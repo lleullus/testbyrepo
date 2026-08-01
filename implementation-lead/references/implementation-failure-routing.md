@@ -35,6 +35,23 @@ Capture a new ownership-only before snapshot, send only the bounded finding/cont
 inspect the actual delta, reopen affected dependency closure review, and return the task to
 `IMPLEMENTED` only after source-level review. Never replace the original pre-Worker Capsule.
 
+## Representative runtime exercise outcomes
+
+- An expected effect that is absent, or an authoritative readback that contradicts the claimed behavior,
+  is task feedback. Use bounded Worker remediation only when current source review establishes a
+  Ticket-authorized defect attributable to the task; select a new initial task when it exposes missing
+  due-now behavior instead.
+- Without an authoritative readback, the runtime-dependent Acceptance Criterion remains `PARTIAL`.
+  Return its owning task to `REVIEWING` for a no-mutation focused check only when a real readback path
+  exists; otherwise return `INCOMPLETE`.
+- An unavailable safe target, execution capability, credential, or reliable target-to-source binding is
+  `INCOMPLETE`; do not reinterpret an environment failure as a product defect or alter source merely to
+  obtain a pass.
+- Unclear target authority, an unapproved external effect, or a required action that is unsafe to run is
+  `BLOCKED` for the user or authority owner.
+- A project delta during a no-mutation focused check follows the ordinary ownership capture and
+  reconciliation rules; it is not an exception that can support runtime coverage.
+
 ## Other routes
 
 - Missed due-now work: reopen decomposition as a new initial task, not remediation.
@@ -50,7 +67,6 @@ inspect the actual delta, reopen affected dependency closure review, and return 
   retain the original run evidence and never re-seal.
 - Other snapshot artifact, store, or local environment failures: `INCOMPLETE`; do not invent product or
   authority remediation.
-- Focused-check failure: task feedback; use Ticket-authorized source remediation when attributable.
 - Final-review or publication source-identity mismatch: reconcile the intervening delta and restart the
   full final review once when disjoint; overlap or authority change is `BLOCKED`, repeated disjoint drift
   is `INCOMPLETE`.

@@ -22,11 +22,11 @@ and source identity independently.
 
 Throughout the run, the Lead MUST emit concise, factual, delta-based user updates at these
 user-relevant trust boundaries: after preflight disposition; before each Worker dispatch, naming the
-bounded task and mutation scope; after each Worker return and ownership comparison, without presenting
-the Worker's claim as accepted; after Lead review whenever the task disposition or Acceptance Criterion
-coverage changes; after any unexpected-delta reconciliation; at final-review entry and after the final
-source-identity comparison; whenever a decision or blocker stops automatic execution; and at the
-terminal outcome. These updates are
+bounded task or zero-mutation focused check and its mutation scope; after each Worker return and
+ownership comparison, without presenting the Worker's claim as accepted; after Lead review whenever
+the task disposition or Acceptance Criterion coverage changes; after any unexpected-delta
+reconciliation; at final-review entry and after the final source-identity comparison; whenever a
+decision or blocker stops automatic execution; and at the terminal outcome. These updates are
 informational, MUST omit routine operations and internal reasoning, and MUST NOT pause execution unless
 a user decision or blocker requires it.
 
@@ -60,7 +60,7 @@ implementation remediation decision. Load `references/task-ownership.md` before 
 | Existing commands and conventions | target repository |
 | Private helper/test organization | Worker unless otherwise governed |
 | Mutation attribution | physical before/after ownership snapshots and observed actor |
-| Source-level implementation completion | Implementation Lead at one exact final source identity |
+| Implementation completion and Acceptance Criterion coverage | Implementation Lead at one exact final source identity |
 | Later technical verification | separate Verification Lead invocation; never this RunState |
 
 The parent Spec approves and limits scope but cannot add due-now tasks missing from the Ticket.
@@ -98,6 +98,10 @@ Before the first Worker, create one immutable physical source baseline with:
 ```text
 ../baseline-capsule/baseline_capsule.py create --project-root <absolute-project-root>
 ```
+
+Resolve this relative path from the canonical physical directory containing this `SKILL.md`, following
+any Skill symlink first. Use that same resolved module for Capsule operations and ImplementationResult
+publication. Never search for or substitute another same-named Baseline Capsule copy.
 
 This is a shared evidence module, not Verification Lead. Retain only the returned `capsuleRef`,
 `baselineSourceIdentity`, `projectionPolicyId`, and expiry. Immediately before dispatching the first
@@ -141,7 +145,10 @@ WITHDRAWN
 BLOCKED
 ```
 
-`IMPLEMENTED` means actual source and integration review is complete. It does not claim a separate
+`IMPLEMENTED` means actual source and integration review is complete. It may contribute to a
+runtime-dependent Acceptance Criterion while that criterion remains `PARTIAL`; a later selected
+representative runtime exercise can establish the criterion without creating an evidence-only task. It
+does not claim a separate
 technical verification verdict.
 
 `attributionState` is `UNASSESSED`, `RECONCILING`, `CLEAR`, or `BLOCKED`. A scope comparison never sets
@@ -156,13 +163,13 @@ claim that the actor of every disjoint external path is known.
 PREFLIGHT -> IMPLEMENTING | FINAL_REVIEW | BLOCKED | INCOMPLETE
 IMPLEMENTING -> RECONCILING | FINAL_REVIEW | BLOCKED | INCOMPLETE
 RECONCILING -> IMPLEMENTING | FINAL_REVIEW | BLOCKED | INCOMPLETE
-FINAL_REVIEW -> RECONCILING | IMPLEMENTATION_COMPLETE | BLOCKED | INCOMPLETE
+FINAL_REVIEW -> IMPLEMENTING | RECONCILING | IMPLEMENTATION_COMPLETE | BLOCKED | INCOMPLETE
 
 PENDING -> WORKER_RUNNING
 WORKER_RUNNING -> RECONCILING | REVIEWING
 RECONCILING -> REVIEWING | WORKER_RUNNING | BLOCKED
 REVIEWING -> IMPLEMENTED
-REVIEWING -> WORKER_RUNNING                 # bounded implementation remediation only
+REVIEWING -> WORKER_RUNNING                 # bounded remediation or no-mutation focused check
 REVIEWING -> WITHDRAWN                      # no attributable product delta remains
 IMPLEMENTED -> REVIEWING                    # later dependency-closure change
 any nonterminal task -> BLOCKED
@@ -241,6 +248,21 @@ Create one coverage record for every Ticket Acceptance Criterion. Each record st
 material premises whose failure would invalidate retained work. Re-evaluate affected coverage and
 premises after every integrated change; neither is a frozen plan.
 
+Evidence must fit the claimed behavior. An Acceptance Criterion about a source artifact, static schema,
+document, or structural constraint may become `ESTABLISHED` through direct current source and artifact
+review. An Acceptance Criterion is runtime-dependent only when its claimed result can remain false
+despite that review and must be observed through an intended product entry point. A runtime-dependent
+criterion remains `PARTIAL` after source integration and becomes `ESTABLISHED` only when a
+representative runtime exercise observes its expected effect and an authoritative product readback
+confirms it at an integrated identity, then dependency closure establishes that evidence remains
+current. A command exit code, Worker summary, mock result, log, or internal-helper call alone is not
+that evidence.
+
+Runtime-dependent claims commonly include an actual response, stored state that is later retrieved,
+an authorization outcome, a UI interaction, a CLI effect, a migration result, or an external
+integration. Do not require runtime evidence for an otherwise static criterion merely because software
+is involved.
+
 Do not store Adapter context, native report, verification retry, result, or verdict data here.
 
 ## Preflight
@@ -259,9 +281,14 @@ Do not store Adapter context, native report, verification retry, result, or verd
 9. Recheck planning, attribution readiness, and exact source identity after Capsule publication and
    immediately before first Worker dispatch.
 
-For a genuine zero-mutation Ticket path, create the Capsule and proceed directly to `FINAL_REVIEW`.
-No Worker dispatch is legal without a current planning seal, clear attribution readiness, frozen task
-envelope, and a current source identity equal to the Capsule baseline.
+For a genuine zero-source-mutation Ticket path, create the Capsule and proceed directly to
+`FINAL_REVIEW` only when every Acceptance Criterion is already `ESTABLISHED`. If required
+runtime-dependent coverage remains `PARTIAL`, enter `IMPLEMENTING` and run the no-mutation focused
+check defined below before final review.
+
+No Worker dispatch is legal without a current planning seal, clear attribution readiness, frozen
+mutation envelope, and a current source identity equal to the Capsule baseline before the first Worker.
+A zero-source-mutation focused check freezes an empty envelope without creating a task.
 
 ## Current task selection
 
@@ -276,15 +303,47 @@ future task. A bounded task must have:
 - actual caller, export, Canonical, and compatibility relationships to inspect;
 - prerequisites and downstream dependency closure;
 - an observable source-level completion condition;
-- focused repository checks the Worker should run.
+- focused repository checks and, when required, representative runtime exercises the Worker should run.
 
 Keep tasks sequential and keep `currentTaskId` empty except while one task is selected. Do not split
 merely by file count or assign multiple Workers. A missed due-now requirement discovered later is a
 new initial task selected from the downgraded coverage record, not retroactive remediation.
 
+A representative runtime exercise is a focused Worker check, not a RunState or an evidence-only task.
+When a current task is expected to close the remaining source gaps for `PARTIAL` runtime-dependent
+criteria, add the smallest set of exercises that directly covers those criteria to
+`focusedWorkerChecks`. One exercise may support multiple criteria only when its expected effect and
+authoritative readback directly establish each one; do not add one exercise per criterion by default.
+
+If all source gaps are closed while required runtime coverage remains `PARTIAL`, return the existing
+`IMPLEMENTED` task that owns the unresolved behavior to `REVIEWING` and dispatch the selected Worker
+for a no-mutation focused check with an empty mutation envelope. This is neither a new task nor
+implementation remediation. If review instead reveals missing due-now source behavior, select a new
+initial task from the downgraded coverage record.
+
+For a genuine zero-source-mutation Ticket with no existing task, dispatch the same check as a run-scoped
+exception while `currentTaskId` remains empty. Apply the ordinary planning, Capsule, before/after
+ownership, raw-result, effect, readback, and safety checks; require an empty project delta; retain the
+ownership artifacts outside the project; and create no TaskState or task record. Only directly observed
+coverage may change.
+
+### Representative runtime exercise safety
+
+Prefer the current checkout with task-owned local or temporary state. A separately deployed target can
+support coverage only when repository or deployment authority binds its revision to the integrated
+source under review; an arbitrary running environment is not evidence. Use product-supported cleanup
+for persistent task-owned test state after its readback. A target that would leave persistent state
+without safe cleanup is not a safe target.
+
+Do not automatically use production, real money, real messages, user data, or another irreversible
+external effect. Those require Ticket authority and explicit user authorization for this invocation.
+Do not silently skip a required exercise or reinterpret an unavailable safe target as a product pass.
+
 ## Sequential Worker loop
 
-While a current Acceptance Criterion gap remains, process the one selected `PENDING` task:
+While a current Acceptance Criterion gap remains, process the one selected `PENDING` task. The
+zero-source-mutation exception above follows steps 1 through 9 with no task-specific fields and an empty
+mutation envelope:
 
 1. Recheck planning seal, attribution readiness, and Capsule existence.
 2. Capture immutable ownership-only `before` outside the project using
@@ -292,7 +351,10 @@ While a current Acceptance Criterion gap remains, process the one selected `PEND
 3. Set `WORKER_RUNNING` and call the selected Worker synchronously.
 4. Provide absolute root, bounded task, linked criterion, allowed and forbidden paths, behavior,
    completion condition, preserved user changes, Canonical relationship, prerequisites, and focused
-   checks. Tell the Worker not to delegate or perform unrelated cleanup.
+   checks. For a representative runtime exercise, also provide the directly covered criteria, intended
+   product entry point, expected effect, authoritative readback, and safe target. Tell the Worker to
+   complete all authorized source changes first, run the exercise last, make no further project-file
+   changes after it, and neither delegate nor perform unrelated cleanup.
 5. Capture immutable ownership-only `after` with the identical policy regardless of whether the Worker
    returned success, failure, or no summary. Never retry a failed Worker call before inspecting delta.
 6. Compare actual physical delta to the frozen envelope. This establishes scope facts only; Worker
@@ -302,9 +364,14 @@ While a current Acceptance Criterion gap remains, process the one selected `PEND
 8. In `REVIEWING`, inspect every Worker-attributable changed path plus callers, exports, Canonicals,
    compatibility, tests, and integration behavior. Reconciled external paths are inspected only enough
    to establish disjointness and preservation and never support task coverage.
-9. Review focused command results as task feedback, not as a separate Verification Lead verdict.
-10. Set `IMPLEMENTED` only when the predicate below is true. If no attributable product delta remains,
-   set `WITHDRAWN`, retain the attempt as history, and forbid its evidence from supporting coverage.
+9. Review focused check results as task feedback, not as a separate Verification Lead verdict. For a
+   representative runtime exercise, inspect the raw result, actual effect, authoritative product
+   readback, selected safe target, and post-call ownership delta; connect it only to criteria it
+   directly observed. A passing exit code or Worker claim does not establish runtime coverage.
+10. For a task dispatch, set `IMPLEMENTED` only when the predicate below is true. If no attributable
+    product delta remains, set `WITHDRAWN`, retain the attempt as history, and forbid its evidence from
+    supporting coverage. For the zero-source-mutation exception, create no TaskState and update only
+    directly observed coverage after confirming a valid empty ownership delta.
 11. Re-evaluate affected coverage, premises, impact scopes, and dependency closure before selecting
     another task.
 
@@ -348,7 +415,7 @@ task_implementation_review_complete
   AND observable task completion condition and integration obligations are satisfied
   AND retained correctness does not depend on an uncreated future task
   AND every material premise supporting the task is currently established
-  AND focused Worker checks were reviewed
+  AND every selected focused Worker check, including any representative runtime exercise, was reviewed
   AND contextual source review is satisfied
 ```
 
@@ -356,8 +423,12 @@ task_implementation_review_complete
 
 If a later task changes a caller, export, Canonical, shared contract, material premise, impact scope,
 or integration relationship relevant to an earlier `IMPLEMENTED` task, return every affected task to
-`REVIEWING` and downgrade affected coverage. Reinspect current source and transition it back to
-`IMPLEMENTED` only after source-level review.
+`REVIEWING` and downgrade affected coverage. An intended entry point, runtime wiring or configuration,
+authorization path, persistence, external integration, and authoritative readback are relevant
+integration relationships for this purpose. Affected runtime-dependent coverage returns to `PARTIAL`
+until a representative runtime exercise is reviewed again. Do not rerun an exercise solely because an
+unrelated change altered the physical source identity; carry the evidence forward only after contextual
+review establishes that its entry point, effect, readback, and material premises remain current.
 
 ## Implementation remediation
 
@@ -384,7 +455,11 @@ and the complete changed-path inventory is current.
 1. Close Worker mutation authority and require no Worker to be running.
 2. Capture `finalReviewStartIdentity` with the Baseline Capsule `identity` operation.
 3. Reinspect every Acceptance Criterion against actual source, callers, exports, Canonicals,
-   compatibility, integration, and retained premises at that identity.
+   compatibility, integration, and retained premises at that identity. For a runtime-dependent
+   criterion, confirm that retained representative runtime evidence directly observed the claimed
+   effect and authoritative readback and remains applicable. If not, downgrade coverage, return the
+   affected task to `REVIEWING`, and re-enter `IMPLEMENTING`; select a new initial task instead when
+   source review reveals missing due-now behavior.
 4. Recheck planning currentness and attribution.
 5. Capture `finalSourceIdentity` with the same projection.
 6. If the identities differ, enter `RECONCILING`. When every intervening change is preserved and
@@ -414,6 +489,8 @@ implementation_complete_authorized
   AND no WITHDRAWN task retains product delta or completion evidence
   AND every Acceptance Criterion is ESTABLISHED at finalSourceIdentity
   AND every Acceptance Criterion has contextual source review
+  AND every runtime-dependent Acceptance Criterion has direct representative runtime evidence whose
+      expected effect and authoritative product readback remain current after dependency closure
   AND no unresolved material premise supports retained work or coverage
   AND no unresolved product-policy, implementation-remediation, or mixed-ownership item remains
   AND every reconciled external change is preserved, disjoint, and excluded from coverage
@@ -421,9 +498,11 @@ implementation_complete_authorized
   AND immutable ImplementationResult publication succeeded
 ```
 
-`IMPLEMENTATION_COMPLETE` means implementation and source-level integration review completed for one
-exact identity. It does not mean `VERIFIED`. Source change after publication leaves the historical
-result intact; a later Verification request using that identity fails its own exact-target gate.
+`IMPLEMENTATION_COMPLETE` means implementation, source-level integration review, and any required
+representative runtime evidence completed for one exact identity. Representative runtime evidence is
+implementation evidence for Ticket Acceptance Criterion coverage. It does not mean `VERIFIED`. Source
+change after publication leaves the historical result intact; a later Verification request using that
+identity fails its own exact-target gate.
 
 ## Terminal return
 
@@ -435,7 +514,10 @@ Return `IMPLEMENTATION_COMPLETE`, `BLOCKED`, or `INCOMPLETE` with:
 - Worker-attributable paths, reconciled external changes, and their dispositions;
 - source-level caller, export, Canonical, compatibility, and integration review;
 - Acceptance Criterion coverage, material-premise dispositions, and unresolved items;
+- representative runtime exercises, their directly covered criteria, observed effects, authoritative
+  product readbacks, and applicable cleanup disposition;
 - Capsule ref, baseline identity, projection policy, expiry, and ImplementationResult ref.
 
-Do not claim that a Worker check, Capsule, source review, or ImplementationResult is a technical
-verification verdict. Do not invoke Verification Lead from this skill.
+Do not claim that a Worker check, representative runtime evidence, Capsule, source review, or
+ImplementationResult is a technical verification verdict.
+Do not invoke Verification Lead from this skill.

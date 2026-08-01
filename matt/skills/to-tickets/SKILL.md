@@ -153,12 +153,15 @@ to prevent unrelated mutation.
 
 ## Verification rules
 
-`Verification` states how the Ticket's Acceptance Criteria can be observed. It
-does not preselect an internal focused test seam or mandate a particular test
-file unless that test surface is itself an approved external contract.
+`Verification` states how the Ticket's Acceptance Criteria can be observed.
+When an approved parent-Spec expectation concerns a runtime result, preserve its
+observable product flow, expected effect, and readback at the product-contract
+level. Do not preselect an internal focused test seam, command, or test file
+unless that surface is itself an approved external contract.
 
-Implementation Lead selects focused evidence during implementation and retains
-the authoritative final Full verification.
+Implementation Lead selects focused implementation evidence, including any
+representative runtime exercise. A separate Verification Lead owns an
+independent technical verification verdict.
 
 ## Blocker rules
 

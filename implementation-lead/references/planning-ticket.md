@@ -96,7 +96,9 @@ must be non-empty and observable. `Goal` remains a required structural field
 with only the narrow coherence check defined above. The other required Ticket
 sections are preserved as raw Markdown except for their explicit preflight
 rules in this reference; this reference adds no generic content schema for
-them.
+them. `Verification` may describe an observable product flow, expected effect,
+and product readback for an Acceptance Criterion, but does not itself add a
+positive completion condition or require an internal command or test seam.
 
 The required parent Spec metadata is:
 

@@ -14,6 +14,8 @@ TASK_OWNERSHIP = (IMPLEMENTATION_ROOT / "references/task-ownership.md").read_tex
 PLANNING_CURRENTNESS = (
     IMPLEMENTATION_ROOT / "references/planning-input-currentness.md"
 ).read_text(encoding="utf-8")
+PLANNING_TICKET = (IMPLEMENTATION_ROOT / "references/planning-ticket.md").read_text(encoding="utf-8")
+TO_TICKETS = (IMPLEMENTATION_ROOT.parent / "matt/skills/to-tickets/SKILL.md").read_text(encoding="utf-8")
 
 
 class ImplementationSkillContractTests(unittest.TestCase):
@@ -59,6 +61,10 @@ class ImplementationSkillContractTests(unittest.TestCase):
             "checkpointHistoryRefs",
             "ImplementationHandoff",
             "assertCurrent",
+            "RUNTIME_EXERCISE",
+            "runtimeExercise",
+            "targetBinding",
+            "implementation-result-v3",
         ):
             self.assertNotIn(removed, SKILL)
 
@@ -70,6 +76,8 @@ class ImplementationSkillContractTests(unittest.TestCase):
 
     def test_first_worker_requires_baseline_capsule_not_verification_lead(self) -> None:
         self.assertIn("../baseline-capsule/baseline_capsule.py create", SKILL)
+        self.assertIn("canonical physical directory containing this `SKILL.md`", SKILL)
+        self.assertIn("Never search for or substitute another same-named Baseline Capsule copy", SKILL)
         self.assertIn("Immediately before dispatching the first\nWorker", SKILL)
         self.assertIn("require exact equality with\n`baselineSourceIdentity`", SKILL)
         self.assertIn("Do not invoke Verification Lead from this skill", SKILL)
@@ -77,11 +85,56 @@ class ImplementationSkillContractTests(unittest.TestCase):
     def test_capsule_failure_prevents_worker_dispatch(self) -> None:
         self.assertIn("no Worker may run after a terminal result", SKILL)
         self.assertIn("missing or expired Capsules are never silently replaced", SKILL)
-        self.assertIn("For a genuine zero-mutation Ticket path, create the Capsule", SKILL)
+        self.assertIn("For a genuine zero-source-mutation Ticket path, create the Capsule", SKILL)
+
+    def test_zero_source_mutation_runtime_coverage_has_an_executable_path(self) -> None:
+        self.assertIn("proceed directly to\n`FINAL_REVIEW` only when every Acceptance Criterion is already `ESTABLISHED`", SKILL)
+        self.assertIn("If required\nruntime-dependent coverage remains `PARTIAL`, enter `IMPLEMENTING`", SKILL)
+        self.assertIn("dispatch the same check as a run-scoped\nexception while `currentTaskId` remains empty", SKILL)
+        self.assertIn("create no TaskState or task record", SKILL)
+        self.assertIn("confirming a valid empty ownership delta", SKILL)
 
     def test_implemented_is_source_review_not_verification(self) -> None:
         self.assertIn("task_implementation_review_complete", SKILL)
         self.assertIn("does not claim a separate\ntechnical verification verdict", SKILL)
+        self.assertIn("Implementation completion and Acceptance Criterion coverage", SKILL)
+
+    def test_runtime_dependent_coverage_requires_direct_product_evidence(self) -> None:
+        self.assertIn("criterion remains `PARTIAL` after source integration", SKILL)
+        self.assertIn("representative runtime exercise observes its expected effect", SKILL)
+        self.assertIn("authoritative product readback", SKILL)
+        self.assertIn("internal-helper call alone is not\nthat evidence", SKILL)
+        self.assertIn("source artifact, static schema,\ndocument, or structural constraint", SKILL)
+
+    def test_runtime_exercise_reuses_existing_task_flow(self) -> None:
+        self.assertIn("focused Worker check, not a RunState or an evidence-only task", SKILL)
+        self.assertIn("without creating an evidence-only task", SKILL)
+        self.assertIn("for a no-mutation focused check with an empty mutation envelope", SKILL)
+        self.assertIn("bounded remediation or no-mutation focused check", SKILL)
+        self.assertIn("One exercise may support multiple criteria", SKILL)
+
+    def test_runtime_evidence_reopens_affected_work_and_carries_forward_only_when_safe(self) -> None:
+        self.assertIn("Affected runtime-dependent coverage returns to `PARTIAL`", SKILL)
+        self.assertIn("Do not rerun an exercise solely because an\nunrelated change altered the physical source identity", SKILL)
+        self.assertIn("affected task to `REVIEWING`", SKILL)
+        self.assertIn("re-enter `IMPLEMENTING`", SKILL)
+
+    def test_runtime_failures_distinguish_product_environment_and_authority(self) -> None:
+        self.assertIn("expected effect that is absent", FAILURE_ROUTING)
+        self.assertIn("Ticket-authorized defect attributable to the task", FAILURE_ROUTING)
+        self.assertIn("Without an authoritative readback, the runtime-dependent Acceptance Criterion remains `PARTIAL`", FAILURE_ROUTING)
+        self.assertIn("reliable target-to-source binding is\n  `INCOMPLETE`", FAILURE_ROUTING)
+        self.assertIn("Unclear target authority, an unapproved external effect", FAILURE_ROUTING)
+        self.assertIn("A project delta during a no-mutation focused check", FAILURE_ROUTING)
+
+    def test_runtime_safety_and_ticket_observability_are_explicit(self) -> None:
+        self.assertIn("Prefer the current checkout with task-owned local or temporary state", SKILL)
+        self.assertIn("without safe cleanup is not a safe target", SKILL)
+        self.assertIn("Do not automatically use production, real money, real messages, user data", SKILL)
+        self.assertIn("explicit user authorization for this invocation", SKILL)
+        self.assertIn("observable product flow, expected effect, and readback", TO_TICKETS)
+        self.assertIn("A separate Verification Lead owns an\nindependent technical verification verdict", TO_TICKETS)
+        self.assertIn("but does not itself add a\npositive completion condition", PLANNING_TICKET)
 
     def test_final_review_binds_two_equal_source_identities(self) -> None:
         self.assertIn("finalReviewStartIdentity", SKILL)
