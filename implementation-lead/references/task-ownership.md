@@ -2,9 +2,10 @@
 
 ## Purpose
 
-Task ownership snapshots protect pre-existing user changes and attribute mutations made during one
-Worker call. They are filesystem evidence only. They do not run commands, understand package
-semantics, establish coverage, replace the shared Baseline Capsule, or verify product behavior.
+Task ownership snapshots protect pre-existing user changes and report physical mutations observed
+during one Worker call. They are filesystem and scope evidence only: they do not identify the actor
+that changed a path. They do not run commands, understand package semantics, establish coverage,
+replace the shared Baseline Capsule, or verify product behavior.
 
 Every artifact contains `ownershipOnly: true`. ImplementationResult does not embed these artifacts;
 they remain run-scoped attribution evidence and never become Capsule or later verification evidence.
@@ -16,8 +17,11 @@ they remain run-scoped attribution evidence and never become Capsule or later ve
 3. Dispatch exactly one selected Worker with exclusive mutation authority for the frozen scope.
 4. Capture a fresh immutable `after.json` using the same exclusion policy.
 5. Compare the artifacts and inspect every actual changed path.
-6. Stop with ownership conflict if any path falls outside the frozen envelope or if an external edit
-   cannot be attributed.
+6. Treat any path outside the frozen envelope as `OUTSIDE_ENVELOPE` and enter nonterminal
+   reconciliation. The comparison result is not itself `BLOCKED` and does not prove Worker causation.
+7. Combine the physical delta with observed actor information and contextual source relationships.
+   Continue for preserved disjoint external changes, remediate attributable Worker scope violations,
+   and block only unresolved overlapping ownership or preservation loss.
 
 Each capture performs two complete physical scans. A mismatch, disappearing entry, or file changing
 while it is hashed produces `SOURCE_CHANGED_DURING_CAPTURE` rather than a partial snapshot.
@@ -32,9 +36,21 @@ while it is hashed produces `SOURCE_CHANGED_DURING_CAPTURE` rather than a partia
 - `.git/**`: excluded because repository control metadata is not product mutation evidence;
   `.gitignore` remains included.
 
-There are no implicit cache or generated-output exclusions. A repository that needs exclusions must
+There are no implicit cache, generated-output, or `.scratch` exclusions. A repository that needs exclusions must
 freeze explicit project-relative patterns and use the identical policy before and after. Exclusions
 reduce preservation coverage and therefore require contextual review.
+
+## Attribution and planning artifacts
+
+`WITHIN_ENVELOPE` means only that every physical change matched a frozen allowed pattern. It does not
+prove that the Worker made those changes; an observed concurrent actor touching an affected path still
+requires reconciliation. `OUTSIDE_ENVELOPE` means only that at least one changed path did not match.
+
+Another `.scratch/<work-slug>/**` tree may be concurrent planning work. It can be recorded as a
+reconciled external change only after the Lead confirms that it is not the current Ticket, Spec,
+blocker, or UI authority and is disjoint from task impact. It remains in physical and final source
+identity; it is not used as task completion evidence. Never add it to the Worker envelope after the
+change or exclude all of `.scratch/**` merely to obtain a clear comparison.
 
 ## Rename candidates
 
@@ -55,5 +71,6 @@ python3 ownership_snapshot.py compare \
   --allow 'src/**' --allow 'tests/**'
 ```
 
-Artifact creation is exclusive and refuses overwrite. Exit `10` from compare means ownership
-conflict; exit `2` means invalid input, inconsistent capture, or invalid artifact.
+Artifact creation is exclusive and refuses overwrite. Exit `10` from compare means reconciliation is
+required because the delta is outside the envelope; it is not a terminal ownership verdict. Exit `2`
+means invalid input, inconsistent capture, or invalid artifact and routes to the failure matrix.

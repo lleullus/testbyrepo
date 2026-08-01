@@ -7,7 +7,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-SUITES = ("tests/contract", "tests/task-ownership", "tests/implementation-result")
+SUITES = (
+    "tests/contract",
+    "tests/task-ownership",
+    "tests/implementation-result",
+    "tests/pilot",
+)
 
 
 def main() -> int:

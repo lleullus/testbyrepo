@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
+import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -45,11 +48,13 @@ class OwnershipSnapshotTests(unittest.TestCase):
         after = self.capture()
         delta = ownership_snapshot.compare(before, after, allowed_mutation_scopes=["worker.txt"])
         self.assertEqual(["worker.txt"], delta["changedPaths"])
-        self.assertEqual("CLEAR", delta["ownershipState"])
+        self.assertEqual(["worker.txt"], delta["inScopePaths"])
+        self.assertEqual("WITHIN_ENVELOPE", delta["scopeState"])
+        self.assertEqual("NOT_ESTABLISHED", delta["actorAttribution"])
         self.assertIn("state.cache", before["entries"])
         self.assertNotIn(".git/index", before["entries"])
 
-    def test_out_of_scope_change_is_a_conflict(self) -> None:
+    def test_out_of_scope_change_requires_reconciliation_without_claiming_actor(self) -> None:
         (self.root / "src").mkdir()
         (self.root / "docs").mkdir()
         (self.root / "src" / "app.py").write_text("before", encoding="utf-8")
@@ -59,8 +64,69 @@ class OwnershipSnapshotTests(unittest.TestCase):
         (self.root / "docs" / "note.md").write_text("external", encoding="utf-8")
         after = self.capture()
         delta = ownership_snapshot.compare(before, after, allowed_mutation_scopes=["src/**"])
+        self.assertEqual(["src/app.py"], delta["inScopePaths"])
         self.assertEqual(["docs/note.md"], delta["outOfScopePaths"])
-        self.assertEqual("CONFLICT", delta["ownershipState"])
+        self.assertEqual("OUTSIDE_ENVELOPE", delta["scopeState"])
+        self.assertEqual("NOT_ESTABLISHED", delta["actorAttribution"])
+
+    def test_concurrent_scratch_work_is_reported_for_reconciliation(self) -> None:
+        (self.root / "src").mkdir()
+        (self.root / "src" / "app.py").write_text("before", encoding="utf-8")
+        before = self.capture()
+        (self.root / "src" / "app.py").write_text("after", encoding="utf-8")
+        ticket = self.root / ".scratch" / "other-work" / "tickets" / "TICKET-001.md"
+        ticket.parent.mkdir(parents=True)
+        ticket.write_text("planning", encoding="utf-8")
+        after = self.capture()
+        delta = ownership_snapshot.compare(before, after, allowed_mutation_scopes=["src/**"])
+        self.assertEqual(["src/app.py"], delta["inScopePaths"])
+        self.assertEqual(
+            [
+                ".scratch",
+                ".scratch/other-work",
+                ".scratch/other-work/tickets",
+                ".scratch/other-work/tickets/TICKET-001.md",
+            ],
+            delta["outOfScopePaths"],
+        )
+        self.assertEqual("OUTSIDE_ENVELOPE", delta["scopeState"])
+
+    def test_compare_cli_returns_reconciliation_signal_for_concurrent_scratch_work(self) -> None:
+        (self.root / "src").mkdir()
+        app = self.root / "src" / "app.py"
+        app.write_text("before", encoding="utf-8")
+        before_path = self.artifacts / "before.json"
+        after_path = self.artifacts / "after.json"
+        ownership_snapshot.write_immutable(self.capture(), before_path)
+        app.write_text("after", encoding="utf-8")
+        spec = self.root / ".scratch" / "wp-002" / "SPEC.md"
+        spec.parent.mkdir(parents=True)
+        spec.write_text("planning", encoding="utf-8")
+        ownership_snapshot.write_immutable(self.capture(), after_path)
+
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(MODULE_PATH),
+                "compare",
+                "--before",
+                str(before_path),
+                "--after",
+                str(after_path),
+                "--allow",
+                "src/**",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(10, completed.returncode)
+        delta = json.loads(completed.stdout)
+        self.assertEqual("OUTSIDE_ENVELOPE", delta["scopeState"])
+        self.assertEqual("NOT_ESTABLISHED", delta["actorAttribution"])
+        self.assertEqual(["src/app.py"], delta["inScopePaths"])
+        self.assertIn(".scratch/wp-002/SPEC.md", delta["outOfScopePaths"])
 
     def test_single_star_does_not_cross_path_segments_for_python_glob(self) -> None:
         self.assertFalse(ownership_snapshot._allowed("src/deep/x.py", ("src/*.py",)))

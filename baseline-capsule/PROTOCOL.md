@@ -52,6 +52,12 @@ directories are included regardless of Git tracked or ignored state. Special
 filesystem entries and symlinks that resolve outside the project root make
 creation fail.
 
+`.scratch/**` is intentionally included. Consumers may use it for the current Ticket, Spec, blocker,
+or approved UI authority, so the shared source projection must not infer which planning tree is
+relevant. Implementation Lead separately reconciles a disjoint concurrent planning tree and excludes
+it from task completion evidence while still binding the final result to the complete physical source
+identity.
+
 ## Storage policy
 
 - default store: `~/.local/state/opencode/baseline-capsules`;

@@ -80,6 +80,7 @@ class BaselineCapsuleTests(unittest.TestCase):
             "tmp/input.txt",
             "vendor/module.go",
             "ignored/source.py",
+            ".scratch/other-work/SPEC.md",
         ):
             self.write(included)
 
@@ -106,6 +107,7 @@ class BaselineCapsuleTests(unittest.TestCase):
             "tmp/input.txt",
             "vendor/module.go",
             "ignored/source.py",
+            ".scratch/other-work/SPEC.md",
         ):
             self.assertIn(included, manifest["entries"])
 

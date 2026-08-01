@@ -179,7 +179,8 @@ This is the minimum initial local-Markdown blocker rule. It intentionally does n
 
 ## Blocked Results
 
-Preflight returns the existing `blocked` result with a concrete cause; it does not create a terminal state or alter the Ticket or Spec.
+Preflight returns terminal RunState `BLOCKED` for this invocation with a concrete cause. It does not
+alter the Ticket or Spec, and a later invocation may start after the named owner resolves the cause.
 
 | Blocked cause | Next owner |
 | --- | --- |

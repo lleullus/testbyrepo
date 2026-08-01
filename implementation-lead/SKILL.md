@@ -24,8 +24,9 @@ Throughout the run, the Lead MUST emit concise, factual, delta-based user update
 user-relevant trust boundaries: after preflight disposition; before each Worker dispatch, naming the
 bounded task and mutation scope; after each Worker return and ownership comparison, without presenting
 the Worker's claim as accepted; after Lead review whenever the task disposition or Acceptance Criterion
-coverage changes; at final-review entry and after the final source-identity comparison; whenever a
-decision or blocker stops automatic execution; and at the terminal outcome. These updates are
+coverage changes; after any unexpected-delta reconciliation; at final-review entry and after the final
+source-identity comparison; whenever a decision or blocker stops automatic execution; and at the
+terminal outcome. These updates are
 informational, MUST omit routine operations and internal reasoning, and MUST NOT pause execution unless
 a user decision or blocker requires it.
 
@@ -77,9 +78,18 @@ Never reset, checkout, stash, clean, overwrite, or remove pre-existing user work
 HEAD, index, branch, commit, or remotes. A dirty worktree is not a blocker and Git HEAD is never a
 substitute for physical state.
 
-The Worker's allowed paths are exclusive mutation scope for the duration of its call. After the first
-Worker, an unexplained external edit or overwritten intermediate state is mixed ownership: stop
-`BLOCKED` for reconciliation. Do not widen a mutation envelope after observing an unexpected change.
+The Worker's allowed paths are its exclusive mutation scope for the duration of its call. An unexpected
+change is evidence to reconcile, not proof that the Worker caused it and not an automatic terminal
+result. Preserve the frozen envelope, enter `RECONCILING`, and classify the delta under
+`references/task-ownership.md`. Never absorb an unexpected path into the task envelope after the fact.
+
+Continue automatically when the unexpected delta is external or remains unattributed but is established
+as disjoint from current planning authority and product impact, preserved unchanged, and excluded from
+task completion evidence. Use bounded ownership remediation when a scope violation is attributable to
+the Worker and safe to correct. Return `BLOCKED` only when planning authority changed, a product-policy
+decision is required, overlapping product mutation cannot be attributed safely, or pre-existing work
+was overwritten or cannot be preserved. These are the only ownership-related conditions that stop
+automatic execution.
 
 ## Baseline Capsule boundary
 
@@ -97,8 +107,10 @@ Worker, call the same tool's `identity` operation and require exact equality wit
 Capsule creation is a pre-Worker evidence requirement:
 
 - quota, unsupported entry, store, corruption, or capability failure is `INCOMPLETE`;
-- changing source, unclear ownership, or a root conflict is `BLOCKED` for reconciliation;
-- no Worker may run after either result;
+- `SOURCE_CHANGED_DURING_CAPTURE` receives one fresh full-capture retry; a second unstable capture is
+  `INCOMPLETE` without product mutation;
+- an ambiguous or conflicting project root is `BLOCKED`;
+- no Worker may run after a terminal result;
 - missing or expired Capsules are never silently replaced.
 
 The Capsule contains no Ticket, Spec, Worker, task, verification plan, command, or verdict state.
@@ -110,6 +122,7 @@ The Capsule contains no Ticket, Spec, Worker, task, verification plan, command, 
 ```text
 PREFLIGHT
 IMPLEMENTING
+RECONCILING
 FINAL_REVIEW
 IMPLEMENTATION_COMPLETE
 INCOMPLETE
@@ -121,6 +134,7 @@ BLOCKED
 ```text
 PENDING
 WORKER_RUNNING
+RECONCILING
 REVIEWING
 IMPLEMENTED
 WITHDRAWN
@@ -130,14 +144,24 @@ BLOCKED
 `IMPLEMENTED` means actual source and integration review is complete. It does not claim a separate
 technical verification verdict.
 
+`attributionState` is `UNASSESSED`, `RECONCILING`, `CLEAR`, or `BLOCKED`. A scope comparison never sets
+it directly. Entering reconciliation sets `RECONCILING`; only completed contextual attribution and
+preservation review can set `CLEAR` or terminal `BLOCKED`. `CLEAR` means every path used as task
+evidence is attributable and every other observed path is preserved and proven disjoint; it does not
+claim that the actor of every disjoint external path is known.
+
 ### Legal transitions
 
 ```text
 PREFLIGHT -> IMPLEMENTING | FINAL_REVIEW | BLOCKED | INCOMPLETE
-IMPLEMENTING -> FINAL_REVIEW | BLOCKED | INCOMPLETE
-FINAL_REVIEW -> IMPLEMENTATION_COMPLETE | IMPLEMENTING | BLOCKED | INCOMPLETE
+IMPLEMENTING -> RECONCILING | FINAL_REVIEW | BLOCKED | INCOMPLETE
+RECONCILING -> IMPLEMENTING | FINAL_REVIEW | BLOCKED | INCOMPLETE
+FINAL_REVIEW -> RECONCILING | IMPLEMENTATION_COMPLETE | BLOCKED | INCOMPLETE
 
-PENDING -> WORKER_RUNNING -> REVIEWING -> IMPLEMENTED
+PENDING -> WORKER_RUNNING
+WORKER_RUNNING -> RECONCILING | REVIEWING
+RECONCILING -> REVIEWING | WORKER_RUNNING | BLOCKED
+REVIEWING -> IMPLEMENTED
 REVIEWING -> WORKER_RUNNING                 # bounded implementation remediation only
 REVIEWING -> WITHDRAWN                      # no attributable product delta remains
 IMPLEMENTED -> REVIEWING                    # later dependency-closure change
@@ -154,7 +178,7 @@ runState
 planningInputSeal
 ticketPath, specPath, projectRoot
 selectedWorker
-ownershipState
+attributionState
 capsuleRef
 baselineSourceIdentity
 projectionPolicyId
@@ -165,6 +189,10 @@ impactScopes[]
 currentTaskId
 taskRecords[]
 completeChangedPathInventory[]
+implementationChangedPaths[]
+reconciledExternalChanges[]
+reconciliationAttempts
+finalReviewRestarts
 finalReviewStartIdentity
 finalSourceIdentity
 implementationResultRef
@@ -172,18 +200,40 @@ ambiguities[]
 terminalCause
 ```
 
+`completeChangedPathInventory` includes both implementation and reconciled external paths. The two
+specialized inventories partition their disposition without deleting any physical delta from the run
+record.
+
 Each task record contains only task and product facts:
 
 ```text
 taskId, state, linkedAcceptanceCriteria,
 allowedMutationScope, forbiddenPaths,
 ownershipBeforeRef, ownershipAfterRef, ownershipDelta,
-observedChangedPaths, preservedUserChanges,
+scopeComparisonState, observedChangedPaths, workerAttributablePaths,
+reconciledExternalChanges, reconciliationDisposition, preservedUserChanges,
 callersReviewed, exportsReviewed, canonicalReviewed,
 compatibilityReviewed, integrationReviewed,
 focusedWorkerChecks, completionCondition, integrationObligations,
 acceptedIntegratedIdentity, withdrawnReason, unresolvedItems
 ```
+
+`scopeComparisonState` is the tool-reported `WITHIN_ENVELOPE` or `OUTSIDE_ENVELOPE` fact.
+`reconciliationDisposition` is empty when no reconciliation occurred, otherwise `CONTINUE`,
+`REMEDIATE`, `BLOCKED`, or `INCOMPLETE`.
+
+Each reconciled external-change record contains:
+
+```text
+paths[], observedActorBasis, planningRelation, taskImpactRelations[],
+preservationBeforeIdentity, preservationAfterIdentity,
+disposition = CONTINUE, excludedFromCoverage = true
+```
+
+`observedActorBasis` records the runtime observation or states that the actor remains unattributed;
+it must not infer an actor from path spelling. `CONTINUE` is valid only when disjointness and unchanged
+preservation are independently established. These records never contribute to Acceptance Criterion
+coverage or Worker completion.
 
 Create one coverage record for every Ticket Acceptance Criterion. Each record stores its current state
 (`UNPROVEN`, `PARTIAL`, or `ESTABLISHED`), claimed behavior, authority locators, contributing
@@ -205,13 +255,13 @@ Do not store Adapter context, native report, verification retry, result, or verd
 6. Initialize current coverage, material premises, and impact scopes.
 7. Select exactly one current task when a due-now gap exists. Freeze only its dependencies, allowed
    mutation patterns, forbidden paths, integration obligations, and observable completion condition.
-8. Establish ownership and create the Baseline Capsule before any Worker.
-9. Recheck planning, ownership, and exact source identity after Capsule publication and immediately
-   before first Worker dispatch.
+8. Establish attribution readiness and create the Baseline Capsule before any Worker.
+9. Recheck planning, attribution readiness, and exact source identity after Capsule publication and
+   immediately before first Worker dispatch.
 
 For a genuine zero-mutation Ticket path, create the Capsule and proceed directly to `FINAL_REVIEW`.
-No Worker dispatch is legal without a current planning seal, clear ownership, frozen task envelope,
-and a current source identity equal to the Capsule baseline.
+No Worker dispatch is legal without a current planning seal, clear attribution readiness, frozen task
+envelope, and a current source identity equal to the Capsule baseline.
 
 ## Current task selection
 
@@ -236,31 +286,63 @@ new initial task selected from the downgraded coverage record, not retroactive r
 
 While a current Acceptance Criterion gap remains, process the one selected `PENDING` task:
 
-1. Recheck planning seal, ownership, and Capsule existence.
+1. Recheck planning seal, attribution readiness, and Capsule existence.
 2. Capture immutable ownership-only `before` outside the project using
    `tools/task-ownership-snapshot/ownership_snapshot.py`.
 3. Set `WORKER_RUNNING` and call the selected Worker synchronously.
 4. Provide absolute root, bounded task, linked criterion, allowed and forbidden paths, behavior,
    completion condition, preserved user changes, Canonical relationship, prerequisites, and focused
    checks. Tell the Worker not to delegate or perform unrelated cleanup.
-5. Capture immutable ownership-only `after` with the identical policy.
-6. Compare actual physical delta to the frozen envelope. Worker summary is non-authoritative.
-7. If ownership is clear, set `REVIEWING` and inspect every changed path plus callers, exports,
-   Canonicals, compatibility, tests, and integration behavior.
-8. Review focused command results as task feedback, not as a separate Verification Lead verdict.
-9. Set `IMPLEMENTED` only when the predicate below is true. If no attributable product delta remains,
+5. Capture immutable ownership-only `after` with the identical policy regardless of whether the Worker
+   returned success, failure, or no summary. Never retry a failed Worker call before inspecting delta.
+6. Compare actual physical delta to the frozen envelope. This establishes scope facts only; Worker
+   summary and path location alone are not actor attribution.
+7. If every path is inside the envelope and no concurrent actor is observed on an affected path, set
+   `REVIEWING`. Otherwise enter `RECONCILING` and follow the reconciliation procedure below.
+8. In `REVIEWING`, inspect every Worker-attributable changed path plus callers, exports, Canonicals,
+   compatibility, tests, and integration behavior. Reconciled external paths are inspected only enough
+   to establish disjointness and preservation and never support task coverage.
+9. Review focused command results as task feedback, not as a separate Verification Lead verdict.
+10. Set `IMPLEMENTED` only when the predicate below is true. If no attributable product delta remains,
    set `WITHDRAWN`, retain the attempt as history, and forbid its evidence from supporting coverage.
-10. Re-evaluate affected coverage, premises, impact scopes, and dependency closure before selecting
+11. Re-evaluate affected coverage, premises, impact scopes, and dependency closure before selecting
     another task.
+
+### Unexpected-delta reconciliation
+
+Reconciliation is a nonterminal source and attribution review. Keep the task envelope frozen and:
+
+1. Recheck the planning seal before interpreting any planning-looking path.
+2. Partition the physical delta into paths inside and outside the envelope without claiming an actor.
+3. Use observed runtime actor information, preserved pre-call state, current source, and task impact
+   relationships to classify every unexpected path. A filename, directory name, Git status, or Worker
+   summary alone is not attribution.
+4. Record `CONTINUE` only when the path is external or unattributed but disjoint from the current
+   Ticket/Spec/blockers/UI authority, allowed and forbidden paths, preserved user changes, callers,
+   exports, Canonicals, shared contracts, tests, and integration obligations. Preserve it, add it to
+   `reconciledExternalChanges`, and exclude it from task evidence.
+5. Record `REMEDIATE` only for a Worker-attributable scope violation that the Ticket authorizes and
+   that can be corrected without reconstructing or overwriting pre-existing work.
+6. Return `BLOCKED` when an unexpected path overlaps product impact or current planning authority and
+   actor attribution is unclear, or when pre-existing work was overwritten or cannot be preserved.
+7. Return `INCOMPLETE` for invalid artifacts or persistent capture/runtime instability that presents no
+   authority or ownership conflict.
+
+Another `.scratch/<work-slug>/**` tree is not automatically safe or unsafe. Treat it as a candidate
+concurrent planning artifact, verify that it is not the current invocation's authority and has no task
+impact, then preserve and continue. Do not globally exclude `.scratch/**`: the current Ticket, Spec,
+blockers, or approved UI authority may live there and remain covered by planning currentness and final
+source identity.
 
 ### Task implementation predicate
 
 ```text
 task_implementation_review_complete
-= ownershipState == CLEAR
+= attributionState == CLEAR
   AND planning_input_current
   AND before/after ownership artifacts are valid and immutable
-  AND actual delta is inside the frozen mutation envelope
+  AND every Worker-attributable path is inside the frozen mutation envelope
+  AND every reconciled external path is preserved, disjoint, and excluded from completion evidence
   AND pre-existing user changes are preserved
   AND required callers/exports/Canonicals/compatibility/integration are current
   AND observable task completion condition and integration obligations are satisfied
@@ -279,40 +361,54 @@ or integration relationship relevant to an earlier `IMPLEMENTED` task, return ev
 
 ## Implementation remediation
 
-Implementation remediation is allowed only before terminal completion and only for a defect discovered
-during source review that is attributable to the selected Worker's bounded task and authorized by the
-Ticket. Freeze a fresh bounded envelope, capture new ownership artifacts, call the same Worker, and
-repeat source and dependency review. A finding from a later independent Verification invocation starts
-a new Implementation Lead invocation; it never reopens this one.
+Implementation remediation is allowed only before terminal completion for either a source-review defect
+or a scope violation attributable to the selected Worker's bounded task and authorized by the Ticket.
+For a scope violation, remediation may remove a Worker-created path or correct Worker-written content,
+but must never guess at or reconstruct overwritten pre-existing work. Freeze a fresh bounded remediation
+envelope, capture new ownership artifacts, call the same Worker, and repeat reconciliation, source, and
+dependency review. A finding from a later independent Verification invocation starts a new Implementation
+Lead invocation; it never reopens this one.
+
+The remediation envelope authorizes only correction of the recorded violation; it does not retroactively
+make the original out-of-envelope delta valid task evidence. If the current source review establishes
+that a new path is genuinely required by an Acceptance Criterion, withdraw the violating attempt as
+evidence and select a new initial task from the remaining coverage gap. Never use remediation to retain
+an unplanned path merely because the Worker already created it.
 
 ## FINAL_REVIEW
 
 Enter only when every selected task is `IMPLEMENTED` or `WITHDRAWN`, no withdrawn attempt retains
-product delta, every Acceptance Criterion is `ESTABLISHED`, planning is current, ownership is clear,
+product delta, every Acceptance Criterion is `ESTABLISHED`, planning is current, attribution is clear,
 and the complete changed-path inventory is current.
 
 1. Close Worker mutation authority and require no Worker to be running.
 2. Capture `finalReviewStartIdentity` with the Baseline Capsule `identity` operation.
 3. Reinspect every Acceptance Criterion against actual source, callers, exports, Canonicals,
    compatibility, integration, and retained premises at that identity.
-4. Recheck planning currentness and ownership.
+4. Recheck planning currentness and attribution.
 5. Capture `finalSourceIdentity` with the same projection.
-6. Require exact equality between both final-review identities.
-7. Publish the immutable ImplementationResult with:
+6. If the identities differ, enter `RECONCILING`. When every intervening change is preserved and
+   disjoint, discard the stale review evidence and restart the complete final review once at the new
+   identity. An overlapping or authority change is `BLOCKED`; a second disjoint identity drift is
+   `INCOMPLETE` because the source cannot provide a stable completion target.
+7. Require exact equality between both final-review identities after any permitted restart.
+8. Publish the immutable ImplementationResult with:
 
 ```text
 tools/implementation-result/implementation_result.py publish --request <request-json>
 ```
 
 The publisher independently rechecks planning bytes, Capsule/project binding, and current source
-identity before writing the result.
+identity before writing the result. `PLANNING_INPUT_CHANGED` is `BLOCKED`.
+`SOURCE_IDENTITY_MISMATCH` uses the same one-restart final-review rule. Capsule, malformed-artifact,
+store, or capability failures are `INCOMPLETE`; they do not become ownership blockers.
 
 ## Completion predicate
 
 ```text
 implementation_complete_authorized
 = planning_input_current
-  AND ownershipState == CLEAR
+  AND attributionState == CLEAR
   AND capsuleRef is current and bound to projectRoot
   AND every selected task is IMPLEMENTED or WITHDRAWN
   AND no WITHDRAWN task retains product delta or completion evidence
@@ -320,6 +416,7 @@ implementation_complete_authorized
   AND every Acceptance Criterion has contextual source review
   AND no unresolved material premise supports retained work or coverage
   AND no unresolved product-policy, implementation-remediation, or mixed-ownership item remains
+  AND every reconciled external change is preserved, disjoint, and excluded from coverage
   AND finalReviewStartIdentity == finalSourceIdentity
   AND immutable ImplementationResult publication succeeded
 ```
@@ -334,7 +431,8 @@ Return `IMPLEMENTATION_COMPLETE`, `BLOCKED`, or `INCOMPLETE` with:
 
 - Ticket, Spec, planning seal, project root, and final source identity;
 - Worker designation, bounded task states, and withdrawn attempts;
-- actual changed-path inventory and preservation or ownership summary;
+- actual changed-path inventory and preservation or attribution summary;
+- Worker-attributable paths, reconciled external changes, and their dispositions;
 - source-level caller, export, Canonical, compatibility, and integration review;
 - Acceptance Criterion coverage, material-premise dispositions, and unresolved items;
 - Capsule ref, baseline identity, projection policy, expiry, and ImplementationResult ref.

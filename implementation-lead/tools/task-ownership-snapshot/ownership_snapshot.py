@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Physical task ownership snapshots for mutation attribution.
+"""Physical task ownership snapshots and frozen-envelope scope comparison.
 
 This tool deliberately knows nothing about language projects, commands, coverage, or technical
-reports.  Its artifacts are ownership-only evidence and must never be used as product verification.
+reports. Its artifacts do not identify mutation actors and must never be used as product verification.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from typing import Any, Iterable, Mapping
 
 
 SCHEMA_VERSION = "task-ownership-snapshot-v1"
-DELTA_VERSION = "task-ownership-delta-v1"
+DELTA_VERSION = "task-ownership-delta-v2"
 
 
 class SnapshotError(RuntimeError):
@@ -228,6 +228,7 @@ def compare(
     )
     changed_paths = sorted(set(created + deleted + modified))
     allowed_patterns = tuple(sorted(set(allowed_mutation_scopes)))
+    in_scope = [path for path in changed_paths if _allowed(path, allowed_patterns)]
     out_of_scope = [path for path in changed_paths if not _allowed(path, allowed_patterns)]
     rename_candidates: list[dict[str, str]] = []
     for old_path in deleted:
@@ -252,9 +253,11 @@ def compare(
         "modified": modified,
         "deleted": deleted,
         "changedPaths": changed_paths,
+        "inScopePaths": in_scope,
         "renameCandidates": rename_candidates,
         "outOfScopePaths": out_of_scope,
-        "ownershipState": "CLEAR" if not out_of_scope else "CONFLICT",
+        "scopeState": "WITHIN_ENVELOPE" if not out_of_scope else "OUTSIDE_ENVELOPE",
+        "actorAttribution": "NOT_ESTABLISHED",
     }
 
 
@@ -292,7 +295,7 @@ def main(argv: list[str] | None = None) -> int:
                 allowed_mutation_scopes=_load_patterns(args.allow),
             )
             print(json.dumps(delta, ensure_ascii=False, indent=2, sort_keys=True))
-            if delta["ownershipState"] != "CLEAR":
+            if delta["scopeState"] != "WITHIN_ENVELOPE":
                 return 10
     except (OSError, ValueError, SnapshotError) as exc:
         print(str(exc), file=sys.stderr)
