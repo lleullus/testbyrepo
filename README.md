@@ -13,6 +13,8 @@ planning and implementation leadership.
 - `baseline-capsule/`: required Implementation Lead support module, exported
   from `/home/user01/project/baseline-capsule` at
   `ffb6ff36df9788cb777aae06ccf847d03f29fe5f`
+- `repo-snapshot/`: independent Git working-tree snapshot skill; its credential
+  remains outside this repository at `/home/user01/.config/repo-snapshot/token`
 
 The component directories are plain tracked directories. They do not contain
 nested Git repositories; versioning is owned by this repository root.
