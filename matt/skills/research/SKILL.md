@@ -17,7 +17,13 @@ The research question, target project, and any relevant local artifacts or sourc
 
 Investigate directly against the sources that own each claim. Separate sourced facts from assumptions and unresolved questions. Do not use research to choose product policy on the user's behalf.
 
-When a written report is useful, save one cited Markdown file in the project's existing local convention; if there is no convention, use `<project-root>/.scratch/<work-slug>/`. Write the report and user-facing findings in the user's conversation language.
+When a planning report is useful, resolve
+`../../../planning-workspace/planning_workspace.py` from this skill's canonical
+physical directory, prepare or revalidate the current external workspace, and
+save one cited Markdown file there. Reuse that workspace for the flow. A
+document explicitly approved as durable product/domain documentation follows
+its product documentation authority instead; do not move it into planning
+storage. Write the report and user-facing findings in the user's conversation language.
 
 ## Output
 

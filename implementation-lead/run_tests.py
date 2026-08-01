@@ -11,6 +11,7 @@ SUITES = (
     "tests/contract",
     "tests/task-ownership",
     "tests/implementation-result",
+    "tests/planning-workspace",
     "tests/pilot",
 )
 

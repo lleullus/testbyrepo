@@ -17,13 +17,18 @@ Use only when the work is both large and unclear enough to need multiple session
 ## Inputs
 
 - A destination for the effort.
-- The target project root and work slug.
+- The target product root, work slug, and current external planning workspace when prepared.
 - The currently known constraints, decisions, and uncertainties.
 
 ## Process
 
 1. Use grilling to state the destination and the first decisions needed to make the route visible.
-2. Write or update `<project-root>/.scratch/<work-slug>/WAYFINDER.md` as a local Markdown map. Keep it limited to the destination, decisions made, open decision questions, known dependencies, and explicit out-of-scope work.
+2. Prepare or revalidate the current external workspace with
+   `../../../planning-workspace/planning_workspace.py` resolved from this
+   skill's canonical physical directory, then write or update
+   `<planning-workspace>/WAYFINDER.md`. Reuse the same canonical workspace for
+   later planning artifacts. Keep the map limited to the destination, decisions
+   made, open decision questions, known dependencies, and explicit out-of-scope work.
 3. Resolve one decision at a time. Research or prototype only when that decision needs them; record their result as a candidate until the user adopts it.
 4. When the route is clear, summarize the adopted decisions and hand the work back to `to-spec`.
 

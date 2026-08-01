@@ -8,7 +8,7 @@ that changed a path. They do not run commands, understand package semantics, est
 replace the shared Baseline Capsule, or verify product behavior.
 
 Every artifact contains `ownershipOnly: true`. ImplementationResult does not embed these artifacts;
-they remain run-scoped attribution evidence and never become Capsule or later verification evidence.
+they remain run-scoped attribution evidence and never become Acceptance or completion evidence.
 
 ## Capture sequence
 

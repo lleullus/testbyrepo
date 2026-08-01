@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Immutable source baselines shared by implementation and verification flows."""
+"""Immutable source baselines for identity-bound implementation completion."""
 
 from __future__ import annotations
 

@@ -44,8 +44,17 @@ class ConcurrentScratchPilotTests(unittest.TestCase):
             spec = current / "SPEC.md"
             ticket = current / "tickets" / "TICKET-001.md"
             ticket.parent.mkdir()
-            spec.write_text("approved spec\n", encoding="utf-8")
-            ticket.write_text("ready ticket\n", encoding="utf-8")
+            spec.write_text("# Spec\nStatus: approved\nOwner: user\n", encoding="utf-8")
+            ticket.write_text(
+                "# Ticket\nStatus: ready\nParent-Spec: ../SPEC.md\n"
+                f"Project-Root: {project}\nWorker:\nUI: no\n\n"
+                "## Goal\nUpdate the value.\n\n"
+                "## Acceptance Criteria\n- The source value is 2.\n\n"
+                "## Scope\napp.py\n\n## Non-Goals\nNone\n\n"
+                "## Blockers\nNone\n\n## Verification\nInspect current source.\n\n"
+                "## References\nNone\n",
+                encoding="utf-8",
+            )
             app = project / "app.py"
             app.write_text("VALUE = 1\n", encoding="utf-8")
 
@@ -90,20 +99,51 @@ class ConcurrentScratchPilotTests(unittest.TestCase):
 
             result_root = root / "results"
             result_store = implementation_result.ResultStore(result_root, capsule_root)
+            planning_seal = {
+                "ticketPath": str(ticket.resolve()),
+                "ticketSha256": digest(ticket),
+                "specPath": str(spec.resolve()),
+                "specSha256": digest(spec),
+                "blockerFiles": [],
+            }
+            criteria = implementation_result.acceptance_criteria_from_ticket(ticket)
             published = result_store.publish(
                 {
-                    "protocolVersion": "implementation-result-v2",
-                    "implementationStatus": "IMPLEMENTATION_COMPLETE",
+                    "protocolVersion": "implementation-result-v3",
                     "projectRoot": str(project.resolve()),
-                    "planningSeal": {
-                        "ticketPath": str(ticket.resolve()),
-                        "ticketSha256": digest(ticket),
-                        "specPath": str(spec.resolve()),
-                        "specSha256": digest(spec),
-                        "blockerFiles": [],
-                    },
+                    "planningSeal": planning_seal,
                     "capsuleRef": capsule["capsuleRef"],
                     "finalSourceIdentity": final_source["sourceIdentity"],
+                    "completionRecord": {
+                        "acceptanceCriteriaDigest": implementation_result.acceptance_criteria_digest(criteria),
+                        "supplementalLocalAuthorityBindings": [],
+                        "coverage": [
+                            {
+                                **criteria[0],
+                                "state": "ESTABLISHED",
+                                "evidenceRequirements": [
+                                    {
+                                        "requirementId": "source-requirement-1",
+                                        "kind": "SOURCE",
+                                        "state": "ESTABLISHED",
+                                        "evidenceRefs": ["source-evidence-1"],
+                                    }
+                                ],
+                            }
+                        ],
+                        "sourceEvidence": [
+                            {
+                                "evidenceId": "source-evidence-1",
+                                "coveredRequirementIds": ["source-requirement-1"],
+                                "authorityLocators": ["Ticket:Acceptance Criteria[1]"],
+                                "authorityBindingRefs": [],
+                                "sourceIdentity": final_source["sourceIdentity"],
+                                "reviewSummary": "Current source contains VALUE = 2.",
+                            }
+                        ],
+                        "runtimeObservations": [],
+                        "unresolvedItems": [],
+                    },
                 }
             )
 

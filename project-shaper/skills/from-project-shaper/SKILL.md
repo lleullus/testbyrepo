@@ -14,10 +14,11 @@ Bridge exactly one approved Project Shaper Work Package into Matt without reopen
 
 ## Input
 
-One exact local Markdown path:
+One exact local Markdown path. It may be in any validated external planning
+workspace; its path is not inferred from the product root:
 
 ```text
-<project-root>/.scratch/<initiative-slug>/matt-briefs/WP-NNN.md
+<initiative-planning-workspace>/matt-briefs/WP-NNN.md
 ```
 
 Do not accept only a package name, a directory, a pasted partial block, or the entire `PROJECT-MAP.md` when an exact brief is available.
@@ -38,6 +39,8 @@ Verify all of the following:
 8. `Project-Root` is one absolute path and matches the parent map.
 9. `Suggested-Work-Slug` is present and unique to the package.
 10. Every package dependency named by the brief exists in the parent map.
+11. The brief and parent map share one canonical external initiative workspace
+    that is disjoint from the canonical product `Project-Root`.
 
 If any check fails, stop with:
 
@@ -85,9 +88,19 @@ After the frame is confirmed:
 2. Use `grill-with-docs` when the package is codebase-backed and unresolved product decisions remain; otherwise use `grill-me`.
 3. Skip grilling only when the package outcome, preserved observable behavior and invariants, explicit boundaries, non-goals, and observable completion evidence are already clear.
 4. Ask only package-internal product or operational decisions. Do not ask the user to choose files, modules, schemas, APIs, libraries, algorithms, or implementation order.
-5. Use the brief's `Suggested-Work-Slug` when writing the package `SPEC.md` unless the user explicitly changes it.
+5. Use the brief's `Suggested-Work-Slug` when preparing a package planning
+   workspace under the external initiative workspace unless the user explicitly
+   selects another external durable workspace. Resolve
+   `../../../planning-workspace/planning_workspace.py` from this skill's
+   canonical physical directory and reuse that package workspace for its Spec,
+   Tickets, Wayfinder, Handoff, and planning reports.
 6. Follow the unmodified `to-spec` and `to-tickets` contracts. Do not add Project Shaper metadata to those artifacts unless the user adopts it as part of the package contract.
 7. End at ready Tickets exactly as normal Matt does. Do not invoke Implementation Lead or a Worker.
+
+Use the normal Matt target-readiness and initialization-authorization gate; do
+not duplicate a Project Shaper-specific greenfield checklist. A Project Map's
+existing `Project-Root` does not itself authorize initialization mutation, fix
+an external identity, or delegate remaining bootstrap choices.
 
 ## Boundary Escape Test
 

@@ -74,7 +74,7 @@ The core Worker contract forbids `ima2-uiux`, intent discovery, concept explorat
 new design-direction selection, unapproved `DESIGN.md` work, global `ima2` setup, and concept mockups.
 Objective `ima2-front` guidance and style samples never add a due-now requirement or Acceptance
 Criterion. The Worker must return its read guidance paths, actual changed paths, commands, applicable
-viewport/state/interaction/keyboard/focus observations, authoritative rendered effect/readback, and
+viewport/state/interaction/keyboard/focus observations, provisional rendered effect/readback, and
 unresolved items; the report is trace rather than completion proof.
 
 ## Rendered Evidence
@@ -82,8 +82,9 @@ unresolved items; the report is trace rather than completion proof.
 Static source inspection cannot establish `UI_IMPLEMENTATION` visual, interaction, responsive, or
 accessibility correctness. In the actual intended renderer, observe each applicable authority-defined
 viewport/responsive condition, state, interaction/timing behavior, semantic, and focus/keyboard
-behavior. A runtime-dependent UI criterion becomes `ESTABLISHED` only through the core representative
-runtime-exercise flow with an expected rendered effect and authoritative product readback.
+behavior. A runtime-dependent UI criterion becomes `ESTABLISHED` only when Implementation Lead directly
+performs the core final representative runtime exercise with an expected rendered effect and
+authoritative product readback at the final source identity.
 
 An unavailable renderer, safe target, capability, or reliable source binding is `INCOMPLETE`; it is not
 a product defect or authority blocker. An absent expected rendered effect is task feedback and uses the
@@ -100,10 +101,8 @@ relabel a prior task, or continue from stale rendered behavior.
 Later changes to shared CSS/design tokens, common layout/chrome, frontend Canonicals/component
 primitives, route/state contracts, UI assets, rendered callers/data shapes, renderer entry points, or
 relevant design-system use downgrade affected rendered coverage and return its owning earlier task to
-`REVIEWING`. For a genuine zero-source-mutation invocation-local check, core instead uses its taskless
-run-scoped re-dispatch path. Re-exercise only affected rendered conditions. An unrelated backend change
-does not require a renderer rerun when contextual review keeps the entry point, effect, readback, and
-material premises current.
+`REVIEWING`. Final rendered observations are created only after source dependency closure; any later
+source change discards them and restarts final review.
 
 ## Return To Core Flow
 

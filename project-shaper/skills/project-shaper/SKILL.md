@@ -59,7 +59,7 @@ When the work is already one Matt-sized unit, route directly to `ask-matt`. When
 - The broad product or project outcome.
 - Any explicitly known top-level boundaries, non-goals, target users, and release intent.
 - Optional reference products, repositories, documents, or examples.
-- The target project root and an initiative slug only when artifacts are about to be written.
+- The target product project root, initiative slug, and current external initiative workspace when artifacts are about to be written.
 - The planning owner, if one is named.
 
 Do not request a project root or slug before an artifact is needed. Do not ask technical questions that Matt or Implementation Lead can own later.
@@ -169,11 +169,17 @@ Use the exact contracts in:
 - `references/project-map-contract.md`
 - `references/matt-handoff-contract.md`
 
+Resolve `../../../planning-workspace/planning_workspace.py` from this skill's
+canonical physical directory. Prepare the default external workspace or the
+user's exact external durable workspace once, then pass the returned canonical
+`planningWorkspace` back as `--workspace` for every map and brief operation in
+this shaping flow. Never use product `.scratch` as a new destination.
+
 Write:
 
 ```text
-<project-root>/.scratch/<initiative-slug>/PROJECT-MAP.md
-<project-root>/.scratch/<initiative-slug>/matt-briefs/WP-NNN.md
+<initiative-planning-workspace>/PROJECT-MAP.md
+<initiative-planning-workspace>/matt-briefs/WP-NNN.md
 ```
 
 A map starts as `draft`. Mark it `approved` only after the user confirms the initiative boundary, package split, MVP cut, and dependency graph and no shaping-level open question remains.

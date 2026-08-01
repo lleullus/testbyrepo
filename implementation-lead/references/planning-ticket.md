@@ -91,8 +91,12 @@ Verification
 References
 ```
 
-Only `Acceptance Criteria` supplies positive completion conditions, and its body
-must be non-empty and observable. `Goal` remains a required structural field
+Only `Acceptance Criteria` supplies positive completion conditions. Its body
+must contain one or more observable criteria as exact top-level `- ` Markdown
+list items. Two-space-indented continuation lines and empty separator lines
+belong to the preceding item. Prose before the first item, another top-level
+list marker, an empty item, a nested-only list, a tab-indented continuation, or
+any other non-empty unindented line is malformed. `Goal` remains a required structural field
 with only the narrow coherence check defined above. The other required Ticket
 sections are preserved as raw Markdown except for their explicit preflight
 rules in this reference; this reference adds no generic content schema for
@@ -126,11 +130,35 @@ All supplied or referenced paths are local filesystem paths. A URL, `file:` URI,
 
 - The supplied Ticket path is the exact local path from the invocation and must resolve to a readable regular file.
 - `Parent-Spec` is an absolute local path or a local path relative to the Ticket directory. It must resolve to one readable regular file. A relative path is never resolved from the current directory or another fallback base.
-- After the project root is established, the canonical parent Spec path must remain inside that root. A path that escapes the root, has no single canonical local target, or is otherwise ambiguous blocks preflight. Explicit `..` segments are permitted only when they resolve unambiguously inside the root, such as `../SPEC.md` from a Ticket directory.
+- The canonical parent Spec may be inside or outside the product project root. It must have one unambiguous readable local regular-file target. Explicit `..` segments are permitted when they resolve unambiguously from the Ticket directory, such as `../SPEC.md` from `tickets/` in an external planning workspace.
 - Ticket `Project-Root` takes priority only when its value is an exact absolute local directory path that resolves to one canonical, accessible directory. A relative, multi-value, placeholder, or non-directory value is malformed and blocks rather than becoming a fallback.
 - The optional invocation `project-root` may supply the root only when the Ticket `Project-Root` value is blank. A nonblank invalid value blocks and must not permit fallback. When the Ticket value is valid and an optional root is also supplied, their canonical real paths must be identical. A mismatch blocks.
 - A blank `Project-Root:` without an optional absolute local directory path is blocked. This is the supported Markdown case where the Ticket does not uniquely determine a root.
 - Symlinks are checked through canonical real paths. The supplied path bytes and authored path value are retained separately from the resolved canonical path; resolution never rewrites the user's path spelling.
+
+## Acceptance Criterion Identity
+
+The publisher reads the current Ticket raw bytes and identifies the one exact
+`## Acceptance Criteria` section. Each top-level item is numbered from one in
+authored order. An item's raw range begins with its exact `- ` line and ends
+immediately before the next top-level item or section heading. Empty separator
+lines are included in the preceding item except that empty lines at the start or
+end of the section are outside every item. Original UTF-8 bytes and line endings
+are preserved; no newline, whitespace, Unicode, or Markdown normalization is
+performed.
+
+Each locator is:
+
+```text
+criterionIndex
+criterionRawSha256
+```
+
+`criterionRawSha256` is lowercase SHA-256 of that exact raw item range. The
+Acceptance Criteria digest is lowercase SHA-256 of compact UTF-8 JSON with no
+trailing newline for the ordered locator array. Every object uses the exact
+field order `criterionIndex`, `criterionRawSha256`. Producer and publisher use
+this contract without aliases or repair.
 
 ## Readiness Preflight
 
@@ -138,13 +166,17 @@ Preflight blocks unless all of the following are true:
 
 - Ticket `Status` is exactly `ready`.
 - The parent Spec `Status` is exactly `approved` and its `Owner` is non-empty.
-- The Ticket has non-empty observable Acceptance Criteria.
+- The Ticket has mechanically valid, non-empty observable top-level Acceptance Criteria.
 - The project root is uniquely resolved under the root rules above.
 - A Worker designation was supplied, resolves unambiguously to an available type, and that type can modify the required project paths.
 - `Goal` is only a non-normative summary and has no conflict or obligation absent from the execution-authority sections.
 - Blockers are clear under the blocker rules below.
 - `UI` is exactly `yes` or `no`, with the required UI reference when it is `yes`.
 - Contextual preflight establishes that the Ticket preserves, rather than expands or reverses, the parent Spec's scope and non-goals.
+- When current scope inspection finds required target readiness absent and first
+  product/package/application artifacts due, the Ticket and Spec establish the
+  initialization scope authority, all applicable external decisions, and the
+  fixed/delegated disposition of every remaining material bootstrap choice.
 
 A Ticket may intentionally implement a strict subset of the parent Spec. Requirements assigned to
 sibling Tickets may be excluded by this Ticket's Scope or Non-Goals; that decomposition is not a scope
@@ -188,8 +220,9 @@ alter the Ticket or Spec, and a later invocation may start after the named owner
 | --- | --- |
 | Ticket format, status, Goal coherence, Acceptance Criteria, scope, non-goals, blocker, or UI reference problem | Ticket/Spec owner |
 | Parent Spec format, approval, Owner, or unresolved product decision problem | Ticket/Spec owner |
+| Missing initialization authority, unresolved applicable external decision, or unresolved bootstrap choice disposition | Ticket/Spec owner |
 | Missing, ambiguous, or unavailable Worker designation, or insufficient capability | User |
-| Unreadable, escaping, mismatched, ambiguous, or non-directory project root | User or repository owner |
+| Unreadable, mismatched, ambiguous, or non-directory project root | User or repository owner |
 | Unreadable Ticket, parent Spec, blocker, or required local reference | Ticket/Spec owner; repository owner when the environment is the cause |
 
 ## Task Boundary

@@ -13,11 +13,17 @@ Capture only the context a later planning session needs without duplicating auth
 
 ## Inputs
 
-The current conversation, the target project root and work slug, and the focus of the next session when the user provides one.
+The current conversation, the target product root, work slug, current external planning workspace, and the focus of the next session when the user provides one.
 
 ## Process
 
-Write `<project-root>/.scratch/<work-slug>/HANDOFF.md` in the user's conversation language. Summarize the current goal, decisions, unresolved questions, and next planning step. Link to existing Specs, Wayfinders, research, prototypes, and Tickets instead of copying them. Redact sensitive information.
+Resolve `../../../planning-workspace/planning_workspace.py` from this skill's
+canonical physical directory and revalidate the current workspace, then write
+`<planning-workspace>/HANDOFF.md` in the user's conversation language. Reuse the
+same workspace rather than creating a new task identity. Summarize the current
+goal, decisions, unresolved questions, and next planning step. Link to existing
+Specs, Wayfinders, research, prototypes, Tickets, and durable product/domain
+authority by exact local path instead of copying them. Redact sensitive information.
 
 State explicitly that the handoff is not an authority document: the approved Spec and reviewed Tickets remain authoritative. Do not change artifact status through a handoff.
 

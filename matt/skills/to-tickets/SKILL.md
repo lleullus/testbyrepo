@@ -14,8 +14,9 @@ implementation steps, or starting implementation.
 
 ## Inputs
 
-- An approved parent Spec at `<project-root>/.scratch/<work-slug>/SPEC.md`.
+- An exact approved parent Spec path.
 - The unique project root for the work.
+- The current exact external planning workspace, or the work slug needed to prepare one.
 - The user's review of the proposed Ticket breakdown.
 
 Read the parent Spec first. Refuse to create Tickets from a missing or non-`approved` Spec. Preserve its scope and non-goals; a Ticket must not expand, reverse, or replace the parent Spec.
@@ -46,17 +47,28 @@ to the Ticket unless the approved parent Spec requires one.
 
 ## Output Contract
 
+Resolve `../../../planning-workspace/planning_workspace.py` from this skill's
+canonical physical directory and revalidate the current external workspace
+before writing. When the approved Spec is in that workspace, reuse its parent
+directory. A persisted legacy Spec inside the product root remains readable but
+does not authorize writing Tickets there; prepare an external workspace and use
+the Spec's canonical absolute path as `Parent-Spec` in that case. Ticket
+drafting may reuse a workspace validated with `--future-project-root`, but before
+any Ticket becomes `ready`, reuse that workspace with strict `--project-root`;
+the future-root result is not sufficient for `ready`. Do not manually create,
+repair, or adopt a workspace after any helper failure.
+
 Write one implementation Ticket per file at:
 
 ```text
-<project-root>/.scratch/<work-slug>/tickets/TICKET-NNN.md
+<planning-workspace>/tickets/TICKET-NNN.md
 ```
 
 Each Ticket begins with its title, then these exact metadata keys:
 
 ```text
 Status: draft
-Parent-Spec: ../SPEC.md
+Parent-Spec: ../SPEC.md | <canonical-absolute-parent-Spec-path>
 Project-Root: <the one absolute project root>
 Worker:
 UI: yes | no
@@ -77,6 +89,11 @@ Each Ticket contains these exact headings:
 Any outcome, constraint, invariant, exclusion, or verification expectation
 mentioned in `Goal` must also be unambiguously represented in `Acceptance
 Criteria`, `Scope`, `Non-Goals`, `Blockers`, or `Verification`.
+
+Use `../SPEC.md` only when it resolves from `tickets/` to the exact approved
+Spec. Otherwise use the exact canonical absolute Spec path. Never copy or move a
+durable authority document merely to make the path relative. `Project-Root`
+continues to mean only the product repository.
 
 Write Tickets in the user's conversation language. A Ticket represents exactly
 one independently observable contract increment or one explicit rollout or
@@ -122,6 +139,14 @@ task decomposition one current task at a time.
 Acceptance Criteria derive only from the parent Spec's observable outcomes,
 preserved invariants, explicit constraints, and approved decisions.
 
+Serialize each Criterion as one exact top-level `- ` list item in authored
+order. Use two-space-indented continuation lines only when one Criterion needs
+multiple lines. Do not use ordered, task-list, nested-only, prose-only, empty,
+or mixed-marker bodies. The current raw UTF-8 item bytes, including authored
+line endings and continuation range, become the ImplementationResult v3
+`criterionIndex` and `criterionRawSha256` identity; do not normalize or add a
+separate user-facing AC ID.
+
 Apply this solution-independence check to every normative Ticket statement, not
 only to Acceptance Criteria:
 
@@ -159,9 +184,11 @@ observable product flow, expected effect, and readback at the product-contract
 level. Do not preselect an internal focused test seam, command, or test file
 unless that surface is itself an approved external contract.
 
-Implementation Lead selects focused implementation evidence, including any
-representative runtime exercise. A separate Verification Lead owns an
-independent technical verification verdict.
+Implementation Lead selects focused implementation evidence. The Worker may run
+provisional runtime checks as implementation feedback, but Implementation Lead
+directly performs any final representative runtime exercise at the final source
+identity. That evidence establishes Ticket completion only and is not an
+independent general technical certification.
 
 ## Blocker rules
 
@@ -225,9 +252,25 @@ Draft the breakdown and obtain the user's confirmation before changing any Ticke
 - Every normative Ticket clause has identifiable authority in the approved
   parent Spec.
 - The Ticket does not increase solution specificity beyond the parent Spec.
+- When the Ticket scope may require first product/package/application artifacts,
+  its Scope, Acceptance Criteria, Non-Goals, and Verification trace the parent
+  Spec's initialization scope authority, applicable external decisions, and
+  remaining bootstrap choice fixed/delegated disposition without adding a
+  technical value or delegation of their own.
+- The exact `Project-Root` is an existing canonical accessible directory before
+  the Ticket becomes `ready`; Matt does not create it. Revalidate the same
+  external workspace with strict `--project-root` after any rootless Spec flow.
+- No applicable external/public/persisted identity or operational constraint is
+  unresolved, and any remaining material private bootstrap choice is either
+  fixed by the Spec or explicitly delegated there.
 
 Use only `draft`, `ready`, `blocked`, or `done` as the Ticket status value. `Worker:` must remain empty.
 Matt must not ask for, select, suggest, or record a Worker.
+
+Do not add `Initialization:`, `Planning-Root:`, a bootstrap manifest, exact
+future source/config/test paths, private package/module identity, dependencies,
+task sequence, or mutation envelope. The Ticket may project externally consumed
+identity or fixed constraints only when the approved parent Spec requires them.
 
 ## Final Output
 

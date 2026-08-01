@@ -58,6 +58,23 @@ fact is necessary to determine whether the contract is internally coherent,
 verify only that fact; do not design the implementation path as part of the
 feasibility check.
 
+For a scope that may require first product/package/application artifacts,
+inspect current target readiness directly. Target-readiness absence is a
+repository fact, not a user question and not a durable acceptance claim. Root
+emptiness is not the test: an existing monorepo can have a new scope, while an
+empty documentation-only target need not initialize a product. Ask only the
+authorization decisions that inspection cannot answer:
+
+- whether initialization mutation is allowed in the current planning scope;
+- applicable external/public/persisted identities and intentionally fixed
+  runtime, toolchain, deployment, or operational constraints; and
+- whether every remaining material bootstrap choice is fixed or explicitly
+  delegated to Implementation Lead/Worker.
+
+Do not ask the user to select private package/module identity, dependencies,
+source/config/test paths, internal structure, commands, or a mutation envelope
+when those choices are not externally consumed constraints.
+
 Before recommending `to-spec`, present one contract-only shared understanding
 and obtain explicit user confirmation. State it without anticipated root
 causes, files, modules, endpoints, internal abstractions, implementation order,

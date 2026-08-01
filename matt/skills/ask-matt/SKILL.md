@@ -14,6 +14,12 @@ Choose the smallest planning path that makes the work clear enough for an approv
 ## Main Flow
 
 1. Decide whether grilling is needed. When it is, immediately start the selected `grill-with-docs` or `grill-me` flow and output its first interview turn in the current conversation. Do not stop at a route recommendation or summary. Skip grilling only when the decisions are already clear.
+   A target with an existing canonical project root and inspectable repository
+   context remains codebase-backed even when the current package/application
+   scope has no implementation source yet; route it to `grill-with-docs`.
+   Route to `grill-me` when the product root or repository context itself is not
+   yet available. Do not classify from words such as greenfield, initialize, or
+   bootstrap.
 2. Use `to-spec` when the desired outcome, preserved observable behavior and
    invariants, explicit boundaries, non-goals, and observable completion
    evidence are clear, and the user has confirmed one contract-only shared
@@ -29,6 +35,15 @@ Choose the smallest planning path that makes the work clear enough for an approv
    the confirmed boundaries, non-goals, or an unavoidable external authority
    boundary. The absence of a known path or uncertainty about the best path is
    not a blocker.
+
+   When the confirmed outcome requires the first product/package/application
+   artifacts in a scope that currently lacks target readiness, planning must
+   resolve only: whether initialization mutation in that scope is authorized;
+   applicable external/public/persisted identities and deliberately fixed
+   runtime, toolchain, deployment, or operational constraints; and whether all
+   remaining material bootstrap choices are fixed or explicitly delegated to
+   Implementation Lead/Worker. Do not ask the user to invent a private package
+   identity, future file list, dependency, or mutation envelope.
 3. Use `to-tickets` only from an approved Spec. It creates the smallest set of
    independently observable desired-state Tickets, not an anticipated internal
    implementation sequence.

@@ -42,15 +42,16 @@ inspect the actual delta, reopen affected dependency closure review, and return 
   Ticket-authorized defect attributable to the task; select a new initial task when it exposes missing
   due-now behavior instead.
 - Without an authoritative readback, the runtime-dependent Acceptance Criterion remains `PARTIAL`.
-  Return its owning task to `REVIEWING` for a no-mutation focused check only when a real readback path
-  exists; otherwise return `INCOMPLETE`.
+  If a real readback path is unavailable, return `INCOMPLETE`; do not ask the Worker to certify it.
 - An unavailable safe target, execution capability, credential, or reliable target-to-source binding is
   `INCOMPLETE`; do not reinterpret an environment failure as a product defect or alter source merely to
   obtain a pass.
 - Unclear target authority, an unapproved external effect, or a required action that is unsafe to run is
   `BLOCKED` for the user or authority owner.
-- A project delta during a no-mutation focused check follows the ordinary ownership capture and
-  reconciliation rules; it is not an exception that can support runtime coverage.
+- A project delta during the Lead-owned final exercise invalidates the observation. Reconcile the delta,
+  then rerun at a stable final candidate on a non-writing source-bound target.
+- Missing or malformed execution-target, planning-seal, project-delta, or cleanup binding is
+  `INCOMPLETE` and forbids publication.
 
 ## Frontend guidance, authority, and renderer outcomes
 
@@ -88,5 +89,17 @@ and locator sufficiency are Ticket/Spec authority conditions. Neither permits a 
 - ImplementationResult `PLANNING_INPUT_CHANGED`: `BLOCKED`. Malformed request, result-store failure,
   Capsule failure, or capability failure: `INCOMPLETE`. Do not claim completion without publication.
 - Changed planning authority or unresolved overlapping ownership: `BLOCKED`.
-- A finding returned by a later independent Verification invocation: start a new Implementation Lead
-  invocation if the user requests authorized product changes. Never reopen or rewrite the prior result.
+- Current scope lacks target readiness but initialization mutation authority is
+  absent: `BLOCKED` before Worker dispatch for the Ticket/Spec owner.
+- Applicable external/public/persisted identity or fixed operational constraint
+  is unresolved, or a material bootstrap choice is neither fixed nor explicitly
+  delegated: `BLOCKED` before Worker dispatch for the Ticket/Spec owner.
+- A private package/module identity is unspecified under approved bootstrap
+  delegation: continue as an implementation choice; it is not a blocker.
+- An authorized bootstrap choice cannot be executed with local capability:
+  `INCOMPLETE`. Network, publication, global installation, credential use, or
+  external resource creation without separate authority is `BLOCKED` before the
+  effect.
+- A later user bug report or review finding requires current planning authority
+  and a new Implementation Lead invocation for product changes. Never reopen or
+  rewrite the prior result.

@@ -15,7 +15,7 @@ without choosing or beginning the implementation.
 ## Inputs
 
 - The most recently user-confirmed contract-only shared understanding.
-- The exact project root and work slug needed for the output path.
+- The exact product project root, work slug, and current external planning workspace when already prepared.
 - The planning owner, if one is named.
 
 ## Normative source lock
@@ -37,15 +37,31 @@ If writing an accurate Spec appears to require a new product requirement,
 boundary, Non-Goal, or externally imposed constraint, stop and obtain explicit
 confirmation of that delta. Do not silently include it in the draft.
 
-Do not re-interview the user for decisions already established. If the project root, work slug, owner, or a material decision is unknown, request only what is needed to write an accurate Spec.
+Do not re-interview the user for decisions already established. If the product
+root, work slug, owner, or a material decision is unknown, request only what is
+needed to write an accurate Spec. If no planning workspace exists in current
+context, prepare the default or user-supplied external workspace with
+`../../../planning-workspace/planning_workspace.py` resolved from this skill's
+canonical physical directory. If one exists, pass its exact canonical path back
+to the same tool as `--workspace` and reuse it. When the intended absolute
+product root is fixed but not provisioned yet, use the helper's explicit
+`--future-project-root` path; it must not create that root. Spec drafting and
+approval may continue with the returned rootless workspace. Do not manually
+create, repair, or adopt a workspace after any helper failure.
 
 ## Output Contract
 
 Write exactly one file at:
 
 ```text
-<project-root>/.scratch/<work-slug>/SPEC.md
+<planning-workspace>/SPEC.md
 ```
+
+`planning-workspace` must be the tool-validated canonical external directory,
+disjoint from the product root. Report the written Spec by canonical absolute
+path. Do not create a new `.scratch` planning destination in the product root.
+For a future root, disjointness is provisional until the root exists; preserve
+the same workspace identity for the later strict revalidation.
 
 The document begins with a title, then these exact metadata keys:
 
@@ -75,6 +91,24 @@ Start with `Status: draft`. Change the exact status value to `approved` only aft
 
 A Spec does not require a complete implementation approach before approval.
 
+When the approved outcome authorizes first product/package/application
+artifacts in a scope without current target readiness, approval does require the
+three planning authorization facts to be resolved:
+
+1. the scope in which initialization mutation is authorized;
+2. every applicable external/public/persisted identity and intentionally fixed
+   runtime, toolchain, deployment, or operational constraint, including an
+   explicit statement when none applies; and
+3. whether every remaining material bootstrap choice is fixed or explicitly
+   delegated to Implementation Lead/Worker.
+
+Preserve observable initialization scope and externally consumed identities in
+`Requirements`. Preserve intentionally fixed operational/technical constraints
+and the fixed/delegated disposition in `Implementation Constraints`. Do not add
+new metadata, repeat the absolute product path in the Spec body, or turn current
+source absence into a permanent requirement. If any applicable fact remains
+unresolved, keep the Spec draft.
+
 Do not require Matt to identify, validate, or prove an implementation path
 before approval. Do not block approval because feasibility has not yet been
 demonstrated. Block approval only when a specific unresolved contradiction
@@ -89,6 +123,13 @@ interface, algorithm, or implementation approach should be used.
 Do not block approval merely because the exact files, modules, endpoint,
 abstraction, task sequence, or focused test seam are not yet known.
 Implementation Lead owns those decisions.
+
+Explicit bootstrap delegation permits private implementation choices only. It
+does not authorize network access, package publication, global installation,
+credential use, external resource creation, or Git metadata changes. An
+external identity is required only when a caller, registry, deployment,
+persisted contract, or operating environment actually consumes it; do not
+invent one for a private package or module.
 
 ## Mandatory contract audit
 

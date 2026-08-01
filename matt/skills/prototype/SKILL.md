@@ -33,7 +33,14 @@ The two branches produce very different artifacts — getting this wrong wastes 
 
 ## When done
 
-The _answer_ is the only thing worth keeping from a prototype. Capture the question and the user's adopted decision in local Markdown, such as a planning note under `<project-root>/.scratch/<work-slug>/` or an approved Spec when appropriate. If the user has not adopted a decision, leave it unresolved and delete the prototype rather than treating it as authority.
+The _answer_ is the only thing worth keeping from a prototype. Keep throwaway
+prototype source under its existing product-context and cleanup rules; it is not
+planning Markdown. Capture the question and the user's adopted decision in the
+current external planning workspace, prepared or revalidated through
+`../../../planning-workspace/planning_workspace.py` resolved from this skill's
+canonical physical directory, or in an approved Spec when appropriate. If the
+user has not adopted a decision, leave it unresolved and delete the prototype
+rather than treating it as authority.
 
 ## Next Action
 

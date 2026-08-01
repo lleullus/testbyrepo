@@ -1,8 +1,7 @@
 # Baseline Capsule
 
-Shared immutable source-baseline module for the independent Implementation Lead
-and Verification Lead skills. It is not an OpenCode skill and owns no planning
-or verification lifecycle state.
+Immutable source-baseline support module for Implementation Lead. It is not an
+OpenCode skill and owns no planning, Acceptance, or completion lifecycle state.
 
 ```bash
 python3 baseline_capsule.py create --project-root /absolute/project

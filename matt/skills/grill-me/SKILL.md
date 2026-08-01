@@ -29,6 +29,20 @@ baseline. Later discussion, prototypes, references, and anticipated approaches
 must not add to, strengthen, or narrow the contract without an explicit
 user-confirmed delta.
 
+When a new product/package/application will require its first product artifacts
+but no inspectable root or repository context exists yet, confirm only:
+
+- the scope in which initialization mutation is authorized;
+- applicable external/public/persisted identities and intentionally fixed
+  runtime, toolchain, deployment, or operational constraints; and
+- whether every remaining material bootstrap choice is fixed or explicitly
+  delegated to Implementation Lead/Worker.
+
+Do not ask for private package/module identity, dependencies, future file
+layout, commands, or a mutation envelope. The exact product `Project-Root` must
+exist as a canonical accessible directory before a Ticket can become `ready`;
+planning does not create it.
+
 ## Output
 
 A contract-only shared understanding of the problem, decisions, constraints,
