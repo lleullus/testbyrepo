@@ -108,7 +108,7 @@ const CHILDLESS_KEYS = new Set([
  * It intentionally never grants final completion approval.
  *
  * @param {string} projectDirectory directory to inspect
- * @param {{boundaryEvidence?: object}} [options] fixed boundary evidence captured before the diagnosis
+ * @param {{boundaryEvidence?: object, fixedThresholds?: object}} [options] fixed policy evidence captured before the diagnosis
  * @returns {object} a limited fast-diagnosis result
  */
 function diagnoseFastProject(projectDirectory, options = {}) {
@@ -117,12 +117,14 @@ function diagnoseFastProject(projectDirectory, options = {}) {
   }
 
   const projectRoot = path.resolve(projectDirectory);
+  const normalizedOptions = isPlainObject(options) ? options : {};
   const beforeScan = scanSourceFiles(projectRoot);
   const beforeState = sourceState(beforeScan);
-  const thresholdState = resolveThresholds(projectRoot);
+  const thresholdState = resolveThresholds(projectRoot, normalizedOptions.fixedThresholds);
   const productFiles = beforeScan.files.filter((file) => !isTestFile(file.path));
   const parser = loadParser();
   let checks;
+  let graph = null;
   let parsedFiles = [];
   let analysisFailure = null;
 
@@ -156,11 +158,11 @@ function diagnoseFastProject(projectDirectory, options = {}) {
     checks = unavailableChecks(analysisFailure.message, analysisFailure.evidence, thresholdState);
   } else {
     const typeScriptConfiguration = assessTypeScriptConfiguration(projectRoot, parsedFiles);
-    const graph = buildDependencyGraph(projectRoot, parsedFiles, typeScriptConfiguration);
+    graph = buildDependencyGraph(projectRoot, parsedFiles, typeScriptConfiguration);
     checks = collectChecks({
       files: parsedFiles,
       graph,
-      options: isPlainObject(options) ? options : {},
+      options: normalizedOptions,
       projectRoot,
       thresholdState,
       typeScriptConfiguration,
@@ -171,7 +173,7 @@ function diagnoseFastProject(projectDirectory, options = {}) {
   const afterState = sourceState(scanSourceFiles(projectRoot));
   checks.push(sourceStabilityCheck(beforeState, afterState));
 
-  return createResult(projectRoot, checks, thresholdState, beforeState, afterState, parser.name);
+  return createResult(projectRoot, checks, thresholdState, beforeState, afterState, parser.name, graph);
 }
 
 function collectChecks(context) {
@@ -686,7 +688,7 @@ function check(id, verdict, message, evidence = [], extra = {}) {
   return { id, verdict, message, evidence, ...extra };
 }
 
-function createResult(projectRoot, checks, thresholdState, before, after, parserName) {
+function createResult(projectRoot, checks, thresholdState, before, after, parserName, graph) {
   const verdict = aggregateVerdict(checks);
   const counts = { FAIL: 0, INCONCLUSIVE: 0, PASS: 0 };
   for (const item of checks) {
@@ -724,6 +726,11 @@ function createResult(projectRoot, checks, thresholdState, before, after, parser
         errors: thresholdState.errors,
         sources: thresholdState.sources
       },
+      dependencyGraph: graph ? {
+        edges: graph.edges,
+        files: graph.files,
+        unknown: graph.unknown
+      } : null,
       parser: parserName,
       sourceReadback: {
         before: sourceStateEvidence(before),
@@ -870,7 +877,11 @@ function sourceState(scan) {
   return { digest: hash.digest('hex'), fileCount: scan.files.length };
 }
 
-function resolveThresholds(projectRoot) {
+function captureSourceState(projectDirectory) {
+  return sourceState(scanSourceFiles(path.resolve(projectDirectory)));
+}
+
+function resolveThresholds(projectRoot, fixedThresholds) {
   const candidates = Object.fromEntries(Object.entries(DEFAULT_THRESHOLDS).map(([name, value]) => [name, []]));
   const errors = [];
   const sources = [];
@@ -915,6 +926,8 @@ function resolveThresholds(projectRoot) {
     }
   }
 
+  collectFixedThresholds(fixedThresholds, candidates, errors);
+
   const values = {};
   for (const [name, defaultValue] of Object.entries(DEFAULT_THRESHOLDS)) {
     const configured = candidates[name];
@@ -935,6 +948,35 @@ function resolveThresholds(projectRoot) {
     };
   }
   return { errors, sources, values };
+}
+
+function collectFixedThresholds(configuration, candidates, errors) {
+  if (configuration === undefined) {
+    return;
+  }
+  if (!isPlainObject(configuration)) {
+    errors.push({
+      message: 'Fixed policy thresholds must be an object when supplied.',
+      path: 'fixedThresholds',
+      status: 'invalid'
+    });
+    return;
+  }
+  for (const thresholdName of Object.keys(DEFAULT_THRESHOLDS)) {
+    if (!Object.hasOwn(configuration, thresholdName)) {
+      continue;
+    }
+    const value = configuration[thresholdName];
+    if (!Number.isSafeInteger(value) || value <= 0) {
+      errors.push({
+        message: `Fixed policy ${thresholdName} must be a positive integer.`,
+        path: `fixedThresholds.${thresholdName}`,
+        status: 'invalid'
+      });
+      continue;
+    }
+    candidates[thresholdName].push({ source: `fixed-policy.thresholds.${thresholdName}`, value });
+  }
 }
 
 function collectEslintThresholds(configuration, source, candidates, errors) {
@@ -2125,4 +2167,4 @@ function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-module.exports = { diagnoseFastProject };
+module.exports = { captureSourceState, diagnoseFastProject };

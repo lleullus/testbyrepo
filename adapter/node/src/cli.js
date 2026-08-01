@@ -3,7 +3,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { admitChange, diagnoseFastProject, diagnoseProject } = require('./index');
+const { admitChange, diagnoseFastProject, diagnoseProject, gateProject } = require('./index');
 
 function run(argv, output, errorOutput) {
   if (argv[0] === 'admit') {
@@ -12,7 +12,53 @@ function run(argv, output, errorOutput) {
   if (argv[0] === 'fast') {
     return runFastDiagnosis(argv.slice(1), output, errorOutput);
   }
+  if (argv[0] === 'gate') {
+    return runQualityGate(argv.slice(1), output, errorOutput);
+  }
   return runDiagnosis(argv, output, errorOutput);
+}
+
+function runQualityGate(argv, output, errorOutput) {
+  let evidencePath = null;
+  let showDetails = false;
+  let targetDirectory = null;
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === '--details' || argument === '-d') {
+      showDetails = true;
+    } else if (argument === '--evidence') {
+      evidencePath = argv[index + 1] || null;
+      index += 1;
+      if (!evidencePath) {
+        errorOutput.write(qualityGateUsage());
+        return { exitCode: 2 };
+      }
+    } else if (argument === '--help' || argument === '-h') {
+      output.write(qualityGateUsage());
+      return { exitCode: 0 };
+    } else if (!targetDirectory) {
+      targetDirectory = argument;
+    } else {
+      errorOutput.write(qualityGateUsage());
+      return { exitCode: 2 };
+    }
+  }
+
+  if (!targetDirectory || !evidencePath) {
+    errorOutput.write(qualityGateUsage());
+    return { exitCode: 2 };
+  }
+
+  let evidence;
+  try {
+    evidence = JSON.parse(fs.readFileSync(path.resolve(evidencePath), 'utf8'));
+  } catch (error) {
+    evidence = { inputError: { path: evidencePath, message: error.message } };
+  }
+  const result = gateProject(path.resolve(targetDirectory), evidence);
+  output.write(`${showDetails ? JSON.stringify(result.details, null, 2) : formatQualityGateSummary(result)}\n`);
+  return { exitCode: exitCodeFor(result.verdict), result };
 }
 
 function runFastDiagnosis(argv, output, errorOutput) {
@@ -168,6 +214,20 @@ function formatFastDiagnosisSummary(result) {
   ].join('\n');
 }
 
+function formatQualityGateSummary(result) {
+  const findings = result.summary.mainFindings;
+  const findingText = findings.length === 0
+    ? 'none observed.'
+    : findings.map((finding) => finding.message).join(' ');
+  const counts = result.summary.categoryCounts;
+  return [
+    `Final quality Gate verdict: ${result.verdict}`,
+    `Completion approval: ${result.completionApproval}`,
+    `Categories: ${counts.PASS} PASS, ${counts.FAIL} FAIL, ${counts.INCONCLUSIVE} INCONCLUSIVE`,
+    `Main findings: ${findingText}`
+  ].join('\n');
+}
+
 function exitCodeFor(verdict) {
   return verdict === 'PASS' ? 0 : verdict === 'FAIL' ? 1 : 2;
 }
@@ -182,6 +242,10 @@ function admissionUsage() {
 
 function fastDiagnosisUsage() {
   return 'Usage: node-policy-checker fast [--details] [--boundary-evidence <json-file>] <project-directory>\n';
+}
+
+function qualityGateUsage() {
+  return 'Usage: node-policy-checker gate [--details] --evidence <json-file> <project-directory>\n';
 }
 
 if (require.main === module) {
