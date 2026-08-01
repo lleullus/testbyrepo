@@ -45,9 +45,10 @@ path.
 
 Load `references/planning-ticket.md` before preflight and
 `references/planning-input-currentness.md` before capturing or rechecking the planning seal. Load
-`references/ui-ticket.md` only for `UI: yes`. Load `references/greenfield-implementation.md` only for
-explicit greenfield initialization. Load `references/implementation-failure-routing.md` before any
-implementation remediation decision. Load `references/task-ownership.md` before the first Worker.
+`references/ui-ticket.md` only for a current `UI_IMPLEMENTATION` dispatch under `UI: yes`. Load
+`references/greenfield-implementation.md` only for explicit greenfield initialization. Load
+`references/implementation-failure-routing.md` before any implementation remediation decision. Load
+`references/task-ownership.md` before the first Worker.
 
 ## Authority
 
@@ -229,6 +230,20 @@ acceptedIntegratedIdentity, withdrawnReason, unresolvedItems
 `reconciliationDisposition` is empty when no reconciliation occurred, otherwise `CONTINUE`,
 `REMEDIATE`, `BLOCKED`, or `INCOMPLETE`.
 
+For a selected task, record its current dispatch `frontendMode`, classification basis, and any resolved
+active `ima2-front` path/base directory in that task record's existing `integrationObligations`, and
+echo the mode with its required direct reads, renderer conditions, commands, expected effects, and
+readbacks in that task record's existing `focusedWorkerChecks`. When an existing `IMPLEMENTED` task
+returns to `REVIEWING` for a no-mutation focused check, reuse those same fields on its owning task
+record. These are task facts, not new RunState, TaskState, task-record fields, manifest, lifecycle, or
+result protocol.
+
+For the genuine zero-source-mutation exception, create no TaskState, task record, or task fields. Keep
+the dispatch classification, resolved active guidance path/base directory, and actual focused/rendered
+evidence only in invocation-local run-scoped check context. Reflect directly observed coverage facts and
+readback in the existing `acceptanceCoverage`, and report them in the terminal return. This context is
+not a new RunRecord field, manifest, lifecycle, or artifact schema.
+
 Each reconciled external-change record contains:
 
 ```text
@@ -309,6 +324,78 @@ Keep tasks sequential and keep `currentTaskId` empty except while one task is se
 merely by file count or assign multiple Workers. A missed due-now requirement discovered later is a
 new initial task selected from the downgraded coverage record, not retroactive remediation.
 
+### Frontend dispatch classification
+
+`frontendMode` is a current-dispatch classification, not a RunState, TaskState, task record, manifest,
+or result protocol. Recompute it when selecting every bounded task, no-mutation focused dispatch,
+genuine zero-source-mutation exception, and frontend remediation dispatch. It has exactly these values:
+
+```text
+NONE
+ENGINEERING_ONLY
+UI_IMPLEMENTATION
+```
+
+The mode changes the selected Worker's dispatch contract, not Worker selection. It creates no Addon,
+dedicated frontend Worker, or separate manifest.
+
+Classify the actual current runtime consumer and observable completion condition, never a file
+extension, directory name, task title, or guessed stack.
+
+- `frontendTarget` is true only when the current dispatch changes or directly exercises source, styles,
+  assets, runtime wiring, configuration, or a rendered product entry point that is an actual browser or
+  native UI runtime consumer.
+- `renderedContractChange` is true only when an approved result changes pixels, content or copy,
+  interaction or navigation, loading/empty/error/success/permission presentation, responsive behavior,
+  accessibility semantics, focus or keyboard behavior, user-visible assets, or motion. A semantics,
+  focus, or keyboard change is a rendered-contract change even when pixels do not change.
+- Shared source is frontend-bearing only when this current dispatch has an actual frontend consumer or
+  renderer impact. Its spelling or location does not decide the classification.
+
+Apply the classification in this order:
+
+1. If the dispatch neither changes nor directly exercises a frontend runtime consumer, use `NONE`.
+2. If it changes frontend runtime source, configuration, state, integration, or performance while its
+   approved rendered and UX result must be exactly preserved and no direct rendered-result exercise is
+   due now, use `ENGINEERING_ONLY`.
+3. Use `UI_IMPLEMENTATION` when the dispatch implements a `renderedContractChange` or must exercise
+   that approved rendered result in the intended renderer, including a no-mutation focused dispatch.
+
+A required direct rendered-result exercise is `UI_IMPLEMENTATION` even when its expected pixels and UX
+are preservation rather than change; `ENGINEERING_ONLY` does not bypass rendered evidence.
+
+`UI_IMPLEMENTATION` with Ticket `UI: no` is `BLOCKED` before Worker dispatch because the due-now
+rendered contract conflicts with Ticket UI authority. This is not triggered by merely seeing a frontend
+file. `UI_IMPLEMENTATION` with Ticket `UI: yes` requires the current approved UI reference, exact
+task-relevant locators, linked criteria, and authority-defined rendered conditions. A missing,
+insufficient, changed, or conflicting reference or locator is `BLOCKED` for the Ticket/Spec owner.
+
+Ticket `UI: yes` does not make every dispatch UI work: a backend-only task is `NONE` and is classified
+again when a later task becomes current. `ENGINEERING_ONLY` is permitted for Ticket `UI: no`, but it
+must preserve the existing rendered and UX result exactly and must not infer a UI authority,
+requirement, or reference.
+
+The Lead never invokes `ima2-uiux` as a fallback. If a due-now UI/UX product decision is not supplied
+by the Ticket/Spec and approved UI authority, do not implement it; return `BLOCKED` for the Ticket/Spec
+owner.
+
+### Active frontend guidance resolution
+
+Before every `ENGINEERING_ONLY` or `UI_IMPLEMENTATION` Worker dispatch, including no-mutation focused
+dispatches, genuine zero-source-mutation exceptions, and frontend remediation dispatches, the Lead
+must load the active skill by the stable identifier `ima2-front` and read it. From the active loader's
+returned base directory, resolve the canonical physical absolute `SKILL.md` path and base directory,
+following symlinks to their real paths, then read that exact `SKILL.md`. Do not search for, select, or
+substitute a same-named npm, package, local, or copied skill.
+
+If the active `ima2-front` skill, its loader-returned base directory, or its canonical `SKILL.md` cannot
+be resolved or read, return `INCOMPLETE` before product mutation. This is an environment/capability
+failure, not a product-authority gap; do not approximate guidance or pass a copied substitute. Record
+the resolved absolute `SKILL.md` path and base directory in the current task record's existing
+`integrationObligations`, or only in the invocation-local context for a genuine zero-source-mutation
+exception, and pass both values afresh on every Worker call. Worker context is never assumed to persist
+between calls. A `NONE` dispatch neither resolves nor passes `ima2-front`.
+
 A representative runtime exercise is a focused Worker check, not a RunState or an evidence-only task.
 When a current task is expected to close the remaining source gaps for `PARTIAL` runtime-dependent
 criteria, add the smallest set of exercises that directly covers those criteria to
@@ -318,8 +405,9 @@ authoritative readback directly establish each one; do not add one exercise per 
 If all source gaps are closed while required runtime coverage remains `PARTIAL`, return the existing
 `IMPLEMENTED` task that owns the unresolved behavior to `REVIEWING` and dispatch the selected Worker
 for a no-mutation focused check with an empty mutation envelope. This is neither a new task nor
-implementation remediation. If review instead reveals missing due-now source behavior, select a new
-initial task from the downgraded coverage record.
+implementation remediation; reuse the owning task record's existing `integrationObligations` and
+`focusedWorkerChecks`. If review instead reveals missing due-now source behavior, select a new initial
+task from the downgraded coverage record.
 
 For a genuine zero-source-mutation Ticket with no existing task, dispatch the same check as a run-scoped
 exception while `currentTaskId` remains empty. Apply the ordinary planning, Capsule, before/after
@@ -338,6 +426,26 @@ without safe cleanup is not a safe target.
 Do not automatically use production, real money, real messages, user data, or another irreversible
 external effect. Those require Ticket authority and explicit user authorization for this invocation.
 Do not silently skip a required exercise or reinterpret an unavailable safe target as a product pass.
+
+### Frontend rendered evidence
+
+`UI_IMPLEMENTATION` never establishes visual, interaction, responsive, or accessibility correctness
+through static source inspection alone. In the actual intended renderer, observe every applicable
+authority-defined viewport/responsive condition, required state, interaction/timing behavior,
+accessibility semantic, and focus/keyboard behavior. For a runtime-dependent UI criterion, use the
+existing representative runtime exercise rules: the expected rendered effect and authoritative product
+readback must be observed at an integrated identity before coverage becomes `ESTABLISHED`.
+
+Use only repository-authoritative renderer/tool commands, a safe target, and reliable source binding.
+If any is unavailable, return `INCOMPLETE` under the existing environment/capability semantics; do not
+relabel that condition as a product defect or authority blocker. If the actual renderer lacks the
+expected effect, treat it as task feedback. Use the existing bounded remediation path only after Lead
+review establishes a Worker-attributable, Ticket-authorized defect in current source; otherwise use the
+existing new-initial-task decision for missing due-now behavior.
+
+Do not create an unnecessary product file, project-root screenshot, or evidence artifact merely to
+prove rendered behavior. Use existing repository/tool output or run-scoped non-product observation;
+create a product artifact only when the Ticket requires it and the frozen allowed scope permits it.
 
 ## Sequential Worker loop
 
@@ -369,11 +477,64 @@ mutation envelope:
    readback, selected safe target, and post-call ownership delta; connect it only to criteria it
    directly observed. A passing exit code or Worker claim does not establish runtime coverage.
 10. For a task dispatch, set `IMPLEMENTED` only when the predicate below is true. If no attributable
-    product delta remains, set `WITHDRAWN`, retain the attempt as history, and forbid its evidence from
-    supporting coverage. For the zero-source-mutation exception, create no TaskState and update only
-    directly observed coverage after confirming a valid empty ownership delta.
+     product delta remains, set `WITHDRAWN`, retain the attempt as history, and forbid its evidence from
+     supporting coverage. For the zero-source-mutation exception, create no TaskState and update only
+     directly observed coverage after confirming a valid empty ownership delta.
 11. Re-evaluate affected coverage, premises, impact scopes, and dependency closure before selecting
-    another task.
+     another task.
+
+### Frontend Worker dispatch contract
+
+For every `ENGINEERING_ONLY` or `UI_IMPLEMENTATION` dispatch, step 4 also passes the freshly resolved
+absolute active `ima2-front/SKILL.md` path and canonical base directory. This contract applies again to
+every no-mutation focused dispatch and frontend remediation dispatch:
+
+1. Before any product-file mutation, the Worker reads the passed absolute `ima2-front/SKILL.md` from
+   beginning to end. It does not assume that the OpenCode `skill` tool is available.
+2. From the passed base directory, the Worker directly reads only the task-relevant references that the
+   `SKILL.md` routing directs for this dispatch. It neither searches for another copy nor relies on
+   context retained from a prior Worker call.
+3. Worker authority for this frontend dispatch is, in descending order:
+
+   ```text
+   ready Ticket and approved parent Spec
+   > approved UI reference and task locator when UI: yes
+   > repository design system, commands, and conventions
+   > ima2-front objective implementation guidance
+   > ima2-front style samples
+   ```
+
+   This applies the existing Authority table; it does not replace it. Workflow guidance and style
+   samples never add a due-now requirement or Acceptance Criterion.
+4. In both modes, the Worker does not invoke `ima2-uiux`, perform intent discovery or concept
+   exploration, choose a new design direction, apply no-brief defaults, or create a new Design Read.
+   It does not create or change `DESIGN.md` unless that artifact is explicitly approved product work in
+   the current Ticket task. It does not invent IA, copy, state meaning, color, typography, asset
+   concept, or motion direction outside approved UI authority.
+5. The Worker does not install or set up `ima2`, log in, or change global defaults. It may generate a
+   production asset only when the current Ticket/task requires it and its output is inside the frozen
+   allowed mutation scope. Concept mockup generation is forbidden.
+6. In `ENGINEERING_ONLY`, the Worker preserves the rendered and UX result exactly. It applies only
+   task-relevant framework, runtime, state, integration, or performance guidance, and does not apply
+   design, concept, or asset-generation procedures or infer UI authority/reference.
+7. In `UI_IMPLEMENTATION`, the Lead also passes the approved UI-reference path, exact current
+   task locators, linked criteria, and authority-defined rendered conditions. The Worker uses only the
+   repository-authoritative browser, renderer, and test commands and the intended product entry point.
+8. If the Worker cannot read the passed guidance path or a routed required reference, it makes no
+   mutation and returns `GUIDANCE_UNAVAILABLE`; the Lead routes this to `INCOMPLETE`. If UI authority
+   or a required locator is insufficient, or guidance conflicts with unresolved higher authority, it
+   makes no mutation and returns `AUTHORITY_GAP`; the Lead routes this to `BLOCKED` for the Ticket/Spec
+   owner.
+9. The Worker return includes the `ima2-front` paths read, actual changed paths, frontend/build/test/
+   renderer commands run, observed viewport, state, interaction, keyboard, and focus results as
+   applicable, authoritative rendered effect/readback, and unresolved items. This report is trace only:
+   the Lead still reviews changed source, callers, Canonicals, design-system use, focused checks, and
+   runtime/rendered effect before accepting completion.
+
+The existing source-first runtime-evidence sequence remains controlling: complete authorized source
+changes first, run the representative or renderer exercise last, and make no further project-file
+mutation after that exercise. Repeated-edit guidance in `ima2-front` never bypasses this safety rule,
+the frozen allowed/forbidden paths, preserved changes, ownership snapshots, or the no-delegation rule.
 
 ### Unexpected-delta reconciliation
 
@@ -430,6 +591,21 @@ until a representative runtime exercise is reviewed again. Do not rerun an exerc
 unrelated change altered the physical source identity; carry the evidence forward only after contextual
 review establishes that its entry point, effect, readback, and material premises remain current.
 
+For retained evidence from a genuine zero-source-mutation exception's invocation-local run-scoped check,
+when contextual review cannot carry it forward, downgrade only its affected coverage to `PARTIAL` and
+re-enter `IMPLEMENTING` to re-dispatch that check with an empty mutation envelope without creating a
+task or TaskState.
+
+For retained `UI_IMPLEMENTATION` evidence associated with an earlier task, a later task that changes
+shared CSS or design tokens, common layout or chrome, a frontend Canonical or component primitive,
+route/state contract, UI asset, rendered caller/data shape, intended renderer entry point, or relevant
+design-system use returns the earlier task to `REVIEWING` and downgrades its affected rendered coverage.
+Re-exercise only the affected viewport, state, interaction, semantic, focus, or keyboard condition.
+An unrelated backend change or
+other source-identity change does not force a renderer exercise when contextual review establishes that
+the relevant entry point, effect, readback, integration relationships, and material premises remain
+current.
+
 ## Implementation remediation
 
 Implementation remediation is allowed only before terminal completion for either a source-review defect
@@ -457,9 +633,22 @@ and the complete changed-path inventory is current.
 3. Reinspect every Acceptance Criterion against actual source, callers, exports, Canonicals,
    compatibility, integration, and retained premises at that identity. For a runtime-dependent
    criterion, confirm that retained representative runtime evidence directly observed the claimed
-   effect and authoritative readback and remains applicable. If not, downgrade coverage, return the
-   affected task to `REVIEWING`, and re-enter `IMPLEMENTING`; select a new initial task instead when
-   source review reveals missing due-now behavior.
+   effect and authoritative readback and remains applicable. For retained coverage that depends on
+   `UI_IMPLEMENTATION` dispatch evidence, also confirm that its approved UI authority and locators
+   remain applicable and that the relevant source/integration relationships, actual renderer effect, and
+   authoritative rendered readback still support the coverage. When either retained evidence type is
+   stale or no longer applicable:
+   - If it belongs to an existing task, downgrade its affected coverage, return the affected task to `REVIEWING`, and re-enter `IMPLEMENTING`.
+   - If it belongs to a genuine zero-source-mutation exception's invocation-local run-scoped check,
+     downgrade its affected coverage to `PARTIAL` and re-enter `IMPLEMENTING` to re-dispatch the
+     existing genuine zero-source-mutation run-scoped no-mutation focused check with an empty mutation
+     envelope. Do not create a TaskState, task record, RunRecord field, manifest, or frontend lifecycle
+     state, and do not set `REVIEWING`.
+
+   These ownership branches apply equally to stale representative runtime evidence and stale
+   `UI_IMPLEMENTATION` renderer evidence.
+   If current source review reveals missing due-now behavior, select a new initial task from the
+   downgraded coverage record.
 4. Recheck planning currentness and attribution.
 5. Capture `finalSourceIdentity` with the same projection.
 6. If the identities differ, enter `RECONCILING`. When every intervening change is preserved and
@@ -490,7 +679,10 @@ implementation_complete_authorized
   AND every Acceptance Criterion is ESTABLISHED at finalSourceIdentity
   AND every Acceptance Criterion has contextual source review
   AND every runtime-dependent Acceptance Criterion has direct representative runtime evidence whose
-      expected effect and authoritative product readback remain current after dependency closure
+       expected effect and authoritative product readback remain current after dependency closure
+  AND every ESTABLISHED coverage that depends on implementation or renderer evidence from a
+      `UI_IMPLEMENTATION` dispatch has applicable approved UI authority and actual-renderer
+      effect/readback evidence current after dependency closure
   AND no unresolved material premise supports retained work or coverage
   AND no unresolved product-policy, implementation-remediation, or mixed-ownership item remains
   AND every reconciled external change is preserved, disjoint, and excluded from coverage
@@ -514,8 +706,11 @@ Return `IMPLEMENTATION_COMPLETE`, `BLOCKED`, or `INCOMPLETE` with:
 - Worker-attributable paths, reconciled external changes, and their dispositions;
 - source-level caller, export, Canonical, compatibility, and integration review;
 - Acceptance Criterion coverage, material-premise dispositions, and unresolved items;
-- representative runtime exercises, their directly covered criteria, observed effects, authoritative
-  product readbacks, and applicable cleanup disposition;
+- representative runtime exercises and any invocation-local zero-source-mutation check, their directly
+  covered criteria, observed effects, authoritative product readbacks, and applicable cleanup
+  disposition;
+- frontend dispatch classifications, resolved active guidance paths, approved UI locators where
+  applicable, and retained renderer observations/readbacks;
 - Capsule ref, baseline identity, projection policy, expiry, and ImplementationResult ref.
 
 Do not claim that a Worker check, representative runtime evidence, Capsule, source review, or

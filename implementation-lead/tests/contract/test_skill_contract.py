@@ -15,6 +15,7 @@ PLANNING_CURRENTNESS = (
     IMPLEMENTATION_ROOT / "references/planning-input-currentness.md"
 ).read_text(encoding="utf-8")
 PLANNING_TICKET = (IMPLEMENTATION_ROOT / "references/planning-ticket.md").read_text(encoding="utf-8")
+UI_TICKET = (IMPLEMENTATION_ROOT / "references/ui-ticket.md").read_text(encoding="utf-8")
 TO_TICKETS = (IMPLEMENTATION_ROOT.parent / "matt/skills/to-tickets/SKILL.md").read_text(encoding="utf-8")
 
 
@@ -94,6 +95,15 @@ class ImplementationSkillContractTests(unittest.TestCase):
         self.assertIn("create no TaskState or task record", SKILL)
         self.assertIn("confirming a valid empty ownership delta", SKILL)
 
+    def test_zero_source_exception_uses_only_invocation_local_context(self) -> None:
+        self.assertIn("that task record's existing `integrationObligations`", SKILL)
+        self.assertIn("returns to `REVIEWING` for a no-mutation focused check, reuse those same fields", SKILL)
+        self.assertIn("create no TaskState, task record, or task fields", SKILL)
+        self.assertIn("only in invocation-local run-scoped check context", SKILL)
+        self.assertIn("existing `acceptanceCoverage`, and report them in the terminal return", SKILL)
+        self.assertIn("not a new RunRecord field, manifest, lifecycle, or artifact schema", SKILL)
+        self.assertNotIn("run-scoped check's existing `integrationObligations`", SKILL)
+
     def test_implemented_is_source_review_not_verification(self) -> None:
         self.assertIn("task_implementation_review_complete", SKILL)
         self.assertIn("does not claim a separate\ntechnical verification verdict", SKILL)
@@ -140,6 +150,17 @@ class ImplementationSkillContractTests(unittest.TestCase):
         self.assertIn("finalReviewStartIdentity", SKILL)
         self.assertIn("finalSourceIdentity", SKILL)
         self.assertIn("Require exact equality between both final-review identities after any permitted restart", SKILL)
+
+    def test_final_review_replays_stale_evidence_by_its_owner(self) -> None:
+        self.assertIn("When either retained evidence type is\n   stale or no longer applicable", SKILL)
+        self.assertIn("If it belongs to an existing task, downgrade its affected coverage, return the affected task to", SKILL)
+        self.assertIn("`REVIEWING`, and re-enter `IMPLEMENTING`", SKILL)
+        self.assertIn("genuine zero-source-mutation exception's invocation-local run-scoped check", SKILL)
+        self.assertIn("downgrade its affected coverage to `PARTIAL`", SKILL)
+        self.assertIn("existing genuine zero-source-mutation run-scoped no-mutation focused check with an empty mutation", SKILL)
+        self.assertIn("Do not create a TaskState, task record, RunRecord field, manifest, or frontend lifecycle", SKILL)
+        self.assertIn("These ownership branches apply equally to stale representative runtime evidence and stale", SKILL)
+        self.assertIn("`UI_IMPLEMENTATION` renderer evidence", SKILL)
 
     def test_unexpected_delta_is_reconciled_before_terminal_routing(self) -> None:
         self.assertIn("change is evidence to reconcile", SKILL)
@@ -191,6 +212,12 @@ class ImplementationSkillContractTests(unittest.TestCase):
         self.assertIn("immutable ImplementationResult publication succeeded", SKILL)
         self.assertIn("It does not mean `VERIFIED`", SKILL)
 
+    def test_ui_dispatch_evidence_is_not_an_acceptance_criterion_type(self) -> None:
+        self.assertIn("every ESTABLISHED coverage that depends on implementation or renderer evidence from a", SKILL)
+        self.assertIn("`UI_IMPLEMENTATION` dispatch has applicable approved UI authority", SKILL)
+        self.assertIn("For retained coverage that depends on\n   `UI_IMPLEMENTATION` dispatch evidence", SKILL)
+        self.assertNotIn("every UI_IMPLEMENTATION Acceptance Criterion", SKILL)
+
     def test_later_verification_cannot_reopen_implementation(self) -> None:
         self.assertIsNotNone(
             re.search(
@@ -200,6 +227,74 @@ class ImplementationSkillContractTests(unittest.TestCase):
             )
         )
         self.assertIn("cannot retroactively alter this\ninvocation's immutable result", SKILL)
+
+    def test_frontend_mode_is_exactly_a_dispatch_classification_not_a_lifecycle(self) -> None:
+        mode_block = re.search(
+            r"`frontendMode` is a current-dispatch classification.*?```text\n(.*?)```",
+            SKILL,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(mode_block)
+        assert mode_block is not None
+        self.assertEqual(
+            {"NONE", "ENGINEERING_ONLY", "UI_IMPLEMENTATION"},
+            set(mode_block.group(1).split()),
+        )
+        self.assertIn("not a RunState, TaskState, task record, manifest,\nor result protocol", SKILL)
+        self.assertIn("not Worker selection", SKILL)
+        self.assertIn("no Addon,\ndedicated frontend Worker, or separate manifest", SKILL)
+        self.assertNotIn("FRONTEND_REVIEW", SKILL)
+        self.assertNotIn("FRONTEND_IMPLEMENTING", SKILL)
+
+    def test_frontend_classification_uses_actual_consumer_and_rendered_contract(self) -> None:
+        self.assertIn("actual current runtime consumer and observable completion condition", SKILL)
+        self.assertIn("never a file\nextension, directory name, task title, or guessed stack", SKILL)
+        self.assertIn("browser or\n  native UI runtime consumer", SKILL)
+        self.assertIn("accessibility semantics, focus or keyboard behavior", SKILL)
+        self.assertIn("Shared source is frontend-bearing only", SKILL)
+        self.assertIn("even when its expected pixels and UX\nare preservation rather than change", SKILL)
+
+    def test_ui_authority_modes_preserve_no_ui_contract(self) -> None:
+        self.assertIn("`UI_IMPLEMENTATION` with Ticket `UI: no` is `BLOCKED` before Worker dispatch", SKILL)
+        self.assertIn("`ENGINEERING_ONLY` is permitted for Ticket `UI: no`", SKILL)
+        self.assertIn("must not infer a UI authority,\nrequirement, or reference", SKILL)
+        self.assertIn("a backend-only task is `NONE`", SKILL)
+        self.assertIn("A Ticket with `UI: no` never loads this reference", UI_TICKET)
+
+    def test_every_frontend_dispatch_passes_active_guidance_for_direct_read(self) -> None:
+        self.assertIn("including no-mutation focused\ndispatches, genuine zero-source-mutation exceptions, and frontend remediation dispatches", SKILL)
+        self.assertIn("stable identifier `ima2-front`", SKILL)
+        self.assertIn("canonical physical absolute `SKILL.md` path", SKILL)
+        self.assertIn("pass both values afresh on every Worker call", SKILL)
+        self.assertIn("Before any product-file mutation, the Worker reads the passed absolute", SKILL)
+        self.assertIn("does not assume that the OpenCode `skill` tool is available", SKILL)
+        self.assertIn("task-relevant references that the\n   `SKILL.md` routing directs", SKILL)
+        self.assertIn("following symlinks to their real paths", SKILL)
+
+    def test_frontend_worker_authority_and_guardrails_are_explicit(self) -> None:
+        self.assertIn("ready Ticket and approved parent Spec", SKILL)
+        self.assertIn("> approved UI reference and task locator when UI: yes", SKILL)
+        self.assertIn("> repository design system, commands, and conventions", SKILL)
+        self.assertIn("> ima2-front objective implementation guidance", SKILL)
+        self.assertIn("> ima2-front style samples", SKILL)
+        self.assertIn("does not invoke `ima2-uiux`", SKILL)
+        self.assertIn("The Lead never invokes `ima2-uiux` as a fallback", SKILL)
+        self.assertIn("create a new Design Read", SKILL)
+        self.assertIn("does not install or set up `ima2`, log in, or change global defaults", SKILL)
+        self.assertIn("Concept mockup generation is forbidden", SKILL)
+        self.assertIn("preserves the rendered and UX result exactly", SKILL)
+
+    def test_frontend_routing_rendered_evidence_and_currentness_are_explicit(self) -> None:
+        self.assertIn("return `INCOMPLETE` before product mutation", SKILL)
+        self.assertIn("returns `GUIDANCE_UNAVAILABLE`; the Lead routes this to `INCOMPLETE`", SKILL)
+        self.assertIn("returns `AUTHORITY_GAP`; the Lead routes this to `BLOCKED`", SKILL)
+        self.assertIn("Static source inspection cannot establish `UI_IMPLEMENTATION`", UI_TICKET)
+        self.assertIn("expected rendered effect and authoritative product\nreadback", SKILL)
+        self.assertIn("Do not apply the no-delta generic Worker-call retry", FAILURE_ROUTING)
+        self.assertIn("shared CSS or design tokens", SKILL)
+        self.assertIn("An unrelated backend change or\nother source-identity change does not force a renderer exercise", SKILL)
+        self.assertIn("create no TaskState or task record", SKILL)
+        self.assertIn("representative runtime exercise is a focused Worker check, not a RunState", SKILL)
 
 
 if __name__ == "__main__":

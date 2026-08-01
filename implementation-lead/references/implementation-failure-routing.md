@@ -52,6 +52,21 @@ inspect the actual delta, reopen affected dependency closure review, and return 
 - A project delta during a no-mutation focused check follows the ordinary ownership capture and
   reconciliation rules; it is not an exception that can support runtime coverage.
 
+## Frontend guidance, authority, and renderer outcomes
+
+| Condition | Disposition |
+| --- | --- |
+| Lead cannot resolve/read active `ima2-front`, its loader-returned base, or its canonical `SKILL.md` before a frontend-bearing dispatch | `INCOMPLETE`; do not approximate or substitute guidance |
+| Worker cannot read the passed guidance path or a routed required reference and returns `GUIDANCE_UNAVAILABLE` without mutation | `INCOMPLETE`; preserve the attempt evidence |
+| Ticket `UI: no` conflicts with a due-now rendered-contract change or required direct rendered exercise | `BLOCKED` for the Ticket/Spec owner before Worker dispatch |
+| Current approved UI authority or task locator is missing, insufficient, changed, or conflicts with unresolved higher authority | `BLOCKED` for the Ticket/Spec owner; Worker returns `AUTHORITY_GAP` without mutation if discovered during dispatch |
+| Intended renderer, safe target, execution capability, or reliable source binding is unavailable | `INCOMPLETE`; do not call it a product defect or authority blocker |
+| Actual renderer lacks the expected effect or rendered readback contradicts it | Task feedback; use existing Worker-attributable remediation or new-initial-task routing after Lead source review |
+
+Do not apply the no-delta generic Worker-call retry to deterministic `GUIDANCE_UNAVAILABLE` or
+`AUTHORITY_GAP` outcomes. Guidance availability is an environment/capability condition; UI authority
+and locator sufficiency are Ticket/Spec authority conditions. Neither permits a best-effort mutation.
+
 ## Other routes
 
 - Missed due-now work: reopen decomposition as a new initial task, not remediation.

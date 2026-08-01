@@ -1,87 +1,117 @@
 # UI Ticket Integration Mechanics
 
 This reference is conditional Implementation Lead mechanics. It does not authorize product behavior
-or mutation, add states or results, weaken a core guard, or replace approved UI, Ticket, parent Spec, or repository
-authority.
+or mutation, add states or results, weaken a core guard, or replace approved UI, Ticket, parent Spec,
+or repository authority.
 
 ## Scope
 
-Use this reference when Ticket `UI: yes` and due-now obligations make a task UI-bearing. It covers
-approved UI-reference locator inspection, `ima2-front` handoff, and rendered UI
-verification mechanics.
+Use this reference only when the current dispatch is classified by core as `UI_IMPLEMENTATION` and
+Ticket `UI: yes`. It covers current approved UI-reference locator inspection, the frontend Worker
+handoff, and rendered evidence mechanics. Ticket `UI: yes` does not make every task UI-bearing: a
+backend-only dispatch can be `NONE`.
 
-## Mandatory load trigger
+A Ticket with `UI: no` never loads this reference and never supplies inferred UI authority. Core may
+still classify a frontend runtime-preservation task as `ENGINEERING_ONLY`, load active `ima2-front`, and
+require exact rendered/UX preservation without inferring a UI requirement or reference.
 
-Load this file before classifying approved UI obligations and before selecting or dispatching the first
-UI-bearing current task for Ticket `UI: yes` work. A Ticket with `UI: no` does not load this reference
-or `ima2-front`.
+## Mandatory Load Trigger
 
-## Preconditions owned by SKILL.md
+Load this file before resolving authority for a currently selected `UI_IMPLEMENTATION` dispatch. Do not
+load it merely because a file looks frontend-related, a task title sounds visual, or a guessed stack is
+present. The core owns the per-dispatch `NONE`, `ENGINEERING_ONLY`, and `UI_IMPLEMENTATION`
+classification from the actual runtime consumer and observable rendered contract.
 
-The core determines UI-bearing status from Ticket `UI` and task obligations, never from title, guessed
-stack, or frontend files. The core owns Ticket/Spec authority precedence, block semantics, Worker
-exclusivity, task source review, final identity binding, and terminal results. `ima2-front` is
-workflow guidance only and cannot override the approved UI reference, Ticket, parent Spec, or repository
-conventions.
+## Preconditions Owned By SKILL.md
 
-## External authoritative contracts
+The core owns Ticket/Spec authority precedence, block and incomplete semantics, Worker exclusivity,
+task source review, final identity binding, and terminal results. `ima2-front` is workflow and
+implementation guidance only; it cannot override the approved UI reference, Ticket, parent Spec, or
+repository conventions.
 
-Use the exact approved local UI/UX reference path and task-relevant locators from the Ticket
-`References` section. Read the current installed `ima2-front` skill by its stable identifier before
-selecting the first UI-bearing current task. If required guidance is unavailable, the existing core `blocked` result
-applies; do not approximate it.
+If a dispatch requires a rendered-contract change or direct renderer exercise and Ticket `UI: no`, core
+returns `BLOCKED` before Worker dispatch. This is an authority conflict, not a classification based on
+the presence of frontend files.
 
-## Mechanics owned here
+## Approved UI Authority
 
-### Approved UI reference
+1. Resolve the exact approved local UI/UX reference path named by the Ticket `References` section under
+   the Ticket contract.
+2. Read its current bytes and preserve the exact task-relevant locator set, linked criteria, and
+   authority-defined rendered conditions needed by the current bounded dispatch.
+3. Do not broaden UI scope from visual similarity, guessed implementation structure, or a future task.
 
-1. Resolve the approved local UI/UX reference named by the Ticket under the Ticket contract.
-2. Read its current bytes and preserve the exact locator set needed by each bounded task.
-3. Do not broaden UI scope from visual
-   similarity or guessed implementation structure.
+Resolve and pass only the approved locators needed by the current `UI_IMPLEMENTATION` dispatch. When a
+later UI dispatch becomes current, resolve its locators against the same approved UI authority and the
+then-current repository state.
 
-Resolve and pass only the approved UX locators required by the current UI-bearing task. Do not require
-a future Ticket-wide UI task or locator plan. When a later UI task becomes current, resolve its
-locators against the same approved UI authority and the then-current repository state.
+A missing, unapproved, unreadable, insufficient, changed, or conflicting approved UI reference or
+required locator is an `AUTHORITY_GAP`: no mutation occurs and core returns `BLOCKED` for the
+Ticket/Spec owner. It does not authorize a best-effort implementation.
 
-A missing, unapproved, unreadable, or insufficient UI reference, missing locator, or missing guidance
-is an authority failure under core. It does not authorize a best-effort implementation.
+## Active Guidance Boundary
 
-### Worker handoff
+Core resolves and reads active `ima2-front` for every `ENGINEERING_ONLY` and `UI_IMPLEMENTATION`
+dispatch, not just the first UI task. It passes the canonical physical absolute `SKILL.md` path and its
+canonical base directory to the Worker. The Worker directly reads that path before product mutation,
+then directly reads only task-relevant routed references relative to that passed base directory; it does
+not assume the OpenCode `skill` tool exists or search for another copy.
 
-Pass only task-relevant UX locators and the applicable `ima2-front` obligations to the selected
-Worker. Keep the mutation envelope and forbidden paths from core. Do not forward the entire UX
-contract or external skill when a bounded subset is sufficient. Use repository-authoritative browser,
-renderer, and test commands; never invent a command or consumer.
+If the Lead cannot resolve/read the active guidance loader, base directory, or canonical guidance path,
+it returns `INCOMPLETE` before mutation. If the Worker cannot read the passed guidance path or a routed
+required reference, it returns `GUIDANCE_UNAVAILABLE` without mutation and the Lead returns
+`INCOMPLETE`. Neither is an authority failure or `BLOCKED`. Do not approximate guidance, replace it
+with a local copy, or apply the generic no-delta Worker-call retry to that deterministic failure.
 
-### Rendered verification
+## Frontend Worker Handoff
 
-For applicable UI obligations, verify the actual renderer at the authority-defined viewport and
-responsive conditions, interaction and timing behavior, loading/empty/error/success states,
-accessibility requirements, and any declared focus/keyboard or semantics contract. Static source
-inspection cannot establish visual correctness. Preserve renderer and focused Worker check evidence as
-implementation review inputs; missing required browser or rendered behavior leaves Acceptance Criteria
-coverage unestablished.
+For `UI_IMPLEMENTATION`, pass the approved UI-reference path, exact current locators, linked criteria,
+authority-defined rendered conditions, resolved active guidance path/base directory, frozen mutation
+envelope, and repository-authoritative browser/renderer/test commands plus the intended product entry
+point. Do not invent a command, consumer, UI requirement, or reference.
 
-### UX changes and stale evidence
+The core Worker contract forbids `ima2-uiux`, intent discovery, concept exploration, no-brief defaults,
+new design-direction selection, unapproved `DESIGN.md` work, global `ima2` setup, and concept mockups.
+Objective `ima2-front` guidance and style samples never add a due-now requirement or Acceptance
+Criterion. The Worker must return its read guidance paths, actual changed paths, commands, applicable
+viewport/state/interaction/keyboard/focus observations, authoritative rendered effect/readback, and
+unresolved items; the report is trace rather than completion proof.
+
+## Rendered Evidence
+
+Static source inspection cannot establish `UI_IMPLEMENTATION` visual, interaction, responsive, or
+accessibility correctness. In the actual intended renderer, observe each applicable authority-defined
+viewport/responsive condition, state, interaction/timing behavior, semantic, and focus/keyboard
+behavior. A runtime-dependent UI criterion becomes `ESTABLISHED` only through the core representative
+runtime-exercise flow with an expected rendered effect and authoritative product readback.
+
+An unavailable renderer, safe target, capability, or reliable source binding is `INCOMPLETE`; it is not
+a product defect or authority blocker. An absent expected rendered effect is task feedback and uses the
+existing source-review/remediation or new-initial-task decision. Use repository/tool output or
+run-scoped non-product observation; do not create screenshots or other project-root evidence artifacts
+unless the Ticket requires the artifact inside the frozen allowed scope.
+
+## Currentness And Dependency Closure
 
 If an approved UI reference or relevant locator changes during the invocation, planning or authority
 currentness fails. Stop before further mutation or completion; do not adopt changed UI authority,
 relabel a prior task, or continue from stale rendered behavior.
 
-## Return to core flow
+Later changes to shared CSS/design tokens, common layout/chrome, frontend Canonicals/component
+primitives, route/state contracts, UI assets, rendered callers/data shapes, renderer entry points, or
+relevant design-system use downgrade affected rendered coverage and return its owning earlier task to
+`REVIEWING`. For a genuine zero-source-mutation invocation-local check, core instead uses its taskless
+run-scoped re-dispatch path. Re-exercise only affected rendered conditions. An unrelated backend change
+does not require a renderer rerun when contextual review keeps the entry point, effect, readback, and
+material premises current.
 
-Return the approved UI-reference path, task locators, rendered behavior references, and unresolved
-effects. The core decides task implementation review, coverage, remediation, final identity, and
-terminal result.
+## Return To Core Flow
 
-## Conflict and unavailable-reference behavior
+Return the approved UI-reference path, task locators, authority-defined rendered conditions, active
+guidance path/base directory, rendered behavior references, evidence/readback, and unresolved effects.
+The core decides task implementation review, coverage, remediation, final identity, and terminal result.
 
-If the approved UI reference, `ima2-front` guidance, Ticket, parent Spec, or core conflict, stop before
-UI task selection, dispatch, implementation review, or completion and use the existing Ticket/Spec or
-incomplete/blocked boundary.
+## Non-Authority Statement
 
-## Non-authority statement
-
-This file is not a UX contract, product policy, Adapter schema, Worker instruction, lifecycle state
-machine, retry authority, or completion verdict.
+This file is not a UX contract, product policy, Adapter schema, Worker instruction replacement,
+lifecycle state machine, retry authority, or completion verdict.
