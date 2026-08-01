@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { createAdmissionSession } = require('./admission');
 
 const SOURCE_EXTENSIONS = ['.cts', '.mts', '.tsx', '.jsx', '.ts', '.mjs', '.cjs', '.js'];
 const RESOLUTION_EXTENSIONS = [...SOURCE_EXTENSIONS, '.json'];
@@ -110,6 +111,18 @@ function diagnoseProject(projectDirectory) {
     reuseCandidates: candidates.reuseCandidates,
     findings
   });
+}
+
+/**
+ * Creates a read-only, one-request admission session with a mediated write gate.
+ * Scope is inferred from repository evidence when omitted; an optional scope can only narrow or confirm it.
+ * attemptWrite accepts declarative { request, scope?, writes: [{ path, content }] } file writes.
+ *
+ * @param {{projectDirectory: string, request: string, scope?: string|string[]}} options admission input
+ * @returns {object} admission result with a declarative mediated-file-write gate
+ */
+function admitChange(options) {
+  return createAdmissionSession(options, diagnoseProject);
 }
 
 function scanProject(projectRoot) {
@@ -1404,5 +1417,6 @@ function isPlainObject(value) {
 }
 
 module.exports = {
+  admitChange,
   diagnoseProject
 };
