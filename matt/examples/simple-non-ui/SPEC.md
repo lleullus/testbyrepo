@@ -1,0 +1,41 @@
+# 예시: 일반 non-UI 동작 한 가지 변경
+
+Status: approved
+Owner: 예시 planning owner
+
+이 문서의 `approved`는 사용자가 이미 확인하고 미해결 제품 결정이 없다는 계약 상태 예시일 뿐, 실제 제품 요구사항이나 실행 fixture가 아니다. 일반 non-UI 흐름에는 Wayfinder나 prototype이 필요하지 않다.
+
+## Problem
+
+가상의 일반 동작 하나를 현재 기준에 맞게 조정해야 한다.
+
+## Desired Outcome
+
+정의된 입력에서 조정된 동작을 관찰할 수 있다.
+
+## Requirements
+
+- 한 가지 non-UI 동작만 바꾼다.
+- 기존에 명시되지 않은 제품 결정을 추가하지 않는다.
+
+## Non-Goals
+
+- UI 변경
+- 큰 작업 탐색이나 prototype 작성
+- 관련 없는 동작의 재설계
+
+## Implementation Constraints
+
+변경은 해당 동작과 직접 연결된 영역으로 제한한다.
+
+## Verification Expectations
+
+대상 동작과 명시된 비대상 경로를 기존 프로젝트의 검증 방법으로 확인한다.
+
+## UI / UX
+
+Not applicable
+
+## Open Questions
+
+None
