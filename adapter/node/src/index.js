@@ -2,9 +2,8 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { createAdmissionSession } = require('./admission');
 const { diagnoseFastProject } = require('./fast-diagnosis');
-const { gateProject } = require('./final-gate');
+const { createGatedAdmissionSession, gateProject } = require('./final-gate');
 
 const SOURCE_EXTENSIONS = ['.cts', '.mts', '.tsx', '.jsx', '.ts', '.mjs', '.cjs', '.js'];
 const RESOLUTION_EXTENSIONS = [...SOURCE_EXTENSIONS, '.json'];
@@ -124,7 +123,7 @@ function diagnoseProject(projectDirectory) {
  * @returns {object} admission result with a declarative mediated-file-write gate
  */
 function admitChange(options) {
-  return createAdmissionSession(options, diagnoseProject);
+  return createGatedAdmissionSession(options);
 }
 
 function scanProject(projectRoot) {
@@ -1418,9 +1417,9 @@ function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-module.exports = {
+module.exports = Object.freeze({
   admitChange,
   diagnoseFastProject,
   diagnoseProject,
   gateProject
-};
+});

@@ -51,6 +51,7 @@ const SEARCH_STOP_WORDS = new Set([
   'type',
   'with'
 ]);
+const ADMISSION_CAPABILITIES = new WeakMap();
 
 /**
  * Creates one read-only admission session for a user change request.
@@ -59,21 +60,46 @@ const SEARCH_STOP_WORDS = new Set([
  *
  * @param {object} options admission input
  * @param {Function} diagnoseProject canonical structural diagnosis function
- * @returns {{admission: object, attemptWrite: Function}}
+ * @param {Function} bindFinalGate private final-Gate binder
+ * @returns {{admission: object, attemptWrite: Function, finalGate: Function}}
  */
-function createAdmissionSession(options, diagnoseProject) {
+function createAdmissionSession(options, diagnoseProject, bindFinalGate) {
   if (typeof diagnoseProject !== 'function') {
     throw new TypeError('createAdmissionSession requires the canonical diagnoseProject function.');
   }
+  if (typeof bindFinalGate !== 'function') {
+    throw new TypeError('createAdmissionSession requires its private final-Gate binder.');
+  }
 
   const assessment = assessAdmission(options, diagnoseProject);
+  const admissionCapability = Object.freeze(Object.create(null));
+  ADMISSION_CAPABILITIES.set(admissionCapability, {
+    admission: assessment.result,
+    admittedScope: assessment.admittedScope,
+    currentSourceAuthorized() {
+      const current = assessment.projectRoot ? fingerprintProject(assessment.projectRoot) : null;
+      return Boolean(current && current.digest && current.digest === assessment.currentDigest);
+    },
+    projectRoot: assessment.projectRoot,
+    reviewer: isPlainObject(options) ? options.semanticReviewer : null
+  });
+  const finalGateSession = bindFinalGate(admissionCapability);
   return Object.freeze({
     ...assessment.result,
     admission: assessment.result,
     attemptWrite(gateOptions) {
       return attemptWrite(assessment, gateOptions);
+    },
+    finalGate() {
+      return finalGateSession.run();
     }
   });
+}
+
+function resolveAdmissionCapability(capability) {
+  return capability && typeof capability === 'object'
+    ? ADMISSION_CAPABILITIES.get(capability) || null
+    : null;
 }
 
 function assessAdmission(options, diagnoseProject) {
@@ -1650,4 +1676,4 @@ function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-module.exports = { createAdmissionSession };
+module.exports = { createAdmissionSession, resolveAdmissionCapability };

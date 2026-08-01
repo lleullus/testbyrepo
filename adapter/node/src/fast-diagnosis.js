@@ -1026,7 +1026,18 @@ function collectEslintThresholds(configuration, source, candidates, errors) {
 }
 
 function collectCheckerThresholds(configuration, source, candidates, errors) {
-  if (!isPlainObject(configuration) || !isPlainObject(configuration.fastDiagnosis)) {
+  if (!isPlainObject(configuration)) {
+    errors.push({
+      message: 'nodePolicyChecker must be an object when supplied.',
+      path: source,
+      status: 'invalid'
+    });
+    return;
+  }
+  if (configuration.fastDiagnosis === undefined) {
+    return;
+  }
+  if (!isPlainObject(configuration.fastDiagnosis)) {
     errors.push({
       message: 'nodePolicyChecker.fastDiagnosis must be an object when supplied.',
       path: source,
@@ -1405,7 +1416,7 @@ function boundaryEvidenceError(message) {
 }
 
 function validBoundaryPath(value) {
-  return typeof value === 'string' && value.length > 0 && !path.isAbsolute(value) && !value.split('/').some((part) => !part || part === '.' || part === '..');
+  return value === '.' || (typeof value === 'string' && value.length > 0 && !path.isAbsolute(value) && !value.split('/').some((part) => !part || part === '.' || part === '..'));
 }
 
 function boundaryForFile(filePath) {

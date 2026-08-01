@@ -376,6 +376,9 @@ test('unsupported configuration and a missing parser capability fail closed as I
   assert.equal(unsupportedResult.verdict, 'INCONCLUSIVE');
 
   const script = [
+    "const Module = require('node:module');",
+    'const load = Module._load;',
+    "Module._load = function(request, parent, isMain) { if (request === '@babel/parser') throw new Error('forced parser unavailability'); return load.call(this, request, parent, isMain); };",
     `const { diagnoseFastProject } = require(${JSON.stringify(path.join(__dirname, '..'))});`,
     'const result = diagnoseFastProject(process.argv[1]);',
     'process.stdout.write(JSON.stringify(result));'

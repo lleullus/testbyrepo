@@ -1,8 +1,22 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { createAdmissionSession, resolveAdmissionCapability } = require('./admission');
 const { captureSourceState, diagnoseFastProject } = require('./fast-diagnosis');
+const { resolveHostReviewerTransport } = require('./reviewer-registry');
+
+const GATE_AUTHORITIES = new WeakSet();
+const DEFAULT_THRESHOLDS = Object.freeze({
+  maxComplexity: 10,
+  maxDepth: 2,
+  maxFanIn: 10,
+  maxFanOut: 10,
+  maxFileLines: 300,
+  maxFunctionLines: 50,
+  maxReexports: 10
+});
 
 const FAST_CHECK_IDS = Object.freeze([
   'empty-catch',
@@ -134,7 +148,18 @@ const CATEGORY_DEFINITIONS = Object.freeze([
 ]);
 const SEMANTIC_REQUIREMENT_BY_ID = new Map(SEMANTIC_REQUIREMENTS.map((item) => [item.id, item]));
 const KNOWN_BASELINE_CHECK_IDS = new Set([...FAST_CHECK_IDS, ...SEMANTIC_REQUIREMENT_BY_ID.keys()]);
+const ATTESTATION_FIELDS = Object.freeze([
+  'reviewerId',
+  'model',
+  'requestDigest',
+  'sourceDigest',
+  'signature'
+]);
 const EVIDENCE_CONTRACT = Object.freeze({
+  authority: {
+    kind: 'wp001-admission-gate-authority',
+    source: 'opaque in-process admission session'
+  },
   policy: {
     kind: 'fixed-wp001-policy',
     required: ['id', 'source', 'projectRoot', 'boundaryEvidence', 'repositoryAuthority', 'thresholds']
@@ -148,11 +173,244 @@ const EVIDENCE_CONTRACT = Object.freeze({
     required: ['id', 'source', 'projectRoot', 'entries']
   },
   semanticJudgment: {
-    required: ['id', 'category', 'verdict', 'rule', 'evidence', 'binding'],
+    required: ['id', 'category', 'verdict', 'rule', 'evidence', 'attestation'],
     failRequired: ['falsifier'],
-    binding: ['policyId', 'preChangeId', 'impactScopeId']
+    attestation: ['reviewerId', 'model', 'requestDigest', 'sourceDigest', 'signature']
   }
 });
+
+function createGatedAdmissionSession(options) {
+  const { diagnoseProject } = require('./index');
+  return createAdmissionSession(options, diagnoseProject, createFinalGateSession);
+}
+
+function createFinalGateSession(admissionCapability) {
+  const admissionAuthority = resolveAdmissionCapability(admissionCapability);
+  if (!admissionAuthority) {
+    throw new TypeError('Final-Gate authority requires an opaque capability minted by createAdmissionSession.');
+  }
+  const authority = captureGateAuthority(admissionAuthority);
+  GATE_AUTHORITIES.add(authority);
+  return Object.freeze({
+    run() {
+      return gateProject(authority.projectRoot, { authority });
+    }
+  });
+}
+
+function captureGateAuthority({ admission, admittedScope, currentSourceAuthorized, projectRoot, reviewer }) {
+  const errors = [];
+  const root = typeof projectRoot === 'string' && projectRoot.length > 0 ? path.resolve(projectRoot) : null;
+  const sessionId = crypto.randomUUID();
+  if (!root || !isPlainObject(admission) || admission.verdict !== 'PASS') {
+    errors.push(inputEvidence('authority', 'A passing WP-001 admission session is required before final-Gate authority can be fixed.'));
+  }
+  if (!isPlainObject(admittedScope) || !Array.isArray(admittedScope.entries) || admittedScope.entries.length === 0) {
+    errors.push(inputEvidence('authority.impactScope', 'WP-001 did not establish a fixed admitted scope.'));
+  }
+  if (typeof currentSourceAuthorized !== 'function') {
+    errors.push(inputEvidence('authority.currentSource', 'The admission session cannot authorize current source identity.'));
+  }
+
+  const policyId = crypto.randomUUID();
+  const preChangeId = crypto.randomUUID();
+  const impactScopeId = crypto.randomUUID();
+  const boundaryEvidence = fixedBoundaryEvidence(root, admission);
+  const repositoryAuthority = fixedRepositoryAuthority(admission);
+  const before = root ? captureSourceState(root) : { error: 'Project root is unavailable.' };
+  let baseline = null;
+  try {
+    baseline = root ? diagnoseFastProject(root, {
+      boundaryEvidence,
+      fixedThresholds: DEFAULT_THRESHOLDS
+    }) : null;
+  } catch (error) {
+    errors.push(capabilityEvidence('baseline-diagnosis', error.message));
+  }
+  if (!baseline || !baseline.details || !baseline.details.dependencyGraph || !before.digest) {
+    errors.push(capabilityEvidence('baseline-diagnosis', 'The pre-change source, checks, or dependency graph could not be captured.'));
+  }
+
+  const thresholds = fixedThresholdValues(baseline);
+  const entries = isPlainObject(admittedScope) && Array.isArray(admittedScope.entries)
+    ? admittedScope.entries.map((entry) => ({ mode: entry.mode, path: entry.path }))
+    : [];
+  const graph = baseline && baseline.details ? baseline.details.dependencyGraph : null;
+  const baselineGraphUnknown = graph && Array.isArray(graph.unknown) ? graph.unknown : null;
+  if (!baselineGraphUnknown) {
+    errors.push(capabilityEvidence('baseline-dependency-graph', 'The pre-change dependency graph did not report its completeness.'));
+  } else if (baselineGraphUnknown.length > 0) {
+    errors.push(...baselineGraphUnknown.map((item) => ({
+      kind: 'import',
+      path: item.path,
+      line: item.line,
+      column: item.column,
+      error: item.message || 'A pre-change dependency edge was unresolved.'
+    })));
+  }
+  const fixedPaths = graph ? dependencyClosure(graph, entries, []) : [];
+  const policy = {
+    kind: 'fixed-wp001-policy',
+    id: policyId,
+    source: `WP-001 admission session ${sessionId}`,
+    projectRoot: root,
+    boundaryEvidence,
+    repositoryAuthority,
+    thresholds
+  };
+  const preChange = {
+    kind: 'fixed-pre-change-source-state',
+    id: preChangeId,
+    source: `WP-001 admission session ${sessionId}`,
+    projectRoot: root,
+    sourceReadback: before,
+    violations: collectBaselineMechanicalViolations(baseline)
+  };
+  const impactScope = {
+    kind: 'fixed-impact-scope',
+    id: impactScopeId,
+    source: `WP-001 admission session ${sessionId}`,
+    projectRoot: root,
+    entries,
+    fixedPaths
+  };
+  const pinnedReviewer = resolvePinnedReviewer(root, reviewer);
+  const authority = {
+    currentSourceAuthorized,
+    errors,
+    impactScope,
+    policy,
+    preChange,
+    projectRoot: root,
+    reviewer: pinnedReviewer.reviewer,
+    reviewerIdentity: reviewerIdentity(pinnedReviewer.reviewer),
+    reviewerProblem: pinnedReviewer.error,
+    sessionId
+  };
+
+  const baselineSemantic = collectReviewerJudgments(authority, 'pre-change', before, fixedPaths, true);
+  const incompleteBaselineSemantic = [...baselineSemantic.checks.values()].filter((item) => !['PASS', 'FAIL'].includes(item.verdict));
+  authority.baselineCompleteness = {
+    mechanicalGraph: baselineGraphUnknown && baselineGraphUnknown.length === 0 ? 'PASS' : 'INCONCLUSIVE',
+    semantic: incompleteBaselineSemantic.length === 0 ? 'PASS' : 'INCONCLUSIVE'
+  };
+  if (incompleteBaselineSemantic.length > 0) {
+    errors.push(capabilityEvidence(
+      'baseline-semantic-review',
+      'At least one pre-change semantic obligation did not produce a fully valid PASS or FAIL.'
+    ));
+  }
+  for (const [id, item] of baselineSemantic.checks) {
+    if (item.verdict !== 'FAIL') {
+      continue;
+    }
+    for (const evidence of item.evidence) {
+      preChange.violations.push(baselineSemanticViolation(id, evidence));
+    }
+  }
+  const after = root ? captureSourceState(root) : { error: 'Project root is unavailable.' };
+  if (!before.digest || !after.digest || before.digest !== after.digest) {
+    errors.push(inputEvidence('authority.sourceReadback', 'Source changed while WP-001 final-Gate authority was being captured.'));
+  }
+  return deepFreeze(authority);
+}
+
+function fixedBoundaryEvidence(projectRoot, admission) {
+  const repositoryEvidence = admission && admission.details && admission.details.repositoryEvidence;
+  const direction = repositoryEvidence && repositoryEvidence.dependencyDirection;
+  const edges = direction && Array.isArray(direction.internalEdges) ? direction.internalEdges : [];
+  const seen = new Set();
+  const allowedDependencies = [];
+  for (const edge of edges) {
+    if (!edge || !safeBoundaryPath(edge.from) || !safeBoundaryPath(edge.to)) {
+      continue;
+    }
+    const key = `${edge.from}\u0000${edge.to}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      allowedDependencies.push({ from: edge.from, to: edge.to });
+    }
+  }
+  return {
+    kind: 'fixed-observed-boundaries',
+    projectRoot,
+    source: 'WP-001 observed pre-change dependency direction',
+    allowedDependencies
+  };
+}
+
+function fixedRepositoryAuthority(admission) {
+  const evidence = admission && admission.details && admission.details.repositoryEvidence;
+  return {
+    executionPaths: evidence && Array.isArray(evidence.executionPaths) ? [...evidence.executionPaths] : [],
+    canonicalSsot: evidence && isPlainObject(evidence.canonicalSsot)
+      ? { path: evidence.canonicalSsot.path }
+      : null
+  };
+}
+
+function resolvePinnedReviewer(projectRoot, reviewerTransport) {
+  const trustedReviewer = resolveHostReviewerTransport(reviewerTransport, projectRoot);
+  if (trustedReviewer.error || !projectRoot) {
+    return { error: trustedReviewer.error || 'The project root is unavailable.', reviewer: null };
+  }
+  let configuration;
+  try {
+    const packageValue = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
+    configuration = packageValue && packageValue.nodePolicyChecker && packageValue.nodePolicyChecker.semanticReviewer;
+  } catch (error) {
+    return { error: `The repository reviewer policy could not be read: ${error.message}`, reviewer: null };
+  }
+  if (!isPlainObject(configuration) || Object.hasOwn(configuration, 'publicKey') ||
+    configuration.id !== trustedReviewer.reviewer.id ||
+    !nonEmptyText(configuration.model) || configuration.model !== trustedReviewer.reviewer.model) {
+    return { error: 'The target repository must explicitly pin the trusted host reviewer identity and exact model, not a trust key.', reviewer: null };
+  }
+  return trustedReviewer;
+}
+
+function fixedThresholdValues(baseline) {
+  const observed = baseline && baseline.details && baseline.details.thresholds;
+  return Object.fromEntries(THRESHOLD_NAMES.map((name) => [
+    name,
+    observed && observed[name] && Number.isSafeInteger(observed[name].effective)
+      ? observed[name].effective
+      : DEFAULT_THRESHOLDS[name]
+  ]));
+}
+
+function collectBaselineMechanicalViolations(baseline) {
+  if (!baseline || !Array.isArray(baseline.checks)) {
+    return [];
+  }
+  return baseline.checks.flatMap((check) => {
+    if (check.verdict !== 'FAIL' || !Array.isArray(check.evidence)) {
+      return [];
+    }
+    return check.evidence.flatMap((evidence) => {
+      if (!evidence || typeof evidence.path !== 'string') {
+        return [];
+      }
+      return [{
+        checkId: check.id,
+        path: evidence.path,
+        ...(Number.isSafeInteger(evidence.line) ? { line: evidence.line } : {}),
+        ...(Number.isSafeInteger(evidence.column) ? { column: evidence.column } : {}),
+        evidenceDigest: evidenceDigest(check.id, evidence)
+      }];
+    });
+  });
+}
+
+function baselineSemanticViolation(checkId, evidence) {
+  return {
+    checkId,
+    path: evidence.path,
+    line: evidence.line,
+    column: evidence.column,
+    evidenceDigest: semanticEvidenceDigest(checkId, evidence)
+  };
+}
 
 /**
  * Runs the final read-only code and review quality Gate for one fixed change context.
@@ -160,24 +418,29 @@ const EVIDENCE_CONTRACT = Object.freeze({
  * impact scope, and all required evidence-connected semantic judgments.
  *
  * @param {string} projectDirectory directory to inspect
- * @param {object} evidence fixed Gate evidence
+ * @param {object} options opaque authority supplied only by a WP-001 admission session
  * @returns {object} final quality Gate result
  */
-function gateProject(projectDirectory, evidence = {}) {
+function gateProject(projectDirectory, options = {}) {
   if (typeof projectDirectory !== 'string' || projectDirectory.length === 0) {
     throw new TypeError('gateProject requires a project directory path.');
   }
 
   const projectRoot = path.resolve(projectDirectory);
   const beforeState = captureSourceState(projectRoot);
-  const evidenceState = validateGateEvidence(evidence, projectRoot);
+  const evidenceState = validateGateEvidence(options, projectRoot);
   const fastOutcome = runFastDiagnosis(projectRoot, evidenceState);
   const impactScopeAssessment = resolveImpactScope(evidenceState, fastOutcome);
   evidenceState.impactScopeAssessment = impactScopeAssessment;
   const mechanicalChecks = collectMechanicalChecks(fastOutcome, evidenceState);
-  const semanticAssessment = collectSemanticChecks(evidence, evidenceState, projectRoot);
+  const semanticAssessment = collectSemanticChecks(evidenceState, beforeState);
   const afterState = captureSourceState(projectRoot);
   const sourceReadback = createSourceReadback(beforeState, afterState);
+  const fullProjectAuthorization = recheckFullProjectAuthorization(evidenceState);
+  if (fullProjectAuthorization.verdict !== 'PASS') {
+    evidenceState.errors.push(...fullProjectAuthorization.evidence);
+    evidenceState.valid = false;
+  }
   const bindingEvidence = [...evidenceState.errors, ...impactScopeAssessment.evidence];
   const bindingCheck = evidenceState.valid && impactScopeAssessment.verdict === 'PASS'
     ? gateCheck('wp001-binding', 'PASS', 'Fixed WP-001 policy, pre-change state, and impact scope are complete and bound to this project.')
@@ -198,13 +461,14 @@ function gateProject(projectDirectory, evidence = {}) {
       'Unrecognized semantic judgments cannot be safely mapped to a required final-Gate obligation.',
       semanticAssessment.unknown
     );
+  const baselineImpactCheck = assessBaselineImpact(evidenceState);
   const categories = CATEGORY_DEFINITIONS.map((definition) => createCategory(
     definition,
     bindingCheck,
     mechanicalChecks,
     semanticAssessment.checks
   ));
-  const finalChecks = [bindingCheck, stabilityCheck, semanticInputCheck];
+  const finalChecks = [bindingCheck, stabilityCheck, semanticInputCheck, fullProjectAuthorization, baselineImpactCheck];
   const verdict = aggregateVerdict([...categories, ...finalChecks]);
   const completionApproval = verdict === 'PASS';
   const counts = countVerdicts(categories);
@@ -223,7 +487,7 @@ function gateProject(projectDirectory, evidence = {}) {
     mainFindings
   };
 
-  return {
+  const result = {
     kind: 'final-code-and-review-quality-gate',
     scope: 'all-b-1-through-b-3-c-1-through-c-5-d-1-through-d-3',
     completionApproval,
@@ -255,6 +519,104 @@ function gateProject(projectDirectory, evidence = {}) {
       sourceReadback
     }
   };
+  const projectionState = { cyclic: false, hostile: false };
+  const projected = deepCopy(result, new WeakMap(), new WeakSet(), projectionState);
+  if (projectionState.cyclic || projectionState.hostile) {
+    const projectionCheck = gateCheck(
+      'result-projection',
+      'INCONCLUSIVE',
+      'The final Gate result contained cyclic or unreadable internal evidence and could not be safely projected.',
+      [capabilityEvidence('result-projection', projectionState.cyclic ? 'Cyclic result evidence was rejected.' : 'Result evidence could not be read safely.')]
+    );
+    const finalChecksWithProjection = Array.isArray(projected.details && projected.details.finalChecks)
+      ? [...projected.details.finalChecks, projectionCheck]
+      : [projectionCheck];
+    const mainFinding = { id: projectionCheck.id, verdict: projectionCheck.verdict, message: projectionCheck.message };
+    const mainFindings = [
+      ...(projected.summary && Array.isArray(projected.summary.mainFindings) ? projected.summary.mainFindings : []),
+      mainFinding
+    ].slice(0, 5);
+    const blockedCompletion = {
+      approved: false,
+      status: 'BLOCKED',
+      reason: 'The final Gate result could not be safely projected because internal evidence was cyclic or unreadable.'
+    };
+    projected.verdict = 'INCONCLUSIVE';
+    projected.completionApproval = false;
+    projected.finalCompletion = blockedCompletion;
+    projected.summary = {
+      ...(projected.summary || {}),
+      mainFindings,
+      verdict: 'INCONCLUSIVE'
+    };
+    if (projected.details) {
+      projected.details.verdict = 'INCONCLUSIVE';
+      projected.details.completionApproval = false;
+      projected.details.finalCompletion = blockedCompletion;
+      projected.details.finalChecks = finalChecksWithProjection;
+      projected.details.evidenceErrors = [
+        ...(Array.isArray(projected.details.evidenceErrors) ? projected.details.evidenceErrors : []),
+        ...projectionCheck.evidence
+      ];
+      projected.details.mainFindings = mainFindings;
+    }
+  }
+  return projected;
+}
+
+function assessBaselineImpact(evidenceState) {
+  const violations = evidenceState.preChange && Array.isArray(evidenceState.preChange.violations)
+    ? evidenceState.preChange.violations.filter((violation, index) => {
+      return impactScopeContains(evidenceState, violation.path) && evidenceState.observedBaselineViolations.has(index);
+    })
+    : [];
+  if (violations.length === 0) {
+    return gateCheck(
+      'baseline-impact',
+      'PASS',
+      'No authentic pre-change mechanical or semantic violation inside the fixed impact scope remains present in current evidence.'
+    );
+  }
+  return gateCheck(
+    'baseline-impact',
+    'FAIL',
+    'An authentic pre-change mechanical or semantic violation inside the fixed impact scope remains present in current evidence.',
+    violations.map((violation) => ({ kind: 'pre-existing-impact', ...violation }))
+  );
+}
+
+function recheckFullProjectAuthorization(evidenceState) {
+  const authority = evidenceState.authority;
+  if (!authority || typeof authority.currentSourceAuthorized !== 'function') {
+    return gateCheck(
+      'full-project-authorization',
+      'INCONCLUSIVE',
+      'The admission session cannot confirm the full project after semantic review.',
+      [capabilityEvidence('authority.currentSource', 'No genuine admission authorization capability is available.')]
+    );
+  }
+  try {
+    if (authority.currentSourceAuthorized()) {
+      return gateCheck(
+        'full-project-authorization',
+        'PASS',
+        'The full project remains the state authorized by the admission session after all reviewer calls.'
+      );
+    }
+    return gateCheck(
+      'full-project-authorization',
+      'INCONCLUSIVE',
+      'The full project changed during the final Gate or differs from the admission-authorized state.',
+      [inputEvidence('authority.currentSource', 'Full-project authorization failed after semantic review.')]
+    );
+  } catch (error) {
+    return gateCheck(
+      'full-project-authorization',
+      'INCONCLUSIVE',
+      'The full project could not be re-authorized after semantic review.',
+      [inputEvidence('authority.currentSource', `Full-project authorization failed: ${error.message}`)]
+    );
+  }
 }
 
 function runFastDiagnosis(projectRoot, evidenceState) {
@@ -306,11 +668,11 @@ function scopeMechanicalCheck(raw, checkId, evidenceState) {
     const match = matchBaselineViolation(evidenceState, checkId, item);
     if (match && !impactScopeContains(evidenceState, item.path)) {
       unrelatedPreExisting.push({ baseline: match.violation, evidence: item });
-      evidenceState.observedBaselineViolations.add(match.index);
+      observeBaselineViolation(evidenceState, checkId, item);
     } else {
       blockingEvidence.push(item);
       if (match) {
-        evidenceState.observedBaselineViolations.add(match.index);
+        observeBaselineViolation(evidenceState, checkId, item);
       }
     }
   }
@@ -330,104 +692,164 @@ function scopeMechanicalCheck(raw, checkId, evidenceState) {
     : { ...raw, evidence: blockingEvidence, unrelatedPreExisting };
 }
 
-function collectSemanticChecks(evidence, evidenceState, projectRoot) {
-  const input = isPlainObject(evidence) && Array.isArray(evidence.semanticJudgments)
-    ? evidence.semanticJudgments
-    : [];
-  const malformedInput = !isPlainObject(evidence) || !Array.isArray(evidence.semanticJudgments);
-  const unknown = input.filter((item) => !isPlainObject(item) || !SEMANTIC_REQUIREMENT_BY_ID.has(item.id));
-  const checks = new Map();
-  const sourceCache = new Map();
-
-  for (const requirement of SEMANTIC_REQUIREMENTS) {
-    const supplied = input.filter((item) => isPlainObject(item) && item.id === requirement.id);
-    if (!evidenceState.valid || evidenceState.impactScopeAssessment.verdict !== 'PASS') {
-      checks.set(requirement.id, gateCheck(
+function collectSemanticChecks(evidenceState, currentState) {
+  if (!evidenceState.valid || evidenceState.impactScopeAssessment.verdict !== 'PASS') {
+    const checks = new Map(SEMANTIC_REQUIREMENTS.map((requirement) => [
+      requirement.id,
+      gateCheck(
         requirement.id,
         'INCONCLUSIVE',
-        'This semantic obligation cannot be judged without complete fixed WP-001 evidence.',
+        'This semantic obligation cannot run without current authoritative WP-001 session evidence.',
         [...evidenceState.errors, ...evidenceState.impactScopeAssessment.evidence],
         { category: requirement.category, label: requirement.label }
-      ));
-      continue;
-    }
-    if (malformedInput || supplied.length === 0) {
+      )
+    ]));
+    return { checks, unknown: [] };
+  }
+  return collectReviewerJudgments(
+    evidenceState.authority,
+    'final',
+    currentState,
+    evidenceState.impactScopeAssessment.effectivePaths,
+    false,
+    evidenceState
+  );
+}
+
+function collectReviewerJudgments(authority, phase, sourceState, impactPaths, allowOutsideScope, evidenceState = null) {
+  const checks = new Map();
+  const reviewer = authority && authority.reviewer;
+  if (!validReviewer(reviewer)) {
+    for (const requirement of SEMANTIC_REQUIREMENTS) {
       checks.set(requirement.id, gateCheck(
         requirement.id,
         'INCONCLUSIVE',
-        'The required evidence-connected semantic judgment was not supplied.',
-        [],
+        'The required AI semantic reviewer capability is unavailable.',
+        [capabilityEvidence('semantic-reviewer', authority && authority.reviewerProblem
+          ? authority.reviewerProblem
+          : 'No fixed AI semantic reviewer was present in the WP-001 session.')],
+        { category: requirement.category, label: requirement.label }
+      ));
+    }
+    return { checks, unknown: [] };
+  }
+
+  const sourceCache = new Map();
+  for (const requirement of SEMANTIC_REQUIREMENTS) {
+    const reviewed = invokeReviewer(authority, reviewer, requirement, phase, sourceState, impactPaths);
+    if (reviewed.error) {
+      checks.set(requirement.id, gateCheck(
+        requirement.id,
+        'INCONCLUSIVE',
+        'The required AI semantic judgment could not be executed or attested.',
+        [reviewed.error],
         { category: requirement.category, label: requirement.label }
       ));
       continue;
     }
-
-    const inspected = supplied.map((item) => inspectSemanticJudgment(item, requirement, evidenceState, projectRoot, sourceCache));
-    const errors = inspected.flatMap((item) => item.errors);
-    if (errors.length > 0) {
+    const inspected = inspectSemanticJudgment(
+      reviewed.judgment,
+      requirement,
+      authority,
+      reviewed.request,
+      sourceCache,
+      allowOutsideScope,
+      evidenceState
+    );
+    if (inspected.errors.length > 0) {
       checks.set(requirement.id, gateCheck(
         requirement.id,
         'INCONCLUSIVE',
-        'The supplied semantic judgment is missing required evidence, binding, or AI FAIL fields.',
-        errors,
-        { category: requirement.category, label: requirement.label, judgments: supplied }
+        'The executed AI semantic judgment has invalid evidence or attestation.',
+        inspected.errors,
+        { category: requirement.category, label: requirement.label }
       ));
       continue;
     }
-
-    const verdicts = new Set(supplied.map((item) => item.verdict));
-    if (verdicts.size !== 1) {
-      checks.set(requirement.id, gateCheck(
-        requirement.id,
-        'INCONCLUSIVE',
-        'Conflicting semantic judgments cannot be normalized to PASS or FAIL.',
-        supplied.flatMap((item) => item.evidence),
-        { category: requirement.category, label: requirement.label, judgments: supplied }
-      ));
-      continue;
+    const judgment = reviewed.judgment;
+    if (evidenceState && phase === 'final') {
+      for (const evidence of judgment.evidence) {
+        observeBaselineViolation(evidenceState, requirement.id, evidence);
+      }
     }
-
-    const verdict = supplied[0].verdict;
     const result = gateCheck(
       requirement.id,
-      verdict,
-      semanticMessage(requirement, verdict),
-      supplied.flatMap((item) => item.evidence),
-      { category: requirement.category, label: requirement.label, judgments: supplied }
+      judgment.verdict,
+      semanticMessage(requirement, judgment.verdict),
+      judgment.evidence,
+      {
+        category: requirement.category,
+        label: requirement.label,
+        reviewer: authority.reviewerIdentity,
+        attestation: judgment.attestation
+      }
     );
-    checks.set(requirement.id, verdict === 'FAIL'
+    checks.set(requirement.id, judgment.verdict === 'FAIL' && evidenceState
       ? scopeSemanticCheck(result, requirement.id, evidenceState)
       : result);
   }
-
-  return { checks, unknown };
+  return { checks, unknown: [] };
 }
 
-function inspectSemanticJudgment(judgment, requirement, evidenceState, projectRoot, sourceCache) {
+function invokeReviewer(authority, reviewer, requirement, phase, sourceState, impactPaths) {
+  const request = {
+    kind: 'ai-semantic-review-request',
+    phase,
+    projectRoot: authority.projectRoot,
+    requirement: {
+      id: requirement.id,
+      category: requirement.category,
+      label: requirement.label
+    },
+    binding: {
+      sessionId: authority.sessionId,
+      policyId: authority.policy.id,
+      preChangeId: authority.preChange.id,
+      impactScopeId: authority.impactScope.id
+    },
+    sourceDigest: sourceState && sourceState.digest ? sourceState.digest : null,
+    impactPaths: Array.isArray(impactPaths) ? [...impactPaths] : []
+  };
+  request.requestDigest = digestValue(request);
+  try {
+    const judgment = reviewer.review(Object.freeze(request));
+    if (judgment && typeof judgment.then === 'function') {
+      return { error: capabilityEvidence(requirement.id, 'Asynchronous reviewer results are unsupported by the synchronous final Gate.') };
+    }
+    if (!isPlainObject(judgment)) {
+      return { error: capabilityEvidence(requirement.id, 'The AI reviewer returned no structured judgment.') };
+    }
+    return { judgment, request };
+  } catch (error) {
+    return { error: capabilityEvidence(requirement.id, normalizeThrownReviewerValue(error)) };
+  }
+}
+
+function inspectSemanticJudgment(judgment, requirement, authority, request, sourceCache, allowOutsideScope, evidenceState) {
   const errors = [];
+  if (judgment.id !== requirement.id) {
+    errors.push(inputEvidence(requirement.id, 'AI judgment ID does not match the executed requirement.'));
+  }
   if (judgment.category !== requirement.category) {
     errors.push(inputEvidence(requirement.id, 'Semantic judgment category does not match its required obligation.'));
   }
   if (!['PASS', 'FAIL', 'INCONCLUSIVE'].includes(judgment.verdict)) {
     errors.push(inputEvidence(requirement.id, 'Semantic judgment verdict must be PASS, FAIL, or INCONCLUSIVE.'));
   }
-  if (!nonEmptyText(judgment.rule)) {
-    errors.push(inputEvidence(requirement.id, 'Semantic judgment must identify the reviewed rule.'));
+  if (judgment.rule !== requirement.id) {
+    errors.push(inputEvidence(requirement.id, 'Semantic judgment must identify the exact executed rule ID.'));
   }
-  if (!sameBinding(judgment.binding, evidenceState)) {
-    errors.push(inputEvidence(requirement.id, 'Semantic judgment is not bound to the fixed policy, pre-change state, and impact scope.'));
+  if (!validAttestation(judgment, authority, request)) {
+    errors.push(inputEvidence(requirement.id, 'Semantic judgment attestation does not match the invoked reviewer, request, and current source digest.'));
   }
   if (!Array.isArray(judgment.evidence) || judgment.evidence.length === 0) {
     errors.push(inputEvidence(requirement.id, 'Semantic judgment must include target source evidence.'));
   } else {
     for (const location of judgment.evidence) {
-      const error = validateSourceLocation(location, projectRoot, sourceCache);
+      const error = validateSourceLocation(location, authority.projectRoot, sourceCache);
       if (error) {
         errors.push(inputEvidence(requirement.id, error));
-      } else if (
-        !impactScopeContains(evidenceState, location.path) &&
-        !(judgment.verdict === 'FAIL' && matchBaselineViolation(evidenceState, requirement.id, location))
-      ) {
+      } else if (!allowOutsideScope && evidenceState && !impactScopeContains(evidenceState, location.path) && !(judgment.verdict === 'FAIL' && matchBaselineViolation(evidenceState, requirement.id, location))) {
         errors.push(inputEvidence(requirement.id, 'Semantic evidence is outside the fixed changed-module and dependency impact scope.'));
       }
     }
@@ -445,11 +867,11 @@ function scopeSemanticCheck(raw, checkId, evidenceState) {
     const match = matchBaselineViolation(evidenceState, checkId, item);
     if (match && !impactScopeContains(evidenceState, item.path)) {
       unrelatedPreExisting.push({ baseline: match.violation, evidence: item });
-      evidenceState.observedBaselineViolations.add(match.index);
+      observeBaselineViolation(evidenceState, checkId, item);
     } else {
       blockingEvidence.push(item);
       if (match) {
-        evidenceState.observedBaselineViolations.add(match.index);
+        observeBaselineViolation(evidenceState, checkId, item);
       }
     }
   }
@@ -466,6 +888,13 @@ function scopeSemanticCheck(raw, checkId, evidenceState) {
   return unrelatedPreExisting.length === 0
     ? raw
     : { ...raw, evidence: blockingEvidence, unrelatedPreExisting };
+}
+
+function observeBaselineViolation(evidenceState, checkId, evidence) {
+  const match = matchBaselineViolation(evidenceState, checkId, evidence);
+  if (match) {
+    evidenceState.observedBaselineViolations.add(match.index);
+  }
 }
 
 function createCategory(definition, bindingCheck, mechanicalChecks, semanticChecks) {
@@ -493,6 +922,7 @@ function createCategory(definition, bindingCheck, mechanicalChecks, semanticChec
 function validateGateEvidence(value, projectRoot) {
   const errors = [];
   const state = {
+    authority: null,
     errors,
     impactScope: null,
     observedBaselineViolations: new Set(),
@@ -500,17 +930,26 @@ function validateGateEvidence(value, projectRoot) {
     preChange: null,
     valid: false
   };
-  if (!isPlainObject(value)) {
-    errors.push(inputEvidence('evidence', 'Final Gate evidence must be an object.'));
+  const authority = isPlainObject(value) ? value.authority : null;
+  if (!authority || !GATE_AUTHORITIES.has(authority)) {
+    errors.push(inputEvidence('authority', 'Final Gate approval requires the opaque authority of the current WP-001 admission session.'));
     return state;
   }
-  if (isPlainObject(value.inputError) && nonEmptyText(value.inputError.message)) {
-    errors.push({ kind: 'input', path: value.inputError.path || 'evidence', error: value.inputError.message });
+  state.authority = authority;
+  errors.push(...authority.errors);
+  if (authority.projectRoot !== projectRoot) {
+    errors.push(inputEvidence('authority.projectRoot', 'WP-001 authority is bound to a different project root.'));
   }
-
-  state.policy = validatePolicy(value.policy, projectRoot, errors);
-  state.preChange = validatePreChange(value.preChange, projectRoot, errors);
-  state.impactScope = validateImpactScope(value.impactScope, projectRoot, errors);
+  try {
+    if (!authority.currentSourceAuthorized()) {
+      errors.push(inputEvidence('authority.currentSource', 'Current source is not the state last authorized by the WP-001 session.'));
+    }
+  } catch (error) {
+    errors.push(inputEvidence('authority.currentSource', `Current source authorization failed: ${error.message}`));
+  }
+  state.policy = validatePolicy(authority.policy, projectRoot, errors);
+  state.preChange = validatePreChange(authority.preChange, projectRoot, errors);
+  state.impactScope = validateImpactScope(authority.impactScope, projectRoot, errors);
   state.valid = errors.length === 0;
   return state;
 }
@@ -568,6 +1007,9 @@ function validateImpactScope(value, projectRoot, errors) {
       errors.push(inputEvidence(`impactScope.entries[${index}]`, 'Each impact-scope entry requires mode exact or subtree and a safe relative path.'));
     }
   });
+  if (!Array.isArray(value.fixedPaths) || value.fixedPaths.some((filePath) => !safeRelativePath(filePath, false))) {
+    errors.push(inputEvidence('impactScope.fixedPaths', 'WP-001 authority must retain its exact pre-change dependency closure.'));
+  }
   return value;
 }
 
@@ -637,12 +1079,15 @@ function validateThresholds(value, name, errors) {
 
 function validateBaselineViolation(value, index, errors) {
   const name = `preChange.violations[${index}]`;
-  if (!isPlainObject(value) || !KNOWN_BASELINE_CHECK_IDS.has(value.checkId) || !safeRelativePath(value.path, false)) {
-    errors.push(inputEvidence(name, 'Each pre-change violation requires a known check ID and safe source path.'));
+  if (!isPlainObject(value) || !KNOWN_BASELINE_CHECK_IDS.has(value.checkId) || !safeRelativePath(value.path, false) || !validDigest(value.evidenceDigest)) {
+    errors.push(inputEvidence(name, 'Each pre-change violation requires a known check ID, safe source path, and exact evidence digest.'));
     return;
   }
   if (value.line !== undefined && (!Number.isSafeInteger(value.line) || value.line < 1)) {
     errors.push(inputEvidence(`${name}.line`, 'Pre-change violation line must be a positive integer when supplied.'));
+  }
+  if (value.column !== undefined && (!Number.isSafeInteger(value.column) || value.column < 1)) {
+    errors.push(inputEvidence(`${name}.column`, 'Pre-change violation column must be a positive integer when supplied.'));
   }
 }
 
@@ -677,7 +1122,11 @@ function matchBaselineViolation(evidenceState, checkId, evidence) {
   const index = evidenceState.preChange.violations.findIndex((violation) => {
     return violation.checkId === checkId &&
       violation.path === evidence.path &&
-      (violation.line === undefined || violation.line === evidence.line);
+      violation.line === evidence.line &&
+      violation.column === evidence.column &&
+      violation.evidenceDigest === (SEMANTIC_REQUIREMENT_BY_ID.has(checkId)
+        ? semanticEvidenceDigest(checkId, evidence)
+        : evidenceDigest(checkId, evidence));
   });
   return index === -1 ? null : { index, violation: evidenceState.preChange.violations[index] };
 }
@@ -708,6 +1157,17 @@ function resolveImpactScope(evidenceState, fastOutcome) {
     };
   }
 
+  const fixedPaths = Array.isArray(evidenceState.impactScope.fixedPaths)
+    ? evidenceState.impactScope.fixedPaths
+    : [];
+  const effectivePaths = dependencyClosure(graph, evidenceState.impactScope.entries, fixedPaths);
+  return { effectivePaths, evidence: [], verdict: 'PASS' };
+}
+
+function dependencyClosure(graph, entries, retainedPaths) {
+  if (!graph || !Array.isArray(graph.files) || !Array.isArray(graph.edges)) {
+    return [];
+  }
   const adjacent = new Map(graph.files.map((file) => [file, new Set()]));
   for (const edge of graph.edges) {
     if (adjacent.has(edge.from) && adjacent.has(edge.to)) {
@@ -715,8 +1175,13 @@ function resolveImpactScope(evidenceState, fastOutcome) {
       adjacent.get(edge.to).add(edge.from);
     }
   }
-  const effective = new Set(graph.files.filter((file) => scopeContains(evidenceState.impactScope.entries, file)));
-  const queue = [...effective];
+  const effective = new Set(Array.isArray(retainedPaths) ? retainedPaths : []);
+  for (const file of graph.files) {
+    if (scopeContains(entries, file)) {
+      effective.add(file);
+    }
+  }
+  const queue = [...effective].filter((file) => adjacent.has(file));
   while (queue.length > 0) {
     const current = queue.shift();
     for (const related of adjacent.get(current) || []) {
@@ -726,7 +1191,7 @@ function resolveImpactScope(evidenceState, fastOutcome) {
       }
     }
   }
-  return { effectivePaths: [...effective].sort(), evidence: [], verdict: 'PASS' };
+  return [...effective].sort();
 }
 
 function impactScopeContains(evidenceState, filePath) {
@@ -738,7 +1203,13 @@ function impactScopeContains(evidenceState, filePath) {
 }
 
 function scopeContains(entries, filePath) {
+  if (!Array.isArray(entries) || typeof filePath !== 'string') {
+    return false;
+  }
   return entries.some((entry) => {
+    if (!isPlainObject(entry) || typeof entry.path !== 'string') {
+      return false;
+    }
     if (entry.path === '.') {
       return true;
     }
@@ -783,13 +1254,6 @@ function isReadableTargetFile(projectRoot, relativePath) {
   }
 }
 
-function sameBinding(binding, evidenceState) {
-  return isPlainObject(binding) && evidenceState.policy && evidenceState.preChange && evidenceState.impactScope &&
-    binding.policyId === evidenceState.policy.id &&
-    binding.preChangeId === evidenceState.preChange.id &&
-    binding.impactScopeId === evidenceState.impactScope.id;
-}
-
 function createSourceReadback(before, after) {
   return {
     before: sourceStateEvidence(before),
@@ -800,6 +1264,9 @@ function createSourceReadback(before, after) {
 
 function describeBinding(evidenceState) {
   return {
+    sessionId: evidenceState.authority ? evidenceState.authority.sessionId : null,
+    reviewer: evidenceState.authority ? evidenceState.authority.reviewerIdentity : null,
+    baselineCompleteness: evidenceState.authority ? evidenceState.authority.baselineCompleteness : null,
     policy: evidenceState.policy ? {
       id: evidenceState.policy.id,
       kind: evidenceState.policy.kind,
@@ -818,6 +1285,7 @@ function describeBinding(evidenceState) {
       kind: evidenceState.impactScope.kind,
       source: evidenceState.impactScope.source,
       entries: evidenceState.impactScope.entries,
+      fixedPaths: evidenceState.impactScope.fixedPaths,
       effectivePaths: evidenceState.impactScopeAssessment ? evidenceState.impactScopeAssessment.effectivePaths : [],
       verdict: evidenceState.impactScopeAssessment ? evidenceState.impactScopeAssessment.verdict : 'INCONCLUSIVE'
     } : null
@@ -839,7 +1307,9 @@ function describeMechanical(fastOutcome, mechanicalChecks) {
 
 function describePreExisting(evidenceState) {
   const violations = evidenceState.preChange && Array.isArray(evidenceState.preChange.violations)
-    ? evidenceState.preChange.violations
+    ? evidenceState.preChange.violations.filter((violation) => {
+      return isPlainObject(violation) && typeof violation.path === 'string' && typeof violation.checkId === 'string';
+    })
     : [];
   const partition = (belongsToScope) => violations.flatMap((violation, index) => {
     return impactScopeContains(evidenceState, violation.path) === belongsToScope
@@ -933,7 +1403,7 @@ function safeRelativePath(value, allowRoot) {
 }
 
 function safeBoundaryPath(value) {
-  return safeRelativePath(value, false);
+  return value === '.' || safeRelativePath(value, false);
 }
 
 function isWithin(projectRoot, candidate) {
@@ -949,6 +1419,126 @@ function validFileCount(value) {
   return Number.isSafeInteger(value) && value >= 0;
 }
 
+function validReviewer(value) {
+  return isPlainObject(value) &&
+    value.kind === 'ai-semantic-reviewer' &&
+    nonEmptyText(value.id) &&
+    nonEmptyText(value.model) &&
+    value.publicKey && typeof value.publicKey === 'object' &&
+    typeof value.review === 'function';
+}
+
+function reviewerIdentity(value) {
+  return validReviewer(value)
+    ? {
+      id: value.id,
+      kind: value.kind,
+      model: value.model,
+      publicKeyFingerprint: crypto.createHash('sha256').update(value.publicKey.export({ format: 'der', type: 'spki' })).digest('hex')
+    }
+    : null;
+}
+
+function validAttestation(judgment, authority, request) {
+  try {
+    const value = judgment && judgment.attestation;
+    if (!isPlainRecord(value) || !hasExactDataFields(value, ATTESTATION_FIELDS) || !authority.reviewerIdentity ||
+      value.reviewerId !== authority.reviewerIdentity.id ||
+      value.model !== authority.reviewerIdentity.model ||
+      value.requestDigest !== request.requestDigest ||
+      value.sourceDigest !== request.sourceDigest ||
+      !nonEmptyText(value.signature)) {
+      return false;
+    }
+    const payload = semanticAttestationPayload(judgment, value);
+    return crypto.verify(
+      null,
+      Buffer.from(canonicalJson(payload)),
+      authority.reviewer.publicKey,
+      Buffer.from(value.signature, 'base64')
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
+function hasExactDataFields(value, expectedFields) {
+  const keys = Reflect.ownKeys(value);
+  if (keys.length !== expectedFields.length || keys.some((key) => typeof key !== 'string' || !expectedFields.includes(key))) {
+    return false;
+  }
+  return keys.every((key) => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor && Object.hasOwn(descriptor, 'value');
+  });
+}
+
+function semanticAttestationPayload(judgment, attestation) {
+  return {
+    reviewerId: attestation.reviewerId,
+    model: attestation.model,
+    requestDigest: attestation.requestDigest,
+    sourceDigest: attestation.sourceDigest,
+    id: judgment.id,
+    category: judgment.category,
+    verdict: judgment.verdict,
+    rule: judgment.rule,
+    evidence: judgment.evidence,
+    falsifier: judgment.falsifier || null
+  };
+}
+
+function evidenceDigest(checkId, evidence) {
+  return digestValue({ checkId, evidence });
+}
+
+function semanticEvidenceDigest(checkId, evidence) {
+  return digestValue({
+    checkId,
+    path: evidence && evidence.path,
+    line: evidence && evidence.line,
+    column: evidence && evidence.column
+  });
+}
+
+function digestValue(value) {
+  return crypto.createHash('sha256').update(canonicalJson(value)).digest('hex');
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(',')}]`;
+  }
+  if (isPlainObject(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function normalizeThrownReviewerValue(value) {
+  if (value === null) {
+    return 'The reviewer threw null.';
+  }
+  if (value === undefined) {
+    return 'The reviewer threw undefined.';
+  }
+  if (typeof value === 'string') {
+    return `The reviewer threw a string: ${value}`;
+  }
+  if (value !== null && (typeof value === 'object' || typeof value === 'function')) {
+    try {
+      const descriptor = Object.getOwnPropertyDescriptor(value, 'message');
+      if (descriptor && Object.hasOwn(descriptor, 'value') && nonEmptyText(descriptor.value)) {
+        return descriptor.value;
+      }
+    } catch (error) {
+      return 'The reviewer threw an unreadable object value.';
+    }
+    return `The reviewer threw a ${typeof value} value.`;
+  }
+  return `The reviewer threw a ${typeof value} value.`;
+}
+
 function nonEmptyText(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -957,4 +1547,71 @@ function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-module.exports = { gateProject };
+function deepCopy(value, seen = new WeakMap(), ancestors = new WeakSet(), state = { cyclic: false, hostile: false }) {
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  let isRecord;
+  try {
+    isRecord = isPlainRecord(value);
+  } catch (error) {
+    state.hostile = true;
+    return null;
+  }
+  const isArray = Array.isArray(value);
+  if (!isArray && !isRecord) {
+    return value;
+  }
+  if (ancestors.has(value)) {
+    state.cyclic = true;
+    return null;
+  }
+  if (seen.has(value)) {
+    return seen.get(value);
+  }
+
+  const copy = isArray ? [] : {};
+  seen.set(value, copy);
+  ancestors.add(value);
+  try {
+    if (isArray) {
+      for (let index = 0; index < value.length; index += 1) {
+        copy.push(deepCopy(value[index], seen, ancestors, state));
+      }
+    } else {
+      for (const [key, item] of Object.entries(value)) {
+        copy[key] = deepCopy(item, seen, ancestors, state);
+      }
+    }
+  } catch (error) {
+    state.hostile = true;
+  } finally {
+    ancestors.delete(value);
+  }
+  return copy;
+}
+
+function deepFreeze(value, seen = new WeakSet()) {
+  if (!Array.isArray(value) && !isPlainRecord(value)) {
+    return value;
+  }
+  if (seen.has(value)) {
+    return value;
+  }
+  seen.add(value);
+  for (const item of Object.values(value)) {
+    deepFreeze(item, seen);
+  }
+  return Object.freeze(value);
+}
+
+function isPlainRecord(value) {
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+module.exports = { createGatedAdmissionSession, gateProject };
