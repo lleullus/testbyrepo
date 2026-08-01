@@ -146,6 +146,15 @@ function assessAdmission(options, diagnoseProject) {
   } else if (diagnosis) {
     selectedResponsibility = selectObservedResponsibility(diagnosis, input.requestText);
     if (!selectedResponsibility) {
+      const responsibilityReinvestigation = reinvestigateResponsibility(diagnosis, input.requestText);
+      selectedResponsibility = responsibilityReinvestigation.responsibility;
+      reinvestigation = {
+        performed: true,
+        reason: 'unresolved-change-responsibility',
+        observed: responsibilityReinvestigation.observed
+      };
+    }
+    if (!selectedResponsibility) {
       risks.push(issue(
         'inconclusive',
         'unresolved-change-responsibility',
@@ -183,6 +192,13 @@ function assessAdmission(options, diagnoseProject) {
   if (reuse.risk) {
     risks.push(reuse.risk);
   }
+  const repositoryAuthority = establishRepositoryAuthority(
+    diagnosis,
+    baseline,
+    input.requestText,
+    newProject
+  );
+  risks.push(...repositoryAuthority.risks);
 
   if (input.projectRoot) {
     afterState = fingerprintProject(input.projectRoot);
@@ -207,7 +223,7 @@ function assessAdmission(options, diagnoseProject) {
   const summaryResponsibility = summarizeResponsibility(selectedResponsibility);
   const mainRisks = sortedRisks.slice(0, 3);
   const sourceState = stableSourceState(beforeState, afterState);
-  const repositoryEvidence = describeRepositoryEvidence(diagnosis);
+  const repositoryEvidence = describeRepositoryEvidence(diagnosis, repositoryAuthority);
   const details = {
     verdict,
     selectedResponsibility: summaryResponsibility,
@@ -284,7 +300,11 @@ function normalizeAdmissionInput(options) {
     ));
   }
 
-  const suppliedScope = normalizeProgrammaticScope(value.scope, Object.hasOwn(value, 'scope') && value.scope !== undefined);
+  const suppliedScope = normalizeProgrammaticScope(
+    value.scope,
+    Object.hasOwn(value, 'scope') && value.scope !== undefined,
+    projectRoot
+  );
   if (suppliedScope.error) {
     risks.push(issue(
       'inconclusive',
@@ -303,26 +323,45 @@ function normalizeAdmissionInput(options) {
   };
 }
 
-function normalizeProgrammaticScope(scope, provided) {
+function normalizeProgrammaticScope(scope, provided, projectRoot) {
   if (!provided) {
     return { error: null, provided: false, scope: null };
   }
 
-  const rawValues = typeof scope === 'string' ? [scope] : Array.isArray(scope) ? scope : null;
+  const rawValues = typeof scope === 'string' || isPlainObject(scope) ? [scope] : Array.isArray(scope) ? scope : null;
   if (!rawValues || rawValues.length === 0) {
     return { error: 'missing-path', provided: true, scope: null };
   }
 
   const entries = [];
   for (const value of rawValues) {
-    const normalized = normalizeRelativePath(value);
+    const pathValue = isPlainObject(value) ? value.path : value;
+    const normalized = normalizeRelativePath(pathValue);
     if (!normalized.path) {
       return { error: normalized.error, provided: true, scope: null };
     }
-    entries.push({ mode: 'subtree', path: normalized.path });
+    const requestedMode = isPlainObject(value) ? value.mode : null;
+    if (requestedMode !== null && requestedMode !== undefined && !['exact', 'subtree'].includes(requestedMode)) {
+      return { error: 'invalid-mode', provided: true, scope: null };
+    }
+    entries.push({
+      mode: requestedMode || inferExplicitScopeMode(projectRoot, normalized.path),
+      path: normalized.path
+    });
   }
 
   return { error: null, provided: true, scope: createScope('explicit', entries) };
+}
+
+function inferExplicitScopeMode(projectRoot, relativePath) {
+  if (!projectRoot) {
+    return 'exact';
+  }
+  try {
+    return fs.lstatSync(path.join(projectRoot, relativePath)).isDirectory() ? 'subtree' : 'exact';
+  } catch (error) {
+    return 'exact';
+  }
 }
 
 function normalizeRelativePath(value) {
@@ -367,15 +406,30 @@ function extractBehavior(requestText) {
   const sentences = requestText.split(/[\n.!?;]+/).map((sentence) => sentence.trim()).filter(Boolean);
   const preservation = sentences.find(isPreservationSentence) || null;
   const failure = sentences.find(isFailureSentence) || null;
-  const desired = sentences.find((sentence) => !isPreservationSentence(sentence) && !isFailureSentence(sentence) && hasDesiredAction(sentence))
-    || sentences.find((sentence) => !isPreservationSentence(sentence) && hasDesiredAction(sentence))
-    || null;
+  const desired = sentences
+    .filter((sentence) => !isFailureSentence(sentence))
+    .map(extractDesiredClause)
+    .find((sentence) => sentence && hasDesiredAction(sentence)) || null;
+
+  const roleTexts = [desired, preservation, failure].filter(Boolean).map(normalizeText);
+  const hasDuplicateRole = new Set(roleTexts.map((text) => text.toLowerCase())).size !== roleTexts.length;
 
   return {
-    desiredBehavior: desired ? requestedBehavior(desired) : null,
+    desiredBehavior: desired && !hasDuplicateRole ? requestedBehavior(desired) : null,
     behaviorToPreserve: preservation ? requestedBehavior(preservation) : null,
     observableFailureOutcome: failure ? requestedBehavior(failure) : null
   };
+}
+
+function extractDesiredClause(sentence) {
+  const preservationMarker = sentence.search(
+    /\b(?:keep|preserve|retain|leave)\b|\b(?:do not|don't|without)\s+(?:change|alter|break|affect|modify)\b|(?:기존|현재|원래)/i
+  );
+  const candidate = preservationMarker > 0 ? sentence.slice(0, preservationMarker) : sentence;
+  return candidate
+    .replace(/\b(?:and|but|while)\s*$/i, '')
+    .replace(/(?:하고|하며|하되|그리고)\s*$/, '')
+    .trim();
 }
 
 function requestedBehavior(text) {
@@ -401,7 +455,7 @@ function isFailureSentence(sentence) {
 }
 
 function hasDesiredAction(sentence) {
-  return /\b(add|allow|create|change|update|support|send|save|show|display|let|enable|prevent|remove|fix|implement|register|validate|check|accept|reject|calculate|list|find|load|read|write|delete|login|notify|reuse)\b/i.test(sentence)
+  return /\b(add|allow|create|change|make|update|support|send|save|show|display|let|enable|prevent|remove|fix|implement|register|validate|check|accept|reject|calculate|list|find|load|read|write|delete|login|notify|reuse)\b/i.test(sentence)
     || /(?:추가|만들|생성|변경|수정|지원|보여|표시|저장|허용|막|방지|고쳐|개선|등록|삭제|로그인|가입|검증|확인|검사|계산|조회|읽|쓰기|알림|전송|재사용)/.test(sentence);
 }
 
@@ -577,6 +631,103 @@ function selectObservedResponsibility(diagnosis, requestText) {
   return { ...deepest[0].responsibility, source: 'observed' };
 }
 
+function reinvestigateResponsibility(diagnosis, requestText) {
+  const details = diagnosis.details;
+  const boundaries = new Map((details.structure.boundaries || []).map((boundary) => [boundary.path, boundary]));
+  const requestTerms = extractSearchTerms(requestText);
+  const requestTargetsTests = requestTerms.some((term) => ['test', 'tests', 'testing', '테스트', '검사'].includes(term));
+  const candidates = (details.responsibilities || []).filter((responsibility) => {
+    if (['package.json', 'tsconfig.json'].includes(responsibility.ownerPath)) {
+      return false;
+    }
+    const boundary = boundaries.get(responsibility.ownerPath);
+    return requestTargetsTests || !boundary || boundary.role !== 'test';
+  });
+  const dependencyDirection = details.dependencyDirection || {};
+  const references = dependencyDirection.internalReferences || [];
+  const entries = packageEntryPaths(details.responsibilities || []);
+  const reuseCandidates = details.reuseCandidates || [];
+  const scored = candidates.map((responsibility) => {
+    const boundary = boundaries.get(responsibility.ownerPath);
+    const files = boundary ? boundary.files : [];
+    const relatedReferences = references.filter((reference) => {
+      return pathBelongsToResponsibility(reference.path, responsibility.ownerPath)
+        || pathBelongsToResponsibility(reference.target, responsibility.ownerPath);
+    });
+    const relatedReuse = reuseCandidates.filter((candidate) => {
+      return pathBelongsToResponsibility(candidate.path, responsibility.ownerPath);
+    });
+    const corpus = [
+      responsibility.ownerPath,
+      ...files,
+      ...relatedReferences.flatMap((reference) => [reference.path, reference.target, reference.specifier]),
+      ...relatedReuse.flatMap((candidate) => [candidate.path, ...(candidate.symbols || [])])
+    ].join(' ');
+    const corpusTerms = new Set(extractSearchTerms(corpus));
+    const termScore = requestTerms.filter((term) => corpusTerms.has(term)).length * 3;
+    const entryScore = entries.some((entry) => pathBelongsToResponsibility(entry, responsibility.ownerPath)) ? 5 : 0;
+    return {
+      responsibility,
+      score: termScore + entryScore,
+      evidence: {
+        entryPaths: entries.filter((entry) => pathBelongsToResponsibility(entry, responsibility.ownerPath)),
+        references: relatedReferences,
+        reuseCandidates: relatedReuse
+      }
+    };
+  }).sort((left, right) => right.score - left.score || left.responsibility.ownerPath.localeCompare(right.responsibility.ownerPath));
+
+  const best = scored[0];
+  const tied = best ? scored.filter((candidate) => candidate.score === best.score) : [];
+  const responsibility = best && (scored.length === 1 || (best.score > 0 && tied.length === 1))
+    ? { ...best.responsibility, source: 'observed' }
+    : null;
+  return {
+    responsibility,
+    observed: {
+      candidateScores: scored.map((candidate) => ({
+        ownerPath: candidate.responsibility.ownerPath,
+        score: candidate.score,
+        evidence: candidate.evidence
+      })),
+      excludedTestResponsibilities: requestTargetsTests
+        ? []
+        : [...boundaries.values()].filter((boundary) => boundary.role === 'test').map((boundary) => boundary.path)
+    }
+  };
+}
+
+function packageEntryPaths(responsibilities) {
+  const packageResponsibility = responsibilities.find((responsibility) => responsibility.ownerPath === 'package.json');
+  if (!packageResponsibility) {
+    return [];
+  }
+  return (packageResponsibility.evidence || []).flatMap((evidence) => {
+    if (evidence.kind !== 'config' || !['bin', 'exports', 'main', 'module'].includes(evidence.key)) {
+      return [];
+    }
+    return collectStringValues(evidence.value).map((value) => value.replace(/^\.\//, ''));
+  });
+}
+
+function collectStringValues(value) {
+  if (typeof value === 'string') {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(collectStringValues);
+  }
+  if (isPlainObject(value)) {
+    return Object.values(value).flatMap(collectStringValues);
+  }
+  return [];
+}
+
+function pathBelongsToResponsibility(filePath, ownerPath) {
+  return typeof filePath === 'string'
+    && (filePath === ownerPath || filePath.startsWith(`${ownerPath}/`));
+}
+
 function summarizeResponsibility(responsibility) {
   if (!responsibility) {
     return null;
@@ -635,8 +786,11 @@ function narrowScope(inferredScope, explicitScope) {
     if (containingEntries.length === 0) {
       return null;
     }
+    if (explicitEntry.mode === 'subtree' && !containingEntries.some((entry) => entry.mode === 'subtree')) {
+      return null;
+    }
     entries.push({
-      mode: containingEntries.some((entry) => entry.mode === 'subtree') ? 'subtree' : 'exact',
+      mode: explicitEntry.mode,
       path: explicitEntry.path
     });
   }
@@ -736,6 +890,131 @@ function assessReuse(projectRoot, diagnosis, requestText, newProject) {
     result.reason = 'No observed symbol or reuse candidate matched the proposed code shape.';
   }
   return result;
+}
+
+function establishRepositoryAuthority(diagnosis, baseline, requestText, newProject) {
+  if (newProject) {
+    return {
+      executionPaths: baseline ? [baseline.entryPath] : [],
+      canonicalSsot: baseline ? {
+        evidence: baseline.files.filter((file) => file.path === baseline.entryPath),
+        path: baseline.entryPath,
+        source: 'proposed-baseline'
+      } : null,
+      risks: []
+    };
+  }
+  if (!diagnosis || !diagnosis.details) {
+    return {
+      executionPaths: [],
+      canonicalSsot: null,
+      risks: [issue(
+        'inconclusive',
+        'repository-authority-unavailable',
+        'Execution paths and canonical source authority could not be established.',
+        []
+      )]
+    };
+  }
+
+  const sourceFiles = diagnosis.details.structure.sourceFiles || [];
+  const entryEvidence = packageEntryEvidence(diagnosis.details.responsibilities || []);
+  const configuredEntries = [...new Set(entryEvidence.flatMap((evidence) => collectStringValues(evidence.value)))];
+  const executionPaths = [...new Set(configuredEntries
+    .map((entry) => resolveObservedEntryPath(entry, sourceFiles))
+    .filter(Boolean))].sort();
+  const risks = [];
+  if (configuredEntries.length === 0 || executionPaths.length === 0) {
+    risks.push(issue(
+      'inconclusive',
+      'execution-path-unresolved',
+      'No configured package execution entry could be resolved to observed source.',
+      entryEvidence
+    ));
+  } else if (executionPaths.length < configuredEntries.length) {
+    risks.push(issue(
+      'inconclusive',
+      'execution-entry-unresolved',
+      'At least one configured package execution entry could not be resolved to observed source.',
+      entryEvidence
+    ));
+  }
+
+  const sourceCandidates = (diagnosis.details.ssotCandidates || []).filter((candidate) => {
+    return !['package.json', 'tsconfig.json'].includes(candidate.path);
+  });
+  const requestTerms = extractSearchTerms(requestText);
+  const scoredCandidates = sourceCandidates.map((candidate) => {
+    const candidateTerms = new Set(extractSearchTerms(`${candidate.path} ${(candidate.symbols || []).join(' ')}`));
+    return {
+      candidate,
+      score: requestTerms.filter((term) => candidateTerms.has(term)).length
+    };
+  }).sort((left, right) => right.score - left.score || left.candidate.path.localeCompare(right.candidate.path));
+  const bestScore = scoredCandidates[0] ? scoredCandidates[0].score : 0;
+  const bestCandidates = scoredCandidates.filter((candidate) => candidate.score === bestScore);
+  let canonicalSsot = null;
+  if (bestScore > 0 && bestCandidates.length === 1) {
+    canonicalSsot = canonicalSsotFromCandidate(bestCandidates[0].candidate, 'request-match');
+  } else if (sourceCandidates.length === 1) {
+    canonicalSsot = canonicalSsotFromCandidate(sourceCandidates[0], 'single-source-candidate');
+  } else {
+    const executionCandidates = sourceCandidates.filter((candidate) => executionPaths.includes(candidate.path));
+    if (executionCandidates.length === 1) {
+      canonicalSsot = canonicalSsotFromCandidate(executionCandidates[0], 'configured-entry');
+    } else if (sourceCandidates.length === 0 && executionPaths.length === 1) {
+      canonicalSsot = {
+        evidence: entryEvidence,
+        path: executionPaths[0],
+        source: 'configured-entry'
+      };
+    }
+  }
+  if (!canonicalSsot) {
+    risks.push(issue(
+      'inconclusive',
+      'canonical-ssot-unresolved',
+      'Repository evidence did not establish one canonical source of truth for the requested behavior.',
+      sourceCandidates.flatMap((candidate) => candidate.evidence || [])
+    ));
+  }
+
+  return { canonicalSsot, executionPaths, risks };
+}
+
+function packageEntryEvidence(responsibilities) {
+  const packageResponsibility = responsibilities.find((responsibility) => responsibility.ownerPath === 'package.json');
+  return packageResponsibility
+    ? (packageResponsibility.evidence || []).filter((evidence) => {
+      return evidence.kind === 'config' && ['bin', 'exports', 'main', 'module'].includes(evidence.key);
+    })
+    : [];
+}
+
+function resolveObservedEntryPath(entry, sourceFiles) {
+  if (typeof entry !== 'string' || (!entry.startsWith('.') && !entry.includes('/'))) {
+    return null;
+  }
+  const normalized = entry.replace(/^\.\//, '').replaceAll('\\', '/');
+  if (sourceFiles.includes(normalized)) {
+    return normalized;
+  }
+  const extension = path.posix.extname(normalized);
+  const base = extension ? normalized.slice(0, -extension.length) : normalized;
+  return sourceFiles.find((sourceFile) => {
+    const sourceExtension = path.posix.extname(sourceFile);
+    const sourceBase = sourceFile.slice(0, -sourceExtension.length);
+    return sourceBase === base || sourceBase === `${normalized}/index`;
+  }) || null;
+}
+
+function canonicalSsotFromCandidate(candidate, source) {
+  return {
+    evidence: candidate.evidence || [],
+    path: candidate.path,
+    source,
+    symbols: candidate.symbols || []
+  };
 }
 
 function requestedShapesFor(requestText) {
@@ -910,18 +1189,18 @@ function deriveTestObligations(behavior) {
   ];
 }
 
-function describeRepositoryEvidence(diagnosis) {
+function describeRepositoryEvidence(diagnosis, repositoryAuthority) {
   if (!diagnosis || !diagnosis.details) {
     return null;
   }
   const details = diagnosis.details;
   const responsibilities = details.responsibilities || [];
-  const executionEntries = responsibilities
-    .filter((responsibility) => ['package.json', 'tsconfig.json'].includes(responsibility.ownerPath))
-    .flatMap((responsibility) => responsibility.evidence || []);
+  const executionEntries = packageEntryEvidence(responsibilities);
   return {
     diagnosisVerdict: diagnosis.verdict,
     executionEntries,
+    executionPaths: repositoryAuthority.executionPaths,
+    canonicalSsot: repositoryAuthority.canonicalSsot,
     responsibilities,
     boundaries: details.structure ? details.structure.boundaries : [],
     dependencyDirection: details.dependencyDirection,
@@ -954,13 +1233,16 @@ function fingerprintProject(projectRoot) {
     for (const entry of entries) {
       const absolutePath = path.join(directory, entry.name);
       const relativePath = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
+      const metadata = fs.lstatSync(absolutePath);
       if (entry.isSymbolicLink()) {
         update('symlink');
         update(relativePath);
+        update(metadata.mode & 0o7777);
         update(fs.readlinkSync(absolutePath));
       } else if (entry.isDirectory()) {
         update('directory');
         update(relativePath);
+        update(metadata.mode & 0o7777);
         if (!IGNORED_DIRECTORIES.has(entry.name)) {
           visit(absolutePath, relativePath);
         }
@@ -968,6 +1250,7 @@ function fingerprintProject(projectRoot) {
         const contents = fs.readFileSync(absolutePath);
         update('file');
         update(relativePath);
+        update(metadata.mode & 0o7777);
         update(contents.length);
         hash.update(contents);
         hash.update('\u0000');
@@ -975,6 +1258,7 @@ function fingerprintProject(projectRoot) {
       } else {
         update('other');
         update(relativePath);
+        update(metadata.mode & 0o7777);
       }
     }
   }
@@ -985,6 +1269,7 @@ function fingerprintProject(projectRoot) {
       return { error: 'The project root is not a directory.' };
     }
     update('root');
+    update(fs.lstatSync(projectRoot).mode & 0o7777);
     visit(projectRoot, '');
     return { digest: hash.digest('hex'), fileCount };
   } catch (error) {
@@ -1095,7 +1380,8 @@ function validateWriteBinding(assessment, gateOptions) {
 
   const suppliedScope = normalizeProgrammaticScope(
     gateOptions.scope,
-    Object.hasOwn(gateOptions, 'scope') && gateOptions.scope !== undefined
+    Object.hasOwn(gateOptions, 'scope') && gateOptions.scope !== undefined,
+    assessment.projectRoot
   );
   if (suppliedScope.error) {
     return writeProblem('changed-scope', 'The supplied scope is not a safe admitted project path.');
@@ -1154,8 +1440,18 @@ function prepareWritePlan(projectRoot, admittedScope, scopeKey, writes) {
       return { error: pathProblem };
     }
 
+    let existingMode = null;
+    if (fs.existsSync(absolutePath)) {
+      try {
+        fs.accessSync(absolutePath, fs.constants.W_OK);
+        existingMode = fs.statSync(absolutePath).mode & 0o777;
+      } catch (error) {
+        return { error: writeProblem('unwritable-write-target', 'An existing write target is not writable.') };
+      }
+    }
+
     paths.add(normalizedPath.path);
-    plan.push({ absolutePath, content, relativePath: normalizedPath.path });
+    plan.push({ absolutePath, content, existingMode, relativePath: normalizedPath.path });
   }
   return { error: null, plan };
 }
@@ -1213,9 +1509,96 @@ function inspectSafeWriteTarget(projectRoot, relativePath) {
 }
 
 function applyWritePlan(plan) {
-  for (const write of plan) {
-    fs.mkdirSync(path.dirname(write.absolutePath), { recursive: true });
-    fs.writeFileSync(write.absolutePath, write.content);
+  const transaction = crypto.randomUUID();
+  const staged = [];
+  const committed = [];
+  const createdDirectories = [];
+
+  try {
+    for (let index = 0; index < plan.length; index += 1) {
+      const write = plan[index];
+      createMissingDirectories(path.dirname(write.absolutePath), createdDirectories);
+      const temporaryPath = path.join(
+        path.dirname(write.absolutePath),
+        `.node-policy-${transaction}-${index}.pending`
+      );
+      const backupPath = path.join(
+        path.dirname(write.absolutePath),
+        `.node-policy-${transaction}-${index}.backup`
+      );
+      fs.writeFileSync(temporaryPath, write.content, { flag: 'wx' });
+      if (write.existingMode !== null) {
+        fs.chmodSync(temporaryPath, write.existingMode);
+        fs.copyFileSync(write.absolutePath, backupPath, fs.constants.COPYFILE_EXCL);
+      }
+      staged.push({ ...write, backupPath, temporaryPath });
+    }
+
+    for (const write of staged) {
+      fs.renameSync(write.temporaryPath, write.absolutePath);
+      committed.push(write);
+    }
+  } catch (error) {
+    const rollbackErrors = rollbackCommittedWrites(committed);
+    cleanupWriteArtifacts(staged, createdDirectories);
+    if (rollbackErrors.length > 0) {
+      throw new Error(`${error.message}; rollback failed: ${rollbackErrors.join('; ')}`);
+    }
+    throw error;
+  }
+
+  cleanupWriteArtifacts(staged, []);
+}
+
+function createMissingDirectories(directory, createdDirectories) {
+  const missing = [];
+  let current = directory;
+  while (!fs.existsSync(current)) {
+    missing.push(current);
+    current = path.dirname(current);
+  }
+  for (const directoryPath of missing.reverse()) {
+    fs.mkdirSync(directoryPath);
+    createdDirectories.push(directoryPath);
+  }
+}
+
+function rollbackCommittedWrites(committed) {
+  const errors = [];
+  for (const write of [...committed].reverse()) {
+    try {
+      if (write.existingMode !== null) {
+        fs.renameSync(write.backupPath, write.absolutePath);
+      } else {
+        fs.unlinkSync(write.absolutePath);
+      }
+    } catch (error) {
+      errors.push(`${write.relativePath}: ${error.message}`);
+    }
+  }
+  return errors;
+}
+
+function cleanupWriteArtifacts(staged, createdDirectories) {
+  for (const write of staged) {
+    for (const artifact of [write.temporaryPath, write.backupPath]) {
+      try {
+        fs.unlinkSync(artifact);
+      } catch (error) {
+        if (!error || error.code !== 'ENOENT') {
+          // Cleanup is best-effort after the authoritative target state is restored.
+        }
+      }
+    }
+  }
+  for (const directory of [...createdDirectories].reverse()) {
+    try {
+      fs.rmdirSync(directory);
+    } catch (error) {
+      if (!error || !['ENOENT', 'ENOTEMPTY'].includes(error.code)) {
+        // Leave a concurrently populated directory intact.
+      }
+    }
   }
 }
 

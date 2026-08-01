@@ -15,8 +15,8 @@
     "node-policy-checker": "./src/cli.js"
   },
   "scripts": {
-    "test": "node --test",
-    "check": "node --check src/index.js && node --check src/admission.js && node --check src/cli.js && node --check test/admission-cli.test.js"
+    "test": "node --test test/*.test.js ../../.opencode/test/*.test.js",
+    "check": "node --check src/index.js && node --check src/admission.js && node --check src/cli.js && node --check ../../.opencode/plugins/node-policy-gate.js && node --check test/admission-cli.test.js && node --check ../../.opencode/test/node-policy-gate.test.js"
   },
   "engines": {
     "node": ">=18"

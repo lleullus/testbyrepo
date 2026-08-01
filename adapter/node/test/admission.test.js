@@ -154,6 +154,7 @@ test('allows an explicit new shape when repository evidence finds no reusable ca
 
   assert.equal(session.verdict, 'PASS');
   assert.equal(session.details.binding.admittedScope.origin, 'explicit');
+  assert.deepEqual(session.details.binding.admittedScope.entries, [{ mode: 'exact', path: 'src/validate-name.js' }]);
   assert.equal(session.details.reuse.decision, 'creation-necessary');
   assert.equal(session.details.reuse.allowsCreation, true);
   const allowed = session.attemptWrite({
@@ -161,6 +162,14 @@ test('allows an explicit new shape when repository evidence finds no reusable ca
     writes: [write('src/validate-name.js', 'exports.validateName = (name) => Boolean(name);\n')]
   });
   assert.equal(allowed.allowed, true);
+
+  const child = session.attemptWrite({
+    request,
+    writes: [write('src/validate-name.js/child.js', 'module.exports = true;\n')]
+  });
+  assert.equal(child.allowed, false);
+  assert.equal(child.reason.code, 'out-of-scope-write');
+  assert.equal(fs.existsSync(path.join(directory, 'src/validate-name.js/child.js')), false);
 });
 
 test('rejects unsafe or mixed declarative writes before changing either target', (t) => {
@@ -230,6 +239,48 @@ test('rejects unsafe or mixed declarative writes before changing either target',
   assert.equal(mixed.reason.code, 'out-of-scope-write');
   assert.deepEqual(snapshot(directory), before);
   assert.equal(fs.existsSync(path.join(outside, 'escape.ts')), false);
+});
+
+test('rolls back earlier files when a later atomic commit fails', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'atomic-project', main: 'src/first.js' }),
+    'src/first.js': 'first old\n',
+    'src/second.js': 'second old\n'
+  });
+  t.after(() => removeProject(directory));
+  const request = 'Update source behavior. Keep existing startup unchanged. If the update fails, show an error message.';
+  const session = admitChange({ projectDirectory: directory, request });
+  const before = snapshot(directory);
+  const renameSync = fs.renameSync;
+
+  fs.renameSync = (source, destination) => {
+    if (destination === path.join(directory, 'src/second.js')) {
+      const error = new Error('simulated second commit failure');
+      error.code = 'EIO';
+      throw error;
+    }
+    return renameSync(source, destination);
+  };
+  t.after(() => {
+    fs.renameSync = renameSync;
+  });
+
+  const denied = session.attemptWrite({
+    request,
+    writes: [
+      write('src/first.js', 'first new\n'),
+      write('src/second.js', 'second new\n')
+    ]
+  });
+
+  fs.renameSync = renameSync;
+  assert.equal(denied.allowed, false);
+  assert.equal(denied.reason.code, 'write-failed');
+  assert.deepEqual(snapshot(directory), before);
+  assert.deepEqual(
+    fs.readdirSync(path.join(directory, 'src')).sort(),
+    ['first.js', 'second.js']
+  );
 });
 
 test('denies pre-pass, changed intent or scope, and external source changes without writes', (t) => {
@@ -353,4 +404,102 @@ test('propagates structural failure and performs no writes', (t) => {
   assert.equal(denied.allowed, false);
   assert.equal(denied.verdict, 'FAIL');
   assert.deepEqual(snapshot(directory), before);
+});
+
+test('separates Korean desired and preserved behavior instead of reusing the failure clause', (t) => {
+  const directory = makeProject(singleBoundaryProject());
+  t.after(() => removeProject(directory));
+  const request = '사용자가 이름을 수정할 수 있게 하고 기존 로그인은 그대로 유지하세요. 실패하면 오류를 보여 주세요.';
+
+  const session = admitChange({ projectDirectory: directory, request });
+
+  assert.equal(session.verdict, 'PASS');
+  assert.match(session.details.behavior.desiredBehavior.text, /이름을 수정/);
+  assert.match(session.details.behavior.behaviorToPreserve.text, /기존 로그인/);
+  assert.match(session.details.behavior.observableFailureOutcome.text, /실패하면 오류/);
+  assert.notEqual(
+    session.details.behavior.desiredBehavior.text,
+    session.details.behavior.observableFailureOutcome.text
+  );
+});
+
+test('fails closed when only preservation and failure behavior are stated', (t) => {
+  const directory = makeProject(singleBoundaryProject());
+  t.after(() => removeProject(directory));
+  const request = '기존 로그인은 그대로 유지하세요. 실패하면 오류를 보여 주세요.';
+
+  const session = admitChange({ projectDirectory: directory, request });
+
+  assert.equal(session.verdict, 'INCONCLUSIVE');
+  assert.equal(session.details.behavior.desiredBehavior, null);
+  assert.ok(session.questions.includes('What should people be able to do after this change?'));
+});
+
+test('reinvestigates ambiguous source and test matches before selecting product responsibility', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'reinvestigation-project', main: 'src/admission.js' }),
+    'src/admission.js': 'exports.admit = () => true;\n',
+    'test/admission.test.js': 'const admission = require(\'../src/admission\');\n'
+  });
+  t.after(() => removeProject(directory));
+  const request = 'Update admission behavior. Keep existing diagnosis unchanged. If admission fails, show an error message.';
+
+  const session = admitChange({ projectDirectory: directory, request });
+
+  assert.equal(session.verdict, 'PASS');
+  assert.equal(session.details.selectedResponsibility.ownerPath, 'src');
+  assert.equal(session.details.reinvestigation.performed, true);
+  assert.equal(session.details.reinvestigation.reason, 'unresolved-change-responsibility');
+  assert.deepEqual(session.details.reinvestigation.observed.excludedTestResponsibilities, ['test']);
+  assert.equal(session.questions.length, 0);
+});
+
+test('fails closed when multiple source SSOT candidates cannot be resolved for the request', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'ambiguous-ssot', main: 'src/index.js' }),
+    'src/index.js': "require('./a'); require('./b');\n",
+    'src/other.js': "require('./a'); require('./b');\n",
+    'src/a.js': 'exports.sharedA = true;\n',
+    'src/b.js': 'exports.sharedB = true;\n'
+  });
+  t.after(() => removeProject(directory));
+  const request = 'Update shared behavior. Keep existing startup unchanged. If the update fails, show an error message.';
+
+  const session = admitChange({ projectDirectory: directory, request });
+
+  assert.equal(session.verdict, 'INCONCLUSIVE');
+  assert.deepEqual(session.details.repositoryEvidence.executionPaths, ['src/index.js']);
+  assert.equal(session.details.repositoryEvidence.canonicalSsot, null);
+  assert.ok(session.risks.some((risk) => risk.code === 'canonical-ssot-unresolved'));
+});
+
+test('records resolved execution path and canonical SSOT before passing admission', (t) => {
+  const directory = makeProject(singleBoundaryProject());
+  t.after(() => removeProject(directory));
+  const request = 'Update user creation behavior. Keep existing startup unchanged. If creation fails, show an error message.';
+
+  const session = admitChange({ projectDirectory: directory, request });
+
+  assert.equal(session.verdict, 'PASS');
+  assert.deepEqual(session.details.repositoryEvidence.executionPaths, ['src/index.js']);
+  assert.equal(session.details.repositoryEvidence.canonicalSsot.path, 'src/index.js');
+});
+
+test('invalidates admission when a source file permission mode changes', (t) => {
+  const directory = makeProject(singleBoundaryProject());
+  t.after(() => removeProject(directory));
+  const request = 'Update user creation behavior. Keep existing startup unchanged. If creation fails, show an error message.';
+  const target = path.join(directory, 'src/index.js');
+  const session = admitChange({ projectDirectory: directory, request });
+  const originalMode = fs.statSync(target).mode & 0o777;
+
+  fs.chmodSync(target, originalMode | 0o111);
+  const stale = session.attemptWrite({
+    request,
+    writes: [write('src/index.js', 'exports.createUser = () => null;\n')]
+  });
+
+  assert.equal(stale.allowed, false);
+  assert.equal(stale.reason.code, 'stale-source');
+  assert.match(fs.readFileSync(target, 'utf8'), /createUser/);
 });
