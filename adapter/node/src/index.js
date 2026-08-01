@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createAdmissionSession } = require('./admission');
+const { diagnoseFastProject } = require('./fast-diagnosis');
 
 const SOURCE_EXTENSIONS = ['.cts', '.mts', '.tsx', '.jsx', '.ts', '.mjs', '.cjs', '.js'];
 const RESOLUTION_EXTENSIONS = [...SOURCE_EXTENSIONS, '.json'];
@@ -1418,5 +1419,6 @@ function isPlainObject(value) {
 
 module.exports = {
   admitChange,
+  diagnoseFastProject,
   diagnoseProject
 };
