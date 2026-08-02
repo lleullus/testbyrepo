@@ -46,10 +46,19 @@ Load `references/planning-ticket.md` before preflight and
 `references/planning-input-currentness.md` before capturing or rechecking the planning seal. Load
 `references/completion-record-v3.md` before classifying Evidence Requirements or publishing. Load
 `references/ui-ticket.md` only for a current `UI_IMPLEMENTATION` dispatch under `UI: yes`. Load
+`references/windows-hyperv-execution.md` only when the actual current runtime consumer or
+repository-authoritative command requirement establishes that the task needs Windows execution. Load
+it after Lead-first Ticket/source/runtime inspection and before any VM use; never infer this condition
+from an extension, directory, title, or guessed stack. Load
 `references/greenfield-implementation.md` when current scope inspection finds
 required target readiness absent and first product/package/application artifacts due. Load
 `references/implementation-failure-routing.md` before any implementation remediation decision. Load
 `references/task-ownership.md` before the first Worker.
+
+When the Windows condition applies, resolve `references/windows-hyperv-execution.md` from the canonical
+physical directory containing this `SKILL.md`, following symlinks, and read that exact canonical regular
+file. Do not search for or substitute a same-named copy. If it cannot be resolved or read, return
+`INCOMPLETE` before Worker dispatch or VM use; do not fall back to approximation.
 
 ## Authority
 
@@ -240,6 +249,13 @@ readbacks in that task record's existing `focusedWorkerChecks`. When an existing
 returns to `REVIEWING` for bounded remediation, reuse those same fields on its owning task record. These
 are task facts, not new RunState, TaskState, task-record fields, manifest, lifecycle, or result protocol.
 
+When the conditional Windows reference applies, the Lead records its canonical path, the actual runtime
+consumer/command basis, and task-specific Windows target constraints in the existing
+`integrationObligations`; record the exact provisional commands, expected effects, and readbacks in the
+existing `focusedWorkerChecks`. This remains orthogonal to `frontendMode`: rendered WPF, WinForms, or
+WinUI work still follows the existing UI authority and `ima2-front` procedures. It creates no Windows
+state, lifecycle, Addon, dedicated Worker, manifest, task-record field, or Completion Record field.
+
 For a genuine zero-source-mutation path, create no TaskState, task record, or task fields. Keep any
 provisional check context invocation-local. Final source or runtime evidence is recorded at run level in
 `completionRecord`; do not create an artificial task merely to hold evidence.
@@ -307,6 +323,12 @@ Lead-owned final exercise. Runtime coverage remains `PARTIAL` until that final e
 No Worker dispatch is legal without a current planning seal, clear attribution readiness, frozen
 mutation envelope, and a current source identity equal to the Capsule baseline before the first Worker.
 A zero-source-mutation path freezes no Worker envelope and creates no task.
+
+At preflight and again while selecting a current task, inspect the exact canonical Ticket and Spec,
+current repository wiring, actual runtime consumer, and repository-authoritative command requirement.
+Only then decide whether Windows execution is necessary. When it is, the Lead reads the conditional
+Windows reference first, records its canonical path and task facts before dispatch, and keeps planning
+workspace identity separate from `Project-Root`, Capsule, and source identity.
 
 ## Current task selection
 
@@ -381,6 +403,15 @@ requirement, or reference.
 The Lead never invokes `ima2-uiux` as a fallback. If a due-now UI/UX product decision is not supplied
 by the Ticket/Spec and approved UI authority, do not implement it; return `BLOCKED` for the Ticket/Spec
 owner.
+
+### Conditional Windows execution routing
+
+Windows execution is a current task/runtime-consumer fact, not a lifecycle or Worker classification.
+Use the conditional Windows reference only when the actual intended product entry point or a
+repository-authoritative build, test, run, install, or GUI command requires the configured Windows
+environment; source spelling, framework naming, or a platform-looking directory is insufficient. The
+selected Worker remains the same user-selected Worker. Its Windows checks are bounded provisional task
+feedback, while the Lead directly performs every final representative Windows exercise in `FINAL_REVIEW`.
 
 ### Active frontend guidance resolution
 
@@ -465,6 +496,11 @@ While a current source gap remains, process the one selected `PENDING` task:
    completion condition, preserved user changes, Canonical relationship, prerequisites, and focused
    checks. Identify any runtime check as provisional feedback and forbid the Worker from presenting it
    as final Acceptance evidence. Tell the Worker neither to delegate nor perform unrelated cleanup.
+   When Windows facts apply, pass the same selected Worker the canonical Windows-reference path and the
+   exact task commands, expected effects, and readbacks recorded for this dispatch. Before VM use, the
+   Worker directly reads that passed reference's Worker contract. It may perform only those bounded
+   provisional checks; Windows necessity, target selection, and final-evidence judgment remain Lead
+   authority.
 5. Capture immutable ownership-only `after` with the identical policy regardless of whether the Worker
    returned success, failure, or no summary. Never retry a failed Worker call before inspecting delta.
 6. Compare actual physical delta to the frozen envelope. This establishes scope facts only; Worker
@@ -623,6 +659,9 @@ changed-path inventory is current.
    immutable ownership `before` snapshot outside the project root.
 6. Implementation Lead directly executes the actual product entry point. It observes the expected
    effect and performs the selected direct-result, independent readback, or required absence check.
+   When Windows execution is required, the Lead directly uses the bounded supervisor under the
+   conditional Windows reference, independently reads its selected result and readback, and never
+   promotes a Worker provisional result to final evidence.
 7. Perform product-supported cleanup of task-owned target state, read back cleanup when required, and
    remove any source-bound materialization.
 8. Capture the ownership `after` snapshot with the same frozen policy and capture

@@ -17,6 +17,9 @@ PLANNING_CURRENTNESS = (
 PLANNING_TICKET = (IMPLEMENTATION_ROOT / "references/planning-ticket.md").read_text(encoding="utf-8")
 UI_TICKET = (IMPLEMENTATION_ROOT / "references/ui-ticket.md").read_text(encoding="utf-8")
 COMPLETION_RECORD = (IMPLEMENTATION_ROOT / "references/completion-record-v3.md").read_text(encoding="utf-8")
+WINDOWS_HYPERV = (
+    IMPLEMENTATION_ROOT / "references/windows-hyperv-execution.md"
+).read_text(encoding="utf-8")
 TO_TICKETS = (IMPLEMENTATION_ROOT.parent / "matt/skills/to-tickets/SKILL.md").read_text(encoding="utf-8")
 MATT_SKILLS = [
     (IMPLEMENTATION_ROOT.parent / f"matt/skills/{name}/SKILL.md").read_text(encoding="utf-8")
@@ -439,6 +442,138 @@ class ImplementationSkillContractTests(unittest.TestCase):
         self.assertIn("any later\nsource change discards them", UI_TICKET)
         self.assertIn("create no TaskState, task record, or task fields", SKILL)
         self.assertIn("Lead-owned final\nrepresentative runtime exercise", SKILL)
+
+    def test_windows_trigger_is_runtime_consumer_or_command_specific(self) -> None:
+        self.assertIn("actual current runtime consumer or\nrepository-authoritative command requirement", SKILL)
+        self.assertIn("never infer this condition\nfrom an extension, directory, title, or guessed stack", SKILL)
+        self.assertIn("actual intended\nconsumer or command requires Windows", WINDOWS_HYPERV)
+        self.assertIn("A file extension, directory name, Ticket title, framework name, or guessed platform is not\na trigger", WINDOWS_HYPERV)
+        self.assertIn("Hyper-V host: DESKTOP-BALMTAV", WINDOWS_HYPERV)
+        self.assertIn("VM: Windows", WINDOWS_HYPERV)
+        self.assertIn("Transport: PowerShell Direct only", WINDOWS_HYPERV)
+
+    def test_windows_is_lead_first_same_worker_and_not_a_new_lifecycle(self) -> None:
+        self.assertIn("the Lead reads the conditional\nWindows reference first", SKILL)
+        self.assertIn("selected Worker remains the same user-selected Worker", SKILL)
+        self.assertIn("no Windows\nstate, lifecycle, Addon, dedicated Worker, manifest", SKILL)
+        self.assertIn("The Lead is first", WINDOWS_HYPERV)
+        self.assertIn("The user-selected Worker remains the only Worker. There is no Windows Worker", WINDOWS_HYPERV)
+        self.assertIn("Before using the VM, the Worker reads\nthe passed reference directly", WINDOWS_HYPERV)
+        self.assertIn("Windows facts are task-specific and are orthogonal to `frontendMode`", WINDOWS_HYPERV)
+        self.assertIn("WPF, WinForms, and WinUI rendered-contract work remains subject to existing approved UI authority", WINDOWS_HYPERV)
+
+    def test_windows_uses_only_the_bounded_supervisor(self) -> None:
+        self.assertIn("Bounded supervisor: C:\\AgentBridgeHost\\Invoke-AgentVmBounded.ps1", WINDOWS_HYPERV)
+        self.assertIn("is never called directly by the Lead or Worker", WINDOWS_HYPERV)
+        self.assertIn("every VM\naction uses only `C:\\AgentBridgeHost\\Invoke-AgentVmBounded.ps1`", WINDOWS_HYPERV)
+        self.assertIn("status -> sync -> submit -> wait -> collect -> cleanup/readback", WINDOWS_HYPERV)
+        self.assertIn("Ordinary\nruns never use `-CollectAll`", WINDOWS_HYPERV)
+        self.assertIn('wslpath -w "$MATERIALIZATION"', WINDOWS_HYPERV)
+        self.assertIn('powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass', WINDOWS_HYPERV)
+        self.assertNotIn("wsl.exe wslpath", WINDOWS_HYPERV)
+        self.assertNotIn("ConvertFrom-Json", WINDOWS_HYPERV)
+        self.assertIn('-Action collect -JobId "$JOB_ID"', WINDOWS_HYPERV)
+        self.assertIn('MATERIALIZATION_NAME="$(basename "$MATERIALIZATION")"', WINDOWS_HYPERV)
+        self.assertIn('GUEST_SOURCE="${GUEST_RUN}\\\\${MATERIALIZATION_NAME}"', WINDOWS_HYPERV)
+        self.assertIn("actual guest source path is\n`<GuestPath>\\<source-basename>`", WINDOWS_HYPERV)
+
+    def test_windows_keeps_external_planning_out_of_vm_materialization(self) -> None:
+        self.assertIn("external\nplanning workspace", WINDOWS_HYPERV)
+        self.assertIn("never separately\ncopied into a product materialization or synced to the VM", WINDOWS_HYPERV)
+        self.assertRegex(WINDOWS_HYPERV, r"`wslpath` and VM sync apply only to a product\s+source materialization")
+        self.assertRegex(
+            WINDOWS_HYPERV,
+            r"Planning-workspace identity never mixes with product `Project-Root`, Baseline Capsule, materialization,\s+or source identity",
+        )
+        self.assertIn("blocked: planning input changed", WINDOWS_HYPERV)
+        self.assertIn("Do not exclude product-root legacy\n`.scratch/**`", WINDOWS_HYPERV)
+        self.assertIn("can\nreach the guest incidentally in the source materialization", WINDOWS_HYPERV)
+        self.assertIn("That guest copy is never planning authority", WINDOWS_HYPERV)
+        self.assertIn("canonical WSL path and `PlanningInputSeal` remain the only authority", WINDOWS_HYPERV)
+        self.assertNotIn("Planning Markdown is never copied or moved into the product project", WINDOWS_HYPERV)
+
+    def test_windows_materialization_and_cleanup_bind_final_identity(self) -> None:
+        self.assertIn("owner-only source materialization outside\nthe project root", WINDOWS_HYPERV)
+        self.assertIn("`source-evidence-v1` projection identity exactly equals\n`finalSourceIdentity`", WINDOWS_HYPERV)
+        self.assertIn("This is the only path passed through `wslpath`", WINDOWS_HYPERV)
+        self.assertIn("Use a new unguessable run ID and unique job IDs", WINDOWS_HYPERV)
+        self.assertIn("A failed guest run directory is never reused", WINDOWS_HYPERV)
+        self.assertIn("capture the existing project source identity and ownership snapshots", WINDOWS_HYPERV)
+        self.assertIn("Clean up the WSL materialization and guest run path", WINDOWS_HYPERV)
+        self.assertIn("executionTargetBinding.mode =\nSOURCE_BOUND_MATERIALIZATION", WINDOWS_HYPERV)
+
+    def test_windows_result_and_gui_evidence_is_concrete_and_redacted(self) -> None:
+        for fact in (
+            "`timedOut` is false",
+            "For a `waitForExit=true` job",
+            "integer `exitCode` equal to the task-expected value",
+            "`success == (exitCode == 0)`",
+            "ordinary successful build or test therefore\nrequires `success=true` and `exitCode=0`",
+            "expected nonzero exit requires `success=false`",
+            "host `wait` exit code to match each other",
+            "interactive GUI job with `waitForExit=false`, `exitCode=null` is expected",
+            "Do not apply the waited-process exit-code relation to this GUI shape",
+            "`user` exactly equals `DESKTOP-IRUC588\\AgentAdmin`",
+            "`sessionId` is nonzero",
+            "actual Lead PNG readback",
+            "GUI automation uses stable `AutomationId` first; coordinate-based automation is\nforbidden",
+            "not evidence of standard-user behavior",
+            "remains `INCOMPLETE` under this profile unless a separate authorized",
+            "never raw stdout, stderr, PNG bytes, credentials, passwords, or user data",
+        ):
+            self.assertIn(fact, WINDOWS_HYPERV)
+
+    def test_windows_recovery_and_host_execution_are_restricted(self) -> None:
+        for fact in (
+            "SSH, external ports, and host-Windows product application, installer, build, test, or GUI execution are\nforbidden",
+            "Do not call\n`activate` in ordinary work",
+            "Only after bounded retry and demonstrated actual PowerShell Direct or\ninteractive-worker channel recovery need",
+            "A successful `activate` performs its own validation and\ncreates its validation checkpoint",
+            "ordinary `checkpoint` action is forbidden unless the Ticket\nexplicitly requires it",
+            "Do not request a guest password, credential, UAC prompt, RunAs, host administrator approval",
+            "AgentBridgeLockTimeout",
+            "AgentBridgeCredentialMissing",
+            "AgentBridgeWallClockTimeout",
+            "Retry the identical\nbounded call exactly once; a second lock timeout is `INCOMPLETE`",
+            "action-specific safe readback of the current state; do not blindly replay the action",
+            "worker timeout exit `124` and worker execution failure exit `125`",
+        ):
+            self.assertIn(fact, WINDOWS_HYPERV)
+
+    def test_windows_status_is_formatted_and_wait_is_the_result_json(self) -> None:
+        self.assertIn("`status` establishes", WINDOWS_HYPERV)
+        self.assertIn("formatted PowerShell object, not JSON", WINDOWS_HYPERV)
+        self.assertIn("wrapper exit `0` and directly inspect `computer`,\n`session`, `workerTask` state/user/run level", WINDOWS_HYPERV)
+        self.assertIn("`queuedJobs`, `inboxUploads`, `processingJobs`,\n`resultUploads`, `results`, `workerHash`, and `bridgeHash`", WINDOWS_HYPERV)
+        self.assertIn("current nonzero interactive\nAgentAdmin session ID", WINDOWS_HYPERV)
+        self.assertIn("scheduled-task principal may be rendered as `AgentAdmin`", WINDOWS_HYPERV)
+        self.assertRegex(WINDOWS_HYPERV, r"Only\s+`wait` emits\s+the selected job's result JSON")
+        self.assertIn("Only WAIT_OUTPUT is result JSON", WINDOWS_HYPERV)
+
+    def test_windows_reference_resolution_is_canonical_or_incomplete(self) -> None:
+        self.assertIn("canonical\nphysical directory containing this `SKILL.md`, following symlinks", SKILL)
+        self.assertIn("exact canonical regular\nfile. Do not search for or substitute a same-named copy", SKILL)
+        self.assertIn("`INCOMPLETE` before Worker dispatch or VM use", SKILL)
+        self.assertIn("do not fall back to approximation", SKILL)
+        self.assertIn("canonical physical `implementation-lead/SKILL.md` directory", WINDOWS_HYPERV)
+        self.assertIn("Failure to resolve or read that exact file\nis `INCOMPLETE` before Worker dispatch or VM use", WINDOWS_HYPERV)
+
+    def test_windows_worker_checks_remain_provisional_and_lead_owns_final_evidence(self) -> None:
+        self.assertIn("bounded provisional task\nfeedback", SKILL)
+        self.assertIn("Lead directly performs every final representative Windows exercise in `FINAL_REVIEW`", SKILL)
+        self.assertIn("Worker Windows observations are bounded provisional focused checks", WINDOWS_HYPERV)
+        self.assertIn("never become a Representative Runtime\nObservation", WINDOWS_HYPERV)
+        self.assertIn("the Lead itself performs the final representative exercise", WINDOWS_HYPERV)
+        self.assertRegex(SKILL, r"never\s+promotes a Worker provisional result to final evidence")
+
+    def test_windows_preserves_existing_planning_and_completion_record_contracts(self) -> None:
+        self.assertIn("PlanningInputSeal", PLANNING_CURRENTNESS)
+        self.assertIn("blocked: planning input changed", PLANNING_CURRENTNESS)
+        self.assertIn("unknown properties are rejected", COMPLETION_RECORD)
+        self.assertIn("runtimeObservations[]", COMPLETION_RECORD)
+        self.assertNotIn("windows", COMPLETION_RECORD.lower())
+        self.assertRegex(WINDOWS_HYPERV, r"no Windows-only\s+schema")
+        self.assertIn("external-planning-workspace, Baseline Capsule, and Completion Record contracts", WINDOWS_HYPERV)
 
 
 if __name__ == "__main__":
