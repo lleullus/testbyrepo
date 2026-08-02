@@ -35,11 +35,17 @@ it back as `--workspace` for every later artifact in this flow. The tool enforce
 exclusive task creation, owner and symlink safety, a single-segment slug, and
 disjointness from the canonical product `Project-Root`.
 
-The planning flow may create `SPEC.md`, `WAYFINDER.md`,
-`tickets/TICKET-NNN.md`, and `HANDOFF.md` only when needed. Existing planning
-input inside product `.scratch` remains readable but is never selected as a new
-generation destination. Keep the external directory focused on current work;
-do not create a separate planning application or tracker configuration.
+The planning flow may create package-scoped `DESIGN.md` and non-authority
+`design-concepts/` candidates through Matt's UI authority flow, using active
+`ima2-uiux` only for design judgment when needed. It may also create `SPEC.md`,
+`WAYFINDER.md`, `tickets/TICKET-NNN.md`, and `HANDOFF.md` only when needed.
+`DESIGN.md` remains in this external workspace, concept candidates are never
+product assets or authority, and neither is written to a product-root planning
+destination.
+Existing planning input inside product `.scratch` remains readable but is never
+selected as a new generation destination. Keep the external directory focused
+on current work; do not create a separate planning application or tracker
+configuration.
 
 ## Process
 

@@ -84,6 +84,64 @@ class ImplementationSkillContractTests(unittest.TestCase):
         self.assertIn("The exact product `Project-Root` must\nexist", GRILL_ME)
         self.assertIn("do\nnot duplicate a Project Shaper-specific greenfield checklist", FROM_PROJECT_SHAPER)
 
+    def test_to_spec_blocks_new_or_material_ui_without_adopted_authority(self) -> None:
+        self.assertIn("independently\nreclassify the confirmed scope", TO_SPEC)
+        self.assertIn("new/material rendered UI", TO_SPEC)
+        self.assertIn("explicitly adopted by the latest\nshared understanding", TO_SPEC)
+        self.assertIn("Do not write a draft Spec on that failure.", TO_SPEC)
+        self.assertIn("BLOCKED: UI / UX authority required before SPEC.md", TO_SPEC)
+
+    def test_design_read_or_status_alone_cannot_authorize_material_ui(self) -> None:
+        self.assertIn("`Status: approved` line or a filename alone is insufficient.", TO_SPEC)
+        self.assertIn("generated concept alone is insufficient", TO_SPEC)
+        self.assertIn("status-only or Design Read/style-only document is", TO_TICKETS)
+
+    def test_utility_dashboard_concept_exemption_keeps_ui_planning_obligations(self) -> None:
+        self.assertIn("waives only visual concept/image-generation", ASK_MATT)
+        self.assertNotIn("§2.5", ASK_MATT)
+        self.assertIn("image-tool bootstrap or generation", ASK_MATT)
+        self.assertIn("It never waives the Matt-owned", ASK_MATT)
+        self.assertIn("Cover every applicable new/material C2 dashboard decision", ASK_MATT)
+
+    def test_non_ui_and_bounded_delta_do_not_require_full_c2_design(self) -> None:
+        self.assertIn("A bounded rendered contract does not require a separate pre-Spec `DESIGN.md`", TO_SPEC)
+        self.assertRegex(TO_SPEC, r"this exact Spec may serve as\s+the scoped UI authority")
+        self.assertIn("Do not block non-UI work or an engineering-only frontend", TO_SPEC)
+        self.assertIn("let the later approved Spec become\nthe scoped authority through its `## UI / UX` section", ASK_MATT)
+        self.assertIn("reference that exact parent Spec target", TO_TICKETS)
+        self.assertIn("due-now direct exercise of an exactly preserved rendered result", ASK_MATT)
+        self.assertIn("rendered decisions or direct preservation conditions", PLANNING_TICKET)
+
+    def test_material_ui_prepares_one_workspace_before_design_output(self) -> None:
+        self.assertIn("Before Matt writes a package authority, prepare or revalidate the same\nexternal planning workspace", ASK_MATT)
+        self.assertIn("do not prepare a second workspace later", ASK_MATT)
+        self.assertIn("including a\n   package-scoped UI authority", FROM_PROJECT_SHAPER)
+        self.assertIn("If `ask-matt`\n   already prepared it for `DESIGN.md`, reuse", FROM_PROJECT_SHAPER)
+
+    def test_ui_ticket_resolves_the_parent_spec_adopted_canonical_authority(self) -> None:
+        self.assertIn("same canonical UI authority target\nadopted by the parent Spec", TO_TICKETS)
+        self.assertRegex(TO_TICKETS, r"authority may instead be the approved\s+parent Spec itself when that section")
+        self.assertIn("resolve that exact local path\nfrom the Spec directory when relative", TO_TICKETS)
+        self.assertIn("resolving to that same canonical authority target", PLANNING_TICKET)
+        self.assertRegex(PLANNING_TICKET, r"status-only document, or Design\s+Read/style-only")
+        self.assertIn("parent-Spec-adopted UI authority referenced by the Ticket", SKILL)
+        self.assertIn("same canonical\n   local target", UI_TICKET)
+
+    def test_from_project_shaper_uses_central_matt_routing_without_changing_core(self) -> None:
+        self.assertIn("Enter the central `ask-matt` Main Flow, including its Central UI / UX Routing", FROM_PROJECT_SHAPER)
+        self.assertIn("This adapter has no independent specialist decision path.", FROM_PROJECT_SHAPER)
+        self.assertNotIn("Central UI / UX Routing", PROJECT_SHAPER)
+
+    def test_matt_owns_ui_authority_without_modifying_the_specialist(self) -> None:
+        self.assertIn("`ima2-uiux` itself remains unchanged", ASK_MATT)
+        self.assertIn("load `ima2-front`, write product code", ASK_MATT)
+        self.assertIn("<planning-workspace>/DESIGN.md", ASK_MATT)
+        self.assertIn("<planning-workspace>/design-concepts/", ASK_MATT)
+        self.assertIn("This is not the specialist's optional project-root YAML mini DESIGN format", ASK_MATT)
+        self.assertIn("`Open Questions` is `None`", ASK_MATT)
+        self.assertIn("returns it to `draft`", ASK_MATT)
+        self.assertIn("One explicit user response may approve both", ASK_MATT)
+
     def test_initialization_mechanics_and_external_effects_remain_implementation_owned(self) -> None:
         self.assertIn("select one current initialization task", GREENFIELD)
         self.assertIn("freeze its exact\nallowed/forbidden paths", GREENFIELD)
@@ -137,8 +195,8 @@ class ImplementationSkillContractTests(unittest.TestCase):
         self.assertIn("<initiative-planning-workspace>/matt-briefs/WP-NNN.md", MATT_HANDOFF_CONTRACT)
         self.assertRegex(FROM_PROJECT_SHAPER, r"independent default\s+package planning workspace")
         self.assertRegex(FROM_PROJECT_SHAPER, r"do not nest the\s+package workspace.*initiative workspace")
-        self.assertRegex(PLANNING_WORKSPACE_README, r"Implementation Lead uses the exact Ticket and Spec paths directly")
-        self.assertRegex(PLANNING_WORKSPACE_README, r"never moved or copied into the product project")
+        self.assertRegex(PLANNING_WORKSPACE_README, r"Implementation Lead uses the exact Ticket and Spec paths\s+directly")
+        self.assertRegex(PLANNING_WORKSPACE_README, r"never\s+moved or copied into the product project")
 
     def test_rootless_spec_workspace_must_be_strictly_revalidated_for_ready_ticket(self) -> None:
         self.assertIn("--future-project-root", PLANNING_WORKSPACE_README)
@@ -155,7 +213,7 @@ class ImplementationSkillContractTests(unittest.TestCase):
         self.assertIn("same canonical `specPath`", PLANNING_CURRENTNESS)
         self.assertIn("exact raw-byte hash equals `specSha256`", PLANNING_CURRENTNESS)
         self.assertIn("Relative blocker paths resolve from the Ticket directory", PLANNING_TICKET)
-        self.assertIn("approved document is a UI/UX authority", PLANNING_TICKET)
+        self.assertIn("an explicit applicable scope, and content complete for the\n  Ticket's due-now rendered result", PLANNING_TICKET)
 
     def test_adapter_native_mechanics_are_absent(self) -> None:
         forbidden = [

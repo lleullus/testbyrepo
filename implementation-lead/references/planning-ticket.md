@@ -207,9 +207,31 @@ This is the minimum initial local-Markdown blocker rule. It intentionally does n
 
 `UI` is exact lower-case `yes` or `no`.
 
-- When `UI: yes`, `References` must include at least one Markdown list item whose entire value is one exact local Markdown path. This is the meaning of a standalone path. Backticks, a label, a colon prefix, a status, or a parenthetical explanation makes that item ineligible as UI authority. The path must resolve to a readable regular file with exactly one top-metadata `Status: approved` entry. Contextual preflight must be able to establish that the approved document is a UI/UX authority; its name alone is not proof.
-- When `UI: no`, the Lead must not infer UI authority, requirements, or work from `References` or any other Ticket text.
-- A remote URL or unreadable local path never supplies UI authority. Other Reference entries may remain raw documented context, but they do not qualify for this check or add planning authority.
+- When `UI: yes`, the parent Spec's `UI / UX` section must identify the
+  applicable UI authority. When it names an external authority, resolve that
+  exact local path from the Spec directory when relative and retain its
+  canonical target. For a bounded rendered contract, the approved parent Spec
+  itself may be the scoped authority only when that section contains all
+  due-now rendered decisions or direct preservation conditions and explicitly
+  declares this role.
+- `References` must include one Markdown list item whose entire value is one
+  exact local Markdown path resolving to that same canonical authority target.
+  The authored path need not use the same spelling because a relative path is
+  resolved from the Ticket directory. Backticks, a label, a colon prefix, a
+  status, or a parenthetical explanation makes that item ineligible as UI
+  authority.
+- The authority target must be a readable regular file with exactly one
+  top-metadata `Status: approved` entry. Contextual preflight must establish
+  a non-empty owner, an explicit applicable scope, and content complete for the
+  Ticket's due-now rendered result. A filename, status-only document, or Design
+  Read/style-only document for new/material UI is insufficient. Multiple
+  References do not create multiple UI authorities; any conflicting or
+  ambiguous authority target blocks.
+- When `UI: no`, the Lead must not infer UI authority, requirements, or work
+  from `References` or any other Ticket text.
+- A remote URL or unreadable local path never supplies UI authority. Other
+  Reference entries may remain raw documented context, but they do not qualify
+  for this check or add planning authority.
 
 ## Blocked Results
 

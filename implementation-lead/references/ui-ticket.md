@@ -35,8 +35,11 @@ the presence of frontend files.
 
 ## Approved UI Authority
 
-1. Resolve the exact approved local UI/UX reference path named by the Ticket `References` section under
-   the Ticket contract.
+1. Resolve the applicable UI authority identified by the approved parent Spec,
+   then require the Ticket `References` path to resolve to that same canonical
+   local target under the Ticket contract. A bounded rendered contract may use
+   the approved parent Spec itself only under that contract's scoped
+   self-authority rule.
 2. Read its current bytes and preserve the exact task-relevant locator set, linked criteria, and
    authority-defined rendered conditions needed by the current bounded dispatch.
 3. Do not broaden UI scope from visual similarity, guessed implementation structure, or a future task.
@@ -45,9 +48,10 @@ Resolve and pass only the approved locators needed by the current `UI_IMPLEMENTA
 later UI dispatch becomes current, resolve its locators against the same approved UI authority and the
 then-current repository state.
 
-A missing, unapproved, unreadable, insufficient, changed, or conflicting approved UI reference or
-required locator is an `AUTHORITY_GAP`: no mutation occurs and core returns `BLOCKED` for the
-Ticket/Spec owner. It does not authorize a best-effort implementation.
+A missing, unapproved, unreadable, insufficient, changed, ambiguous, or
+conflicting approved UI authority or required locator is an `AUTHORITY_GAP`: no
+mutation occurs and core returns `BLOCKED` for the Ticket/Spec owner. It does
+not authorize a best-effort implementation.
 
 ## Active Guidance Boundary
 

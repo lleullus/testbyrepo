@@ -66,7 +66,7 @@ file. Do not search for or substitute a same-named copy. If it cannot be resolve
 | --- | --- |
 | Product behavior and Acceptance Criteria | ready Ticket; approved parent Spec limits scope |
 | Due-now task decomposition | Ticket only |
-| Approved UI behavior | Ticket's approved UI reference |
+| Approved UI behavior | parent-Spec-adopted UI authority referenced by the Ticket |
 | Architecture/schema/migration constraints | approved Spec or named repository authority |
 | Existing commands and conventions | target repository |
 | Private helper/test organization | Worker unless otherwise governed |
@@ -391,9 +391,11 @@ are preservation rather than change; `ENGINEERING_ONLY` does not bypass rendered
 
 `UI_IMPLEMENTATION` with Ticket `UI: no` is `BLOCKED` before Worker dispatch because the due-now
 rendered contract conflicts with Ticket UI authority. This is not triggered by merely seeing a frontend
-file. `UI_IMPLEMENTATION` with Ticket `UI: yes` requires the current approved UI reference, exact
-task-relevant locators, linked criteria, and authority-defined rendered conditions. A missing,
-insufficient, changed, or conflicting reference or locator is `BLOCKED` for the Ticket/Spec owner.
+file. `UI_IMPLEMENTATION` with Ticket `UI: yes` requires the current
+parent-Spec-adopted UI authority referenced by the Ticket, exact task-relevant
+locators, linked criteria, and authority-defined rendered conditions. A
+missing, insufficient, changed, ambiguous, or conflicting reference or locator
+is `BLOCKED` for the Ticket/Spec owner.
 
 Ticket `UI: yes` does not make every dispatch UI work: a backend-only task is `NONE` and is classified
 again when a later task becomes current. `ENGINEERING_ONLY` is permitted for Ticket `UI: no`, but it

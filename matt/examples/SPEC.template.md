@@ -37,7 +37,15 @@ endpoint, abstraction, 구현 순서와 test seam은 그 자체가 승인된
 
 ## UI / UX
 
-UI 작업이 아니면 `Not applicable`이라고 적는다. Prototype은 검토 자료일 뿐 권위가 아니다. 사용자 또는 명시된 planning owner가 채택한 결정만 여기에 반영한다.
+UI 작업이 아니면 본문 전체를 정확히 `Not applicable`으로 적는다. 새롭거나
+material한 UI라면 최신 shared understanding이 명시적으로 채택한, 완전하고
+승인된 로컬 UI/UX authority의 exact local path와 적용 rendered scope를 적는다.
+상대 경로는 Spec 디렉터리에서 해석한다. Bounded rendered contract에 별도
+authority가 없다면 채택된 rendered 결정 또는 직접 보존 조건을 모두 적고,
+승인된 이 Spec 자체가 해당 범위의 scoped UI authority임을 명시한다. 어느
+authority도 이 Spec의 제품 범위를 확대하거나 뒤집지 않는다.
+Prototype, Design Read, style 선택, 생성 concept는 명시적으로 채택되지 않으면
+검토 자료일 뿐 authority가 아니다.
 
 ## Open Questions
 

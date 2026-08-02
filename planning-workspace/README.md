@@ -46,9 +46,12 @@ neither may equal, contain, or be contained by it.
 The JSON `planningWorkspace` is the canonical identity for the whole planning
 flow. Preserve it in current planning context and pass it back with
 `--workspace` for every later artifact. Do not create a new task identity per
-Spec, Ticket, Wayfinder, Handoff, research report, Project Map, or Matt brief.
-Implementation Lead uses the exact Ticket and Spec paths directly; planning
-Markdown is never moved or copied into the product project.
+Spec, package-scoped `DESIGN.md`, its non-authority `design-concepts/`
+candidates, Ticket, Wayfinder, Handoff, research report, Project Map, or Matt
+brief. `DESIGN.md` is allowed here only as a Matt-planning UI/UX authority;
+concept candidates remain supporting context, and neither is a product-root
+design destination. Implementation Lead uses the exact Ticket and Spec paths
+directly; planning Markdown is never moved or copied into the product project.
 Existing planning input inside a product `.scratch` remains readable but is not
 a valid destination for newly generated planning Markdown.
 

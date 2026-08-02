@@ -85,19 +85,25 @@ Recommend accepting the frame when it faithfully projects the approved map. This
 After the frame is confirmed:
 
 1. Treat only this Work Package as the current planning unit.
-2. Use `grill-with-docs` when the package is codebase-backed and unresolved product decisions remain; otherwise use `grill-me`.
-3. Skip grilling only when the package outcome, preserved observable behavior and invariants, explicit boundaries, non-goals, and observable completion evidence are already clear.
-4. Ask only package-internal product or operational decisions. Do not ask the user to choose files, modules, schemas, APIs, libraries, algorithms, or implementation order.
-5. Use the brief's `Suggested-Work-Slug` once to prepare an independent default
-   package planning workspace unless the user explicitly selects another
-   external durable workspace. Resolve
+2. Enter the central `ask-matt` Main Flow, including its Central UI / UX Routing
+   audit. This adapter has no independent specialist decision path. The central
+   flow chooses `grill-with-docs` for codebase-backed unresolved decisions or
+   `grill-me` otherwise, and skips grilling only when the package contract is
+   already clear.
+3. Ask only package-internal product or operational decisions. Do not ask the user to choose files, modules, schemas, APIs, libraries, algorithms, or implementation order.
+4. When the central flow is about to write its first artifact, including a
+   package-scoped UI authority, use the brief's `Suggested-Work-Slug` once to
+   prepare an independent default package planning workspace unless the user
+   explicitly selects another external durable workspace. If `ask-matt`
+   already prepared it for `DESIGN.md`, reuse that exact returned workspace and
+   do not prepare another. Resolve
    `../../../planning-workspace/planning_workspace.py` from this skill's
    canonical physical directory and reuse that canonical package workspace for
-   its Spec, Tickets, Wayfinder, Handoff, and planning reports. Keep the
+   its `DESIGN.md`, Spec, Tickets, Wayfinder, Handoff, and planning reports. Keep the
    initiative map and brief at their exact original paths; do not nest the
    package workspace under the initiative workspace.
-6. Follow the unmodified `to-spec` and `to-tickets` contracts. Do not add Project Shaper metadata to those artifacts unless the user adopts it as part of the package contract.
-7. End at ready Tickets exactly as normal Matt does. Do not invoke Implementation Lead or a Worker.
+5. Follow the unmodified `to-spec` and `to-tickets` contracts. Do not add Project Shaper metadata to those artifacts unless the user adopts it as part of the package contract.
+6. End at ready Tickets exactly as normal Matt does. Do not invoke Implementation Lead or a Worker.
 
 Use the normal Matt target-readiness and initialization-authorization gate; do
 not duplicate a Project Shaper-specific greenfield checklist. A Project Map's

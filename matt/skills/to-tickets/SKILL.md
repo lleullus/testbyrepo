@@ -21,9 +21,12 @@ implementation steps, or starting implementation.
 
 Read the parent Spec first. Refuse to create Tickets from a missing or non-`approved` Spec. Preserve its scope and non-goals; a Ticket must not expand, reverse, or replace the parent Spec.
 
-The approved parent Spec is the sole normative source for a Ticket. References,
-current code, prior Tickets, tests, and expected implementation work may provide
-context or evidence, but do not authorize additional Ticket requirements.
+The approved parent Spec is the sole product outcome and scope authority for a
+Ticket. For a UI Ticket, the exact UI authority adopted by the parent Spec may
+supply rendered-design detail only within that approved scope. Other
+references, current code, prior Tickets, tests, and expected implementation
+work may provide context or evidence, but do not authorize additional Ticket
+requirements.
 
 ## Parent-Spec traceability audit
 
@@ -40,10 +43,14 @@ the sole location of an implementation obligation. Removing the `Goal` body
 must not change what Implementation Lead must implement, preserve, exclude, or
 verify.
 
-References do not import normative authority. If a required Ticket clause
-cannot be traced to the parent Spec, remove it or reopen the Spec for an
-explicit approved delta. Perform this audit internally; do not add a trace table
-to the Ticket unless the approved parent Spec requires one.
+References do not import normative authority except for the one UI authority
+explicitly adopted by the parent Spec for a UI Ticket. Every product outcome,
+scope, boundary, and Non-Goal still traces to the parent Spec; rendered detail
+may additionally trace to an applicable locator in that adopted UI authority.
+If a required Ticket clause cannot be traced under those rules, remove it or
+reopen the Spec for an explicit approved delta. Perform this audit internally;
+do not add a trace table to the Ticket unless the approved parent Spec requires
+one.
 
 ## Output Contract
 
@@ -104,8 +111,10 @@ inside the Ticket and are selected and revised by Implementation Lead.
 
 The `## Blockers` body is either the exact one-line value `None` or a Markdown
 list whose complete item values are local Markdown paths. For a UI Ticket, set
-`UI: yes` and include at least one approved UI/UX authority in `## References`
-as a Markdown list item whose complete value is its local Markdown path.
+`UI: yes`. Carry a path that resolves to the same canonical UI authority target
+adopted by the parent Spec into `## References` as a path-only Markdown item.
+For a bounded rendered contract whose approved parent Spec declares itself the
+scoped UI authority, reference that exact parent Spec target.
 
 ## Ticket decomposition rules
 
@@ -224,14 +233,28 @@ status `resolved` or `done` for every referenced blocker.
 
 ## UI reference rules
 
-For `UI: yes`, at least one `## References` list item must contain only one
-local Markdown path. Do not wrap that authority path in backticks or combine it
-with a label, colon prefix, parenthetical explanation, or URL. Resolve relative
-paths from the Ticket directory. The target must be a readable regular file
-with exactly one top-metadata `Status: approved` entry, and its content must
-establish it as the approved UI/UX authority. Other References remain context
-only and cannot supply product authority. Put any explanation outside the
+For `UI: yes`, the parent Spec's `## UI / UX` must identify the applicable UI
+authority. When it names an external authority, resolve that exact local path
+from the Spec directory when relative. For a bounded rendered contract, the
+authority may instead be the approved parent Spec itself when that section
+contains all scoped rendered decisions or direct preservation conditions and
+declares that role. At least one `## References` item must be a path whose
+resolved canonical target is that same authority file; its authored spelling
+may differ because relative paths resolve from the Ticket directory.
+
+Do not wrap that authority path in backticks or combine it with a label, colon
+prefix, parenthetical explanation, or URL. The target must be a readable
+regular file with exactly one top-metadata `Status: approved` entry, and its
+content must establish complete approved UI/UX authority for this Ticket's
+rendered scope; a status-only or Design Read/style-only document is
+insufficient for new/material UI. Other References remain context only and
+cannot supply product or UI authority. Put any explanation outside the
 authority list item.
+
+If the adopted authority's scoped decisions changed after Spec approval, or
+the relationship to the approved Spec cannot be established, do not create or
+ready the Ticket. Return the changed UI delta to the Spec owner for explicit
+approval instead of adopting the current file silently.
 
 ## Readiness Rules
 
@@ -243,7 +266,8 @@ Draft the breakdown and obtain the user's confirmation before changing any Ticke
   blocker is `resolved` or `done`.
 - Acceptance Criteria are observable.
 - The project root is uniquely determined.
-- A UI Ticket has a path-only approved local UI/UX authority reference.
+- A UI Ticket has a path-only reference resolving to the parent-Spec-adopted,
+  applicable, complete approved local UI/UX authority target.
 - The Ticket is not merely an anticipated internal preparatory step.
 - Its Goal and Acceptance Criteria do not depend on a provisional technical
   explanation being true.
