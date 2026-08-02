@@ -1,8 +1,16 @@
 import type { BrowserLogger, ChromeClient } from "../types.js";
 import type { ProviderDomAdapter, ProviderDomFlowContext } from "../providerDomFlow.js";
 import { ensurePromptReady } from "../actions/navigation.js";
-import { submitPrompt, type AttachmentReadyExpectation } from "../actions/promptComposer.js";
-import { waitForAssistantResponse } from "../actions/assistantResponse.js";
+import {
+  submitPrompt,
+  type AttachmentReadyExpectation,
+  type PromptCommitTurnIdentity,
+} from "../actions/promptComposer.js";
+import type { ConversationTurnIdentity } from "../conversationTurns.js";
+import {
+  waitForAssistantResponse,
+  type AssistantResponseIdentityScope,
+} from "../actions/assistantResponse.js";
 
 interface ChatgptDomProviderState {
   runtime: ChromeClient["Runtime"];
@@ -13,7 +21,8 @@ interface ChatgptDomProviderState {
   attachmentTimeoutMs?: number;
   baselineTurns?: number | null;
   attachmentNames?: AttachmentReadyExpectation[];
-  committedTurns?: number | null;
+  committedUserTurn?: PromptCommitTurnIdentity | null;
+  committedAssistantTurn?: ConversationTurnIdentity | null;
   onPromptSubmitted?: () => Promise<void> | void;
 }
 
@@ -36,7 +45,7 @@ async function typePrompt(_ctx: ProviderDomFlowContext): Promise<void> {
 
 async function submitPromptViaAdapter(ctx: ProviderDomFlowContext): Promise<void> {
   const state = requireState(ctx);
-  const committedTurns = await submitPrompt(
+  const committedUserTurn = await submitPrompt(
     {
       runtime: state.runtime,
       input: state.input,
@@ -49,14 +58,8 @@ async function submitPromptViaAdapter(ctx: ProviderDomFlowContext): Promise<void
     ctx.prompt,
     state.logger,
   );
-  state.committedTurns =
-    typeof committedTurns === "number" && Number.isFinite(committedTurns) ? committedTurns : null;
-  if (
-    state.committedTurns != null &&
-    (state.baselineTurns == null || state.committedTurns > state.baselineTurns)
-  ) {
-    state.baselineTurns = Math.max(0, state.committedTurns - 1);
-  }
+  state.committedUserTurn = committedUserTurn;
+  state.committedAssistantTurn = null;
 }
 
 async function waitForResponse(ctx: ProviderDomFlowContext): Promise<{
@@ -65,12 +68,23 @@ async function waitForResponse(ctx: ProviderDomFlowContext): Promise<{
   meta?: { turnId?: string | null; messageId?: string | null };
 }> {
   const state = requireState(ctx);
+  const identityScope: AssistantResponseIdentityScope | undefined = state.committedUserTurn
+    ? {
+        committedUserTurn: state.committedUserTurn,
+        committedAssistantTurn: state.committedAssistantTurn,
+      }
+    : undefined;
   const answer = await waitForAssistantResponse(
     state.runtime,
     state.timeoutMs,
     state.logger,
     state.baselineTurns ?? undefined,
+    undefined,
+    identityScope,
   );
+  if (identityScope?.committedAssistantTurn) {
+    state.committedAssistantTurn = identityScope.committedAssistantTurn;
+  }
   return {
     text: answer.text,
     html: answer.html,

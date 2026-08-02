@@ -62,6 +62,8 @@ import type { LaunchedChrome } from "chrome-launcher";
 import { BrowserAutomationError } from "../oracle/errors.js";
 import { alignPromptEchoPair, buildPromptEchoMatcher } from "./reattachHelpers.js";
 import { buildConversationTurnCountExpression } from "./conversationTurns.js";
+import type { ConversationTurnIdentity } from "./conversationTurns.js";
+import type { AssistantResponseIdentityScope } from "./actions/assistantResponse.js";
 import type { ProfileRunLock } from "./profileState.js";
 import {
   cleanupStaleProfileState,
@@ -727,9 +729,27 @@ export function maybeArchiveCompletedConversationForTest(
 type BrowserSubmissionResult = {
   baselineTurns: number | null;
   baselineAssistantText: string | null;
+  committedUserTurn?: ConversationTurnIdentity | null;
+  committedAssistantTurn?: ConversationTurnIdentity | null;
   deepResearchTargetKeys?: string[];
   deepResearchTargetBaselineCaptured?: boolean;
 };
+
+type ChatGptProviderSubmissionState = Record<string, unknown> & {
+  baselineTurns?: number | null;
+  committedUserTurn?: ConversationTurnIdentity | null;
+  committedAssistantTurn?: ConversationTurnIdentity | null;
+};
+
+function buildAssistantResponseIdentityScope(
+  submission: Pick<BrowserSubmissionResult, "committedUserTurn" | "committedAssistantTurn">,
+): AssistantResponseIdentityScope | undefined {
+  if (!submission.committedUserTurn) return undefined;
+  return {
+    committedUserTurn: submission.committedUserTurn,
+    committedAssistantTurn: submission.committedAssistantTurn ?? null,
+  };
+}
 
 async function captureDeepResearchTargetBaseline(
   client: ChromeClient,
@@ -1595,7 +1615,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
       }
       let baselineTurns = await readConversationTurnCount(Runtime, logger);
       // Learned: return baselineTurns so assistant polling can ignore earlier content.
-      const providerState: Record<string, unknown> = {
+      const providerState: ChatGptProviderSubmissionState = {
         runtime: Runtime,
         input: Input,
         logger,
@@ -1651,6 +1671,8 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
       return {
         baselineTurns,
         baselineAssistantText,
+        committedUserTurn: providerState.committedUserTurn ?? null,
+        committedAssistantTurn: providerState.committedAssistantTurn ?? null,
         deepResearchTargetKeys: deepResearchTargetBaseline?.targetKeys,
         deepResearchTargetBaselineCaptured: deepResearchTargetBaseline?.captured,
       };
@@ -1663,6 +1685,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
 
     let baselineTurns: number | null = null;
     let baselineAssistantText: string | null = null;
+    let identityScope: AssistantResponseIdentityScope | undefined;
     let deepResearchTargetKeys: string[] = [];
     let deepResearchTargetBaselineCaptured = false;
     await acquireProfileLockIfNeeded();
@@ -1682,6 +1705,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
       });
       baselineTurns = submission.baselineTurns;
       baselineAssistantText = submission.baselineAssistantText;
+      identityScope = buildAssistantResponseIdentityScope(submission);
       deepResearchTargetKeys = submission.deepResearchTargetKeys ?? [];
       deepResearchTargetBaselineCaptured = submission.deepResearchTargetBaselineCaptured ?? false;
     } finally {
@@ -1776,6 +1800,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
           Runtime,
           baselineTurns ?? undefined,
           expectedConversationId(),
+          identityScope,
         ).catch(() => null);
         const text = typeof snapshot?.text === "string" ? snapshot.text.trim() : "";
         if (text) {
@@ -1870,6 +1895,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
                 logger,
                 baselineTurns ?? undefined,
                 expectedConversationId(),
+                identityScope,
               ),
             timeoutMs,
             logger,
@@ -1906,6 +1932,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
                   logger,
                   baselineTurns ?? undefined,
                   expectedConversationId(),
+                  identityScope,
                 ),
               timeoutMs: config.timeoutMs,
               logger,
@@ -2012,6 +2039,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
           answerMarkdown: turnAnswerMarkdown,
           logger,
           allowMarkdownUpdate: !copiedMarkdown,
+          identityScope,
         }));
 
       // Final sanity check: ensure we didn't accidentally capture the user prompt instead of the assistant turn.
@@ -2019,6 +2047,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
         Runtime,
         baselineTurns ?? undefined,
         expectedConversationId(),
+        identityScope,
       ).catch(() => null);
       const finalText = typeof finalSnapshot?.text === "string" ? finalSnapshot.text.trim() : "";
       if (finalText && finalText !== turnPrompt.trim()) {
@@ -2061,6 +2090,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
             Runtime,
             baselineTurns ?? undefined,
             expectedConversationId(),
+            identityScope,
           ).catch(() => null);
           const text = typeof snapshot?.text === "string" ? snapshot.text.trim() : "";
           const isStillEcho = !text || Boolean(promptEchoMatcher?.isEcho(text));
@@ -2093,6 +2123,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
             Runtime,
             baselineTurns ?? undefined,
             expectedConversationId(),
+            identityScope,
           ).catch(() => null);
           const text = typeof snapshot?.text === "string" ? snapshot.text.trim() : "";
           if (text && text.length > bestText.length) {
@@ -2148,6 +2179,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
         });
         baselineTurns = submission.baselineTurns;
         baselineAssistantText = submission.baselineAssistantText;
+        identityScope = buildAssistantResponseIdentityScope(submission);
       } finally {
         await releaseProfileLockIfHeld();
       }
@@ -2647,6 +2679,7 @@ async function maybeRecoverLongAssistantResponse({
   answerMarkdown,
   logger,
   allowMarkdownUpdate,
+  identityScope,
 }: {
   runtime: ChromeClient["Runtime"];
   baselineTurns: number | null;
@@ -2654,6 +2687,7 @@ async function maybeRecoverLongAssistantResponse({
   answerMarkdown: string;
   logger: BrowserLogger;
   allowMarkdownUpdate: boolean;
+  identityScope?: AssistantResponseIdentityScope;
 }): Promise<{ answerText: string; answerMarkdown: string }> {
   // Learned: long streaming responses can still be rendering after initial capture.
   // Add a brief delay and re-poll to catch any additional content (#71).
@@ -2666,9 +2700,12 @@ async function maybeRecoverLongAssistantResponse({
   let bestLength = capturedLength;
   let bestText = answerText;
   for (let i = 0; i < 5; i++) {
-    const laterSnapshot = await readAssistantSnapshot(runtime, baselineTurns ?? undefined).catch(
-      () => null,
-    );
+    const laterSnapshot = await readAssistantSnapshot(
+      runtime,
+      baselineTurns ?? undefined,
+      undefined,
+      identityScope,
+    ).catch(() => null);
     const laterText = typeof laterSnapshot?.text === "string" ? laterSnapshot.text.trim() : "";
     if (laterText.length > bestLength) {
       bestLength = laterText.length;
@@ -3163,7 +3200,7 @@ async function runRemoteBrowserMode(
         );
       }
       let baselineTurns = await readConversationTurnCount(Runtime, logger);
-      const providerState: Record<string, unknown> = {
+      const providerState: ChatGptProviderSubmissionState = {
         runtime: Runtime,
         input: Input,
         logger,
@@ -3193,6 +3230,8 @@ async function runRemoteBrowserMode(
       return {
         baselineTurns,
         baselineAssistantText,
+        committedUserTurn: providerState.committedUserTurn ?? null,
+        committedAssistantTurn: providerState.committedAssistantTurn ?? null,
         deepResearchTargetKeys: deepResearchTargetBaseline?.targetKeys,
         deepResearchTargetBaselineCaptured: deepResearchTargetBaseline?.captured,
       };
@@ -3205,6 +3244,7 @@ async function runRemoteBrowserMode(
 
     let baselineTurns: number | null = null;
     let baselineAssistantText: string | null = null;
+    let identityScope: AssistantResponseIdentityScope | undefined;
     let deepResearchTargetKeys: string[] = [];
     let deepResearchTargetBaselineCaptured = false;
     const submission = await runSubmissionWithRecovery({
@@ -3221,6 +3261,7 @@ async function runRemoteBrowserMode(
     });
     baselineTurns = submission.baselineTurns;
     baselineAssistantText = submission.baselineAssistantText;
+    identityScope = buildAssistantResponseIdentityScope(submission);
     deepResearchTargetKeys = submission.deepResearchTargetKeys ?? [];
     deepResearchTargetBaselineCaptured = submission.deepResearchTargetBaselineCaptured ?? false;
     const imageArtifactMinTurnIndex = baselineTurns;
@@ -3308,6 +3349,7 @@ async function runRemoteBrowserMode(
           Runtime,
           baselineTurns ?? undefined,
           expectedConversationId(),
+          identityScope,
         ).catch(() => null);
         const text = typeof snapshot?.text === "string" ? snapshot.text.trim() : "";
         if (text) {
@@ -3401,6 +3443,7 @@ async function runRemoteBrowserMode(
               logger,
               baselineTurns ?? undefined,
               expectedConversationId(),
+              identityScope,
             ),
           timeoutMs,
           logger,
@@ -3435,6 +3478,7 @@ async function runRemoteBrowserMode(
                 logger,
                 baselineTurns ?? undefined,
                 expectedConversationId(),
+                identityScope,
               ),
             timeoutMs: config.timeoutMs,
             logger,
@@ -3538,6 +3582,7 @@ async function runRemoteBrowserMode(
           answerMarkdown: turnAnswerMarkdown,
           logger,
           allowMarkdownUpdate: !copiedMarkdown,
+          identityScope,
         }));
 
       // Final sanity check: ensure we didn't accidentally capture the user prompt instead of the assistant turn.
@@ -3545,6 +3590,7 @@ async function runRemoteBrowserMode(
         Runtime,
         baselineTurns ?? undefined,
         expectedConversationId(),
+        identityScope,
       ).catch(() => null);
       const finalText = typeof finalSnapshot?.text === "string" ? finalSnapshot.text.trim() : "";
       if (
@@ -3583,6 +3629,7 @@ async function runRemoteBrowserMode(
             Runtime,
             baselineTurns ?? undefined,
             expectedConversationId(),
+            identityScope,
           ).catch(() => null);
           const text = typeof snapshot?.text === "string" ? snapshot.text.trim() : "";
           const isStillEcho = !text || Boolean(promptEchoMatcher?.isEcho(text));
@@ -3639,6 +3686,7 @@ async function runRemoteBrowserMode(
       });
       baselineTurns = submission.baselineTurns;
       baselineAssistantText = submission.baselineAssistantText;
+      identityScope = buildAssistantResponseIdentityScope(submission);
       const turn = await captureAssistantTurn(followUpPrompt, `Follow-up ${index + 1}`);
       turns.push({ ...turn, prompt: followUpPrompt });
       answerText = turn.answerText;
@@ -3928,6 +3976,7 @@ async function waitForAssistantResponseWithReload(
   logger: BrowserLogger,
   minTurnIndex?: number,
   expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
 ) {
   try {
     return await waitForAssistantResponse(
@@ -3936,6 +3985,7 @@ async function waitForAssistantResponseWithReload(
       logger,
       minTurnIndex,
       expectedConversationId,
+      identityScope,
     );
   } catch (error) {
     if (!shouldReloadAfterAssistantError(error)) {
@@ -3954,6 +4004,7 @@ async function waitForAssistantResponseWithReload(
       logger,
       minTurnIndex,
       expectedConversationId,
+      identityScope,
     );
   }
 }

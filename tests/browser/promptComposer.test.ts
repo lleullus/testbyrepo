@@ -8,6 +8,110 @@ import {
   CONVERSATION_TURN_CONTAINER_SELECTOR,
   CONVERSATION_TURN_SELECTOR,
 } from "../../src/browser/constants.js";
+import { buildConversationTurnCountExpression } from "../../src/browser/conversationTurns.js";
+
+class IdentityElement {
+  parentElement: IdentityElement | null = null;
+
+  constructor(
+    private readonly attributes: Record<string, string> = {},
+    private readonly ownText = "",
+    readonly children: IdentityElement[] = [],
+  ) {
+    for (const child of children) {
+      child.parentElement = this;
+    }
+  }
+
+  get innerText(): string {
+    return this.textContent;
+  }
+
+  get textContent(): string {
+    return `${this.ownText}${this.children.map((child) => child.textContent).join("")}`;
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes[name] ?? null;
+  }
+
+  contains(node: IdentityElement): boolean {
+    return this.children.some((child) => child === node || child.contains(node));
+  }
+
+  querySelectorAll(selector: string): IdentityElement[] {
+    return flattenIdentityElements(this.children).filter((element) =>
+      matchesIdentitySelector(element, selector),
+    );
+  }
+}
+
+class IdentityDocument {
+  constructor(readonly roots: IdentityElement[]) {}
+
+  querySelector(): null {
+    return null;
+  }
+
+  querySelectorAll(selector: string): IdentityElement[] {
+    return flattenIdentityElements(this.roots).filter((element) =>
+      matchesIdentitySelector(element, selector),
+    );
+  }
+}
+
+function flattenIdentityElements(elements: IdentityElement[]): IdentityElement[] {
+  return elements.flatMap((element) => [element, ...flattenIdentityElements(element.children)]);
+}
+
+function matchesIdentitySelector(element: IdentityElement, selector: string): boolean {
+  return selector
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .some((part) => {
+      const attributes = Array.from(
+        part.matchAll(/\[([a-z-]+)(?:([\^$*]?=)["']?([^\]"']*)["']?)?\]/gi),
+      );
+      return attributes.every(([, name, operator, expected]) => {
+        const actual = element.getAttribute(name);
+        if (actual === null) return false;
+        if (!operator) return true;
+        if (operator === "=") return actual === expected;
+        if (operator === "^=") return actual.startsWith(expected);
+        if (operator === "*=") return actual.includes(expected);
+        if (operator === "$=") return actual.endsWith(expected);
+        return false;
+      });
+    });
+}
+
+function evaluateIdentityProbe(document: IdentityDocument, expression: string): unknown {
+  class FakeTextArea {}
+  return Function(
+    "document",
+    "HTMLTextAreaElement",
+    "location",
+    `return ${expression};`,
+  )(document, FakeTextArea, { href: "https://chatgpt.com/c/identity-test" });
+}
+
+function makeWindowTurn(
+  ordinal: number,
+  role: "user" | "assistant",
+  text: string,
+): IdentityElement {
+  return new IdentityElement({ "data-testid": `conversation-turn-${ordinal}` }, "", [
+    new IdentityElement(
+      {
+        "data-message-author-role": role,
+        "data-turn-id": `${role}-turn-${ordinal}`,
+        "data-message-id": `${role}-message-${ordinal}`,
+      },
+      text,
+    ),
+  ]);
+}
 
 describe("promptComposer", () => {
   test("fails composer clearing when stale text remains", async () => {
@@ -57,6 +161,170 @@ describe("promptComposer", () => {
       const promise = promptComposer.verifyPromptCommitted(runtime as never, "hello", 150);
       // Attach the rejection handler before timers advance to avoid unhandled-rejection warnings.
       const assertion = expect(promise).rejects.toThrow(/prompt did not appear/i);
+      await vi.advanceTimersByTimeAsync(250);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("returns the identity of a new user turn when its prompt matches", async () => {
+    const oldTurn = new IdentityElement(
+      {
+        "data-testid": "conversation-turn-10",
+        "data-message-author-role": "user",
+        "data-message-id": "message-old",
+      },
+      "old prompt",
+    );
+    const newTurn = new IdentityElement({ "data-testid": "conversation-turn-11" }, "", [
+      new IdentityElement(
+        {
+          "data-message-author-role": "user",
+          "data-turn-id": "turn-new",
+          "data-message-id": "message-new",
+        },
+        "new prompt",
+      ),
+    ]);
+    const document = new IdentityDocument([oldTurn, newTurn]);
+    const runtime = {
+      evaluate: vi.fn(async ({ expression }: { expression: string }) => ({
+        result: { value: evaluateIdentityProbe(document, expression) },
+      })),
+    };
+
+    await expect(
+      promptComposer.verifyPromptCommitted(runtime as never, "new prompt", 150, undefined, 2, [
+        {
+          turnId: null,
+          messageId: "message-old",
+          testId: "conversation-turn-10",
+          absoluteOrdinal: 10,
+        },
+      ]),
+    ).resolves.toEqual({
+      turnId: "turn-new",
+      messageId: "message-new",
+      testId: "conversation-turn-11",
+      absoluteOrdinal: 11,
+    });
+  });
+
+  test("returns turn-7 from a fixed five-turn [conversation-turn-2,3,4,5,6] -> [conversation-turn-4,5,6,7,8] window without count growth", async () => {
+    const preSubmitTurns = [
+      makeWindowTurn(2, "assistant", "answer 2"),
+      makeWindowTurn(3, "user", "prompt 3"),
+      makeWindowTurn(4, "assistant", "answer 4"),
+      makeWindowTurn(5, "user", "prompt 5"),
+      makeWindowTurn(6, "assistant", "answer 6"),
+    ];
+    const postSubmitTurns = [
+      makeWindowTurn(4, "assistant", "answer 4"),
+      makeWindowTurn(5, "user", "prompt 5"),
+      makeWindowTurn(6, "assistant", "answer 6"),
+      makeWindowTurn(7, "user", "sliding-window prompt"),
+      makeWindowTurn(8, "assistant", "answer 8"),
+    ];
+    const document = new IdentityDocument(preSubmitTurns);
+
+    expect(evaluateIdentityProbe(document, buildConversationTurnCountExpression())).toBe(5);
+
+    const runtime = {
+      evaluate: vi.fn(async ({ expression }: { expression: string }) => {
+        if (expression.includes("document.readyState")) {
+          return { result: { value: { ready: true, composer: true, fileInput: false } } };
+        }
+        if (expression.includes("focused: true")) {
+          return { result: { value: { focused: true } } };
+        }
+        if (expression.includes("editorText")) {
+          return {
+            result: {
+              value: {
+                editorText: "sliding-window prompt",
+                fallbackValue: "",
+                activeValue: "sliding-window prompt",
+              },
+            },
+          };
+        }
+        if (expression.includes("button.scrollIntoView")) {
+          document.roots.splice(0, document.roots.length, ...postSubmitTurns);
+          return { result: { value: { status: "clicked" } } };
+        }
+        if (expression.includes("const allTurns")) {
+          return { result: { value: evaluateIdentityProbe(document, expression) } };
+        }
+        return { result: { value: true } };
+      }),
+    };
+    const input = { insertText: vi.fn(), dispatchKeyEvent: vi.fn() };
+    const logger = Object.assign(vi.fn(), { verbose: false });
+
+    const committedUserTurn = await submitPrompt(
+      {
+        runtime: runtime as never,
+        input: input as never,
+        baselineTurns: 5,
+      },
+      "sliding-window prompt",
+      logger as never,
+    );
+
+    expect(evaluateIdentityProbe(document, buildConversationTurnCountExpression())).toBe(5);
+    expect(document.roots.map((turn) => turn.getAttribute("data-testid"))).toEqual([
+      "conversation-turn-4",
+      "conversation-turn-5",
+      "conversation-turn-6",
+      "conversation-turn-7",
+      "conversation-turn-8",
+    ]);
+    expect(committedUserTurn).toEqual({
+      turnId: "user-turn-7",
+      messageId: "user-message-7",
+      testId: "conversation-turn-7",
+      absoluteOrdinal: 7,
+    });
+  });
+
+  test("rejects a stale user turn with the same prompt as a new commit", async () => {
+    vi.useFakeTimers();
+    try {
+      const staleTurn = new IdentityElement(
+        {
+          "data-testid": "conversation-turn-10",
+          "data-message-author-role": "user",
+          "data-turn-id": "turn-old",
+          "data-message-id": "message-old",
+        },
+        "same prompt",
+      );
+      const document = new IdentityDocument([staleTurn]);
+      const runtime = {
+        evaluate: vi.fn(async ({ expression }: { expression: string }) => ({
+          result: { value: evaluateIdentityProbe(document, expression) },
+        })),
+      };
+      const promise = promptComposer.verifyPromptCommitted(
+        runtime as never,
+        "same prompt",
+        150,
+        undefined,
+        1,
+        [
+          {
+            turnId: "turn-old",
+            messageId: "message-old",
+            testId: "conversation-turn-10",
+            absoluteOrdinal: 10,
+          },
+        ],
+      );
+      const assertion = expect(promise).rejects.toMatchObject({
+        name: "BrowserAutomationError",
+        details: expect.objectContaining({ code: "prompt-commit-timeout" }),
+      });
       await vi.advanceTimersByTimeAsync(250);
       await assertion;
     } finally {
@@ -175,14 +443,14 @@ describe("promptComposer", () => {
     }
   });
 
-  test("allows prompt match even if baseline turn count cannot be read", async () => {
+  test("does not allow a prompt match without a stable pre-submit identity set", async () => {
     const runtime = {
       evaluate: vi
         .fn()
         // Baseline read fails
         .mockRejectedValueOnce(new Error("turn read failed"))
-        // First poll shows prompt match (baseline unknown)
-        .mockResolvedValueOnce({
+        // Polls show a prompt match without a stable identity proof.
+        .mockResolvedValue({
           result: {
             value: {
               baseline: -1,
@@ -204,7 +472,10 @@ describe("promptComposer", () => {
 
     await expect(
       promptComposer.verifyPromptCommitted(runtime as never, "hello", 150),
-    ).resolves.toBe(1);
+    ).rejects.toMatchObject({
+      name: "BrowserAutomationError",
+      details: expect.objectContaining({ code: "prompt-commit-timeout" }),
+    });
   });
 
   test("attachment sends time out instead of allowing Enter fallback", async () => {
@@ -260,6 +531,34 @@ describe("promptComposer", () => {
         if (expression.includes("button.scrollIntoView")) {
           return { result: { value: { status: "clicked" } } };
         }
+        if (expression.includes("const userTurnCandidates")) {
+          return {
+            result: {
+              value: {
+                baseline: 0,
+                turnsCount: 1,
+                userMatched: true,
+                prefixMatched: false,
+                lastMatched: true,
+                hasNewTurn: true,
+                stableIdentityProof: true,
+                committedUserTurn: {
+                  turnId: "turn-new",
+                  messageId: "message-new",
+                  testId: "conversation-turn-1",
+                  absoluteOrdinal: 1,
+                },
+                stopVisible: true,
+                assistantVisible: false,
+                composerCleared: true,
+                inConversation: true,
+              },
+            },
+          };
+        }
+        if (expression.includes("const allTurns")) {
+          return { result: { value: [] } };
+        }
         return {
           result: {
             value: {
@@ -281,7 +580,7 @@ describe("promptComposer", () => {
     const input = { insertText: vi.fn(), dispatchKeyEvent: vi.fn() };
     const logger = Object.assign(vi.fn(), { verbose: false });
 
-    await submitPrompt(
+    const committedUserTurn = await submitPrompt(
       {
         runtime: runtime as never,
         input: input as never,
@@ -293,6 +592,18 @@ describe("promptComposer", () => {
     );
 
     expect(onPromptSubmitted).toHaveBeenCalledTimes(1);
+    expect(committedUserTurn).toEqual({
+      turnId: "turn-new",
+      messageId: "message-new",
+      testId: "conversation-turn-1",
+      absoluteOrdinal: 1,
+    });
+    const expressions = runtime.evaluate.mock.calls.map(([args]) => args.expression);
+    expect(
+      expressions.findIndex((expression) => expression.includes("const allTurns")),
+    ).toBeLessThan(
+      expressions.findIndex((expression) => expression.includes("button.scrollIntoView")),
+    );
   });
 
   test("waits for a delayed trusted click without issuing a second send", async () => {

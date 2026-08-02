@@ -7,7 +7,13 @@ import {
   FINISHED_ACTIONS_SELECTOR,
   STOP_BUTTON_SELECTORS,
 } from "../constants.js";
-import { buildConversationTurnListExpression } from "../conversationTurns.js";
+import {
+  buildConversationTurnListExpression,
+  buildConversationTurnRecordsExpression,
+  buildConversationTurnIdentityMatcherExpression,
+  normalizeConversationTurnIdentity,
+  type ConversationTurnIdentity,
+} from "../conversationTurns.js";
 import { buildThinkingActivePredicateJs, readThinkingActivity } from "./thinkingStatus.js";
 import { delay } from "../utils.js";
 import {
@@ -19,8 +25,14 @@ import { buildClickDispatcher } from "./domEvents.js";
 
 const ASSISTANT_POLL_TIMEOUT_ERROR = "assistant-response-watchdog-timeout";
 const STOP_CONTROL_SELECTOR = STOP_BUTTON_SELECTORS.join(", ");
+const ASSISTANT_TURN_BINDING_TIMEOUT_MS = 3_000;
 // Still used by the in-page settle heuristic's length buckets (see buildResponseObserverExpression).
 const MIN_CONFIDENT_ANSWER_LENGTH = 16;
+
+export interface AssistantResponseIdentityScope {
+  committedUserTurn: ConversationTurnIdentity;
+  committedAssistantTurn?: ConversationTurnIdentity | null;
+}
 
 function readPositiveIntEnv(name: string, fallback: number): number {
   const raw = Number(process.env[name]);
@@ -178,12 +190,189 @@ export function buildActiveThinkingStatusPredicateJsForTest(fnName: string): str
   return buildActiveThinkingStatusPredicateJs(fnName);
 }
 
+/**
+ * Build a browser-context expression that binds the assistant turn owned by a committed user
+ * turn. Selection is turn-scoped and identity-based; DOM indexes are used only while resolving
+ * the current window and are never returned as part of the identity.
+ */
+function buildAssistantTurnIdentityBindingExpression(
+  committedUserTurn: ConversationTurnIdentity,
+): string {
+  const resolver = buildScopedAssistantRecordResolver(
+    {
+      committedUserTurn,
+      committedAssistantTurn: null,
+    },
+    "resolveBindingScopedAssistantRecord",
+    "BINDING_IDENTITY_SCOPE",
+  );
+  return `(() => {
+    ${resolver}
+    return resolveBindingScopedAssistantRecord()?.identity ?? null;
+  })()`;
+}
+
+export function buildAssistantTurnIdentityBindingExpressionForTest(
+  committedUserTurn: ConversationTurnIdentity,
+): string {
+  return buildAssistantTurnIdentityBindingExpression(committedUserTurn);
+}
+
+/** Bind once to the first owned assistant identity without spending the full response timeout. */
+export async function bindAssistantTurnIdentity(
+  Runtime: ChromeClient["Runtime"],
+  committedUserTurn: ConversationTurnIdentity,
+  timeoutMs = ASSISTANT_TURN_BINDING_TIMEOUT_MS,
+): Promise<ConversationTurnIdentity | null> {
+  const expectedUser = normalizeConversationTurnIdentity(committedUserTurn);
+  if (!expectedUser) return null;
+  const deadline = Date.now() + Math.max(0, timeoutMs);
+  while (true) {
+    try {
+      const { result } = await Runtime.evaluate({
+        expression: buildAssistantTurnIdentityBindingExpression(expectedUser),
+        returnByValue: true,
+      });
+      const identity = normalizeConversationTurnIdentity(result?.value);
+      if (identity) return identity;
+    } catch {
+      // The page can be re-rendering while the placeholder turn mounts.
+    }
+    if (Date.now() >= deadline) return null;
+    await delay(Math.min(100, Math.max(1, deadline - Date.now())));
+  }
+}
+
+function buildScopedAssistantRecordResolver(
+  identityScope: AssistantResponseIdentityScope,
+  functionName = "resolveScopedAssistantRecord",
+  scopeName = "IDENTITY_SCOPE",
+): string {
+  return `
+    const ${scopeName} = ${JSON.stringify(identityScope)};
+    ${buildConversationTurnIdentityMatcherExpression()}
+    const ${functionName} = () => {
+      const records = ${buildConversationTurnRecordsExpression()};
+      const expectedAssistant = ${scopeName}?.committedAssistantTurn;
+      if (hasStableConversationTurnIdentity(expectedAssistant)) {
+        const matches = records.filter(
+          (record) =>
+            record.role === 'assistant' &&
+            sameConversationTurnIdentity(record.identity, expectedAssistant),
+        );
+        return matches.length === 1 ? matches[0] : null;
+      }
+
+      const expectedUser = ${scopeName}?.committedUserTurn;
+      if (!hasStableConversationTurnIdentity(expectedUser)) return null;
+      const userMatches = records
+        .map((record, index) => ({ record, index }))
+        .filter(
+          ({ record }) =>
+            record.role === 'user' &&
+            sameCommittedConversationTurnIdentity(record.identity, expectedUser),
+        );
+      if (userMatches.length !== 1) return null;
+
+      const userIndex = userMatches[0].index;
+      const userOrdinal = conversationTurnOrdinal(expectedUser);
+      const nextRecord = records[userIndex + 1];
+      if (
+        nextRecord?.role === 'assistant' &&
+        !hasStableConversationTurnIdentity(nextRecord.identity)
+      ) {
+        return null;
+      }
+      if (
+        nextRecord?.role === 'assistant' &&
+        hasStableConversationTurnIdentity(nextRecord.identity) &&
+        conversationTurnOrdinal(nextRecord.identity) === null
+      ) {
+        return nextRecord;
+      }
+
+      if (userOrdinal !== null) {
+        const ordinalCandidates = records
+          .map((record, index) => ({ record, index }))
+          .filter(({ record, index }) => {
+            const assistantOrdinal = conversationTurnOrdinal(record.identity);
+            return (
+              index > userIndex &&
+              record.role === 'assistant' &&
+              hasStableConversationTurnIdentity(record.identity) &&
+              assistantOrdinal !== null &&
+              assistantOrdinal > userOrdinal
+            );
+          });
+        if (ordinalCandidates.length > 0) {
+          const pairedCandidates = ordinalCandidates.filter(
+            ({ record }) => conversationTurnOrdinal(record.identity) === userOrdinal + 1,
+          );
+          if (pairedCandidates.length === 0) return null;
+          const closestOrdinal = Math.min(
+            ...pairedCandidates.map(({ record }) => conversationTurnOrdinal(record.identity)),
+          );
+          const closest = pairedCandidates.filter(
+            ({ record }) => conversationTurnOrdinal(record.identity) === closestOrdinal,
+          );
+          return closest.length === 1 ? closest[0].record : null;
+        }
+      }
+
+      if (userOrdinal !== null) return null;
+
+      if (
+        nextRecord?.role !== 'assistant' ||
+        !hasStableConversationTurnIdentity(nextRecord.identity)
+      ) {
+        return null;
+      }
+      const nextOrdinal = conversationTurnOrdinal(nextRecord.identity);
+      if (userOrdinal !== null && nextOrdinal !== null && nextOrdinal <= userOrdinal) {
+        return null;
+      }
+      return nextRecord;
+    };
+  `;
+}
+
+async function resolveAssistantResponseIdentityScope(
+  Runtime: ChromeClient["Runtime"],
+  identityScope: AssistantResponseIdentityScope | undefined,
+  timeoutMs: number,
+): Promise<AssistantResponseIdentityScope | undefined> {
+  if (!identityScope) return undefined;
+  const committedUserTurn = normalizeConversationTurnIdentity(identityScope.committedUserTurn);
+  const committedAssistantTurn = normalizeConversationTurnIdentity(
+    identityScope.committedAssistantTurn,
+  );
+  const resolved: AssistantResponseIdentityScope = {
+    committedUserTurn: committedUserTurn ?? identityScope.committedUserTurn,
+    committedAssistantTurn,
+  };
+  if (!committedUserTurn || committedAssistantTurn) {
+    return resolved;
+  }
+  const bound = await bindAssistantTurnIdentity(
+    Runtime,
+    committedUserTurn,
+    Math.min(ASSISTANT_TURN_BINDING_TIMEOUT_MS, Math.max(0, timeoutMs)),
+  );
+  if (bound) {
+    resolved.committedAssistantTurn = bound;
+  }
+  identityScope.committedUserTurn = resolved.committedUserTurn;
+  identityScope.committedAssistantTurn = resolved.committedAssistantTurn;
+  return resolved;
+}
+
 export async function waitForAssistantResponse(
   Runtime: ChromeClient["Runtime"],
   timeoutMs: number,
   logger: BrowserLogger,
   minTurnIndex?: number,
   expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
 ): Promise<{
   text: string;
   html?: string;
@@ -191,6 +380,11 @@ export async function waitForAssistantResponse(
 }> {
   const start = Date.now();
   logger("Waiting for ChatGPT response");
+  const resolvedIdentityScope = await resolveAssistantResponseIdentityScope(
+    Runtime,
+    identityScope,
+    timeoutMs,
+  );
   // Learned: two paths are needed:
   // 1) DOM observer (fast when mutations fire),
   // 2) snapshot poller (fallback when observers miss or JS stalls).
@@ -198,6 +392,7 @@ export async function waitForAssistantResponse(
     timeoutMs,
     minTurnIndex,
     expectedConversationId,
+    resolvedIdentityScope,
   );
   const evaluationPromise = Runtime.evaluate({
     expression,
@@ -218,6 +413,7 @@ export async function waitForAssistantResponse(
     timeoutMs,
     minTurnIndex,
     expectedConversationId,
+    resolvedIdentityScope,
     pollerAbort.signal,
   ).then(
     (value) => ({ kind: "poll" as const, value }),
@@ -266,6 +462,7 @@ export async function waitForAssistantResponse(
           logger,
           minTurnIndex,
           expectedConversationId,
+          resolvedIdentityScope,
         );
         if (recovered) {
           return recovered;
@@ -293,6 +490,7 @@ export async function waitForAssistantResponse(
         logger,
         minTurnIndex,
         expectedConversationId,
+        resolvedIdentityScope,
       );
       if (recovered) {
         return recovered;
@@ -318,6 +516,7 @@ export async function waitForAssistantResponse(
     logger,
     minTurnIndex,
     expectedConversationId,
+    resolvedIdentityScope,
   );
   const candidate = refreshed ?? parsed;
   if (isGeneratedImageAssistantAnswer(candidate)) {
@@ -329,7 +528,7 @@ export async function waitForAssistantResponse(
   // phase begins. Re-confirm EVERY captured text through the terminal-only poller, which
   // finalizes only on positive proof (a debounced action bar, or a quiet window with no
   // active thinking). We deliberately drop the old ">= candidate length" acceptance: the
-  // poller is turn-scoped (minTurnIndex), so whatever it proves terminal is the right turn,
+  // poller is turn-scoped by identity (or the legacy minTurnIndex), so whatever it proves terminal is the right turn,
   // even when the real answer is shorter than a verbose preamble.
   const elapsedMs = Date.now() - start;
   const remainingMs = Math.max(0, timeoutMs - elapsedMs);
@@ -340,6 +539,7 @@ export async function waitForAssistantResponse(
       remainingMs,
       minTurnIndex,
       expectedConversationId,
+      resolvedIdentityScope,
     );
     if (completed) {
       return completed;
@@ -366,15 +566,20 @@ export async function readAssistantSnapshot(
   Runtime: ChromeClient["Runtime"],
   minTurnIndex?: number,
   expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
 ): Promise<AssistantSnapshot | null> {
   const { result } = await Runtime.evaluate({
-    expression: buildAssistantSnapshotExpression(minTurnIndex, expectedConversationId),
+    expression: buildAssistantSnapshotExpression(
+      minTurnIndex,
+      expectedConversationId,
+      identityScope,
+    ),
     returnByValue: true,
   });
   const value = result?.value;
   if (value && typeof value === "object") {
     const snapshot = value as AssistantSnapshot;
-    if (typeof minTurnIndex === "number" && Number.isFinite(minTurnIndex)) {
+    if (!identityScope && typeof minTurnIndex === "number" && Number.isFinite(minTurnIndex)) {
       const turnIndex = typeof snapshot.turnIndex === "number" ? snapshot.turnIndex : null;
       if (turnIndex === null) {
         return snapshot;
@@ -412,23 +617,44 @@ export async function captureAssistantMarkdown(
   return null;
 }
 
-export function buildAssistantExtractorForTest(name: string): string {
-  return buildAssistantExtractor(name);
+export function buildAssistantExtractorForTest(
+  name: string,
+  identityScope?: AssistantResponseIdentityScope,
+): string {
+  return buildAssistantExtractor(name, identityScope);
 }
 
 export function buildAssistantSnapshotExpressionForTest(
   minTurnIndex?: number,
   expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
 ): string {
-  return buildAssistantSnapshotExpression(minTurnIndex, expectedConversationId);
+  return buildAssistantSnapshotExpression(minTurnIndex, expectedConversationId, identityScope);
+}
+
+export function buildResponseObserverExpressionForTest(
+  timeoutMs: number,
+  minTurnIndex?: number,
+  expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
+): string {
+  return buildResponseObserverExpression(
+    timeoutMs,
+    minTurnIndex,
+    expectedConversationId,
+    identityScope,
+  );
 }
 
 export function buildConversationDebugExpressionForTest(): string {
   return buildConversationDebugExpression();
 }
 
-export function buildMarkdownFallbackExtractorForTest(minTurnLiteral = "0"): string {
-  return buildMarkdownFallbackExtractor(minTurnLiteral);
+export function buildMarkdownFallbackExtractorForTest(
+  minTurnLiteral = "0",
+  identityScope?: AssistantResponseIdentityScope,
+): string {
+  return buildMarkdownFallbackExtractor(minTurnLiteral, identityScope);
 }
 
 export function buildCopyExpressionForTest(
@@ -443,6 +669,7 @@ async function recoverAssistantResponse(
   logger: BrowserLogger,
   minTurnIndex?: number,
   expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
 ): Promise<{
   text: string;
   html?: string;
@@ -455,7 +682,12 @@ async function recoverAssistantResponse(
   const recoveryStartedAt = Date.now();
   const recovered = await waitForCondition(
     async () => {
-      const snapshot = await readAssistantSnapshot(Runtime, minTurnIndex, expectedConversationId);
+      const snapshot = await readAssistantSnapshot(
+        Runtime,
+        minTurnIndex,
+        expectedConversationId,
+        identityScope,
+      );
       return normalizeAssistantSnapshot(snapshot);
     },
     recoveryTimeoutMs,
@@ -472,6 +704,7 @@ async function recoverAssistantResponse(
         remainingMs,
         minTurnIndex,
         expectedConversationId,
+        identityScope,
       );
       if (confirmed) {
         logger("Recovered and confirmed assistant response via polling fallback");
@@ -547,6 +780,7 @@ async function refreshAssistantSnapshot(
   logger: BrowserLogger,
   minTurnIndex?: number,
   expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
 ): Promise<{
   text: string;
   html?: string;
@@ -566,6 +800,7 @@ async function refreshAssistantSnapshot(
       Runtime,
       minTurnIndex,
       expectedConversationId,
+      identityScope,
     ).catch(() => null);
     const latest = normalizeAssistantSnapshot(latestSnapshot);
     if (latest) {
@@ -616,6 +851,7 @@ async function pollAssistantCompletion(
   timeoutMs: number,
   minTurnIndex?: number,
   expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
   abortSignal?: AbortSignal,
 ): Promise<{
   text: string;
@@ -629,7 +865,12 @@ async function pollAssistantCompletion(
     if (abortSignal?.aborted) {
       return null;
     }
-    const snapshot = await readAssistantSnapshot(Runtime, minTurnIndex, expectedConversationId);
+    const snapshot = await readAssistantSnapshot(
+      Runtime,
+      minTurnIndex,
+      expectedConversationId,
+      identityScope,
+    );
     const normalized = normalizeAssistantSnapshot(snapshot);
     if (normalized) {
       // Generated-image answers stream no text and mount no action bar; accept immediately.
@@ -638,7 +879,7 @@ async function pollAssistantCompletion(
       }
       const [stopVisible, barVisible, thinkingActivity] = await Promise.all([
         isStopButtonVisible(Runtime),
-        isCompletionVisible(Runtime, normalized.meta, minTurnIndex),
+        isCompletionVisible(Runtime, normalized.meta, minTurnIndex, identityScope),
         readThinkingActivity(Runtime),
       ]);
       const decision = classifyTurnTerminal(
@@ -711,6 +952,7 @@ export const buildStopButtonVisibilityExpressionForTest = buildStopButtonVisibil
 function buildCompletionVisibilityExpression(
   meta: { turnId?: string | null; messageId?: string | null },
   minTurnIndex?: number,
+  identityScope?: AssistantResponseIdentityScope,
 ): string {
   const expectedMessageId = meta.messageId ? JSON.stringify(meta.messageId) : "null";
   const expectedTurnId = meta.turnId ? JSON.stringify(meta.turnId) : "null";
@@ -718,10 +960,19 @@ function buildCompletionVisibilityExpression(
     typeof minTurnIndex === "number" && Number.isFinite(minTurnIndex) && minTurnIndex >= 0
       ? Math.floor(minTurnIndex)
       : -1;
+  const scopedResolver = identityScope
+    ? buildScopedAssistantRecordResolver(
+        identityScope,
+        "resolveCompletionScopedAssistantRecord",
+        "COMPLETION_IDENTITY_SCOPE",
+      )
+    : "";
   return `(() => {
     const EXPECTED_MESSAGE_ID = ${expectedMessageId};
     const EXPECTED_TURN_ID = ${expectedTurnId};
     const MIN_TURN_INDEX = ${minTurnLiteral};
+    const HAS_IDENTITY_SCOPE = ${identityScope ? "true" : "false"};
+    ${scopedResolver}
     // Find the LAST assistant turn to check completion status. Must match the same logic as
     // buildAssistantExtractor, then correlate the controls to the sampled response.
     const ASSISTANT_SELECTOR = '${ASSISTANT_ROLE_SELECTOR}';
@@ -739,17 +990,25 @@ function buildCompletionVisibilityExpression(
     const turns = ${buildConversationTurnListExpression()};
     let lastAssistantTurn = null;
     let lastAssistantIndex = -1;
-    for (let i = turns.length - 1; i >= 0; i--) {
-      if (isAssistantTurn(turns[i])) {
-        lastAssistantTurn = turns[i];
-        lastAssistantIndex = i;
-        break;
+    if (HAS_IDENTITY_SCOPE) {
+      const scopedRecord = resolveCompletionScopedAssistantRecord();
+      if (scopedRecord) {
+        lastAssistantTurn = scopedRecord.node;
+        lastAssistantIndex = turns.indexOf(lastAssistantTurn);
+      }
+    } else {
+      for (let i = turns.length - 1; i >= 0; i--) {
+        if (isAssistantTurn(turns[i])) {
+          lastAssistantTurn = turns[i];
+          lastAssistantIndex = i;
+          break;
+        }
       }
     }
     if (!lastAssistantTurn) return false;
 
     const hasExpectedIdentity = Boolean(EXPECTED_MESSAGE_ID || EXPECTED_TURN_ID);
-    if (hasExpectedIdentity) {
+    if (!HAS_IDENTITY_SCOPE && hasExpectedIdentity) {
       const identityNodes = [
         lastAssistantTurn,
         ...Array.from(lastAssistantTurn.querySelectorAll('[data-message-id], [data-testid]')),
@@ -759,7 +1018,7 @@ function buildCompletionVisibilityExpression(
         (EXPECTED_TURN_ID && node.getAttribute?.('data-testid') === EXPECTED_TURN_ID),
       );
       if (!identityMatches) return false;
-    } else if (MIN_TURN_INDEX < 0 || lastAssistantIndex < MIN_TURN_INDEX) {
+    } else if (!HAS_IDENTITY_SCOPE && (MIN_TURN_INDEX < 0 || lastAssistantIndex < MIN_TURN_INDEX)) {
       // Fallback/project snapshots without an identity may use the new-turn baseline, but an
       // uncorrelated persistent action bar from an older turn must never prove completion.
       return false;
@@ -779,11 +1038,12 @@ async function isCompletionVisible(
     completionVisible?: boolean;
   },
   minTurnIndex?: number,
+  identityScope?: AssistantResponseIdentityScope,
 ): Promise<boolean> {
-  if (hasScopedCompletionProof(meta)) return true;
+  if (!identityScope && hasScopedCompletionProof(meta)) return true;
   try {
     const { result } = await Runtime.evaluate({
-      expression: buildCompletionVisibilityExpression(meta, minTurnIndex),
+      expression: buildCompletionVisibilityExpression(meta, minTurnIndex, identityScope),
       returnByValue: true,
     });
     return Boolean(result?.value);
@@ -855,6 +1115,7 @@ async function waitForCondition<T>(
 function buildAssistantSnapshotExpression(
   minTurnIndex?: number,
   expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
 ): string {
   const minTurnLiteral =
     typeof minTurnIndex === "number" && Number.isFinite(minTurnIndex) && minTurnIndex >= 0
@@ -877,7 +1138,7 @@ function buildAssistantSnapshotExpression(
       return null;
     }
     // Learned: the default turn DOM misses project view; keep a fallback extractor.
-    ${buildAssistantExtractor("extractAssistantTurn")}
+    ${buildAssistantExtractor("extractAssistantTurn", identityScope)}
     const extracted = extractAssistantTurn();
     const isPlaceholder = (snapshot) => {
       const normalized = String(snapshot?.text ?? '').toLowerCase().trim();
@@ -897,7 +1158,7 @@ function buildAssistantSnapshotExpression(
       return extracted;
     }
     // Fallback for ChatGPT project view: answers can live outside conversation turns.
-    const extractFallback = ${buildMarkdownFallbackExtractor("MIN_TURN_INDEX")};
+    const extractFallback = ${buildMarkdownFallbackExtractor("MIN_TURN_INDEX", identityScope)};
     const fallback = extractFallback();
     if (fallback && !isPlaceholder(fallback) && !isActiveThinkingStatus(fallback)) {
       return fallback;
@@ -910,6 +1171,7 @@ function buildResponseObserverExpression(
   timeoutMs: number,
   minTurnIndex?: number,
   expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
 ): string {
   const selectorsLiteral = JSON.stringify(ANSWER_SELECTORS);
   const assistantLiteral = JSON.stringify(ASSISTANT_ROLE_SELECTOR);
@@ -921,6 +1183,13 @@ function buildResponseObserverExpression(
     typeof expectedConversationId === "string" && expectedConversationId.trim().length > 0
       ? JSON.stringify(expectedConversationId.trim())
       : "null";
+  const scopedResolver = identityScope
+    ? buildScopedAssistantRecordResolver(
+        identityScope,
+        "resolveObserverScopedAssistantRecord",
+        "OBSERVER_IDENTITY_SCOPE",
+      )
+    : "";
   return `(() => {
     ${buildClickDispatcher()}
     const SELECTORS = ${selectorsLiteral};
@@ -928,6 +1197,8 @@ function buildResponseObserverExpression(
     const FINISHED_SELECTOR = '${FINISHED_ACTIONS_SELECTOR}';
     const ASSISTANT_SELECTOR = ${assistantLiteral};
     const EXPECTED_CONVERSATION_ID = ${expectedConversationLiteral};
+    const HAS_IDENTITY_SCOPE = ${identityScope ? "true" : "false"};
+    ${scopedResolver}
     // Learned: settling avoids capturing mid-stream HTML; keep short.
     const settleDelayMs = 800;
     const currentConversationId = () => {
@@ -963,15 +1234,18 @@ function buildResponseObserverExpression(
     };
 
     const MIN_TURN_INDEX = ${minTurnLiteral};
-    ${buildAssistantExtractor("extractFromTurns")}
+    ${buildAssistantExtractor("extractFromTurns", identityScope)}
     // Learned: some layouts (project view) render markdown without assistant turn wrappers.
-    const extractFromMarkdownFallback = ${buildMarkdownFallbackExtractor("MIN_TURN_INDEX")};
+    const extractFromMarkdownFallback = ${buildMarkdownFallbackExtractor(
+      "MIN_TURN_INDEX",
+      identityScope,
+    )};
 
     const acceptSnapshot = (snapshot) => {
       if (!snapshot) return null;
       if (!matchesExpectedConversation()) return null;
       const index = typeof snapshot.turnIndex === 'number' ? snapshot.turnIndex : -1;
-      if (MIN_TURN_INDEX >= 0) {
+      if (!HAS_IDENTITY_SCOPE && MIN_TURN_INDEX >= 0) {
         if (index < 0 || index < MIN_TURN_INDEX) {
           return null;
         }
@@ -1051,10 +1325,14 @@ function buildResponseObserverExpression(
     const isLastAssistantTurnFinished = () => {
       const turns = ${buildConversationTurnListExpression()};
       let lastAssistantTurn = null;
-      for (let i = turns.length - 1; i >= 0; i--) {
-        if (isAssistantTurn(turns[i])) {
-          lastAssistantTurn = turns[i];
-          break;
+      if (HAS_IDENTITY_SCOPE) {
+        lastAssistantTurn = resolveObserverScopedAssistantRecord()?.node ?? null;
+      } else {
+        for (let i = turns.length - 1; i >= 0; i--) {
+          if (isAssistantTurn(turns[i])) {
+            lastAssistantTurn = turns[i];
+            break;
+          }
         }
       }
       if (!lastAssistantTurn) return false;
@@ -1155,11 +1433,17 @@ function buildResponseObserverExpression(
   })()`;
 }
 
-function buildAssistantExtractor(functionName: string): string {
+function buildAssistantExtractor(
+  functionName: string,
+  identityScope?: AssistantResponseIdentityScope,
+): string {
   const assistantLiteral = JSON.stringify(ASSISTANT_ROLE_SELECTOR);
+  const scopedResolver = identityScope ? buildScopedAssistantRecordResolver(identityScope) : "";
   return `const ${functionName} = () => {
     ${buildClickDispatcher()}
     const ASSISTANT_SELECTOR = ${assistantLiteral};
+    const HAS_IDENTITY_SCOPE = ${identityScope ? "true" : "false"};
+    ${scopedResolver}
     const isAssistantTurn = (node) => {
       if (!(node instanceof HTMLElement)) return false;
       const turnAttr = (node.getAttribute('data-turn') || node.dataset?.turn || '').toLowerCase();
@@ -1195,8 +1479,14 @@ function buildAssistantExtractor(functionName: string): string {
     };
 
     const turns = ${buildConversationTurnListExpression()};
-    for (let index = turns.length - 1; index >= 0; index -= 1) {
-      const turn = turns[index];
+    const scopedRecord = HAS_IDENTITY_SCOPE ? resolveScopedAssistantRecord() : null;
+    if (HAS_IDENTITY_SCOPE && !scopedRecord) return null;
+    const candidateRecords = HAS_IDENTITY_SCOPE
+      ? [scopedRecord]
+      : turns.slice().reverse().map((node) => ({ node }));
+    for (const candidateRecord of candidateRecords) {
+      const turn = candidateRecord.node;
+      const index = turns.indexOf(turn);
       if (!isAssistantTurn(turn)) {
         continue;
       }
@@ -1242,11 +1532,17 @@ function buildAssistantExtractor(functionName: string): string {
   };`;
 }
 
-function buildMarkdownFallbackExtractor(minTurnLiteral?: string): string {
+function buildMarkdownFallbackExtractor(
+  minTurnLiteral?: string,
+  identityScope?: AssistantResponseIdentityScope,
+): string {
   const turnIndexValue = minTurnLiteral
     ? `(${minTurnLiteral} >= 0 ? ${minTurnLiteral} : null)`
     : "null";
   return `(() => {
+    const HAS_IDENTITY_SCOPE = ${identityScope ? "true" : "false"};
+    // A stable scope must never fall back to the latest project/global markdown node.
+    if (HAS_IDENTITY_SCOPE) return null;
     const __minTurn = ${turnIndexValue};
     const roots = [
       document.querySelector('section[data-testid="screen-threadFlyOut"]'),

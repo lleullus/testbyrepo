@@ -2,6 +2,8 @@ import { describe, expect, test, vi } from "vitest";
 import {
   buildConversationTurnCountExpression,
   buildConversationTurnListExpression,
+  hasConversationTurnIdentity,
+  normalizeConversationTurnIdentity,
 } from "../../src/browser/conversationTurns.js";
 import {
   CONVERSATION_TURN_CONTAINER_SELECTOR,
@@ -36,5 +38,48 @@ describe("conversation turn expressions", () => {
     ]);
 
     expect(evaluate(buildConversationTurnListExpression(), responses)).toEqual(legacyTurns);
+  });
+
+  test("does not treat an ordinal-only object as a stable identity", () => {
+    expect(normalizeConversationTurnIdentity({ absoluteOrdinal: 4 })).toBeNull();
+    expect(
+      hasConversationTurnIdentity({
+        turnId: null,
+        messageId: null,
+        testId: null,
+        absoluteOrdinal: 4,
+      }),
+    ).toBe(false);
+  });
+
+  test("only preserves an absolute ordinal derived from a matching test ID", () => {
+    expect(
+      normalizeConversationTurnIdentity({
+        testId: "conversation-turn-4",
+        absoluteOrdinal: 4,
+      }),
+    ).toEqual({
+      turnId: null,
+      messageId: null,
+      testId: "conversation-turn-4",
+      absoluteOrdinal: 4,
+    });
+    expect(
+      normalizeConversationTurnIdentity({
+        testId: "conversation-turn-4",
+        absoluteOrdinal: 5,
+      }),
+    ).toBeNull();
+    expect(
+      normalizeConversationTurnIdentity({
+        turnId: "turn-4",
+        absoluteOrdinal: 4,
+      }),
+    ).toEqual({
+      turnId: "turn-4",
+      messageId: null,
+      testId: null,
+      absoluteOrdinal: null,
+    });
   });
 });

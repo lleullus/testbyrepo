@@ -1,7 +1,10 @@
 import { createContext, Script } from "node:vm";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
+  bindAssistantTurnIdentity,
+  buildAssistantTurnIdentityBindingExpressionForTest,
   buildActiveThinkingStatusPredicateJsForTest,
+  buildResponseObserverExpressionForTest,
   buildAssistantSnapshotExpressionForTest,
   buildCompletionVisibilityExpressionForTest,
   buildMarkdownFallbackExtractorForTest,
@@ -10,9 +13,15 @@ import {
   createTerminalGateState,
   hasScopedCompletionProof,
   matchesThinkingStatusLabelForTest,
+  readAssistantSnapshot,
   type TerminalGateConfig,
   type TerminalSample,
+  type AssistantResponseIdentityScope,
 } from "../../src/browser/actions/assistantResponse.js";
+import {
+  buildConversationTurnCountExpression,
+  type ConversationTurnIdentity,
+} from "../../src/browser/conversationTurns.js";
 import {
   buildThinkingActivePredicateJsForTest,
   buildThinkingActivityDetailsPredicateJsForTest,
@@ -257,6 +266,588 @@ describe("completion action correlation", () => {
     expect(expression).toContain("completionVisible: actionMarkdowns.includes(node)");
     expect(expression).toContain("return Boolean(lastUser.compareDocumentPosition(node) & 4)");
     expect(expression).toContain("if (!hasTurns) return isAfterCurrentUser(node)");
+  });
+});
+
+describe("assistant turn identity binding", () => {
+  class BindingElement {
+    parentElement: BindingElement | null = null;
+
+    constructor(
+      private readonly attributes: Record<string, string> = {},
+      private readonly ownText = "",
+      readonly children: BindingElement[] = [],
+    ) {
+      for (const child of children) {
+        child.parentElement = this;
+      }
+    }
+
+    get innerText(): string {
+      return this.textContent;
+    }
+
+    get textContent(): string {
+      return `${this.ownText}${this.children.map((child) => child.textContent).join("")}`;
+    }
+
+    getBoundingClientRect() {
+      return { left: 0, top: 0, width: 120, height: 40, right: 120, bottom: 40 };
+    }
+
+    get innerHTML(): string {
+      return this.textContent;
+    }
+
+    getAttribute(name: string): string | null {
+      return this.attributes[name] ?? null;
+    }
+
+    contains(node: BindingElement): boolean {
+      return this.children.some((child) => child === node || child.contains(node));
+    }
+
+    querySelectorAll(selector: string): BindingElement[] {
+      return flattenBindingElements(this.children).filter((element) =>
+        matchesBindingSelector(element, selector),
+      );
+    }
+
+    querySelector(selector: string): BindingElement | null {
+      return this.querySelectorAll(selector)[0] ?? null;
+    }
+  }
+
+  class BindingDocument {
+    readonly body: BindingElement;
+
+    constructor(readonly roots: BindingElement[]) {
+      this.body = new BindingElement({}, "", roots);
+    }
+
+    querySelector(): null {
+      return null;
+    }
+
+    querySelectorAll(selector: string): BindingElement[] {
+      return flattenBindingElements(this.roots).filter((element) =>
+        matchesBindingSelector(element, selector),
+      );
+    }
+  }
+
+  function flattenBindingElements(elements: BindingElement[]): BindingElement[] {
+    return elements.flatMap((element) => [element, ...flattenBindingElements(element.children)]);
+  }
+
+  function matchesBindingSelector(element: BindingElement, selector: string): boolean {
+    return selector
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .some((part) => {
+        const attributes = Array.from(
+          part.matchAll(/\[([a-z-]+)(?:([\^$*]?=)["']?([^\]"']*)["']?)?\]/gi),
+        );
+        if (attributes.length === 0) return false;
+        return attributes.every(([, name, operator, expected]) => {
+          const actual = element.getAttribute(name);
+          if (actual === null) return false;
+          if (!operator) return true;
+          if (operator === "=") return actual === expected;
+          if (operator === "^=") return actual.startsWith(expected);
+          if (operator === "*=") return actual.includes(expected);
+          if (operator === "$=") return actual.endsWith(expected);
+          return false;
+        });
+      });
+  }
+
+  function makeTurn(
+    testId: string,
+    role: "user" | "assistant",
+    turnId: string,
+    messageId?: string,
+    text = "",
+  ): BindingElement {
+    return new BindingElement({ "data-testid": testId }, "", [
+      new BindingElement(
+        {
+          "data-message-author-role": role,
+          "data-turn-id": turnId,
+          ...(messageId ? { "data-message-id": messageId } : {}),
+        },
+        text,
+      ),
+    ]);
+  }
+
+  function makeUnnumberedTurn(role: "user" | "assistant", turnId: string): BindingElement {
+    return new BindingElement({
+      "data-message-author-role": role,
+      "data-turn-id": turnId,
+    });
+  }
+
+  function evaluateBinding(
+    document: BindingDocument,
+    user: ConversationTurnIdentity,
+  ): ConversationTurnIdentity | null {
+    return Function(
+      "document",
+      `return ${buildAssistantTurnIdentityBindingExpressionForTest(user)};`,
+    )(document) as ConversationTurnIdentity | null;
+  }
+
+  function evaluateSnapshot(
+    document: BindingDocument,
+    expression: string,
+  ): Record<string, unknown> | null {
+    return Function(
+      "document",
+      "HTMLElement",
+      "location",
+      "window",
+      `return ${expression};`,
+    )(
+      document,
+      BindingElement,
+      { href: "https://chatgpt.com/c/identity-test" },
+      {
+        getComputedStyle: () => ({ display: "block", visibility: "visible", opacity: "1" }),
+      },
+    ) as Record<string, unknown> | null;
+  }
+
+  function evaluateTurnCount(document: BindingDocument): number {
+    return Function(
+      "document",
+      `return ${buildConversationTurnCountExpression()};`,
+    )(document) as number;
+  }
+
+  async function evaluateObserver(
+    document: BindingDocument,
+    expression: string,
+  ): Promise<Record<string, unknown> | null> {
+    class FakeMutationObserver {
+      constructor(_callback: () => void) {}
+
+      observe(): void {}
+
+      disconnect(): void {}
+    }
+    return (await Function(
+      "document",
+      "HTMLElement",
+      "HTMLProgressElement",
+      "location",
+      "window",
+      "MutationObserver",
+      `return ${expression};`,
+    )(
+      document,
+      BindingElement,
+      class {},
+      { href: "https://chatgpt.com/c/identity-test" },
+      {
+        getComputedStyle: () => ({ display: "block", visibility: "visible", opacity: "1" }),
+        innerHeight: 900,
+        innerWidth: 1440,
+      },
+      FakeMutationObserver,
+    )) as Record<string, unknown> | null;
+  }
+
+  function evaluateCompletion(document: BindingDocument, expression: string): boolean {
+    return Function(
+      "document",
+      "HTMLElement",
+      `return ${expression};`,
+    )(document, BindingElement) as boolean;
+  }
+
+  function makeFinishedAssistantTurn(
+    testId: string,
+    turnId: string,
+    messageId: string,
+    text: string,
+    finished = true,
+  ): BindingElement {
+    return new BindingElement({ "data-testid": testId }, "", [
+      new BindingElement(
+        {
+          "data-message-author-role": "assistant",
+          "data-turn-id": turnId,
+          "data-message-id": messageId,
+        },
+        text,
+        finished ? [new BindingElement({ "data-testid": "copy-turn-action-button" })] : [],
+      ),
+    ]);
+  }
+
+  const committedUser: ConversationTurnIdentity = {
+    turnId: "user-turn-10",
+    messageId: "user-message-10",
+    testId: "conversation-turn-10",
+    absoluteOrdinal: 10,
+  };
+
+  test("binds a placeholder assistant without a message ID", async () => {
+    const document = new BindingDocument([
+      makeTurn("conversation-turn-10", "user", "user-turn-10", "user-message-10"),
+      makeTurn("conversation-turn-11", "assistant", "assistant-turn-11"),
+    ]);
+    const runtime = {
+      evaluate: vi.fn().mockResolvedValue({
+        result: { value: evaluateBinding(document, committedUser) },
+      }),
+    };
+
+    await expect(bindAssistantTurnIdentity(runtime as never, committedUser, 0)).resolves.toEqual({
+      turnId: "assistant-turn-11",
+      messageId: null,
+      testId: "conversation-turn-11",
+      absoluteOrdinal: 11,
+    });
+  });
+
+  test("falls back to the immediate top-level assistant when no ordinal is available", () => {
+    const user = makeUnnumberedTurn("user", "user-without-ordinal");
+    const document = new BindingDocument([
+      makeUnnumberedTurn("assistant", "stale-assistant"),
+      user,
+      makeUnnumberedTurn("assistant", "owned-assistant"),
+      makeUnnumberedTurn("assistant", "unrelated-latest"),
+    ]);
+
+    expect(
+      evaluateBinding(document, {
+        turnId: "user-without-ordinal",
+        messageId: null,
+        testId: null,
+        absoluteOrdinal: null,
+      }),
+    ).toEqual({
+      turnId: "owned-assistant",
+      messageId: null,
+      testId: null,
+      absoluteOrdinal: null,
+    });
+  });
+
+  test("chooses the owned assistant over stale and unrelated latest assistants", () => {
+    const document = new BindingDocument([
+      makeTurn("conversation-turn-9", "assistant", "stale-assistant-9", "stale-message-9"),
+      makeTurn("conversation-turn-10", "user", "user-turn-10", "user-message-10"),
+      makeTurn("conversation-turn-11", "assistant", "owned-assistant-11", "owned-message-11"),
+      makeTurn("conversation-turn-12", "assistant", "latest-assistant-12", "latest-message-12"),
+    ]);
+
+    expect(evaluateBinding(document, committedUser)).toEqual({
+      turnId: "owned-assistant-11",
+      messageId: "owned-message-11",
+      testId: "conversation-turn-11",
+      absoluteOrdinal: 11,
+    });
+  });
+
+  test("does not infer an assistant when the committed user anchor is absent", () => {
+    const document = new BindingDocument([
+      makeTurn("conversation-turn-11", "assistant", "assistant-turn-11"),
+      makeTurn("conversation-turn-12", "assistant", "assistant-turn-12", "message-12"),
+    ]);
+
+    expect(evaluateBinding(document, committedUser)).toBeNull();
+  });
+
+  test("keeps the bound identity after a DOM prefix is removed", () => {
+    const stale = makeTurn("conversation-turn-9", "assistant", "stale-assistant-9");
+    const user = makeTurn("conversation-turn-10", "user", "user-turn-10", "user-message-10");
+    const owned = makeTurn("conversation-turn-11", "assistant", "owned-assistant-11");
+    const latest = makeTurn("conversation-turn-12", "assistant", "latest-assistant-12");
+    const document = new BindingDocument([stale, user, owned, latest]);
+
+    const first = evaluateBinding(document, committedUser);
+    document.roots.splice(0, 1);
+    const afterPrefixRemoval = evaluateBinding(document, committedUser);
+
+    expect(afterPrefixRemoval).toEqual(first);
+  });
+
+  test("rejects a contradictory user identity instead of choosing one field's node", () => {
+    const contradictoryUser = new BindingElement({ "data-testid": "conversation-turn-10" }, "", [
+      new BindingElement({
+        "data-message-author-role": "user",
+        "data-turn-id": "user-turn-10",
+        "data-message-id": "different-message-10",
+      }),
+    ]);
+    const document = new BindingDocument([
+      contradictoryUser,
+      makeTurn("conversation-turn-11", "assistant", "assistant-turn-11"),
+    ]);
+
+    expect(evaluateBinding(document, committedUser)).toBeNull();
+  });
+
+  test("accepts the owned assistant after its DOM index drops and IDs are refreshed", async () => {
+    const document = new BindingDocument([
+      makeTurn("conversation-turn-10", "user", "user-turn-10", "user-message-10"),
+      makeTurn(
+        "conversation-turn-11",
+        "assistant",
+        "assistant-turn-final",
+        "final-message",
+        "owned answer",
+      ),
+      makeTurn("conversation-turn-12", "assistant", "latest-assistant-12", "latest-message-12"),
+    ]);
+    const scope = {
+      committedUserTurn: committedUser,
+      committedAssistantTurn: {
+        turnId: "assistant-turn-placeholder",
+        messageId: "placeholder-message",
+        testId: "conversation-turn-11",
+        absoluteOrdinal: 11,
+      },
+    } satisfies AssistantResponseIdentityScope;
+    const expression = buildAssistantSnapshotExpressionForTest(99, undefined, scope);
+    const runtime = {
+      evaluate: vi.fn().mockResolvedValue({
+        result: { value: evaluateSnapshot(document, expression) },
+      }),
+    };
+
+    await expect(
+      readAssistantSnapshot(runtime as never, 99, undefined, scope),
+    ).resolves.toMatchObject({
+      text: "owned answer",
+      turnIndex: 1,
+    });
+    const snapshot = evaluateSnapshot(document, expression);
+    expect(snapshot).toMatchObject({ text: "owned answer", turnIndex: 1 });
+    expect(buildResponseObserverExpressionForTest(1_000, 99, undefined, scope)).toContain(
+      "if (!HAS_IDENTITY_SCOPE && MIN_TURN_INDEX >= 0)",
+    );
+  });
+
+  test("accepts turn-8 at current index 4 in [conversation-turn-4,5,6,7,8] after [conversation-turn-2,3,4,5,6] slides, even with legacy minTurnIndex 5", async () => {
+    const preSubmitDocument = new BindingDocument([
+      makeTurn("conversation-turn-2", "assistant", "assistant-turn-2", "assistant-message-2"),
+      makeTurn("conversation-turn-3", "user", "user-turn-3", "user-message-3"),
+      makeTurn("conversation-turn-4", "assistant", "assistant-turn-4", "assistant-message-4"),
+      makeTurn("conversation-turn-5", "user", "user-turn-5", "user-message-5"),
+      makeTurn("conversation-turn-6", "assistant", "assistant-turn-6", "assistant-message-6"),
+    ]);
+    const postSubmitDocument = new BindingDocument([
+      makeTurn("conversation-turn-4", "assistant", "assistant-turn-4", "assistant-message-4"),
+      makeTurn("conversation-turn-5", "user", "user-turn-5", "user-message-5"),
+      makeTurn("conversation-turn-6", "assistant", "assistant-turn-6", "assistant-message-6"),
+      makeTurn("conversation-turn-7", "user", "user-turn-7", "user-message-7"),
+      makeFinishedAssistantTurn(
+        "conversation-turn-8",
+        "assistant-turn-8",
+        "assistant-message-8",
+        "owned turn-8 answer",
+      ),
+    ]);
+    const committedUserTurn: ConversationTurnIdentity = {
+      turnId: "user-turn-7",
+      messageId: "user-message-7",
+      testId: "conversation-turn-7",
+      absoluteOrdinal: 7,
+    };
+    const scope: AssistantResponseIdentityScope = {
+      committedUserTurn,
+      committedAssistantTurn: null,
+    };
+
+    expect(evaluateTurnCount(preSubmitDocument)).toBe(5);
+    expect(evaluateTurnCount(postSubmitDocument)).toBe(5);
+    expect(postSubmitDocument.roots.map((turn) => turn.getAttribute("data-testid"))).toEqual([
+      "conversation-turn-4",
+      "conversation-turn-5",
+      "conversation-turn-6",
+      "conversation-turn-7",
+      "conversation-turn-8",
+    ]);
+    expect(evaluateBinding(postSubmitDocument, committedUserTurn)).toEqual({
+      turnId: "assistant-turn-8",
+      messageId: "assistant-message-8",
+      testId: "conversation-turn-8",
+      absoluteOrdinal: 8,
+    });
+
+    const snapshotExpression = buildAssistantSnapshotExpressionForTest(5, undefined, scope);
+    const runtime = {
+      evaluate: vi.fn().mockResolvedValue({
+        result: { value: evaluateSnapshot(postSubmitDocument, snapshotExpression) },
+      }),
+    };
+    await expect(
+      readAssistantSnapshot(runtime as never, 5, undefined, scope),
+    ).resolves.toMatchObject({
+      text: "owned turn-8 answer",
+      turnIndex: 4,
+    });
+
+    vi.useFakeTimers();
+    try {
+      const observerResult = evaluateObserver(
+        postSubmitDocument,
+        buildResponseObserverExpressionForTest(1_000, 5, undefined, scope),
+      );
+      await vi.advanceTimersByTimeAsync(400);
+      await expect(observerResult).resolves.toMatchObject({
+        text: "owned turn-8 answer",
+        turnIndex: 4,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("binds the owned assistant from the committed user when the scope has no assistant yet", () => {
+    const document = new BindingDocument([
+      makeTurn("conversation-turn-10", "user", "user-turn-10", "user-message-10"),
+      makeTurn(
+        "conversation-turn-11",
+        "assistant",
+        "assistant-turn-bound",
+        "bound-message",
+        "bound answer",
+      ),
+      makeTurn("conversation-turn-12", "assistant", "latest-assistant-12", "latest-message-12"),
+    ]);
+    const scope: AssistantResponseIdentityScope = {
+      committedUserTurn: committedUser,
+      committedAssistantTurn: null,
+    };
+
+    expect(
+      evaluateSnapshot(document, buildAssistantSnapshotExpressionForTest(99, undefined, scope)),
+    ).toMatchObject({ text: "bound answer", turnIndex: 1 });
+  });
+
+  test("rejects a different latest assistant instead of using the stable-scope fallback", () => {
+    const document = new BindingDocument([
+      makeTurn("conversation-turn-10", "user", "user-turn-10", "user-message-10"),
+      makeTurn(
+        "conversation-turn-12",
+        "assistant",
+        "latest-assistant-12",
+        "latest-message-12",
+        "unrelated latest",
+      ),
+    ]);
+    const scope: AssistantResponseIdentityScope = {
+      committedUserTurn: committedUser,
+      committedAssistantTurn: {
+        turnId: "assistant-turn-11",
+        messageId: "owned-message-11",
+        testId: "conversation-turn-11",
+        absoluteOrdinal: 11,
+      },
+    };
+
+    expect(
+      evaluateSnapshot(document, buildAssistantSnapshotExpressionForTest(0, undefined, scope)),
+    ).toBeNull();
+  });
+
+  test("does not return turn-6 or unrelated turn-9 when [conversation-turn-6,7] lacks owned turn-8", () => {
+    const committedUserTurn: ConversationTurnIdentity = {
+      turnId: "user-turn-7",
+      messageId: "user-message-7",
+      testId: "conversation-turn-7",
+      absoluteOrdinal: 7,
+    };
+    const scope: AssistantResponseIdentityScope = {
+      committedUserTurn,
+      committedAssistantTurn: null,
+    };
+    const postSubmitWithoutOwnedAssistant = new BindingDocument([
+      makeFinishedAssistantTurn(
+        "conversation-turn-6",
+        "assistant-turn-6",
+        "assistant-message-6",
+        "completed turn-6 answer",
+      ),
+      makeTurn("conversation-turn-7", "user", "user-turn-7", "user-message-7", "new prompt"),
+    ]);
+
+    expect(
+      evaluateSnapshot(
+        postSubmitWithoutOwnedAssistant,
+        buildAssistantSnapshotExpressionForTest(5, undefined, scope),
+      ),
+    ).toBeNull();
+
+    const unrelatedLatestAssistant = new BindingDocument([
+      ...postSubmitWithoutOwnedAssistant.roots,
+      makeFinishedAssistantTurn(
+        "conversation-turn-9",
+        "assistant-turn-9",
+        "assistant-message-9",
+        "unrelated latest answer",
+      ),
+    ]);
+    expect(
+      evaluateSnapshot(
+        unrelatedLatestAssistant,
+        buildAssistantSnapshotExpressionForTest(5, undefined, scope),
+      ),
+    ).toBeNull();
+    expect(evaluateBinding(unrelatedLatestAssistant, committedUserTurn)).toBeNull();
+  });
+
+  test("correlates completion action bars to the same scoped assistant turn", () => {
+    const scope: AssistantResponseIdentityScope = {
+      committedUserTurn: committedUser,
+      committedAssistantTurn: {
+        turnId: "assistant-turn-11",
+        messageId: "owned-message-11",
+        testId: "conversation-turn-11",
+        absoluteOrdinal: 11,
+      },
+    };
+    const expression = buildCompletionVisibilityExpressionForTest({}, 99, scope);
+    const ownedWithAction = new BindingDocument([
+      makeTurn("conversation-turn-10", "user", "user-turn-10", "user-message-10"),
+      makeFinishedAssistantTurn(
+        "conversation-turn-11",
+        "assistant-turn-final",
+        "final-message",
+        "owned answer",
+      ),
+      makeFinishedAssistantTurn(
+        "conversation-turn-12",
+        "latest-assistant-12",
+        "latest-message-12",
+        "latest answer",
+      ),
+    ]);
+    expect(evaluateCompletion(ownedWithAction, expression)).toBe(true);
+
+    const onlyLatestHasAction = new BindingDocument([
+      makeTurn("conversation-turn-10", "user", "user-turn-10", "user-message-10"),
+      makeFinishedAssistantTurn(
+        "conversation-turn-11",
+        "assistant-turn-final",
+        "final-message",
+        "owned answer",
+        false,
+      ),
+      makeFinishedAssistantTurn(
+        "conversation-turn-12",
+        "latest-assistant-12",
+        "latest-message-12",
+        "latest answer",
+      ),
+    ]);
+    expect(evaluateCompletion(onlyLatestHasAction, expression)).toBe(false);
   });
 });
 
