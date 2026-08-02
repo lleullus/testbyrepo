@@ -20,7 +20,6 @@ type ThinkingTimeOutcome = (
   | { status: "menu-not-found"; diagnostic?: ThinkingTimePickerDiagnostic }
   | { status: "option-not-found"; diagnostic?: ThinkingTimePickerDiagnostic }
   | { status: "selection-unverified"; diagnostic?: ThinkingTimePickerDiagnostic }
-  | { status: "model-changed"; diagnostic?: ThinkingTimePickerDiagnostic }
   | {
       status: "model-kind-not-found";
       diagnostic?: ThinkingTimePickerDiagnostic;
@@ -53,8 +52,8 @@ function logPickerDiagnostic(result: ThinkingTimeOutcome | undefined, logger: Br
 /**
  * Selects a thinking-time level in ChatGPT's composer.
  *
- * Missing controls remain best-effort except explicit Pro effort and model
- * mutation, which fail closed.
+ * Missing controls remain best-effort except Pro Extended, which fails closed
+ * unless the selected option is confirmed.
  */
 export async function ensureThinkingTime(
   Runtime: ChromeClient["Runtime"],
@@ -67,9 +66,7 @@ export async function ensureThinkingTime(
   const targetModelKind = inferThinkingTargetModelKind(desiredModel);
   const observedModelKind = result && "modelKind" in result ? result.modelKind : null;
   const strictProEffort =
-    level === "pro" ||
-    ((targetModelKind === "pro" || observedModelKind === "pro") && level === "extended");
-  const strictEffortLabel = level === "pro" ? "Pro effort" : "Pro Extended";
+    (targetModelKind === "pro" || observedModelKind === "pro") && level === "extended";
 
   switch (result?.status) {
     case "already-selected":
@@ -93,24 +90,17 @@ export async function ensureThinkingTime(
             : "";
       const message = `Thinking time: ${result.status.replaceAll("-", " ")}${kindHint} (requested ${capitalizedLevel})`;
       if (strictProEffort) {
-        throw new Error(`${message}; refusing to submit without confirmed ${strictEffortLabel}.`);
+        throw new Error(`${message}; refusing to submit without confirmed Pro Extended.`);
       }
       logger(formatBrowserThinkingLog(`${message}; continuing with ChatGPT default.`));
       return;
-    }
-    case "model-changed": {
-      await logDomFailure(Runtime, logger, "thinking-model-changed");
-      logPickerDiagnostic(result, logger);
-      throw new Error(
-        `Thinking time: model changed while selecting ${capitalizedLevel}; refusing to submit.`,
-      );
     }
     default: {
       await logDomFailure(Runtime, logger, "thinking-time-unknown");
       logPickerDiagnostic(result, logger);
       if (strictProEffort) {
         throw new Error(
-          `Thinking time: unknown outcome selecting ${capitalizedLevel}; refusing to submit without confirmed ${strictEffortLabel}.`,
+          `Thinking time: unknown outcome selecting ${capitalizedLevel}; refusing to submit without confirmed Pro Extended.`,
         );
       }
       logger(
@@ -126,7 +116,7 @@ export async function ensureThinkingTime(
 /**
  * Best-effort selection of a thinking time level in ChatGPT's composer pill menu.
  * Safe by default: if the pill/menu/option isn't present, we continue without throwing.
- * @param level - The thinking time intensity: 'light', 'standard', 'extended', 'heavy', or 'pro'
+ * @param level - The thinking time intensity: 'light', 'standard', 'extended', or 'heavy'
  */
 export async function ensureThinkingTimeIfAvailable(
   Runtime: ChromeClient["Runtime"],
@@ -150,7 +140,6 @@ export async function ensureThinkingTimeIfAvailable(
       case "option-not-found":
       case "selection-unverified":
       case "model-kind-not-found":
-      case "model-changed":
         if (logger.verbose) {
           logger(
             formatBrowserThinkingLog(
@@ -218,7 +207,6 @@ function buildThinkingTimeExpression(
       standard: ['standard', 'medium', '标准', '中'],
       extended: ['extended', 'high', '扩展', '深度', '加强', '高'],
       heavy: ['heavy', 'extra high', '重度', '加重', '极高'],
-      pro: ['pro'],
     };
     const targetTokens = LEVEL_TOKENS[TARGET_LEVEL] || [TARGET_LEVEL];
 
@@ -318,8 +306,6 @@ function buildThinkingTimeExpression(
 
     const TRAILING_SELECTOR = '[data-model-picker-thinking-effort-action="true"]';
     const INTELLIGENCE_MENU_SELECTOR = '[data-testid="composer-intelligence-picker-content"]';
-    const MODERN_SIMPLE_SELECTOR = '[data-testid="composer-model-picker-slider-simple-view"]';
-    const MODERN_ADVANCED_SELECTOR = '[data-testid="composer-model-picker-slider-advanced-view"]';
     const PRO_EFFORT_TRIGGER_SELECTOR = '[data-testid="composer-intelligence-pro-thinking-effort-trigger"]';
 
     const findModelButton = () => document.querySelector(MODEL_BUTTON_SELECTOR);
@@ -392,20 +378,10 @@ function buildThinkingTimeExpression(
           isVisible,
         );
         const modelBtn = findModelButton();
-        const modernRoots = Array.from(document.querySelectorAll(INTELLIGENCE_MENU_SELECTOR)).filter(
-          isVisible,
-        );
         return {
           targetModelKind: TARGET_MODEL_KIND,
           targetLevel: TARGET_LEVEL,
           modelButton: describeNode(modelBtn),
-          modernRootCount: modernRoots.length,
-          modernRoots: modernRoots.slice(0, 2).map((root) => ({
-            root: describeNode(root),
-            simple: describeNode(root.querySelector?.(MODERN_SIMPLE_SELECTOR)),
-            advanced: describeNode(root.querySelector?.(MODERN_ADVANCED_SELECTOR)),
-            slider: describeNode(root.querySelector?.('[role="slider"]')),
-          })),
           composerButtons: composerButtons.slice(0, 12).map(describeNode),
           trailingCount: trailings.length,
           trailings: trailings.slice(0, 12).map(describeNode),
@@ -445,160 +421,6 @@ function buildThinkingTimeExpression(
       ...extra,
       diagnostic: collectPickerDiagnostic(),
     });
-    const MODERN_EFFORTS = {
-      light: { label: 'Instant', index: 0 },
-      standard: { label: 'Medium', index: 1 },
-      extended: { label: 'High', index: 2 },
-      heavy: { label: 'Extra High', index: 3 },
-      pro: { label: 'Pro', index: 4 },
-    };
-    const MODERN_LABELS = Object.values(MODERN_EFFORTS).map((entry) => entry.label);
-    const exactNodeLabel = (node) => String(
-      (node?.textContent ?? '') || (node?.getAttribute?.('aria-label') ?? ''),
-    ).replace(/\\s+/g, ' ').trim();
-    const parseModernRow = (row, prefix) => {
-      const text = exactNodeLabel(row);
-      if (text.slice(0, prefix.length).toLowerCase() !== prefix.toLowerCase()) return null;
-      const value = text.slice(prefix.length).trim();
-      return value ? { row, value } : null;
-    };
-    const parseModernAdvanced = (advanced) => {
-      const text = exactNodeLabel(advanced);
-      const rows = Array.from(
-        advanced?.querySelectorAll?.('[role="menuitem"], [role="menuitemradio"]') ?? [],
-      ).filter(isVisible);
-      const modelRows = rows.map((row) => parseModernRow(row, 'Model')).filter(Boolean);
-      const effortRows = rows.map((row) => parseModernRow(row, 'Effort')).filter(Boolean);
-      if (modelRows.length === 1 && effortRows.length === 1) {
-        const effort = MODERN_LABELS.find(
-          (label) => label.toLowerCase() === effortRows[0].value.toLowerCase(),
-        );
-        if (effort) {
-          return { model: modelRows[0].value, effort, effortTrigger: effortRows[0].row };
-        }
-        return null;
-      }
-      if (modelRows.length > 0 || effortRows.length > 0) return null;
-
-      if (text.slice(0, 5).toLowerCase() !== 'model') return null;
-      const body = text.slice(5).trimStart();
-      for (const label of [...MODERN_LABELS].sort((a, b) => b.length - a.length)) {
-        for (const suffix of ['Effort' + label, 'Effort ' + label]) {
-          if (!body.toLowerCase().endsWith(suffix.toLowerCase())) continue;
-          const model = body.slice(0, -suffix.length).trim();
-          if (model) return { model, effort: label, effortTrigger: null };
-        }
-      }
-      return null;
-    };
-    const visibleModernRoots = () =>
-      Array.from(document.querySelectorAll(INTELLIGENCE_MENU_SELECTOR)).filter(isVisible);
-    const modernParts = (root) => ({
-      simple: root?.querySelector?.(MODERN_SIMPLE_SELECTOR) ?? null,
-      advanced: root?.querySelector?.(MODERN_ADVANCED_SELECTOR) ?? null,
-      slider: root?.querySelector?.('[role="slider"]') ?? null,
-    });
-    const modernSliderIsValid = (slider) => {
-      const rect = slider?.getBoundingClientRect?.();
-      const current = Number(slider?.getAttribute?.('aria-valuenow'));
-      return Boolean(
-        rect && rect.width > 0 && rect.height > 0 &&
-        slider.getAttribute?.('aria-valuemin') === '0' &&
-        slider.getAttribute?.('aria-valuemax') === '4' &&
-        Number.isInteger(current) && current >= 0 && current <= 4
-      );
-    };
-    const modernCorroborates = (parts, target) => {
-      const summary = exactNodeLabel(parts.simple).toLowerCase();
-      return (
-        modernSliderIsValid(parts.slider) &&
-        parts.slider?.getAttribute?.('aria-valuenow') === String(target.index) &&
-        summary.startsWith((target.label + ', ' + (target.index + 1) + ' of 5').toLowerCase())
-      );
-    };
-    const exactModernOption = (menu, targetLabel) => {
-      const matches = Array.from(
-        menu?.querySelectorAll?.('[role="menuitem"], [role="menuitemradio"], [role="option"]') ?? [],
-      ).filter(
-        (node) => isVisible(node) && exactNodeLabel(node).toLowerCase() === targetLabel.toLowerCase(),
-      );
-      return matches.length === 1 ? matches[0] : null;
-    };
-    const selectModernIntelligenceEffort = async (root) => {
-      const target = MODERN_EFFORTS[TARGET_LEVEL];
-      const parts = modernParts(root);
-      const before = parseModernAdvanced(parts.advanced);
-      if (
-        !target || !isVisible(parts.simple) || !isVisible(parts.advanced) ||
-        !modernSliderIsValid(parts.slider) || !before
-      ) {
-        return failure('selection-unverified', { modernReason: 'malformed-root' });
-      }
-      if (before.effort === target.label && modernCorroborates(parts, target)) {
-        return { status: 'already-selected', label: target.label, modelKind: effectiveTargetModelKind() };
-      }
-      const trigger = before.effortTrigger;
-      if (!trigger) return failure('selection-unverified', { modernReason: 'effort-trigger-not-found' });
-
-      const visibleMenusBefore = new Set(
-        Array.from(document.querySelectorAll(MENU_CONTAINER_SELECTOR)).filter(isVisible),
-      );
-      dispatchClickSequence(trigger);
-      const menuDeadline = performance.now() + MAX_WAIT_MS;
-      let effortMenu = null;
-      while (performance.now() < menuDeadline) {
-        const controlledId = trigger.getAttribute?.('aria-controls');
-        const controlled = controlledId ? document.getElementById?.(controlledId) : null;
-        if (controlled && isVisible(controlled)) {
-          effortMenu = controlled;
-        } else {
-          const newlyVisible = Array.from(document.querySelectorAll(MENU_CONTAINER_SELECTOR)).filter(
-            (menu) => isVisible(menu) && !visibleMenusBefore.has(menu),
-          );
-          const ownedCandidates = newlyVisible.filter((menu) =>
-            MODERN_LABELS.filter((label) => exactModernOption(menu, label)).length >= 3,
-          );
-          if (ownedCandidates.length === 1) effortMenu = ownedCandidates[0];
-        }
-        if (effortMenu) break;
-        await sleep(100);
-      }
-      if (!effortMenu) return failure('menu-not-found');
-      const option = exactModernOption(effortMenu, target.label);
-      if (!option) return failure('option-not-found');
-      dispatchClickSequence(option);
-      await sleep(STEP_WAIT_MS);
-
-      const verifyDeadline = performance.now() + 2000;
-      while (performance.now() < verifyDeadline) {
-        let currentRoots = visibleModernRoots();
-        if (currentRoots.length === 0) {
-          const button = findModelButton();
-          if (button?.getAttribute?.('aria-expanded') !== 'true') dispatchClickSequence(button);
-          await sleep(INITIAL_WAIT_MS);
-          currentRoots = visibleModernRoots();
-        }
-        if (currentRoots.length !== 1) {
-          await sleep(100);
-          continue;
-        }
-        const current = modernParts(currentRoots[0]);
-        const after = parseModernAdvanced(current.advanced);
-        if (after?.model && after.model !== before.model) {
-          return failure('model-changed', { beforeModel: before.model, afterModel: after.model });
-        }
-        if (
-          after?.model === before.model &&
-          after.effort === target.label &&
-          modernCorroborates(current, target)
-        ) {
-          closeOpenMenus();
-          return { status: 'switched', label: target.label, modelKind: effectiveTargetModelKind() };
-        }
-        await sleep(100);
-      }
-      return failure('selection-unverified', { modernReason: 'post-selection-state-unverified' });
-    };
     const findOptionInMenu = (menu, modelKindOverride = null) => {
       const items = Array.from(menu.querySelectorAll(MENU_ITEM_SELECTOR));
       const modelKind = modelKindOverride || effectiveTargetModelKind();
@@ -879,29 +701,6 @@ function buildThinkingTimeExpression(
     };
     let composerEffortPill = findComposerEffortPill();
     let modelBtn = findModelButton();
-    let modernRoots = visibleModernRoots();
-    if (modernRoots.length === 0) {
-      const pickerCandidates = Array.from(document.querySelectorAll(MODEL_BUTTON_SELECTOR)).filter(
-        isVisible,
-      );
-      if (modelBtn && pickerCandidates.length === 1 && pickerCandidates[0] === modelBtn) {
-        const candidate = pickerCandidates[0];
-        if (candidate.getAttribute?.('aria-expanded') !== 'true') {
-          dispatchClickSequence(candidate);
-          await sleep(INITIAL_WAIT_MS);
-        }
-        const intelligenceDeadline = performance.now() + INTELLIGENCE_WAIT_MS;
-        while (performance.now() < intelligenceDeadline) {
-          modernRoots = visibleModernRoots();
-          if (modernRoots.length > 0) break;
-          await sleep(100);
-        }
-      }
-    }
-    if (modernRoots.length > 0) {
-      if (modernRoots.length !== 1) return failure('selection-unverified');
-      return selectModernIntelligenceEffort(modernRoots[0]);
-    }
     const modelKindFromLegacyTrailing = (trailing) => {
       const row = trailing.closest?.(
         '[role="menuitem"], [role="menuitemradio"], [data-radix-collection-item]',
