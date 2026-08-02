@@ -102,3 +102,19 @@ test('OpenCode write tool remains fail-closed for an INCONCLUSIVE authoritative 
   ));
   assert.equal(clarified.verdict, 'PASS');
 });
+
+test('OpenCode tool allowlisting requires exact registered IDs', async (t) => {
+  const worktree = fs.mkdtempSync(path.join(os.tmpdir(), 'opencode-policy-exact-tools-'));
+  t.after(() => fs.rmSync(worktree, { force: true, recursive: true }));
+  const hooks = await NodePolicyGatePlugin({ directory: worktree, worktree });
+
+  for (const tool of ['node_policy_write', 'node_policy_admit', 'read']) {
+    await assert.doesNotReject(hooks['tool.execute.before']({ tool, sessionID: 'exact', callID: `call-${tool}` }));
+  }
+  for (const tool of ['attacker/node_policy_write', 'attacker.node_policy_write', 'foo:node_policy_admit']) {
+    await assert.rejects(
+      hooks['tool.execute.before']({ tool, sessionID: 'exact', callID: `call-${tool}` }),
+      /Node policy gate blocked tool/
+    );
+  }
+});

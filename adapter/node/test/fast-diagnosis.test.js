@@ -477,3 +477,120 @@ test('fast API accepts an internal dependency allowed by fixed observed-boundary
   assert.equal(boundaryCheck.boundaryEvidenceSource, 'fixture pre-change observation');
   assert.equal(digest(directory), before);
 });
+
+test('fast dependency graph resolves nested and baseUrl-only TypeScript imports, but keeps broken aliases external', (t) => {
+  const valid = makeProject({
+    'package.json': JSON.stringify({ name: 'fast-nested-alias' }),
+    'packages/app/tsconfig.json': JSON.stringify({ compilerOptions: { strict: true, baseUrl: '.', paths: { '@/*': ['src/*'] } } }),
+    'packages/app/src/index.ts': "import { value } from '@/value';\nexport const result: number = value;\n",
+    'packages/app/src/value.ts': 'export const value: number = 1;\n'
+  });
+  const baseUrl = makeProject({
+    'package.json': JSON.stringify({ name: 'fast-baseurl' }),
+    'tsconfig.json': JSON.stringify({ compilerOptions: { strict: true, baseUrl: 'src' } }),
+    'src/index.ts': "import { value } from 'shared';\nexport const result: number = value;\n",
+    'src/shared.ts': 'export const value: number = 1;\n'
+  });
+  const broken = makeProject({
+    'package.json': JSON.stringify({ name: 'fast-broken-alias' }),
+    'tsconfig.json': JSON.stringify({ compilerOptions: { strict: true, baseUrl: 'src' } }),
+    'src/index.ts': "import { value } from 'missing';\nexport const result: number = value;\n"
+  });
+  t.after(() => removeProject(valid));
+  t.after(() => removeProject(baseUrl));
+  t.after(() => removeProject(broken));
+
+  const validResult = diagnoseFastProject(valid, { boundaryEvidence: observedBoundaryEvidence(valid, [{ from: 'packages/app', to: 'packages/app' }]) });
+  const baseResult = diagnoseFastProject(baseUrl, { boundaryEvidence: observedBoundaryEvidence(baseUrl, [{ from: 'src', to: 'src' }]) });
+  const brokenResult = diagnoseFastProject(broken, { boundaryEvidence: observedBoundaryEvidence(broken) });
+
+  assert.ok(validResult.details.dependencyGraph.edges.some((edge) => edge.to === 'packages/app/src/value.ts'));
+  assert.ok(baseResult.details.dependencyGraph.edges.some((edge) => edge.to === 'src/shared.ts'));
+  assert.equal(brokenResult.verdict, 'PASS');
+  assert.ok(!brokenResult.details.dependencyGraph.unknown.some((item) => item.specifier === 'missing'));
+});
+
+test('fast TypeScript resolution merges local extends with declaring-config path origins', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'fast-extended-alias' }),
+    'configs/base/tsconfig.json': JSON.stringify({ compilerOptions: { strict: true, baseUrl: 'src', paths: { '@/*': ['*'] } } }),
+    'configs/base/src/value.ts': 'export const value: number = 1;\n',
+    'packages/app/tsconfig.json': JSON.stringify({ extends: '../../configs/base/tsconfig.json' }),
+    'packages/app/src/index.ts': "import { value } from '@/value';\nexport const result: number = value;\n"
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseFastProject(directory, {
+    boundaryEvidence: observedBoundaryEvidence(directory, [{ from: 'packages/app', to: 'configs' }])
+  });
+
+  assert.equal(result.details.dependencyGraph.unknown.length, 0);
+  assert.ok(result.details.dependencyGraph.edges.some((edge) => {
+    return edge.from === 'packages/app/src/index.ts' && edge.to === 'configs/base/src/value.ts';
+  }));
+});
+
+test('fast TypeScript strictness fails closed for an extends cycle', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'fast-cyclic-tsconfig' }),
+    'packages/app/tsconfig.json': JSON.stringify({ extends: '../base/tsconfig.json', compilerOptions: { strict: true } }),
+    'packages/base/tsconfig.json': JSON.stringify({ extends: '../app/tsconfig.json', compilerOptions: { strict: true } }),
+    'packages/app/src/index.ts': 'export const value: number = 1;\n'
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseFastProject(directory, {
+    boundaryEvidence: observedBoundaryEvidence(directory)
+  });
+
+  assert.equal(fastCheck(result, 'typescript-strict').verdict, 'INCONCLUSIVE');
+  assert.equal(fastCheck(result, 'typescript-strict').evidence[0].status, 'invalid');
+});
+
+test('fast TypeScript resolution rejects an external extends symlink under ignored node_modules', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'fast-external-extends-symlink' }),
+    'node_modules-marker.js': 'module.exports = true;\n',
+    'packages/app/tsconfig.json': JSON.stringify({ extends: '../../node_modules/shared/tsconfig.json' }),
+    'packages/app/src/index.ts': 'export const value: number = 1;\n'
+  });
+  const linkedConfig = path.join(directory, 'node_modules', 'shared', 'tsconfig.json');
+  fs.mkdirSync(path.dirname(linkedConfig), { recursive: true });
+  fs.symlinkSync(path.join(__dirname, '..', 'package.json'), linkedConfig);
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseFastProject(directory, {
+    boundaryEvidence: observedBoundaryEvidence(directory)
+  });
+
+  const strictCheck = fastCheck(result, 'typescript-strict');
+  assert.equal(strictCheck.verdict, 'INCONCLUSIVE');
+  assert.equal(strictCheck.evidence[0].status, 'unsupported');
+});
+
+test('fast TypeScript resolution chooses the most specific paths pattern and preserves explicit alias failures', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'fast-specific-paths' }),
+    'tsconfig.json': JSON.stringify({ compilerOptions: {
+      strict: true,
+      baseUrl: '.',
+      paths: {
+        '@/*': ['fallback/*'],
+        '@app/*': ['specific/*'],
+        '@missing/*': ['missing/*']
+      }
+    } }),
+    'src/index.ts': "import { value } from '@app/value';\nimport { missing } from '@missing/value';\nexport const result = value || missing;\n",
+    'fallback/app/value.ts': 'export const value = 0;\n',
+    'specific/value.ts': 'export const value = 1;\n'
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseFastProject(directory, {
+    boundaryEvidence: observedBoundaryEvidence(directory)
+  });
+
+  assert.equal(result.verdict, 'INCONCLUSIVE');
+  assert.ok(result.details.dependencyGraph.edges.some((edge) => edge.to === 'specific/value.ts'));
+  assert.ok(result.details.dependencyGraph.unknown.some((item) => item.specifier === '@missing/value'));
+});

@@ -138,6 +138,138 @@ test('keeps an unconfigured nested TypeScript source inconclusive with path evid
   assert.ok(risk.evidence.some((evidence) => evidence.path === 'tests/fixtures/unconfigured/src/index.ts'));
 });
 
+test('resolves aliases using the nearest nested tsconfig and its baseUrl', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'nested-aliases' }),
+    'src/index.js': 'module.exports = true;\n',
+    'packages/app/tsconfig.json': JSON.stringify({ compilerOptions: { strict: true, baseUrl: '.', paths: { '@/*': ['src/*'] } } }),
+    'packages/app/src/index.ts': "import { value } from '@/value';\nexport const result: number = value;\n",
+    'packages/app/src/value.ts': 'export const value: number = 1;\n'
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseProject(directory);
+
+  assert.equal(result.verdict, 'PASS');
+  assert.ok(result.details.dependencyDirection.internalReferences.some((reference) => {
+    return reference.path === 'packages/app/src/index.ts' && reference.target === 'packages/app/src/value.ts';
+  }));
+});
+
+test('merges local tsconfig extends and resolves inherited paths from the declaring config directory', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'extended-aliases', main: 'src/index.js' }),
+    'src/index.js': 'module.exports = true;\n',
+    'configs/base/tsconfig.json': JSON.stringify({ compilerOptions: { strict: true, baseUrl: 'src', paths: { '@/*': ['*'] } } }),
+    'configs/base/src/value.ts': 'export const value: number = 1;\n',
+    'packages/app/tsconfig.json': JSON.stringify({ extends: '../../configs/base/tsconfig.json' }),
+    'packages/app/src/index.ts': "import { value } from '@/value';\nexport const result: number = value;\n"
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseProject(directory);
+
+  assert.equal(result.verdict, 'PASS');
+  assert.ok(result.details.dependencyDirection.internalReferences.some((reference) => {
+    return reference.path === 'packages/app/src/index.ts' && reference.target === 'configs/base/src/value.ts';
+  }));
+});
+
+test('selects the most specific matching TypeScript path pattern', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'specific-paths', main: 'src/index.ts' }),
+    'tsconfig.json': JSON.stringify({ compilerOptions: {
+      baseUrl: '.',
+      paths: {
+        '@/*': ['fallback/*'],
+        '@app/*': ['specific/*']
+      }
+    } }),
+    'src/index.ts': "import { value } from '@app/value';\nexport const result: number = value;\n",
+    'fallback/app/value.ts': 'export const value = 0;\n',
+    'specific/value.ts': 'export const value = 1;\n'
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseProject(directory);
+
+  assert.equal(result.verdict, 'PASS');
+  assert.ok(result.details.dependencyDirection.internalReferences.some((reference) => {
+    return reference.path === 'src/index.ts' && reference.target === 'specific/value.ts';
+  }));
+});
+
+test('fails closed for a cycle in a local tsconfig extends chain', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'cyclic-tsconfig', main: 'src/index.js' }),
+    'src/index.js': 'module.exports = true;\n',
+    'packages/app/tsconfig.json': JSON.stringify({ extends: '../base/tsconfig.json', compilerOptions: { strict: true } }),
+    'packages/base/tsconfig.json': JSON.stringify({ extends: '../app/tsconfig.json', compilerOptions: { baseUrl: '.' } }),
+    'packages/app/src/index.ts': 'export const value: number = 1;\n'
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseProject(directory);
+
+  assert.equal(result.verdict, 'INCONCLUSIVE');
+  assert.ok(result.risks.some((risk) => risk.code === 'required-invalid-tsconfig.json'));
+});
+
+test('fails closed when a tsconfig extends an external symlink under ignored node_modules', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'external-extends-symlink', main: 'src/index.js' }),
+    'src/index.js': 'module.exports = true;\n',
+    'packages/app/tsconfig.json': JSON.stringify({ extends: '../../node_modules/shared/tsconfig.json' }),
+    'packages/app/src/index.ts': 'export const value: number = 1;\n'
+  });
+  const linkedConfig = path.join(directory, 'node_modules', 'shared', 'tsconfig.json');
+  fs.mkdirSync(path.dirname(linkedConfig), { recursive: true });
+  fs.symlinkSync(path.join(__dirname, '..', 'package.json'), linkedConfig);
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseProject(directory);
+
+  assert.equal(result.verdict, 'INCONCLUSIVE');
+  assert.ok(result.risks.some((risk) => risk.code === 'required-unsupported-tsconfig.json'));
+});
+
+test('resolves a valid baseUrl-only import and leaves a missing baseUrl fallback external', (t) => {
+  const valid = makeProject({
+    'package.json': JSON.stringify({ name: 'baseurl-only' }),
+    'tsconfig.json': JSON.stringify({ compilerOptions: { strict: true, baseUrl: 'src' } }),
+    'src/index.ts': "import { value } from 'shared';\nexport const result: number = value;\n",
+    'src/shared.ts': 'export const value: number = 1;\n'
+  });
+  const external = makeProject({
+    'package.json': JSON.stringify({ name: 'external-baseurl', dependencies: { react: '^1.0.0' } }),
+    'tsconfig.json': JSON.stringify({ compilerOptions: { strict: true, baseUrl: 'src' } }),
+    'src/index.ts': "import React from 'react';\nexport const result = React;\n"
+  });
+  t.after(() => removeProject(valid));
+  t.after(() => removeProject(external));
+
+  const validResult = diagnoseProject(valid);
+  const externalResult = diagnoseProject(external);
+
+  assert.equal(validResult.verdict, 'PASS');
+  assert.equal(externalResult.verdict, 'PASS');
+  assert.ok(externalResult.details.dependencyDirection.externalImports.some((item) => item.specifier === 'react'));
+});
+
+test('reports a missing explicit paths mapping as an unresolved alias', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'broken-explicit-alias' }),
+    'tsconfig.json': JSON.stringify({ compilerOptions: { strict: true, paths: { '@/*': ['src/*'] } } }),
+    'src/index.ts': "import { value } from '@/missing';\nexport const result: number = value;\n"
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseProject(directory);
+
+  assert.equal(result.verdict, 'FAIL');
+  assert.ok(result.risks.some((risk) => risk.code === 'unresolved-path-alias'));
+});
+
 test('uses INCONCLUSIVE for a TypeScript source with an invalid containing tsconfig', (t) => {
   const directory = makeProject({
     'package.json': JSON.stringify({ name: 'invalid-nested-tsconfig' }),
@@ -169,6 +301,153 @@ test('uses FAIL for an observed unresolved relative import', (t) => {
   const failure = result.risks.find((risk) => risk.code === 'unresolved-relative-import');
   assert.equal(failure.evidence[0].path, 'src/index.js');
   assert.equal(failure.evidence[0].specifier, './missing');
+});
+
+test('a skipped source symlink makes structural diagnosis INCONCLUSIVE', (t) => {
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'node-policy-checker-diagnosis-symlink-'));
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'symlink-source', main: 'src/index.js' }),
+    'src/index.js': 'exports.value = 1;\n'
+  });
+  fs.writeFileSync(path.join(outside, 'outside.js'), 'exports.outside = true;\n');
+  fs.symlinkSync(path.join(outside, 'outside.js'), path.join(directory, 'src', 'linked.js'));
+  t.after(() => removeProject(directory));
+  t.after(() => removeProject(outside));
+
+  const result = diagnoseProject(directory);
+
+  assert.equal(result.verdict, 'INCONCLUSIVE');
+  assert.ok(result.risks.some((risk) => risk.code === 'skipped-symbolic-link' && risk.severity === 'inconclusive'));
+});
+
+test('configured missing package execution entry is not reported as PASS', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'missing-entry', main: 'missing.js' }),
+    'src/index.js': 'exports.value = 1;\n'
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseProject(directory);
+
+  assert.equal(result.verdict, 'INCONCLUSIVE');
+  assert.equal(result.details.repositoryAuthority.executionPaths.length, 0);
+  assert.equal(result.details.repositoryAuthority.canonicalSsot, null);
+  assert.ok(result.risks.some((risk) => risk.code === 'execution-entry-unresolved'));
+});
+
+test('root main and bin entries resolve as observed execution paths', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'root-entries', main: 'index.js', bin: 'cli.js' }),
+    'index.js': 'exports.value = 1;\n',
+    'cli.js': '#!/usr/bin/env node\n'
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseProject(directory);
+
+  assert.equal(result.verdict, 'PASS');
+  assert.deepEqual(result.details.repositoryAuthority.executionPaths, ['cli.js', 'index.js']);
+  assert.equal(result.details.repositoryAuthority.canonicalSsot.path, 'index.js');
+});
+
+test('records Node default index.js as the package execution entry when no entry is configured', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({ name: 'default-entry' }),
+    'index.js': 'module.exports = true;\n'
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseProject(directory);
+
+  assert.equal(result.verdict, 'PASS');
+  assert.deepEqual(result.details.repositoryAuthority.executionPaths, ['index.js']);
+  assert.deepEqual(result.details.repositoryAuthority.canonicalSsot, {
+    evidence: [{ kind: 'file', path: 'index.js' }],
+    path: 'index.js',
+    source: 'node-default-entry'
+  });
+});
+
+test('ignores package export subpath patterns as execution entries', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({
+      name: 'wildcard-exports',
+      exports: { '.': './index.js', './*': './src/*.js' }
+    }),
+    'index.js': 'module.exports = true;\n',
+    'src/feature.js': 'module.exports = true;\n'
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseProject(directory);
+
+  assert.equal(result.verdict, 'PASS');
+  assert.deepEqual(result.details.repositoryAuthority.executionPaths, ['index.js']);
+  assert.equal(result.details.repositoryAuthority.canonicalSsot.path, 'index.js');
+});
+
+test('prefers an unambiguous package-root export over package main for canonical authority', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({
+      name: 'exports-over-main',
+      main: './main.js',
+      exports: { '.': './index.js' }
+    }),
+    'index.js': 'module.exports = "exports";\n',
+    'main.js': 'module.exports = "main";\n'
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseProject(directory);
+
+  assert.equal(result.verdict, 'PASS');
+  assert.deepEqual(result.details.repositoryAuthority.executionPaths, ['index.js', 'main.js']);
+  assert.equal(result.details.repositoryAuthority.canonicalSsot.path, 'index.js');
+  assert.equal(result.details.repositoryAuthority.canonicalSsot.source, 'configured-exports-root-entry');
+});
+
+test('does not let a shadowed missing main block a valid package-root export', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({
+      name: 'exports-shadowed-main',
+      exports: './src/index.js',
+      main: './missing.js'
+    }),
+    'src/index.js': 'module.exports = "exports";\n'
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseProject(directory);
+
+  assert.equal(result.verdict, 'PASS');
+  assert.deepEqual(result.details.repositoryAuthority.executionPaths, ['src/index.js']);
+  assert.equal(result.details.repositoryAuthority.canonicalSsot.path, 'src/index.js');
+  assert.equal(result.details.repositoryAuthority.canonicalSsot.source, 'configured-exports-root-entry');
+  assert.ok(!result.risks.some((risk) => risk.code === 'execution-entry-unresolved'));
+});
+
+test('keeps independent bin and module execution failures visible beside a valid root export', (t) => {
+  const directory = makeProject({
+    'package.json': JSON.stringify({
+      name: 'exports-independent-surfaces',
+      exports: './src/index.js',
+      main: './missing-main.js',
+      bin: './missing-cli.js',
+      module: './missing-module.js'
+    }),
+    'src/index.js': 'module.exports = "exports";\n'
+  });
+  t.after(() => removeProject(directory));
+
+  const result = diagnoseProject(directory);
+  const unresolved = result.risks.find((risk) => risk.code === 'execution-entry-unresolved');
+
+  assert.equal(result.verdict, 'INCONCLUSIVE');
+  assert.ok(unresolved);
+  assert.ok(unresolved.evidence.some((evidence) => evidence.value === './missing-cli.js'));
+  assert.ok(unresolved.evidence.some((evidence) => evidence.value === './missing-module.js'));
+  assert.ok(!unresolved.evidence.some((evidence) => evidence.value === './missing-main.js'));
+  assert.equal(result.details.repositoryAuthority.canonicalSsot.path, 'src/index.js');
 });
 
 test('resolves a relative package-root import through package main', () => {

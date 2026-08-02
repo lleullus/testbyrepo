@@ -6,6 +6,7 @@ const path = require('node:path');
 const { createAdmissionSession, resolveAdmissionCapability } = require('./admission');
 const { captureSourceState, diagnoseFastProject } = require('./fast-diagnosis');
 const { resolveHostReviewerTransport } = require('./reviewer-registry');
+const { createBehaviorProofSession } = require('./behavior-proof');
 
 const GATE_AUTHORITIES = new WeakSet();
 const DEFAULT_THRESHOLDS = Object.freeze({
@@ -147,6 +148,11 @@ const CATEGORY_DEFINITIONS = Object.freeze([
   }
 ]);
 const SEMANTIC_REQUIREMENT_BY_ID = new Map(SEMANTIC_REQUIREMENTS.map((item) => [item.id, item]));
+const WP002_QUALITY_OBLIGATIONS = Object.freeze({
+  kind: 'fixed-wp002-quality-obligations',
+  mechanical: FAST_CHECK_IDS,
+  semantic: SEMANTIC_REQUIREMENTS.map((requirement) => requirement.id)
+});
 const KNOWN_BASELINE_CHECK_IDS = new Set([...FAST_CHECK_IDS, ...SEMANTIC_REQUIREMENT_BY_ID.keys()]);
 const ATTESTATION_FIELDS = Object.freeze([
   'reviewerId',
@@ -181,7 +187,20 @@ const EVIDENCE_CONTRACT = Object.freeze({
 
 function createGatedAdmissionSession(options) {
   const { diagnoseProject } = require('./index');
-  return createAdmissionSession(options, diagnoseProject, createFinalGateSession);
+  let finalGateSession = null;
+  return createAdmissionSession(
+    options,
+    diagnoseProject,
+    (admissionCapability) => {
+      finalGateSession = createFinalGateSession(admissionCapability);
+      return finalGateSession;
+    },
+    (admissionCapability) => createBehaviorProofSession(
+      admissionCapability,
+      WP002_QUALITY_OBLIGATIONS,
+      finalGateSession ? finalGateSession.behaviorProofScopeBasis() : null
+    )
+  );
 }
 
 function createFinalGateSession(admissionCapability) {
@@ -191,10 +210,24 @@ function createFinalGateSession(admissionCapability) {
   }
   const authority = captureGateAuthority(admissionAuthority);
   GATE_AUTHORITIES.add(authority);
+  const behaviorProofScopeBasis = createBehaviorProofScopeBasis(authority);
   return Object.freeze({
+    behaviorProofScopeBasis() {
+      return behaviorProofScopeBasis;
+    },
     run() {
       return gateProject(authority.projectRoot, { authority });
     }
+  });
+}
+
+function createBehaviorProofScopeBasis(authority) {
+  return deepFreeze({
+    completeness: authority.baselineCompleteness ? authority.baselineCompleteness.mechanicalGraph : 'INCONCLUSIVE',
+    impactScope: authority.impactScope,
+    kind: 'wp002-final-gate-impact-scope-basis',
+    projectRoot: authority.projectRoot,
+    sessionId: authority.sessionId
   });
 }
 
@@ -269,7 +302,7 @@ function captureGateAuthority({ admission, admittedScope, currentSourceAuthorize
   const impactScope = {
     kind: 'fixed-impact-scope',
     id: impactScopeId,
-    source: `WP-001 admission session ${sessionId}`,
+    source: `WP-002 final-Gate session ${sessionId}`,
     projectRoot: root,
     entries,
     fixedPaths
@@ -1161,6 +1194,18 @@ function resolveImpactScope(evidenceState, fastOutcome) {
     ? evidenceState.impactScope.fixedPaths
     : [];
   const effectivePaths = dependencyClosure(graph, evidenceState.impactScope.entries, fixedPaths);
+  const fixedPathSet = new Set(fixedPaths);
+  const uncoveredPaths = effectivePaths.filter((filePath) => !fixedPathSet.has(filePath));
+  if (uncoveredPaths.length > 0) {
+    return {
+      effectivePaths: [...fixedPaths],
+      evidence: uncoveredPaths.map((filePath) => capabilityEvidence(
+        'dependency-impact-scope',
+        `${filePath}: current dependency closure is absent from the immutable pre-change impact scope.`
+      )),
+      verdict: 'INCONCLUSIVE'
+    };
+  }
   return { effectivePaths, evidence: [], verdict: 'PASS' };
 }
 

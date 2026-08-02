@@ -118,7 +118,7 @@ function requireContainedProject(repositoryRoot, projectDirectory) {
 }
 
 function normalizeToolName(toolName) {
-  return String(toolName).split(/[.:/]/).at(-1);
+  return typeof toolName === 'string' ? toolName : '';
 }
 
 module.exports = NodePolicyGatePlugin;

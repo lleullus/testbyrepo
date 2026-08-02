@@ -1102,7 +1102,9 @@ function assessTypeScriptConfiguration(projectRoot, files) {
     }
     sources.push({
       compilerOptions: resolved.compilerOptions,
+      compilerOptionOrigins: resolved.compilerOptionOrigins,
       configPath: displayPath(projectRoot, configPath),
+      configDirectory: path.dirname(configPath),
       path: file.path,
       status: 'present'
     });
@@ -1143,15 +1145,22 @@ function resolveTsconfig(projectRoot, configPath, cache, stack) {
     return result;
   }
   const value = document.value;
-  let inherited = {};
+  let inherited = { compilerOptionOrigins: {}, compilerOptions: {} };
   if (value.extends !== undefined) {
-    if (typeof value.extends !== 'string' || !value.extends.startsWith('.')) {
+    if (
+      typeof value.extends !== 'string' ||
+      !(
+        ['.', '..'].includes(value.extends) ||
+        value.extends.startsWith('./') ||
+        value.extends.startsWith('../')
+      )
+    ) {
       const result = { message: 'Only local relative tsconfig extends values are supported.', status: 'unsupported' };
       cache.set(normalized, result);
       stack.delete(normalized);
       return result;
     }
-    const inheritedPath = resolveLocalConfig(path.dirname(normalized), value.extends);
+    const inheritedPath = resolveLocalConfig(projectRoot, path.dirname(normalized), value.extends);
     if (!inheritedPath || !isWithin(projectRoot, inheritedPath)) {
       const result = { message: 'The tsconfig extends target is missing or outside the target tree.', status: 'unsupported' };
       cache.set(normalized, result);
@@ -1164,19 +1173,99 @@ function resolveTsconfig(projectRoot, configPath, cache, stack) {
       stack.delete(normalized);
       return parent;
     }
-    inherited = parent.compilerOptions;
+    inherited = parent;
   }
-  const compilerOptions = isPlainObject(value.compilerOptions) ? value.compilerOptions : {};
-  const result = { compilerOptions: { ...inherited, ...compilerOptions }, status: 'present' };
+  if (value.compilerOptions !== undefined && !isPlainObject(value.compilerOptions)) {
+    const result = { message: 'tsconfig compilerOptions must be an object.', status: 'invalid' };
+    cache.set(normalized, result);
+    stack.delete(normalized);
+    return result;
+  }
+  const compilerOptionError = validateTypeScriptCompilerOptions(value.compilerOptions || {});
+  if (compilerOptionError) {
+    const result = { message: compilerOptionError, status: 'invalid' };
+    cache.set(normalized, result);
+    stack.delete(normalized);
+    return result;
+  }
+  const compilerOptions = value.compilerOptions || {};
+  const compilerOptionOrigins = { ...inherited.compilerOptionOrigins };
+  for (const key of Object.keys(compilerOptions)) {
+    compilerOptionOrigins[key] = path.dirname(normalized);
+  }
+  const result = {
+    compilerOptionOrigins,
+    compilerOptions: { ...inherited.compilerOptions, ...compilerOptions },
+    status: 'present'
+  };
   cache.set(normalized, result);
   stack.delete(normalized);
   return result;
 }
 
-function resolveLocalConfig(directory, extendsValue) {
+function validateTypeScriptCompilerOptions(compilerOptions) {
+  if (Object.hasOwn(compilerOptions, 'baseUrl') && typeof compilerOptions.baseUrl !== 'string') {
+    return 'tsconfig compilerOptions.baseUrl must be a string.';
+  }
+  if (!Object.hasOwn(compilerOptions, 'paths')) {
+    return null;
+  }
+  if (!isPlainObject(compilerOptions.paths)) {
+    return 'tsconfig compilerOptions.paths must be an object.';
+  }
+  for (const [pattern, substitutions] of Object.entries(compilerOptions.paths)) {
+    if (!Array.isArray(substitutions) || substitutions.some((substitution) => typeof substitution !== 'string')) {
+      return `tsconfig compilerOptions.paths.${pattern} must be an array of strings.`;
+    }
+  }
+  return null;
+}
+
+function resolveLocalConfig(projectRoot, directory, extendsValue) {
   const base = path.resolve(directory, extendsValue);
   const candidates = path.extname(base) ? [base] : [base, `${base}.json`];
-  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+  return candidates.find((candidate) => isSafeTsconfigTarget(projectRoot, candidate)) || null;
+}
+
+function isSafeTsconfigTarget(projectRoot, candidate) {
+  if (!isWithin(projectRoot, candidate) || containsSymlinkComponent(projectRoot, candidate)) {
+    return false;
+  }
+
+  let candidateStat;
+  let projectRealPath;
+  let candidateRealPath;
+  try {
+    candidateStat = fs.lstatSync(candidate);
+    if (!candidateStat.isFile() || candidateStat.isSymbolicLink()) {
+      return false;
+    }
+    projectRealPath = fs.realpathSync(projectRoot);
+    candidateRealPath = fs.realpathSync(candidate);
+  } catch (error) {
+    return false;
+  }
+  return isWithin(projectRealPath, candidateRealPath);
+}
+
+function containsSymlinkComponent(projectRoot, candidate) {
+  const relativePath = path.relative(path.resolve(projectRoot), path.resolve(candidate));
+  if (!relativePath || relativePath.startsWith(`..${path.sep}`) || relativePath === '..' || path.isAbsolute(relativePath)) {
+    return false;
+  }
+
+  let currentPath = path.resolve(projectRoot);
+  for (const segment of relativePath.split(path.sep)) {
+    currentPath = path.join(currentPath, segment);
+    try {
+      if (fs.lstatSync(currentPath).isSymbolicLink()) {
+        return true;
+      }
+    } catch (error) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function buildDependencyGraph(projectRoot, files, typeScriptConfiguration) {
@@ -1194,13 +1283,24 @@ function buildDependencyGraph(projectRoot, files, typeScriptConfiguration) {
       }
       if (!isRelativeSpecifier(reference.specifier)) {
         const configuration = configurationBySource.get(file.path);
-        if (
-          configuration &&
-          configuration.status === 'present' &&
-          configuration.compilerOptions &&
-          (typeof configuration.compilerOptions.baseUrl === 'string' || isPlainObject(configuration.compilerOptions.paths))
-        ) {
-          unknown.push({ ...reference, message: 'A TypeScript path-alias dependency cannot be resolved mechanically.' });
+        if (configuration && configuration.status === 'present') {
+          const resolution = resolveTypeScriptSource(projectRoot, file, reference.specifier, configuration, fileByAbsolutePath);
+          if (resolution.status === 'source') {
+            const key = `${file.path}\u0000${resolution.file.path}\u0000${reference.line}\u0000${reference.specifier}`;
+            if (!edgeKeys.has(key)) {
+              edgeKeys.add(key);
+              edges.push({
+                column: reference.column,
+                from: file.path,
+                kind: reference.kind,
+                line: reference.line,
+                specifier: reference.specifier,
+                to: resolution.file.path
+              });
+            }
+          } else if (resolution.status === 'missing' || resolution.status === 'outside') {
+            unknown.push({ ...reference, message: 'A configured TypeScript baseUrl or path alias could not be resolved.' });
+          }
         }
         continue;
       }
@@ -1224,6 +1324,114 @@ function buildDependencyGraph(projectRoot, files, typeScriptConfiguration) {
     }
   }
   return { edges, files: files.map((file) => file.path), unknown };
+}
+
+function resolveTypeScriptSource(projectRoot, file, specifier, configuration, fileByAbsolutePath) {
+  const compilerOptions = configuration.compilerOptions || {};
+  const baseUrl = typeof compilerOptions.baseUrl === 'string'
+    ? path.resolve(
+      (configuration.compilerOptionOrigins && configuration.compilerOptionOrigins.baseUrl) || configuration.configDirectory,
+      compilerOptions.baseUrl
+    )
+    : null;
+  const paths = isPlainObject(compilerOptions.paths) ? compilerOptions.paths : null;
+  if (Object.hasOwn(compilerOptions, 'paths') && !paths) {
+    return { expectedPaths: [], status: 'missing' };
+  }
+
+  const matches = paths
+    ? Object.entries(paths)
+      .map(([pattern, substitutions], declarationOrder) => ({
+        declarationOrder,
+        pattern,
+        substitutions,
+        wildcard: matchTypeScriptPathPattern(pattern, specifier)
+      }))
+      .filter((match) => match.wildcard !== null)
+      .sort(compareTypeScriptPathMatches)
+    : [];
+
+  for (const match of matches) {
+    const { pattern, substitutions, wildcard } = match;
+    if (!Array.isArray(substitutions)) {
+      return { expectedPaths: [], status: 'missing' };
+    }
+    const expected = [];
+    const resolutionBase = baseUrl || path.resolve(
+      (configuration.compilerOptionOrigins && configuration.compilerOptionOrigins.paths) || configuration.configDirectory
+    );
+    for (const substitution of substitutions) {
+      if (typeof substitution !== 'string') {
+        continue;
+      }
+      const resolution = resolveSourceCandidate(
+        projectRoot,
+        path.resolve(resolutionBase, substitution.replaceAll('*', wildcard)),
+        fileByAbsolutePath
+      );
+      if (resolution.status !== 'missing') {
+        return resolution;
+      }
+      expected.push(...resolution.expectedPaths);
+    }
+    return { expectedPaths: unique(expected), pattern, status: 'missing' };
+  }
+  if (typeof compilerOptions.baseUrl === 'string') {
+    const resolution = resolveSourceCandidate(projectRoot, path.resolve(baseUrl, specifier), fileByAbsolutePath);
+    return resolution.status === 'missing' ? { status: 'external' } : resolution;
+  }
+  return { status: 'external' };
+}
+
+function matchTypeScriptPathPattern(pattern, specifier) {
+  const wildcard = pattern.indexOf('*');
+  if (wildcard === -1) {
+    return pattern === specifier ? '' : null;
+  }
+  const prefix = pattern.slice(0, wildcard);
+  const suffix = pattern.slice(wildcard + 1);
+  return specifier.startsWith(prefix) && specifier.endsWith(suffix)
+    ? specifier.slice(prefix.length, specifier.length - suffix.length || undefined)
+    : null;
+}
+
+function compareTypeScriptPathMatches(left, right) {
+  const leftWildcard = left.pattern.indexOf('*');
+  const rightWildcard = right.pattern.indexOf('*');
+  if (leftWildcard === -1 || rightWildcard === -1) {
+    if (leftWildcard === -1 && rightWildcard !== -1) {
+      return -1;
+    }
+    if (leftWildcard !== -1 && rightWildcard === -1) {
+      return 1;
+    }
+  }
+
+  const prefixDifference = rightWildcard - leftWildcard;
+  if (prefixDifference !== 0) {
+    return prefixDifference;
+  }
+
+  const leftSuffixLength = leftWildcard === -1 ? 0 : left.pattern.length - leftWildcard - 1;
+  const rightSuffixLength = rightWildcard === -1 ? 0 : right.pattern.length - rightWildcard - 1;
+  const suffixDifference = rightSuffixLength - leftSuffixLength;
+  return suffixDifference !== 0 ? suffixDifference : left.declarationOrder - right.declarationOrder;
+}
+
+function resolveSourceCandidate(projectRoot, basePath, fileByAbsolutePath) {
+  if (!isWithin(projectRoot, basePath)) {
+    return { status: 'outside' };
+  }
+  for (const candidate of sourceCandidates(basePath)) {
+    if (!isWithin(projectRoot, candidate)) {
+      continue;
+    }
+    const record = fileByAbsolutePath.get(path.resolve(candidate));
+    if (record) {
+      return { file: record, status: 'source' };
+    }
+  }
+  return { expectedPaths: sourceCandidates(basePath).map((candidate) => displayPath(projectRoot, candidate)), status: 'missing' };
 }
 
 function collectReferences(file) {

@@ -735,6 +735,45 @@ test('pre-change dependency closure remains blocking after the current import is
   assert.equal(result.verdict, 'FAIL');
 });
 
+test('current reachability outside the immutable pre-change closure cannot approve final completion', (t) => {
+  const directory = makeProject({
+    ...cleanProject("import { existing } from './existing';\nexport const value = existing;\n", 'src/changed.ts'),
+    'src/existing.ts': 'export const existing: number = 1;\n',
+    'src/disconnected.ts': 'export const disconnected: number = 2;\n'
+  });
+  t.after(() => removeProject(directory));
+  const reviewer = aiReviewer(() => 'PASS', { path: 'src/changed.ts' });
+  const reviewerCapability = hostReviewer(directory, reviewer);
+  const session = admitChange({
+    projectDirectory: directory,
+    request: REQUEST,
+    scope: 'src/changed.ts',
+    semanticReviewer: reviewerCapability
+  });
+  assert.equal(session.verdict, 'PASS');
+  assert.equal(session.details.binding.admittedScope.entries.length, 1);
+  const written = session.attemptWrite({
+    request: REQUEST,
+    writes: [{
+      path: 'src/changed.ts',
+      content: "import { existing } from './existing';\nimport { disconnected } from './disconnected';\nexport const value = existing + disconnected;\n"
+    }]
+  });
+
+  assert.equal(written.allowed, true);
+  const result = session.finalGate();
+
+  assert.equal(result.verdict, 'INCONCLUSIVE');
+  assert.equal(result.completionApproval, false);
+  assert.equal(result.finalCompletion.status, 'BLOCKED');
+  assert.equal(result.details.finalChecks.find((item) => item.id === 'wp001-binding').verdict, 'INCONCLUSIVE');
+  assert.equal(result.details.binding.impactScope.fixedPaths.includes('src/disconnected.ts'), false);
+  assert.equal(result.details.binding.impactScope.effectivePaths.includes('src/disconnected.ts'), false);
+  assert.ok(result.details.finalChecks.find((item) => item.id === 'wp001-binding').evidence.some((item) => {
+    return item.path === 'dependency-impact-scope' && item.error.includes('src/disconnected.ts');
+  }));
+});
+
 test('a pre-change unknown dependency edge remains INCONCLUSIVE after the import is removed', (t) => {
   const directory = makeProject({
     ...cleanProject([

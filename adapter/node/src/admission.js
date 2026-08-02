@@ -61,9 +61,9 @@ const ADMISSION_CAPABILITIES = new WeakMap();
  * @param {object} options admission input
  * @param {Function} diagnoseProject canonical structural diagnosis function
  * @param {Function} bindFinalGate private final-Gate binder
- * @returns {{admission: object, attemptWrite: Function, finalGate: Function}}
+ * @returns {{admission: object, attemptWrite: Function, finalGate: Function, behaviorProof: Function}}
  */
-function createAdmissionSession(options, diagnoseProject, bindFinalGate) {
+function createAdmissionSession(options, diagnoseProject, bindFinalGate, bindBehaviorProof) {
   if (typeof diagnoseProject !== 'function') {
     throw new TypeError('createAdmissionSession requires the canonical diagnoseProject function.');
   }
@@ -84,6 +84,9 @@ function createAdmissionSession(options, diagnoseProject, bindFinalGate) {
     reviewer: isPlainObject(options) ? options.semanticReviewer : null
   });
   const finalGateSession = bindFinalGate(admissionCapability);
+  const behaviorProofSession = typeof bindBehaviorProof === 'function'
+    ? bindBehaviorProof(admissionCapability)
+    : null;
   return Object.freeze({
     ...assessment.result,
     admission: assessment.result,
@@ -92,6 +95,12 @@ function createAdmissionSession(options, diagnoseProject, bindFinalGate) {
     },
     finalGate() {
       return finalGateSession.run();
+    },
+    behaviorProof(options) {
+      if (!behaviorProofSession) {
+        throw new TypeError('Behavior proof is unavailable for this admission session.');
+      }
+      return behaviorProofSession.run(options);
     }
   });
 }
@@ -111,6 +120,7 @@ function assessAdmission(options, diagnoseProject) {
   let diagnosisError = null;
   let beforeState = null;
   let afterState = null;
+  let rootIdentity = null;
   let reinvestigation = {
     performed: false,
     reason: missingBehavior.length > 0 ? 'required-behavior-missing' : null,
@@ -118,6 +128,7 @@ function assessAdmission(options, diagnoseProject) {
   };
 
   if (input.projectRoot) {
+    rootIdentity = captureDirectoryIdentity(input.projectRoot);
     beforeState = fingerprintProject(input.projectRoot);
     if (!beforeState.digest) {
       risks.push(projectStateRisk(beforeState, 'before-admission'));
@@ -291,7 +302,9 @@ function assessAdmission(options, diagnoseProject) {
   return {
     result,
     verdict,
+    diagnosis,
     projectRoot: input.projectRoot,
+    rootIdentity,
     intentKey: input.intentKey,
     admittedScope,
     inferredScope,
@@ -472,8 +485,7 @@ function isPreservationSentence(sentence) {
 
 function isFailureSentence(sentence) {
   const englishCondition = /\b(if|when|unless)\b/i.test(sentence)
-    || /\bon\s+(failure|failures|error|errors|invalid)\b/i.test(sentence)
-    || /\b(empty|null|undefined|missing|invalid|failure|fails)\b/i.test(sentence);
+    || /\bon\s+(failure|failures|error|errors|invalid)\b/i.test(sentence);
   const englishOutcome = /\b(show|display|return|respond|report|tell|see|visible|error|fail|reject|prevent|block|message)\b/i.test(sentence);
   const koreanCondition = /(?:이면|라면|으면|면|경우|실패|없|누락|null|잘못|유효하지)/.test(sentence);
   const koreanOutcome = /(?:보여|표시|반환|알려|오류|에러|실패|거부|막|차단|메시지)/.test(sentence);
@@ -943,6 +955,11 @@ function establishRepositoryAuthority(diagnosis, baseline, requestText, newProje
     };
   }
 
+  const diagnosedAuthority = diagnosis.details.repositoryAuthority;
+  if (diagnosedAuthority && Array.isArray(diagnosedAuthority.executionPaths)) {
+    return authorityFromDiagnosis(diagnosedAuthority, diagnosis.details);
+  }
+
   const sourceFiles = diagnosis.details.structure.sourceFiles || [];
   const entryEvidence = packageEntryEvidence(diagnosis.details.responsibilities || []);
   const configuredEntries = [...new Set(entryEvidence.flatMap((evidence) => collectStringValues(evidence.value)))];
@@ -980,7 +997,15 @@ function establishRepositoryAuthority(diagnosis, baseline, requestText, newProje
   const bestScore = scoredCandidates[0] ? scoredCandidates[0].score : 0;
   const bestCandidates = scoredCandidates.filter((candidate) => candidate.score === bestScore);
   let canonicalSsot = null;
-  if (bestScore > 0 && bestCandidates.length === 1) {
+  const mainEvidence = entryEvidence.find((evidence) => evidence.key === 'main');
+  const mainPath = mainEvidence ? resolveObservedEntryPath(mainEvidence.value, sourceFiles) : null;
+  if (mainPath && executionPaths.includes(mainPath) && sourceCandidates.length === 0) {
+    canonicalSsot = {
+      evidence: [mainEvidence],
+      path: mainPath,
+      source: 'configured-main-entry'
+    };
+  } else if (bestScore > 0 && bestCandidates.length === 1) {
     canonicalSsot = canonicalSsotFromCandidate(bestCandidates[0].candidate, 'request-match');
   } else if (sourceCandidates.length === 1) {
     canonicalSsot = canonicalSsotFromCandidate(sourceCandidates[0], 'single-source-candidate');
@@ -1008,6 +1033,117 @@ function establishRepositoryAuthority(diagnosis, baseline, requestText, newProje
   return { canonicalSsot, executionPaths, risks };
 }
 
+function authorityFromDiagnosis(authority, details) {
+  const sourceFiles = details.structure && details.structure.sourceFiles || [];
+  const observedPaths = new Set(sourceFiles);
+  const rootExports = packageRootExportPaths(details.responsibilities || [], sourceFiles);
+  const rootExportConfigured = packageHasRootExport(details.responsibilities || []);
+  const rawExecutionPaths = rootExportConfigured
+    ? rootExports
+    : rootExports.length > 0
+    ? rootExports
+    : [...new Set(authority.executionPaths.filter((value) => typeof value === 'string'))];
+  const executionPaths = [...new Set(rawExecutionPaths.filter((value) => {
+    return !value.includes('*') && observedPaths.has(value);
+  }))].sort();
+  const risks = [];
+  if (executionPaths.length === 0) {
+    risks.push(issue(
+      'inconclusive',
+      'execution-path-unresolved',
+      'Diagnosis did not establish a concrete package execution source.',
+      authority.evidence || []
+    ));
+  } else if (executionPaths.length < rawExecutionPaths.length) {
+    risks.push(issue(
+      'inconclusive',
+      'execution-entry-unresolved',
+      'Diagnosis included a package execution entry that could not be resolved to observed source.',
+      authority.evidence || []
+    ));
+  }
+
+  const rootExportEvidence = packageEntryEvidence(details.responsibilities || []).find((evidence) => evidence.key === 'exports');
+  const diagnosedCanonical = rootExportConfigured && rootExports.length === 1
+    ? {
+      evidence: rootExportEvidence ? [rootExportEvidence] : [],
+      path: executionPaths[0],
+      source: 'configured-exports-root'
+    }
+    : rootExportConfigured ? null : authority.canonicalSsot;
+  const canonicalSsot = diagnosedCanonical
+    && typeof diagnosedCanonical.path === 'string'
+    && observedPaths.has(diagnosedCanonical.path)
+    && !diagnosedCanonical.path.includes('*')
+    ? { ...diagnosedCanonical }
+    : null;
+  if (!canonicalSsot) {
+    risks.push(issue(
+      'inconclusive',
+      'canonical-ssot-unresolved',
+      'Diagnosis did not establish one concrete canonical source of truth for the requested behavior.',
+      authority.evidence || []
+    ));
+  }
+  return { canonicalSsot, executionPaths, risks };
+}
+
+function packageRootExportPaths(responsibilities, sourceFiles) {
+  const exportsEvidence = packageEntryEvidence(responsibilities).find((evidence) => evidence.key === 'exports');
+  if (!exportsEvidence) {
+    return [];
+  }
+  return [...new Set(collectPackageRootExportTargets(exportsEvidence.value)
+    .map((entry) => resolveObservedEntryPath(entry, sourceFiles))
+    .filter(Boolean))].sort();
+}
+
+function packageHasRootExport(responsibilities) {
+  const exportsEvidence = packageEntryEvidence(responsibilities).find((evidence) => evidence.key === 'exports');
+  if (!exportsEvidence) {
+    return false;
+  }
+  const value = exportsEvidence.value;
+  if (typeof value === 'string') {
+    return true;
+  }
+  if (!isPlainObject(value)) {
+    return false;
+  }
+  return Object.hasOwn(value, '.') || !Object.keys(value).some((key) => key.startsWith('.'));
+}
+
+function collectPackageRootExportTargets(value) {
+  if (typeof value === 'string') {
+    return [value];
+  }
+  if (!isPlainObject(value)) {
+    return [];
+  }
+  if (Object.hasOwn(value, '.')) {
+    return collectPackageConditionTargets(value['.']);
+  }
+  if (Object.keys(value).some((key) => key.startsWith('.'))) {
+    return [];
+  }
+  return collectPackageConditionTargets(value);
+}
+
+function collectPackageConditionTargets(value) {
+  if (typeof value === 'string') {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(collectPackageConditionTargets);
+  }
+  if (isPlainObject(value)) {
+    return Object.entries(value)
+      .filter(([key]) => key !== 'types')
+      .flatMap(([, target]) => collectPackageConditionTargets(target));
+  }
+  return [];
+}
+
 function packageEntryEvidence(responsibilities) {
   const packageResponsibility = responsibilities.find((responsibility) => responsibility.ownerPath === 'package.json');
   return packageResponsibility
@@ -1018,10 +1154,13 @@ function packageEntryEvidence(responsibilities) {
 }
 
 function resolveObservedEntryPath(entry, sourceFiles) {
-  if (typeof entry !== 'string' || (!entry.startsWith('.') && !entry.includes('/'))) {
+  if (typeof entry !== 'string' || entry.length === 0 || entry.includes('\\') || path.posix.isAbsolute(entry) || path.win32.isAbsolute(entry) || /^[A-Za-z]:/.test(entry)) {
     return null;
   }
   const normalized = entry.replace(/^\.\//, '').replaceAll('\\', '/');
+  if (normalized.split('/').some((segment) => !segment || segment === '.' || segment === '..')) {
+    return null;
+  }
   if (sourceFiles.includes(normalized)) {
     return normalized;
   }
@@ -1064,17 +1203,27 @@ function requestedShapesFor(requestText) {
   return [...shapes];
 }
 
-function collectObservedSymbols(projectRoot, diagnosis) {
+function collectObservedSymbols(projectRoot, diagnosis, sourceFileState = null) {
   const symbols = [];
   const seen = new Set();
-  const errors = [];
-  const sourceFiles = diagnosis.details.structure.sourceFiles || [];
+  const errors = sourceFileState ? [...sourceFileState.errors] : [];
+  const sourceFiles = sourceFileState
+    ? sourceFileState.files
+    : diagnosis.details.structure.sourceFiles || [];
 
   function add(pathValue, symbol, evidence, kind = 'unknown') {
-    const key = `${pathValue}\u0000${symbol}`;
+    const publicKey = symbol.publicKey || symbol.symbol || symbol;
+    const symbolName = symbol.symbol || symbol;
+    const key = `${pathValue}\u0000${publicKey}`;
     if (!seen.has(key)) {
       seen.add(key);
-      symbols.push({ evidence, kind, path: pathValue, symbol });
+      symbols.push({
+        evidence,
+        kind: symbol.kind || kind,
+        path: pathValue,
+        publicKey,
+        symbol: symbolName
+      });
     }
   }
 
@@ -1086,23 +1235,656 @@ function collectObservedSymbols(projectRoot, diagnosis) {
       errors.push({ path: sourceFile, message: error.message });
       continue;
     }
-    const declaration = /(?:^|[;\n])\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(function|class|interface|type|const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)/gm;
-    for (let match = declaration.exec(contents); match; match = declaration.exec(contents)) {
-      add(sourceFile, match[2], [symbolEvidence(sourceFile, match[2])], match[1]);
+    const parsed = parseReusableSymbols(contents, sourceFile);
+    if (parsed.error) {
+      errors.push({ path: sourceFile, message: parsed.error });
+      continue;
     }
-    const commonJs = /\b(?:module\.exports|exports)\.([A-Za-z_$][A-Za-z0-9_$]*)\s*=/g;
-    for (let match = commonJs.exec(contents); match; match = commonJs.exec(contents)) {
-      add(sourceFile, match[1], [symbolEvidence(sourceFile, match[1])]);
+    for (const symbol of parsed.symbols) {
+      add(sourceFile, symbol, [symbol.evidence], symbol.kind);
     }
   }
 
   for (const candidate of diagnosis.details.reuseCandidates || []) {
     for (const symbol of candidate.symbols || []) {
-      add(candidate.path, symbol, candidate.evidence || [symbolEvidence(candidate.path, symbol)]);
+      add(
+        candidate.path,
+        { publicKey: `export:${symbol}`, symbol },
+        candidate.evidence || [symbolEvidence(candidate.path, symbol)]
+      );
     }
   }
 
   return { errors, symbols };
+}
+
+function collectCurrentSourceFiles(projectRoot) {
+  const files = [];
+  const errors = [];
+
+  function visit(directory, relativeDirectory) {
+    let entries;
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch (error) {
+      errors.push({
+        path: relativeDirectory || '.',
+        message: error.message
+      });
+      return;
+    }
+    for (const entry of entries) {
+      const absolutePath = path.join(directory, entry.name);
+      const relativePath = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
+      if (entry.isSymbolicLink()) {
+        if (isReusableCodePath(relativePath)) {
+          errors.push({ path: relativePath, message: 'A current source file is a symbolic link.' });
+        }
+      } else if (entry.isDirectory()) {
+        if (!IGNORED_DIRECTORIES.has(entry.name)) {
+          visit(absolutePath, relativePath);
+        }
+      } else if (entry.isFile() && isReusableCodePath(relativePath)) {
+        files.push(relativePath);
+      }
+    }
+  }
+
+  visit(projectRoot, '');
+  files.sort();
+  return { errors, files };
+}
+
+function validatePlannedWriteReuse(assessment, plan) {
+  const codeWrites = plan.filter((write) => isReusableCodePath(write.relativePath));
+  if (codeWrites.length === 0) {
+    return null;
+  }
+  const parser = loadAdmissionParser();
+  if (parser.error) {
+    return writeProblem('reuse-write-analysis-unavailable', `Proposed code writes cannot be safely analyzed: ${parser.error}`);
+  }
+  if (!assessment.diagnosis || !assessment.projectRoot) {
+    return writeProblem('reuse-write-analysis-unavailable', 'Current reusable symbols cannot be established before a proposed code write.');
+  }
+  const currentSourceFiles = collectCurrentSourceFiles(assessment.projectRoot);
+  const observed = collectObservedSymbols(assessment.projectRoot, assessment.diagnosis, currentSourceFiles);
+  if (observed.errors.length > 0) {
+    return writeProblem('reuse-write-analysis-unavailable', 'Current reusable symbols could not be completely established before a proposed code write.');
+  }
+  const currentBySymbol = new Map();
+  for (const symbol of observed.symbols) {
+    const publicKey = symbol.publicKey || `export:${symbol.symbol}`;
+    let paths = currentBySymbol.get(publicKey);
+    if (!paths) {
+      paths = new Set();
+      currentBySymbol.set(publicKey, paths);
+    }
+    paths.add(symbol.path);
+  }
+  const proposed = [];
+  for (const write of codeWrites) {
+    const parsed = parseReusableSymbols(write.content.toString('utf8'), write.relativePath);
+    if (parsed.error) {
+      return writeProblem('reuse-write-analysis-unavailable', `Proposed code write ${write.relativePath} could not be parsed: ${parsed.error}`);
+    }
+    for (const symbol of parsed.symbols) {
+      const publicKey = symbol.publicKey || `export:${symbol.symbol}`;
+      const currentPaths = currentBySymbol.get(publicKey) || new Set();
+      if ([...currentPaths].some((currentPath) => currentPath !== write.relativePath)) {
+        return writeProblem(
+          'reuse-required-for-proposed-write-symbol',
+          `The proposed write introduces reusable symbol ${symbol.symbol}, which already exists in observed source. Reuse or update the existing symbol instead.`
+        );
+      }
+      const otherProposed = proposed.find((candidate) => candidate.publicKey === publicKey && candidate.path !== write.relativePath);
+      if (otherProposed) {
+        return writeProblem(
+          'duplicate-proposed-write-symbol',
+          `The proposed writes introduce reusable symbol ${symbol.symbol} more than once.`
+        );
+      }
+      proposed.push({ path: write.relativePath, publicKey, symbol: symbol.symbol });
+    }
+  }
+  return null;
+}
+
+function isReusableCodePath(filePath) {
+  return typeof filePath === 'string' && /\.(?:cjs|mjs|jsx|js|cts|mts|tsx|ts)$/.test(filePath);
+}
+
+function loadAdmissionParser() {
+  try {
+    const parser = require('@babel/parser');
+    if (typeof parser.parse !== 'function') {
+      throw new TypeError('@babel/parser does not expose parse.');
+    }
+    return { error: null, parse: parser.parse };
+  } catch (error) {
+    return { error: error.message, parse: null };
+  }
+}
+
+function parseReusableSymbols(contents, filePath) {
+  const parser = loadAdmissionParser();
+  if (parser.error) {
+    return { error: parser.error, symbols: [] };
+  }
+  let ast;
+  try {
+    ast = parser.parse(contents, {
+      plugins: admissionParserPlugins(filePath),
+      ranges: true,
+      sourceType: 'unambiguous'
+    }).program;
+  } catch (error) {
+    return { error: error.message, symbols: [] };
+  }
+
+  const bindings = new Map();
+  const classOwners = new Map();
+  let moduleClassOwner = null;
+  const symbols = [];
+  const seen = new Set();
+  function addSymbol(symbol, node, kind, publicKey = `export:${symbol}`) {
+    if (!symbol || symbol === 'constructor' || !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(symbol)) {
+      return;
+    }
+    const key = `${publicKey}\u0000${node.start || 0}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    symbols.push({
+      evidence: {
+        column: node.loc && node.loc.start ? node.loc.start.column + 1 : 1,
+        kind: 'symbol',
+        line: node.loc && node.loc.start ? node.loc.start.line : 1,
+        path: filePath,
+        symbol
+      },
+      kind,
+      publicKey,
+      symbol
+    });
+  }
+
+  function unwrapExpression(node) {
+    let current = node;
+    while (current && ['ParenthesizedExpression', 'TSAsExpression', 'TSTypeAssertion', 'TypeCastExpression'].includes(current.type)) {
+      current = current.expression;
+    }
+    return current;
+  }
+
+  function registerDeclaration(node) {
+    if (!node) {
+      return;
+    }
+    if (['FunctionDeclaration', 'ClassDeclaration'].includes(node.type) && node.id) {
+      bindings.set(node.id.name, {
+        kind: node.type === 'ClassDeclaration' ? 'class' : 'function',
+        node,
+        name: node.id.name
+      });
+      return;
+    }
+    if (['TSInterfaceDeclaration', 'TSTypeAliasDeclaration', 'TSEnumDeclaration'].includes(node.type) && node.id) {
+      bindings.set(node.id.name, { kind: 'type', node, name: node.id.name });
+      return;
+    }
+    if (node.type !== 'VariableDeclaration') {
+      return;
+    }
+    for (const declarator of node.declarations || []) {
+      if (!declarator.id || declarator.id.type !== 'Identifier') {
+        continue;
+      }
+      const init = unwrapExpression(declarator.init);
+      let kind = 'value';
+      let staticString = null;
+      if (init && ['ArrowFunctionExpression', 'FunctionExpression'].includes(init.type)) {
+        kind = 'function';
+      } else if (init && init.type === 'ClassExpression') {
+        kind = 'class';
+      } else if (init && init.type === 'ObjectExpression') {
+        kind = 'object';
+      } else if (node.kind === 'const' && staticStringValue(init) !== null) {
+        kind = 'constant-string';
+        staticString = staticStringValue(init);
+      }
+      bindings.set(declarator.id.name, {
+        init,
+        kind,
+        name: declarator.id.name,
+        node: declarator,
+        staticString
+      });
+    }
+  }
+
+  for (const statement of ast.body || []) {
+    registerDeclaration(statement.type === 'ExportNamedDeclaration' ? statement.declaration : statement);
+    if (statement.type === 'ExportDefaultDeclaration') {
+      registerDeclaration(statement.declaration);
+    }
+  }
+
+  function classMethodKey(owner, name) {
+    return `class:${filePath}:${owner}.${name}`;
+  }
+
+  function objectMethodKey(owner, name) {
+    return owner
+      ? `object:${filePath}:${owner}.${name}`
+      : `export:${name}`;
+  }
+
+  function addClassExport(exportName, bindingName, node, evidenceNode = node) {
+    const classNode = node && node.type === 'ClassDeclaration' ? node : node;
+    addSymbol(exportName, evidenceNode.id || evidenceNode, 'class', `export:${exportName}`);
+    if (bindingName) {
+      classOwners.set(bindingName, exportName);
+    }
+    for (const element of classNode.body && classNode.body.body || []) {
+      if (!['ClassMethod', 'ClassPrivateMethod', 'ClassProperty', 'ClassPrivateProperty', 'ClassField'].includes(element.type)) {
+        continue;
+      }
+      if (element.type.includes('Private')) {
+        continue;
+      }
+      const name = admissionPropertyName(element.key);
+      if (!name || name === 'constructor') {
+        continue;
+      }
+      const value = unwrapExpression(element.value);
+      if (['ClassProperty', 'ClassField'].includes(element.type) && value && !['ArrowFunctionExpression', 'FunctionExpression'].includes(value.type)) {
+        continue;
+      }
+      addSymbol(name, element.key, 'method', classMethodKey(exportName, name));
+    }
+  }
+
+  function addFunctionExport(exportName, node, publicKey = `export:${exportName}`) {
+    addSymbol(exportName, node.id || node, 'function', publicKey);
+  }
+
+  function addTypeExport(exportName, node) {
+    addSymbol(exportName, node.id || node, 'type', `export:${exportName}`);
+  }
+
+  function addBindingExport(exportName, bindingName, evidenceNode) {
+    const binding = bindings.get(bindingName);
+    if (!binding) {
+      addSymbol(exportName, evidenceNode, 'function', `export:${exportName}`);
+      return;
+    }
+    if (binding.kind === 'class') {
+      addClassExport(exportName, bindingName, binding.node, evidenceNode || binding.node);
+    } else if (binding.kind === 'function') {
+      addFunctionExport(exportName, binding.node.id || binding.node, `export:${exportName}`);
+    } else if (binding.kind === 'type') {
+      addTypeExport(exportName, binding.node);
+    } else if (binding.kind === 'object') {
+      addSymbol(exportName, binding.node, 'object', `export:${exportName}`);
+      collectObjectMembers(binding.init, exportName === 'default' ? 'default' : exportName);
+    }
+  }
+
+  function addValueExport(exportName, valueNode, evidenceNode, publicKey = `export:${exportName}`) {
+    const value = unwrapExpression(valueNode);
+    if (!value) {
+      return;
+    }
+    if (value.type === 'Identifier') {
+      const binding = bindings.get(value.name);
+      if (binding && binding.kind === 'class') {
+        addClassExport(exportName, value.name, binding.node, evidenceNode || value);
+      } else if (binding && binding.kind === 'function') {
+        addSymbol(exportName, evidenceNode || value, 'function', publicKey);
+      } else if (binding && binding.kind === 'object') {
+        addSymbol(exportName, evidenceNode || value, 'object', publicKey);
+        collectObjectMembers(binding.init, exportName);
+      }
+      return;
+    }
+    if (['FunctionExpression', 'ArrowFunctionExpression'].includes(value.type)) {
+      addFunctionExport(exportName, value, publicKey);
+    } else if (value.type === 'ClassExpression') {
+      addClassExport(exportName, null, value, evidenceNode || value);
+    } else if (value.type === 'ObjectExpression') {
+      addSymbol(exportName, evidenceNode || value, 'object', publicKey);
+      collectObjectMembers(value, exportName);
+    }
+  }
+
+  function collectObjectMembers(objectNode, owner) {
+    if (!objectNode || objectNode.type !== 'ObjectExpression') {
+      return;
+    }
+    for (const property of objectNode.properties || []) {
+      if (!['ObjectMethod', 'ObjectProperty'].includes(property.type)) {
+        continue;
+      }
+      const name = admissionPropertyName(property.key);
+      if (!name || name === 'constructor') {
+        continue;
+      }
+      const publicKey = objectMethodKey(owner, name);
+      if (property.type === 'ObjectMethod') {
+        addSymbol(name, property.key, 'method', publicKey);
+        continue;
+      }
+      const value = unwrapExpression(property.value);
+      if (value && value.type === 'Identifier') {
+        const binding = bindings.get(value.name);
+        if (binding && binding.kind === 'class') {
+          addSymbol(name, property.key, 'class', publicKey);
+          classOwners.set(value.name, name);
+          for (const element of binding.node.body && binding.node.body.body || []) {
+            if (element.type !== 'ClassMethod' || admissionPropertyName(element.key) === 'constructor') {
+              continue;
+            }
+            const methodName = admissionPropertyName(element.key);
+            if (methodName) {
+              addSymbol(methodName, element.key, 'method', classMethodKey(name, methodName));
+            }
+          }
+        } else if (binding && binding.kind === 'function') {
+          addSymbol(name, property.key, 'function', publicKey);
+        } else if (binding && binding.kind === 'object') {
+          addSymbol(name, property.key, 'object', publicKey);
+          collectObjectMembers(binding.init, owner ? `${owner}.${name}` : name);
+        }
+      } else if (value && ['FunctionExpression', 'ArrowFunctionExpression'].includes(value.type)) {
+        addSymbol(name, property.key, 'function', publicKey);
+      } else if (value && value.type === 'ClassExpression') {
+        addClassExport(name, null, value, property.key);
+      } else if (value && value.type === 'ObjectExpression') {
+        addSymbol(name, property.key, 'object', publicKey);
+        collectObjectMembers(value, owner ? `${owner}.${name}` : name);
+      }
+    }
+  }
+
+  function addDefaultExport(node) {
+    const declaration = unwrapExpression(node);
+    if (!declaration) {
+      return;
+    }
+    if (declaration.type === 'Identifier') {
+      addBindingExport('default', declaration.name, declaration);
+    } else if (declaration.type === 'ClassDeclaration') {
+      addClassExport('default', declaration.id && declaration.id.name, declaration, declaration.id || declaration);
+    } else if (declaration.type === 'FunctionDeclaration') {
+      addFunctionExport('default', declaration, 'export:default');
+    } else {
+      addValueExport('default', declaration, declaration, 'export:default');
+    }
+  }
+
+  function addNamedDeclaration(declaration) {
+    if (!declaration) {
+      return;
+    }
+    if (['FunctionDeclaration', 'ClassDeclaration'].includes(declaration.type) && declaration.id) {
+      addBindingExport(declaration.id.name, declaration.id.name, declaration.id);
+    } else if (['TSInterfaceDeclaration', 'TSTypeAliasDeclaration', 'TSEnumDeclaration'].includes(declaration.type) && declaration.id) {
+      addTypeExport(declaration.id.name, declaration);
+    } else if (declaration.type === 'VariableDeclaration') {
+      for (const declarator of declaration.declarations || []) {
+        if (declarator.id && declarator.id.type === 'Identifier') {
+          addBindingExport(declarator.id.name, declarator.id.name, declarator.id);
+        }
+      }
+    }
+  }
+
+  for (const statement of ast.body || []) {
+    if (statement.type === 'ExportNamedDeclaration') {
+      addNamedDeclaration(statement.declaration);
+      for (const specifier of statement.specifiers || []) {
+        if (specifier.type === 'ExportNamespaceSpecifier') {
+          const exported = admissionPropertyName(specifier.exported);
+          if (exported) {
+            addSymbol(exported, specifier.exported, 'object', `export:${exported}`);
+          }
+          continue;
+        }
+        const exported = admissionPropertyName(specifier.exported);
+        const local = admissionPropertyName(specifier.local);
+        if (exported) {
+          if (statement.source) {
+            addSymbol(exported, specifier.exported, 'function', `reexport:${filePath}:${exported}`);
+          } else if (local) {
+            addBindingExport(exported, local, specifier.exported);
+          }
+        }
+      }
+    } else if (statement.type === 'ExportDefaultDeclaration') {
+      addDefaultExport(statement.declaration);
+    }
+  }
+
+  const assignments = [];
+  let unresolvedComputedExport = false;
+  for (const statement of ast.body || []) {
+    visitAdmissionNode(statement, (node, ancestors) => {
+      if (node.type !== 'AssignmentExpression' || node.operator !== '=') {
+        return;
+      }
+      if (ancestors.some((ancestor) => [
+        'ArrowFunctionExpression',
+        'ClassMethod',
+        'ClassPrivateMethod',
+        'FunctionDeclaration',
+        'FunctionExpression',
+        'ObjectMethod'
+      ].includes(ancestor.type))) {
+        return;
+      }
+      if (hasUnresolvedCommonJsExportKey(node.left, bindings)) {
+        unresolvedComputedExport = true;
+      }
+      assignments.push(node);
+    });
+  }
+
+  function prototypeOwner(left) {
+    if (!left || left.type !== 'MemberExpression') {
+      return null;
+    }
+    const prototype = left.object;
+    if (!prototype || prototype.type !== 'MemberExpression' || admissionPropertyName(prototype.property) !== 'prototype') {
+      return null;
+    }
+    if (prototype.object.type === 'Identifier') {
+      return classOwners.get(prototype.object.name) || null;
+    }
+    if (isModuleExportsAssignment(prototype.object, bindings)) {
+      return moduleClassOwner;
+    }
+    const exportedClass = commonJsExportName(prototype.object, bindings);
+    if (exportedClass && classOwners.has(exportedClass)) {
+      return classOwners.get(exportedClass);
+    }
+    return null;
+  }
+
+  function addPrototypeAssignment(node) {
+    const owner = prototypeOwner(node.left);
+    const name = admissionPropertyName(node.left.property);
+    if (!owner || !name || name === 'constructor') {
+      return;
+    }
+    const value = unwrapExpression(node.right);
+    if (value && value.type === 'Identifier') {
+      const binding = bindings.get(value.name);
+      if (!binding || binding.kind !== 'function') {
+        return;
+      }
+    } else if (!value || !['FunctionExpression', 'ArrowFunctionExpression'].includes(value.type)) {
+      return;
+    }
+    addSymbol(name, node.left.property || node.left, 'method', classMethodKey(owner, name));
+  }
+
+  function addCommonJsAssignment(node) {
+    const target = commonJsExportName(node.left, bindings);
+    if (target === 'module.exports') {
+      const value = unwrapExpression(node.right);
+      if (value && ['FunctionExpression', 'ArrowFunctionExpression'].includes(value.type)) {
+        addFunctionExport(value.id && value.id.name ? value.id.name : 'default', value, `export:${value.id && value.id.name ? value.id.name : 'default'}`);
+      } else if (value && value.type === 'ClassExpression') {
+        const exportName = value.id && value.id.name ? value.id.name : 'default';
+        addClassExport(exportName, null, value, value.id || value);
+        moduleClassOwner = exportName;
+      } else if (value && value.type === 'Identifier') {
+        const binding = bindings.get(value.name);
+        if (binding && binding.kind === 'class') {
+          addBindingExport(value.name, value.name, value);
+          moduleClassOwner = value.name;
+        } else if (binding && binding.kind === 'function') {
+          addBindingExport(value.name, value.name, value);
+        } else if (binding && binding.kind === 'object') {
+          collectObjectMembers(binding.init, null);
+        }
+      } else if (value && value.type === 'ObjectExpression') {
+        collectObjectMembers(value, null);
+      }
+      return;
+    }
+    if (target) {
+      addValueExport(target, node.right, node.left.property || node.left, `export:${target}`);
+    }
+  }
+
+  for (const assignment of assignments) {
+    if (!prototypeOwner(assignment.left)) {
+      addCommonJsAssignment(assignment);
+    }
+  }
+  for (const assignment of assignments) {
+    if (prototypeOwner(assignment.left)) {
+      addPrototypeAssignment(assignment);
+    }
+  }
+
+  if (unresolvedComputedExport) {
+    return {
+      error: 'A computed CommonJS export key could not be resolved to a static string.',
+      symbols: []
+    };
+  }
+  return { error: null, symbols };
+}
+
+function admissionParserPlugins(filePath) {
+  const plugins = [];
+  if (/\.(?:cts|mts|tsx|ts)$/.test(filePath)) {
+    plugins.push('typescript');
+  }
+  if (/\.(?:jsx|tsx)$/.test(filePath)) {
+    plugins.push('jsx');
+  }
+  return plugins;
+}
+
+function visitAdmissionNode(node, visitor, ancestors = []) {
+  if (!node || typeof node !== 'object' || typeof node.type !== 'string' || node.type.startsWith('Comment')) {
+    return;
+  }
+  visitor(node, ancestors);
+  for (const [key, value] of Object.entries(node)) {
+    if (['comments', 'loc', 'start', 'end', 'extra', 'tokens', 'leadingComments', 'innerComments', 'trailingComments'].includes(key)) {
+      continue;
+    }
+    if (value && typeof value === 'object' && typeof value.type === 'string') {
+      visitAdmissionNode(value, visitor, [...ancestors, node]);
+    } else if (Array.isArray(value)) {
+      for (const item of value) {
+        if (item && typeof item === 'object' && typeof item.type === 'string') {
+          visitAdmissionNode(item, visitor, [...ancestors, node]);
+        }
+      }
+    }
+  }
+}
+
+function admissionPropertyName(node) {
+  return node && node.type === 'Identifier'
+    ? node.name
+    : node && ['StringLiteral', 'Literal', 'NumericLiteral'].includes(node.type) && (typeof node.value === 'string' || typeof node.value === 'number')
+      ? String(node.value)
+      : null;
+}
+
+function staticStringValue(node) {
+  if (node && ['StringLiteral', 'Literal'].includes(node.type) && typeof node.value === 'string') {
+    return node.value;
+  }
+  if (node && node.type === 'TemplateLiteral' && node.expressions.length === 0 && node.quasis.length === 1) {
+    return node.quasis[0].value.cooked;
+  }
+  return null;
+}
+
+function memberPropertyName(node, bindings) {
+  if (!node) {
+    return null;
+  }
+  if (!node.computed) {
+    return admissionPropertyName(node.property);
+  }
+  const literal = node.property;
+  if (literal && ['StringLiteral', 'Literal', 'NumericLiteral'].includes(literal.type)
+    && (typeof literal.value === 'string' || typeof literal.value === 'number')) {
+    return String(literal.value);
+  }
+  if (literal && literal.type === 'Identifier' && bindings) {
+    const binding = bindings.get(literal.name);
+    if (binding && binding.kind === 'constant-string') {
+      return binding.staticString;
+    }
+  }
+  return null;
+}
+
+function commonJsExportName(node, bindings) {
+  if (!node || node.type !== 'MemberExpression') {
+    return null;
+  }
+  const property = memberPropertyName(node, bindings);
+  if (!property) {
+    return null;
+  }
+  if (node.object && node.object.type === 'Identifier' && node.object.name === 'exports') {
+    return property;
+  }
+  if (node.object && node.object.type === 'MemberExpression' &&
+    node.object.object && node.object.object.type === 'Identifier' && node.object.object.name === 'module' &&
+    memberPropertyName(node.object, bindings) === 'exports') {
+    return property;
+  }
+  return isModuleExportsAssignment(node, bindings) ? 'module.exports' : null;
+}
+
+function isModuleExportsAssignment(node, bindings) {
+  return Boolean(node && node.type === 'MemberExpression' && node.object && node.object.type === 'Identifier' &&
+    node.object.name === 'module' && memberPropertyName(node, bindings) === 'exports');
+}
+
+function hasUnresolvedCommonJsExportKey(node, bindings) {
+  if (!node || node.type !== 'MemberExpression' || !node.computed) {
+    return false;
+  }
+  if (node.object && node.object.type === 'Identifier' && node.object.name === 'exports') {
+    return !memberPropertyName(node, bindings);
+  }
+  return Boolean(node.object && node.object.type === 'MemberExpression'
+    && isModuleExportsAssignment(node.object, bindings)
+    && !memberPropertyName(node, bindings));
 }
 
 function findReuseMatches(searchTerms, symbols, reuseCandidates, requestedShapes) {
@@ -1144,6 +1926,7 @@ function hasExactReusableSymbol(searchTerms, observed, requestedShapes) {
     function: ['function', 'helper'],
     interface: ['shape', 'type'],
     let: ['function', 'helper'],
+    method: ['function', 'helper'],
     type: ['shape', 'type'],
     var: ['function', 'helper']
   };
@@ -1245,7 +2028,7 @@ function copyDiagnosisRisks(diagnosis) {
   }));
 }
 
-function fingerprintProject(projectRoot) {
+function fingerprintProject(projectRoot, ignoredPaths = new Set(), ignoredDirectories = new Set()) {
   const hash = crypto.createHash('sha256');
   let fileCount = 0;
 
@@ -1259,6 +2042,10 @@ function fingerprintProject(projectRoot) {
     for (const entry of entries) {
       const absolutePath = path.join(directory, entry.name);
       const relativePath = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
+      const ignoredDirectory = ignoredDirectories.has(relativePath);
+      if (ignoredPaths.has(relativePath) && !ignoredDirectory) {
+        continue;
+      }
       const metadata = fs.lstatSync(absolutePath);
       if (entry.isSymbolicLink()) {
         update('symlink');
@@ -1266,9 +2053,11 @@ function fingerprintProject(projectRoot) {
         update(metadata.mode & 0o7777);
         update(fs.readlinkSync(absolutePath));
       } else if (entry.isDirectory()) {
-        update('directory');
-        update(relativePath);
-        update(metadata.mode & 0o7777);
+        if (!ignoredDirectory) {
+          update('directory');
+          update(relativePath);
+          update(metadata.mode & 0o7777);
+        }
         if (!IGNORED_DIRECTORIES.has(entry.name)) {
           visit(absolutePath, relativePath);
         }
@@ -1300,6 +2089,98 @@ function fingerprintProject(projectRoot) {
     return { digest: hash.digest('hex'), fileCount };
   } catch (error) {
     return { error: error.message };
+  }
+}
+
+function captureDirectoryIdentity(projectRoot) {
+  try {
+    const stat = fs.lstatSync(projectRoot);
+    return stat.isDirectory() && !stat.isSymbolicLink()
+      ? { dev: stat.dev, ino: stat.ino }
+      : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function fileIdentity(stat) {
+  return { dev: stat.dev, ino: stat.ino };
+}
+
+function sameFileIdentity(left, right) {
+  return Boolean(left && right && left.dev === right.dev && left.ino === right.ino);
+}
+
+function digestBuffer(contents) {
+  return crypto.createHash('sha256').update(contents).digest('hex');
+}
+
+function sameFileMetadata(left, right) {
+  return Boolean(left && right
+    && left.mode === right.mode
+    && left.size === right.size
+    && left.mtimeNs === right.mtimeNs
+    && left.ctimeNs === right.ctimeNs);
+}
+
+function sameFileState(left, right) {
+  return Boolean(left && right
+    && sameFileIdentity(left, right)
+    && sameFileMetadata(left, right)
+    && left.digest === right.digest);
+}
+
+function sameFileContentState(left, right) {
+  return Boolean(left && right
+    && sameFileIdentity(left, right)
+    && left.mode === right.mode
+    && left.size === right.size
+    && left.mtimeNs === right.mtimeNs
+    && left.digest === right.digest);
+}
+
+function readFileDescriptorState(fd) {
+  const before = fs.fstatSync(fd);
+  if (!before.isFile()) {
+    throw new Error('A mediated file changed into a non-regular file while being read.');
+  }
+  const hash = crypto.createHash('sha256');
+  const buffer = Buffer.alloc(64 * 1024);
+  let position = 0;
+  while (true) {
+    const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, position);
+    if (bytesRead === 0) {
+      break;
+    }
+    hash.update(buffer.subarray(0, bytesRead));
+    position += bytesRead;
+  }
+  const after = fs.fstatSync(fd);
+  if (!sameFileMetadata(fileStateMetadata(before), fileStateMetadata(after)) || after.size !== position) {
+    throw new Error('A mediated file changed while its content was being read.');
+  }
+  return {
+    ...fileStateMetadata(after),
+    ...fileIdentity(after),
+    digest: hash.digest('hex')
+  };
+}
+
+function fileStateMetadata(stat) {
+  return {
+    ctimeNs: stat.ctimeNs,
+    mode: stat.mode & 0o7777,
+    mtimeNs: stat.mtimeNs,
+    size: stat.size
+  };
+}
+
+function readRegularFileState(filePath) {
+  const fd = fs.openSync(filePath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  try {
+    return readFileDescriptorState(fd);
+  } finally {
+    fs.closeSync(fd);
   }
 }
 
@@ -1369,6 +2250,11 @@ function attemptWrite(assessment, gateOptions) {
     return deniedWrite(assessment, bindingProblem.code, bindingProblem.message, 'INCONCLUSIVE');
   }
 
+  const reuseProblem = validatePlannedWriteReuse(assessment, plannedWrites.plan);
+  if (reuseProblem) {
+    return deniedWrite(assessment, reuseProblem.code, reuseProblem.message, 'INCONCLUSIVE');
+  }
+
   // This digest check is the final authorization step before any filesystem mutation.
   const currentState = assessment.projectRoot ? fingerprintProject(assessment.projectRoot) : null;
   if (!currentState || !currentState.digest || currentState.digest !== assessment.currentDigest) {
@@ -1376,7 +2262,12 @@ function attemptWrite(assessment, gateOptions) {
   }
 
   try {
-    applyWritePlan(plannedWrites.plan);
+    applyWritePlan(
+      plannedWrites.plan,
+      assessment.projectRoot,
+      assessment.rootIdentity,
+      assessment.currentDigest
+    );
   } catch (error) {
     recordCurrentSourceState(assessment, null);
     return deniedWrite(assessment, 'write-failed', `The mediated write could not be completed: ${error.message}`, 'INCONCLUSIVE');
@@ -1466,18 +2357,43 @@ function prepareWritePlan(projectRoot, admittedScope, scopeKey, writes) {
       return { error: pathProblem };
     }
 
+    const relativeDirectory = path.posix.dirname(normalizedPath.path) === '.'
+      ? ''
+      : path.posix.dirname(normalizedPath.path);
+    const parentState = captureExistingParentIdentities(projectRoot, relativeDirectory);
+    if (parentState.error) {
+      return { error: parentState.error };
+    }
+
     let existingMode = null;
-    if (fs.existsSync(absolutePath)) {
-      try {
-        fs.accessSync(absolutePath, fs.constants.W_OK);
-        existingMode = fs.statSync(absolutePath).mode & 0o777;
-      } catch (error) {
-        return { error: writeProblem('unwritable-write-target', 'An existing write target is not writable.') };
+    let existingIdentity = null;
+    let existingState = null;
+    try {
+      const existing = fs.lstatSync(absolutePath);
+      if (!existing.isFile()) {
+        return { error: writeProblem('special-write-target', 'Mediated writes may replace regular files only.') };
+      }
+      fs.accessSync(absolutePath, fs.constants.W_OK);
+      existingState = readRegularFileState(absolutePath);
+      existingMode = existingState.mode;
+      existingIdentity = fileIdentity(existingState);
+    } catch (error) {
+      if (!error || error.code !== 'ENOENT') {
+        return { error: writeProblem('unreadable-write-target', 'An existing write target could not be authenticated.') };
       }
     }
 
     paths.add(normalizedPath.path);
-    plan.push({ absolutePath, content, existingMode, relativePath: normalizedPath.path });
+    plan.push({
+      absolutePath,
+      content,
+      contentDigest: digestBuffer(content),
+      existingIdentity,
+      existingMode,
+      existingState,
+      parentIdentities: parentState.identities,
+      relativePath: normalizedPath.path
+    });
   }
   return { error: null, plan };
 }
@@ -1534,39 +2450,113 @@ function inspectSafeWriteTarget(projectRoot, relativePath) {
   return null;
 }
 
-function applyWritePlan(plan) {
+function captureExistingParentIdentities(projectRoot, relativeDirectory) {
+  const identities = [];
+  if (!relativeDirectory) {
+    return { error: null, identities };
+  }
+
+  let currentPath = projectRoot;
+  for (const segment of relativeDirectory.split('/')) {
+    currentPath = path.join(currentPath, segment);
+    let entry;
+    try {
+      entry = fs.lstatSync(currentPath);
+    } catch (error) {
+      if (error && error.code === 'ENOENT') {
+        return { error: null, identities };
+      }
+      return {
+        error: writeProblem('unreadable-write-path', 'A requested write parent could not be authenticated.'),
+        identities: []
+      };
+    }
+    if (entry.isSymbolicLink() || !entry.isDirectory()) {
+      return {
+        error: writeProblem('unsafe-write-parent', 'A requested write parent is not a stable directory.'),
+        identities: []
+      };
+    }
+    identities.push({ identity: fileIdentity(entry), relativePath: identities.length ? `${identities.at(-1).relativePath}/${segment}` : segment });
+  }
+  return { error: null, identities };
+}
+
+function applyWritePlan(plan, projectRoot, rootIdentity, authorizedDigest) {
+  assertSafeWriteCapability();
   const transaction = crypto.randomUUID();
   const staged = [];
-  const committed = [];
   const createdDirectories = [];
+  const handles = new Map();
+  const rootFd = openDirectoryHandle(projectRoot, rootIdentity);
+  handles.set('', { fd: rootFd, relativePath: '' });
 
   try {
     for (let index = 0; index < plan.length; index += 1) {
       const write = plan[index];
-      createMissingDirectories(path.dirname(write.absolutePath), createdDirectories);
-      const temporaryPath = path.join(
-        path.dirname(write.absolutePath),
-        `.node-policy-${transaction}-${index}.pending`
+      const relativeDirectory = path.posix.dirname(write.relativePath) === '.' ? '' : path.posix.dirname(write.relativePath);
+      const parent = openRelativeDirectoryHandle(
+        handles,
+        relativeDirectory,
+        createdDirectories,
+        transaction,
+        write.parentIdentities
       );
-      const backupPath = path.join(
-        path.dirname(write.absolutePath),
-        `.node-policy-${transaction}-${index}.backup`
-      );
-      fs.writeFileSync(temporaryPath, write.content, { flag: 'wx' });
-      if (write.existingMode !== null) {
-        fs.chmodSync(temporaryPath, write.existingMode);
-        fs.copyFileSync(write.absolutePath, backupPath, fs.constants.COPYFILE_EXCL);
-      }
-      staged.push({ ...write, backupPath, temporaryPath });
+      const name = path.posix.basename(write.relativePath);
+      const targetPath = handlePath(parent.fd, name);
+      const temporaryPath = handlePath(parent.fd, `.node-policy-${transaction}-${index}.pending`);
+      const backupPath = handlePath(parent.fd, `.node-policy-${transaction}-${index}.backup`);
+      const backupRelativePath = relativeDirectory
+        ? `${relativeDirectory}/.node-policy-${transaction}-${index}.backup`
+        : `.node-policy-${transaction}-${index}.backup`;
+      const stagedWrite = {
+        ...write,
+        backupPath,
+        backupRelativePath,
+        backupState: 'none',
+        parent,
+        pendingFd: null,
+        pendingIdentity: null,
+        pendingState: null,
+        recoveryPath: handlePath(parent.fd, `.node-policy-${transaction}-${index}.recovery`),
+        recoveryRelativePath: relativeDirectory
+          ? `${relativeDirectory}/.node-policy-${transaction}-${index}.recovery`
+          : `.node-policy-${transaction}-${index}.recovery`,
+        recoveryState: 'none',
+        temporaryRelativePath: relativeDirectory
+          ? `${relativeDirectory}/.node-policy-${transaction}-${index}.pending`
+          : `.node-policy-${transaction}-${index}.pending`,
+        targetPath,
+        targetState: write.existingMode === null ? 'absent' : 'present',
+        temporaryPath
+      };
+      staged.push(stagedWrite);
+      createPendingFile(stagedWrite);
+    }
+
+    const ignoredPaths = new Set(staged.map((write) => write.temporaryRelativePath));
+    const ignoredDirectories = new Set();
+    for (const directory of createdDirectories) {
+      ignoredPaths.add(directory.relativePath);
+      ignoredDirectories.add(directory.relativePath);
+    }
+    const preCommitState = fingerprintProject(projectRoot, ignoredPaths, ignoredDirectories);
+    if (!preCommitState.digest || preCommitState.digest !== authorizedDigest) {
+      throw new Error('The project source changed before the mediated commit began.');
     }
 
     for (const write of staged) {
-      fs.renameSync(write.temporaryPath, write.absolutePath);
-      committed.push(write);
+      verifyDirectoryHandle(write.parent, projectRoot);
+      commitStagedWrite(write);
+      verifyDirectoryHandle(write.parent, projectRoot);
+    }
+    for (const write of staged) {
+      verifyCommittedTarget(write);
     }
   } catch (error) {
-    const rollbackErrors = rollbackCommittedWrites(committed);
+    const rollbackErrors = rollbackCommittedWrites(staged);
     cleanupWriteArtifacts(staged, createdDirectories);
+    closeDirectoryHandles(handles);
     if (rollbackErrors.length > 0) {
       throw new Error(`${error.message}; rollback failed: ${rollbackErrors.join('; ')}`);
     }
@@ -1574,40 +2564,325 @@ function applyWritePlan(plan) {
   }
 
   cleanupWriteArtifacts(staged, []);
+  closeDirectoryHandles(handles);
 }
 
-function createMissingDirectories(directory, createdDirectories) {
-  const missing = [];
-  let current = directory;
-  while (!fs.existsSync(current)) {
-    missing.push(current);
-    current = path.dirname(current);
+function assertSafeWriteCapability() {
+  if (process.platform !== 'linux'
+    || typeof fs.constants.O_NOFOLLOW !== 'number'
+    || typeof fs.constants.O_DIRECTORY !== 'number'
+    || typeof fs.fchmodSync !== 'function'
+    || typeof fs.linkSync !== 'function') {
+    throw new Error('Race-resistant mediated writes are unavailable on this platform.');
   }
-  for (const directoryPath of missing.reverse()) {
-    fs.mkdirSync(directoryPath);
-    createdDirectories.push(directoryPath);
+  try {
+    if (!fs.statSync('/proc/self/fd').isDirectory()) {
+      throw new Error('The directory-handle path is unavailable.');
+    }
+  } catch (error) {
+    throw new Error(`Race-resistant mediated writes are unavailable: ${error.message}`);
+  }
+}
+
+function createPendingFile(write) {
+  const flags = fs.constants.O_RDWR
+    | fs.constants.O_CREAT
+    | fs.constants.O_EXCL
+    | fs.constants.O_NOFOLLOW;
+  let fd;
+  try {
+    fd = fs.openSync(write.temporaryPath, flags, 0o666);
+    let offset = 0;
+    while (offset < write.content.length) {
+      offset += fs.writeSync(fd, write.content, offset, write.content.length - offset);
+    }
+    if (write.existingMode !== null) {
+      fs.fchmodSync(fd, write.existingMode);
+    }
+    write.pendingFd = fd;
+    write.pendingState = readFileDescriptorState(fd);
+    write.pendingIdentity = fileIdentity(write.pendingState);
+    if (write.pendingState.digest !== write.contentDigest || write.pendingState.size !== write.content.length) {
+      throw new Error('The mediated pending file does not contain the planned content.');
+    }
+  } catch (error) {
+    if (fd !== undefined) {
+      fs.closeSync(fd);
+    }
+    throw error;
+  }
+}
+
+function commitStagedWrite(write) {
+  verifyPendingFile(write);
+  if (write.existingMode !== null) {
+    const existingState = verifyExistingTarget(write);
+    fs.renameSync(write.targetPath, write.backupPath);
+    write.backupState = 'moved';
+    const moved = readRegularFileState(write.backupPath);
+    if (!sameFileState(moved, existingState) || !sameFileState(moved, write.existingState)) {
+      const restoreError = restoreMovedTarget(write);
+      throw new Error(restoreError
+        ? `A mediated write target changed before commit; rollback failed: ${restoreError}`
+        : 'A mediated write target changed before commit.');
+    }
+  }
+
+  installPendingWithoutReplacement(write);
+  verifyCommittedTarget(write);
+  if (write.existingMode !== null) {
+    const backupState = readRegularFileState(write.backupPath);
+    if (!sameFileState(backupState, write.existingState)) {
+      throw new Error('The existing target changed during the mediated commit.');
+    }
+  }
+}
+
+function verifyCommittedTarget(write) {
+  let installed;
+  try {
+    installed = readRegularFileState(write.targetPath);
+  } catch (error) {
+    write.committedTargetMismatch = true;
+    throw new Error(`The installed target could not be authenticated: ${error.message}`);
+  }
+  if (!sameFileContentState(installed, write.pendingState)
+    || installed.digest !== write.contentDigest
+    || installed.size !== write.content.length
+    || (write.committedState && !sameFileState(installed, write.committedState))) {
+    write.committedTargetMismatch = true;
+    throw new Error('The installed target changed before the mediated commit completed.');
+  }
+  write.committedState = installed;
+}
+
+function verifyPendingFile(write) {
+  const descriptorState = readFileDescriptorState(write.pendingFd);
+  if (!sameFileState(descriptorState, write.pendingState)
+    || descriptorState.digest !== write.contentDigest
+    || descriptorState.size !== write.content.length) {
+    throw new Error('A mediated pending file changed or no longer contains the planned content.');
+  }
+  const pathState = readRegularFileState(write.temporaryPath);
+  if (!sameFileState(pathState, descriptorState)) {
+    throw new Error('A mediated pending pathname changed before commit.');
+  }
+}
+
+function verifyExistingTarget(write) {
+  let targetState;
+  try {
+    targetState = readRegularFileState(write.targetPath);
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      throw new Error('A mediated write target disappeared before commit.');
+    }
+    throw error;
+  }
+  if (!sameFileState(targetState, write.existingState)) {
+    throw new Error('A mediated write target changed before commit.');
+  }
+  return targetState;
+}
+
+function installPendingWithoutReplacement(write) {
+  if (write.existingMode === null) {
+    try {
+      fs.lstatSync(write.targetPath);
+      throw new Error('A mediated write target appeared before commit.');
+    } catch (error) {
+      if (!error || error.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+
+  // Linking into the directory is a no-replace operation, unlike rename.
+  fs.linkSync(write.temporaryPath, write.targetPath);
+  const installed = readRegularFileState(write.targetPath);
+  if (!sameFileContentState(installed, write.pendingState)
+    || installed.digest !== write.contentDigest
+    || installed.size !== write.content.length) {
+    throw new Error('The mediated pending file could not be installed as a regular file.');
+  }
+  write.targetState = 'committed';
+  fs.unlinkSync(write.temporaryPath);
+}
+
+function openDirectoryHandle(directory, expectedIdentity) {
+  const fd = fs.openSync(directory, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW);
+  try {
+    const stat = fs.fstatSync(fd);
+    if (!stat.isDirectory() || (expectedIdentity && (stat.dev !== expectedIdentity.dev || stat.ino !== expectedIdentity.ino))) {
+      throw new Error('The canonical project root changed before the mediated write began.');
+    }
+    return fd;
+  } catch (error) {
+    fs.closeSync(fd);
+    throw error;
+  }
+}
+
+function openRelativeDirectoryHandle(handles, relativeDirectory, createdDirectories, transaction, expectedIdentities = []) {
+  if (!relativeDirectory) {
+    return handles.get('');
+  }
+  const expectedByPath = new Map(expectedIdentities.map((entry) => [entry.relativePath, entry.identity]));
+  const segments = relativeDirectory.split('/');
+  let current = '';
+  for (const segment of segments) {
+    const next = current ? `${current}/${segment}` : segment;
+    const expectedIdentity = expectedByPath.get(next) || null;
+    if (!handles.has(next)) {
+      const parent = handles.get(current);
+      if (!parent) {
+        throw new Error('A mediated write parent directory could not be anchored.');
+      }
+      const childPath = handlePath(parent.fd, segment);
+      let fd;
+      try {
+        fd = fs.openSync(childPath, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW);
+      } catch (error) {
+        if (!error || error.code !== 'ENOENT') {
+          throw error;
+        }
+        if (expectedIdentity) {
+          throw new Error(`A planned write parent disappeared before it could be opened: ${next}.`);
+        }
+        fs.mkdirSync(childPath, 0o755);
+        createdDirectories.push({ path: childPath, relativePath: next });
+        fd = fs.openSync(childPath, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW);
+      }
+      const opened = fs.fstatSync(fd);
+      if (!opened.isDirectory() || (expectedIdentity && !sameFileIdentity(fileIdentity(opened), expectedIdentity))) {
+        fs.closeSync(fd);
+        throw new Error(`A planned write parent changed before it was opened: ${next}.`);
+      }
+      handles.set(next, { fd, relativePath: next });
+    } else if (expectedIdentity) {
+      const opened = fs.fstatSync(handles.get(next).fd);
+      if (!opened.isDirectory() || !sameFileIdentity(fileIdentity(opened), expectedIdentity)) {
+        throw new Error(`A planned write parent changed before it was reused: ${next}.`);
+      }
+    }
+    current = next;
+  }
+  return handles.get(relativeDirectory);
+}
+
+function handlePath(fd, name = '') {
+  return path.join('/proc/self/fd', String(fd), name);
+}
+
+function verifyDirectoryHandle(handle, projectRoot) {
+  const expected = fs.fstatSync(handle.fd);
+  const absolutePath = handle.relativePath
+    ? path.join(projectRoot, ...handle.relativePath.split('/'))
+    : projectRoot;
+  const observed = fs.lstatSync(absolutePath);
+  if (!observed.isDirectory() || observed.dev !== expected.dev || observed.ino !== expected.ino) {
+    throw new Error(`A mediated write parent changed before commit: ${handle.relativePath || '.'}.`);
   }
 }
 
 function rollbackCommittedWrites(committed) {
   const errors = [];
   for (const write of [...committed].reverse()) {
-    try {
-      if (write.existingMode !== null) {
-        fs.renameSync(write.backupPath, write.absolutePath);
-      } else {
-        fs.unlinkSync(write.absolutePath);
+    if (write.targetState === 'committed') {
+      try {
+        const target = fs.lstatSync(write.targetPath);
+        if (sameFileIdentity(fileIdentity(target), write.pendingIdentity)) {
+          if (write.committedTargetMismatch) {
+            const recoveryError = preserveCommittedTarget(write);
+            if (recoveryError) {
+              errors.push(`${write.relativePath}: ${recoveryError}`);
+            }
+          }
+          fs.unlinkSync(write.targetPath);
+        } else {
+          const recovery = write.backupState === 'moved'
+            ? `; original target backup preserved at ${write.backupRelativePath}`
+            : '';
+          if (write.backupState === 'moved') {
+            write.backupState = 'preserved';
+          }
+          errors.push(`${write.relativePath}: the committed target changed before rollback${recovery}`);
+          continue;
+        }
+      } catch (error) {
+        if (!error || error.code !== 'ENOENT') {
+          const recovery = write.backupState === 'moved'
+            ? `; original target backup preserved at ${write.backupRelativePath}`
+            : '';
+          if (write.backupState === 'moved') {
+            write.backupState = 'preserved';
+          }
+          errors.push(`${write.relativePath}: ${error.message}${recovery}`);
+          continue;
+        }
       }
-    } catch (error) {
-      errors.push(`${write.relativePath}: ${error.message}`);
+    }
+    if (write.backupState === 'moved') {
+      const restoreError = restoreMovedTarget(write);
+      if (restoreError) {
+        errors.push(`${write.relativePath}: ${restoreError}`);
+      }
     }
   }
   return errors;
 }
 
+function preserveCommittedTarget(write) {
+  if (write.recoveryState === 'preserved') {
+    return `installed target recovery preserved at ${write.recoveryRelativePath}`;
+  }
+  try {
+    fs.linkSync(write.targetPath, write.recoveryPath);
+    write.recoveryState = 'preserved';
+    return `installed target recovery preserved at ${write.recoveryRelativePath}`;
+  } catch (error) {
+    return `installed target recovery could not be preserved at ${write.recoveryRelativePath}: ${error.message}`;
+  }
+}
+
+function restoreMovedTarget(write) {
+  if (write.backupState !== 'moved') {
+    return null;
+  }
+  try {
+    fs.linkSync(write.backupPath, write.targetPath);
+    fs.unlinkSync(write.backupPath);
+    write.backupState = 'restored';
+    write.targetState = 'present';
+    return null;
+  } catch (error) {
+    if (error && error.code === 'EEXIST') {
+      write.backupState = 'preserved';
+      return `the concurrent target owns the pathname; original target backup preserved at ${write.backupRelativePath}`;
+    }
+    write.backupState = 'preserved';
+    return `the original target could not be restored; backup preserved at ${write.backupRelativePath}: ${error.message}`;
+  }
+}
+
 function cleanupWriteArtifacts(staged, createdDirectories) {
   for (const write of staged) {
-    for (const artifact of [write.temporaryPath, write.backupPath]) {
+    if (write.pendingFd !== null) {
+      try {
+        fs.closeSync(write.pendingFd);
+      } catch (error) {
+        // Descriptor cleanup is best effort after the transaction outcome is fixed.
+      }
+      write.pendingFd = null;
+    }
+    const artifacts = [write.temporaryPath];
+    if (write.backupState !== 'preserved') {
+      artifacts.push(write.backupPath);
+    }
+    if (write.recoveryState !== 'preserved') {
+      artifacts.push(write.recoveryPath);
+    }
+    for (const artifact of artifacts) {
       try {
         fs.unlinkSync(artifact);
       } catch (error) {
@@ -1619,11 +2894,21 @@ function cleanupWriteArtifacts(staged, createdDirectories) {
   }
   for (const directory of [...createdDirectories].reverse()) {
     try {
-      fs.rmdirSync(directory);
+      fs.rmdirSync(directory.path);
     } catch (error) {
       if (!error || !['ENOENT', 'ENOTEMPTY'].includes(error.code)) {
         // Leave a concurrently populated directory intact.
       }
+    }
+  }
+}
+
+function closeDirectoryHandles(handles) {
+  for (const handle of handles.values()) {
+    try {
+      fs.closeSync(handle.fd);
+    } catch (error) {
+      // The descriptor is best-effort cleanup after the transaction outcome is fixed.
     }
   }
 }
