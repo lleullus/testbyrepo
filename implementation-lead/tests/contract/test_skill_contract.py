@@ -116,15 +116,26 @@ class ImplementationSkillContractTests(unittest.TestCase):
         self.assertIn("If every material choice is fixed, no delegation is applicable\n   or required", GREENFIELD)
 
     def test_external_planning_workspace_is_shared_by_active_generators(self) -> None:
-        active = MATT_SKILLS + [PROJECT_SHAPER, PROJECT_MAP_CONTRACT, MATT_HANDOFF_CONTRACT, FROM_PROJECT_SHAPER]
+        active = MATT_SKILLS + [
+            PROJECT_SHAPER,
+            PROJECT_MAP_CONTRACT,
+            MATT_HANDOFF_CONTRACT,
+            FROM_PROJECT_SHAPER,
+            PLANNING_WORKSPACE_README,
+        ]
         self.assertTrue(all("<project-root>/.scratch" not in text for text in active))
+        self.assertTrue(all("/tmp" + "/opencode/planning" not in text for text in active))
         for text in MATT_SKILLS:
             self.assertIn("planning-workspace/planning_workspace.py", text)
-        self.assertIn("/tmp/opencode/planning/<task-owned-id>/<work-slug>/", MATT_SKILLS[0])
+        self.assertIn("~/opencode/planning/<task-owned-id>/<work-slug>/", MATT_SKILLS[0])
         self.assertIn("<planning-workspace>/SPEC.md", MATT_SKILLS[1])
         self.assertIn("<planning-workspace>/tickets/TICKET-NNN.md", TO_TICKETS)
         self.assertIn("<initiative-planning-workspace>/PROJECT-MAP.md", PROJECT_SHAPER)
         self.assertIn("<initiative-planning-workspace>/matt-briefs/WP-NNN.md", MATT_HANDOFF_CONTRACT)
+        self.assertRegex(FROM_PROJECT_SHAPER, r"independent default\s+package planning workspace")
+        self.assertRegex(FROM_PROJECT_SHAPER, r"do not nest the\s+package workspace.*initiative workspace")
+        self.assertRegex(PLANNING_WORKSPACE_README, r"Implementation Lead uses the exact Ticket and Spec paths directly")
+        self.assertRegex(PLANNING_WORKSPACE_README, r"never moved or copied into the product project")
 
     def test_rootless_spec_workspace_must_be_strictly_revalidated_for_ready_ticket(self) -> None:
         self.assertIn("--future-project-root", PLANNING_WORKSPACE_README)

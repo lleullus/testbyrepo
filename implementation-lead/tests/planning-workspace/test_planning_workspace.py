@@ -45,15 +45,26 @@ class PlanningWorkspaceTests(unittest.TestCase):
         planning_workspace.DEFAULT_PLANNING_ROOT = self.original_default
         self.temporary.cleanup()
 
+    def test_production_default_root_uses_home_namespace(self) -> None:
+        self.assertEqual(Path.home() / "opencode" / "planning", self.original_default)
+        self.assertTrue(self.original_default.is_absolute())
+
     def test_default_workspace_is_exclusive_external_owner_only_and_reusable(self) -> None:
         first = planning_workspace.prepare(str(self.product), "external-planning")
         second = planning_workspace.prepare(str(self.product), "external-planning")
         first_path = Path(first["planningWorkspace"])
         second_path = Path(second["planningWorkspace"])
         self.assertNotEqual(first_path, second_path)
+        self.assertNotEqual(first["taskId"], second["taskId"])
+        self.assertRegex(str(first["taskId"]), r"^task-[a-f0-9]{32}$")
         self.assertTrue(first_path.is_dir())
+        self.assertTrue(first_path.is_absolute())
+        self.assertEqual(first_path.resolve(), first_path)
+        self.assertTrue(first_path.is_relative_to(self.default_root))
         self.assertEqual(0o700, first_path.stat().st_mode & 0o777)
         self.assertEqual(os.geteuid(), first_path.stat().st_uid)
+        self.assertEqual(0o700, first_path.parent.stat().st_mode & 0o777)
+        self.assertEqual(os.geteuid(), first_path.parent.stat().st_uid)
         self.assertFalse(first_path.is_relative_to(self.product))
         self.assertFalse(self.product.is_relative_to(first_path))
         self.assertFalse((self.product / ".scratch").exists())
@@ -78,6 +89,37 @@ class PlanningWorkspaceTests(unittest.TestCase):
         os.chmod(unsafe_parent, 0o777)
         with self.assertRaisesRegex(planning_workspace.WorkspaceError, "UNSAFE_WORKSPACE_PARENT"):
             planning_workspace.prepare(str(self.product), "work", str(unsafe_parent / "work"))
+
+    def test_managed_supplied_paths_fail_without_creating_directories(self) -> None:
+        task_id = "task-" + "a" * 32
+        supplied_paths = (
+            (self.default_root / "not-a-task" / "work", "work"),
+            (self.default_root / task_id / "work" / "nested", "nested"),
+            (self.default_root / task_id / "different-slug", "work"),
+            (self.default_root / task_id / "work", "work"),
+        )
+
+        for workspace, slug in supplied_paths:
+            with self.subTest(workspace=workspace), self.assertRaisesRegex(
+                planning_workspace.WorkspaceError, "INVALID_DEFAULT_WORKSPACE"
+            ):
+                planning_workspace.prepare(str(self.product), slug, str(workspace))
+            self.assertFalse(workspace.exists())
+        self.assertFalse(self.default_root.exists())
+
+    def test_default_workspace_overlap_fails_before_managed_root_creation(self) -> None:
+        containing_product = self.default_root.parent.parent
+        with self.assertRaisesRegex(planning_workspace.WorkspaceError, "WORKSPACE_PROJECT_OVERLAP"):
+            planning_workspace.prepare(str(containing_product), "work")
+        self.assertFalse(self.default_root.exists())
+
+        for future_product in (self.default_root.parent, self.default_root):
+            with self.subTest(future_product=future_product), self.assertRaisesRegex(
+                planning_workspace.WorkspaceError, "WORKSPACE_PROJECT_OVERLAP"
+            ):
+                planning_workspace.prepare_future_root(str(future_product), "work")
+            self.assertFalse(future_product.exists())
+            self.assertFalse(self.default_root.exists())
 
     def test_slug_and_product_overlap_fail_closed(self) -> None:
         for slug in ("", ".", "..", "Bad", "bad/name", "bad\\name", "bad--", "valid--slug"):
@@ -193,6 +235,27 @@ class PlanningWorkspaceTests(unittest.TestCase):
         self.default_root.symlink_to(target, target_is_directory=True)
         with self.assertRaisesRegex(planning_workspace.WorkspaceError, "UNSAFE_MANAGED_ANCESTOR"):
             planning_workspace.prepare(str(self.product), "work")
+
+    def test_default_root_base_must_be_safe_and_canonical(self) -> None:
+        base = self.default_root.parent.parent
+        os.chmod(base, 0o777)
+        with self.assertRaisesRegex(planning_workspace.WorkspaceError, "INVALID_DEFAULT_ROOT"):
+            planning_workspace.prepare(str(self.product), "work")
+        os.chmod(base, 0o700)
+
+    def test_project_shaper_package_workspace_is_independent_from_initiative_workspace(self) -> None:
+        initiative = planning_workspace.prepare(str(self.product), "initiative")
+        package = planning_workspace.prepare(str(self.product), "core-job")
+        initiative_workspace = Path(initiative["planningWorkspace"])
+        package_workspace = Path(package["planningWorkspace"])
+
+        self.assertTrue(initiative["defaultWorkspace"])
+        self.assertTrue(package["defaultWorkspace"])
+        self.assertNotEqual(initiative["taskId"], package["taskId"])
+        self.assertTrue(initiative_workspace.is_relative_to(self.default_root))
+        self.assertTrue(package_workspace.is_relative_to(self.default_root))
+        self.assertFalse(initiative_workspace.is_relative_to(package_workspace))
+        self.assertFalse(package_workspace.is_relative_to(initiative_workspace))
 
     def test_external_project_map_and_relative_brief_validate_without_product_pollution(self) -> None:
         workspace = Path(planning_workspace.prepare(str(self.product), "initiative")["planningWorkspace"])

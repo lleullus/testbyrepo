@@ -24,7 +24,7 @@ Do not ask for a GitHub, GitLab, Linear, Jira, or other remote tracker. Do not i
 Planning Markdown stays outside the target product project. The default is:
 
 ```text
-/tmp/opencode/planning/<task-owned-id>/<work-slug>/
+~/opencode/planning/<task-owned-id>/<work-slug>/
 ```
 
 The user may instead supply one exact external durable workspace. Before the

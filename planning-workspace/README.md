@@ -22,16 +22,20 @@ has `rootReady: false`. Once that exact root exists, pass the same
 creating a `ready` Ticket.
 
 Without `--workspace`, it exclusively creates
-`/tmp/opencode/planning/<task-owned-id>/<work-slug>/`. It validates the managed
+`~/opencode/planning/<task-owned-id>/<work-slug>/`. It validates the managed
 ancestor owner, permissions, and non-symlink identity, creates owner-only task
-directories, and never adopts an existing generated task path.
+directories, and never adopts an existing generated task path. The home-based
+root's base directory must be canonical, current-user-owned, writable and
+searchable, and not group/world writable.
 Reusing a generated workspace with `--workspace` revalidates the complete
 managed root, task-directory, and workspace chain. Changed ownership, unsafe
 permissions, or symlink/retargeted identity fails closed. Generated task and
 workspace directories must retain exact mode `0700`. Any supplied path below
 the default planning root remains in the generated namespace: it must have the
 exact `<task-owned-id>/<work-slug>` shape and match the supplied work slug, and
-cannot be reclassified as a durable user-supplied workspace.
+cannot be reclassified as a durable user-supplied workspace. It must already
+exist as that generated workspace; malformed, nested, mismatched, and absent
+managed paths are rejected without creating directories.
 
 An explicitly supplied workspace may be an existing durable directory or a new
 exact directory under an existing canonical safe parent. It must be owned and
@@ -43,6 +47,8 @@ The JSON `planningWorkspace` is the canonical identity for the whole planning
 flow. Preserve it in current planning context and pass it back with
 `--workspace` for every later artifact. Do not create a new task identity per
 Spec, Ticket, Wayfinder, Handoff, research report, Project Map, or Matt brief.
+Implementation Lead uses the exact Ticket and Spec paths directly; planning
+Markdown is never moved or copied into the product project.
 Existing planning input inside a product `.scratch` remains readable but is not
 a valid destination for newly generated planning Markdown.
 

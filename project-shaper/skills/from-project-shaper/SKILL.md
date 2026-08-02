@@ -88,12 +88,14 @@ After the frame is confirmed:
 2. Use `grill-with-docs` when the package is codebase-backed and unresolved product decisions remain; otherwise use `grill-me`.
 3. Skip grilling only when the package outcome, preserved observable behavior and invariants, explicit boundaries, non-goals, and observable completion evidence are already clear.
 4. Ask only package-internal product or operational decisions. Do not ask the user to choose files, modules, schemas, APIs, libraries, algorithms, or implementation order.
-5. Use the brief's `Suggested-Work-Slug` when preparing a package planning
-   workspace under the external initiative workspace unless the user explicitly
-   selects another external durable workspace. Resolve
+5. Use the brief's `Suggested-Work-Slug` once to prepare an independent default
+   package planning workspace unless the user explicitly selects another
+   external durable workspace. Resolve
    `../../../planning-workspace/planning_workspace.py` from this skill's
-   canonical physical directory and reuse that package workspace for its Spec,
-   Tickets, Wayfinder, Handoff, and planning reports.
+   canonical physical directory and reuse that canonical package workspace for
+   its Spec, Tickets, Wayfinder, Handoff, and planning reports. Keep the
+   initiative map and brief at their exact original paths; do not nest the
+   package workspace under the initiative workspace.
 6. Follow the unmodified `to-spec` and `to-tickets` contracts. Do not add Project Shaper metadata to those artifacts unless the user adopts it as part of the package contract.
 7. End at ready Tickets exactly as normal Matt does. Do not invoke Implementation Lead or a Worker.
 

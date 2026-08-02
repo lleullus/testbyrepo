@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Sequence
 
 
-DEFAULT_PLANNING_ROOT = Path("/tmp/opencode/planning")
+DEFAULT_PLANNING_ROOT = Path.home() / "opencode" / "planning"
 WORK_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 TASK_ID_PATTERN = re.compile(r"^task-[a-f0-9]{32}$")
 
@@ -64,7 +64,7 @@ def _ensure_default_root(root: Path) -> Path:
     if not root.is_absolute() or len(root.parts) < 3:
         raise WorkspaceError("INVALID_DEFAULT_ROOT", "default planning root identity is invalid")
     current = root.parent.parent
-    _lstat_directory(current, "INVALID_DEFAULT_ROOT")
+    _validate_owned_directory(current, "INVALID_DEFAULT_ROOT", writable=True)
     if current.resolve(strict=True) != current:
         raise WorkspaceError("INVALID_DEFAULT_ROOT", "default planning root base must be canonical")
     for name in (root.parent.name, root.name):
@@ -169,9 +169,7 @@ def _prepare_supplied(raw_workspace: str, project_root: Path) -> tuple[Path, boo
     return canonical, created
 
 
-def _validate_default_workspace_reuse(workspace: Path, work_slug: str) -> str | None:
-    if not workspace.is_relative_to(DEFAULT_PLANNING_ROOT):
-        return None
+def _validate_default_workspace_reuse(workspace: Path, work_slug: str) -> str:
     relative = workspace.relative_to(DEFAULT_PLANNING_ROOT)
     if len(relative.parts) != 2:
         raise WorkspaceError(
@@ -184,10 +182,17 @@ def _validate_default_workspace_reuse(workspace: Path, work_slug: str) -> str | 
             "INVALID_DEFAULT_WORKSPACE",
             "generated workspace task identity or work slug does not match",
         )
+    if not workspace.exists() or workspace.is_symlink():
+        raise WorkspaceError(
+            "INVALID_DEFAULT_WORKSPACE",
+            "generated workspace must already exist before it can be reused",
+        )
+    _validate_owned_directory(workspace, "UNSAFE_WORKSPACE", writable=True)
+    if workspace.resolve(strict=True) != workspace:
+        raise WorkspaceError("UNSAFE_WORKSPACE", "supplied planning workspace must be canonical")
     root = _ensure_default_root(DEFAULT_PLANNING_ROOT)
     task_directory = root / task_id
     _validate_owned_directory(task_directory, "UNSAFE_TASK_DIRECTORY", writable=True)
-    _validate_owned_directory(workspace, "UNSAFE_WORKSPACE", writable=True)
     if stat.S_IMODE(task_directory.stat().st_mode) != 0o700:
         raise WorkspaceError("UNSAFE_TASK_DIRECTORY", "generated task directory mode must be 0700")
     if stat.S_IMODE(workspace.stat().st_mode) != 0o700:
@@ -202,8 +207,16 @@ def _validate_default_workspace_reuse(workspace: Path, work_slug: str) -> str | 
 def _prepare(project: Path, work_slug: str, workspace: str | None, *, future_root: bool) -> dict[str, object]:
     _validate_slug(work_slug)
     if workspace is not None:
-        canonical, created = _prepare_supplied(workspace, project)
-        task_id = _validate_default_workspace_reuse(canonical, work_slug)
+        supplied = Path(workspace).expanduser()
+        if supplied.is_absolute() and supplied.is_relative_to(DEFAULT_PLANNING_ROOT):
+            # Managed paths are generated identities, never user-created workspaces.
+            task_id = _validate_default_workspace_reuse(supplied, work_slug)
+            _require_disjoint(supplied, project)
+            canonical = supplied
+            created = False
+        else:
+            canonical, created = _prepare_supplied(workspace, project)
+            task_id = None
         result: dict[str, object] = {
             "planningWorkspace": str(canonical),
             "workSlug": work_slug,
@@ -217,8 +230,8 @@ def _prepare(project: Path, work_slug: str, workspace: str | None, *, future_roo
             result["projectRoot"] = str(project)
         return result
 
+    _require_disjoint(DEFAULT_PLANNING_ROOT, project)
     root = _ensure_default_root(DEFAULT_PLANNING_ROOT)
-    _require_disjoint(root, project)
     task_id = f"task-{uuid.uuid4().hex}"
     task_directory = root / task_id
     _mkdir_exclusive(task_directory, "TASK_DIRECTORY_COLLISION")
