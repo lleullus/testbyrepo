@@ -86,14 +86,15 @@ function proofProject({ script = 'node --test test/index.test.js', source = INIT
 }
 
 function admittedRevision(directory, source = REVISED_SOURCE, options = {}) {
+  const request = options.request || REQUEST;
   const session = admitChange({
     projectDirectory: directory,
-    request: REQUEST,
+    request,
     scope: options.scope || 'src/index.js'
   });
   assert.equal(session.verdict, 'PASS');
   const write = session.attemptWrite({
-    request: REQUEST,
+    request,
     writes: [{ path: options.path || 'src/index.js', content: source }]
   });
   assert.equal(write.allowed, true);
@@ -229,6 +230,22 @@ test('disposable proof rejects an escaping symlink in an ignored directory witho
   assert.equal(check(result, 'test-execution').verdict, 'INCONCLUSIVE');
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'untouched');
   assert.equal(fs.existsSync(path.join(outside, 'escape.txt')), false);
+});
+
+test('disposable proof permits an internal node_modules bin symlink', (t) => {
+  const directory = makeProject(proofProject({
+    extraFiles: {
+      'node_modules/pkg/bin/tool.js': '#!/usr/bin/env node\n'
+    }
+  }));
+  fs.mkdirSync(path.join(directory, 'node_modules', '.bin'), { recursive: true });
+  fs.symlinkSync('../pkg/bin/tool.js', path.join(directory, 'node_modules', '.bin', 'tool'));
+  t.after(() => removeProject(directory));
+
+  const result = admittedRevision(directory).behaviorProof();
+
+  assert.equal(result.verdict, 'PASS');
+  assert.equal(result.details.testExecution.status, 'PASS');
 });
 
 test('behavior proof rejects unsafe test targets and does not execute lifecycle scripts', (t) => {
@@ -643,6 +660,64 @@ test('an unproven added defensive branch remains INCONCLUSIVE instead of being n
 
   assert.notEqual(result.verdict, 'PASS');
   assert.equal(check(result, 'defensive-handling').verdict, 'INCONCLUSIVE');
+});
+
+test('failure-path proof rejects an assertion and implementation using the wrong retained failure outcome', (t) => {
+  const request = 'Update the existing value behavior. Keep startup unchanged. If a value is invalid, show "EXPECTED_FAILURE".';
+  const wrongFailureSource = REVISED_SOURCE.replace('value is required', 'WRONG_FAILURE');
+  const wrongFailureTests = behavioralTests().replace(
+    "assert.throws(() => validate(null), /value is required/)",
+    "assert.throws(() => validate(null), /WRONG_FAILURE/)"
+  );
+  const directory = makeProject(proofProject({ source: INITIAL_SOURCE, tests: wrongFailureTests }));
+  t.after(() => removeProject(directory));
+
+  const result = admittedRevision(directory, wrongFailureSource, { request }).behaviorProof();
+  const failureObligation = result.details.binding.testObligations.find((obligation) => obligation.case === 'failure-path');
+
+  assert.match(failureObligation.obligation, /EXPECTED_FAILURE/);
+  assert.equal(result.details.testExecution.status, 'PASS');
+  assert.equal(result.details.edgeCases.categories.find((item) => item.id === 'failure-path').status, 'FAIL');
+  assert.notEqual(check(result, 'defensive-handling').verdict, 'PASS');
+  assert.notEqual(result.verdict, 'PASS');
+});
+
+test('failure-path proof rejects a matcherless throw assertion for a specific requested failure outcome', (t) => {
+  const request = 'Update the existing value behavior. Keep startup unchanged. If a value is invalid, show "EXPECTED_FAILURE".';
+  const expectedFailureSource = REVISED_SOURCE.replace('value is required', 'EXPECTED_FAILURE');
+  const matcherlessTests = behavioralTests().replace(
+    "assert.throws(() => validate(null), /value is required/)",
+    'assert.throws(() => validate(null))'
+  );
+  const directory = makeProject(proofProject({ source: INITIAL_SOURCE, tests: matcherlessTests }));
+  t.after(() => removeProject(directory));
+
+  const result = admittedRevision(directory, expectedFailureSource, { request }).behaviorProof();
+
+  assert.equal(result.details.testExecution.status, 'PASS');
+  assert.equal(result.details.edgeCases.categories.find((item) => item.id === 'failure-path').status, 'FAIL');
+  assert.notEqual(check(result, 'defensive-handling').verdict, 'PASS');
+  assert.notEqual(result.verdict, 'PASS');
+});
+
+test('failure-path proof consumes a structured Korean generic error outcome', (t) => {
+  const request = '사용자가 값을 수정할 수 있게 하고 기존 시작 동작은 그대로 유지하세요. 실패하면 오류를 보여 주세요.';
+  const koreanFailureSource = REVISED_SOURCE.replace('value is required', '오류');
+  const koreanFailureTests = behavioralTests().replace('/value is required/', '/오류/');
+  const directory = makeProject(proofProject({ source: INITIAL_SOURCE, tests: koreanFailureTests }));
+  t.after(() => removeProject(directory));
+
+  const result = admittedRevision(directory, koreanFailureSource, { request }).behaviorProof();
+  const failureObligation = result.details.binding.testObligations.find((obligation) => obligation.case === 'failure-path');
+
+  assert.deepEqual(failureObligation.expectedFailureOutcome, {
+    constraints: [],
+    generic: true,
+    kind: 'error'
+  });
+  assert.equal(result.details.edgeCases.categories.find((item) => item.id === 'failure-path').status, 'PASS');
+  assert.equal(check(result, 'defensive-handling').verdict, 'PASS');
+  assert.equal(result.verdict, 'PASS');
 });
 
 test('forged public policy cannot mint a behavior-proof runner', () => {

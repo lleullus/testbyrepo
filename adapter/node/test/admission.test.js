@@ -998,6 +998,12 @@ test('separates Korean desired and preserved behavior instead of reusing the fai
   assert.match(session.details.behavior.desiredBehavior.text, /이름을 수정/);
   assert.match(session.details.behavior.behaviorToPreserve.text, /기존 로그인/);
   assert.match(session.details.behavior.observableFailureOutcome.text, /실패하면 오류/);
+  const failureObligation = session.details.testObligations.find((obligation) => obligation.case === 'failure-path');
+  assert.deepEqual(failureObligation.expectedFailureOutcome, {
+    constraints: [],
+    generic: true,
+    kind: 'error'
+  });
   assert.notEqual(
     session.details.behavior.desiredBehavior.text,
     session.details.behavior.observableFailureOutcome.text

@@ -108,16 +108,18 @@ function project({ indexSource = INDEX_WITH_OBSERVABLE_OUTPUT, tests = testsForI
   };
 }
 
-function admittedRevision(directory) {
+function admittedRevision(directory, options = {}) {
+  const request = options.request || REQUEST;
+  const source = options.source || REVISED_FORMAT;
   const session = admitChange({
     projectDirectory: directory,
-    request: REQUEST,
+    request,
     scope: 'src'
   });
   assert.equal(session.verdict, 'PASS');
   const write = session.attemptWrite({
-    request: REQUEST,
-    writes: [{ path: 'src/format.js', content: REVISED_FORMAT }]
+    request,
+    writes: [{ path: 'src/format.js', content: source }]
   });
   assert.equal(write.allowed, true);
   return session;
@@ -159,6 +161,40 @@ test('deep behavior proof executes and mutates every fixed dependency-impact sou
   assert.ok(result.details.impact.perSource.every((item) => item.tests.includes('test/index.test.js')));
   assert.equal(result.details.sourceReadback.unchanged, true);
   assert.equal(digest(directory), before);
+});
+
+test('deep behavior proof rejects a retained wrong failure outcome despite passing impact tests', (t) => {
+  const request = 'Update the existing value behavior. Keep startup unchanged. If a value is invalid, show "EXPECTED_FAILURE".';
+  const wrongFailureSource = REVISED_FORMAT.replace('value is required', 'WRONG_FAILURE');
+  const wrongFailureTests = testsForIndex().replace(
+    "assert.throws(() => validate(null), /value is required/)",
+    "assert.throws(() => validate(null), /WRONG_FAILURE/)"
+  );
+  const directory = makeProject(project({ tests: wrongFailureTests }));
+  t.after(() => removeProject(directory));
+
+  const result = admittedRevision(directory, { request, source: wrongFailureSource }).behaviorProof({ mode: 'deep' });
+
+  assert.equal(result.details.testExecution.status, 'PASS');
+  assert.equal(result.details.edgeCases.categories.find((item) => item.id === 'failure-path').status, 'FAIL');
+  assert.notEqual(check(result, 'edge-case-regressions').verdict, 'PASS');
+  assert.notEqual(check(result, 'defensive-handling').verdict, 'PASS');
+  assert.notEqual(result.verdict, 'PASS');
+});
+
+test('deep behavior proof consumes a structured Korean generic error outcome', (t) => {
+  const request = '사용자가 값을 수정할 수 있게 하고 기존 시작 동작은 그대로 유지하세요. 실패하면 오류를 보여 주세요.';
+  const koreanFailureSource = REVISED_FORMAT.replace('value is required', '오류');
+  const koreanFailureTests = testsForIndex().replace('/value is required/', '/오류/');
+  const directory = makeProject(project({ tests: koreanFailureTests }));
+  t.after(() => removeProject(directory));
+
+  const result = admittedRevision(directory, { request, source: koreanFailureSource }).behaviorProof({ mode: 'deep' });
+
+  assert.equal(result.details.edgeCases.categories.find((item) => item.id === 'failure-path').status, 'PASS');
+  assert.equal(check(result, 'edge-case-regressions').verdict, 'PASS');
+  assert.equal(check(result, 'defensive-handling').verdict, 'PASS');
+  assert.equal(result.verdict, 'PASS');
 });
 
 test('deep behavior proof is INCONCLUSIVE when a new product source is admitted outside immutable WP-002 closure', (t) => {

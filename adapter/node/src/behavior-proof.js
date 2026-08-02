@@ -107,7 +107,17 @@ function captureBehaviorAuthority(admissionAuthority, qualityObligations, wp002I
     deepErrors.push(capabilityEvidence('authority.impactSource', 'The fixed WP-002 impact scope did not contain readable Node or TypeScript product source.'));
   }
   const testObligations = admission && admission.details && Array.isArray(admission.details.testObligations)
-    ? admission.details.testObligations.map((obligation) => ({ ...obligation }))
+    ? admission.details.testObligations.map((obligation) => ({
+      ...obligation,
+      ...(obligation && obligation.expectedFailureOutcome ? {
+        expectedFailureOutcome: {
+          ...obligation.expectedFailureOutcome,
+          constraints: Array.isArray(obligation.expectedFailureOutcome.constraints)
+            ? obligation.expectedFailureOutcome.constraints.map((constraint) => ({ ...constraint }))
+            : obligation.expectedFailureOutcome.constraints
+        }
+      } : {})
+    }))
     : [];
   if (testObligations.length === 0) {
     errors.push(capabilityEvidence('authority.testObligations', 'WP-001 did not retain the required edge-case obligations.'));
@@ -181,7 +191,7 @@ function proveFocusedBehavior(projectDirectory, options = {}) {
   const edgeCases = assessEdgeCases(relatedProductFiles, {
     ...related,
     applicableSourceFiles: changedSource.files
-  }, projectRoot);
+  }, projectRoot, evidence.authority ? evidence.authority.testObligations : []);
   const mockBoundaries = assessMockBoundaries(
     related.closureFiles || related.files,
     evidence.authority && evidence.authority.externalBoundaries,
@@ -285,7 +295,12 @@ function proveDeepBehavior(projectDirectory, options = {}) {
     ? resolveImpactTestCapability(projectRoot, related)
     : { available: false, reason: 'A valid fixed dependency impact closure was not available.' };
   const observability = assessImpactObservability(related, impactSources.files, projectRoot);
-  const edgeCases = assessImpactEdgeCases(impactSources.files, related, projectRoot);
+  const edgeCases = assessImpactEdgeCases(
+    impactSources.files,
+    related,
+    projectRoot,
+    evidence.authority ? evidence.authority.testObligations : []
+  );
   const mockBoundaries = assessMockBoundaries(
     related.closureFiles || related.files,
     evidence.authority && evidence.authority.externalBoundaries,
@@ -1600,7 +1615,7 @@ function withDisposableCopy(projectRoot, action) {
     validateDisposableSource(projectRoot);
     temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'node-policy-checker-behavior-proof-'));
     const copyRoot = path.join(temporaryDirectory, 'project');
-    fs.cpSync(projectRoot, copyRoot, { dereference: false, recursive: true });
+    fs.cpSync(projectRoot, copyRoot, { dereference: false, recursive: true, verbatimSymlinks: true });
     const copyRootIdentity = fs.lstatSync(copyRoot);
     validateDisposableSource(copyRoot);
     copyRootFd = openDisposableDirectory(copyRoot, copyRootIdentity);
@@ -1657,24 +1672,24 @@ function validateDisposableSource(projectRoot) {
   validateSymlinkTree(projectRoot, projectRoot);
 }
 
-function validateSymlinkTree(root, projectRoot) {
+function validateSymlinkTree(directory, treeRoot) {
   let entries;
   try {
-    entries = fs.readdirSync(root, { withFileTypes: true });
+    entries = fs.readdirSync(directory, { withFileTypes: true });
   } catch (error) {
     throw new Error(`The disposable project tree could not be read: ${error.message}`);
   }
   for (const entry of entries) {
-    const absolutePath = path.join(root, entry.name);
+    const absolutePath = path.join(directory, entry.name);
     if (entry.isSymbolicLink()) {
-      validateSymlink(root, absolutePath, projectRoot);
+      validateSymlink(absolutePath, treeRoot);
     } else if (entry.isDirectory()) {
-      validateSymlinkTree(absolutePath, projectRoot);
+      validateSymlinkTree(absolutePath, treeRoot);
     }
   }
 }
 
-function validateSymlink(projectRoot, linkPath, treeRoot) {
+function validateSymlink(linkPath, treeRoot) {
   const target = fs.readlinkSync(linkPath);
   if (path.posix.isAbsolute(target) || path.win32.isAbsolute(target) || /^[A-Za-z]:/.test(target)) {
     throw new Error(`The copied symbolic link is absolute: ${displayPath(treeRoot, linkPath)}.`);
@@ -1696,7 +1711,7 @@ function validateSymlink(projectRoot, linkPath, treeRoot) {
       throw new Error(`The copied symbolic link chain is absolute: ${displayPath(treeRoot, linkPath)}.`);
     }
     const resolved = path.resolve(path.dirname(current), currentTarget);
-    if (!isWithin(projectRoot, resolved)) {
+    if (!isWithin(treeRoot, resolved)) {
       throw new Error(`The copied symbolic link leaves the project: ${displayPath(treeRoot, linkPath)}.`);
     }
     try {
@@ -1712,7 +1727,7 @@ function validateSymlink(projectRoot, linkPath, treeRoot) {
   } catch (error) {
     throw new Error(`The copied symbolic link cannot be resolved: ${displayPath(treeRoot, linkPath)}.`);
   }
-  if (!isWithin(projectRoot, realTarget)) {
+  if (!isWithin(treeRoot, realTarget)) {
     throw new Error(`The copied symbolic link ultimately leaves the project: ${displayPath(treeRoot, linkPath)}.`);
   }
 }
@@ -3316,7 +3331,7 @@ function sourceText(contents, node) {
   return contents.slice(node.start, node.end).replace(/\s+/g, ' ').trim();
 }
 
-function assessEdgeCases(sourceFiles, related, projectRoot = null) {
+function assessEdgeCases(sourceFiles, related, projectRoot = null, testObligations = []) {
   const sourceFacts = (related.sourceFiles || sourceFiles).map(buildSourceFacts);
   const applicableSourceFacts = (related.applicableSourceFiles || sourceFiles).map(buildSourceFacts);
   const blocks = (related.files || []).flatMap((file) => extractTestBlocks(file.contents, file.path, sourceFacts, projectRoot));
@@ -3327,7 +3342,15 @@ function assessEdgeCases(sourceFiles, related, projectRoot = null) {
       status: 'INCONCLUSIVE'
     };
   }
-  const categories = edgeCategoryIds().map((id) => assessEdgeCategory(id, sourceFacts, blocks, related.onlySource, projectRoot, applicableSourceFacts));
+  const categories = edgeCategoryIds().map((id) => assessEdgeCategory(
+    id,
+    sourceFacts,
+    blocks,
+    related.onlySource,
+    projectRoot,
+    applicableSourceFacts,
+    testObligations
+  ));
   return {
     categories,
     status: categories.some((category) => category.status === 'INCONCLUSIVE')
@@ -3336,14 +3359,14 @@ function assessEdgeCases(sourceFiles, related, projectRoot = null) {
   };
 }
 
-function assessImpactEdgeCases(impactFiles, related, projectRoot = null) {
+function assessImpactEdgeCases(impactFiles, related, projectRoot = null, testObligations = []) {
   const perSource = impactFiles.map((file) => {
     const selected = related.perSource.find((item) => item.path === file.path);
     const assessment = assessEdgeCases(impactFiles, {
       ...(selected || { files: [] }),
       onlySource: file.path,
       sourceFiles: impactFiles
-    }, projectRoot);
+    }, projectRoot, testObligations);
     return {
       path: file.path,
       ...assessment,
@@ -3388,11 +3411,25 @@ function edgeCategoryIds() {
   return ['empty-input', 'null', 'boundary-values', 'concurrency', 'failure-path', 'side-effects'];
 }
 
-function assessEdgeCategory(id, sourceFacts, blocks, onlySource = null, projectRoot = null, applicableSourceFacts = sourceFacts) {
+function assessEdgeCategory(
+  id,
+  sourceFacts,
+  blocks,
+  onlySource = null,
+  projectRoot = null,
+  applicableSourceFacts = sourceFacts,
+  testObligations = []
+) {
   const applicablePaths = new Set(applicableSourceFacts.map((fact) => fact.file.path));
   const applicable = sourceFacts.filter((fact) => applicablePaths.has(fact.file.path) && (!onlySource || fact.file.path === onlySource) && isEdgeApplicable(fact, id));
   if (applicable.length === 0) {
     return { id, rationale: edgeNotApplicableReason(id), status: 'NOT_APPLICABLE' };
+  }
+  const failureObligation = id === 'failure-path'
+    ? parseFailurePathObligation(testObligations)
+    : null;
+  if (failureObligation && !failureObligation.valid) {
+    return { id, rationale: failureObligation.reason, status: 'INCONCLUSIVE' };
   }
   const evidence = [];
   for (const fact of applicable) {
@@ -3402,9 +3439,12 @@ function assessEdgeCategory(id, sourceFacts, blocks, onlySource = null, projectR
       if (!observation || !calls.some((call) => call.affectedPaths.includes(fact.file.path))) {
         continue;
       }
-      if (!edgeCallMatches(id, calls, block, fact)) {
+      if (!edgeCallMatches(id, calls, block, fact, failureObligation)) {
         continue;
       }
+      const failureEvidence = id === 'failure-path'
+        ? matchingFailureAssertion(block, calls, fact, failureObligation)
+        : null;
       evidence.push({
         calls: calls.filter((call) => call.affectedPaths.includes(fact.file.path)).map((call) => ({
           argumentCount: call.node.arguments.length,
@@ -3412,7 +3452,8 @@ function assessEdgeCategory(id, sourceFacts, blocks, onlySource = null, projectR
           module: call.modulePath
         })),
         path: block.path,
-        title: block.title
+        title: block.title,
+        ...(failureEvidence ? { assertion: failureEvidence } : {})
       });
     }
   }
@@ -3862,7 +3903,7 @@ function reachableSourcePaths(startPath, sourceFacts, projectRoot = null) {
   return [...reachable];
 }
 
-function edgeCallMatches(id, calls, block, fact) {
+function edgeCallMatches(id, calls, block, fact, failureObligation = null) {
   const relevantCalls = calls.filter((call) => call.affectedPaths.includes(fact.file.path));
   if (id === 'empty-input') {
     return relevantCalls.some((call) => call.node.arguments.some(isEmptyArgument));
@@ -3878,15 +3919,213 @@ function edgeCallMatches(id, calls, block, fact) {
     });
   }
   if (id === 'failure-path') {
-    return assertionNodes(block.node).some((assertion) => {
-      return isErrorAssertion(assertion) && behaviorCallNodes(assertion).some((call) => relevantCalls.some((candidate) => candidate.node === call));
-    });
+    return Boolean(matchingFailureAssertion(block, calls, fact, failureObligation));
   }
   if (id === 'concurrency') {
     return hasConcurrentProductCalls(block.node, relevantCalls);
   }
   return assertionNodes(block.node).some((assertion) => assertionObservesEffect(assertion, block.bindingModel)) && relevantCalls.length > 0;
 }
+
+function parseFailurePathObligation(testObligations) {
+  if (!Array.isArray(testObligations)) {
+    return { reason: 'The retained failure-path obligation is unavailable.', valid: false };
+  }
+  const obligations = testObligations.filter((obligation) => obligation && obligation.case === 'failure-path');
+  if (obligations.length !== 1 || typeof obligations[0].obligation !== 'string') {
+    return { reason: 'The retained failure-path obligation is missing or malformed.', valid: false };
+  }
+  const outcome = validateExpectedFailureOutcome(obligations[0].expectedFailureOutcome);
+  if (!outcome.valid) {
+    return { reason: outcome.reason, valid: false };
+  }
+  return {
+    obligation: obligations[0].obligation,
+    outcome,
+    valid: true
+  };
+}
+
+function validateExpectedFailureOutcome(outcome) {
+  if (!outcome || outcome.kind !== 'error' || typeof outcome.generic !== 'boolean' || !Array.isArray(outcome.constraints)) {
+    return { reason: 'The retained failure-path obligation has no supported structured expected failure outcome.', valid: false };
+  }
+  const constraints = [];
+  for (const constraint of outcome.constraints) {
+    if (!constraint || !['message', 'name'].includes(constraint.kind) || !['exact', 'regex'].includes(constraint.type)) {
+      return { reason: 'The retained structured expected failure outcome is malformed.', valid: false };
+    }
+    if (constraint.type === 'exact' && typeof constraint.value !== 'string') {
+      return { reason: 'The retained structured expected failure outcome is malformed.', valid: false };
+    }
+    if (constraint.type === 'regex' && (typeof constraint.pattern !== 'string' || typeof constraint.flags !== 'string')) {
+      return { reason: 'The retained structured expected failure outcome is malformed.', valid: false };
+    }
+    constraints.push({ ...constraint });
+  }
+  if (!outcome.generic && constraints.length === 0) {
+    return { reason: 'The retained structured expected failure outcome has no observable constraint.', valid: false };
+  }
+  return { constraints, generic: outcome.generic, valid: true };
+}
+
+function matchingFailureAssertion(block, calls, fact, failureObligation) {
+  if (!failureObligation || !failureObligation.valid) {
+    return null;
+  }
+  const relevantCalls = calls.filter((call) => call.affectedPaths.includes(fact.file.path));
+  for (const assertion of assertionNodes(block.node)) {
+    if (!isErrorAssertion(assertion) || !behaviorCallNodes(assertion).some((call) => relevantCalls.some((candidate) => candidate.node === call))) {
+      continue;
+    }
+    const matcher = failureAssertionMatcher(assertion);
+    if (!matcher || !failureMatcherMatchesOutcome(matcher, failureObligation.outcome)) {
+      continue;
+    }
+    return {
+      matcher: describeFailureMatcher(matcher),
+      text: sourceText(block.file.contents, assertion),
+      outcome: failureObligation.outcome
+    };
+  }
+  return null;
+}
+
+function failureAssertionMatcher(assertion) {
+  const expected = assertion.arguments && assertion.arguments[1];
+  return expected ? parseFailureMatcher(expected) : null;
+}
+
+function parseFailureMatcher(node) {
+  if (node.type === 'RegExpLiteral') {
+    return { kind: 'message', type: 'regex', pattern: node.pattern, flags: node.flags || '' };
+  }
+  if (node.type === 'Identifier' && FAILURE_CONSTRUCTOR_NAMES.has(node.name)) {
+    return { kind: 'name', type: 'exact', value: node.name };
+  }
+  if (node.type === 'NewExpression' && node.callee && node.callee.type === 'Identifier' && FAILURE_CONSTRUCTOR_NAMES.has(node.callee.name)) {
+    const message = node.arguments && node.arguments[0] ? parseFailureMatcherValue(node.arguments[0]) : null;
+    return {
+      kind: 'error',
+      message,
+      name: node.callee.name
+    };
+  }
+  if (node.type === 'ObjectExpression') {
+    const properties = [];
+    for (const property of node.properties || []) {
+      if (property.type !== 'ObjectProperty' || property.computed) {
+        return null;
+      }
+      const name = property.key && (property.key.name || property.key.value);
+      const value = parseFailureMatcherValue(property.value);
+      if (typeof name !== 'string' || !value) {
+        return null;
+      }
+      properties.push({ name, value });
+    }
+    return properties.length > 0 ? { kind: 'object', properties } : null;
+  }
+  return null;
+}
+
+function parseFailureMatcherValue(node) {
+  if (node.type === 'RegExpLiteral') {
+    return { type: 'regex', pattern: node.pattern, flags: node.flags || '' };
+  }
+  if (node.type === 'StringLiteral') {
+    return { type: 'exact', value: node.value };
+  }
+  if (node.type === 'NumericLiteral' || node.type === 'BooleanLiteral') {
+    return { type: 'exact', value: node.value };
+  }
+  return null;
+}
+
+function failureMatcherMatchesOutcome(matcher, outcome) {
+  if (!matcher || !outcome || !outcome.valid) {
+    return false;
+  }
+  if (outcome.generic) {
+    return true;
+  }
+  return outcome.constraints.every((constraint) => failureMatcherMatchesConstraint(matcher, constraint));
+}
+
+function failureMatcherMatchesConstraint(matcher, constraint) {
+  if (matcher.kind === 'message') {
+    return matchFailureValue(matcher, constraint);
+  }
+  if (matcher.kind === 'name') {
+    return constraint.kind === 'name'
+      ? matchFailureValue({ type: matcher.type, value: matcher.value }, constraint)
+      : false;
+  }
+  if (matcher.kind === 'error') {
+    if (constraint.kind === 'name' && constraint.type === 'exact') {
+      return matcher.name === constraint.value;
+    }
+    return matcher.message ? matchFailureValue(matcher.message, constraint) : false;
+  }
+  if (matcher.kind === 'object') {
+    const property = matcher.properties.find((candidate) => candidate.name === constraint.kind);
+    return property ? matchFailureValue(property.value, constraint) : false;
+  }
+  return false;
+}
+
+function matchFailureValue(matcher, constraint) {
+  if (matcher.type === 'exact' && constraint.type === 'exact') {
+    return String(matcher.value) === String(constraint.value);
+  }
+  if (matcher.type === 'regex' && constraint.type === 'exact') {
+    return testFailureRegex(matcher, String(constraint.value));
+  }
+  if (matcher.type === 'exact' && constraint.type === 'regex') {
+    return testFailureRegex(constraint, String(matcher.value));
+  }
+  return matcher.type === 'regex' && constraint.type === 'regex' &&
+    matcher.pattern === constraint.pattern && matcher.flags === constraint.flags;
+}
+
+function testFailureRegex(matcher, value) {
+  try {
+    const regex = new RegExp(matcher.pattern, matcher.flags);
+    return regex.test(value);
+  } catch (error) {
+    return false;
+  }
+}
+
+function describeFailureMatcher(matcher) {
+  if (matcher.kind === 'message') {
+    return matcher.type === 'regex'
+      ? `/${matcher.pattern}/${matcher.flags}`
+      : matcher.value;
+  }
+  if (matcher.kind === 'name') {
+    return matcher.value;
+  }
+  if (matcher.kind === 'error') {
+    return { name: matcher.name, message: matcher.message ? describeFailureMatcherValue(matcher.message) : null };
+  }
+  return Object.fromEntries(matcher.properties.map((property) => [property.name, describeFailureMatcherValue(property.value)]));
+}
+
+function describeFailureMatcherValue(value) {
+  return value.type === 'regex' ? `/${value.pattern}/${value.flags}` : value.value;
+}
+
+const FAILURE_CONSTRUCTOR_NAMES = new Set([
+  'AggregateError',
+  'Error',
+  'EvalError',
+  'RangeError',
+  'ReferenceError',
+  'SyntaxError',
+  'TypeError',
+  'URIError'
+]);
 
 function hasConcurrentProductCalls(root, relevantCalls) {
   let matched = false;

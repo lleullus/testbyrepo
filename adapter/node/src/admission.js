@@ -1964,6 +1964,9 @@ function deriveTestObligations(behavior) {
   const failureOutcome = behavior.observableFailureOutcome
     ? behavior.observableFailureOutcome.text
     : 'the required observable failure outcome';
+  const expectedFailureOutcome = behavior.observableFailureOutcome
+    ? structureExpectedFailureOutcome(behavior.observableFailureOutcome.text)
+    : null;
   return [
     {
       case: 'empty-input',
@@ -1987,6 +1990,7 @@ function deriveTestObligations(behavior) {
     },
     {
       case: 'failure-path',
+      expectedFailureOutcome,
       obligation: `Verify the requested failure path produces: ${failureOutcome}`,
       phase: 'pre-write'
     },
@@ -1996,6 +2000,62 @@ function deriveTestObligations(behavior) {
       phase: 'pre-write'
     }
   ];
+}
+
+function structureExpectedFailureOutcome(text) {
+  const quoted = extractExpectedFailureValues(text)
+    .filter((value) => !isGenericExpectedFailureValue(value));
+  const requestedRegexes = extractExpectedFailureRegexes(text);
+  const identifiers = [...new Set(text.match(/\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g) || [])];
+  const types = [...new Set(text.match(/\b(?:Error|TypeError|RangeError|ReferenceError|SyntaxError|EvalError|URIError|AggregateError)\b/g) || [])];
+  const constraints = [
+    ...quoted.map((value) => ({ kind: 'message', type: 'exact', value })),
+    ...requestedRegexes.map((value) => ({ kind: 'message', type: 'regex', ...value })),
+    ...identifiers.filter((value) => !quoted.includes(value)).map((value) => ({ kind: 'message', type: 'exact', value })),
+    ...types.map((value) => ({ kind: 'name', type: 'exact', value }))
+  ];
+  if (constraints.length > 0) {
+    return { constraints, generic: false, kind: 'error' };
+  }
+  if (/(?:error|exception|failure|reject|throw|message|오류|에러|예외|실패|메시지)/i.test(text)) {
+    return { constraints: [], generic: true, kind: 'error' };
+  }
+  return { constraints: [], generic: false, kind: 'unsupported' };
+}
+
+function extractExpectedFailureValues(text) {
+  const values = [];
+  const pattern = /(["'`])((?:\\.|(?!\1)[^\\])*)\1/g;
+  for (const match of text.matchAll(pattern)) {
+    values.push(unescapeExpectedFailureText(match[2]));
+  }
+  return values;
+}
+
+function unescapeExpectedFailureText(value) {
+  return value.replace(/\\([\\'"`nrt])/g, (match, escaped) => ({
+    '\\': '\\',
+    "'": "'",
+    '"': '"',
+    '`': '`',
+    n: '\n',
+    r: '\r',
+    t: '\t'
+  }[escaped] || match));
+}
+
+function extractExpectedFailureRegexes(text) {
+  const values = [];
+  const pattern = /\/((?:\\.|[^/\\\n])*)\/([dgimsuvy]*)/g;
+  for (const match of text.matchAll(pattern)) {
+    values.push({ flags: match[2], pattern: match[1] });
+  }
+  return values;
+}
+
+function isGenericExpectedFailureValue(value) {
+  return /^(?:an?\s+)?(?:error|exception|failure|message)(?:\s+(?:message|outcome))?$/i.test(value.trim()) ||
+    /^(?:오류|에러|예외|실패|메시지)$/.test(value.trim());
 }
 
 function describeRepositoryEvidence(diagnosis, repositoryAuthority) {
