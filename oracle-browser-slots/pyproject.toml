@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta:__legacy__"
+
+[project]
+name = "oracle-browser-slots"
+version = "0.1.0"
+description = "Independent local Chrome slots for Oracle Browser"
+requires-python = ">=3.11"
+
+[project.scripts]
+oracle-browser-slots = "oracle_browser_slots.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["oracle_browser_slots*"]

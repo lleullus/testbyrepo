@@ -16,3 +16,6 @@ oracle-*.tgz.sha1
 oracle-*.tgz.sha256
 /.claude
 /.release-artifacts/
+/oracle-browser-slots/.scratch/*
+!/oracle-browser-slots/.scratch/oracle-context-wp-002-session-followup/
+!/oracle-browser-slots/.scratch/oracle-context-wp-002-session-followup/**
