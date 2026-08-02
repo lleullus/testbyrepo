@@ -1,7 +1,7 @@
 import type { ConsultInput } from "./types.js";
 
 const CHATGPT_PRO_HEAVY_MODEL = "gpt-5.5-pro";
-const CHATGPT_PRO_HEAVY_THINKING_TIME = "extended";
+const CHATGPT_PRO_HEAVY_THINKING_TIME = "pro";
 
 export function applyConsultPreset(input: ConsultInput): ConsultInput {
   if (!input.preset) {

@@ -1,9 +1,214 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   buildThinkingTimeExpressionForTest,
   ensureThinkingTime,
   inferThinkingTargetModelKindForTest,
 } from "../../src/browser/actions/thinkingTime.js";
+
+async function runModernEffortSelection({
+  level,
+  initialEffort = "Medium",
+  mutateModel = false,
+  malformed = false,
+  structuralRows = true,
+}: {
+  level: "light" | "standard" | "extended" | "heavy" | "pro";
+  initialEffort?: string;
+  mutateModel?: boolean;
+  malformed?: boolean;
+  structuralRows?: boolean;
+}) {
+  class FakeEventTarget {
+    dispatchEvent(_event: unknown): boolean {
+      return true;
+    }
+  }
+  class FakeEvent {
+    constructor(public readonly type: string) {}
+  }
+  class FakeElement extends FakeEventTarget {
+    public id = "";
+
+    constructor(
+      public textContent: string,
+      private readonly attributes: Record<string, string> = {},
+      public readonly children: FakeElement[] = [],
+      private readonly onClick?: () => void,
+    ) {
+      super();
+      this.id = attributes.id ?? "";
+    }
+    getAttribute(name: string): string | null {
+      return this.attributes[name] ?? null;
+    }
+    setAttribute(name: string, value: string): void {
+      this.attributes[name] = value;
+    }
+    querySelector(selector: string): FakeElement | null {
+      if (selector.includes("slider-simple-view"))
+        return this.children.find((x) => x.id === "simple") ?? null;
+      if (selector.includes("slider-advanced-view"))
+        return this.children.find((x) => x.id === "advanced") ?? null;
+      if (selector.includes('[role="slider"]'))
+        return this.children.find((x) => x.getAttribute("role") === "slider") ?? null;
+      return this.querySelectorAll(selector)[0] ?? null;
+    }
+    querySelectorAll(selector: string): FakeElement[] {
+      if (
+        selector.includes("menuitem") ||
+        selector.includes('[role="option"]') ||
+        selector.includes("button")
+      ) {
+        return this.children.filter((child) => {
+          const role = child.getAttribute("role");
+          return role === "menuitem" || role === "menuitemradio" || role === "option";
+        });
+      }
+      return [];
+    }
+    matches(selector: string): boolean {
+      return selector.includes("__composer-pill") && this.attributes.class === "__composer-pill";
+    }
+    closest(_selector: string): FakeElement | null {
+      return null;
+    }
+    contains(node: unknown): boolean {
+      return this.children.includes(node as FakeElement);
+    }
+    getBoundingClientRect(): { width: number; height: number } {
+      return { width: 120, height: 32 };
+    }
+    override dispatchEvent(event: unknown): boolean {
+      if ((event as { type?: string }).type === "click") this.onClick?.();
+      return true;
+    }
+  }
+
+  const targets = {
+    light: { label: "Instant", index: 0 },
+    standard: { label: "Medium", index: 1 },
+    extended: { label: "High", index: 2 },
+    heavy: { label: "Extra High", index: 3 },
+    pro: { label: "Pro", index: 4 },
+  } as const;
+  const target = targets[level];
+  const initialTarget = Object.values(targets).find((entry) => entry.label === initialEffort);
+  let menuOpen = false;
+  let legacyClicks = 0;
+  let model = "GPT-5.6 Sol";
+  const simple = new FakeElement(
+    `${initialEffort}, ${initialTarget!.index + 1} of 5.Use Left and Right arrow keys to adjust power.`,
+    {
+      id: "simple",
+      "data-testid": "composer-model-picker-slider-simple-view",
+    },
+  );
+  const slider = new FakeElement("", {
+    role: "slider",
+    "aria-valuemin": "0",
+    "aria-valuemax": "4",
+    "aria-valuenow": String(initialTarget!.index),
+    "aria-hidden": "true",
+  });
+  const modelRow = new FakeElement(`Model${model}`, { role: "menuitem" });
+  const trigger = new FakeElement(
+    `Effort${initialEffort}`,
+    { role: "menuitem", "aria-controls": "effort-menu" },
+    [],
+    () => {
+      menuOpen = true;
+    },
+  );
+  const advanced = new FakeElement(
+    `Model${model}Effort${initialEffort}`,
+    { id: "advanced", "data-testid": "composer-model-picker-slider-advanced-view" },
+    structuralRows ? [modelRow, trigger, new FakeElement("Pro", { role: "menuitem" })] : [],
+  );
+  const labels = ["Instant", "Medium", "Extra High", "High", "Pro"];
+  const options = labels.map(
+    (label) =>
+      new FakeElement(label, { role: "menuitemradio" }, [], () => {
+        if (label !== target.label) return;
+        if (mutateModel) model = "GPT-5.6 Thinking";
+        modelRow.textContent = `Model${model}`;
+        trigger.textContent = `Effort${label}`;
+        advanced.textContent = `Model${model}Effort${label}`;
+        simple.textContent = `${label}, ${target.index + 1} of 5.Use Left and Right arrow keys to adjust power.`;
+        slider.setAttribute("aria-valuenow", String(target.index));
+      }),
+  );
+  const effortMenu = new FakeElement(
+    labels.join(" "),
+    { id: "effort-menu", role: "menu" },
+    options,
+  );
+  const rootChildren = malformed ? [simple, advanced] : [simple, advanced, slider];
+  const root = new FakeElement(
+    "Intelligence",
+    {
+      "data-testid": "composer-intelligence-picker-content",
+      role: "group",
+    },
+    rootChildren,
+  );
+  const legacyPill = new FakeElement(
+    initialEffort,
+    { class: "__composer-pill", "aria-haspopup": "menu", "aria-expanded": "true" },
+    [],
+    () => {
+      legacyClicks += 1;
+    },
+  );
+  const decoyMenu = new FakeElement("Pro", { role: "menu" }, [
+    new FakeElement("Pro", { role: "menuitemradio" }),
+  ]);
+  const documentStub = {
+    body: new FakeElement(""),
+    querySelector: (selector: string) => {
+      if (selector.includes("composer-intelligence-pro-thinking-effort-trigger")) return null;
+      return documentStub.querySelectorAll(selector)[0] ?? null;
+    },
+    querySelectorAll: (selector: string) => {
+      if (selector === '[data-testid="composer-intelligence-picker-content"]') return [root];
+      if (
+        selector.includes("model-switcher-dropdown-button") ||
+        selector.includes("button.__composer-pill")
+      )
+        return [legacyPill];
+      if (selector.includes('[role="menu"]') || selector.includes("data-radix")) {
+        return menuOpen ? [effortMenu, decoyMenu] : [decoyMenu];
+      }
+      return [];
+    },
+    getElementById: (id: string) => (id === "effort-menu" && menuOpen ? effortMenu : null),
+    dispatchEvent: () => true,
+  };
+  let now = 0;
+  const expression = buildThinkingTimeExpressionForTest(level, null);
+  const evaluate = new Function(
+    "document",
+    "performance",
+    "setTimeout",
+    "window",
+    "EventTarget",
+    "PointerEvent",
+    "MouseEvent",
+    "HTMLElement",
+    `return ${expression};`,
+  ) as (...args: unknown[]) => Promise<unknown>;
+  const result = await evaluate(
+    documentStub,
+    { now: () => (now += 100) },
+    (callback: () => void) => callback(),
+    { PointerEvent: FakeEvent, MouseEvent: FakeEvent, Event: FakeEvent },
+    FakeEventTarget,
+    FakeEvent,
+    FakeEvent,
+    FakeElement,
+  );
+  return { result, legacyClicks };
+}
 
 describe("browser thinking-time selection expression", () => {
   it("uses centralized menu selectors and normalized matching", () => {
@@ -20,12 +225,86 @@ describe("browser thinking-time selection expression", () => {
   });
 
   it("targets the requested thinking time level", () => {
-    const levels = ["light", "standard", "extended", "heavy"] as const;
+    const levels = ["light", "standard", "extended", "heavy", "pro"] as const;
     for (const level of levels) {
       const expression = buildThinkingTimeExpressionForTest(level);
       expect(expression).toContain("const TARGET_LEVEL");
       expect(expression).toContain(`"${level}"`);
     }
+  });
+
+  it.each([
+    ["heavy", "Medium", "Extra High"],
+    ["pro", "Medium", "Pro"],
+    ["extended", "Extra High", "High"],
+  ] as const)("selects the exact modern %s effort option", async (level, initialEffort, label) => {
+    const { result } = await runModernEffortSelection({ level, initialEffort });
+    expect(result).toMatchObject({ status: "switched", label });
+  });
+
+  it("does not mistake the Effort Pro trigger for the exact Pro option", async () => {
+    const { result } = await runModernEffortSelection({ level: "heavy", initialEffort: "Pro" });
+    expect(result).toMatchObject({ status: "switched", label: "Extra High" });
+  });
+
+  it("recognizes the exact observed Extra High DOM with an aria-hidden slider", async () => {
+    const { result, legacyClicks } = await runModernEffortSelection({
+      level: "heavy",
+      initialEffort: "Extra High",
+    });
+    expect(result).toMatchObject({ status: "already-selected", label: "Extra High" });
+    expect(legacyClicks).toBe(0);
+  });
+
+  it("recognizes concatenated Pro effort rows as already selected", async () => {
+    const { result, legacyClicks } = await runModernEffortSelection({
+      level: "pro",
+      initialEffort: "Pro",
+    });
+    expect(result).toMatchObject({ status: "already-selected", label: "Pro" });
+    expect(legacyClicks).toBe(0);
+  });
+
+  it("uses the anchored concatenated-text fallback when structural rows are unavailable", async () => {
+    const { result } = await runModernEffortSelection({
+      level: "heavy",
+      initialEffort: "Extra High",
+      structuralRows: false,
+    });
+    expect(result).toMatchObject({ status: "already-selected", label: "Extra High" });
+  });
+
+  it("fails closed when modern effort selection mutates the model", async () => {
+    const { result } = await runModernEffortSelection({ level: "heavy", mutateModel: true });
+    expect(result).toMatchObject({ status: "model-changed" });
+
+    const runtime = { evaluate: async () => ({ result: { value: result } }) };
+    await expect(
+      ensureThinkingTime(runtime as never, "heavy", (() => {}) as never, null),
+    ).rejects.toThrow(/model changed.*refusing to submit/i);
+  });
+
+  it("does not fall through to legacy controls when a modern picker is malformed", async () => {
+    const { result, legacyClicks } = await runModernEffortSelection({
+      level: "heavy",
+      malformed: true,
+    });
+    expect(result).toMatchObject({ status: "selection-unverified" });
+    expect(legacyClicks).toBe(0);
+  });
+
+  it("does not retry current-strategy effort selection with a recaptured model baseline", () => {
+    const source = readFileSync(new URL("../../src/browser/index.ts", import.meta.url), "utf8");
+    expect(source.match(/retries: modelStrategy === "current" \? 0 : 2/g)).toHaveLength(2);
+  });
+
+  it("fails closed for unverified explicit Pro effort", async () => {
+    const runtime = {
+      evaluate: async () => ({ result: { value: { status: "selection-unverified" } } }),
+    };
+    await expect(
+      ensureThinkingTime(runtime as never, "pro", (() => {}) as never, null),
+    ).rejects.toThrow(/refusing to submit without confirmed Pro effort/);
   });
 
   it("supports ChatGPT's model-menu thinking effort control", () => {

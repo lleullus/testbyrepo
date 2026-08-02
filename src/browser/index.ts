@@ -1503,7 +1503,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
       const thinkingTargetModel = modelStrategy === "select" ? config.desiredModel : null;
       await raceWithDisconnect(
         withRetries(() => ensureThinkingTime(Runtime, thinkingTime, logger, thinkingTargetModel), {
-          retries: 2,
+          retries: modelStrategy === "current" ? 0 : 2,
           delayMs: 300,
           onRetry: (attempt, error) => {
             if (options.verbose) {
@@ -3102,7 +3102,7 @@ async function runRemoteBrowserMode(
       await withRetries(
         () => ensureThinkingTime(Runtime, thinkingTime, logger, thinkingTargetModel),
         {
-          retries: 2,
+          retries: modelStrategy === "current" ? 0 : 2,
           delayMs: 300,
           onRetry: (attempt, error) => {
             if (options.verbose) {

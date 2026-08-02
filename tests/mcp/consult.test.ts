@@ -28,7 +28,7 @@ describe("summarizeModelRunsForConsult", () => {
     ).toMatchObject({
       engine: "browser",
       model: "gpt-5.5-pro",
-      browserThinkingTime: "extended",
+      browserThinkingTime: "pro",
     });
 
     expect(
@@ -67,6 +67,13 @@ describe("summarizeModelRunsForConsult", () => {
     ).toMatchObject({
       browserThinkingTime: "heavy",
     });
+    expect(
+      consultInputSchema.parse({
+        prompt: "use maximum effort",
+        files: [],
+        browserThinkingTime: "pro",
+      }),
+    ).toMatchObject({ browserThinkingTime: "pro" });
   });
 
   test("keeps the registered MCP input schema JSON-schema compatible", () => {
