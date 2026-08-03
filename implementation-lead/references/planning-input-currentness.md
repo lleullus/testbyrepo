@@ -2,7 +2,7 @@
 
 ## Purpose And Boundary
 
-This reference owns the resolver and currentness mechanics for the `planning-ticket.md` contract. It does not add a planning authority, terminal state, evidence class, ledger, or self-digest. The captured seal is persisted only as historical correlation in a completed immutable ImplementationResult.
+This reference owns the resolver and currentness mechanics for the `planning-ticket.md` contract. It does not add a planning authority, terminal state, evidence class, ledger, or self-digest. The captured seal is persisted in the immutable `ImplementationHandoff` and later bound by each fresh VerificationRun.
 
 `planning-ticket.md` remains authoritative for Ticket, parent Spec, blocker, project-root, UI/reference, Worker, and readiness rules. This reference neither consumes additional planning inputs nor changes those rules.
 
@@ -40,7 +40,7 @@ Its field semantics are:
 - `blockerFiles` preserves the Ticket-authored list order. Exact `None` produces `[]`; duplicate canonical targets block rather than producing duplicate entries.
 - A blocker `status` is its exact parsed metadata value. Initial readiness permits only `resolved` or `done`.
 - Exact supplied and authored path values remain ordinary invocation/preflight scratch outside the seal, solely for mismatch diagnosis. They do not create seal fields.
-- The seal remains immutable invocation state and is copied into the completed ImplementationResult. It is not a resumption token, is never adopted by a later invocation, and is not hashed into itself.
+- The seal remains immutable invocation state and is copied into the completed `ImplementationHandoff`. It is not a resumption token, is never adopted by a later invocation, and is not hashed into itself.
 
 The canonical seal serialization is compact UTF-8 JSON with no insignificant
 whitespace and no trailing newline. Outer fields occur in exact order
@@ -76,7 +76,7 @@ Evaluate `planning_input_current` at these gated points:
 1. Immediately before every Worker call, including first, later, and bounded implementation remediation.
 2. Immediately before marking each task `IMPLEMENTED`.
 3. Immediately before entering final source review.
-4. Immediately before publishing the ImplementationResult.
+4. Immediately before publishing the `ImplementationHandoff`.
 
 If it is false at any point, stop before that action and return exactly:
 

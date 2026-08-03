@@ -7,8 +7,8 @@ during one Worker call. They are filesystem and scope evidence only: they do not
 that changed a path. They do not run commands, understand package semantics, establish coverage,
 replace the shared Baseline Capsule, or verify product behavior.
 
-Every artifact contains `ownershipOnly: true`. ImplementationResult does not embed these artifacts;
-they remain run-scoped attribution evidence and never become Acceptance or completion evidence.
+Every artifact contains `ownershipOnly: true`. `ImplementationHandoff` does not embed these artifacts;
+they remain owner-store attribution facts and never become final Acceptance-Criterion evidence.
 
 ## Capture sequence
 

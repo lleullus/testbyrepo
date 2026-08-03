@@ -152,9 +152,10 @@ Serialize each Criterion as one exact top-level `- ` list item in authored
 order. Use two-space-indented continuation lines only when one Criterion needs
 multiple lines. Do not use ordered, task-list, nested-only, prose-only, empty,
 or mixed-marker bodies. The current raw UTF-8 item bytes, including authored
-line endings and continuation range, become the ImplementationResult v3
-`criterionIndex` and `criterionRawSha256` identity; do not normalize or add a
-separate user-facing AC ID.
+line endings and continuation range, become the shared
+`criterionIndex` and `criterionRawSha256` identity used by
+`implementation-handoff-v1`, every sealed VerificationRun, and
+`verification-result-v1`; do not normalize or add a separate user-facing AC ID.
 
 Apply this solution-independence check to every normative Ticket statement, not
 only to Acceptance Criteria:
@@ -193,11 +194,14 @@ observable product flow, expected effect, and readback at the product-contract
 level. Do not preselect an internal focused test seam, command, or test file
 unless that surface is itself an approved external contract.
 
-Implementation Lead selects focused implementation evidence. The Worker may run
-provisional runtime checks as implementation feedback, but Implementation Lead
-directly performs any final representative runtime exercise at the final source
-identity. That evidence establishes Ticket completion only and is not an
-independent general technical certification.
+Implementation Lead selects focused source, check, and provisional smoke facts
+needed for implementation and integration closure. Those facts lead only to an
+identity-bound `ImplementationHandoff` and do not establish an Acceptance-
+Criterion verdict. After handoff, a fresh read-only Verification Assessor maps
+every exact AC to presealed source reviews and/or concrete product flows, and the
+Verification runner owns execution attempts, readback, cleanup, and the final
+`VerificationResult`. Do not prescribe an internal verification seam that could
+substitute for the approved observable product behavior.
 
 ## Blocker rules
 

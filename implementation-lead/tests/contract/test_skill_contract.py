@@ -1,637 +1,227 @@
 from __future__ import annotations
 
-import re
 import unittest
 from pathlib import Path
 
 
-IMPLEMENTATION_ROOT = Path(__file__).resolve().parents[2]
-SKILL = (IMPLEMENTATION_ROOT / "SKILL.md").read_text(encoding="utf-8")
-FAILURE_ROUTING = (IMPLEMENTATION_ROOT / "references/implementation-failure-routing.md").read_text(
-    encoding="utf-8"
-)
-TASK_OWNERSHIP = (IMPLEMENTATION_ROOT / "references/task-ownership.md").read_text(encoding="utf-8")
-PLANNING_CURRENTNESS = (
-    IMPLEMENTATION_ROOT / "references/planning-input-currentness.md"
+ROOT = Path(__file__).resolve().parents[3]
+IMPLEMENTATION_SKILL = (ROOT / "implementation-lead/SKILL.md").read_text(encoding="utf-8")
+VERIFICATION_SKILL = (ROOT / "verification-lead/SKILL.md").read_text(encoding="utf-8")
+HANDOFF_REFERENCE = (
+    ROOT / "implementation-lead/references/implementation-handoff-v1.md"
 ).read_text(encoding="utf-8")
-PLANNING_TICKET = (IMPLEMENTATION_ROOT / "references/planning-ticket.md").read_text(encoding="utf-8")
-UI_TICKET = (IMPLEMENTATION_ROOT / "references/ui-ticket.md").read_text(encoding="utf-8")
-COMPLETION_RECORD = (IMPLEMENTATION_ROOT / "references/completion-record-v3.md").read_text(encoding="utf-8")
-WINDOWS_HYPERV = (
-    IMPLEMENTATION_ROOT / "references/windows-hyperv-execution.md"
+HISTORICAL_V3 = (
+    ROOT / "implementation-lead/references/completion-record-v3.md"
 ).read_text(encoding="utf-8")
-TO_TICKETS = (IMPLEMENTATION_ROOT.parent / "matt/skills/to-tickets/SKILL.md").read_text(encoding="utf-8")
-MATT_SKILLS = [
-    (IMPLEMENTATION_ROOT.parent / f"matt/skills/{name}/SKILL.md").read_text(encoding="utf-8")
-    for name in ("setup-matt-pocock-skills", "to-spec", "to-tickets", "wayfinder", "handoff", "research", "prototype")
-]
-PROJECT_SHAPER = (
-    IMPLEMENTATION_ROOT.parent / "project-shaper/skills/project-shaper/SKILL.md"
+FAILURE_ROUTING = (
+    ROOT / "implementation-lead/references/implementation-failure-routing.md"
 ).read_text(encoding="utf-8")
-PROJECT_MAP_CONTRACT = (
-    IMPLEMENTATION_ROOT.parent
-    / "project-shaper/skills/project-shaper/references/project-map-contract.md"
+UI_REFERENCE = (ROOT / "implementation-lead/references/ui-ticket.md").read_text(encoding="utf-8")
+WINDOWS_REFERENCE = (
+    ROOT / "implementation-lead/references/windows-hyperv-execution.md"
 ).read_text(encoding="utf-8")
-MATT_HANDOFF_CONTRACT = (
-    IMPLEMENTATION_ROOT.parent
-    / "project-shaper/skills/project-shaper/references/matt-handoff-contract.md"
+GREENFIELD_REFERENCE = (
+    ROOT / "implementation-lead/references/greenfield-implementation.md"
 ).read_text(encoding="utf-8")
-FROM_PROJECT_SHAPER = (
-    IMPLEMENTATION_ROOT.parent / "project-shaper/skills/from-project-shaper/SKILL.md"
+TO_TICKETS = (ROOT / "matt/skills/to-tickets/SKILL.md").read_text(encoding="utf-8")
+README = (ROOT / "README.md").read_text(encoding="utf-8")
+FREEZE_EVIDENCE = (
+    ROOT / "verification-lead/references/freeze-22-evidence.md"
 ).read_text(encoding="utf-8")
-GREENFIELD = (IMPLEMENTATION_ROOT / "references/greenfield-implementation.md").read_text(encoding="utf-8")
-ASK_MATT = (IMPLEMENTATION_ROOT.parent / "matt/skills/ask-matt/SKILL.md").read_text(encoding="utf-8")
-GRILL_WITH_DOCS = (
-    IMPLEMENTATION_ROOT.parent / "matt/skills/grill-with-docs/SKILL.md"
-).read_text(encoding="utf-8")
-GRILL_ME = (IMPLEMENTATION_ROOT.parent / "matt/skills/grill-me/SKILL.md").read_text(encoding="utf-8")
-TO_SPEC = (IMPLEMENTATION_ROOT.parent / "matt/skills/to-spec/SKILL.md").read_text(encoding="utf-8")
-BASELINE_README = (IMPLEMENTATION_ROOT.parent / "baseline-capsule/README.md").read_text(encoding="utf-8")
-BASELINE_SOURCE = (IMPLEMENTATION_ROOT.parent / "baseline-capsule/baseline_capsule.py").read_text(
-    encoding="utf-8"
-)
-PLANNING_WORKSPACE_README = (IMPLEMENTATION_ROOT.parent / "planning-workspace/README.md").read_text(
-    encoding="utf-8"
-)
 
 
-class ImplementationSkillContractTests(unittest.TestCase):
-    def test_greenfield_classification_uses_current_scope_readiness(self) -> None:
-        self.assertIn("current Ticket scope lacks required target readiness", GREENFIELD)
-        self.assertIn("Ticket wording such as `greenfield`, `initialize`, or `bootstrap` is not a\ntrigger", GREENFIELD)
-        self.assertIn("Product-root emptiness is not a trigger", GREENFIELD)
-        self.assertIn("existing monorepo may have\na scope-local initialization", GREENFIELD)
-        self.assertIn("empty documentation-only root is not\nproduct initialization", GREENFIELD)
-        self.assertIn("Classify current target readiness for the Ticket scope", SKILL)
+def compact(value: str) -> str:
+    return " ".join(value.split())
 
-    def test_greenfield_planning_interface_stays_declarative(self) -> None:
-        for fact in (
-            "Initialization scope authority",
-            "Applicable external decisions",
-            "Remaining bootstrap decision disposition",
-        ):
-            self.assertIn(fact, GREENFIELD)
-        self.assertIn("scope in which initialization mutation is authorized", TO_SPEC)
-        self.assertIn("applicable external decisions", TO_TICKETS)
-        self.assertIn("remaining bootstrap choice fixed/delegated disposition", TO_TICKETS)
-        self.assertIn("Do not add `Initialization:`, `Planning-Root:`, a bootstrap manifest", TO_TICKETS)
-        self.assertIn("private package/module identity", TO_TICKETS)
 
-    def test_matt_routes_and_asks_only_authorization_decisions(self) -> None:
-        self.assertIn("remains codebase-backed even when", ASK_MATT)
-        self.assertIn("route it to `grill-with-docs`", ASK_MATT)
-        self.assertIn("Target-readiness absence is a\nrepository fact, not a user question", GRILL_WITH_DOCS)
-        self.assertIn("The exact product `Project-Root` must\nexist", GRILL_ME)
-        self.assertIn("do\nnot duplicate a Project Shaper-specific greenfield checklist", FROM_PROJECT_SHAPER)
+class ImplementationAndVerificationContractTests(unittest.TestCase):
+    def test_implementation_lead_ends_in_handoff_not_verification(self) -> None:
+        self.assertIn("implementation-handoff-v1", IMPLEMENTATION_SKILL)
+        self.assertIn("IMPLEMENTATION_HANDOFF_COMPLETE", IMPLEMENTATION_SKILL)
+        self.assertIn("independent verification is pending", IMPLEMENTATION_SKILL)
+        self.assertIn("does not certify the final product behavior", IMPLEMENTATION_SKILL)
+        self.assertIn("must not label a provisional smoke", IMPLEMENTATION_SKILL)
 
-    def test_to_spec_blocks_new_or_material_ui_without_adopted_authority(self) -> None:
-        self.assertIn("independently\nreclassify the confirmed scope", TO_SPEC)
-        self.assertIn("new/material rendered UI", TO_SPEC)
-        self.assertIn("explicitly adopted by the latest\nshared understanding", TO_SPEC)
-        self.assertIn("Do not write a draft Spec on that failure.", TO_SPEC)
-        self.assertIn("BLOCKED: UI / UX authority required before SPEC.md", TO_SPEC)
-
-    def test_design_read_or_status_alone_cannot_authorize_material_ui(self) -> None:
-        self.assertIn("`Status: approved` line or a filename alone is insufficient.", TO_SPEC)
-        self.assertIn("generated concept alone is insufficient", TO_SPEC)
-        self.assertIn("status-only or Design Read/style-only document is", TO_TICKETS)
-
-    def test_utility_dashboard_concept_exemption_keeps_ui_planning_obligations(self) -> None:
-        self.assertIn("waives only visual concept/image-generation", ASK_MATT)
-        self.assertNotIn("§2.5", ASK_MATT)
-        self.assertIn("image-tool bootstrap or generation", ASK_MATT)
-        self.assertIn("It never waives the Matt-owned", ASK_MATT)
-        self.assertIn("Cover every applicable new/material C2 dashboard decision", ASK_MATT)
-
-    def test_non_ui_and_bounded_delta_do_not_require_full_c2_design(self) -> None:
-        self.assertIn("A bounded rendered contract does not require a separate pre-Spec `DESIGN.md`", TO_SPEC)
-        self.assertRegex(TO_SPEC, r"this exact Spec may serve as\s+the scoped UI authority")
-        self.assertIn("Do not block non-UI work or an engineering-only frontend", TO_SPEC)
-        self.assertIn("let the later approved Spec become\nthe scoped authority through its `## UI / UX` section", ASK_MATT)
-        self.assertIn("reference that exact parent Spec target", TO_TICKETS)
-        self.assertIn("due-now direct exercise of an exactly preserved rendered result", ASK_MATT)
-        self.assertIn("rendered decisions or direct preservation conditions", PLANNING_TICKET)
-
-    def test_material_ui_prepares_one_workspace_before_design_output(self) -> None:
-        self.assertIn("Before Matt writes a package authority, prepare or revalidate the same\nexternal planning workspace", ASK_MATT)
-        self.assertIn("do not prepare a second workspace later", ASK_MATT)
-        self.assertIn("including a\n   package-scoped UI authority", FROM_PROJECT_SHAPER)
-        self.assertIn("If `ask-matt`\n   already prepared it for `DESIGN.md`, reuse", FROM_PROJECT_SHAPER)
-
-    def test_ui_ticket_resolves_the_parent_spec_adopted_canonical_authority(self) -> None:
-        self.assertIn("same canonical UI authority target\nadopted by the parent Spec", TO_TICKETS)
-        self.assertRegex(TO_TICKETS, r"authority may instead be the approved\s+parent Spec itself when that section")
-        self.assertIn("resolve that exact local path\nfrom the Spec directory when relative", TO_TICKETS)
-        self.assertIn("resolving to that same canonical authority target", PLANNING_TICKET)
-        self.assertRegex(PLANNING_TICKET, r"status-only document, or Design\s+Read/style-only")
-        self.assertIn("parent-Spec-adopted UI authority referenced by the Ticket", SKILL)
-        self.assertIn("same canonical\n   local target", UI_TICKET)
-
-    def test_from_project_shaper_uses_central_matt_routing_without_changing_core(self) -> None:
-        self.assertIn("Enter the central `ask-matt` Main Flow, including its Central UI / UX Routing", FROM_PROJECT_SHAPER)
-        self.assertIn("This adapter has no independent specialist decision path.", FROM_PROJECT_SHAPER)
-        self.assertNotIn("Central UI / UX Routing", PROJECT_SHAPER)
-
-    def test_matt_owns_ui_authority_without_modifying_the_specialist(self) -> None:
-        self.assertIn("`ima2-uiux` itself remains unchanged", ASK_MATT)
-        self.assertIn("load `ima2-front`, write product code", ASK_MATT)
-        self.assertIn("<planning-workspace>/DESIGN.md", ASK_MATT)
-        self.assertIn("<planning-workspace>/design-concepts/", ASK_MATT)
-        self.assertIn("This is not the specialist's optional project-root YAML mini DESIGN format", ASK_MATT)
-        self.assertIn("`Open Questions` is `None`", ASK_MATT)
-        self.assertIn("returns it to `draft`", ASK_MATT)
-        self.assertIn("One explicit user response may approve both", ASK_MATT)
-
-    def test_initialization_mechanics_and_external_effects_remain_implementation_owned(self) -> None:
-        self.assertIn("select one current initialization task", GREENFIELD)
-        self.assertIn("freeze its exact\nallowed/forbidden paths", GREENFIELD)
-        self.assertIn("Private toolchain, private package/module identity, dependencies", GREENFIELD)
-        self.assertIn("Bootstrap delegation does not authorize network access", GREENFIELD)
-        self.assertIn("Preserve every pre-existing user\nfile", GREENFIELD)
-        self.assertIn("Do not globally exclude `.scratch/**`", GREENFIELD)
-        self.assertIn("If current target readiness already exists, use the ordinary brownfield flow", GREENFIELD)
-
-    def test_greenfield_admission_matrix_covers_language_neutral_branches(self) -> None:
-        rows = {}
-        for line in GREENFIELD.splitlines():
-            if line.startswith("| `"):
-                scenario, _, disposition = (cell.strip() for cell in line.strip("|").split("|"))
-                rows[scenario.strip("`")] = disposition
-        self.assertEqual(
-            {
-                "all-fixed-no-delegation": "`ADMIT_INITIALIZATION`",
-                "delegated-private-choice": "`ADMIT_INITIALIZATION`",
-                "missing-initialization-authority": "`BLOCKED` before Worker dispatch.",
-                "unresolved-bootstrap-disposition": "`BLOCKED` before Worker dispatch.",
-                "unauthorized-external-effect": "`BLOCKED` before that effect.",
-                "root-not-ready": "`BLOCKED`; neither planning nor Implementation Lead creates it.",
-                "brownfield-ready-scope": "`ORDINARY_FLOW`; do not apply initialization admission.",
-                "documentation-only-empty-root": "`ORDINARY_FLOW`; root emptiness is not initialization.",
-                "scope-local-initialization": (
-                    "Apply the same initialization authority and disposition gates; "
-                    "root non-emptiness does not bypass them."
-                ),
-            },
-            rows,
+    def test_only_two_public_contracts_are_named(self) -> None:
+        expected = (
+            "Implementation Lead -> implementation-handoff-v1\n"
+            "Verification Lead   -> verification-result-v1"
         )
-        self.assertIn("If every material choice is fixed, no delegation is applicable\n   or required", GREENFIELD)
+        self.assertIn(expected, IMPLEMENTATION_SKILL)
+        self.assertIn("implementation-handoff-v1", VERIFICATION_SKILL)
+        self.assertIn("verification-result-v1", VERIFICATION_SKILL)
 
-    def test_external_planning_workspace_is_shared_by_active_generators(self) -> None:
-        active = MATT_SKILLS + [
-            PROJECT_SHAPER,
-            PROJECT_MAP_CONTRACT,
-            MATT_HANDOFF_CONTRACT,
-            FROM_PROJECT_SHAPER,
-            PLANNING_WORKSPACE_README,
+    def test_v3_is_explicitly_retired_and_read_only(self) -> None:
+        self.assertIn("retired for every new publication", IMPLEMENTATION_SKILL)
+        self.assertIn("PROTOCOL_RETIRED", HISTORICAL_V3)
+        self.assertIn("byte-preserving historical read", HISTORICAL_V3)
+        self.assertIn("no dual publication", HISTORICAL_V3.lower())
+        self.assertIn("never converted to a handoff", HANDOFF_REFERENCE)
+
+    def test_handoff_payload_and_derivation_are_exact(self) -> None:
+        for field in (
+            "implementationHandoffRef",
+            "planningSealDigest",
+            "baselineCapsuleRef",
+            "baselineSourceIdentity",
+            "finalSourceIdentity",
+            "implementationDeltaRef",
+            "criterionAccounting[]",
+            "unresolvedImplementationItems = []",
+        ):
+            self.assertIn(field, HANDOFF_REFERENCE)
+        self.assertIn("derives, rather than trusts caller claims", IMPLEMENTATION_SKILL)
+        self.assertIn("Publication and transaction closure are atomic", compact(IMPLEMENTATION_SKILL))
+
+    def test_worker_mutation_and_ownership_boundary_are_explicit(self) -> None:
+        self.assertIn("Only the selected Worker may mutate", IMPLEMENTATION_SKILL)
+        self.assertIn("before/after ownership snapshots", IMPLEMENTATION_SKILL)
+        self.assertIn("cannot be added to the envelope after the fact", compact(IMPLEMENTATION_SKILL))
+        self.assertIn("Preserve external paths exactly", IMPLEMENTATION_SKILL)
+        self.assertIn("Never reset, checkout, stash, clean", IMPLEMENTATION_SKILL)
+
+    def test_both_implementation_transaction_modes_and_safe_release_are_documented(self) -> None:
+        self.assertIn("INITIAL_IMPLEMENTATION", IMPLEMENTATION_SKILL)
+        self.assertIn("VERIFICATION_REMEDIATION", IMPLEMENTATION_SKILL)
+        self.assertIn("CLOSED_NO_SUCCESSOR", IMPLEMENTATION_SKILL)
+        self.assertIn("current physical identity = exact failed predecessor identity", IMPLEMENTATION_SKILL)
+        self.assertIn("externalEffectState = CLEAR", IMPLEMENTATION_SKILL)
+
+    def test_remediation_requires_published_failure_and_authority_delta(self) -> None:
+        self.assertIn("current tip = exact published VERIFICATION_FAILED", FAILURE_ROUTING)
+        self.assertIn("A draft rationale", FAILURE_ROUTING)
+        self.assertIn("does not authorize remediation", FAILURE_ROUTING)
+        self.assertIn("new material decision cannot", FAILURE_ROUTING)
+        self.assertIn("leaves the failed result as the current tip", FAILURE_ROUTING)
+
+    def test_successful_remediation_requires_new_handoff_and_fresh_assessor(self) -> None:
+        self.assertIn("non-empty authorized tool-owned delta", FAILURE_ROUTING)
+        self.assertIn("new non-ancestor source", FAILURE_ROUTING)
+        self.assertIn("successor `ImplementationHandoff`", FAILURE_ROUTING)
+        self.assertIn("fresh Assessor", FAILURE_ROUTING)
+        self.assertIn("Old attempts, mappings, rationale", VERIFICATION_SKILL)
+
+    def test_exact_repeat_uses_three_valued_mechanical_guard(self) -> None:
+        self.assertIn("Only `MATCH` stops", VERIFICATION_SKILL)
+        self.assertIn("`NO_MATCH` may continue", VERIFICATION_SKILL)
+        self.assertIn("`UNAVAILABLE` creates no generic", VERIFICATION_SKILL)
+        self.assertIn("structured terminal fact", VERIFICATION_SKILL)
+
+    def test_verification_roles_are_strictly_separated(self) -> None:
+        for role in ("Coordinator", "Assessor", "Remediation Lead", "Worker"):
+            self.assertIn(role, VERIFICATION_SKILL)
+        self.assertIn("does not implement product changes", VERIFICATION_SKILL)
+        self.assertIn("fresh read-only Assessor", VERIFICATION_SKILL)
+        self.assertIn("A Worker actor cannot be reused", compact(VERIFICATION_SKILL))
+
+    def test_owner_store_claim_and_atomic_linearity_are_required(self) -> None:
+        self.assertIn("exclusive `VERIFY` or `REMEDIATE` claim", VERIFICATION_SKILL)
+        self.assertIn("at most one active claim", VERIFICATION_SKILL)
+        self.assertIn("successor node, continuation edge, claim consumption", VERIFICATION_SKILL)
+        self.assertIn("following unique immutable edges", VERIFICATION_SKILL)
+        self.assertIn("VERIFIED -> terminal", compact(VERIFICATION_SKILL))
+
+    def test_finite_budget_includes_execution_and_closure_dimensions(self) -> None:
+        for field in (
+            "workerCalls",
+            "remediationTransactions",
+            "effectfulActions",
+            "toolCostUnits",
+            "closureOperations",
+        ):
+            self.assertIn(field, VERIFICATION_SKILL)
+        self.assertIn("Exhaustion blocks a new unit", VERIFICATION_SKILL)
+        self.assertIn("never abandons containment", VERIFICATION_SKILL)
+
+    def test_preflight_fail_closed_contract_is_explicit(self) -> None:
+        self.assertIn("CANDIDATE_IDENTITY_UNAVAILABLE_AT_START", VERIFICATION_SKILL)
+        self.assertIn("zero product attempts", VERIFICATION_SKILL)
+        self.assertIn("sealedPlanDigest = null", VERIFICATION_SKILL)
+        self.assertIn("Planning or authorization prohibition publishes `BLOCKED`", VERIFICATION_SKILL)
+
+    def test_exact_ac_mapping_and_basis_anchor_contract_are_explicit(self) -> None:
+        self.assertIn("criterionIndex", VERIFICATION_SKILL)
+        self.assertIn("criterionRawSha256", VERIFICATION_SKILL)
+        self.assertIn("exact and bidirectional", compact(VERIFICATION_SKILL))
+        self.assertIn("canonicalPath", VERIFICATION_SKILL)
+        self.assertIn("selectedTextSha256", VERIFICATION_SKILL)
+        self.assertIn("copying or delta-editing an ancestor plan", VERIFICATION_SKILL)
+
+    def test_process_executor_is_fixed_concrete_and_no_shell(self) -> None:
+        self.assertIn("initial callable executor set is closed to `PROCESS`", VERIFICATION_SKILL)
+        self.assertIn("executes directly", VERIFICATION_SKILL)
+        self.assertIn("with no shell", VERIFICATION_SKILL)
+        self.assertIn("accepts no replacement request", VERIFICATION_SKILL)
+        self.assertIn("runtime plugins", VERIFICATION_SKILL)
+
+    def test_cardinality_polling_and_ledger_are_complete(self) -> None:
+        self.assertIn("ACTION and CLEANUP logical step can start at most once", VERIFICATION_SKILL)
+        self.assertIn("`1..10` identical-request polls", VERIFICATION_SKILL)
+        self.assertIn("Every miss, error, output digest", compact(VERIFICATION_SKILL))
+        self.assertIn("can never be retried in the same run", VERIFICATION_SKILL)
+
+    def test_correlation_is_bounded_and_not_a_dsl(self) -> None:
+        self.assertIn("tool generates a unique correlation token", VERIFICATION_SKILL)
+        self.assertIn("No regex, JSONPath, DOM extraction", VERIFICATION_SKILL)
+        self.assertIn("`MATCH`", VERIFICATION_SKILL)
+        self.assertIn("`UNAVAILABLE`", VERIFICATION_SKILL)
+
+    def test_retain_and_contradiction_stop_are_explicit(self) -> None:
+        self.assertIn("RETAIN flow can be verified only", compact(VERIFICATION_SKILL))
+        self.assertIn("final sealed step is an actually executed READBACK", VERIFICATION_SKILL)
+        self.assertIn("ACTION_STOPPED_AFTER_CONTRADICTION", VERIFICATION_SKILL)
+        self.assertIn("NOT_RUN_PRIOR_CONTRADICTION", VERIFICATION_SKILL)
+
+    def test_result_input_excludes_self_attested_facts_and_derives_status(self) -> None:
+        self.assertIn("cannot submit receipts, selected attempts", VERIFICATION_SKILL)
+        self.assertIn("aggregate status", VERIFICATION_SKILL)
+        self.assertIn("valid exact contradiction -> VERIFICATION_FAILED", VERIFICATION_SKILL)
+        self.assertIn("FORGED", VERIFICATION_SKILL.upper())
+        for status in ("VERIFIED", "VERIFICATION_FAILED", "INCOMPLETE", "BLOCKED"):
+            self.assertIn(status, VERIFICATION_SKILL)
+
+    def test_cross_run_effect_replay_requires_mechanical_safety(self) -> None:
+        self.assertIn("does not erase ambiguous", VERIFICATION_SKILL)
+        self.assertIn("authoritative readback", VERIFICATION_SKILL)
+        self.assertIn("exact-idempotency", VERIFICATION_SKILL)
+        self.assertIn("unique-correlation", VERIFICATION_SKILL)
+        self.assertIn("Per-run cardinality alone", VERIFICATION_SKILL)
+
+    def test_ui_and_windows_checks_are_provisional_until_fresh_verification(self) -> None:
+        self.assertIn("fresh Verification Assessor", UI_REFERENCE)
+        self.assertIn("do not establish a public criterion", UI_REFERENCE)
+        self.assertIn("provisional implementation facts", WINDOWS_REFERENCE)
+        self.assertIn("not final runtime evidence", WINDOWS_REFERENCE)
+        self.assertIn("successor handoff", WINDOWS_REFERENCE)
+
+    def test_greenfield_joins_handoff_not_retired_result(self) -> None:
+        self.assertIn("`implementation-handoff-v1` flow", GREENFIELD_REFERENCE)
+        self.assertIn("fresh Verification Assessor", compact(GREENFIELD_REFERENCE))
+        self.assertNotIn("v3 result flow", GREENFIELD_REFERENCE)
+
+    def test_to_tickets_preserves_shared_raw_ac_identity(self) -> None:
+        self.assertIn("shared\n`criterionIndex` and `criterionRawSha256` identity", TO_TICKETS)
+        self.assertIn("`implementation-handoff-v1`", TO_TICKETS)
+        self.assertIn("every sealed VerificationRun", TO_TICKETS)
+        self.assertIn("`verification-result-v1`", TO_TICKETS)
+
+    def test_to_tickets_assigns_final_product_flow_to_verification_assessor(self) -> None:
+        self.assertIn("fresh read-only Verification Assessor", TO_TICKETS)
+        self.assertIn("presealed source reviews and/or concrete product flows", TO_TICKETS)
+        self.assertIn("do not establish an Acceptance-\nCriterion verdict", TO_TICKETS)
+
+    def test_repository_readme_exposes_verification_component(self) -> None:
+        self.assertIn("`verification-lead/`", README)
+        self.assertIn("verification-result-v1", README)
+        self.assertIn("PROCESS executor", README)
+
+    def test_freeze_evidence_registers_all_twenty_two_conditions(self) -> None:
+        checklist_rows = [
+            line for line in FREEZE_EVIDENCE.splitlines() if line.startswith("| ") and "| [x] |" in line
         ]
-        self.assertTrue(all("<project-root>/.scratch" not in text for text in active))
-        self.assertTrue(all("/tmp" + "/opencode/planning" not in text for text in active))
-        for text in MATT_SKILLS:
-            self.assertIn("planning-workspace/planning_workspace.py", text)
-        self.assertIn("~/opencode/planning/<task-owned-id>/<work-slug>/", MATT_SKILLS[0])
-        self.assertIn("<planning-workspace>/SPEC.md", MATT_SKILLS[1])
-        self.assertIn("<planning-workspace>/tickets/TICKET-NNN.md", TO_TICKETS)
-        self.assertIn("<initiative-planning-workspace>/PROJECT-MAP.md", PROJECT_SHAPER)
-        self.assertIn("<initiative-planning-workspace>/matt-briefs/WP-NNN.md", MATT_HANDOFF_CONTRACT)
-        self.assertRegex(FROM_PROJECT_SHAPER, r"independent default\s+package planning workspace")
-        self.assertRegex(FROM_PROJECT_SHAPER, r"do not nest the\s+package workspace.*initiative workspace")
-        self.assertRegex(PLANNING_WORKSPACE_README, r"Implementation Lead uses the exact Ticket and Spec paths\s+directly")
-        self.assertRegex(PLANNING_WORKSPACE_README, r"never\s+moved or copied into the product project")
-
-    def test_rootless_spec_workspace_must_be_strictly_revalidated_for_ready_ticket(self) -> None:
-        self.assertIn("--future-project-root", PLANNING_WORKSPACE_README)
-        self.assertIn("does not create the future root", PLANNING_WORKSPACE_README)
-        self.assertIn("same\n`planningWorkspace`", PLANNING_WORKSPACE_README)
-        self.assertIn("strict `--project-root`", TO_TICKETS)
-        self.assertIn("Ticket\ndrafting may reuse a workspace", TO_TICKETS)
-        self.assertIn("Do not manually\ncreate, repair, or adopt a workspace", TO_SPEC)
-        self.assertIn("Do not manually create,\nrepair, or adopt a workspace", TO_TICKETS)
-
-    def test_external_parent_spec_preserves_exact_path_currentness(self) -> None:
-        self.assertIn("may be inside or outside the product project root", PLANNING_TICKET)
-        self.assertIn("Product-root containment is not a parent-Spec readiness condition", PLANNING_CURRENTNESS)
-        self.assertIn("same canonical `specPath`", PLANNING_CURRENTNESS)
-        self.assertIn("exact raw-byte hash equals `specSha256`", PLANNING_CURRENTNESS)
-        self.assertIn("Relative blocker paths resolve from the Ticket directory", PLANNING_TICKET)
-        self.assertIn("an explicit applicable scope, and content complete for the\n  Ticket's due-now rendered result", PLANNING_TICKET)
-
-    def test_adapter_native_mechanics_are_absent(self) -> None:
-        forbidden = [
-            r"\bNode\b",
-            r"\bPython\b",
-            r"\bGo\b",
-            r"nativeReport",
-            r"contextDigest",
-            r"adapterVersion",
-            r"references/adapters",
-            r"adapters/node",
-            r"adapters/python",
-            r"adapters/go",
-            r"per-task Fast",
-            r"Full entry",
-        ]
-        for pattern in forbidden:
-            self.assertIsNone(re.search(pattern, SKILL), pattern)
-
-    def test_run_state_is_implementation_only(self) -> None:
-        for state in (
-            "PREFLIGHT",
-            "IMPLEMENTING",
-            "RECONCILING",
-            "FINAL_REVIEW",
-            "IMPLEMENTATION_COMPLETE",
-            "INCOMPLETE",
-            "BLOCKED",
-            "PENDING",
-            "WORKER_RUNNING",
-            "REVIEWING",
-            "IMPLEMENTED",
-        ):
-            self.assertIn(state, SKILL)
-        for removed in (
-            "READY_FOR_VERIFICATION",
-            "verificationSessionId",
-            "verificationResultId",
-            "verificationVerdict",
-            "currentnessResult",
-            "checkpointHistoryRefs",
-            "ImplementationHandoff",
-            "assertCurrent",
-            "RUNTIME_EXERCISE",
-            "runtimeExercise",
-        ):
-            self.assertNotIn(removed, SKILL)
-
-    def test_attribution_and_scope_states_are_not_conflated(self) -> None:
-        self.assertIn("`attributionState` is `UNASSESSED`, `RECONCILING`, `CLEAR`, or `BLOCKED`", SKILL)
-        self.assertIn("A scope comparison never sets\nit directly", SKILL)
-        self.assertIn("`scopeComparisonState` is the tool-reported", SKILL)
-        self.assertIn("it does not\nclaim that the actor of every disjoint external path is known", SKILL)
-
-    def test_first_worker_requires_baseline_capsule(self) -> None:
-        self.assertIn("../baseline-capsule/baseline_capsule.py create", SKILL)
-        self.assertIn("canonical physical directory containing this `SKILL.md`", SKILL)
-        self.assertIn("Never search for or substitute another same-named Baseline Capsule copy", SKILL)
-        self.assertIn("Immediately before dispatching the first\nWorker", SKILL)
-        self.assertIn("require exact equality with\n`baselineSourceIdentity`", SKILL)
-        self.assertIn("immutable source-baseline support module", SKILL)
-
-    def test_capsule_failure_prevents_worker_dispatch(self) -> None:
-        self.assertIn("no Worker may run after a terminal result", SKILL)
-        self.assertIn("missing or expired Capsules are never silently replaced", SKILL)
-        self.assertIn("For a genuine zero-source-mutation Ticket path, create the Capsule", SKILL)
-
-    def test_zero_source_mutation_runtime_coverage_has_an_executable_path(self) -> None:
-        self.assertIn("For a genuine zero-source-mutation Ticket path, create the Capsule", SKILL)
-        self.assertIn("proceed directly to\n`FINAL_REVIEW` when every source requirement is `ESTABLISHED`", SKILL)
-        self.assertIn("Runtime coverage remains `PARTIAL` until that final exercise succeeds", SKILL)
-        self.assertIn("A zero-source-mutation path freezes no Worker envelope and creates no task", SKILL)
-
-    def test_zero_source_evidence_is_durable_without_artificial_task(self) -> None:
-        self.assertIn("create no TaskState, task record, or task fields", SKILL)
-        self.assertIn("Final source or runtime evidence is recorded at run level in\n`completionRecord`", SKILL)
-        self.assertIn("do not create an artificial task merely to hold evidence", SKILL)
-
-    def test_implemented_is_source_review_not_verification(self) -> None:
-        self.assertIn("task_implementation_review_complete", SKILL)
-        self.assertIn("does not claim a separate", SKILL)
-        self.assertIn("technical verification verdict", SKILL)
-        self.assertIn("Implementation completion and Acceptance Criterion coverage", SKILL)
-
-    def test_runtime_dependent_coverage_requires_direct_product_evidence(self) -> None:
-        self.assertIn("requirement remains `PARTIAL` after source integration", SKILL)
-        self.assertIn("Implementation Lead directly performs a representative runtime exercise", SKILL)
-        self.assertIn("obtains the required authoritative product readback", SKILL)
-        self.assertIn("internal-helper call alone\nis not that evidence", SKILL)
-        self.assertIn("source artifact, static schema,\ndocument, or structural constraint", SKILL)
-
-    def test_runtime_exercise_is_lead_owned_after_source_closure(self) -> None:
-        self.assertIn("Worker runtime checks are provisional focused feedback", SKILL)
-        self.assertIn("never become a Representative Runtime\nObservation", SKILL)
-        self.assertIn("When all source gaps are closed, proceed to\n`FINAL_REVIEW`", SKILL)
-        self.assertIn("Implementation Lead directly performs the smallest set", SKILL)
-        self.assertIn("One exercise may support multiple requirements", SKILL)
-
-    def test_runtime_observation_is_not_carried_across_source_change(self) -> None:
-        self.assertIn("Worker observations remain provisional and are never carried", SKILL)
-        self.assertIn("Lead-owned observations are created only after dependency closure", SKILL)
-        self.assertIn("any subsequent source change discards them", SKILL)
-
-    def test_runtime_failures_distinguish_product_environment_and_authority(self) -> None:
-        self.assertIn("expected effect that is absent", FAILURE_ROUTING)
-        self.assertIn("Ticket-authorized defect attributable to the task", FAILURE_ROUTING)
-        self.assertIn("Without an authoritative readback, the runtime-dependent Acceptance Criterion remains `PARTIAL`", FAILURE_ROUTING)
-        self.assertIn("reliable target-to-source binding is\n  `INCOMPLETE`", FAILURE_ROUTING)
-        self.assertIn("Unclear target authority, an unapproved external effect", FAILURE_ROUTING)
-        self.assertIn("A project delta during the Lead-owned final exercise invalidates the observation", FAILURE_ROUTING)
-
-    def test_runtime_safety_and_ticket_observability_are_explicit(self) -> None:
-        self.assertIn("Use the current checkout only when the repository-authoritative command cannot create", SKILL)
-        self.assertIn("source materialization outside the project root", SKILL)
-        self.assertIn("Use `INDEPENDENT_READBACK`", SKILL)
-        self.assertIn("Do not automatically use production, real money, real messages, user data", SKILL)
-        self.assertIn("explicit user authorization for this invocation", SKILL)
-        self.assertIn("observable product flow, expected effect, and readback", TO_TICKETS)
-        self.assertIn("Implementation Lead\ndirectly performs any final representative runtime exercise", TO_TICKETS)
-        self.assertIn("but does not itself add a\npositive completion condition", PLANNING_TICKET)
-
-    def test_final_review_binds_two_equal_source_identities(self) -> None:
-        self.assertIn("finalReviewStartIdentity", SKILL)
-        self.assertIn("finalSourceIdentity", SKILL)
-        self.assertIn("source identity before and after equals `finalSourceIdentity`", SKILL)
-        self.assertIn("finalReviewStartIdentity == finalSourceIdentity", SKILL)
-
-    def test_final_review_discards_observation_on_identity_drift(self) -> None:
-        self.assertIn("discard all observations and restart the complete final review once", SKILL)
-        self.assertIn("second disjoint identity drift is\n    `INCOMPLETE`", SKILL)
-        self.assertIn("overlapping or authority change is `BLOCKED`", SKILL)
-
-    def test_unexpected_delta_is_reconciled_before_terminal_routing(self) -> None:
-        self.assertIn("change is evidence to reconcile", SKILL)
-        self.assertIn("Continue automatically when the unexpected delta is external or remains unattributed", SKILL)
-        self.assertIn("Record `CONTINUE` only when", SKILL)
-        self.assertIn("Record `REMEDIATE` only for", SKILL)
-
-    def test_blocked_is_reserved_for_authority_overlap_or_preservation_loss(self) -> None:
-        self.assertIn("Return `BLOCKED` only when planning authority changed", SKILL)
-        self.assertIn("pre-existing work was overwritten", SKILL)
-
-    def test_other_scratch_work_is_not_automatically_blocking(self) -> None:
-        self.assertIn("Another `.scratch/<work-slug>/**` tree is not automatically safe or unsafe", SKILL)
-        self.assertIn("Do not globally exclude `.scratch/**`", SKILL)
-
-    def test_reconciled_external_changes_are_auditable_and_not_completion_evidence(self) -> None:
-        self.assertIn("Each reconciled external-change record contains", SKILL)
-        self.assertIn("preservationBeforeIdentity, preservationAfterIdentity", SKILL)
-        self.assertIn("excludedFromCoverage = true", SKILL)
-        self.assertIn("must not infer an actor from path spelling", SKILL)
-
-    def test_scope_remediation_cannot_launder_an_out_of_envelope_delta(self) -> None:
-        self.assertIn("does not retroactively\nmake the original out-of-envelope delta valid task evidence", SKILL)
-        self.assertIn("Never use remediation to retain\nan unplanned path", SKILL)
-
-    def test_operational_failures_do_not_become_ownership_blockers(self) -> None:
-        self.assertIn("Ownership compare exit `10`: enter `RECONCILING`", FAILURE_ROUTING)
-        self.assertIn("retry the same bounded call once", FAILURE_ROUTING)
-        self.assertIn("A second\n  no-delta runtime failure is `INCOMPLETE`", FAILURE_ROUTING)
-        self.assertIn("never re-seal", FAILURE_ROUTING)
-        self.assertIn("ImplementationResult `PLANNING_INPUT_CHANGED`: `BLOCKED`", FAILURE_ROUTING)
-
-    def test_reconciliation_scenario_matrix_is_closed(self) -> None:
-        self.assertIn("Preserved external change, disjoint from planning authority and task impact", FAILURE_ROUTING)
-        self.assertIn("Worker-attributable scope violation", FAILURE_ROUTING)
-        self.assertIn("Overlapping product path with unclear actor", FAILURE_ROUTING)
-        self.assertIn("overwritten pre-existing work", FAILURE_ROUTING)
-        self.assertIn("A path inside the envelope can still be externally edited", FAILURE_ROUTING)
-        self.assertIn("`WITHIN_ENVELOPE` means only", TASK_OWNERSHIP)
-        self.assertIn("blocked: planning input changed", PLANNING_CURRENTNESS)
-
-    def test_final_review_has_one_disjoint_restart(self) -> None:
-        self.assertIn("restart the complete final review once", SKILL)
-        self.assertIn("second disjoint identity drift is\n    `INCOMPLETE`", SKILL)
-
-    def test_completion_publishes_independent_result(self) -> None:
-        self.assertIn("implementation-result-v3", SKILL)
-        self.assertIn("implementation_result.py publish", SKILL)
-        self.assertIn("the caller does not submit\n`implementationStatus`", SKILL)
-        self.assertIn("publisher validates and writes immutable implementation-result-v3", SKILL)
-        self.assertIn("It does not mean `VERIFIED`", SKILL)
-        self.assertIn("supplementalLocalAuthorityBindings", COMPLETION_RECORD)
-        self.assertIn("projectDeltaBinding", COMPLETION_RECORD)
-        self.assertIn("unknown properties are rejected", COMPLETION_RECORD)
-
-    def test_ui_dispatch_evidence_is_not_an_acceptance_criterion_type(self) -> None:
-        self.assertIn("every ESTABLISHED coverage that depends on implementation or renderer evidence from a", SKILL)
-        self.assertIn("`UI_IMPLEMENTATION` dispatch has applicable approved UI authority", SKILL)
-        self.assertIn("`UI_IMPLEMENTATION` dispatch has applicable approved UI authority", SKILL)
-        self.assertIn("Implementation Lead uses the actual intended\nrenderer", SKILL)
-        self.assertNotIn("every UI_IMPLEMENTATION Acceptance Criterion", SKILL)
-
-    def test_later_finding_cannot_reopen_implementation(self) -> None:
-        self.assertIn("later user bug report or review finding requires new", SKILL)
-        self.assertIn("it never reopens this one", SKILL)
-        self.assertIn("cannot\nretroactively alter this invocation's immutable result", SKILL)
-
-    def test_removed_named_actor_is_absent_from_active_contracts(self) -> None:
-        removed_actor = "Verification" + " Lead"
-        active = [
-            SKILL,
-            FAILURE_ROUTING,
-            TASK_OWNERSHIP,
-            PLANNING_CURRENTNESS,
-            PLANNING_TICKET,
-            UI_TICKET,
-            GREENFIELD,
-            TO_TICKETS,
-            BASELINE_README,
-            BASELINE_SOURCE,
-        ]
-        self.assertTrue(all(removed_actor not in text for text in active))
-        self.assertIn("Ticket's Acceptance Criteria can be observed", TO_TICKETS)
-        self.assertIn("Verification Expectations", TO_SPEC)
-        self.assertIn("independent certification", COMPLETION_RECORD)
-        self.assertIn("independent general technical\ncertification", SKILL)
-
-    def test_frontend_mode_is_exactly_a_dispatch_classification_not_a_lifecycle(self) -> None:
-        mode_block = re.search(
-            r"`frontendMode` is a current-dispatch classification.*?```text\n(.*?)```",
-            SKILL,
-            re.DOTALL,
-        )
-        self.assertIsNotNone(mode_block)
-        assert mode_block is not None
-        self.assertEqual(
-            {"NONE", "ENGINEERING_ONLY", "UI_IMPLEMENTATION"},
-            set(mode_block.group(1).split()),
-        )
-        self.assertIn("not a RunState, TaskState, task record, manifest,\nor result protocol", SKILL)
-        self.assertIn("not Worker selection", SKILL)
-        self.assertIn("no Addon,\ndedicated frontend Worker, or separate manifest", SKILL)
-        self.assertNotIn("FRONTEND_REVIEW", SKILL)
-        self.assertNotIn("FRONTEND_IMPLEMENTING", SKILL)
-
-    def test_frontend_classification_uses_actual_consumer_and_rendered_contract(self) -> None:
-        self.assertIn("actual current runtime consumer and observable completion condition", SKILL)
-        self.assertIn("never a file\nextension, directory name, task title, or guessed stack", SKILL)
-        self.assertIn("browser or\n  native UI runtime consumer", SKILL)
-        self.assertIn("accessibility semantics, focus or keyboard behavior", SKILL)
-        self.assertIn("Shared source is frontend-bearing only", SKILL)
-        self.assertIn("even when its expected pixels and UX\nare preservation rather than change", SKILL)
-
-    def test_ui_authority_modes_preserve_no_ui_contract(self) -> None:
-        self.assertIn("`UI_IMPLEMENTATION` with Ticket `UI: no` is `BLOCKED` before Worker dispatch", SKILL)
-        self.assertIn("`ENGINEERING_ONLY` is permitted for Ticket `UI: no`", SKILL)
-        self.assertIn("must not infer a UI authority,\nrequirement, or reference", SKILL)
-        self.assertIn("a backend-only task is `NONE`", SKILL)
-        self.assertIn("A Ticket with `UI: no` never loads this reference", UI_TICKET)
-
-    def test_every_frontend_dispatch_passes_active_guidance_for_direct_read(self) -> None:
-        self.assertIn("including frontend remediation\ndispatches", SKILL)
-        self.assertIn("stable identifier `ima2-front`", SKILL)
-        self.assertIn("canonical physical absolute `SKILL.md` path", SKILL)
-        self.assertIn("pass both values afresh on every Worker call", SKILL)
-        self.assertIn("Before any product-file mutation, the Worker reads the passed absolute", SKILL)
-        self.assertIn("does not assume that the OpenCode `skill` tool is available", SKILL)
-        self.assertIn("task-relevant references that the\n   `SKILL.md` routing directs", SKILL)
-        self.assertIn("following symlinks to their real paths", SKILL)
-
-    def test_frontend_worker_authority_and_guardrails_are_explicit(self) -> None:
-        self.assertIn("ready Ticket and approved parent Spec", SKILL)
-        self.assertIn("> approved UI reference and task locator when UI: yes", SKILL)
-        self.assertIn("> repository design system, commands, and conventions", SKILL)
-        self.assertIn("> ima2-front objective implementation guidance", SKILL)
-        self.assertIn("> ima2-front style samples", SKILL)
-        self.assertIn("does not invoke `ima2-uiux`", SKILL)
-        self.assertIn("The Lead never invokes `ima2-uiux` as a fallback", SKILL)
-        self.assertIn("create a new Design Read", SKILL)
-        self.assertIn("does not install or set up `ima2`, log in, or change global defaults", SKILL)
-        self.assertIn("Concept mockup generation is forbidden", SKILL)
-        self.assertIn("preserves the rendered and UX result exactly", SKILL)
-
-    def test_frontend_routing_rendered_evidence_and_currentness_are_explicit(self) -> None:
-        self.assertIn("return `INCOMPLETE` before product mutation", SKILL)
-        self.assertIn("returns `GUIDANCE_UNAVAILABLE`; the Lead routes this to `INCOMPLETE`", SKILL)
-        self.assertIn("returns `AUTHORITY_GAP`; the Lead routes this to `BLOCKED`", SKILL)
-        self.assertIn("Static source inspection cannot establish `UI_IMPLEMENTATION`", UI_TICKET)
-        self.assertIn("expected rendered effect and authoritative product readback", SKILL)
-        self.assertIn("Do not apply the no-delta generic Worker-call retry", FAILURE_ROUTING)
-        self.assertIn("shared CSS/design tokens", UI_TICKET)
-        self.assertIn("Final rendered observations are created only after source dependency closure", UI_TICKET)
-        self.assertIn("any later\nsource change discards them", UI_TICKET)
-        self.assertIn("create no TaskState, task record, or task fields", SKILL)
-        self.assertIn("Lead-owned final\nrepresentative runtime exercise", SKILL)
-
-    def test_windows_trigger_is_runtime_consumer_or_command_specific(self) -> None:
-        self.assertIn("actual current runtime consumer or\nrepository-authoritative command requirement", SKILL)
-        self.assertIn("never infer this condition\nfrom an extension, directory, title, or guessed stack", SKILL)
-        self.assertIn("actual intended\nconsumer or command requires Windows", WINDOWS_HYPERV)
-        self.assertIn("A file extension, directory name, Ticket title, framework name, or guessed platform is not\na trigger", WINDOWS_HYPERV)
-        self.assertIn("Hyper-V host: DESKTOP-BALMTAV", WINDOWS_HYPERV)
-        self.assertIn("VM: Windows", WINDOWS_HYPERV)
-        self.assertIn("Transport: PowerShell Direct only", WINDOWS_HYPERV)
-
-    def test_windows_is_lead_first_same_worker_and_not_a_new_lifecycle(self) -> None:
-        self.assertIn("the Lead reads the conditional\nWindows reference first", SKILL)
-        self.assertIn("selected Worker remains the same user-selected Worker", SKILL)
-        self.assertIn("no Windows\nstate, lifecycle, Addon, dedicated Worker, manifest", SKILL)
-        self.assertIn("The Lead is first", WINDOWS_HYPERV)
-        self.assertIn("The user-selected Worker remains the only Worker. There is no Windows Worker", WINDOWS_HYPERV)
-        self.assertIn("Before using the VM, the Worker reads\nthe passed reference directly", WINDOWS_HYPERV)
-        self.assertIn("Windows facts are task-specific and are orthogonal to `frontendMode`", WINDOWS_HYPERV)
-        self.assertIn("WPF, WinForms, and WinUI rendered-contract work remains subject to existing approved UI authority", WINDOWS_HYPERV)
-
-    def test_windows_uses_only_the_bounded_supervisor(self) -> None:
-        self.assertIn("Bounded supervisor: C:\\AgentBridgeHost\\Invoke-AgentVmBounded.ps1", WINDOWS_HYPERV)
-        self.assertIn("is never called directly by the Lead or Worker", WINDOWS_HYPERV)
-        self.assertIn("every VM\naction uses only `C:\\AgentBridgeHost\\Invoke-AgentVmBounded.ps1`", WINDOWS_HYPERV)
-        self.assertIn("status -> sync -> submit -> wait -> collect -> cleanup/readback", WINDOWS_HYPERV)
-        self.assertIn("Ordinary\nruns never use `-CollectAll`", WINDOWS_HYPERV)
-        self.assertIn('wslpath -w "$MATERIALIZATION"', WINDOWS_HYPERV)
-        self.assertIn('powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass', WINDOWS_HYPERV)
-        self.assertNotIn("wsl.exe wslpath", WINDOWS_HYPERV)
-        self.assertNotIn("ConvertFrom-Json", WINDOWS_HYPERV)
-        self.assertIn('-Action collect -JobId "$JOB_ID"', WINDOWS_HYPERV)
-        self.assertIn('MATERIALIZATION_NAME="$(basename "$MATERIALIZATION")"', WINDOWS_HYPERV)
-        self.assertIn('GUEST_SOURCE="${GUEST_RUN}\\\\${MATERIALIZATION_NAME}"', WINDOWS_HYPERV)
-        self.assertIn("actual guest source path is\n`<GuestPath>\\<source-basename>`", WINDOWS_HYPERV)
-
-    def test_windows_keeps_external_planning_out_of_vm_materialization(self) -> None:
-        self.assertIn("external\nplanning workspace", WINDOWS_HYPERV)
-        self.assertIn("never separately\ncopied into a product materialization or synced to the VM", WINDOWS_HYPERV)
-        self.assertRegex(WINDOWS_HYPERV, r"`wslpath` and VM sync apply only to a product\s+source materialization")
-        self.assertRegex(
-            WINDOWS_HYPERV,
-            r"Planning-workspace identity never mixes with product `Project-Root`, Baseline Capsule, materialization,\s+or source identity",
-        )
-        self.assertIn("blocked: planning input changed", WINDOWS_HYPERV)
-        self.assertIn("Do not exclude product-root legacy\n`.scratch/**`", WINDOWS_HYPERV)
-        self.assertIn("can\nreach the guest incidentally in the source materialization", WINDOWS_HYPERV)
-        self.assertIn("That guest copy is never planning authority", WINDOWS_HYPERV)
-        self.assertIn("canonical WSL path and `PlanningInputSeal` remain the only authority", WINDOWS_HYPERV)
-        self.assertNotIn("Planning Markdown is never copied or moved into the product project", WINDOWS_HYPERV)
-
-    def test_windows_materialization_and_cleanup_bind_final_identity(self) -> None:
-        self.assertIn("owner-only source materialization outside\nthe project root", WINDOWS_HYPERV)
-        self.assertIn("`source-evidence-v1` projection identity exactly equals\n`finalSourceIdentity`", WINDOWS_HYPERV)
-        self.assertIn("This is the only path passed through `wslpath`", WINDOWS_HYPERV)
-        self.assertIn("Use a new unguessable run ID and unique job IDs", WINDOWS_HYPERV)
-        self.assertIn("A failed guest run directory is never reused", WINDOWS_HYPERV)
-        self.assertIn("capture the existing project source identity and ownership snapshots", WINDOWS_HYPERV)
-        self.assertIn("Clean up the WSL materialization and guest run path", WINDOWS_HYPERV)
-        self.assertIn("executionTargetBinding.mode =\nSOURCE_BOUND_MATERIALIZATION", WINDOWS_HYPERV)
-
-    def test_windows_result_and_gui_evidence_is_concrete_and_redacted(self) -> None:
-        for fact in (
-            "`timedOut` is false",
-            "For a `waitForExit=true` job",
-            "integer `exitCode` equal to the task-expected value",
-            "`success == (exitCode == 0)`",
-            "ordinary successful build or test therefore\nrequires `success=true` and `exitCode=0`",
-            "expected nonzero exit requires `success=false`",
-            "host `wait` exit code to match each other",
-            "interactive GUI job with `waitForExit=false`, `exitCode=null` is expected",
-            "Do not apply the waited-process exit-code relation to this GUI shape",
-            "`user` exactly equals `DESKTOP-IRUC588\\AgentAdmin`",
-            "`sessionId` is nonzero",
-            "actual Lead PNG readback",
-            "GUI automation uses stable `AutomationId` first; coordinate-based automation is\nforbidden",
-            "not evidence of standard-user behavior",
-            "remains `INCOMPLETE` under this profile unless a separate authorized",
-            "never raw stdout, stderr, PNG bytes, credentials, passwords, or user data",
-        ):
-            self.assertIn(fact, WINDOWS_HYPERV)
-
-    def test_windows_recovery_and_host_execution_are_restricted(self) -> None:
-        for fact in (
-            "SSH, external ports, and host-Windows product application, installer, build, test, or GUI execution are\nforbidden",
-            "Do not call\n`activate` in ordinary work",
-            "Only after bounded retry and demonstrated actual PowerShell Direct or\ninteractive-worker channel recovery need",
-            "A successful `activate` performs its own validation and\ncreates its validation checkpoint",
-            "ordinary `checkpoint` action is forbidden unless the Ticket\nexplicitly requires it",
-            "Do not request a guest password, credential, UAC prompt, RunAs, host administrator approval",
-            "AgentBridgeLockTimeout",
-            "AgentBridgeCredentialMissing",
-            "AgentBridgeWallClockTimeout",
-            "Retry the identical\nbounded call exactly once; a second lock timeout is `INCOMPLETE`",
-            "action-specific safe readback of the current state; do not blindly replay the action",
-            "worker timeout exit `124` and worker execution failure exit `125`",
-        ):
-            self.assertIn(fact, WINDOWS_HYPERV)
-
-    def test_windows_status_is_formatted_and_wait_is_the_result_json(self) -> None:
-        self.assertIn("`status` establishes", WINDOWS_HYPERV)
-        self.assertIn("formatted PowerShell object, not JSON", WINDOWS_HYPERV)
-        self.assertIn("wrapper exit `0` and directly inspect `computer`,\n`session`, `workerTask` state/user/run level", WINDOWS_HYPERV)
-        self.assertIn("`queuedJobs`, `inboxUploads`, `processingJobs`,\n`resultUploads`, `results`, `workerHash`, and `bridgeHash`", WINDOWS_HYPERV)
-        self.assertIn("current nonzero interactive\nAgentAdmin session ID", WINDOWS_HYPERV)
-        self.assertIn("scheduled-task principal may be rendered as `AgentAdmin`", WINDOWS_HYPERV)
-        self.assertRegex(WINDOWS_HYPERV, r"Only\s+`wait` emits\s+the selected job's result JSON")
-        self.assertIn("Only WAIT_OUTPUT is result JSON", WINDOWS_HYPERV)
-
-    def test_windows_reference_resolution_is_canonical_or_incomplete(self) -> None:
-        self.assertIn("canonical\nphysical directory containing this `SKILL.md`, following symlinks", SKILL)
-        self.assertIn("exact canonical regular\nfile. Do not search for or substitute a same-named copy", SKILL)
-        self.assertIn("`INCOMPLETE` before Worker dispatch or VM use", SKILL)
-        self.assertIn("do not fall back to approximation", SKILL)
-        self.assertIn("canonical physical `implementation-lead/SKILL.md` directory", WINDOWS_HYPERV)
-        self.assertIn("Failure to resolve or read that exact file\nis `INCOMPLETE` before Worker dispatch or VM use", WINDOWS_HYPERV)
-
-    def test_windows_worker_checks_remain_provisional_and_lead_owns_final_evidence(self) -> None:
-        self.assertIn("bounded provisional task\nfeedback", SKILL)
-        self.assertIn("Lead directly performs every final representative Windows exercise in `FINAL_REVIEW`", SKILL)
-        self.assertIn("Worker Windows observations are bounded provisional focused checks", WINDOWS_HYPERV)
-        self.assertIn("never become a Representative Runtime\nObservation", WINDOWS_HYPERV)
-        self.assertIn("the Lead itself performs the final representative exercise", WINDOWS_HYPERV)
-        self.assertRegex(SKILL, r"never\s+promotes a Worker provisional result to final evidence")
-
-    def test_windows_preserves_existing_planning_and_completion_record_contracts(self) -> None:
-        self.assertIn("PlanningInputSeal", PLANNING_CURRENTNESS)
-        self.assertIn("blocked: planning input changed", PLANNING_CURRENTNESS)
-        self.assertIn("unknown properties are rejected", COMPLETION_RECORD)
-        self.assertIn("runtimeObservations[]", COMPLETION_RECORD)
-        self.assertNotIn("windows", COMPLETION_RECORD.lower())
-        self.assertRegex(WINDOWS_HYPERV, r"no Windows-only\s+schema")
-        self.assertIn("external-planning-workspace, Baseline Capsule, and Completion Record contracts", WINDOWS_HYPERV)
+        self.assertEqual(22, len(checklist_rows))
+        for number, row in enumerate(checklist_rows, start=1):
+            self.assertTrue(row.startswith(f"| {number} | [x] |"), row)
 
 
 if __name__ == "__main__":

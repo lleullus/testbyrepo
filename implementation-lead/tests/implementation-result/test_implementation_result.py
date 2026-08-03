@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import copy
 import hashlib
 import importlib.util
 import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,24 +20,25 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-class ImplementationResultTests(unittest.TestCase):
+class ImplementationHandoffTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        root = Path(self.temporary.name)
-        self.project = root / "project"
+        temporary_root = Path(self.temporary.name)
+        self.project = temporary_root / "project"
         self.project.mkdir()
-        (self.project / "app.txt").write_text("final source\n", encoding="utf-8")
-        self.planning = root / "planning"
+        (self.project / "app.txt").write_text("before\n", encoding="utf-8")
+        self.planning = temporary_root / "planning"
         self.planning.mkdir()
         self.ticket = self.planning / "TICKET.md"
         self.spec = self.planning / "SPEC.md"
         self.spec.write_text("# Spec\nStatus: approved\nOwner: user\n", encoding="utf-8")
         self.write_ticket("- The final source contains the approved marker.\n")
-        self.capsule_root = root / "capsules"
-        self.result_root = root / "results"
-        self.capsules = implementation_result.baseline_capsule.CapsuleStore(self.capsule_root)
-        self.handle = self.capsules.create(self.project)
-        self.store = implementation_result.ResultStore(self.result_root, self.capsule_root)
+        self.workflow_root = temporary_root / "workflow"
+        self.capsule_root = temporary_root / "capsules"
+        self.historical_root = temporary_root / "historical"
+        self.publisher = implementation_result.HandoffPublisher(
+            self.workflow_root, self.capsule_root
+        )
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -72,459 +71,382 @@ class ImplementationResultTests(unittest.TestCase):
             "blockerFiles": [],
         }
 
-    def final_identity(self) -> str:
-        return implementation_result.baseline_capsule.capture_identity(self.project)["sourceIdentity"]
-
-    def request(self, kind: str = "SOURCE") -> dict[str, object]:
-        seal = self.planning_seal()
-        criteria = implementation_result.acceptance_criteria_from_ticket(self.ticket)
-        final_identity = self.final_identity()
-        requirement_id = "requirement-1"
-        if kind == "SOURCE":
-            evidence_id = "source-1"
-            source_evidence = [
-                {
-                    "evidenceId": evidence_id,
-                    "coveredRequirementIds": [requirement_id],
-                    "authorityLocators": ["Ticket:Acceptance Criteria[1]"],
-                    "authorityBindingRefs": [],
-                    "sourceIdentity": final_identity,
-                    "reviewSummary": "Current source contains the approved marker.",
-                }
-            ]
-            runtime_observations = []
-        else:
-            evidence_id = "runtime-1"
-            snapshot_identity = "sha256:" + "a" * 64
-            source_evidence = []
-            runtime_observations = [
-                {
-                    "observationId": evidence_id,
-                    "coveredRequirementIds": [requirement_id],
-                    "entryPointAuthority": {
-                        "authorityLocators": ["Ticket:Verification", "repository:public-entry-point"],
-                        "authorityBindingRefs": [],
-                    },
-                    "executionTargetBinding": {
-                        "mode": "CURRENT_PROJECT_ROOT",
-                        "authorityLocators": ["repository:run-command"],
-                        "finalSourceIdentity": final_identity,
-                        "targetIdentityOrRevision": final_identity,
-                        "bindingSummaryOrDigest": "Current canonical project root at final identity.",
-                    },
-                    "redactedInvocationSummary": "Invoked the public entry point with task-owned input.",
-                    "expectedEffectSummary": "The public result contains the approved marker.",
-                    "observedEffectSummary": "The public result contained the approved marker.",
-                    "observationMode": "DIRECT_RESULT",
-                    "readbackSummaryOrDigest": "Direct returned result matched the expected value.",
-                    "planningSealDigest": implementation_result.planning_seal_digest(seal),
-                    "sourceIdentityBefore": final_identity,
-                    "sourceIdentityAfter": final_identity,
-                    "projectDeltaBinding": {
-                        "ownershipSnapshotIdentityBefore": snapshot_identity,
-                        "ownershipSnapshotIdentityAfter": snapshot_identity,
-                        "changedPathCount": 0,
-                        "deltaSummaryOrDigest": "No project-root path changed.",
-                        "disposition": "CLEAR",
-                    },
-                    "cleanupDisposition": {
-                        "required": False,
-                        "state": "NOT_REQUIRED",
-                        "authorityOrRationale": "Direct result created no persistent state.",
-                        "readbackSummaryOrDigest": "",
-                    },
-                    "observedAt": "2026-08-01T00:00:00+00:00",
-                }
-            ]
-        completion = {
-            "acceptanceCriteriaDigest": implementation_result.acceptance_criteria_digest(criteria),
-            "supplementalLocalAuthorityBindings": [],
-            "coverage": [
-                {
-                    **criteria[0],
-                    "state": "ESTABLISHED",
-                    "evidenceRequirements": [
-                        {
-                            "requirementId": requirement_id,
-                            "kind": kind,
-                            "state": "ESTABLISHED",
-                            "evidenceRefs": [evidence_id],
-                        }
-                    ],
-                }
-            ],
-            "sourceEvidence": source_evidence,
-            "runtimeObservations": runtime_observations,
-            "unresolvedItems": [],
+    @staticmethod
+    def budget_vector(**overrides: int) -> dict[str, int]:
+        result = {
+            field: 0 for field in implementation_result.workflow_store.BUDGET_FIELDS
         }
+        result.update(overrides)
+        return result
+
+    def criteria(self) -> list[dict[str, object]]:
+        return implementation_result.acceptance_criteria_from_ticket(self.ticket)
+
+    def prepare_initial(self, *, mutate: bool) -> dict[str, object]:
+        planning_identity = implementation_result.planning_seal_digest(self.planning_seal())
+        transaction = self.publisher.transactions.start_initial(
+            project_root=self.project,
+            planning_identity=planning_identity,
+            selected_worker="worker",
+        )
+        task_ids: list[str] = []
+        if mutate:
+            task_id = "task-1"
+            envelope = self.publisher.transactions.freeze_envelope(
+                transaction_capability=transaction["transactionCapability"],
+                task_id=task_id,
+                criterion_refs=self.criteria(),
+                allowed_paths=["app.txt"],
+                forbidden_paths=[],
+            )
+            self.publisher.transactions.begin_worker_call(
+                worker_capability=transaction["workerCapability"],
+                envelope_ref=envelope["envelopeRef"],
+            )
+            (self.project / "app.txt").write_text("approved marker\n", encoding="utf-8")
+            self.publisher.transactions.capture_after(
+                transaction_capability=transaction["transactionCapability"],
+                envelope_ref=envelope["envelopeRef"],
+            )
+            self.publisher.transactions.reconcile_envelope(
+                transaction_capability=transaction["transactionCapability"],
+                envelope_ref=envelope["envelopeRef"],
+                reconciliation={
+                    "disposition": "CONTINUE",
+                    "workerAttributablePaths": ["app.txt"],
+                    "externalPaths": [],
+                    "preservedUserChanges": [],
+                    "externalEffectState": "CLEAR",
+                },
+            )
+            task_ids.append(task_id)
+        prepared = self.publisher.transactions.prepare_handoff(
+            transaction_capability=transaction["transactionCapability"]
+        )
+        return {**transaction, **prepared, "taskIds": task_ids}
+
+    def request(
+        self, transaction: dict[str, object], *, actor_capability: str | None = None
+    ) -> dict[str, object]:
         return {
-            "protocolVersion": "implementation-result-v3",
-            "projectRoot": str(self.project.resolve()),
-            "planningSeal": seal,
-            "capsuleRef": self.handle["capsuleRef"],
-            "finalSourceIdentity": final_identity,
-            "completionRecord": completion,
+            "protocolVersion": "implementation-handoff-v1",
+            "implementationTransactionRef": transaction["transactionRef"],
+            "actorCapability": actor_capability,
+            "planningSeal": self.planning_seal(),
+            "criterionAccounting": [
+                {**criterion, "taskIds": list(transaction["taskIds"])}
+                for criterion in self.criteria()
+            ],
+            "unresolvedImplementationItems": [],
         }
 
-    def assert_rejected(self, request: dict[str, object], code: str) -> None:
-        with self.assertRaises(implementation_result.ResultError) as raised:
-            self.store.publish(request)
+    def assert_code(self, code: str, operation) -> None:
+        with self.assertRaises(implementation_result.HandoffError) as raised:
+            operation()
         self.assertEqual(code, raised.exception.code)
 
-    def mutating_store(self, stage: str, mutation) -> object:
-        parent = self
+    def test_initial_handoff_is_transaction_derived_and_round_trips(self) -> None:
+        transaction = self.prepare_initial(mutate=True)
 
-        class MutatingStore(implementation_result.ResultStore):
-            mutated = False
+        handoff = self.publisher.publish(self.request(transaction))
 
-            def _publication_checkpoint(self, current_stage: str) -> None:
-                if current_stage == stage and not self.mutated:
-                    self.mutated = True
-                    mutation()
+        self.assertEqual("implementation-handoff-v1", handoff["protocolVersion"])
+        self.assertEqual("IMPLEMENTATION_HANDOFF_COMPLETE", handoff["implementationStatus"])
+        self.assertRegex(
+            handoff["implementationHandoffRef"], r"^implementation:handoff:v1:[a-f0-9]{32}$"
+        )
+        self.assertEqual(transaction["implementationDeltaRef"], handoff["implementationDeltaRef"])
+        self.assertEqual(transaction["finalSourceIdentity"], handoff["finalSourceIdentity"])
+        self.assertNotIn("sourceEvidence", handoff)
+        self.assertNotIn("runtimeObservations", handoff)
+        self.assertNotIn("verificationStatus", handoff)
+        stored = self.publisher.workflow.read_node(handoff["implementationHandoffRef"])
+        self.assertEqual(handoff, stored["payload"])
+        closed = self.publisher.transactions.read_transaction(transaction["transactionRef"])
+        self.assertEqual("CLOSED_WITH_HANDOFF", closed["state"])
+        self.assertEqual("HANDOFF_PUBLISHED", closed["events"][-1]["eventKind"])
 
-        return MutatingStore(parent.result_root, parent.capsule_root)
+    def test_initial_zero_mutation_handoff_has_empty_tool_owned_delta(self) -> None:
+        transaction = self.prepare_initial(mutate=False)
 
-    def assert_no_publication_artifact(self) -> None:
-        self.assertEqual([], list(self.result_root.glob("*.json")))
-        self.assertEqual([], list(self.result_root.glob(".pending-*")))
+        handoff = self.publisher.publish(self.request(transaction))
 
-    def test_static_only_complete_record_publishes_v3_and_round_trips(self) -> None:
-        request = self.request()
-        result = self.store.publish(request)
-        self.assertRegex(result["implementationResultRef"], r"^implementation:v3:[a-f0-9]{32}$")
-        self.assertEqual("IMPLEMENTATION_COMPLETE", result["implementationStatus"])
-        self.assertEqual([], result["completionRecord"]["runtimeObservations"])
-        self.assertEqual(request["planningSeal"], result["planningSeal"])
-        self.assertEqual(request["completionRecord"], result["completionRecord"])
-        token = result["implementationResultRef"].split(":")[-1]
-        stored = json.loads((self.result_root / f"{token}.json").read_text(encoding="utf-8"))
-        self.assertEqual(result, stored)
-        self.assertEqual(
-            stored["planningSealDigest"],
-            implementation_result.planning_seal_digest(stored["planningSeal"]),
+        self.assertEqual(transaction["baselineSourceIdentity"], handoff["finalSourceIdentity"])
+        self.assertEqual([], handoff["criterionAccounting"][0]["taskIds"])
+
+    def test_criterion_accounting_must_match_exact_ticket_and_transaction_tasks(self) -> None:
+        transaction = self.prepare_initial(mutate=True)
+        request = self.request(transaction)
+        request["criterionAccounting"][0]["taskIds"] = []
+        self.assert_code(
+            "INCOMPLETE_CRITERION_ACCOUNTING", lambda: self.publisher.publish(request)
         )
 
-    def test_complete_runtime_record_publishes(self) -> None:
-        self.write_ticket("- The public entry point returns the approved marker.\n")
-        request = self.request("RUNTIME")
-        result = self.store.publish(request)
-        self.assertEqual(1, len(result["completionRecord"]["runtimeObservations"]))
+        request = self.request(transaction)
+        request["criterionAccounting"][0]["criterionRawSha256"] = "0" * 64
+        self.assert_code("ACCEPTANCE_CRITERIA_MISMATCH", lambda: self.publisher.publish(request))
 
-    def test_bare_completion_and_missing_completion_record_are_rejected(self) -> None:
-        request = self.request()
-        request["implementationStatus"] = "IMPLEMENTATION_COMPLETE"
-        self.assert_rejected(request, "MALFORMED_RESULT")
-        request = self.request()
-        del request["completionRecord"]
-        self.assert_rejected(request, "MALFORMED_RESULT")
+    def test_unresolved_items_and_caller_status_fields_are_rejected(self) -> None:
+        transaction = self.prepare_initial(mutate=False)
+        request = self.request(transaction)
+        request["unresolvedImplementationItems"] = ["gap"]
+        self.assert_code("UNRESOLVED_IMPLEMENTATION_ITEMS", lambda: self.publisher.publish(request))
 
-    def test_missing_duplicate_or_changed_criterion_is_rejected(self) -> None:
-        request = self.request()
-        request["completionRecord"]["coverage"] = []
-        self.assert_rejected(request, "INCOMPLETE_COVERAGE")
+        request = self.request(transaction)
+        request["implementationStatus"] = "IMPLEMENTATION_HANDOFF_COMPLETE"
+        self.assert_code("MALFORMED_HANDOFF", lambda: self.publisher.publish(request))
 
-        self.write_ticket("- First criterion.\n- Second criterion.\n")
-        request = self.request()
-        request["completionRecord"]["coverage"].append(copy.deepcopy(request["completionRecord"]["coverage"][0]))
-        self.assert_rejected(request, "ACCEPTANCE_CRITERIA_MISMATCH")
-
-        self.write_ticket("- The final source contains the approved marker.\n")
-        request = self.request()
-        request["completionRecord"]["coverage"][0]["criterionRawSha256"] = "0" * 64
-        self.assert_rejected(request, "ACCEPTANCE_CRITERIA_MISMATCH")
-        request = self.request()
-        request["completionRecord"]["acceptanceCriteriaDigest"] = "0" * 64
-        self.assert_rejected(request, "ACCEPTANCE_CRITERIA_MISMATCH")
-
-    def test_unestablished_requirement_and_missing_evidence_are_rejected(self) -> None:
-        request = self.request()
-        request["completionRecord"]["coverage"][0]["state"] = "PARTIAL"
-        self.assert_rejected(request, "INCOMPLETE_COVERAGE")
-        request = self.request()
-        request["completionRecord"]["coverage"][0]["evidenceRequirements"][0]["state"] = "UNPROVEN"
-        self.assert_rejected(request, "INCOMPLETE_COVERAGE")
-        request = self.request()
-        request["completionRecord"]["sourceEvidence"] = []
-        self.assert_rejected(request, "INCOMPLETE_COVERAGE")
-        self.write_ticket("- The public entry point returns the approved marker.\n")
-        request = self.request("RUNTIME")
-        request["completionRecord"]["runtimeObservations"] = []
-        self.assert_rejected(request, "INCOMPLETE_COVERAGE")
-
-    def test_runtime_target_and_planning_bindings_are_required_and_current(self) -> None:
-        self.write_ticket("- The public entry point returns the approved marker.\n")
-        request = self.request("RUNTIME")
-        del request["completionRecord"]["runtimeObservations"][0]["executionTargetBinding"]
-        self.assert_rejected(request, "MALFORMED_RESULT")
-        request = self.request("RUNTIME")
-        request["completionRecord"]["runtimeObservations"][0]["executionTargetBinding"][
-            "targetIdentityOrRevision"
-        ] = "sha256:" + "b" * 64
-        self.assert_rejected(request, "SOURCE_IDENTITY_MISMATCH")
-        request = self.request("RUNTIME")
-        request["completionRecord"]["runtimeObservations"][0]["planningSealDigest"] = "0" * 64
-        self.assert_rejected(request, "PLANNING_INPUT_CHANGED")
-
-    def test_evidence_source_and_project_delta_identities_must_be_final_and_clear(self) -> None:
-        request = self.request()
-        request["completionRecord"]["sourceEvidence"][0]["sourceIdentity"] = "sha256:" + "b" * 64
-        self.assert_rejected(request, "SOURCE_IDENTITY_MISMATCH")
-        self.write_ticket("- The public entry point returns the approved marker.\n")
-        for key, value in (
-            ("ownershipSnapshotIdentityAfter", "sha256:" + "b" * 64),
-            ("changedPathCount", 1),
-            ("disposition", "DIRTY"),
-        ):
-            request = self.request("RUNTIME")
-            request["completionRecord"]["runtimeObservations"][0]["projectDeltaBinding"][key] = value
-            self.assert_rejected(request, "PROJECT_DELTA_NOT_CLEAR")
-
-    def test_cleanup_contract_is_enforced(self) -> None:
-        self.write_ticket("- The public entry point persists the approved marker.\n")
-        request = self.request("RUNTIME")
-        cleanup = request["completionRecord"]["runtimeObservations"][0]["cleanupDisposition"]
-        cleanup.update({"required": True, "state": "NOT_REQUIRED", "readbackSummaryOrDigest": ""})
-        self.assert_rejected(request, "MALFORMED_RESULT")
-        request = self.request("RUNTIME")
-        cleanup = request["completionRecord"]["runtimeObservations"][0]["cleanupDisposition"]
-        cleanup.update(
-            {
-                "required": True,
-                "state": "COMPLETE",
-                "authorityOrRationale": "Product delete command.",
-                "readbackSummaryOrDigest": "Authoritative readback confirmed absence.",
-            }
-        )
-        self.store.publish(request)
-
-    def test_supplemental_authority_is_current_and_referenced(self) -> None:
-        authority = self.planning / "UI.md"
-        authority.write_text("approved UI authority\n", encoding="utf-8")
-        request = self.request()
-        request["completionRecord"]["supplementalLocalAuthorityBindings"] = [
-            {
-                "authorityBindingId": "ui-1",
-                "role": "approved-ui-authority",
-                "canonicalPath": str(authority.resolve()),
-                "rawSha256": digest(authority),
-            }
-        ]
-        request["completionRecord"]["sourceEvidence"][0]["authorityBindingRefs"] = ["ui-1"]
-        self.store.publish(request)
-
-        request = self.request()
-        request["completionRecord"]["sourceEvidence"][0]["authorityBindingRefs"] = ["missing"]
-        self.assert_rejected(request, "MALFORMED_RESULT")
-
-        request = self.request()
-        request["completionRecord"]["supplementalLocalAuthorityBindings"] = [
-            {
-                "authorityBindingId": "ui-1",
-                "role": "approved-ui-authority",
-                "canonicalPath": str(authority.resolve()),
-                "rawSha256": digest(authority),
-            }
-        ]
-        request["completionRecord"]["sourceEvidence"][0]["authorityBindingRefs"] = ["ui-1"]
-        authority.write_text("changed\n", encoding="utf-8")
-        self.assert_rejected(request, "AUTHORITY_CHANGED")
-
-    def test_unresolved_unknown_and_oversized_payloads_are_rejected(self) -> None:
-        request = self.request()
-        request["completionRecord"]["unresolvedItems"] = ["gap"]
-        self.assert_rejected(request, "UNRESOLVED_ITEMS")
-        request = self.request()
-        request["completionRecord"]["unknown"] = True
-        self.assert_rejected(request, "MALFORMED_RESULT")
-        request = self.request()
-        request["completionRecord"]["sourceEvidence"][0]["reviewSummary"] = "x" * 4097
-        self.assert_rejected(request, "MALFORMED_RESULT")
-        request = self.request()
-        request["padding"] = "x" * implementation_result.MAX_REQUEST_BYTES
-        self.assert_rejected(request, "MALFORMED_RESULT")
-
-    def test_planning_source_capsule_and_wire_spelling_currentness(self) -> None:
-        request = self.request()
+    def test_planning_or_source_drift_leaves_transaction_ready_and_no_node(self) -> None:
+        transaction = self.prepare_initial(mutate=False)
+        request = self.request(transaction)
         self.ticket.write_text("changed\n", encoding="utf-8")
-        self.assert_rejected(request, "PLANNING_INPUT_CHANGED")
+        self.assert_code("PLANNING_INPUT_CHANGED", lambda: self.publisher.publish(request))
+        self.assertEqual(
+            "READY_FOR_HANDOFF",
+            self.publisher.transactions.read_transaction(transaction["transactionRef"])["state"],
+        )
 
         self.write_ticket("- The final source contains the approved marker.\n")
-        request = self.request()
-        (self.project / "app.txt").write_text("changed source\n", encoding="utf-8")
-        self.assert_rejected(request, "SOURCE_IDENTITY_MISMATCH")
+        transaction = self.prepare_initial(mutate=False)
+        request = self.request(transaction)
+        (self.project / "late.txt").write_text("late\n", encoding="utf-8")
+        self.assert_code("SOURCE_IDENTITY_MISMATCH", lambda: self.publisher.publish(request))
+        connection = self.publisher.workflow._connect()
+        try:
+            self.assertEqual(0, connection.execute("SELECT COUNT(*) FROM nodes").fetchone()[0])
+        finally:
+            connection.close()
 
-        (self.project / "app.txt").write_text("final source\n", encoding="utf-8")
-        request = self.request()
-        request["planningSeal"]["ticketSHA256"] = request["planningSeal"].pop("ticketSha256")
-        self.assert_rejected(request, "MALFORMED_RESULT")
+    def test_transaction_cannot_publish_twice(self) -> None:
+        transaction = self.prepare_initial(mutate=False)
+        self.publisher.publish(self.request(transaction))
+        self.assert_code(
+            "IMPLEMENTATION_TRANSACTION_NOT_READY",
+            lambda: self.publisher.publish(self.request(transaction)),
+        )
 
-        other = self.project.parent / "other"
-        other.mkdir()
-        other_handle = self.capsules.create(other)
-        request = self.request()
-        request["capsuleRef"] = other_handle["capsuleRef"]
-        self.assert_rejected(request, "CAPSULE_PROJECT_MISMATCH")
+    def test_all_new_v3_publications_are_retired_before_shape_validation(self) -> None:
+        for legacy_kind in ("SOURCE", "RUNTIME"):
+            with self.subTest(legacy_kind=legacy_kind):
+                self.assert_code(
+                    "PROTOCOL_RETIRED",
+                    lambda kind=legacy_kind: self.publisher.publish(
+                        {
+                            "protocolVersion": "implementation-result-v3",
+                            "legacyClaimedKind": kind,
+                            "completionRecord": {"callerAuthoredOutcome": "success"},
+                        }
+                    ),
+                )
 
-    def test_planning_seal_reordered_request_and_blocker_are_rejected(self) -> None:
-        request = self.request()
-        seal = request["planningSeal"]
-        request["planningSeal"] = {
-            "specPath": seal["specPath"],
-            "specSha256": seal["specSha256"],
-            "ticketPath": seal["ticketPath"],
-            "ticketSha256": seal["ticketSha256"],
-            "blockerFiles": [],
+    def test_historical_v3_is_read_only_and_never_adapted(self) -> None:
+        self.historical_root.mkdir()
+        token = "1" * 32
+        result_ref = f"implementation:v3:{token}"
+        path = self.historical_root / f"{token}.json"
+        value = {
+            "protocolVersion": "implementation-result-v3",
+            "implementationResultRef": result_ref,
+            "implementationStatus": "IMPLEMENTATION_COMPLETE",
+            "completionRecord": {"runtimeObservations": [{"callerAuthored": True}]},
         }
-        self.assert_rejected(request, "MALFORMED_RESULT")
+        path.write_text(json.dumps(value), encoding="utf-8")
+        before = path.read_bytes()
 
-        blocker = self.planning / "BLOCKER.md"
-        blocker.write_text("# Blocker\nStatus: resolved\n", encoding="utf-8")
-        request = self.request()
-        request["planningSeal"]["blockerFiles"] = [
-            {"status": "resolved", "path": str(blocker.resolve()), "sha256": digest(blocker)}
-        ]
-        self.assert_rejected(request, "MALFORMED_RESULT")
+        readback = implementation_result.HistoricalV3Store(self.historical_root).read(result_ref)
 
-    def test_planning_seal_digest_uses_schema_order_not_mapping_order(self) -> None:
-        seal = self.planning_seal()
-        reordered = {key: seal[key] for key in reversed(tuple(seal))}
+        self.assertEqual(value, readback)
+        self.assertEqual(before, path.read_bytes())
+        self.assertNotIn("implementationHandoffRef", readback)
+
+    def failed_workflow(self) -> dict[str, object]:
+        initial = self.prepare_initial(mutate=False)
+        handoff = self.publisher.publish(self.request(initial))
+        root_ref = handoff["implementationHandoffRef"]
+        source = handoff["finalSourceIdentity"]
+        graph = self.publisher.workflow
+        invocation = graph.start_invocation(
+            root_ref=root_ref,
+            elapsed_seconds=600,
+            limits=self.budget_vector(
+                workerCalls=2,
+                remediationTransactions=1,
+                effectfulActions=1,
+                toolCostUnits=10,
+                closureOperations=5,
+            ),
+        )
+        coordinator = invocation["coordinator"]
+        assessor = graph.issue_actor(
+            coordinator_capability=coordinator["capability"], role="ASSESSOR"
+        )
+        worker = graph.issue_actor(
+            coordinator_capability=coordinator["capability"], role="WORKER"
+        )
+        verify_budget = graph.reserve_budget(
+            coordinator_capability=coordinator["capability"],
+            transition_kind="VERIFY",
+            spend=self.budget_vector(effectfulActions=1, toolCostUnits=2),
+            closure_reserve=self.budget_vector(toolCostUnits=1, closureOperations=1),
+        )
+        verify_claim = graph.acquire_claim(
+            coordinator_capability=coordinator["capability"],
+            claimant_actor_ref=assessor["actorRef"],
+            tip_ref=root_ref,
+            transition_kind="VERIFY",
+            planning_identity=handoff["planningSealDigest"],
+            source_identity=source,
+            execution_ref=implementation_result.workflow_store.allocate_ref("VERIFY"),
+            budget_reservation_ref=verify_budget["reservationRef"],
+        )
+        graph.consume_budget(
+            actor_capability=assessor["capability"],
+            reservation_ref=verify_budget["reservationRef"],
+            category="CLOSURE",
+            amounts=self.budget_vector(closureOperations=1),
+        )
+        result_ref = implementation_result.workflow_store.allocate_ref("VERIFICATION_RESULT")
+        failed = graph.publish_successor(
+            claimant_capability=assessor["capability"],
+            claim_ref=verify_claim["claimRef"],
+            node_ref=result_ref,
+            node_kind="VERIFICATION_RESULT",
+            protocol_version="verification-result-v1",
+            planning_identity=handoff["planningSealDigest"],
+            source_identity=source,
+            verification_status="VERIFICATION_FAILED",
+            payload={
+                "protocolVersion": "verification-result-v1",
+                "verificationResultRef": result_ref,
+                "verificationStatus": "VERIFICATION_FAILED",
+                "implementationHandoffRef": root_ref,
+                "planningSealDigest": handoff["planningSealDigest"],
+                "finalSourceIdentity": source,
+                "criterionResults": [
+                    {
+                        **self.criteria()[0],
+                        "verdict": "CONTRADICTED",
+                        "semanticRationale": "tool-owned contradiction",
+                    }
+                ],
+            },
+        )
+        remediator = graph.issue_actor(
+            coordinator_capability=coordinator["capability"], role="REMEDIATOR"
+        )
+        remediation_budget = graph.reserve_budget(
+            coordinator_capability=coordinator["capability"],
+            transition_kind="REMEDIATE",
+            spend=self.budget_vector(
+                remediationTransactions=1, workerCalls=1, toolCostUnits=3
+            ),
+            closure_reserve=self.budget_vector(toolCostUnits=1, closureOperations=2),
+        )
+        claim = graph.acquire_claim(
+            coordinator_capability=coordinator["capability"],
+            claimant_actor_ref=remediator["actorRef"],
+            tip_ref=failed["nodeRef"],
+            transition_kind="REMEDIATE",
+            planning_identity=handoff["planningSealDigest"],
+            source_identity=source,
+            execution_ref=implementation_result.workflow_store.allocate_ref("REMEDIATE"),
+            budget_reservation_ref=remediation_budget["reservationRef"],
+        )
+        return {
+            "handoff": handoff,
+            "coordinator": coordinator,
+            "worker": worker,
+            "remediator": remediator,
+            "budget": remediation_budget,
+            "claim": claim,
+        }
+
+    def test_remediation_handoff_closes_transaction_and_advances_failed_tip_atomically(self) -> None:
+        workflow = self.failed_workflow()
+        transaction = self.publisher.transactions.start_remediation(
+            remediator_capability=workflow["remediator"]["capability"],
+            worker_capability=workflow["worker"]["capability"],
+            claim_ref=workflow["claim"]["claimRef"],
+            project_root=self.project,
+            admission={
+                "disposition": "ADMITTED",
+                "criterionRefs": self.criteria(),
+                "authorityDeltaDigest": "c" * 64,
+                "desiredOutcomeUnchanged": True,
+                "acceptanceMeaningUnchanged": True,
+                "scopeAndNonGoalsUnchanged": True,
+                "materialProductDecisionRequired": False,
+                "safetyAndOwnershipAuthorized": True,
+            },
+        )
+        envelope = self.publisher.transactions.freeze_envelope(
+            transaction_capability=transaction["transactionCapability"],
+            task_id="remediation-1",
+            criterion_refs=self.criteria(),
+            allowed_paths=["app.txt"],
+            forbidden_paths=[],
+        )
+        self.publisher.transactions.begin_worker_call(
+            worker_capability=workflow["worker"]["capability"],
+            envelope_ref=envelope["envelopeRef"],
+        )
+        (self.project / "app.txt").write_text("fixed\n", encoding="utf-8")
+        self.publisher.transactions.capture_after(
+            transaction_capability=transaction["transactionCapability"],
+            envelope_ref=envelope["envelopeRef"],
+        )
+        self.publisher.transactions.reconcile_envelope(
+            transaction_capability=transaction["transactionCapability"],
+            envelope_ref=envelope["envelopeRef"],
+            reconciliation={
+                "disposition": "CONTINUE",
+                "workerAttributablePaths": ["app.txt"],
+                "externalPaths": [],
+                "preservedUserChanges": [],
+                "externalEffectState": "CLEAR",
+            },
+        )
+        prepared = self.publisher.transactions.prepare_handoff(
+            transaction_capability=transaction["transactionCapability"]
+        )
+        graph = self.publisher.workflow
+        graph.consume_budget(
+            actor_capability=workflow["remediator"]["capability"],
+            reservation_ref=workflow["budget"]["reservationRef"],
+            category="CLOSURE",
+            amounts=self.budget_vector(closureOperations=1),
+        )
+        request_transaction = {**transaction, **prepared, "taskIds": ["remediation-1"]}
+
+        handoff = self.publisher.publish(
+            self.request(
+                request_transaction,
+                actor_capability=workflow["remediator"]["capability"],
+            )
+        )
+
         self.assertEqual(
-            implementation_result.planning_seal_digest(seal),
-            implementation_result.planning_seal_digest(reordered),
+            workflow["handoff"]["finalSourceIdentity"], handoff["baselineSourceIdentity"]
         )
-
-    def test_stored_planning_seal_and_blocker_preserve_canonical_key_order(self) -> None:
-        blocker = self.planning / "BLOCKER.md"
-        blocker.write_text("# Blocker\nStatus: resolved\n", encoding="utf-8")
-        request = self.request()
-        request["planningSeal"]["blockerFiles"] = [
-            {"path": str(blocker.resolve()), "sha256": digest(blocker), "status": "resolved"}
-        ]
-        result = self.store.publish(request)
-        token = result["implementationResultRef"].split(":")[-1]
-        object_key_orders = []
-
-        def capture_pairs(pairs):
-            object_key_orders.append(tuple(key for key, _ in pairs))
-            return dict(pairs)
-
-        json.loads(
-            (self.result_root / f"{token}.json").read_text(encoding="utf-8"),
-            object_pairs_hook=capture_pairs,
+        self.assertNotEqual(handoff["baselineSourceIdentity"], handoff["finalSourceIdentity"])
+        self.assertEqual(
+            "CLOSED_WITH_HANDOFF",
+            self.publisher.transactions.read_transaction(transaction["transactionRef"])["state"],
         )
-        self.assertIn(implementation_result.PLANNING_SEAL_FIELDS, object_key_orders)
-        self.assertIn(implementation_result.BLOCKER_FIELDS, object_key_orders)
-
-    def test_publication_detects_planning_mutation_and_leaves_no_success_artifact(self) -> None:
-        request = self.request()
-        store = self.mutating_store(
-            "after_candidate_write",
-            lambda: self.ticket.write_text("changed during publication\n", encoding="utf-8"),
+        self.assertEqual(
+            handoff["implementationHandoffRef"],
+            graph.current_tip(workflow["handoff"]["implementationHandoffRef"])["nodeRef"],
         )
-        self.assert_rejected_with_store(store, request, "PLANNING_INPUT_CHANGED")
-        self.assert_no_publication_artifact()
+        self.assertEqual(3, len(graph.lineage(workflow["handoff"]["implementationHandoffRef"])))
 
-    def test_publication_detects_source_mutation_and_leaves_no_success_artifact(self) -> None:
-        request = self.request()
-        store = self.mutating_store(
-            "before_commit",
-            lambda: (self.project / "app.txt").write_text("changed during publication\n", encoding="utf-8"),
-        )
-        self.assert_rejected_with_store(store, request, "SOURCE_IDENTITY_MISMATCH")
-        self.assert_no_publication_artifact()
-
-    def test_post_commit_authority_mutation_removes_success_artifact(self) -> None:
-        authority = self.planning / "UI.md"
-        authority.write_text("approved UI authority\n", encoding="utf-8")
-        request = self.request()
-        request["completionRecord"]["supplementalLocalAuthorityBindings"] = [
-            {
-                "authorityBindingId": "ui-1",
-                "role": "approved-ui-authority",
-                "canonicalPath": str(authority.resolve()),
-                "rawSha256": digest(authority),
-            }
-        ]
-        request["completionRecord"]["sourceEvidence"][0]["authorityBindingRefs"] = ["ui-1"]
-        store = self.mutating_store(
-            "after_commit",
-            lambda: authority.write_text("changed during publication\n", encoding="utf-8"),
-        )
-        self.assert_rejected_with_store(store, request, "AUTHORITY_CHANGED")
-        self.assert_no_publication_artifact()
-
-    def test_post_link_failure_cleanup_is_directory_fsynced(self) -> None:
-        request = self.request()
-        store = self.mutating_store(
-            "after_commit",
-            lambda: self.ticket.write_text("changed during publication\n", encoding="utf-8"),
-        )
-        fsync_calls = 0
-        original_fsync = implementation_result._fsync_directory
-
-        def counted_fsync(path: Path) -> None:
-            nonlocal fsync_calls
-            fsync_calls += 1
-            original_fsync(path)
-
-        with mock.patch.object(implementation_result, "_fsync_directory", counted_fsync):
-            self.assert_rejected_with_store(store, request, "PLANNING_INPUT_CHANGED")
-        self.assertEqual(2, fsync_calls)
-        self.assert_no_publication_artifact()
-
-    def test_failed_publication_reports_cleanup_failure(self) -> None:
-        request = self.request()
-        store = self.mutating_store(
-            "after_commit",
-            lambda: self.ticket.write_text("changed during publication\n", encoding="utf-8"),
-        )
-        original_unlink = Path.unlink
-
-        def fail_public_result_unlink(path: Path, *args, **kwargs) -> None:
-            if path.parent == self.result_root and path.suffix == ".json":
-                raise OSError("simulated cleanup failure")
-            original_unlink(path, *args, **kwargs)
-
-        with mock.patch.object(Path, "unlink", fail_public_result_unlink):
-            self.assert_rejected_with_store(store, request, "PUBLICATION_CLEANUP_FAILED")
-        for artifact in self.result_root.glob("*.json"):
-            artifact.unlink()
-
-    def test_acceptance_criterion_parser_preserves_raw_ranges_and_rejects_ambiguity(self) -> None:
+    def test_acceptance_criterion_parser_preserves_raw_ranges(self) -> None:
         self.write_ticket("- First line.\r\n  continuation.\r\n\r\n- Second line.\r\n")
         criteria = implementation_result.acceptance_criteria_from_ticket(self.ticket)
         self.assertEqual([1, 2], [item["criterionIndex"] for item in criteria])
-        first = b"- First line.\r\n  continuation.\r\n\r\n"
-        self.assertEqual(hashlib.sha256(first).hexdigest(), criteria[0]["criterionRawSha256"])
-        for malformed in (
-            "Nested only.\n  - Child.\n",
-            "* Wrong marker.\n",
-            "- \n",
-            "- Valid.\n\tcontinuation\n",
-        ):
-            with self.subTest(malformed=malformed):
-                self.write_ticket(malformed)
-                with self.assertRaisesRegex(implementation_result.ResultError, "MALFORMED_TICKET"):
-                    implementation_result.acceptance_criteria_from_ticket(self.ticket)
-
-    def test_existing_v2_artifact_is_not_changed_by_v3_publish(self) -> None:
-        self.result_root.mkdir(parents=True, exist_ok=True)
-        legacy = self.result_root / "legacy-v2.json"
-        legacy.write_bytes(b'{"protocolVersion":"implementation-result-v2"}\n')
-        before = legacy.read_bytes()
-        self.store.publish(self.request())
-        self.assertEqual(before, legacy.read_bytes())
-
-    def test_result_store_inside_project_is_rejected_before_publication(self) -> None:
-        store = implementation_result.ResultStore(self.project / "results", self.capsule_root)
-        self.assert_rejected_with_store(store, self.request(), "INVALID_RESULT_ROOT")
-
-    def assert_rejected_with_store(
-        self, store: object, request: dict[str, object], code: str
-    ) -> None:
-        with self.assertRaises(implementation_result.ResultError) as raised:
-            store.publish(request)
-        self.assertEqual(code, raised.exception.code)
+        self.assertEqual(
+            hashlib.sha256(b"- First line.\r\n  continuation.\r\n\r\n").hexdigest(),
+            criteria[0]["criterionRawSha256"],
+        )
 
 
 if __name__ == "__main__":

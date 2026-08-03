@@ -79,8 +79,9 @@ as product mutation inputs.
 After the Worker, inspect every created path, external/public export identity,
 lockfile and dependency provenance, caller, Canonical, test, and integration
 boundary. Confirm post-initialization target readiness and then join the
-ordinary source review, final representative runtime observation, and v3 result
-flow.
+ordinary implementation transaction, source/integration closure, and
+`implementation-handoff-v1` flow. Any safe smoke remains provisional; a fresh
+Verification Assessor owns the later representative product flow and final AC verdict.
 
 If source or a manifest appeared after planning, preserve it and classify the
 current scope again. Do not enforce a stale emptiness assumption. Continue by

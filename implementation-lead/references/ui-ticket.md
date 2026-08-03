@@ -83,18 +83,18 @@ unresolved items; the report is trace rather than completion proof.
 
 ## Rendered Evidence
 
-Static source inspection cannot establish `UI_IMPLEMENTATION` visual, interaction, responsive, or
-accessibility correctness. In the actual intended renderer, observe each applicable authority-defined
-viewport/responsive condition, state, interaction/timing behavior, semantic, and focus/keyboard
-behavior. A runtime-dependent UI criterion becomes `ESTABLISHED` only when Implementation Lead directly
-performs the core final representative runtime exercise with an expected rendered effect and
-authoritative product readback at the final source identity.
+Static source inspection cannot establish final `UI_IMPLEMENTATION` visual, interaction, responsive,
+or accessibility correctness. The Worker and Implementation Lead may run bounded provisional rendered
+checks to close source and integration work, but those checks do not establish a public criterion
+verdict. A fresh Verification Assessor must independently seal the actual intended renderer, each
+applicable authority-defined viewport/state/interaction/focus condition, expected rendered effect, and
+authoritative readback at the handoff source identity.
 
-An unavailable renderer, safe target, capability, or reliable source binding is `INCOMPLETE`; it is not
-a product defect or authority blocker. An absent expected rendered effect is task feedback and uses the
-existing source-review/remediation or new-initial-task decision. Use repository/tool output or
-run-scoped non-product observation; do not create screenshots or other project-root evidence artifacts
-unless the Ticket requires the artifact inside the frozen allowed scope.
+An unavailable implementation-check renderer or safe target stops implementation closure without
+manufacturing a VerificationResult. An absent expected effect during a provisional check is task
+feedback and uses the existing implementation repair path. Use repository/tool output or run-scoped
+non-product observation; do not create screenshots or other project-root evidence artifacts unless the
+Ticket requires the artifact inside the frozen allowed scope.
 
 ## Currentness And Dependency Closure
 
@@ -104,15 +104,15 @@ relabel a prior task, or continue from stale rendered behavior.
 
 Later changes to shared CSS/design tokens, common layout/chrome, frontend Canonicals/component
 primitives, route/state contracts, UI assets, rendered callers/data shapes, renderer entry points, or
-relevant design-system use downgrade affected rendered coverage and return its owning earlier task to
-`REVIEWING`. Final rendered observations are created only after source dependency closure; any later
-source change discards them and restarts final review.
+relevant design-system use reopen the affected implementation review before handoff. After handoff,
+any source change requires a successor handoff and a fresh VerificationRun; old rendered observations
+cannot be carried forward.
 
 ## Return To Core Flow
 
 Return the approved UI-reference path, task locators, authority-defined rendered conditions, active
-guidance path/base directory, rendered behavior references, evidence/readback, and unresolved effects.
-The core decides task implementation review, coverage, remediation, final identity, and terminal result.
+guidance path/base directory, provisional rendered check facts, and unresolved implementation effects.
+The core decides task implementation review, ownership closure, final identity, and handoff readiness.
 
 ## Non-Authority Statement
 
