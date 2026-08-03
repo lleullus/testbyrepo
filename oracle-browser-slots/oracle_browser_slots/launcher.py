@@ -109,7 +109,7 @@ class ChromeLauncher:
             "--use-mock-keychain",
             "--no-first-run",
             "--no-default-browser-check",
-            self.settings.chatgpt_url,
+            self.settings.effective_launcher_url(slot.slot_id),
         ]
 
     @staticmethod

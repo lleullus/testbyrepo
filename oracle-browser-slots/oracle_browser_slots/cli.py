@@ -17,7 +17,7 @@ from .service import SlotService
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="oracle-browser-slots",
-        description="Prepare and inspect the three fixed local Oracle Browser slots.",
+        description="Prepare and inspect the five fixed local Oracle Browser slots.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
 

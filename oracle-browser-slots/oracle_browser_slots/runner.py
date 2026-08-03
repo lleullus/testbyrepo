@@ -15,6 +15,7 @@ from .attachments import (
     PreparedAttachment,
 )
 from .cdp import CDPError
+from .model import validate_chatgpt_url
 from .service import SlotService
 
 
@@ -24,6 +25,7 @@ REQUIRED_ORACLE_FLAGS = (
     ("--engine", "browser"),
     ("--browser-model-strategy", "current"),
 )
+URL_ALIAS_FLAGS = ("--chatgpt-url", "--browser-url")
 FORBIDDEN_TRANSPORT_FLAGS = (
     "--browser-manual-login",
     "--browser-chrome-path",
@@ -166,13 +168,22 @@ class JobRunner:
         return prepared.command, prepared
 
     def claim_for_auto(
-        self, slot_id: int, request_id: str, argv: Sequence[str]
+        self,
+        slot_id: int,
+        request_id: str,
+        argv: Sequence[str],
+        *,
+        apply_workspace_mapping: bool = True,
     ) -> dict[str, Any]:
         """Validate for one selected slot and atomically claim it without Popen."""
 
         command = list(argv)
         try:
-            command = self._validated_oracle_command(slot_id, command)
+            command = self._validated_oracle_command(
+                slot_id,
+                command,
+                apply_workspace_mapping=apply_workspace_mapping,
+            )
         except OracleTransportError as exc:
             record = self.service.run_rejection(
                 slot_id,
@@ -426,7 +437,11 @@ class JobRunner:
         }
 
     def _validated_oracle_command(
-        self, slot_id: int | None, argv: list[str]
+        self,
+        slot_id: int | None,
+        argv: list[str],
+        *,
+        apply_workspace_mapping: bool = True,
     ) -> list[str]:
         expected_executable = self.oracle_cli_path
         if not os.path.isabs(expected_executable) or argv[0] != expected_executable:
@@ -448,6 +463,15 @@ class JobRunner:
                     f"Oracle 요청에 stock Oracle 외부 transport 옵션이 포함되어 있습니다: {token}",
                     "browser-manual-login, browser-chrome-path, browser-keep-browser, remote-host, bridge를 제거하십시오.",
                 )
+
+        caller_url = self._caller_chatgpt_url(argv)
+        injection: str | None = None
+        if (
+            apply_workspace_mapping
+            and caller_url is None
+            and slot_id is not None
+        ):
+            injection = self.service.settings.slot_chatgpt_url_override(slot_id)
 
         values: dict[str, list[str]] = {flag: [] for flag, _ in REQUIRED_ORACLE_FLAGS}
         values["--remote-chrome"] = []
@@ -505,7 +529,88 @@ class JobRunner:
         normalized = list(argv)
         for flag, expected in required_values.items():
             if not values[flag]:
-                normalized.extend((flag, expected))
+                normalized = self._insert_before_terminator(
+                    normalized, (flag, expected)
+                )
+        if injection is not None:
+            normalized = self._insert_before_terminator(
+                normalized, ("--chatgpt-url", injection)
+            )
+        return normalized
+
+    @staticmethod
+    def _caller_chatgpt_url(argv: list[str]) -> str | None:
+        """Validate caller URL aliases before the first standalone `--`."""
+
+        seen: dict[str, str] = {}
+        caller_url: str | None = None
+        index = 1
+        while index < len(argv):
+            token = argv[index]
+            if token == "--":
+                break
+            flag: str | None = None
+            value: str | None = None
+            if token in URL_ALIAS_FLAGS:
+                flag = token
+                if (
+                    index + 1 >= len(argv)
+                    or argv[index + 1].startswith("-")
+                ):
+                    raise OracleTransportError(
+                        f"{token} 값이 없습니다.",
+                        f"{token}에 https URL을 지정하십시오.",
+                    )
+                value = argv[index + 1]
+                index += 1
+            else:
+                for candidate in URL_ALIAS_FLAGS:
+                    prefix = f"{candidate}="
+                    if token.startswith(prefix):
+                        flag = candidate
+                        value = token[len(prefix) :]
+                        break
+            if flag is not None:
+                if not value or value.startswith("-"):
+                    raise OracleTransportError(
+                        f"{flag} 값이 비어 있거나 옵션으로 해석될 수 있습니다.",
+                        f"{flag}에 https URL을 지정하십시오.",
+                    )
+                try:
+                    validate_chatgpt_url(value, flag)
+                except ValueError as exc:
+                    raise OracleTransportError(
+                        str(exc),
+                        f"{flag}에 https://chatgpt.com 또는 "
+                        "https://chat.openai.com URL을 지정하십시오.",
+                    ) from exc
+                if flag in seen:
+                    raise OracleTransportError(
+                        f"{flag}가 중복 지정되었습니다.",
+                        f"{flag}를 한 번만 지정하십시오.",
+                    )
+                seen[flag] = value
+                if len(seen) > 1:
+                    raise OracleTransportError(
+                        "--chatgpt-url과 --browser-url을 함께 지정할 수 없습니다.",
+                        "URL alias는 둘 중 하나만 지정하십시오.",
+                    )
+                caller_url = value
+            index += 1
+        return caller_url
+
+    @staticmethod
+    def _insert_before_terminator(
+        normalized: list[str], pair: Sequence[str]
+    ) -> list[str]:
+        """Insert injected options before the first standalone `--`."""
+
+        try:
+            terminator = normalized.index("--")
+        except ValueError:
+            normalized.extend(pair)
+        else:
+            normalized[terminator:terminator] = list(pair)
         return normalized
 
     @staticmethod

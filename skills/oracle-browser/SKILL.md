@@ -23,9 +23,9 @@ Runtime identity:
 
 - Oracle package: `@steipete/oracle@0.16.1`
 - Linux Chrome: `/usr/bin/google-chrome`
-- managed profiles: `/home/user01/.oracle/browser-profiles/slot-1` through `slot-3`
+- managed profiles: `/home/user01/.oracle/browser-profiles/slot-1` through `slot-5`
 - sessions and artifacts: `/home/user01/.oracle/sessions`
-- browser transport: local CDP at `127.0.0.1:19222` through `127.0.0.1:19224`
+- browser transport: local CDP at `127.0.0.1:19222` through `127.0.0.1:19226`
 - wrapper state: `/home/user01/.oracle/browser-slots`
 
 The wrapper selects or pins one managed slot, injects its `--remote-chrome`,
@@ -202,6 +202,22 @@ Use `--parent-session-id <session-id>` only when the user explicitly names a
 parent. An ineligible explicit parent must fail without fallback. The wrapper
 pins followup to the parent's originating slot, waits only when that slot is
 occupied, restores an archived parent when needed, and never switches slots.
+
+Do not confuse managed followup eligibility with chat existence. A rejection
+for missing context or origin metadata does not mean the parent session or
+ChatGPT conversation is absent. Check the parent `meta.json`, transcript, stable
+`/c/<id>` URL, and live tab before reporting what is missing.
+
+For a legacy parent that has a completed answer and stable chat URL but lacks
+`oracle_browser_slots` origin metadata:
+
+1. Finalize it with `oracle session <id> --render` and prepare its known slot.
+2. Never forge session metadata or pass `--followup` through `run`/`submit`.
+3. Only when the user explicitly requests that exact chat, open and verify the
+   exact URL in the known slot, dry-run `--browser-tab <url>`, then use managed
+   `run` with that exact tab and the current conversation context ID.
+4. Verify the child completed on the same URL and report that this is verified
+   chat continuity, not authoritative wrapper followup lineage.
 
 After success, require the final `session_persisted.authoritative_readback` to
 show the selected parent, distinct child, original slot, matching conversation

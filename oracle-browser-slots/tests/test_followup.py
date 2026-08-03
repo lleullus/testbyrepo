@@ -37,7 +37,9 @@ class FakeLauncher:
 
 
 class FakeCDP:
-    def __init__(self, slot_ids=(1, 2, 3), *, restore_error: Exception | None = None) -> None:
+    def __init__(
+        self, slot_ids=(1, 2, 3, 4, 5), *, restore_error: Exception | None = None
+    ) -> None:
         self.slot_ids = set(slot_ids)
         self.restore_error = restore_error
         self.restore_calls: list[tuple[int, str]] = []
@@ -466,7 +468,7 @@ class ParentSelectionTests(unittest.TestCase):
 
 
 class FollowupExecutionTests(unittest.TestCase):
-    def _ready_service(self, root: Path, ready_slots=(1, 2, 3)) -> SlotService:
+    def _ready_service(self, root: Path, ready_slots=(1, 2, 3, 4, 5)) -> SlotService:
         settings = settings_for(root)
         service = SlotService(
             settings,
@@ -575,7 +577,7 @@ class FollowupExecutionTests(unittest.TestCase):
             service = SlotService(
                 settings_for(root), cdp=cdp, launcher=FakeLauncher()
             )
-            for slot_id in (1, 2, 3):
+            for slot_id in (1, 2, 3, 4, 5):
                 self.assertEqual(service.prepare(slot_id)["status"], AVAILABLE)
             oracle_home = root / "oracle-home"
             parent_directory = write_stock_session(
@@ -630,7 +632,7 @@ class FollowupExecutionTests(unittest.TestCase):
             service = SlotService(
                 settings_for(root), cdp=cdp, launcher=FakeLauncher()
             )
-            for slot_id in (1, 2, 3):
+            for slot_id in (1, 2, 3, 4, 5):
                 self.assertEqual(service.prepare(slot_id)["status"], AVAILABLE)
             oracle_home = root / "oracle-home"
             parent_directory = write_stock_session(
@@ -709,6 +711,89 @@ class FollowupExecutionTests(unittest.TestCase):
             self.assertEqual(
                 sorted(path.name for path in (oracle_home / "sessions").iterdir()),
                 ["parent-unready-two"],
+            )
+
+    def test_slot_five_origin_runs_on_slot_five_endpoint(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root)
+            oracle_home = root / "oracle-home"
+            write_stock_session(
+                oracle_home, service.settings, "parent-slot-five", slot_id=5
+            )
+            factory = FakeOracleFactory(oracle_home)
+            events: list[dict[str, object]] = []
+            result = FollowupRunner(
+                service,
+                runner=JobRunner(
+                    service,
+                    popen_factory=factory,
+                    oracle_cli_path=TEST_ORACLE_CLI,
+                ),
+                repository=OracleSessionRepository(
+                    service.settings, oracle_home=oracle_home
+                ),
+                poll_interval=0.01,
+            ).run(
+                "slot-five-followup",
+                "ctx-main",
+                [TEST_ORACLE_CLI, "-p", "continue on slot five"],
+                emit=events.append,
+            )
+
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(len(factory.calls), 1)
+            command = factory.calls[0]["argv"]
+            self.assertEqual(option_value(command, "--followup"), "parent-slot-five")
+            self.assertEqual(
+                option_value(command, "--remote-chrome"),
+                f"127.0.0.1:{service.settings.slot(5).port}",
+            )
+            self.assertEqual(factory.calls[0]["env"]["ORACLE_BROWSER_SLOT_ID"], "5")
+            readback = result["record"]["authoritative_readback"]
+            self.assertEqual(readback["original_slot"]["slot_id"], 5)
+            self.assertEqual(readback["parent_session_id"], "parent-slot-five")
+            self.assertTrue(readback["verification"]["ok"])
+            self.assertEqual(service.status(5)["status"], AVAILABLE)
+
+    def test_unavailable_slot_four_origin_fails_without_fallback(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root, ready_slots=(1, 2, 3, 5))
+            oracle_home = root / "oracle-home"
+            write_stock_session(
+                oracle_home, service.settings, "parent-unready-four", slot_id=4
+            )
+            factory = FakeOracleFactory(oracle_home)
+            result = FollowupRunner(
+                service,
+                runner=JobRunner(
+                    service,
+                    popen_factory=factory,
+                    oracle_cli_path=TEST_ORACLE_CLI,
+                ),
+                repository=OracleSessionRepository(
+                    service.settings, oracle_home=oracle_home
+                ),
+                poll_interval=0.01,
+            ).run(
+                "unavailable-slot-four-origin",
+                "ctx-main",
+                [TEST_ORACLE_CLI, "-p", "must not run"],
+            )
+
+            self.assertEqual(result["exit_code"], 1)
+            self.assertIn(
+                "다른 슬롯으로 전환하지 않았습니다",
+                result["record"]["operator_action"],
+            )
+            self.assertEqual(result["record"]["attempted_slots"], [4])
+            self.assertEqual(factory.calls, [])
+            self.assertEqual(service.status(1)["status"], AVAILABLE)
+            self.assertEqual(service.status(5)["status"], AVAILABLE)
+            self.assertEqual(
+                sorted(path.name for path in (oracle_home / "sessions").iterdir()),
+                ["parent-unready-four"],
             )
 
     def test_missing_or_explicit_ineligible_parent_never_spawns_child(self):
@@ -1006,7 +1091,7 @@ class IsolatedCliExerciseTests(unittest.TestCase):
 
             while True:
                 server = _ThreadedTCPServer(("127.0.0.1", 0), _FakeCDPHandler)
-                if server.server_address[1] <= 65534:
+                if server.server_address[1] <= 65532:
                     break
                 server.server_close()
             server_thread = threading.Thread(target=server.serve_forever, daemon=True)

@@ -1100,7 +1100,12 @@ class FollowupRunner:
                         emit=emit,
                     )
 
-                attempted = self.runner.claim_for_auto(parent.slot_id, request_id, command)
+                attempted = self.runner.claim_for_auto(
+                    parent.slot_id,
+                    request_id,
+                    command,
+                    apply_workspace_mapping=False,
+                )
                 if attempted.get("accepted"):
                     claim = attempted
                     break

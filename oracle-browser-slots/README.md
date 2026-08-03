@@ -1,6 +1,6 @@
 # Oracle Browser Slots
 
-This repository provides three explicitly selected WSL Linux Chrome slots for
+This repository provides five explicitly selected WSL Linux Chrome slots for
 Oracle Browser. It does not identify the ChatGPT account in a profile or compare
 accounts between slots.
 
@@ -64,7 +64,8 @@ The child receives these environment variables:
 
 The stock Oracle example above consumes the deterministic slot 1 endpoint.
 For slot 2 use `--slot 2` and `--remote-chrome 127.0.0.1:19223`; for slot 3 use
-`127.0.0.1:19224`. Missing `--engine browser`,
+`127.0.0.1:19224`; for slot 4 use `127.0.0.1:19225`; for slot 5 use
+`127.0.0.1:19226`. Missing `--engine browser`,
 `--browser-model-strategy current`, or `--remote-chrome` values are injected
 for the selected slot. Conflicting or duplicate values and alternate transport
 options are rejected before claim. A second request for an occupied slot is
@@ -74,7 +75,7 @@ in the occupancy record; status and run will mark the slot `사용 불가` until
 explicit `prepare` recovers it.
 
 `submit` accepts a request ID and the same canonical stock Oracle argv without a
-slot. It claims the first available slot in 1, 2, 3 order, injects that slot's
+slot. It claims the first available slot in 1, 2, 3, 4, 5 order, injects that slot's
 fixed `--remote-chrome`, and emits lifecycle JSONL on stderr. When all usable
 slots are occupied it emits a FIFO queue record and waits without automatic
 expiry. `submit` accepts no caller-supplied `--remote-chrome`; the selected
@@ -156,8 +157,8 @@ exits, including failure and interruption paths.
 Defaults match the WSL Oracle Browser runtime:
 
 - Chrome: `/usr/bin/google-chrome` (or `CHROME_PATH`)
-- Ports: `127.0.0.1:19222`, `127.0.0.1:19223`, `127.0.0.1:19224`
-- Profiles: `~/.oracle/browser-profiles/slot-1` through `slot-3`
+- Ports: `127.0.0.1:19222` through `127.0.0.1:19226`
+- Profiles: `~/.oracle/browser-profiles/slot-1` through `slot-5`
 - State: `~/.oracle/browser-slots`
 
 Tests and non-production runs can isolate the runtime with:
@@ -170,6 +171,37 @@ Tests and non-production runs can isolate the runtime with:
 - `ORACLE_BROWSER_SLOTS_CDP_REQUEST_TIMEOUT`
 - `ORACLE_BROWSER_SLOTS_QUEUE_POLL_INTERVAL`
 - `ORACLE_BROWSER_SLOTS_ORACLE_CLI` for an explicit absolute-path test binary only
+
+## Slot-wise ChatGPT workspace URLs
+
+Set `ORACLE_BROWSER_SLOTS_CHATGPT_URLS` to a JSON object whose keys are slot IDs
+(`"1"` through `"5"`) and whose values are ChatGPT workspace URLs:
+
+```bash
+export ORACLE_BROWSER_SLOTS_CHATGPT_URLS='{"3":"https://chatgpt.com/g/g-p-xxxx/project"}'
+```
+
+Rules:
+
+- When a mapped slot is selected by `run` or auto-assigned by `submit`, the
+  wrapper injects `--chatgpt-url <mapped-url>` into the stock Oracle argv so the
+  request runs in that slot's workspace. Unmapped slots keep the exact original
+  argv.
+- A caller-supplied `--chatgpt-url` or `--browser-url` always wins; the wrapper
+  does not inject in that case. The two aliases are one logical option: at most
+  one occurrence, no duplicate or cross-alias values, and no empty or option-like
+  value.
+- `followup` never injects a workspace URL; it resumes the parent conversation.
+- `prepare` opens the mapped URL as the initial tab only when Chrome is freshly
+  launched for that slot; an existing Chrome session is left unchanged.
+- Valid URLs are `https` only, on `chatgpt.com` or `chat.openai.com`, without a
+  custom port or credentials. Path and query are preserved.
+- Any configuration error fails closed: every command (including `status` and
+  `followup`) exits with code 2 and an explanatory error.
+
+The legacy `ORACLE_BROWSER_SLOTS_CHATGPT_URL` remains launcher-only (initial tab
+when a slot has no explicit mapping); it is never injected into `run`/`submit`
+argv.
 
 The state file is per slot and includes an `occupancy` object with the job ID,
 start time, owner PID, and owner process starttime. State transitions use a

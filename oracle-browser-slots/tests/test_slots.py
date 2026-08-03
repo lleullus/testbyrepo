@@ -30,7 +30,7 @@ from oracle_browser_slots.cdp import (
 )
 from oracle_browser_slots.coordination import QueueCoordinator
 from oracle_browser_slots.launcher import ChromeLauncher, PrepareError
-from oracle_browser_slots.model import AVAILABLE, OCCUPIED, UNAVAILABLE, Settings
+from oracle_browser_slots.model import AVAILABLE, OCCUPIED, SLOT_IDS, UNAVAILABLE, Settings
 from oracle_browser_slots.runner import CANONICAL_ORACLE_CLI, JobRunner
 from oracle_browser_slots.service import SlotService, process_starttime
 from oracle_browser_slots.state import StateError, StateStore
@@ -1045,14 +1045,19 @@ class SlotServiceTests(unittest.TestCase):
     def test_slot_ports_and_profiles_are_fixed_and_distinct(self):
         with TemporaryDirectory() as directory:
             settings = settings_for(Path(directory))
-            slots = [settings.slot(slot_id) for slot_id in (1, 2, 3)]
-            self.assertEqual([slot.port for slot in slots], [19222, 19223, 19224])
+            slots = [settings.slot(slot_id) for slot_id in SLOT_IDS]
+            self.assertEqual(
+                [slot.port for slot in slots],
+                [19222, 19223, 19224, 19225, 19226],
+            )
             self.assertEqual(
                 [str(slot.profile_dir) for slot in slots],
                 [
                     f"{directory}/profiles/slot-1",
                     f"{directory}/profiles/slot-2",
                     f"{directory}/profiles/slot-3",
+                    f"{directory}/profiles/slot-4",
+                    f"{directory}/profiles/slot-5",
                 ],
             )
 
@@ -1064,6 +1069,8 @@ class SlotServiceTests(unittest.TestCase):
                     1: CDPError("slot 1 CDP failed"),
                     2: LoginResult(True, "slot 2 ready", "없음"),
                     3: LoginResult(False, "login required", "sign in"),
+                    4: LoginResult(True, "slot 4 ready", "없음"),
+                    5: LoginResult(True, "slot 5 ready", "없음"),
                 }
             )
             service = SlotService(
@@ -1072,18 +1079,26 @@ class SlotServiceTests(unittest.TestCase):
                 launcher=FakeLauncher(),
             )
 
-            prepared = [service.prepare(slot_id) for slot_id in (1, 2, 3)]
+            prepared = [service.prepare(slot_id) for slot_id in SLOT_IDS]
             self.assertEqual(prepared[0]["status"], UNAVAILABLE)
             self.assertEqual(prepared[1]["status"], AVAILABLE)
             self.assertEqual(prepared[2]["status"], UNAVAILABLE)
+            self.assertEqual(prepared[3]["status"], AVAILABLE)
+            self.assertEqual(prepared[4]["status"], AVAILABLE)
 
             statuses = service.status_all()
-            self.assertEqual([record["slot_id"] for record in statuses], [1, 2, 3])
+            self.assertEqual(
+                [record["slot_id"] for record in statuses], list(SLOT_IDS)
+            )
             self.assertEqual(statuses[0]["status"], UNAVAILABLE)
             self.assertEqual(statuses[1]["status"], AVAILABLE)
             self.assertEqual(statuses[2]["status"], UNAVAILABLE)
+            self.assertEqual(statuses[3]["status"], AVAILABLE)
+            self.assertEqual(statuses[4]["status"], AVAILABLE)
             self.assertIn(2, cdp.calls)
             self.assertIn(3, cdp.calls)
+            self.assertIn(4, cdp.calls)
+            self.assertIn(5, cdp.calls)
 
     def test_occupancy_is_readable_and_abandoned_work_requires_reprepare(self):
         with TemporaryDirectory() as directory:
@@ -1116,6 +1131,33 @@ class SlotServiceTests(unittest.TestCase):
 
             recovered = service.prepare(2)
             self.assertEqual(recovered["status"], AVAILABLE)
+
+
+class SettingsTests(unittest.TestCase):
+    def test_port_base_maximum_is_accepted_and_derives_slot_five_port(self):
+        settings = Settings.from_env(
+            {
+                "HOME": "/home/test",
+                "ORACLE_BROWSER_SLOTS_PORT_BASE": "65531",
+            }
+        )
+        self.assertEqual(settings.port_base, 65531)
+        self.assertEqual(settings.slot(5).port, 65535)
+        self.assertEqual(
+            settings.slot(5).profile_dir,
+            Path("/home/test/.oracle/browser-profiles/slot-5"),
+        )
+
+    def test_port_base_at_or_above_65532_is_rejected(self):
+        for port_base in (65532, 65533, 65534, 65535, 65536):
+            with self.subTest(port_base=port_base):
+                with self.assertRaisesRegex(ValueError, "between 1 and 65531"):
+                    Settings.from_env(
+                        {
+                            "HOME": "/home/test",
+                            "ORACLE_BROWSER_SLOTS_PORT_BASE": str(port_base),
+                        }
+                    )
 
 
 class PreparePersistenceTests(unittest.TestCase):
@@ -1568,11 +1610,50 @@ class CliTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             payload = json.loads(completed.stdout)
             self.assertEqual(payload["operation"], "status")
-            self.assertEqual([slot["slot_id"] for slot in payload["slots"]], [1, 2, 3])
+            self.assertEqual(
+                [slot["slot_id"] for slot in payload["slots"]], list(SLOT_IDS)
+            )
             self.assertEqual({slot["status"] for slot in payload["slots"]}, {"미준비"})
             self.assertEqual(
-                [slot["port"] for slot in payload["slots"]], [19222, 19223, 19224]
+                [slot["port"] for slot in payload["slots"]],
+                [19222, 19223, 19224, 19225, 19226],
             )
+            self.assertEqual(
+                [slot["profile_dir"] for slot in payload["slots"]],
+                [
+                    f"{directory}/profiles/slot-1",
+                    f"{directory}/profiles/slot-2",
+                    f"{directory}/profiles/slot-3",
+                    f"{directory}/profiles/slot-4",
+                    f"{directory}/profiles/slot-5",
+                ],
+            )
+
+    def test_parser_accepts_slot_four_and_five_for_slot_selecting_commands(self):
+        from oracle_browser_slots.cli import build_parser
+
+        parser = build_parser()
+        self.assertEqual(parser.parse_args(["prepare", "--slot", "5"]).slot, 5)
+        self.assertEqual(parser.parse_args(["status", "--slot", "4"]).slot, 4)
+        self.assertEqual(
+            parser.parse_args(
+                [
+                    "run",
+                    "--slot",
+                    "5",
+                    "--job-id",
+                    "job-five",
+                    "--",
+                    CANONICAL_ORACLE_CLI,
+                    "-p",
+                    "task",
+                ]
+            ).slot,
+            5,
+        )
+        with self.assertRaises(SystemExit) as invalid:
+            parser.parse_args(["prepare", "--slot", "6"])
+        self.assertEqual(invalid.exception.code, 2)
 
     def test_public_run_rejects_unprepared_slot_without_starting_command(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -1645,12 +1726,13 @@ class CliTests(unittest.TestCase):
             self.assertEqual(events[0]["event"], "failed")
             self.assertEqual(events[0]["request_id"], "cli-unavailable")
             self.assertEqual(
-                [slot["slot_id"] for slot in events[0]["slot_diagnostics"]], [1, 2, 3]
+                [slot["slot_id"] for slot in events[0]["slot_diagnostics"]],
+                list(SLOT_IDS),
             )
 
 
 class AutoAllocatorTests(unittest.TestCase):
-    def _ready_service(self, root: Path, ready_slots=(1, 2, 3)) -> SlotService:
+    def _ready_service(self, root: Path, ready_slots=SLOT_IDS) -> SlotService:
         settings = settings_for(root)
         cdp = FakeCDP(
             {
@@ -1697,6 +1779,40 @@ class AutoAllocatorTests(unittest.TestCase):
             self.assertEqual(commands[0][-1], "127.0.0.1:19223")
             self.assertEqual([event["event"] for event in events], ["started", "finished"])
             self.assertEqual(service.status(2)["status"], AVAILABLE)
+
+    def test_submit_uses_slot_five_endpoint_when_first_available(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root, ready_slots=(5,))
+            commands: list[list[str]] = []
+
+            def popen(argv, *, env, close_fds):
+                commands.append(argv)
+                return ReturnCodeChild(0)
+
+            events: list[dict[str, object]] = []
+            result = AutoAllocator(
+                service,
+                runner=self._runner(service, popen),
+                poll_interval=0.01,
+            ).submit(
+                "auto-slot-five",
+                [TEST_ORACLE_CLI, "-p", "task"],
+                emit=events.append,
+            )
+
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(result["record"]["assigned_slot"], 5)
+            self.assertEqual(result["record"]["attempted_slots"], [5])
+            self.assertEqual(commands[0][-1], "127.0.0.1:19226")
+            self.assertEqual(
+                commands[0][commands[0].index("--remote-chrome") + 1],
+                "127.0.0.1:19226",
+            )
+            self.assertEqual(
+                [event["event"] for event in events], ["started", "finished"]
+            )
+            self.assertEqual(service.status(5)["status"], AVAILABLE)
 
     def test_duplicate_request_running_rejects_before_second_claim_or_popen(self):
         with TemporaryDirectory() as directory:
@@ -1841,7 +1957,10 @@ class AutoAllocatorTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             service = self._ready_service(root)
-            held = [service.claim_job(slot_id, f"held-{slot_id}") for slot_id in (1, 2, 3)]
+            held = [
+                service.claim_job(slot_id, f"held-{slot_id}")
+                for slot_id in SLOT_IDS
+            ]
             self.assertTrue(all(result["accepted"] for result in held))
             queued = threading.Event()
             first_result: dict[str, object] = {}
@@ -1970,7 +2089,8 @@ class AutoAllocatorTests(unittest.TestCase):
             self.assertEqual(len(events), 1)
             self.assertEqual(events[0]["event"], "failed")
             self.assertEqual(
-                [item["slot_id"] for item in events[0]["slot_diagnostics"]], [1, 2, 3]
+                [item["slot_id"] for item in events[0]["slot_diagnostics"]],
+                list(SLOT_IDS),
             )
             self.assertTrue(all(item["operator_action"] for item in events[0]["slot_diagnostics"]))
             self.assertFalse((settings.state_root / "allocator-queue.json").exists())
@@ -2017,7 +2137,10 @@ class AutoAllocatorTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             service = self._ready_service(root)
-            held = [service.claim_job(slot_id, f"held-{slot_id}") for slot_id in (1, 2, 3)]
+            held = [
+                service.claim_job(slot_id, f"held-{slot_id}")
+                for slot_id in SLOT_IDS
+            ]
             self.assertTrue(all(result["accepted"] for result in held))
             events_by_request: dict[str, list[dict[str, object]]] = {"first": [], "second": []}
             results: dict[str, dict[str, object]] = {}
@@ -2090,7 +2213,10 @@ class AutoAllocatorTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             service = self._ready_service(root)
-            held = [service.claim_job(slot_id, f"held-{slot_id}") for slot_id in (1, 2, 3)]
+            held = [
+                service.claim_job(slot_id, f"held-{slot_id}")
+                for slot_id in SLOT_IDS
+            ]
             self.assertTrue(all(result["accepted"] for result in held))
             context = multiprocessing.get_context("fork")
             result_queue = context.Queue()
@@ -2107,7 +2233,10 @@ class AutoAllocatorTests(unittest.TestCase):
             self.assertIsNone(cancelled["assigned_slot"])
             self.assertEqual(cancelled["outcome"], "cancelled")
             self.assertFalse((settings_for(root).state_root / "allocator-queue.json").exists())
-            self.assertEqual([service.status(slot_id)["status"] for slot_id in (1, 2, 3)], [OCCUPIED] * 3)
+            self.assertEqual(
+                [service.status(slot_id)["status"] for slot_id in SLOT_IDS],
+                [OCCUPIED] * len(SLOT_IDS),
+            )
 
     def test_waiting_sighup_removes_queue_entry_and_cancels_without_assignment(self):
         if not hasattr(signal, "SIGHUP"):
@@ -2115,7 +2244,10 @@ class AutoAllocatorTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             service = self._ready_service(root)
-            held = [service.claim_job(slot_id, f"held-{slot_id}") for slot_id in (1, 2, 3)]
+            held = [
+                service.claim_job(slot_id, f"held-{slot_id}")
+                for slot_id in SLOT_IDS
+            ]
             self.assertTrue(all(result["accepted"] for result in held))
             context = multiprocessing.get_context("fork")
             result_queue = context.Queue()
@@ -2138,8 +2270,8 @@ class AutoAllocatorTests(unittest.TestCase):
             self.assertEqual(payload["result"]["record"]["outcome"], "cancelled")
             self.assertFalse((settings_for(root).state_root / "allocator-queue.json").exists())
             self.assertEqual(
-                [service.status(slot_id)["status"] for slot_id in (1, 2, 3)],
-                [OCCUPIED] * 3,
+                [service.status(slot_id)["status"] for slot_id in SLOT_IDS],
+                [OCCUPIED] * len(SLOT_IDS),
             )
 
     def test_running_cancel_finishes_claim_without_retry(self):

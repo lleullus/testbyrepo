@@ -12,6 +12,7 @@ from .model import (
     AVAILABLE,
     NOT_READY,
     OCCUPIED,
+    SLOT_IDS,
     UNAVAILABLE,
     Settings,
     Slot,
@@ -321,7 +322,7 @@ class SlotService:
 
     def status_all(self) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
-        for slot_id in (1, 2, 3):
+        for slot_id in SLOT_IDS:
             try:
                 records.append(self.status(slot_id))
             except Exception as exc:  # one broken slot must not hide the others
