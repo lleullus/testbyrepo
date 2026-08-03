@@ -9,6 +9,7 @@ import json
 import os
 import re
 import secrets
+import sqlite3
 import subprocess
 import uuid
 from datetime import datetime, timezone
@@ -56,6 +57,47 @@ MAX_CRITERIA = 128
 MAX_COMMAND_PARTS = 256
 MAX_OUTPUT_BYTES = 64 * 1024
 MAX_TIMEOUT_SECONDS = 900
+
+_DISPATCH_ENVELOPE_FIELDS = (
+    "envelope_ref",
+    "transaction_ref",
+    "task_id",
+    "criterion_refs_json",
+    "allowed_paths_json",
+    "forbidden_paths_json",
+    "before_snapshot_json",
+    "before_snapshot_sha256",
+    "after_snapshot_json",
+    "after_snapshot_sha256",
+    "delta_json",
+    "reconciliation_json",
+    "state",
+    "created_at",
+    "closed_at",
+)
+_DISPATCH_TRANSACTION_FIELDS = (
+    "transaction_ref",
+    "mode",
+    "root_ref",
+    "claim_ref",
+    "owner_actor_ref",
+    "worker_actor_ref",
+    "selected_worker",
+    "worker_capability_sha256",
+    "project_root",
+    "planning_identity",
+    "baseline_source_identity",
+    "state",
+)
+_INVALIDATION_EVENT_FIELDS = {
+    "envelopeRef",
+    "oldIdentity",
+    "newIdentity",
+    "changedPaths",
+    "workerAttributablePaths",
+    "externalPaths",
+    "preservedUserChanges",
+}
 
 
 class TransactionError(RuntimeError):
@@ -124,8 +166,55 @@ def _criterion_refs(value: Any) -> list[dict[str, Any]]:
 def _decode_json(value: Any, locator: str) -> Any:
     try:
         return json.loads(bytes(value))
-    except (TypeError, json.JSONDecodeError) as exc:
+    except (TypeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise TransactionError("STORE_CORRUPT", f"{locator} is unreadable") from exc
+
+
+def _stored_payload(value: Any, expected_digest: Any, locator: str) -> tuple[bytes, Any]:
+    """Authenticate one stored JSON blob before decoding it."""
+    try:
+        encoded = bytes(value)
+    except (TypeError, ValueError) as exc:
+        raise TransactionError("STORE_CORRUPT", f"{locator} is not a byte payload") from exc
+    if (
+        not isinstance(expected_digest, str)
+        or SHA256_PATTERN.fullmatch(expected_digest) is None
+        or hashlib.sha256(encoded).hexdigest() != expected_digest
+    ):
+        raise TransactionError("STORE_CORRUPT", f"{locator} payload digest differs")
+    try:
+        return encoded, json.loads(encoded)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise TransactionError("STORE_CORRUPT", f"{locator} is unreadable") from exc
+
+
+def _stored_snapshot(
+    value: Any,
+    expected_digest: Any,
+    locator: str,
+    *,
+    expected_project_root: Path | str,
+) -> tuple[bytes, dict[str, Any]]:
+    encoded, decoded = _stored_payload(value, expected_digest, locator)
+    try:
+        validated = ownership_snapshot.validate_snapshot(
+            decoded, expected_project_root=expected_project_root
+        )
+    except ownership_snapshot.SnapshotError as exc:
+        raise TransactionError("STORE_CORRUPT", f"{locator} is invalid: {exc.message}") from exc
+    return encoded, validated
+
+
+def _stored_strings(value: Any, locator: str) -> list[str]:
+    decoded = _decode_json(value, locator)
+    try:
+        return _strings(decoded, locator)
+    except TransactionError as exc:
+        raise TransactionError("STORE_CORRUPT", f"{locator} is invalid: {exc.message}") from exc
+
+
+def _row_fingerprint(row: Any, fields: Sequence[str]) -> tuple[Any, ...]:
+    return tuple(bytes(row[field]) if isinstance(row[field], memoryview) else row[field] for field in fields)
 
 
 def _bounded_output(value: bytes) -> dict[str, Any]:
@@ -142,10 +231,44 @@ def _bounded_output(value: bytes) -> dict[str, Any]:
 class ImplementationTransactionStore:
     def __init__(
         self,
-        workflow_root: Path | str = workflow_store.DEFAULT_STORE_ROOT,
+        workflow_root: Path | str | None = None,
         capsule_root: Path | str | None = None,
+        *,
+        guard: Any | None = None,
+        workflow: Any | None = None,
     ) -> None:
-        self.workflow = workflow_store.WorkflowStore(workflow_root)
+        if workflow is not None:
+            if not isinstance(workflow, workflow_store.WorkflowStore):
+                raise TransactionError(
+                    "INVALID_WORKFLOW_STORE", "injected workflow is not an audited WorkflowStore"
+                )
+            if workflow_root is not None:
+                try:
+                    expected_root = Path(workflow_root).expanduser().resolve()
+                except (OSError, RuntimeError) as exc:
+                    raise TransactionError(
+                        "INVALID_WORKFLOW_STORE", "workflow root cannot be canonicalized"
+                    ) from exc
+                if expected_root != workflow.store_root:
+                    raise TransactionError(
+                        "INVALID_WORKFLOW_STORE",
+                        "injected workflow differs from the requested workflow root",
+                    )
+            self.workflow = workflow
+        else:
+            if guard is None:
+                raise TransactionError(
+                    "AUDIT_GUARD_REQUIRED",
+                    "implementation transactions require a live audited-open guard session",
+                )
+            try:
+                opened = workflow_store.audit_and_open_workflow_store(
+                    workflow_root or workflow_store.DEFAULT_STORE_ROOT,
+                    guard=guard,
+                )
+            except workflow_store.WorkflowStoreError as exc:
+                raise TransactionError(exc.code, exc.message) from exc
+            self.workflow = opened.store
         self.capsules = baseline_capsule.CapsuleStore(
             capsule_root or os.environ.get("BASELINE_CAPSULE_STORE", baseline_capsule.DEFAULT_STORE_ROOT)
         )
@@ -176,6 +299,247 @@ class ImplementationTransactionStore:
         if row is None:
             raise TransactionError("INVALID_CAPABILITY", "transaction capability is unknown")
         return row
+
+    def _remediation_dispatch_authority_locked(
+        self,
+        connection: sqlite3.Connection,
+        transaction: Any,
+        *,
+        worker_digest: str,
+    ) -> tuple[Any, ...] | None:
+        """Validate and fingerprint the full claim-bound remediation authority chain.
+
+        This intentionally does not enforce the invocation deadline or remaining
+        Worker-call allowance. Those are spend gates and apply only after source
+        currentness chooses the actual-dispatch branch.
+        """
+        if transaction["mode"] != "VERIFICATION_REMEDIATION":
+            return None
+        claim = connection.execute(
+            "SELECT * FROM claims WHERE claim_ref = ?", (transaction["claim_ref"],)
+        ).fetchone()
+        if claim is None or claim["state"] != "ACTIVE":
+            raise TransactionError(
+                "REMEDIATION_CLAIM_MISMATCH", "remediation claim is not active"
+            )
+        if (
+            claim["claim_ref"] != transaction["claim_ref"]
+            or claim["root_ref"] != transaction["root_ref"]
+            or claim["transition_kind"] != "REMEDIATE"
+            or claim["execution_ref"] != transaction["transaction_ref"]
+            or claim["claimant_actor_ref"] != transaction["owner_actor_ref"]
+            or claim["planning_identity"] != transaction["planning_identity"]
+            or claim["source_identity"] != transaction["baseline_source_identity"]
+            or claim["successor_ref"] is not None
+            or claim["closure_ref"] is not None
+            or claim["closed_at"] is not None
+        ):
+            raise TransactionError(
+                "REMEDIATION_CLAIM_MISMATCH",
+                "remediation claim authority differs from its implementation transaction",
+            )
+        try:
+            tip = self.workflow._current_tip_locked(connection, transaction["root_ref"])
+        except workflow_store.WorkflowStoreError as exc:
+            raise TransactionError(exc.code, exc.message) from exc
+        if tip["node_ref"] != claim["tip_ref"]:
+            raise TransactionError(
+                "STALE_WORKFLOW_TIP", "remediation claim no longer targets the current tip"
+            )
+
+        owner = connection.execute(
+            "SELECT * FROM actors WHERE actor_ref = ?", (transaction["owner_actor_ref"],)
+        ).fetchone()
+        worker = connection.execute(
+            "SELECT * FROM actors WHERE actor_ref = ?", (transaction["worker_actor_ref"],)
+        ).fetchone()
+        coordinator = connection.execute(
+            "SELECT * FROM actors WHERE actor_ref = ?", (claim["coordinator_actor_ref"],)
+        ).fetchone()
+        if (
+            owner is None
+            or worker is None
+            or coordinator is None
+            or owner["role"] != "REMEDIATOR"
+            or worker["role"] != "WORKER"
+            or coordinator["role"] != "COORDINATOR"
+            or owner["bound_claim_ref"] != claim["claim_ref"]
+            or worker["bound_claim_ref"] is not None
+            or coordinator["bound_claim_ref"] is not None
+            or transaction["selected_worker"] != worker["actor_ref"]
+            or worker["capability_sha256"] != worker_digest
+            or transaction["worker_capability_sha256"] != worker_digest
+        ):
+            raise TransactionError(
+                "ACTOR_CONTEXT_MISMATCH",
+                "remediation owner or selected Worker authority differs",
+            )
+        invocation_ref = owner["invocation_ref"]
+        if any(
+            actor["root_ref"] != transaction["root_ref"]
+            or actor["invocation_ref"] != invocation_ref
+            for actor in (owner, worker, coordinator)
+        ):
+            raise TransactionError(
+                "ACTOR_CONTEXT_MISMATCH", "remediation actors are not in one root invocation"
+            )
+
+        reservation = connection.execute(
+            "SELECT * FROM budget_reservations WHERE reservation_ref = ?",
+            (claim["budget_reservation_ref"],),
+        ).fetchone()
+        if (
+            reservation is None
+            or reservation["state"] != "ACTIVE"
+            or reservation["reservation_ref"] != claim["budget_reservation_ref"]
+            or reservation["transition_kind"] != "REMEDIATE"
+            or reservation["invocation_ref"] != invocation_ref
+            or reservation["closed_at"] is not None
+        ):
+            raise TransactionError(
+                "BUDGET_RESERVATION_MISMATCH",
+                "remediation claim has no active matching reservation",
+            )
+        invocation = connection.execute(
+            "SELECT * FROM invocations WHERE invocation_ref = ?", (invocation_ref,)
+        ).fetchone()
+        if (
+            invocation is None
+            or invocation["state"] != "ACTIVE"
+            or invocation["root_ref"] != transaction["root_ref"]
+            or invocation["closed_at"] is not None
+        ):
+            raise TransactionError(
+                "INVOCATION_NOT_ACTIVE", "remediation invocation is absent, closed, or mismatched"
+            )
+        try:
+            self.workflow._stored_budget(
+                reservation["spend_reserved_json"], "reservation.spendReserved"
+            )
+            self.workflow._stored_budget(
+                reservation["closure_reserved_json"], "reservation.closureReserved"
+            )
+            self.workflow._stored_budget(
+                reservation["spend_used_json"], "reservation.spendUsed"
+            )
+            self.workflow._stored_budget(
+                reservation["closure_used_json"], "reservation.closureUsed"
+            )
+            self.workflow._stored_budget(invocation["limits_json"], "invocation.limits")
+            self.workflow._stored_budget(
+                invocation["consumed_json"], "invocation.consumed"
+            )
+        except workflow_store.WorkflowStoreError as exc:
+            raise TransactionError(exc.code, exc.message) from exc
+        return (
+            _row_fingerprint(
+                claim,
+                (
+                    "claim_ref",
+                    "root_ref",
+                    "tip_ref",
+                    "transition_kind",
+                    "coordinator_actor_ref",
+                    "claimant_actor_ref",
+                    "planning_identity",
+                    "source_identity",
+                    "execution_ref",
+                    "budget_reservation_ref",
+                    "state",
+                ),
+            ),
+            _row_fingerprint(
+                owner,
+                (
+                    "actor_ref",
+                    "role",
+                    "root_ref",
+                    "invocation_ref",
+                    "capability_sha256",
+                    "bound_claim_ref",
+                ),
+            ),
+            _row_fingerprint(
+                worker,
+                (
+                    "actor_ref",
+                    "role",
+                    "root_ref",
+                    "invocation_ref",
+                    "capability_sha256",
+                    "bound_claim_ref",
+                ),
+            ),
+            _row_fingerprint(
+                coordinator,
+                (
+                    "actor_ref",
+                    "role",
+                    "root_ref",
+                    "invocation_ref",
+                    "capability_sha256",
+                    "bound_claim_ref",
+                ),
+            ),
+            _row_fingerprint(
+                reservation,
+                (
+                    "reservation_ref",
+                    "invocation_ref",
+                    "transition_kind",
+                    "spend_reserved_json",
+                    "closure_reserved_json",
+                    "spend_used_json",
+                    "closure_used_json",
+                    "state",
+                ),
+            ),
+            _row_fingerprint(
+                invocation,
+                (
+                    "invocation_ref",
+                    "root_ref",
+                    "deadline_at",
+                    "limits_json",
+                    "consumed_json",
+                    "state",
+                    "closed_at",
+                ),
+            ),
+        )
+
+    def _dispatch_authority_locked(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        envelope_ref: str,
+        worker_digest: str,
+    ) -> tuple[Any, Any, tuple[Any, ...] | None]:
+        envelope = connection.execute(
+            "SELECT * FROM implementation_envelopes WHERE envelope_ref = ?", (envelope_ref,)
+        ).fetchone()
+        if envelope is None or envelope["state"] != "FROZEN":
+            raise TransactionError(
+                "ENVELOPE_NOT_FROZEN", "envelope is absent or no longer frozen"
+            )
+        transaction = connection.execute(
+            "SELECT * FROM implementation_transactions WHERE transaction_ref = ?",
+            (envelope["transaction_ref"],),
+        ).fetchone()
+        if transaction is None:
+            raise TransactionError("STORE_CORRUPT", "envelope transaction is absent")
+        if transaction["state"] != "OPEN":
+            raise TransactionError(
+                "TRANSACTION_NOT_READY", "transaction is not exactly OPEN for Worker dispatch"
+            )
+        if transaction["worker_capability_sha256"] != worker_digest:
+            raise TransactionError(
+                "WORKER_CAPABILITY_MISMATCH", "only the selected Worker may begin this call"
+            )
+        authority = self._remediation_dispatch_authority_locked(
+            connection, transaction, worker_digest=worker_digest
+        )
+        return envelope, transaction, authority
 
     @staticmethod
     def _project_root(raw: Path | str) -> Path:
@@ -356,26 +720,39 @@ class ImplementationTransactionStore:
                     if not isinstance(flow, Mapping):
                         return None
                     step_facts: list[dict[str, Any]] = []
-                    stable_targets: list[dict[str, Any]] = []
                     for step in flow.get("steps", []):
                         if not isinstance(step, Mapping):
                             return None
-                        binding = step.get("sourceBinding")
-                        if not isinstance(binding, Mapping):
+                        executor_version = step.get("executorVersion")
+                        if executor_version != "process-v3":
+                            # Retired, mixed, and unknown plans never receive a
+                            # new-code exact-repeat interpretation.
                             return None
-                        request_projection = {
-                            "executorKind": step.get("executorKind"),
-                            "executable": step.get("executable"),
-                            "argv": step.get("argv"),
-                            "cwd": step.get("cwd"),
-                            "environmentDelta": step.get("environmentDelta"),
-                            "inputRefs": step.get("inputRefs"),
-                            "sourceBinding": {
-                                "mode": binding.get("mode"),
-                                "targetIdentityOrRevision": binding.get("targetIdentityOrRevision"),
-                                "bindingBasisAnchors": binding.get("bindingBasisAnchors"),
-                            },
-                        }
+                        repeat_digest = step.get("repeatRequestDigest")
+                        canonical_digest = step.get("canonicalRequestDigest")
+                        identity_projection = step.get("executableIdentity")
+                        if (
+                            step.get("executorKind") != "PROCESS"
+                            or step.get("environmentPolicy") != "SEALED_EMPTY_BASE_V1"
+                            or not isinstance(repeat_digest, str)
+                            or not SHA256_PATTERN.fullmatch(repeat_digest)
+                            or not isinstance(canonical_digest, str)
+                            or not SHA256_PATTERN.fullmatch(canonical_digest)
+                            or not isinstance(identity_projection, Mapping)
+                            or set(identity_projection)
+                            != {
+                                "canonicalPath",
+                                "contentSha256",
+                                "byteCount",
+                                "executableMode",
+                                "ownerUid",
+                                "ownerGid",
+                            }
+                        ):
+                            raise TransactionError(
+                                "STORE_CORRUPT",
+                                "process-v3 repeat request authority is malformed",
+                            )
                         attempts = connection.execute(
                             """
                             SELECT * FROM verification_attempts
@@ -389,6 +766,14 @@ class ImplementationTransactionStore:
                             for attempt in attempts
                         ):
                             return None
+                        if any(
+                            attempt["request_sha256"] != canonical_digest
+                            for attempt in attempts
+                        ):
+                            raise TransactionError(
+                                "STORE_CORRUPT",
+                                "repeat guard attempt differs from the sealed request",
+                            )
                         terminal = attempts[-1]
                         result = _decode_json(terminal["result_json"], "terminalAttempt")
                         if not isinstance(result, Mapping):
@@ -413,16 +798,8 @@ class ImplementationTransactionStore:
                             {
                                 "stepId": step.get("stepId"),
                                 "role": step.get("role"),
-                                "obligationRequestDigest": hashlib.sha256(
-                                    _canonical_json(request_projection)
-                                ).hexdigest(),
+                                "obligationRequestDigest": repeat_digest,
                                 "terminalFact": terminal_fact,
-                            }
-                        )
-                        stable_targets.append(
-                            {
-                                "mode": binding.get("mode"),
-                                "targetIdentityOrRevision": binding.get("targetIdentityOrRevision"),
                             }
                         )
                     flow_facts.append(
@@ -433,9 +810,6 @@ class ImplementationTransactionStore:
                             ).hexdigest(),
                             "expectedTerminalObservationSha256": hashlib.sha256(
                                 str(flow.get("expectedTerminalObservation", "")).encode("utf-8")
-                            ).hexdigest(),
-                            "stableTargetDigest": hashlib.sha256(
-                                _canonical_json(stable_targets)
                             ).hexdigest(),
                             "steps": step_facts,
                         }
@@ -699,6 +1073,9 @@ class ImplementationTransactionStore:
 
         try:
             before = ownership_snapshot.capture(project_root, exclusions=excluded)
+            before = ownership_snapshot.validate_snapshot(
+                before, expected_project_root=project_root
+            )
         except (OSError, ownership_snapshot.SnapshotError) as exc:
             code = exc.code if isinstance(exc, ownership_snapshot.SnapshotError) else "SNAPSHOT_FAILED"
             raise TransactionError(code, str(exc)) from exc
@@ -709,27 +1086,44 @@ class ImplementationTransactionStore:
             transaction = self._transaction_for_capability_locked(connection, transaction_capability)
             if transaction["state"] not in {"OPEN", "RECONCILING"}:
                 raise TransactionError("TRANSACTION_NOT_READY", "transaction changed during capture")
-            connection.execute(
+            active = connection.execute(
                 """
-                INSERT INTO implementation_envelopes(
-                    envelope_ref, transaction_ref, task_id, criterion_refs_json,
-                    allowed_paths_json, forbidden_paths_json, before_snapshot_json,
-                    before_snapshot_sha256, after_snapshot_json, after_snapshot_sha256,
-                    delta_json, reconciliation_json, state, created_at, closed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'FROZEN', ?, NULL)
+                SELECT envelope_ref FROM implementation_envelopes
+                WHERE transaction_ref = ? AND state != 'RECONCILED'
                 """,
-                (
-                    envelope_ref,
-                    transaction["transaction_ref"],
-                    task_id,
-                    _canonical_json(criteria),
-                    _canonical_json(allowed),
-                    _canonical_json(forbidden),
-                    before_payload,
-                    hashlib.sha256(before_payload).hexdigest(),
-                    created_at,
-                ),
-            )
+                (transaction["transaction_ref"],),
+            ).fetchone()
+            if active is not None:
+                raise TransactionError(
+                    "ENVELOPE_ALREADY_ACTIVE", "one envelope became active during snapshot capture"
+                )
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO implementation_envelopes(
+                        envelope_ref, transaction_ref, task_id, criterion_refs_json,
+                        allowed_paths_json, forbidden_paths_json, before_snapshot_json,
+                        before_snapshot_sha256, after_snapshot_json, after_snapshot_sha256,
+                        delta_json, reconciliation_json, state, created_at, closed_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'FROZEN', ?, NULL)
+                    """,
+                    (
+                        envelope_ref,
+                        transaction["transaction_ref"],
+                        task_id,
+                        _canonical_json(criteria),
+                        _canonical_json(allowed),
+                        _canonical_json(forbidden),
+                        before_payload,
+                        hashlib.sha256(before_payload).hexdigest(),
+                        created_at,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise TransactionError(
+                    "ENVELOPE_ALREADY_ACTIVE",
+                    "envelope insert conflicts with an active or legacy same-task envelope",
+                ) from exc
             self._event_locked(
                 connection,
                 transaction["transaction_ref"],
@@ -756,62 +1150,189 @@ class ImplementationTransactionStore:
 
     def begin_worker_call(self, *, worker_capability: str, envelope_ref: str) -> dict[str, Any]:
         worker_digest = _capability_digest(worker_capability)
+        connection = self.workflow._connect()
+        try:
+            connection.execute("BEGIN")
+            envelope, transaction, remediation_authority = self._dispatch_authority_locked(
+                connection, envelope_ref=envelope_ref, worker_digest=worker_digest
+            )
+            before_raw, before = _stored_snapshot(
+                envelope["before_snapshot_json"],
+                envelope["before_snapshot_sha256"],
+                "beforeSnapshot",
+                expected_project_root=transaction["project_root"],
+            )
+            allowed = _stored_strings(envelope["allowed_paths_json"], "allowedPaths")
+            envelope_fingerprint = _row_fingerprint(envelope, _DISPATCH_ENVELOPE_FIELDS)
+            transaction_fingerprint = _row_fingerprint(
+                transaction, _DISPATCH_TRANSACTION_FIELDS
+            )
+        finally:
+            connection.rollback()
+            connection.close()
+
+        try:
+            fresh = ownership_snapshot.capture(
+                transaction["project_root"], exclusions=before["policy"]["exclusions"]
+            )
+            fresh = ownership_snapshot.validate_snapshot(
+                fresh, expected_project_root=transaction["project_root"]
+            )
+            delta = ownership_snapshot.compare(
+                before, fresh, allowed_mutation_scopes=allowed
+            )
+        except (OSError, ownership_snapshot.SnapshotError) as exc:
+            code = exc.code if isinstance(exc, ownership_snapshot.SnapshotError) else "SNAPSHOT_FAILED"
+            raise TransactionError(code, str(exc)) from exc
+
+        invalidated = before["identity"] != fresh["identity"]
+        after_payload = _canonical_json(fresh)
+        delta_payload = _canonical_json(delta)
+        changed_paths = list(delta["changedPaths"])
+        reconciliation = {
+            "disposition": "CONTINUE",
+            "workerAttributablePaths": [],
+            "externalPaths": changed_paths,
+            "preservedUserChanges": changed_paths,
+            "externalEffectState": "CLEAR",
+        }
         with self.workflow._transaction() as connection:
-            envelope = connection.execute(
-                "SELECT * FROM implementation_envelopes WHERE envelope_ref = ?", (envelope_ref,)
-            ).fetchone()
-            if envelope is None or envelope["state"] != "FROZEN":
-                raise TransactionError("ENVELOPE_NOT_FROZEN", "envelope is absent or no longer frozen")
-            transaction = connection.execute(
-                "SELECT * FROM implementation_transactions WHERE transaction_ref = ?",
-                (envelope["transaction_ref"],),
-            ).fetchone()
-            if transaction is None or transaction["worker_capability_sha256"] != worker_digest:
-                raise TransactionError("WORKER_CAPABILITY_MISMATCH", "only the selected Worker may begin this call")
-            if transaction["mode"] == "VERIFICATION_REMEDIATION":
-                claim = connection.execute(
-                    "SELECT * FROM claims WHERE claim_ref = ?", (transaction["claim_ref"],)
-                ).fetchone()
-                if claim is None or claim["state"] != "ACTIVE":
-                    raise TransactionError("REMEDIATION_CLAIM_MISMATCH", "remediation claim is not active")
-                reservation = connection.execute(
-                    "SELECT * FROM budget_reservations WHERE reservation_ref = ?",
-                    (claim["budget_reservation_ref"],),
-                ).fetchone()
-                if reservation is None or reservation["state"] != "ACTIVE":
-                    raise TransactionError("BUDGET_RESERVATION_NOT_ACTIVE", "remediation budget is not active")
-                try:
-                    self.workflow._assert_invocation_spend_open_locked(
-                        connection, reservation["invocation_ref"]
+            locked_envelope, locked_transaction, locked_authority = (
+                self._dispatch_authority_locked(
+                    connection,
+                    envelope_ref=envelope_ref,
+                    worker_digest=worker_digest,
+                )
+            )
+            if (
+                _row_fingerprint(locked_envelope, _DISPATCH_ENVELOPE_FIELDS)
+                != envelope_fingerprint
+                or _row_fingerprint(locked_transaction, _DISPATCH_TRANSACTION_FIELDS)
+                != transaction_fingerprint
+                or locked_authority != remediation_authority
+            ):
+                raise TransactionError(
+                    "DISPATCH_STATE_CHANGED", "dispatch authority changed during source capture"
+                )
+            locked_raw, locked_before = _stored_snapshot(
+                locked_envelope["before_snapshot_json"],
+                locked_envelope["before_snapshot_sha256"],
+                "beforeSnapshot",
+                expected_project_root=locked_transaction["project_root"],
+            )
+            if locked_raw != before_raw or locked_before != before:
+                raise TransactionError(
+                    "DISPATCH_STATE_CHANGED", "stored before snapshot changed during recapture"
+                )
+
+            if invalidated:
+                cursor = connection.execute(
+                    """
+                    UPDATE implementation_envelopes
+                    SET after_snapshot_json = ?, after_snapshot_sha256 = ?, delta_json = ?,
+                        reconciliation_json = ?, state = 'RECONCILED', closed_at = ?
+                    WHERE envelope_ref = ? AND state = 'FROZEN'
+                    """,
+                    (
+                        after_payload,
+                        hashlib.sha256(after_payload).hexdigest(),
+                        delta_payload,
+                        _canonical_json(reconciliation),
+                        _now(),
+                        envelope_ref,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise TransactionError(
+                        "DISPATCH_STATE_CHANGED", "frozen envelope changed before invalidation"
                     )
-                except workflow_store.WorkflowStoreError as exc:
-                    raise TransactionError(exc.code, exc.message) from exc
-                reserved = self.workflow._stored_budget(
-                    reservation["spend_reserved_json"], "reservation.spendReserved"
+                self._event_locked(
+                    connection,
+                    locked_transaction["transaction_ref"],
+                    "ENVELOPE_INVALIDATED_BEFORE_DISPATCH",
+                    {
+                        "envelopeRef": envelope_ref,
+                        "oldIdentity": before["identity"],
+                        "newIdentity": fresh["identity"],
+                        "changedPaths": changed_paths,
+                        "workerAttributablePaths": [],
+                        "externalPaths": changed_paths,
+                        "preservedUserChanges": changed_paths,
+                    },
                 )
-                used = self.workflow._stored_budget(
-                    reservation["spend_used_json"], "reservation.spendUsed"
+            else:
+                if locked_transaction["mode"] == "VERIFICATION_REMEDIATION":
+                    claim = connection.execute(
+                        "SELECT * FROM claims WHERE claim_ref = ?",
+                        (locked_transaction["claim_ref"],),
+                    ).fetchone()
+                    reservation = connection.execute(
+                        "SELECT * FROM budget_reservations WHERE reservation_ref = ?",
+                        (claim["budget_reservation_ref"],),
+                    ).fetchone()
+                    try:
+                        self.workflow._assert_invocation_spend_open_locked(
+                            connection, reservation["invocation_ref"]
+                        )
+                        reserved = self.workflow._stored_budget(
+                            reservation["spend_reserved_json"], "reservation.spendReserved"
+                        )
+                        used = self.workflow._stored_budget(
+                            reservation["spend_used_json"], "reservation.spendUsed"
+                        )
+                    except workflow_store.WorkflowStoreError as exc:
+                        raise TransactionError(exc.code, exc.message) from exc
+                    if used["workerCalls"] + 1 > reserved["workerCalls"]:
+                        raise TransactionError(
+                            "BUDGET_RESERVATION_EXCEEDED", "no Worker-call budget remains"
+                        )
+                    used["workerCalls"] += 1
+                    cursor = connection.execute(
+                        """
+                        UPDATE budget_reservations SET spend_used_json = ?
+                        WHERE reservation_ref = ? AND state = 'ACTIVE'
+                        """,
+                        (_canonical_json(used), reservation["reservation_ref"]),
+                    )
+                    if cursor.rowcount != 1:
+                        raise TransactionError(
+                            "DISPATCH_STATE_CHANGED", "Worker-call reservation changed"
+                        )
+                cursor = connection.execute(
+                    """
+                    UPDATE implementation_envelopes SET state = 'DISPATCHED'
+                    WHERE envelope_ref = ? AND state = 'FROZEN'
+                    """,
+                    (envelope_ref,),
                 )
-                if used["workerCalls"] + 1 > reserved["workerCalls"]:
-                    raise TransactionError("BUDGET_RESERVATION_EXCEEDED", "no Worker-call budget remains")
-                used["workerCalls"] += 1
-                connection.execute(
-                    "UPDATE budget_reservations SET spend_used_json = ? WHERE reservation_ref = ?",
-                    (_canonical_json(used), reservation["reservation_ref"]),
+                if cursor.rowcount != 1:
+                    raise TransactionError(
+                        "DISPATCH_STATE_CHANGED", "frozen envelope changed before dispatch"
+                    )
+                cursor = connection.execute(
+                    """
+                    UPDATE implementation_transactions SET state = 'WORKER_ACTIVE'
+                    WHERE transaction_ref = ? AND state = 'OPEN'
+                    """,
+                    (locked_transaction["transaction_ref"],),
                 )
-            connection.execute(
-                "UPDATE implementation_envelopes SET state = 'DISPATCHED' WHERE envelope_ref = ? AND state = 'FROZEN'",
-                (envelope_ref,),
-            )
-            connection.execute(
-                "UPDATE implementation_transactions SET state = 'WORKER_ACTIVE' WHERE transaction_ref = ?",
-                (transaction["transaction_ref"],),
-            )
-            self._event_locked(
-                connection,
-                transaction["transaction_ref"],
-                "WORKER_CALL_STARTED",
-                {"envelopeRef": envelope_ref, "selectedWorker": transaction["selected_worker"]},
+                if cursor.rowcount != 1:
+                    raise TransactionError(
+                        "DISPATCH_STATE_CHANGED", "transaction changed before dispatch"
+                    )
+                self._event_locked(
+                    connection,
+                    locked_transaction["transaction_ref"],
+                    "WORKER_CALL_STARTED",
+                    {
+                        "envelopeRef": envelope_ref,
+                        "selectedWorker": locked_transaction["selected_worker"],
+                    },
+                )
+        if invalidated:
+            raise TransactionError(
+                "SOURCE_CHANGED_BEFORE_WORKER_DISPATCH",
+                "source differs from the exact frozen envelope snapshot; no Worker call was authorized",
             )
         return {"envelopeRef": envelope_ref, "workerCallAuthorized": True}
 
@@ -968,12 +1489,20 @@ class ImplementationTransactionStore:
             ).fetchone()
             if envelope is None or envelope["state"] != "DISPATCHED":
                 raise TransactionError("ENVELOPE_NOT_DISPATCHED", "envelope is absent or was not dispatched")
-            before = _decode_json(envelope["before_snapshot_json"], "beforeSnapshot")
-            allowed = _decode_json(envelope["allowed_paths_json"], "allowedPaths")
+            before_raw, before = _stored_snapshot(
+                envelope["before_snapshot_json"],
+                envelope["before_snapshot_sha256"],
+                "beforeSnapshot",
+                expected_project_root=transaction["project_root"],
+            )
+            allowed = _stored_strings(envelope["allowed_paths_json"], "allowedPaths")
             exclusions = before["policy"]["exclusions"]
             project_root = transaction["project_root"]
         try:
             after = ownership_snapshot.capture(project_root, exclusions=exclusions)
+            after = ownership_snapshot.validate_snapshot(
+                after, expected_project_root=project_root
+            )
             delta = ownership_snapshot.compare(before, after, allowed_mutation_scopes=allowed)
         except (OSError, ownership_snapshot.SnapshotError) as exc:
             code = exc.code if isinstance(exc, ownership_snapshot.SnapshotError) else "SNAPSHOT_FAILED"
@@ -988,7 +1517,17 @@ class ImplementationTransactionStore:
             ).fetchone()
             if envelope is None or envelope["state"] != "DISPATCHED":
                 raise TransactionError("ENVELOPE_NOT_DISPATCHED", "envelope changed during capture")
-            connection.execute(
+            locked_raw, locked_before = _stored_snapshot(
+                envelope["before_snapshot_json"],
+                envelope["before_snapshot_sha256"],
+                "beforeSnapshot",
+                expected_project_root=transaction["project_root"],
+            )
+            if locked_raw != before_raw or locked_before != before:
+                raise TransactionError(
+                    "DISPATCH_STATE_CHANGED", "before snapshot changed during after capture"
+                )
+            cursor = connection.execute(
                 """
                 UPDATE implementation_envelopes
                 SET after_snapshot_json = ?, after_snapshot_sha256 = ?, delta_json = ?,
@@ -1003,10 +1542,21 @@ class ImplementationTransactionStore:
                     envelope_ref,
                 ),
             )
-            connection.execute(
-                "UPDATE implementation_transactions SET state = 'RECONCILING' WHERE transaction_ref = ?",
+            if cursor.rowcount != 1:
+                raise TransactionError(
+                    "DISPATCH_STATE_CHANGED", "dispatched envelope changed during after capture"
+                )
+            cursor = connection.execute(
+                """
+                UPDATE implementation_transactions SET state = 'RECONCILING'
+                WHERE transaction_ref = ? AND state = 'WORKER_ACTIVE'
+                """,
                 (transaction["transaction_ref"],),
             )
+            if cursor.rowcount != 1:
+                raise TransactionError(
+                    "DISPATCH_STATE_CHANGED", "transaction changed during after capture"
+                )
             self._event_locked(
                 connection,
                 transaction["transaction_ref"],
@@ -1054,10 +1604,100 @@ class ImplementationTransactionStore:
                 raise TransactionError("RECONCILIATION_INCOMPLETE", "changed path partition is incomplete")
             if not worker_set.issubset(set(delta["inScopePaths"])):
                 raise TransactionError("RECONCILIATION_INCOMPLETE", "Worker-attributable path is outside the envelope")
-            if any(ownership_snapshot._allowed(path, tuple(forbidden)) for path in worker_set):
-                raise TransactionError("RECONCILIATION_INCOMPLETE", "Worker-attributable path is forbidden")
+            try:
+                forbidden_worker_path = any(
+                    ownership_snapshot.path_matches_any(path, tuple(forbidden))
+                    for path in worker_set
+                )
+            except ownership_snapshot.SnapshotError as exc:
+                raise TransactionError(
+                    "STORE_CORRUPT", f"stored envelope path policy is invalid: {exc.message}"
+                ) from exc
+            if forbidden_worker_path:
+                raise TransactionError(
+                    "RECONCILIATION_INCOMPLETE", "Worker-attributable path is forbidden"
+                )
             if external_set and not external_set.issubset(set(preserved)):
                 raise TransactionError("RECONCILIATION_INCOMPLETE", "external paths are not recorded as preserved")
+            prior_envelopes = connection.execute(
+                """
+                SELECT envelope_ref, delta_json, reconciliation_json, state
+                FROM implementation_envelopes
+                WHERE transaction_ref = ? AND task_id = ? AND envelope_ref != ?
+                """,
+                (transaction["transaction_ref"], envelope["task_id"], envelope_ref),
+            ).fetchall()
+            prior_by_ref = {row["envelope_ref"]: row for row in prior_envelopes}
+            invalidation_rows = connection.execute(
+                """
+                SELECT payload_json, payload_sha256
+                FROM implementation_events
+                WHERE transaction_ref = ?
+                  AND event_kind = 'ENVELOPE_INVALIDATED_BEFORE_DISPATCH'
+                ORDER BY event_id
+                """,
+                (transaction["transaction_ref"],),
+            ).fetchall()
+            invalidations: dict[str, list[Mapping[str, Any]]] = {}
+            for offset, event_row in enumerate(invalidation_rows):
+                _, raw_event = _stored_payload(
+                    event_row["payload_json"],
+                    event_row["payload_sha256"],
+                    f"invalidationEvent[{offset}]",
+                )
+                if (
+                    not isinstance(raw_event, Mapping)
+                    or set(raw_event) != _INVALIDATION_EVENT_FIELDS
+                    or not isinstance(raw_event.get("envelopeRef"), str)
+                ):
+                    raise TransactionError(
+                        "STORE_CORRUPT", f"invalidationEvent[{offset}] shape is invalid"
+                    )
+                invalidations.setdefault(raw_event["envelopeRef"], []).append(raw_event)
+            prior_external_paths: set[str] = set()
+            for prior_ref, prior in prior_by_ref.items():
+                prior_events = invalidations.get(prior_ref, [])
+                if not prior_events:
+                    continue
+                if len(prior_events) != 1 or prior["state"] != "RECONCILED":
+                    raise TransactionError(
+                        "STORE_CORRUPT", "prior same-task invalidation facts are inconsistent"
+                    )
+                prior_delta = _decode_json(prior["delta_json"], "priorInvalidation.delta")
+                prior_reconciliation = _decode_json(
+                    prior["reconciliation_json"], "priorInvalidation.reconciliation"
+                )
+                prior_event = prior_events[0]
+                if (
+                    not isinstance(prior_delta, Mapping)
+                    or not isinstance(prior_reconciliation, Mapping)
+                    or prior_event["changedPaths"] != prior_delta.get("changedPaths")
+                    or prior_event["workerAttributablePaths"] != []
+                    or prior_event["externalPaths"] != prior_reconciliation.get("externalPaths")
+                    or prior_event["preservedUserChanges"]
+                    != prior_reconciliation.get("preservedUserChanges")
+                    or prior_event["externalPaths"] != prior_event["changedPaths"]
+                    or prior_event["preservedUserChanges"] != prior_event["changedPaths"]
+                ):
+                    raise TransactionError(
+                        "STORE_CORRUPT", "prior same-task invalidation partition differs"
+                    )
+                try:
+                    prior_external_paths.update(
+                        _strings(
+                            prior_event["externalPaths"],
+                            "priorInvalidation.externalPaths",
+                        )
+                    )
+                except TransactionError as exc:
+                    raise TransactionError(
+                        "STORE_CORRUPT", f"prior invalidation paths are invalid: {exc.message}"
+                    ) from exc
+            if worker_set & prior_external_paths:
+                raise TransactionError(
+                    "RECONCILIATION_INCOMPLETE",
+                    "same-task Worker attribution overlaps prior pre-dispatch external drift",
+                )
             normalized = {
                 "disposition": "CONTINUE",
                 "workerAttributablePaths": worker_paths,

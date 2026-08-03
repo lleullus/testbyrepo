@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 import re
+import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,6 +61,15 @@ PLANNING_SEAL_FIELDS = (
     "blockerFiles",
 )
 BLOCKER_FIELDS = ("path", "sha256", "status")
+INVALIDATION_EVENT_FIELDS = {
+    "envelopeRef",
+    "oldIdentity",
+    "newIdentity",
+    "changedPaths",
+    "workerAttributablePaths",
+    "externalPaths",
+    "preservedUserChanges",
+}
 
 
 class HandoffError(RuntimeError):
@@ -295,11 +305,17 @@ def _validate_criterion_accounting(
 class HandoffPublisher:
     def __init__(
         self,
-        workflow_root: Path | str = DEFAULT_WORKFLOW_ROOT,
+        workflow_root: Path | str | None = None,
         capsule_root: Path | str | None = None,
+        *,
+        guard: Any | None = None,
+        workflow: Any | None = None,
     ) -> None:
         self.transactions = implementation_transaction.ImplementationTransactionStore(
-            workflow_root, capsule_root
+            workflow_root,
+            capsule_root,
+            guard=guard,
+            workflow=workflow,
         )
         self.workflow = self.transactions.workflow
 
@@ -322,6 +338,290 @@ class HandoffPublisher:
             raise HandoffError(exc.code, exc.message) from exc
         if observed != final_identity:
             raise HandoffError("SOURCE_IDENTITY_MISMATCH", "final source changed during publication")
+
+    @staticmethod
+    def _stored_event_payload(row: Any, locator: str) -> dict[str, Any]:
+        encoded = bytes(row["payload_json"])
+        if hashlib.sha256(encoded).hexdigest() != row["payload_sha256"]:
+            raise HandoffError("TRANSACTION_CORRUPT", f"{locator} payload digest differs")
+        try:
+            value = json.loads(encoded)
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise HandoffError("TRANSACTION_CORRUPT", f"{locator} payload is unreadable") from exc
+        if not isinstance(value, dict):
+            raise HandoffError("TRANSACTION_CORRUPT", f"{locator} payload is not an object")
+        return value
+
+    def _criterion_accounting_locked(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        transaction_ref: str,
+        criteria: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Derive immutable AC linkage from exact dispatched envelope facts."""
+        transaction = connection.execute(
+            """
+            SELECT selected_worker, project_root
+            FROM implementation_transactions
+            WHERE transaction_ref = ?
+            """,
+            (transaction_ref,),
+        ).fetchone()
+        if transaction is None:
+            raise HandoffError("TRANSACTION_CORRUPT", "implementation transaction is absent")
+        envelopes = connection.execute(
+            """
+            SELECT *
+            FROM implementation_envelopes
+            WHERE transaction_ref = ?
+            ORDER BY task_id, envelope_ref
+            """,
+            (transaction_ref,),
+        ).fetchall()
+        event_rows = connection.execute(
+            """
+            SELECT event_kind, payload_json, payload_sha256
+            FROM implementation_events
+            WHERE transaction_ref = ?
+              AND event_kind IN (
+                  'ENVELOPE_FROZEN',
+                  'WORKER_CALL_STARTED',
+                  'ENVELOPE_INVALIDATED_BEFORE_DISPATCH'
+              )
+            ORDER BY event_id
+            """,
+            (transaction_ref,),
+        ).fetchall()
+        events: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for index, row in enumerate(event_rows):
+            payload = self._stored_event_payload(row, f"implementation event[{index}]")
+            envelope_ref = payload.get("envelopeRef")
+            if not isinstance(envelope_ref, str):
+                raise HandoffError("TRANSACTION_CORRUPT", "implementation event has no envelope ref")
+            events.setdefault((row["event_kind"], envelope_ref), []).append(payload)
+
+        known_envelope_refs = {row["envelope_ref"] for row in envelopes}
+        if any(envelope_ref not in known_envelope_refs for _, envelope_ref in events):
+            raise HandoffError(
+                "TRANSACTION_CORRUPT",
+                "implementation event refers to an envelope outside the transaction rows",
+            )
+
+        expected = {
+            (item["criterionIndex"], item["criterionRawSha256"]): item for item in criteria
+        }
+        tasks_by_criterion: dict[tuple[int, str], set[str]] = {
+            identity: set() for identity in expected
+        }
+        for offset, envelope in enumerate(envelopes):
+            if envelope["state"] != "RECONCILED":
+                raise HandoffError(
+                    "IMPLEMENTATION_TRANSACTION_NOT_READY",
+                    f"envelope[{offset}] is not reconciled",
+                )
+            task_id = envelope["task_id"]
+            if not isinstance(task_id, str) or not ID_PATTERN.fullmatch(task_id):
+                raise HandoffError("TRANSACTION_CORRUPT", f"envelope[{offset}] task id is invalid")
+            try:
+                criterion_refs = json.loads(bytes(envelope["criterion_refs_json"]))
+                allowed_paths = json.loads(bytes(envelope["allowed_paths_json"]))
+                forbidden_paths = json.loads(bytes(envelope["forbidden_paths_json"]))
+            except (TypeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise HandoffError(
+                    "TRANSACTION_CORRUPT", f"envelope[{offset}] immutable fields are unreadable"
+                ) from exc
+            try:
+                before_raw = bytes(envelope["before_snapshot_json"])
+            except (TypeError, ValueError) as exc:
+                raise HandoffError(
+                    "TRANSACTION_CORRUPT", f"envelope[{offset}] before snapshot is unreadable"
+                ) from exc
+            if hashlib.sha256(before_raw).hexdigest() != envelope["before_snapshot_sha256"]:
+                raise HandoffError(
+                    "TRANSACTION_CORRUPT", f"envelope[{offset}] before snapshot digest differs"
+                )
+            try:
+                before = implementation_transaction.ownership_snapshot.validate_snapshot(
+                    json.loads(before_raw), expected_project_root=transaction["project_root"]
+                )
+            except (
+                UnicodeDecodeError,
+                json.JSONDecodeError,
+                implementation_transaction.ownership_snapshot.SnapshotError,
+            ) as exc:
+                raise HandoffError(
+                    "TRANSACTION_CORRUPT", f"envelope[{offset}] before snapshot is invalid"
+                ) from exc
+            frozen = events.get(("ENVELOPE_FROZEN", envelope["envelope_ref"]), [])
+            started = events.get(("WORKER_CALL_STARTED", envelope["envelope_ref"]), [])
+            invalidated = events.get(
+                ("ENVELOPE_INVALIDATED_BEFORE_DISPATCH", envelope["envelope_ref"]), []
+            )
+            if len(frozen) != 1:
+                raise HandoffError(
+                    "TRANSACTION_CORRUPT",
+                    f"envelope[{offset}] lacks exactly one frozen fact",
+                )
+            if (
+                set(frozen[0])
+                != {
+                    "envelopeRef",
+                    "taskId",
+                    "criterionRefs",
+                    "allowedPaths",
+                    "forbiddenPaths",
+                    "beforeIdentity",
+                }
+                or frozen[0].get("envelopeRef") != envelope["envelope_ref"]
+                or frozen[0].get("taskId") != task_id
+                or frozen[0].get("criterionRefs") != criterion_refs
+                or frozen[0].get("allowedPaths") != allowed_paths
+                or frozen[0].get("forbiddenPaths") != forbidden_paths
+                or frozen[0].get("beforeIdentity") != before["identity"]
+            ):
+                raise HandoffError(
+                    "TRANSACTION_CORRUPT", f"envelope[{offset}] immutable facts differ from its row"
+                )
+            is_candidate = len(started) == 1 and len(invalidated) == 0
+            is_invalidated = len(started) == 0 and len(invalidated) == 1
+            if not is_candidate and not is_invalidated:
+                raise HandoffError(
+                    "TRANSACTION_CORRUPT",
+                    f"envelope[{offset}] has an invalid dispatch/invalidation fact combination",
+                )
+            if is_candidate and (
+                set(started[0]) != {"envelopeRef", "selectedWorker"}
+                or started[0].get("envelopeRef") != envelope["envelope_ref"]
+                or started[0].get("selectedWorker") != transaction["selected_worker"]
+            ):
+                raise HandoffError(
+                    "TRANSACTION_CORRUPT",
+                    f"envelope[{offset}] Worker-start fact differs from the selected Worker",
+                )
+            if is_invalidated:
+                invalidation = invalidated[0]
+                try:
+                    after_raw = bytes(envelope["after_snapshot_json"])
+                except (TypeError, ValueError) as exc:
+                    raise HandoffError(
+                        "TRANSACTION_CORRUPT",
+                        f"envelope[{offset}] invalidation after snapshot is unreadable",
+                    ) from exc
+                if hashlib.sha256(after_raw).hexdigest() != envelope["after_snapshot_sha256"]:
+                    raise HandoffError(
+                        "TRANSACTION_CORRUPT",
+                        f"envelope[{offset}] invalidation after snapshot digest differs",
+                    )
+                try:
+                    after = implementation_transaction.ownership_snapshot.validate_snapshot(
+                        json.loads(after_raw), expected_project_root=transaction["project_root"]
+                    )
+                    delta = json.loads(bytes(envelope["delta_json"]))
+                    reconciliation = json.loads(bytes(envelope["reconciliation_json"]))
+                except (
+                    TypeError,
+                    UnicodeDecodeError,
+                    json.JSONDecodeError,
+                    implementation_transaction.ownership_snapshot.SnapshotError,
+                ) as exc:
+                    raise HandoffError(
+                        "TRANSACTION_CORRUPT",
+                        f"envelope[{offset}] invalidation row is unreadable or invalid",
+                    ) from exc
+                changed_paths = delta.get("changedPaths") if isinstance(delta, dict) else None
+                expected_reconciliation: dict[str, Any] = {
+                    "disposition": "CONTINUE",
+                    "workerAttributablePaths": [],
+                    "externalPaths": changed_paths,
+                    "preservedUserChanges": changed_paths,
+                    "externalEffectState": "CLEAR",
+                }
+                expected_invalidation = {
+                    "envelopeRef": envelope["envelope_ref"],
+                    "oldIdentity": before["identity"],
+                    "newIdentity": after["identity"],
+                    "changedPaths": changed_paths,
+                    "workerAttributablePaths": [],
+                    "externalPaths": changed_paths,
+                    "preservedUserChanges": changed_paths,
+                }
+                if (
+                    envelope["state"] != "RECONCILED"
+                    or not isinstance(delta, dict)
+                    or delta.get("beforeIdentity") != before["identity"]
+                    or delta.get("afterIdentity") != after["identity"]
+                    or not isinstance(changed_paths, list)
+                    or reconciliation != expected_reconciliation
+                    or set(invalidation) != INVALIDATION_EVENT_FIELDS
+                    or invalidation != expected_invalidation
+                ):
+                    raise HandoffError(
+                        "TRANSACTION_CORRUPT",
+                        f"envelope[{offset}] invalidation identity or path partition differs",
+                    )
+            if not isinstance(criterion_refs, list):
+                raise HandoffError(
+                    "TRANSACTION_CORRUPT", f"envelope[{offset}] criterion refs are malformed"
+                )
+            seen: set[tuple[int, str]] = set()
+            for raw_ref in criterion_refs:
+                if not isinstance(raw_ref, dict) or set(raw_ref) != {
+                    "criterionIndex",
+                    "criterionRawSha256",
+                }:
+                    raise HandoffError(
+                        "TRANSACTION_CORRUPT", f"envelope[{offset}] criterion ref is malformed"
+                    )
+                identity = (raw_ref["criterionIndex"], raw_ref["criterionRawSha256"])
+                if identity not in expected or raw_ref != expected[identity] or identity in seen:
+                    raise HandoffError(
+                        "ACCEPTANCE_CRITERIA_MISMATCH",
+                        f"envelope[{offset}] criterion identity is stale or duplicated",
+                    )
+                seen.add(identity)
+                if is_candidate:
+                    tasks_by_criterion[identity].add(task_id)
+        return [
+            {
+                **criterion,
+                "taskIds": sorted(
+                    tasks_by_criterion[
+                        (criterion["criterionIndex"], criterion["criterionRawSha256"])
+                    ]
+                ),
+            }
+            for criterion in criteria
+        ]
+
+    @staticmethod
+    def _validate_caller_accounting(raw: Any, derived: list[dict[str, Any]]) -> None:
+        if not isinstance(raw, list) or len(raw) != len(derived):
+            raise HandoffError(
+                "INCOMPLETE_CRITERION_ACCOUNTING", "criterionAccounting must contain every exact AC"
+            )
+        for offset, (item, expected) in enumerate(zip(raw, derived)):
+            if not isinstance(item, Mapping) or set(item) != {
+                "criterionIndex",
+                "criterionRawSha256",
+                "taskIds",
+            }:
+                raise HandoffError(
+                    "MALFORMED_HANDOFF", f"criterionAccounting[{offset}] is malformed"
+                )
+            if (
+                item["criterionIndex"] != expected["criterionIndex"]
+                or item["criterionRawSha256"] != expected["criterionRawSha256"]
+            ):
+                raise HandoffError(
+                    "ACCEPTANCE_CRITERIA_MISMATCH",
+                    f"criterionAccounting[{offset}] is stale or reordered",
+                )
+            if item["taskIds"] != expected["taskIds"]:
+                raise HandoffError(
+                    "INCOMPLETE_CRITERION_ACCOUNTING",
+                    f"criterionAccounting[{offset}] differs from publisher-derived task linkage/order",
+                )
 
     def publish(self, request: Mapping[str, Any]) -> dict[str, Any]:
         request = _mapping(request, "ImplementationHandoff request")
@@ -355,9 +655,6 @@ class HandoffPublisher:
             raise HandoffError("IMPLEMENTATION_TRANSACTION_NOT_READY", "transaction is not ready for handoff")
         if transaction["planningIdentity"] != planning_identity:
             raise HandoffError("PLANNING_INPUT_CHANGED", "transaction planning identity differs")
-        criterion_accounting = _validate_criterion_accounting(
-            request["criterionAccounting"], criteria, transaction
-        )
         project_root = Path(transaction["projectRoot"])
         final_identity = transaction["finalSourceIdentity"]
         baseline_identity = transaction["baselineSourceIdentity"]
@@ -376,71 +673,110 @@ class HandoffPublisher:
                 self.transactions.capsules.release_read(lease["readLeaseId"])
         except baseline_capsule.CapsuleError as exc:
             raise HandoffError(exc.code, exc.message) from exc
-        self._currentness_validator(
-            planning_seal=planning_seal,
-            criteria=criteria,
-            project_root=project_root,
-            final_identity=final_identity,
-        )
-        handoff_ref = workflow_store.allocate_ref("IMPLEMENTATION_HANDOFF")
-        completed_at = datetime.now(timezone.utc).isoformat()
-        payload = {
-            "protocolVersion": PROTOCOL_VERSION,
-            "implementationHandoffRef": handoff_ref,
-            "implementationStatus": "IMPLEMENTATION_HANDOFF_COMPLETE",
-            "projectRoot": str(project_root),
-            "planningSeal": planning_seal,
-            "planningSealDigest": planning_identity,
-            "baselineCapsuleRef": transaction["baselineCapsuleRef"],
-            "baselineSourceIdentity": baseline_identity,
-            "finalSourceIdentity": final_identity,
-            "implementationDeltaRef": delta_ref,
-            "criterionAccounting": criterion_accounting,
-            "unresolvedImplementationItems": [],
-            "completedAt": completed_at,
-        }
-        def validator() -> None:
-            self._currentness_validator(
-                planning_seal=planning_seal,
-                criteria=criteria,
-                project_root=project_root,
-                final_identity=final_identity,
-            )
         try:
-            if transaction["mode"] == "INITIAL_IMPLEMENTATION":
-                if request["actorCapability"] is not None:
-                    raise HandoffError("ROLE_CAPABILITY_MISMATCH", "initial handoff has no verification actor")
-                node = self.workflow.publish_initial_handoff(
-                    node_ref=handoff_ref,
-                    protocol_version=PROTOCOL_VERSION,
-                    planning_identity=planning_identity,
-                    source_identity=final_identity,
-                    payload=payload,
-                    implementation_transaction_ref=transaction_ref,
-                    validate_currentness=validator,
+            with self.workflow._transaction() as connection:
+                locked = connection.execute(
+                    "SELECT * FROM implementation_transactions WHERE transaction_ref = ?",
+                    (transaction_ref,),
+                ).fetchone()
+                if locked is None or locked["state"] != "READY_FOR_HANDOFF":
+                    raise HandoffError(
+                        "IMPLEMENTATION_TRANSACTION_NOT_READY",
+                        "transaction is not ready for handoff",
+                    )
+                if (
+                    locked["project_root"] != str(project_root)
+                    or locked["planning_identity"] != planning_identity
+                    or locked["baseline_capsule_ref"] != transaction["baselineCapsuleRef"]
+                    or locked["baseline_source_identity"] != baseline_identity
+                    or locked["final_source_identity"] != final_identity
+                    or locked["implementation_delta_ref"] != delta_ref
+                ):
+                    raise HandoffError(
+                        "IMPLEMENTATION_TRANSACTION_MISMATCH",
+                        "transaction closure facts changed before publication",
+                    )
+                criterion_accounting = self._criterion_accounting_locked(
+                    connection,
+                    transaction_ref=transaction_ref,
+                    criteria=criteria,
                 )
-            elif transaction["mode"] == "VERIFICATION_REMEDIATION":
-                actor_capability = request["actorCapability"]
-                if not isinstance(actor_capability, str):
-                    raise HandoffError("ROLE_CAPABILITY_MISMATCH", "remediation handoff requires its Remediator")
-                claim_ref = transaction["claimRef"]
-                node = self.workflow.publish_successor(
-                    claimant_capability=actor_capability,
-                    claim_ref=claim_ref,
-                    node_ref=handoff_ref,
-                    node_kind="IMPLEMENTATION_HANDOFF",
-                    protocol_version=PROTOCOL_VERSION,
-                    planning_identity=planning_identity,
-                    source_identity=final_identity,
-                    verification_status=None,
-                    payload=payload,
-                    implementation_transaction_ref=transaction_ref,
-                    validate_currentness=validator,
+                self._validate_caller_accounting(
+                    request["criterionAccounting"], criterion_accounting
                 )
-            else:
-                raise HandoffError("MALFORMED_HANDOFF", "transaction mode is invalid")
+                if locked["mode"] == "INITIAL_IMPLEMENTATION":
+                    if request["actorCapability"] is not None:
+                        raise HandoffError(
+                            "ROLE_CAPABILITY_MISMATCH", "initial handoff has no verification actor"
+                        )
+                elif locked["mode"] == "VERIFICATION_REMEDIATION":
+                    if not isinstance(request["actorCapability"], str):
+                        raise HandoffError(
+                            "ROLE_CAPABILITY_MISMATCH",
+                            "remediation handoff requires its Remediator",
+                        )
+                else:
+                    raise HandoffError("MALFORMED_HANDOFF", "transaction mode is invalid")
+
+                # This is deliberately inside the same BEGIN IMMEDIATE that inserts
+                # the immutable node and HANDOFF_PUBLISHED event.
+                self._currentness_validator(
+                    planning_seal=planning_seal,
+                    criteria=criteria,
+                    project_root=project_root,
+                    final_identity=final_identity,
+                )
+                handoff_ref = workflow_store.allocate_ref("IMPLEMENTATION_HANDOFF")
+                completed_at = datetime.now(timezone.utc).isoformat()
+                payload = {
+                    "protocolVersion": PROTOCOL_VERSION,
+                    "implementationHandoffRef": handoff_ref,
+                    "implementationStatus": "IMPLEMENTATION_HANDOFF_COMPLETE",
+                    "projectRoot": str(project_root),
+                    "planningSeal": planning_seal,
+                    "planningSealDigest": planning_identity,
+                    "baselineCapsuleRef": locked["baseline_capsule_ref"],
+                    "baselineSourceIdentity": locked["baseline_source_identity"],
+                    "finalSourceIdentity": locked["final_source_identity"],
+                    "implementationDeltaRef": locked["implementation_delta_ref"],
+                    "criterionAccounting": criterion_accounting,
+                    "unresolvedImplementationItems": [],
+                    "completedAt": completed_at,
+                }
+                if locked["mode"] == "INITIAL_IMPLEMENTATION":
+                    node = self.workflow._close_initial_handoff_locked(
+                        connection,
+                        node_ref=handoff_ref,
+                        protocol_version=PROTOCOL_VERSION,
+                        planning_identity=planning_identity,
+                        source_identity=final_identity,
+                        payload=payload,
+                        implementation_transaction_ref=transaction_ref,
+                        created_at=completed_at,
+                    )
+                else:
+                    node = self.workflow._close_successor_locked(
+                        connection,
+                        claimant_capability=request["actorCapability"],
+                        claim_ref=locked["claim_ref"],
+                        node_ref=handoff_ref,
+                        node_kind="IMPLEMENTATION_HANDOFF",
+                        protocol_version=PROTOCOL_VERSION,
+                        planning_identity=planning_identity,
+                        source_identity=final_identity,
+                        verification_status=None,
+                        payload=payload,
+                        implementation_transaction_ref=transaction_ref,
+                        created_at=completed_at,
+                    )
+        except HandoffError:
+            raise
         except workflow_store.WorkflowStoreError as exc:
             raise HandoffError(exc.code, exc.message) from exc
+        except sqlite3.IntegrityError as exc:
+            raise HandoffError(
+                "ATOMIC_PUBLICATION_CONFLICT", "handoff publication conflicted"
+            ) from exc
         if node["payload"] != payload:
             raise HandoffError("PUBLICATION_FAILED", "stored handoff readback differs")
         return payload
@@ -489,6 +825,7 @@ def _read_request(path: Path) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workflow-root", default=os.environ.get("IMPLEMENTATION_WORKFLOW_STORE", str(DEFAULT_WORKFLOW_ROOT)))
+    parser.add_argument("--workflow-guard-fd", type=int)
     parser.add_argument("--capsule-store", default=os.environ.get("BASELINE_CAPSULE_STORE"))
     parser.add_argument("--historical-root", default=os.environ.get("IMPLEMENTATION_RESULT_STORE", str(DEFAULT_HISTORICAL_ROOT)))
     commands = parser.add_subparsers(dest="command", required=True)
@@ -499,7 +836,23 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "publish":
-            result = HandoffPublisher(args.workflow_root, args.capsule_store).publish(
+            if args.workflow_guard_fd is None:
+                raise HandoffError(
+                    "AUDIT_GUARD_REQUIRED",
+                    "publish requires a caller-owned deployment workflow lock fd",
+                )
+            try:
+                guard = (
+                    implementation_transaction.workflow_store.guard_session_from_locked_fd(
+                        args.workflow_guard_fd,
+                        store_root=args.workflow_root,
+                    )
+                )
+            except implementation_transaction.workflow_store.WorkflowStoreError as exc:
+                raise HandoffError(exc.code, exc.message) from exc
+            result = HandoffPublisher(
+                args.workflow_root, args.capsule_store, guard=guard
+            ).publish(
                 _read_request(Path(args.request))
             )
         else:

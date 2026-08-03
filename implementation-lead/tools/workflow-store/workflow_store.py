@@ -9,12 +9,14 @@ verification step.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
 import secrets
 import sqlite3
 import stat
+import sys
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -22,8 +24,10 @@ from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping
 
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 9
+EXECUTOR_FLOOR = "process-v3"
 DEFAULT_STORE_ROOT = Path.home() / ".local/state/opencode/implementation-workflows"
+PREOPEN_MODULE = Path(__file__).with_name("workflow_store_preopen.py")
 
 NODE_KINDS = {"IMPLEMENTATION_HANDOFF", "VERIFICATION_RESULT"}
 TRANSITION_KINDS = {"VERIFY", "REMEDIATE"}
@@ -55,6 +59,79 @@ CAPABILITY_PATTERN = re.compile(r"^cap:v1:[a-f0-9]{64}$")
 
 MAX_PAYLOAD_BYTES = 1024 * 1024
 MAX_LINEAGE_NODES = 1024
+
+
+def _load_preopen_module() -> Any:
+    name = "implementation_workflow_store_preopen_runtime"
+    existing = sys.modules.get(name)
+    if existing is not None:
+        return existing
+    spec = importlib.util.spec_from_file_location(name, PREOPEN_MODULE)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("workflow-store pre-open auditor cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def guard_session_from_locked_fd(fd: int, *, store_root: Path | str) -> Any:
+    """Acquire and bind a GuardSession to one root-scoped Unix lock descriptor.
+
+    Acquiring this lock does not make legacy writers participate.  Deployment
+    must still quiesce or fence revisions that do not use the same lock.  The
+    descriptor remains caller-owned and must stay open through audited open;
+    this helper acquires its lock and binds the minted session to ``store_root``.
+    """
+
+    if isinstance(fd, bool) or not isinstance(fd, int) or fd < 0:
+        raise WorkflowStoreError("AUDIT_GUARD_REQUIRED", "guard fd must be non-negative")
+    try:
+        import fcntl
+
+        observed = os.fstat(fd)
+        if not stat.S_ISREG(observed.st_mode):
+            raise OSError("guard descriptor is not a regular file")
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (ImportError, OSError) as exc:
+        raise WorkflowStoreError(
+            "AUDIT_GUARD_NOT_HELD", "guard fd is unavailable or not exclusively locked"
+        ) from exc
+    identity = f"locked-fd:{observed.st_dev}:{observed.st_ino}"
+
+    def is_active() -> bool:
+        try:
+            current = os.fstat(fd)
+            if (current.st_dev, current.st_ino) != (observed.st_dev, observed.st_ino):
+                return False
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except OSError:
+            return False
+
+    return _load_preopen_module()._mint_guard_session(
+        identity=identity,
+        kind="EXCLUSIVE_LOCK",
+        is_active=is_active,
+        raw_root=store_root,
+    )
+
+
+def _mint_test_guard_session(
+    *,
+    store_root: Path | str,
+    identity: str,
+    is_active: Callable[[], bool],
+    kind: str = "QUIESCENCE",
+) -> Any:
+    """Private deterministic guard seam for isolated regression fixtures."""
+
+    return _load_preopen_module()._mint_guard_session(
+        identity=identity,
+        kind=kind,
+        is_active=is_active,
+        raw_root=store_root,
+    )
 
 
 class WorkflowStoreError(RuntimeError):
@@ -182,14 +259,69 @@ def _validate_node_payload(
 class WorkflowStore:
     """SQLite-backed append-only graph with atomic claim consumption."""
 
+    store_root: Path
+    database_path: Path
+    audit_report: Any
+
     def __init__(self, store_root: Path | str = DEFAULT_STORE_ROOT) -> None:
-        self.store_root = Path(store_root).expanduser().resolve()
-        self.store_root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        if self.store_root.is_symlink() or not self.store_root.is_dir():
-            raise WorkflowStoreError("INVALID_STORE", "workflow store root must be a real directory")
-        os.chmod(self.store_root, 0o700)
-        self.database_path = self.store_root / "workflow.sqlite3"
-        self._initialize()
+        del store_root
+        raise WorkflowStoreError(
+            "AUDITED_OPEN_REQUIRED",
+            "WorkflowStore opens only through audit_and_open_workflow_store()",
+        )
+
+    @classmethod
+    def _open_from_audit(
+        cls,
+        canonical_root: Path,
+        report: Any,
+        *,
+        guard: Any,
+        migration_hook: Callable[[str], None] | None = None,
+    ) -> WorkflowStore:
+        """Consume an admitted lease callback without re-entering the public constructor."""
+
+        guard.assert_active()
+        root = Path(canonical_root)
+        if not root.is_absolute() or str(root) != report.source_manifest.canonical_root:
+            raise WorkflowStoreError(
+                "AUDIT_ROOT_MISMATCH", "audited root differs from the constructor target"
+            )
+        expected_database = str(root / "workflow.sqlite3")
+        if report.source_manifest.canonical_database_path != expected_database:
+            raise WorkflowStoreError(
+                "AUDIT_ROOT_MISMATCH", "audited database path differs from the constructor target"
+            )
+        if report.disposition == "NO_STORE":
+            root.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            if root.resolve(strict=False) != root:
+                raise WorkflowStoreError(
+                    "AUDIT_SOURCE_CHANGED",
+                    "workflow root parent changed after the absence audit",
+                )
+            try:
+                root.mkdir(mode=0o700)
+            except FileExistsError as exc:
+                raise WorkflowStoreError(
+                    "AUDIT_SOURCE_CHANGED", "workflow root appeared after the absence audit"
+                ) from exc
+        elif report.disposition == "CLEAR":
+            if root.is_symlink() or not root.is_dir():
+                raise WorkflowStoreError(
+                    "AUDIT_SOURCE_CHANGED", "audited workflow root is no longer a real directory"
+                )
+        else:
+            raise WorkflowStoreError(
+                "WORKFLOW_STORE_OPEN_BLOCKED", "a blocked audit cannot initialize a store"
+            )
+
+        instance = cls.__new__(cls)
+        instance.store_root = root
+        instance.database_path = root / "workflow.sqlite3"
+        instance.audit_report = report
+        instance._initialize_from_audit(guard=guard, migration_hook=migration_hook)
+        instance._enforce_owner_only_modes()
+        return instance
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path, timeout=30.0, isolation_level=None)
@@ -220,10 +352,246 @@ class WorkflowStore:
             connection.close()
             self._enforce_owner_only_modes()
 
-    def _initialize(self) -> None:
+    @staticmethod
+    def _migration_checkpoint(
+        hook: Callable[[str], None] | None, stage: str
+    ) -> None:
+        if hook is not None:
+            hook(stage)
+
+    def _initialize_from_audit(
+        self,
+        *,
+        guard: Any,
+        migration_hook: Callable[[str], None] | None,
+    ) -> None:
+        report = self.audit_report
+        guard.assert_active()
+        if report.disposition == "NO_STORE":
+            if report.schema_version is not None:
+                raise WorkflowStoreError(
+                    "AUDIT_REPORT_INVALID", "absence audit unexpectedly contains a schema"
+                )
+            self._bootstrap_fresh(guard=guard)
+            return
+        if report.disposition != "CLEAR" or report.schema_version not in {7, SCHEMA_VERSION}:
+            raise WorkflowStoreError(
+                "WORKFLOW_STORE_OPEN_BLOCKED", "audit did not admit this schema for opening"
+            )
+
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT value FROM store_meta WHERE key = 'schema_version'"
+            ).fetchall()
+            if len(row) != 1 or row[0]["value"] != str(report.schema_version):
+                raise WorkflowStoreError(
+                    "AUDIT_SOURCE_CHANGED", "schema version differs from the admitted audit"
+                )
+            if report.schema_version == 7:
+                self._migrate_v7_to_v9_locked(
+                    connection, migration_hook=migration_hook
+                )
+            else:
+                self._verify_v9_locked(connection)
+            guard.assert_active()
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def _migrate_v7_to_v9_locked(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        migration_hook: Callable[[str], None] | None,
+    ) -> None:
+        multiple_active = connection.execute(
+            """
+            SELECT transaction_ref, COUNT(*) AS amount
+            FROM implementation_envelopes
+            WHERE state != 'RECONCILED'
+            GROUP BY transaction_ref
+            HAVING COUNT(*) > 1
+            LIMIT 1
+            """
+        ).fetchone()
+        if multiple_active is not None:
+            raise WorkflowStoreError(
+                "UPGRADE_BLOCKED_LEGACY_ENVELOPES",
+                "legacy transaction has multiple active envelopes",
+            )
+        legacy_continuation = connection.execute(
+            """
+            SELECT ie.envelope_ref
+            FROM implementation_envelopes AS ie
+            JOIN implementation_transactions AS it
+              ON it.transaction_ref = ie.transaction_ref
+            WHERE it.state IN ('OPEN', 'WORKER_ACTIVE', 'RECONCILING', 'READY_FOR_HANDOFF')
+              AND ie.state IN ('DISPATCHED', 'CAPTURED', 'RECONCILED')
+            LIMIT 1
+            """
+        ).fetchone()
+        if legacy_continuation is not None:
+            raise WorkflowStoreError(
+                "UPGRADE_BLOCKED_LEGACY_ENVELOPES",
+                "legacy-dispatched envelope cannot gain continuation authority",
+            )
+        open_run = connection.execute(
+            "SELECT run_ref FROM verification_runs WHERE state != 'CLOSED' LIMIT 1"
+        ).fetchone()
+        if open_run is not None:
+            raise WorkflowStoreError(
+                "UPGRADE_BLOCKED_LEGACY_EXECUTOR",
+                "non-closed legacy verification run requires controlled drain",
+            )
+
+        columns = (
+            "envelope_ref",
+            "transaction_ref",
+            "task_id",
+            "criterion_refs_json",
+            "allowed_paths_json",
+            "forbidden_paths_json",
+            "before_snapshot_json",
+            "before_snapshot_sha256",
+            "after_snapshot_json",
+            "after_snapshot_sha256",
+            "delta_json",
+            "reconciliation_json",
+            "state",
+            "created_at",
+            "closed_at",
+        )
+        column_sql = ", ".join(columns)
+        before_rows = [
+            tuple(row)
+            for row in connection.execute(
+                f"SELECT {column_sql} FROM implementation_envelopes ORDER BY envelope_ref"
+            ).fetchall()
+        ]
+        connection.execute(
+            "ALTER TABLE implementation_envelopes RENAME TO implementation_envelopes_v7"
+        )
+        self._migration_checkpoint(migration_hook, "after_rename")
+        connection.execute(
+            """CREATE TABLE implementation_envelopes (
+                    envelope_ref TEXT PRIMARY KEY,
+                    transaction_ref TEXT NOT NULL REFERENCES implementation_transactions(transaction_ref),
+                    task_id TEXT NOT NULL,
+                    criterion_refs_json BLOB NOT NULL,
+                    allowed_paths_json BLOB NOT NULL,
+                    forbidden_paths_json BLOB NOT NULL,
+                    before_snapshot_json BLOB NOT NULL,
+                    before_snapshot_sha256 TEXT NOT NULL,
+                    after_snapshot_json BLOB,
+                    after_snapshot_sha256 TEXT,
+                    delta_json BLOB,
+                    reconciliation_json BLOB,
+                    state TEXT NOT NULL CHECK (state IN ('FROZEN', 'DISPATCHED', 'CAPTURED', 'RECONCILED')),
+                    created_at TEXT NOT NULL,
+                    closed_at TEXT
+                )"""
+        )
+        connection.execute(
+            f"INSERT INTO implementation_envelopes({column_sql}) "
+            f"SELECT {column_sql} FROM implementation_envelopes_v7"
+        )
+        copied_rows = [
+            tuple(row)
+            for row in connection.execute(
+                f"SELECT {column_sql} FROM implementation_envelopes ORDER BY envelope_ref"
+            ).fetchall()
+        ]
+        if copied_rows != before_rows:
+            raise WorkflowStoreError(
+                "STORE_MIGRATION_FAILED", "envelope rows changed during v9 migration"
+            )
+        self._migration_checkpoint(migration_hook, "after_copy")
+        connection.execute("DROP TABLE implementation_envelopes_v7")
+        connection.execute(
+            """CREATE INDEX implementation_envelopes_by_transaction
+                    ON implementation_envelopes(transaction_ref)"""
+        )
+        connection.execute(
+            """CREATE UNIQUE INDEX one_active_envelope_per_transaction
+                    ON implementation_envelopes(transaction_ref) WHERE state != 'RECONCILED'"""
+        )
+        self._migration_checkpoint(migration_hook, "after_indexes")
+        foreign_key_issues = connection.execute("PRAGMA foreign_key_check").fetchall()
+        if foreign_key_issues:
+            raise WorkflowStoreError(
+                "STORE_MIGRATION_FAILED", "foreign-key check failed during v9 migration"
+            )
+        existing_floor = connection.execute(
+            "SELECT value FROM store_meta WHERE key = 'executor_floor'"
+        ).fetchall()
+        if existing_floor:
+            raise WorkflowStoreError(
+                "STORE_MIGRATION_FAILED", "legacy store already has an executor floor"
+            )
+        connection.execute(
+            "INSERT INTO store_meta(key, value) VALUES ('executor_floor', ?)",
+            (EXECUTOR_FLOOR,),
+        )
+        self._migration_checkpoint(migration_hook, "before_version")
+        updated = connection.execute(
+            "UPDATE store_meta SET value = ? WHERE key = 'schema_version' AND value = '7'",
+            (str(SCHEMA_VERSION),),
+        )
+        if updated.rowcount != 1:
+            raise WorkflowStoreError(
+                "STORE_MIGRATION_FAILED", "schema version changed during v9 migration"
+            )
+        self._migration_checkpoint(migration_hook, "after_version")
+        self._verify_v9_locked(connection)
+
+    @staticmethod
+    def _verify_v9_locked(connection: sqlite3.Connection) -> None:
+        rows = connection.execute(
+            "SELECT key, value FROM store_meta WHERE key IN ('schema_version', 'executor_floor')"
+        ).fetchall()
+        values = {str(row["key"]): str(row["value"]) for row in rows}
+        if values != {
+            "schema_version": str(SCHEMA_VERSION),
+            "executor_floor": EXECUTOR_FLOOR,
+        }:
+            raise WorkflowStoreError(
+                "UNSUPPORTED_STORE", "workflow schema or executor floor differs"
+            )
+        table = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'implementation_envelopes'"
+        ).fetchone()
+        if table is None or table["sql"] is None:
+            raise WorkflowStoreError("STORE_CORRUPT", "implementation envelope table is absent")
+        normalized_sql = " ".join(str(table["sql"]).split()).lower()
+        if "unique(transaction_ref, task_id)" in normalized_sql:
+            raise WorkflowStoreError(
+                "STORE_CORRUPT", "legacy same-task uniqueness remains in schema v9"
+            )
+        indexes = {
+            str(row["name"]): (int(row["unique"]), int(row["partial"]))
+            for row in connection.execute(
+                "PRAGMA index_list('implementation_envelopes')"
+            ).fetchall()
+        }
+        if indexes.get("implementation_envelopes_by_transaction") != (0, 0) or indexes.get(
+            "one_active_envelope_per_transaction"
+        ) != (1, 1):
+            raise WorkflowStoreError(
+                "STORE_CORRUPT", "schema v9 envelope indexes are incomplete"
+            )
+        if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+            raise WorkflowStoreError("STORE_CORRUPT", "workflow foreign-key check failed")
+
+    def _bootstrap_fresh(self, *, guard: Any) -> None:
         with self._transaction() as connection:
             connection.executescript(
                 """
+                BEGIN IMMEDIATE;
                 CREATE TABLE IF NOT EXISTS store_meta (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
@@ -349,8 +717,7 @@ class WorkflowStore:
                     reconciliation_json BLOB,
                     state TEXT NOT NULL CHECK (state IN ('FROZEN', 'DISPATCHED', 'CAPTURED', 'RECONCILED')),
                     created_at TEXT NOT NULL,
-                    closed_at TEXT,
-                    UNIQUE(transaction_ref, task_id)
+                    closed_at TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS implementation_checks (
@@ -449,6 +816,10 @@ class WorkflowStore:
                     ON claims(tip_ref) WHERE state = 'ACTIVE';
                 CREATE UNIQUE INDEX IF NOT EXISTS one_active_claim_per_root
                     ON claims(root_ref) WHERE state = 'ACTIVE';
+                CREATE INDEX IF NOT EXISTS implementation_envelopes_by_transaction
+                    ON implementation_envelopes(transaction_ref);
+                CREATE UNIQUE INDEX IF NOT EXISTS one_active_envelope_per_transaction
+                    ON implementation_envelopes(transaction_ref) WHERE state != 'RECONCILED';
 
                 CREATE TRIGGER IF NOT EXISTS nodes_no_update
                 BEFORE UPDATE ON nodes BEGIN SELECT RAISE(ABORT, 'immutable nodes'); END;
@@ -491,20 +862,20 @@ class WorkflowStore:
                 """
             )
             row = connection.execute("SELECT value FROM store_meta WHERE key = 'schema_version'").fetchone()
-            if row is None:
-                connection.execute(
-                    "INSERT INTO store_meta(key, value) VALUES ('schema_version', ?)",
-                    (str(SCHEMA_VERSION),),
+            if row is not None:
+                raise WorkflowStoreError(
+                    "AUDIT_SOURCE_CHANGED", "fresh bootstrap found an existing schema"
                 )
-            elif row["value"] == "6":
-                # v7 adds only the owner-controlled exactly-once verification-step
-                # execution table and its delete guard, both created idempotently above.
-                connection.execute(
-                    "UPDATE store_meta SET value = ? WHERE key = 'schema_version'",
-                    (str(SCHEMA_VERSION),),
-                )
-            elif row["value"] != str(SCHEMA_VERSION):
-                raise WorkflowStoreError("UNSUPPORTED_STORE", "workflow store schema version differs")
+            connection.execute(
+                "INSERT INTO store_meta(key, value) VALUES ('schema_version', ?)",
+                (str(SCHEMA_VERSION),),
+            )
+            connection.execute(
+                "INSERT INTO store_meta(key, value) VALUES ('executor_floor', ?)",
+                (EXECUTOR_FLOOR,),
+            )
+            self._verify_v9_locked(connection)
+            guard.assert_active()
 
     @staticmethod
     def _node_view(row: sqlite3.Row) -> dict[str, Any]:
@@ -528,17 +899,30 @@ class WorkflowStore:
             "createdAt": row["created_at"],
         }
 
-    def publish_initial_handoff(
+    def publish_initial_handoff(self, **_: Any) -> dict[str, Any]:
+        """Retired generic publication surface.
+
+        Initial handoffs are semantic artifacts owned by ``HandoffPublisher``.
+        Mechanics-only tests seed their local SQLite fixture directly.
+        """
+        raise WorkflowStoreError(
+            "PUBLICATION_SURFACE_RETIRED",
+            "initial handoffs publish only through HandoffPublisher",
+        )
+
+    def _close_initial_handoff_locked(
         self,
+        connection: sqlite3.Connection,
         *,
         node_ref: str,
         protocol_version: str,
         planning_identity: str,
         source_identity: str,
         payload: Mapping[str, Any],
-        implementation_transaction_ref: str | None = None,
-        validate_currentness: Callable[[], None] | None = None,
+        implementation_transaction_ref: str,
+        created_at: str,
     ) -> dict[str, Any]:
+        """Insert one publisher-derived initial handoff on the caller's transaction."""
         encoded = _validate_node_payload(
             node_ref=node_ref,
             node_kind="IMPLEMENTATION_HANDOFF",
@@ -548,83 +932,84 @@ class WorkflowStore:
             verification_status=None,
             payload=_mapping(payload, "payload"),
         )
-        created_at = utc_now()
-        try:
-            with self._transaction() as connection:
-                transaction = None
-                if implementation_transaction_ref is not None:
-                    transaction = connection.execute(
-                        "SELECT * FROM implementation_transactions WHERE transaction_ref = ?",
-                        (implementation_transaction_ref,),
-                    ).fetchone()
-                    if (
-                        transaction is None
-                        or transaction["mode"] != "INITIAL_IMPLEMENTATION"
-                        or transaction["state"] != "READY_FOR_HANDOFF"
-                    ):
-                        raise WorkflowStoreError(
-                            "IMPLEMENTATION_TRANSACTION_NOT_READY",
-                            "initial handoff requires one ready initial transaction",
-                        )
-                    if (
-                        transaction["planning_identity"] != planning_identity
-                        or transaction["final_source_identity"] != source_identity
-                        or payload.get("baselineSourceIdentity") != transaction["baseline_source_identity"]
-                        or payload.get("baselineCapsuleRef") != transaction["baseline_capsule_ref"]
-                        or payload.get("implementationDeltaRef") != transaction["implementation_delta_ref"]
-                    ):
-                        raise WorkflowStoreError(
-                            "IMPLEMENTATION_TRANSACTION_MISMATCH",
-                            "handoff facts differ from the ready transaction",
-                        )
-                if validate_currentness is not None:
-                    validate_currentness()
-                connection.execute(
-                    """
-                    INSERT INTO nodes(
-                        node_ref, node_kind, protocol_version, root_ref, planning_identity,
-                        source_identity, verification_status, payload_json, payload_sha256, created_at
-                    ) VALUES (?, 'IMPLEMENTATION_HANDOFF', ?, ?, ?, ?, NULL, ?, ?, ?)
-                    """,
-                    (
-                        node_ref,
-                        protocol_version,
-                        node_ref,
-                        planning_identity,
-                        source_identity,
-                        encoded,
-                        hashlib.sha256(encoded).hexdigest(),
-                        created_at,
-                    ),
-                )
-                row = connection.execute("SELECT * FROM nodes WHERE node_ref = ?", (node_ref,)).fetchone()
-                assert row is not None
-                view = self._node_view(row)
-                if transaction is not None:
-                    connection.execute(
-                        """
-                        UPDATE implementation_transactions
-                        SET state = 'CLOSED_WITH_HANDOFF', closed_at = ?
-                        WHERE transaction_ref = ? AND state = 'READY_FOR_HANDOFF'
-                        """,
-                        (created_at, implementation_transaction_ref),
-                    )
-                    event_payload = canonical_json({"implementationHandoffRef": node_ref})
-                    connection.execute(
-                        """
-                        INSERT INTO implementation_events(
-                            transaction_ref, event_kind, payload_json, payload_sha256, created_at
-                        ) VALUES (?, 'HANDOFF_PUBLISHED', ?, ?, ?)
-                        """,
-                        (
-                            implementation_transaction_ref,
-                            event_payload,
-                            hashlib.sha256(event_payload).hexdigest(),
-                            created_at,
-                        ),
-                    )
-        except sqlite3.IntegrityError as exc:
-            raise WorkflowStoreError("IMMUTABLE_NODE_EXISTS", f"refusing duplicate node: {node_ref}") from exc
+        transaction = connection.execute(
+            "SELECT * FROM implementation_transactions WHERE transaction_ref = ?",
+            (implementation_transaction_ref,),
+        ).fetchone()
+        if (
+            transaction is None
+            or transaction["mode"] != "INITIAL_IMPLEMENTATION"
+            or transaction["state"] != "READY_FOR_HANDOFF"
+            or transaction["root_ref"] is not None
+            or transaction["claim_ref"] is not None
+        ):
+            raise WorkflowStoreError(
+                "IMPLEMENTATION_TRANSACTION_NOT_READY",
+                "initial handoff requires one ready initial transaction",
+            )
+        if (
+            transaction["planning_identity"] != planning_identity
+            or transaction["final_source_identity"] != source_identity
+            or payload.get("projectRoot") != transaction["project_root"]
+            or payload.get("baselineSourceIdentity") != transaction["baseline_source_identity"]
+            or payload.get("baselineCapsuleRef") != transaction["baseline_capsule_ref"]
+            or payload.get("implementationDeltaRef") != transaction["implementation_delta_ref"]
+        ):
+            raise WorkflowStoreError(
+                "IMPLEMENTATION_TRANSACTION_MISMATCH",
+                "handoff facts differ from the ready transaction",
+            )
+        payload_digest = hashlib.sha256(encoded).hexdigest()
+        connection.execute(
+            """
+            INSERT INTO nodes(
+                node_ref, node_kind, protocol_version, root_ref, planning_identity,
+                source_identity, verification_status, payload_json, payload_sha256, created_at
+            ) VALUES (?, 'IMPLEMENTATION_HANDOFF', ?, ?, ?, ?, NULL, ?, ?, ?)
+            """,
+            (
+                node_ref,
+                protocol_version,
+                node_ref,
+                planning_identity,
+                source_identity,
+                encoded,
+                payload_digest,
+                created_at,
+            ),
+        )
+        updated = connection.execute(
+            """
+            UPDATE implementation_transactions
+            SET state = 'CLOSED_WITH_HANDOFF', closed_at = ?
+            WHERE transaction_ref = ? AND state = 'READY_FOR_HANDOFF'
+            """,
+            (created_at, implementation_transaction_ref),
+        )
+        if updated.rowcount != 1:
+            raise WorkflowStoreError(
+                "IMPLEMENTATION_TRANSACTION_NOT_READY", "initial transaction changed during publication"
+            )
+        event_payload = canonical_json({"implementationHandoffRef": node_ref})
+        connection.execute(
+            """
+            INSERT INTO implementation_events(
+                transaction_ref, event_kind, payload_json, payload_sha256, created_at
+            ) VALUES (?, 'HANDOFF_PUBLISHED', ?, ?, ?)
+            """,
+            (
+                implementation_transaction_ref,
+                event_payload,
+                hashlib.sha256(event_payload).hexdigest(),
+                created_at,
+            ),
+        )
+        row = connection.execute("SELECT * FROM nodes WHERE node_ref = ?", (node_ref,)).fetchone()
+        if row is None:
+            raise WorkflowStoreError("STORE_CORRUPT", "published initial node is absent")
+        view = self._node_view(row)
+        if view["payloadSha256"] != payload_digest or view["payload"] != payload:
+            raise WorkflowStoreError("STORE_CORRUPT", "published initial node differs from canonical payload")
         return view
 
     def read_node(self, node_ref: str) -> dict[str, Any]:
@@ -1035,40 +1420,66 @@ class WorkflowStore:
                 "claim result closure must consume exactly one closure operation",
             )
         with self._transaction() as connection:
-            claimant = self._actor_for_capability_locked(connection, claimant_capability)
-            claim = connection.execute(
-                "SELECT * FROM claims WHERE claim_ref = ?", (claim_ref,)
-            ).fetchone()
-            if claim is None or claim["state"] != "ACTIVE":
-                raise WorkflowStoreError("CLAIM_NOT_ACTIVE", "claim is absent or already closed")
-            if claim["claimant_actor_ref"] != claimant["actor_ref"]:
-                raise WorkflowStoreError("CLAIM_ACTOR_MISMATCH", "capability does not own this claim")
-            reservation = connection.execute(
-                "SELECT * FROM budget_reservations WHERE reservation_ref = ?",
-                (claim["budget_reservation_ref"],),
-            ).fetchone()
-            if reservation is None or reservation["state"] != "ACTIVE":
-                raise WorkflowStoreError(
-                    "BUDGET_RESERVATION_NOT_ACTIVE", "claim budget reservation is absent or closed"
-                )
-            if reservation["invocation_ref"] != claimant["invocation_ref"]:
-                raise WorkflowStoreError("ACTOR_CONTEXT_MISMATCH", "claim budget invocation differs")
-            used = self._stored_budget(reservation["closure_used_json"], "reservation.CLOSURE.used")
-            if used["closureOperations"] > 0:
-                return used
-            reserved = self._stored_budget(
-                reservation["closure_reserved_json"], "reservation.CLOSURE.reserved"
+            return self._ensure_claim_closure_budget_locked(
+                connection,
+                claimant_capability=claimant_capability,
+                claim_ref=claim_ref,
+                amounts=normalized,
             )
-            next_used = _add_budget(used, normalized)
-            exceeded = [field for field in BUDGET_FIELDS if next_used[field] > reserved[field]]
-            if exceeded:
-                raise WorkflowStoreError(
-                    "BUDGET_RESERVATION_EXCEEDED", f"reservation exceeded: {', '.join(exceeded)}"
-                )
-            connection.execute(
-                "UPDATE budget_reservations SET closure_used_json = ? WHERE reservation_ref = ?",
-                (canonical_json(next_used), reservation["reservation_ref"]),
+
+    def _ensure_claim_closure_budget_locked(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        claimant_capability: str,
+        claim_ref: str,
+        amounts: Mapping[str, Any],
+    ) -> dict[str, int]:
+        """Charge result closure on the caller-owned workflow transaction."""
+        if not CLAIM_REF_PATTERN.fullmatch(claim_ref):
+            raise WorkflowStoreError("MALFORMED_CLAIM", "claim ref is malformed")
+        normalized = _budget_vector(amounts, "amounts")
+        if normalized["closureOperations"] != 1 or any(
+            normalized[field] != 0 for field in BUDGET_FIELDS if field != "closureOperations"
+        ):
+            raise WorkflowStoreError(
+                "MALFORMED_BUDGET",
+                "claim result closure must consume exactly one closure operation",
             )
+        claimant = self._actor_for_capability_locked(connection, claimant_capability)
+        claim = connection.execute(
+            "SELECT * FROM claims WHERE claim_ref = ?", (claim_ref,)
+        ).fetchone()
+        if claim is None or claim["state"] != "ACTIVE":
+            raise WorkflowStoreError("CLAIM_NOT_ACTIVE", "claim is absent or already closed")
+        if claim["claimant_actor_ref"] != claimant["actor_ref"]:
+            raise WorkflowStoreError("CLAIM_ACTOR_MISMATCH", "capability does not own this claim")
+        reservation = connection.execute(
+            "SELECT * FROM budget_reservations WHERE reservation_ref = ?",
+            (claim["budget_reservation_ref"],),
+        ).fetchone()
+        if reservation is None or reservation["state"] != "ACTIVE":
+            raise WorkflowStoreError(
+                "BUDGET_RESERVATION_NOT_ACTIVE", "claim budget reservation is absent or closed"
+            )
+        if reservation["invocation_ref"] != claimant["invocation_ref"]:
+            raise WorkflowStoreError("ACTOR_CONTEXT_MISMATCH", "claim budget invocation differs")
+        used = self._stored_budget(reservation["closure_used_json"], "reservation.CLOSURE.used")
+        if used["closureOperations"] > 0:
+            return used
+        reserved = self._stored_budget(
+            reservation["closure_reserved_json"], "reservation.CLOSURE.reserved"
+        )
+        next_used = _add_budget(used, normalized)
+        exceeded = [field for field in BUDGET_FIELDS if next_used[field] > reserved[field]]
+        if exceeded:
+            raise WorkflowStoreError(
+                "BUDGET_RESERVATION_EXCEEDED", f"reservation exceeded: {', '.join(exceeded)}"
+            )
+        connection.execute(
+            "UPDATE budget_reservations SET closure_used_json = ? WHERE reservation_ref = ?",
+            (canonical_json(next_used), reservation["reservation_ref"]),
+        )
         return next_used
 
     def close_budget_reservation(
@@ -1264,7 +1675,11 @@ class WorkflowStore:
         if not CLAIM_REF_PATTERN.fullmatch(claim_ref):
             raise WorkflowStoreError("MALFORMED_CLAIM", "claim ref is malformed")
         closed_at = utc_now()
-        closure_ref = f"closure:unstarted:v1:{uuid.uuid4().hex}"
+        # v1 closures predate atomic transfer of used reservation budget into
+        # invocation consumption.  A v2 marker identifies the prospective
+        # conservation path so the pre-open auditor can distinguish it from
+        # unprovable legacy nonzero releases.
+        closure_ref = f"closure:unstarted:v2:{uuid.uuid4().hex}"
         with self._transaction() as connection:
             claimant = self._actor_for_capability_locked(connection, claimant_capability)
             claim = connection.execute("SELECT * FROM claims WHERE claim_ref = ?", (claim_ref,)).fetchone()
@@ -1272,6 +1687,32 @@ class WorkflowStore:
                 raise WorkflowStoreError("CLAIM_NOT_ACTIVE", "claim is absent or already closed")
             if claim["claimant_actor_ref"] != claimant["actor_ref"]:
                 raise WorkflowStoreError("CLAIM_ACTOR_MISMATCH", "capability does not own this claim")
+            expected_role = "ASSESSOR" if claim["transition_kind"] == "VERIFY" else "REMEDIATOR"
+            expected_execution_prefix = (
+                "verification:run:" if claim["transition_kind"] == "VERIFY" else "implementation:transaction:"
+            )
+            coordinator = connection.execute(
+                "SELECT * FROM actors WHERE actor_ref = ?", (claim["coordinator_actor_ref"],)
+            ).fetchone()
+            if (
+                claim["transition_kind"] not in TRANSITION_KINDS
+                or not isinstance(claim["execution_ref"], str)
+                or not EXECUTION_REF_PATTERN.fullmatch(claim["execution_ref"])
+                or not claim["execution_ref"].startswith(expected_execution_prefix)
+                or claim["successor_ref"] is not None
+                or claim["closure_ref"] is not None
+                or claim["closed_at"] is not None
+                or claimant["role"] != expected_role
+                or claimant["root_ref"] != claim["root_ref"]
+                or claimant["bound_claim_ref"] != claim_ref
+                or coordinator is None
+                or coordinator["role"] != "COORDINATOR"
+                or coordinator["root_ref"] != claim["root_ref"]
+                or coordinator["invocation_ref"] != claimant["invocation_ref"]
+            ):
+                raise WorkflowStoreError(
+                    "STORE_CORRUPT", "claim and actor release relationship is inconsistent"
+                )
             verification_facts = connection.execute(
                 "SELECT 1 FROM verification_runs WHERE run_ref = ? LIMIT 1", (claim["execution_ref"],)
             ).fetchone()
@@ -1289,26 +1730,145 @@ class WorkflowStore:
             ).fetchone()
             if reservation is None or reservation["state"] != "ACTIVE":
                 raise WorkflowStoreError("BUDGET_RESERVATION_NOT_ACTIVE", "claim reservation is not active")
-            connection.execute(
+            invocation = connection.execute(
+                "SELECT * FROM invocations WHERE invocation_ref = ?",
+                (reservation["invocation_ref"],),
+            ).fetchone()
+            if (
+                reservation["transition_kind"] != claim["transition_kind"]
+                or reservation["invocation_ref"] != claimant["invocation_ref"]
+                or reservation["invocation_ref"] != coordinator["invocation_ref"]
+                or reservation["closed_at"] is not None
+                or invocation is None
+                or invocation["state"] != "ACTIVE"
+                or invocation["closed_at"] is not None
+                or invocation["root_ref"] != claim["root_ref"]
+            ):
+                raise WorkflowStoreError(
+                    "STORE_CORRUPT",
+                    "claim, reservation, and invocation release relationship is inconsistent",
+                )
+            tip = self._current_tip_locked(connection, claim["root_ref"])
+            if (
+                tip["node_ref"] != claim["tip_ref"]
+                or tip["planning_identity"] != claim["planning_identity"]
+                or tip["source_identity"] != claim["source_identity"]
+            ):
+                raise WorkflowStoreError(
+                    "STORE_CORRUPT", "active release claim no longer matches its immutable tip"
+                )
+
+            limits = self._stored_budget(invocation["limits_json"], "invocation.limits")
+            consumed = self._stored_budget(invocation["consumed_json"], "invocation.consumed")
+            spend_reserved = self._stored_budget(
+                reservation["spend_reserved_json"], "reservation.spendReserved"
+            )
+            closure_reserved = self._stored_budget(
+                reservation["closure_reserved_json"], "reservation.closureReserved"
+            )
+            spend_used = self._stored_budget(
+                reservation["spend_used_json"], "reservation.spendUsed"
+            )
+            closure_used = self._stored_budget(
+                reservation["closure_used_json"], "reservation.closureUsed"
+            )
+            if closure_reserved["closureOperations"] <= 0:
+                raise WorkflowStoreError(
+                    "STORE_CORRUPT", "active reservation has no closure capacity"
+                )
+            used_over_reserved = [
+                field
+                for field in BUDGET_FIELDS
+                if spend_used[field] > spend_reserved[field]
+                or closure_used[field] > closure_reserved[field]
+            ]
+            consumed_over_limits = [
+                field for field in BUDGET_FIELDS if consumed[field] > limits[field]
+            ]
+            reserved_over_limits = [
+                field
+                for field in BUDGET_FIELDS
+                if consumed[field] + spend_reserved[field] + closure_reserved[field]
+                > limits[field]
+            ]
+            next_consumed = _add_budget(consumed, spend_used, closure_used)
+            next_over_limits = [
+                field for field in BUDGET_FIELDS if next_consumed[field] > limits[field]
+            ]
+            if used_over_reserved or consumed_over_limits or reserved_over_limits or next_over_limits:
+                raise WorkflowStoreError(
+                    "STORE_CORRUPT", "release budget vectors violate reservation or invocation limits"
+                )
+
+            invocation_update = connection.execute(
+                """
+                UPDATE invocations SET consumed_json = ?
+                WHERE invocation_ref = ? AND state = 'ACTIVE' AND consumed_json = ?
+                """,
+                (
+                    canonical_json(next_consumed),
+                    invocation["invocation_ref"],
+                    invocation["consumed_json"],
+                ),
+            )
+            if invocation_update.rowcount != 1:
+                raise WorkflowStoreError(
+                    "ATOMIC_RELEASE_CONFLICT", "invocation changed during unstarted claim release"
+                )
+            claim_update = connection.execute(
                 """
                 UPDATE claims
                 SET state = 'RELEASED', closure_ref = ?, closed_at = ?
                 WHERE claim_ref = ? AND state = 'ACTIVE'
+                  AND claimant_actor_ref = ? AND budget_reservation_ref = ?
+                  AND transition_kind = ?
                 """,
-                (closure_ref, closed_at, claim_ref),
+                (
+                    closure_ref,
+                    closed_at,
+                    claim_ref,
+                    claimant["actor_ref"],
+                    reservation["reservation_ref"],
+                    claim["transition_kind"],
+                ),
             )
-            connection.execute(
+            if claim_update.rowcount != 1:
+                raise WorkflowStoreError(
+                    "ATOMIC_RELEASE_CONFLICT", "claim changed during unstarted release"
+                )
+            reservation_update = connection.execute(
                 """
                 UPDATE budget_reservations
                 SET state = 'CLOSED', closed_at = ?
                 WHERE reservation_ref = ? AND state = 'ACTIVE'
+                  AND invocation_ref = ? AND transition_kind = ?
+                  AND spend_used_json = ? AND closure_used_json = ?
                 """,
-                (closed_at, reservation["reservation_ref"]),
+                (
+                    closed_at,
+                    reservation["reservation_ref"],
+                    invocation["invocation_ref"],
+                    claim["transition_kind"],
+                    reservation["spend_used_json"],
+                    reservation["closure_used_json"],
+                ),
             )
+            if reservation_update.rowcount != 1:
+                raise WorkflowStoreError(
+                    "ATOMIC_RELEASE_CONFLICT", "reservation changed during unstarted release"
+                )
         return {"claimRef": claim_ref, "state": "RELEASED", "closureRef": closure_ref}
 
-    def publish_successor(
+    def publish_successor(self, **_: Any) -> dict[str, Any]:
+        """Retired caller-authored semantic publication surface."""
+        raise WorkflowStoreError(
+            "PUBLICATION_SURFACE_RETIRED",
+            "successors publish only through their artifact-owning publisher",
+        )
+
+    def _close_successor_locked(
         self,
+        connection: sqlite3.Connection,
         *,
         claimant_capability: str,
         claim_ref: str,
@@ -1319,10 +1879,11 @@ class WorkflowStore:
         source_identity: str,
         verification_status: str | None,
         payload: Mapping[str, Any],
+        created_at: str,
         implementation_transaction_ref: str | None = None,
         verification_run_ref: str | None = None,
-        validate_currentness: Callable[[], None] | None = None,
     ) -> dict[str, Any]:
+        """Atomically close one owner-derived successor on an already-held lock."""
         if not CLAIM_REF_PATTERN.fullmatch(claim_ref):
             raise WorkflowStoreError("MALFORMED_CLAIM", "claim ref is malformed")
         encoded = _validate_node_payload(
@@ -1334,269 +1895,353 @@ class WorkflowStore:
             verification_status=verification_status,
             payload=_mapping(payload, "payload"),
         )
-        created_at = utc_now()
-        try:
-            with self._transaction() as connection:
-                claimant = self._actor_for_capability_locked(connection, claimant_capability)
-                claim = connection.execute("SELECT * FROM claims WHERE claim_ref = ?", (claim_ref,)).fetchone()
-                if claim is None or claim["state"] != "ACTIVE":
-                    raise WorkflowStoreError("CLAIM_NOT_ACTIVE", "claim is absent or already closed")
-                if claim["claimant_actor_ref"] != claimant["actor_ref"]:
-                    raise WorkflowStoreError("CLAIM_ACTOR_MISMATCH", "capability does not own this claim")
-                expected_role = "ASSESSOR" if claim["transition_kind"] == "VERIFY" else "REMEDIATOR"
-                if claimant["role"] != expected_role:
-                    raise WorkflowStoreError("ROLE_CAPABILITY_MISMATCH", "claimant role differs")
-                reservation = connection.execute(
-                    "SELECT * FROM budget_reservations WHERE reservation_ref = ?",
-                    (claim["budget_reservation_ref"],),
-                ).fetchone()
-                if reservation is None or reservation["state"] != "ACTIVE":
-                    raise WorkflowStoreError(
-                        "BUDGET_RESERVATION_NOT_ACTIVE", "claim budget reservation is absent or closed"
-                    )
-                if reservation["invocation_ref"] != claimant["invocation_ref"]:
-                    raise WorkflowStoreError("ACTOR_CONTEXT_MISMATCH", "claim budget invocation differs")
-                spend_used = self._stored_budget(reservation["spend_used_json"], "reservation.spendUsed")
-                closure_used = self._stored_budget(reservation["closure_used_json"], "reservation.closureUsed")
-                if closure_used["closureOperations"] <= 0:
-                    raise WorkflowStoreError(
-                        "CLOSURE_BUDGET_UNUSED", "successor publication requires recorded closure work"
-                    )
-                expected_kind = (
-                    "VERIFICATION_RESULT" if claim["transition_kind"] == "VERIFY" else "IMPLEMENTATION_HANDOFF"
-                )
-                if node_kind != expected_kind:
-                    raise WorkflowStoreError("INVALID_SUCCESSOR_KIND", "node kind does not match claim transition")
-                implementation_transaction = None
-                verification_run = None
-                if claim["transition_kind"] == "REMEDIATE":
-                    if verification_run_ref is not None:
-                        raise WorkflowStoreError(
-                            "VERIFICATION_RUN_MISMATCH",
-                            "remediation successor cannot close a VerificationRun",
-                        )
-                    if implementation_transaction_ref != claim["execution_ref"]:
-                        raise WorkflowStoreError(
-                            "IMPLEMENTATION_TRANSACTION_NOT_READY",
-                            "remediation successor must use the claim-bound transaction",
-                        )
-                    implementation_transaction = connection.execute(
-                        "SELECT * FROM implementation_transactions WHERE transaction_ref = ?",
-                        (implementation_transaction_ref,),
-                    ).fetchone()
-                    if (
-                        implementation_transaction is None
-                        or implementation_transaction["mode"] != "VERIFICATION_REMEDIATION"
-                        or implementation_transaction["state"] != "READY_FOR_HANDOFF"
-                        or implementation_transaction["claim_ref"] != claim_ref
-                    ):
-                        raise WorkflowStoreError(
-                            "IMPLEMENTATION_TRANSACTION_NOT_READY",
-                            "remediation implementation transaction is not ready",
-                        )
-                elif implementation_transaction_ref is not None:
-                    raise WorkflowStoreError(
-                        "IMPLEMENTATION_TRANSACTION_MISMATCH",
-                        "verification result cannot close an implementation transaction",
-                    )
-                elif verification_run_ref is not None:
-                    if verification_run_ref != claim["execution_ref"]:
-                        raise WorkflowStoreError(
-                            "VERIFICATION_RUN_MISMATCH", "result must use the claim-bound VerificationRun"
-                        )
-                    verification_run = connection.execute(
-                        "SELECT * FROM verification_runs WHERE run_ref = ?", (verification_run_ref,)
-                    ).fetchone()
-                    if (
-                        verification_run is None
-                        or verification_run["state"] not in {"PREFLIGHT", "SEALED"}
-                        or verification_run["claim_ref"] != claim_ref
-                        or verification_run["assessor_actor_ref"] != claimant["actor_ref"]
-                    ):
-                        raise WorkflowStoreError("VERIFICATION_RUN_NOT_READY", "VerificationRun is not publishable")
-                tip = self._current_tip_locked(connection, claim["root_ref"])
-                if tip["node_ref"] != claim["tip_ref"]:
-                    raise WorkflowStoreError("STALE_WORKFLOW_TIP", "claim no longer owns the current tip")
-                if planning_identity != claim["planning_identity"] or planning_identity != tip["planning_identity"]:
-                    raise WorkflowStoreError("PLANNING_IDENTITY_MISMATCH", "successor planning identity differs")
+        payload_digest = hashlib.sha256(encoded).hexdigest()
+        claimant = self._actor_for_capability_locked(connection, claimant_capability)
+        claim = connection.execute(
+            "SELECT * FROM claims WHERE claim_ref = ?", (claim_ref,)
+        ).fetchone()
+        if claim is None or claim["state"] != "ACTIVE":
+            raise WorkflowStoreError("CLAIM_NOT_ACTIVE", "claim is absent or already closed")
+        if claim["claimant_actor_ref"] != claimant["actor_ref"]:
+            raise WorkflowStoreError("CLAIM_ACTOR_MISMATCH", "capability does not own this claim")
+        expected_role = "ASSESSOR" if claim["transition_kind"] == "VERIFY" else "REMEDIATOR"
+        if claimant["role"] != expected_role:
+            raise WorkflowStoreError("ROLE_CAPABILITY_MISMATCH", "claimant role differs")
+        reservation = connection.execute(
+            "SELECT * FROM budget_reservations WHERE reservation_ref = ?",
+            (claim["budget_reservation_ref"],),
+        ).fetchone()
+        if reservation is None or reservation["state"] != "ACTIVE":
+            raise WorkflowStoreError(
+                "BUDGET_RESERVATION_NOT_ACTIVE", "claim budget reservation is absent or closed"
+            )
+        if reservation["invocation_ref"] != claimant["invocation_ref"]:
+            raise WorkflowStoreError("ACTOR_CONTEXT_MISMATCH", "claim budget invocation differs")
+        spend_used = self._stored_budget(reservation["spend_used_json"], "reservation.spendUsed")
+        closure_used = self._stored_budget(
+            reservation["closure_used_json"], "reservation.closureUsed"
+        )
+        if closure_used["closureOperations"] <= 0:
+            raise WorkflowStoreError(
+                "CLOSURE_BUDGET_UNUSED", "successor publication requires recorded closure work"
+            )
+        expected_kind = (
+            "VERIFICATION_RESULT" if claim["transition_kind"] == "VERIFY" else "IMPLEMENTATION_HANDOFF"
+        )
+        if node_kind != expected_kind:
+            raise WorkflowStoreError("INVALID_SUCCESSOR_KIND", "node kind does not match claim transition")
 
-                if claim["transition_kind"] == "VERIFY":
-                    if source_identity != claim["source_identity"] or source_identity != tip["source_identity"]:
-                        raise WorkflowStoreError("SOURCE_IDENTITY_MISMATCH", "verification changed source identity")
-                    expected_handoff = (
-                        tip["node_ref"]
-                        if tip["node_kind"] == "IMPLEMENTATION_HANDOFF"
-                        else json.loads(bytes(tip["payload_json"]))["implementationHandoffRef"]
-                    )
-                    if payload.get("implementationHandoffRef") != expected_handoff:
-                        raise WorkflowStoreError("HANDOFF_IDENTITY_MISMATCH", "result references another handoff")
-                    if verification_run is not None:
-                        if (
-                            verification_run["implementation_handoff_ref"] != expected_handoff
-                            or verification_run["planning_identity"] != planning_identity
-                            or verification_run["source_identity"] != source_identity
-                            or payload.get("verificationRunRef") != verification_run_ref
-                            or payload.get("sealedPlanDigest") != verification_run["sealed_plan_sha256"]
-                        ):
-                            raise WorkflowStoreError(
-                                "VERIFICATION_RUN_MISMATCH", "result facts differ from its VerificationRun"
-                            )
-                else:
-                    assert implementation_transaction is not None
-                    if (
-                        implementation_transaction["planning_identity"] != planning_identity
-                        or implementation_transaction["baseline_source_identity"] != tip["source_identity"]
-                        or implementation_transaction["final_source_identity"] != source_identity
-                        or payload.get("baselineCapsuleRef") != implementation_transaction["baseline_capsule_ref"]
-                        or payload.get("implementationDeltaRef")
-                        != implementation_transaction["implementation_delta_ref"]
-                    ):
-                        raise WorkflowStoreError(
-                            "IMPLEMENTATION_TRANSACTION_MISMATCH",
-                            "remediation handoff facts differ from its transaction",
-                        )
-                    if payload.get("baselineSourceIdentity") != tip["source_identity"]:
-                        raise WorkflowStoreError("SOURCE_IDENTITY_MISMATCH", "remediation baseline differs")
-                    if source_identity == tip["source_identity"]:
-                        raise WorkflowStoreError("EMPTY_REMEDIATION_DELTA", "remediation must create a new identity")
-                    ancestor = connection.execute(
-                        "SELECT 1 FROM nodes WHERE root_ref = ? AND source_identity = ? LIMIT 1",
-                        (claim["root_ref"], source_identity),
-                    ).fetchone()
-                    if ancestor is not None:
-                        raise WorkflowStoreError("ANCESTOR_SOURCE_REUSED", "remediation reused an ancestor identity")
+        implementation_transaction = None
+        verification_run = None
+        if claim["transition_kind"] == "REMEDIATE":
+            if verification_run_ref is not None or implementation_transaction_ref != claim["execution_ref"]:
+                raise WorkflowStoreError(
+                    "IMPLEMENTATION_TRANSACTION_NOT_READY",
+                    "remediation successor must use the claim-bound transaction",
+                )
+            implementation_transaction = connection.execute(
+                "SELECT * FROM implementation_transactions WHERE transaction_ref = ?",
+                (implementation_transaction_ref,),
+            ).fetchone()
+            if (
+                implementation_transaction is None
+                or implementation_transaction["mode"] != "VERIFICATION_REMEDIATION"
+                or implementation_transaction["state"] != "READY_FOR_HANDOFF"
+                or implementation_transaction["claim_ref"] != claim_ref
+                or implementation_transaction["root_ref"] != claim["root_ref"]
+            ):
+                raise WorkflowStoreError(
+                    "IMPLEMENTATION_TRANSACTION_NOT_READY",
+                    "remediation implementation transaction is not ready",
+                )
+        else:
+            if implementation_transaction_ref is not None or verification_run_ref != claim["execution_ref"]:
+                raise WorkflowStoreError(
+                    "VERIFICATION_RUN_MISMATCH", "result must use the claim-bound VerificationRun"
+                )
+            verification_run = connection.execute(
+                "SELECT * FROM verification_runs WHERE run_ref = ?", (verification_run_ref,)
+            ).fetchone()
+            if (
+                verification_run is None
+                or verification_run["state"] not in {"PREFLIGHT", "SEALED"}
+                or verification_run["claim_ref"] != claim_ref
+                or verification_run["root_ref"] != claim["root_ref"]
+                or verification_run["assessor_actor_ref"] != claimant["actor_ref"]
+            ):
+                raise WorkflowStoreError(
+                    "VERIFICATION_RUN_NOT_READY", "VerificationRun is not publishable"
+                )
 
-                if validate_currentness is not None:
-                    validate_currentness()
+        tip = self._current_tip_locked(connection, claim["root_ref"])
+        if tip["node_ref"] != claim["tip_ref"]:
+            raise WorkflowStoreError("STALE_WORKFLOW_TIP", "claim no longer owns the current tip")
+        if planning_identity != claim["planning_identity"] or planning_identity != tip["planning_identity"]:
+            raise WorkflowStoreError(
+                "PLANNING_IDENTITY_MISMATCH", "successor planning identity differs"
+            )
+        if claim["transition_kind"] == "VERIFY":
+            assert verification_run is not None
+            if source_identity != claim["source_identity"] or source_identity != tip["source_identity"]:
+                raise WorkflowStoreError(
+                    "SOURCE_IDENTITY_MISMATCH", "verification changed source identity"
+                )
+            tip_payload = json.loads(bytes(tip["payload_json"]))
+            expected_handoff = (
+                tip["node_ref"]
+                if tip["node_kind"] == "IMPLEMENTATION_HANDOFF"
+                else tip_payload.get("implementationHandoffRef")
+            )
+            if (
+                payload.get("implementationHandoffRef") != expected_handoff
+                or verification_run["implementation_handoff_ref"] != expected_handoff
+                or verification_run["planning_identity"] != planning_identity
+                or verification_run["source_identity"] != source_identity
+                or verification_run["root_ref"] != claim["root_ref"]
+                or payload.get("verificationRunRef") != verification_run_ref
+                or payload.get("sealedPlanDigest") != verification_run["sealed_plan_sha256"]
+            ):
+                raise WorkflowStoreError(
+                    "VERIFICATION_RUN_MISMATCH", "result facts differ from its VerificationRun"
+                )
+        else:
+            assert implementation_transaction is not None
+            if (
+                implementation_transaction["planning_identity"] != planning_identity
+                or implementation_transaction["baseline_source_identity"] != tip["source_identity"]
+                or implementation_transaction["final_source_identity"] != source_identity
+                or payload.get("projectRoot") != implementation_transaction["project_root"]
+                or payload.get("baselineCapsuleRef")
+                != implementation_transaction["baseline_capsule_ref"]
+                or payload.get("implementationDeltaRef")
+                != implementation_transaction["implementation_delta_ref"]
+                or payload.get("baselineSourceIdentity") != tip["source_identity"]
+            ):
+                raise WorkflowStoreError(
+                    "IMPLEMENTATION_TRANSACTION_MISMATCH",
+                    "remediation handoff facts differ from its transaction",
+                )
+            if source_identity == tip["source_identity"]:
+                raise WorkflowStoreError(
+                    "EMPTY_REMEDIATION_DELTA", "remediation must create a new identity"
+                )
+            ancestor = connection.execute(
+                "SELECT 1 FROM nodes WHERE root_ref = ? AND source_identity = ? LIMIT 1",
+                (claim["root_ref"], source_identity),
+            ).fetchone()
+            if ancestor is not None:
+                raise WorkflowStoreError(
+                    "ANCESTOR_SOURCE_REUSED", "remediation reused an ancestor identity"
+                )
 
-                connection.execute(
-                    """
-                    INSERT INTO nodes(
-                        node_ref, node_kind, protocol_version, root_ref, planning_identity,
-                        source_identity, verification_status, payload_json, payload_sha256, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        node_ref,
-                        node_kind,
-                        protocol_version,
-                        claim["root_ref"],
-                        planning_identity,
-                        source_identity,
-                        verification_status,
-                        encoded,
-                        hashlib.sha256(encoded).hexdigest(),
-                        created_at,
-                    ),
+        connection.execute(
+            """
+            INSERT INTO nodes(
+                node_ref, node_kind, protocol_version, root_ref, planning_identity,
+                source_identity, verification_status, payload_json, payload_sha256, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                node_ref,
+                node_kind,
+                protocol_version,
+                claim["root_ref"],
+                planning_identity,
+                source_identity,
+                verification_status,
+                encoded,
+                payload_digest,
+                created_at,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO edges(predecessor_ref, successor_ref, transition_kind, claim_ref, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (claim["tip_ref"], node_ref, claim["transition_kind"], claim_ref, created_at),
+        )
+        consumed_claim = connection.execute(
+            """
+            UPDATE claims
+            SET state = 'CONSUMED', successor_ref = ?, closed_at = ?
+            WHERE claim_ref = ? AND state = 'ACTIVE'
+            """,
+            (node_ref, created_at, claim_ref),
+        )
+        if consumed_claim.rowcount != 1:
+            raise WorkflowStoreError("CLAIM_NOT_ACTIVE", "claim changed during publication")
+        invocation = connection.execute(
+            "SELECT consumed_json FROM invocations WHERE invocation_ref = ?",
+            (reservation["invocation_ref"],),
+        ).fetchone()
+        if invocation is None:
+            raise WorkflowStoreError("STORE_CORRUPT", "claim invocation is absent")
+        consumed = self._stored_budget(invocation["consumed_json"], "invocation.consumed")
+        next_consumed = _add_budget(consumed, spend_used, closure_used)
+        connection.execute(
+            "UPDATE invocations SET consumed_json = ? WHERE invocation_ref = ?",
+            (canonical_json(next_consumed), reservation["invocation_ref"]),
+        )
+        closed_reservation = connection.execute(
+            """
+            UPDATE budget_reservations SET state = 'CLOSED', closed_at = ?
+            WHERE reservation_ref = ? AND state = 'ACTIVE'
+            """,
+            (created_at, reservation["reservation_ref"]),
+        )
+        if closed_reservation.rowcount != 1:
+            raise WorkflowStoreError(
+                "BUDGET_RESERVATION_NOT_ACTIVE", "claim reservation changed during publication"
+            )
+        if implementation_transaction is not None:
+            closed_transaction = connection.execute(
+                """
+                UPDATE implementation_transactions
+                SET state = 'CLOSED_WITH_HANDOFF', closed_at = ?
+                WHERE transaction_ref = ? AND state = 'READY_FOR_HANDOFF'
+                """,
+                (created_at, implementation_transaction_ref),
+            )
+            if closed_transaction.rowcount != 1:
+                raise WorkflowStoreError(
+                    "IMPLEMENTATION_TRANSACTION_NOT_READY",
+                    "remediation transaction changed during publication",
                 )
-                connection.execute(
-                    """
-                    INSERT INTO edges(predecessor_ref, successor_ref, transition_kind, claim_ref, created_at)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (claim["tip_ref"], node_ref, claim["transition_kind"], claim_ref, created_at),
+            event_payload = canonical_json({"implementationHandoffRef": node_ref})
+            connection.execute(
+                """
+                INSERT INTO implementation_events(
+                    transaction_ref, event_kind, payload_json, payload_sha256, created_at
+                ) VALUES (?, 'HANDOFF_PUBLISHED', ?, ?, ?)
+                """,
+                (
+                    implementation_transaction_ref,
+                    event_payload,
+                    hashlib.sha256(event_payload).hexdigest(),
+                    created_at,
+                ),
+            )
+        if verification_run is not None:
+            closure_payload = canonical_json(
+                {
+                    "verificationResultRef": node_ref,
+                    "verificationStatus": verification_status,
+                    "completedAt": created_at,
+                }
+            )
+            closed_run = connection.execute(
+                """
+                UPDATE verification_runs
+                SET state = 'CLOSED', closure_json = ?, closed_at = ?
+                WHERE run_ref = ? AND state IN ('PREFLIGHT', 'SEALED')
+                """,
+                (closure_payload, created_at, verification_run_ref),
+            )
+            if closed_run.rowcount != 1:
+                raise WorkflowStoreError(
+                    "VERIFICATION_RUN_NOT_READY", "VerificationRun changed during publication"
                 )
-                connection.execute(
-                    """
-                    UPDATE claims
-                    SET state = 'CONSUMED', successor_ref = ?, closed_at = ?
-                    WHERE claim_ref = ? AND state = 'ACTIVE'
-                    """,
-                    (node_ref, created_at, claim_ref),
-                )
-                invocation = connection.execute(
-                    "SELECT consumed_json FROM invocations WHERE invocation_ref = ?",
-                    (reservation["invocation_ref"],),
-                ).fetchone()
-                if invocation is None:
-                    raise WorkflowStoreError("STORE_CORRUPT", "claim invocation is absent")
-                consumed = self._stored_budget(invocation["consumed_json"], "invocation.consumed")
-                next_consumed = _add_budget(consumed, spend_used, closure_used)
-                connection.execute(
-                    "UPDATE invocations SET consumed_json = ? WHERE invocation_ref = ?",
-                    (canonical_json(next_consumed), reservation["invocation_ref"]),
-                )
-                connection.execute(
-                    """
-                    UPDATE budget_reservations
-                    SET state = 'CLOSED', closed_at = ?
-                    WHERE reservation_ref = ? AND state = 'ACTIVE'
-                    """,
-                    (created_at, reservation["reservation_ref"]),
-                )
-                if implementation_transaction is not None:
-                    connection.execute(
-                        """
-                        UPDATE implementation_transactions
-                        SET state = 'CLOSED_WITH_HANDOFF', closed_at = ?
-                        WHERE transaction_ref = ? AND state = 'READY_FOR_HANDOFF'
-                        """,
-                        (created_at, implementation_transaction_ref),
-                    )
-                    event_payload = canonical_json({"implementationHandoffRef": node_ref})
-                    connection.execute(
-                        """
-                        INSERT INTO implementation_events(
-                            transaction_ref, event_kind, payload_json, payload_sha256, created_at
-                        ) VALUES (?, 'HANDOFF_PUBLISHED', ?, ?, ?)
-                        """,
-                        (
-                            implementation_transaction_ref,
-                            event_payload,
-                            hashlib.sha256(event_payload).hexdigest(),
-                            created_at,
-                        ),
-                    )
-                if verification_run is not None:
-                    closure_payload = canonical_json(
-                        {
-                            "verificationResultRef": node_ref,
-                            "verificationStatus": verification_status,
-                            "completedAt": created_at,
-                        }
-                    )
-                    connection.execute(
-                        """
-                        UPDATE verification_runs
-                        SET state = 'CLOSED', closure_json = ?, closed_at = ?
-                        WHERE run_ref = ? AND state IN ('PREFLIGHT', 'SEALED')
-                        """,
-                        (closure_payload, created_at, verification_run_ref),
-                    )
-                    event_payload = canonical_json({"verificationResultRef": node_ref})
-                    connection.execute(
-                        """
-                        INSERT INTO verification_events(
-                            run_ref, event_kind, payload_json, payload_sha256, created_at
-                        ) VALUES (?, 'RESULT_PUBLISHED', ?, ?, ?)
-                        """,
-                        (
-                            verification_run_ref,
-                            event_payload,
-                            hashlib.sha256(event_payload).hexdigest(),
-                            created_at,
-                        ),
-                    )
-                row = connection.execute("SELECT * FROM nodes WHERE node_ref = ?", (node_ref,)).fetchone()
-                assert row is not None
-                view = self._node_view(row)
-        except sqlite3.IntegrityError as exc:
-            raise WorkflowStoreError("ATOMIC_CONTINUATION_CONFLICT", "successor publication conflicted") from exc
+            event_payload = canonical_json({"verificationResultRef": node_ref})
+            connection.execute(
+                """
+                INSERT INTO verification_events(
+                    run_ref, event_kind, payload_json, payload_sha256, created_at
+                ) VALUES (?, 'RESULT_PUBLISHED', ?, ?, ?)
+                """,
+                (
+                    verification_run_ref,
+                    event_payload,
+                    hashlib.sha256(event_payload).hexdigest(),
+                    created_at,
+                ),
+            )
+        row = connection.execute("SELECT * FROM nodes WHERE node_ref = ?", (node_ref,)).fetchone()
+        if row is None:
+            raise WorkflowStoreError("STORE_CORRUPT", "published successor node is absent")
+        view = self._node_view(row)
+        if view["payloadSha256"] != payload_digest or view["payload"] != payload:
+            raise WorkflowStoreError("STORE_CORRUPT", "published successor differs from canonical payload")
         return view
 
     def database_mode(self) -> int:
         return stat.S_IMODE(self.database_path.stat().st_mode)
 
 
+class WorkflowStoreOpenResult:
+    """Audited store together with the exact immutable pre-open report."""
+
+    def __init__(self, store: WorkflowStore, report: Any) -> None:
+        self.store = store
+        self.report = report
+
+
+def audit_and_open_workflow_store(
+    store_root: Path | str = DEFAULT_STORE_ROOT,
+    *,
+    guard: Any,
+    private_parent: Path | str | None = None,
+    lease_ttl_seconds: float = 300.0,
+    _migration_hook: Callable[[str], None] | None = None,
+) -> WorkflowStoreOpenResult:
+    """Audit one exact root and consume its single-use lease to initialize it.
+
+    Callers must supply a live deployment lock or deployment-owner quiescence
+    session.  This function never invents a process-local attestation and never
+    falls back to the retired direct constructor.
+    """
+
+    preopen = _load_preopen_module()
+    try:
+        outcome = preopen.audit_workflow_store(
+            store_root,
+            guard=guard,
+            private_parent=private_parent,
+            lease_ttl_seconds=lease_ttl_seconds,
+        )
+    except preopen.PreOpenAuditError as exc:
+        raise WorkflowStoreError(exc.code, exc.message) from exc
+    if outcome.lease is None or not outcome.report.is_admitted:
+        blockers = ", ".join(outcome.report.blockers) or "unspecified audit blocker"
+        raise WorkflowStoreError(
+            "WORKFLOW_STORE_OPEN_BLOCKED", f"pre-open audit blocked this root: {blockers}"
+        )
+
+    try:
+        store = outcome.lease.consume(
+            guard=guard,
+            opener=lambda canonical_root, report: WorkflowStore._open_from_audit(
+                canonical_root,
+                report,
+                guard=guard,
+                migration_hook=_migration_hook,
+            ),
+        )
+    except WorkflowStoreError:
+        raise
+    except preopen.PreOpenAuditError as exc:
+        raise WorkflowStoreError(exc.code, exc.message) from exc
+    except sqlite3.Error as exc:
+        raise WorkflowStoreError(
+            "STORE_MIGRATION_FAILED", "audited workflow initialization failed"
+        ) from exc
+    return WorkflowStoreOpenResult(store, outcome.report)
+
+
 __all__ = [
     "ACTOR_ROLES",
     "BUDGET_FIELDS",
     "DEFAULT_STORE_ROOT",
+    "EXECUTOR_FLOOR",
     "NODE_KINDS",
+    "SCHEMA_VERSION",
     "TRANSITION_KINDS",
     "VERIFICATION_STATUSES",
     "WorkflowStore",
     "WorkflowStoreError",
+    "WorkflowStoreOpenResult",
+    "audit_and_open_workflow_store",
     "allocate_ref",
     "canonical_json",
+    "guard_session_from_locked_fd",
 ]

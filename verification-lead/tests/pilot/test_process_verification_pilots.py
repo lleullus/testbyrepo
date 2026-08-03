@@ -43,28 +43,39 @@ class ProcessVerificationPilots(unittest.TestCase):
         self.source = verification_run.baseline_capsule.capture_identity(self.project)["sourceIdentity"]
         self.workflow_root = root / "workflow"
         self.capsule_root = root / "capsules"
-        self.service = verification_run.VerificationService(self.workflow_root)
-        self.root_ref = verification_run.workflow_store.allocate_ref("IMPLEMENTATION_HANDOFF")
-        self.service.workflow.publish_initial_handoff(
-            node_ref=self.root_ref,
-            protocol_version="implementation-handoff-v1",
+        self.guard = verification_run.workflow_store._mint_test_guard_session(
+            store_root=self.workflow_root,
+            identity=f"process-pilot:{self.workflow_root}",
+            is_active=lambda: True,
+        )
+        transaction_store = (
+            verification_run.handoff_contract.implementation_transaction.ImplementationTransactionStore(
+                self.workflow_root, self.capsule_root, guard=self.guard
+            )
+        )
+        transaction = transaction_store.start_initial(
+            project_root=self.project,
             planning_identity=self.planning,
-            source_identity=self.source,
-            payload={
+            selected_worker="pilot-worker",
+        )
+        transaction_store.prepare_handoff(
+            transaction_capability=transaction["transactionCapability"]
+        )
+        initial = verification_run.handoff_contract.HandoffPublisher(
+            self.workflow_root, self.capsule_root, guard=self.guard
+        ).publish(
+            {
                 "protocolVersion": "implementation-handoff-v1",
-                "implementationHandoffRef": self.root_ref,
-                "implementationStatus": "IMPLEMENTATION_HANDOFF_COMPLETE",
-                "projectRoot": str(self.project.resolve()),
+                "implementationTransactionRef": transaction["transactionRef"],
+                "actorCapability": None,
                 "planningSeal": self.seal_value,
-                "planningSealDigest": self.planning,
-                "baselineCapsuleRef": "capsule:v1:" + "1" * 32,
-                "baselineSourceIdentity": self.source,
-                "finalSourceIdentity": self.source,
-                "implementationDeltaRef": "implementation:delta:v1:" + "2" * 32,
-                "criterionAccounting": [{**self.criteria[0], "taskIds": ["initial"]}],
+                "criterionAccounting": [{**self.criteria[0], "taskIds": []}],
                 "unresolvedImplementationItems": [],
-                "completedAt": "2026-08-03T00:00:00+00:00",
-            },
+            }
+        )
+        self.root_ref = str(initial["implementationHandoffRef"])
+        self.service = verification_run.VerificationService(
+            self.workflow_root, guard=self.guard
         )
         self.invocation = self.service.workflow.start_invocation(
             root_ref=self.root_ref,
@@ -128,6 +139,12 @@ class ProcessVerificationPilots(unittest.TestCase):
             },
             "pollPolicy": {"maxAttempts": polls, "intervalMs": interval} if role == "READBACK" else None,
         }
+
+    def external_executable(self, name: str, source: str, *, mode: int = 0o700) -> Path:
+        path = Path(self.temporary.name) / name
+        path.write_text(source, encoding="utf-8")
+        path.chmod(mode)
+        return path.resolve(strict=True)
 
     def flow(self, flow_id: str, steps: list[dict[str, object]]) -> dict[str, object]:
         return {
@@ -260,6 +277,193 @@ class ProcessVerificationPilots(unittest.TestCase):
         self.assertEqual(1, len({item["canonicalRequestDigest"] for item in readback["attempts"]}))
         self.assertEqual("VERIFIED", result["verificationStatus"])
 
+    def test_v3_self_update_post_drift_survives_later_readback_as_incomplete(self) -> None:
+        executable = self.external_executable(
+            "pilot-self-update",
+            (
+                f"#!{Path(sys.executable).resolve()}\n"
+                "from pathlib import Path\n"
+                "print('pilot-output')\n"
+                "path = Path(__file__)\n"
+                "path.write_text('#!/bin/sh\\nprintf changed\\n')\n"
+                "path.chmod(0o700)\n"
+            ),
+        )
+        action = self.step("self-update", "ACTION", "print('unused')")
+        action["executable"] = str(executable)
+        action["argv"] = []
+        opened = self.open_verify()
+        sealed = self.seal(
+            opened,
+            [
+                self.flow(
+                    "post-drift",
+                    [action, self.step("readback", "READBACK", "print('still-readable')")],
+                )
+            ],
+        )
+        drift = self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="post-drift",
+            step_id="self-update",
+        )
+        attempt = drift["attempts"][0]
+        self.assertEqual("EXECUTABLE_IDENTITY_DRIFT", attempt["status"])
+        self.assertEqual("POST", attempt["result"]["executableIdentityPhase"])
+        self.assertTrue(attempt["result"]["processStarted"])
+        artifact = self.service.read_artifact(
+            assessor_capability=opened["assessor"]["capability"],
+            artifact_ref=attempt["artifactRef"],
+        )
+        self.assertEqual("pilot-output\n", artifact["payload"]["stdout"]["text"])
+        self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="post-drift",
+            step_id="readback",
+        )
+        result = self.assess(opened, sealed, "SATISFIED")
+        self.assertEqual("INCOMPLETE", result["verificationStatus"])
+        self.assertIn("EXECUTABLE_IDENTITY_DRIFT", result["reasonCodes"])
+
+    def test_v3_content_swap_blocks_before_process_start(self) -> None:
+        marker = Path(self.temporary.name) / "content-swap-marker"
+        executable = self.external_executable(
+            "pilot-content-swap",
+            f"#!{Path(sys.executable).resolve()}\nfrom pathlib import Path\nPath({str(marker)!r}).write_text('original')\n",
+        )
+        action = self.step("swap", "ACTION", "print('unused')")
+        action["executable"] = str(executable)
+        action["argv"] = []
+        opened = self.open_verify()
+        sealed = self.seal(opened, [self.flow("content-swap", [action])])
+        executable.write_text(
+            f"#!{Path(sys.executable).resolve()}\nfrom pathlib import Path\nPath({str(marker)!r}).write_text('swapped')\n",
+            encoding="utf-8",
+        )
+        executable.chmod(0o700)
+        execution = self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="content-swap",
+            step_id="swap",
+        )
+        attempt = execution["attempts"][0]
+        self.assertEqual("EXECUTABLE_IDENTITY_DRIFT", attempt["status"])
+        self.assertEqual("PRE", attempt["result"]["executableIdentityPhase"])
+        self.assertFalse(attempt["result"]["processStarted"])
+        self.assertFalse(marker.exists())
+        result = self.assess(opened, sealed, "SATISFIED")
+        self.assertEqual("INCOMPLETE", result["verificationStatus"])
+
+    def test_v3_mode_swap_blocks_before_process_start(self) -> None:
+        executable = self.external_executable(
+            "pilot-mode-swap", "#!/bin/sh\nprintf must-not-run\\n\n", mode=0o700
+        )
+        readback = self.step("mode", "READBACK", "print('unused')")
+        readback["executable"] = str(executable)
+        readback["argv"] = []
+        opened = self.open_verify()
+        sealed = self.seal(opened, [self.flow("mode-swap", [readback])])
+        executable.chmod(0o755)
+        execution = self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="mode-swap",
+            step_id="mode",
+        )
+        attempt = execution["attempts"][0]
+        self.assertEqual("EXECUTABLE_IDENTITY_DRIFT", attempt["status"])
+        self.assertEqual("PRE", attempt["result"]["executableIdentityPhase"])
+        self.assertFalse(attempt["result"]["processStarted"])
+
+    def test_v3_contradiction_precedes_later_executable_drift(self) -> None:
+        executable = self.external_executable(
+            "pilot-contradiction-drift",
+            (
+                f"#!{Path(sys.executable).resolve()}\n"
+                "from pathlib import Path\n"
+                "print('drift')\n"
+                "path = Path(__file__)\n"
+                "path.write_text('#!/bin/sh\\nprintf changed\\n')\n"
+                "path.chmod(0o700)\n"
+            ),
+        )
+        drifting = self.step("drift", "READBACK", "print('unused')")
+        drifting["executable"] = str(executable)
+        drifting["argv"] = []
+        opened = self.open_verify()
+        sealed = self.seal(
+            opened,
+            [
+                self.flow(
+                    "contradiction",
+                    [self.step("observe", "READBACK", "print('contradiction')")],
+                ),
+                self.flow("drift", [drifting]),
+            ],
+        )
+        self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="contradiction",
+            step_id="observe",
+        )
+        self.service.declare_contradiction(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            criterion_ref=self.criteria[0],
+        )
+        self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="drift",
+            step_id="drift",
+        )
+        result = self.assess(opened, sealed, "CONTRADICTED")
+        self.assertEqual("VERIFICATION_FAILED", result["verificationStatus"])
+        self.assertIn("EXECUTABLE_IDENTITY_DRIFT", result["reasonCodes"])
+
+    def test_v3_small_and_large_executable_hash_accounting(self) -> None:
+        small = self.external_executable("small-tool", "#!/bin/sh\nprintf small\\n\n")
+        large = self.external_executable(
+            "large-tool",
+            "#!/bin/sh\nprintf large\\n\n#" + ("x" * (1024 * 1024)) + "\n",
+        )
+        steps: list[dict[str, object]] = []
+        for step_id, executable in (("small", small), ("large", large)):
+            step = self.step(step_id, "READBACK", "print('unused')")
+            step["executable"] = str(executable)
+            step["argv"] = []
+            steps.append(step)
+        opened = self.open_verify()
+        sealed = self.seal(opened, [self.flow("hash-cost", steps)])
+        attempts = []
+        for step_id in ("small", "large"):
+            execution = self.service.execute_step(
+                assessor_capability=opened["assessor"]["capability"],
+                verification_run_ref=sealed["verificationRunRef"],
+                flow_id="hash-cost",
+                step_id=step_id,
+            )
+            attempts.append(execution["attempts"][0])
+        result = self.assess(opened, sealed, "SATISFIED")
+        self.assertEqual("VERIFIED", result["verificationStatus"])
+        for attempt, executable in zip(attempts, (small, large)):
+            byte_count = executable.stat().st_size
+            self.assertEqual(
+                {"before": byte_count, "after": byte_count, "total": byte_count * 2},
+                attempt["result"]["executableBytesHashed"],
+            )
+            self.assertGreaterEqual(attempt["result"]["durationMs"], 0)
+            self.assertGreaterEqual(
+                attempt["result"]["identityObservationDurationMs"]["before"], 0
+            )
+            self.assertGreaterEqual(
+                attempt["result"]["identityObservationDurationMs"]["after"], 0
+            )
+
     def publish_failure(self):
         opened = self.open_verify()
         sealed = self.seal(
@@ -285,6 +489,7 @@ class ProcessVerificationPilots(unittest.TestCase):
         transactions = verification_run.handoff_contract.implementation_transaction.ImplementationTransactionStore(
             self.workflow_root,
             self.capsule_root,
+            guard=self.guard,
         )
         transaction = transactions.start_remediation(
             remediator_capability=remediation["remediator"]["capability"],
@@ -339,6 +544,7 @@ class ProcessVerificationPilots(unittest.TestCase):
         successor = verification_run.handoff_contract.HandoffPublisher(
             self.workflow_root,
             self.capsule_root,
+            workflow=transactions.workflow,
         ).publish(
             {
                 "protocolVersion": "implementation-handoff-v1",
@@ -379,6 +585,7 @@ class ProcessVerificationPilots(unittest.TestCase):
         transactions = verification_run.handoff_contract.implementation_transaction.ImplementationTransactionStore(
             self.workflow_root,
             self.capsule_root,
+            guard=self.guard,
         )
         with self.assertRaises(
             verification_run.handoff_contract.implementation_transaction.TransactionError

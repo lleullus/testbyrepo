@@ -21,6 +21,28 @@ from typing import Any, Iterable, Mapping
 
 SCHEMA_VERSION = "task-ownership-snapshot-v1"
 DELTA_VERSION = "task-ownership-delta-v2"
+_TOP_LEVEL_FIELDS = frozenset(
+    {
+        "schemaVersion",
+        "ownershipOnly",
+        "projectRoot",
+        "capturedAt",
+        "identity",
+        "policy",
+        "entries",
+    }
+)
+_FIXED_POLICY = {
+    "gitMetadata": "excluded",
+    "ignoredAndUntracked": "included",
+    "symlinks": "target-and-mode",
+    "regularFiles": "sha256-size-and-mode",
+    "directories": "mode",
+    "stabilityPasses": 2,
+}
+_POLICY_FIELDS = frozenset({*_FIXED_POLICY, "exclusions"})
+_SHA256_PATTERN = re.compile(r"[a-f0-9]{64}")
+_IDENTITY_PATTERN = re.compile(r"sha256:[a-f0-9]{64}")
 
 
 class SnapshotError(RuntimeError):
@@ -136,11 +158,215 @@ def _workspace_identity(entries: Mapping[str, Mapping[str, Any]], exclusions: tu
     return f"sha256:{hashlib.sha256(_canonical_json(identity_input)).hexdigest()}"
 
 
+def _invalid_snapshot(message: str) -> SnapshotError:
+    return SnapshotError("INVALID_SNAPSHOT", message)
+
+
+def _canonical_root(value: Any) -> str:
+    if not isinstance(value, str) or not value or "\x00" in value:
+        raise _invalid_snapshot("projectRoot must be a non-empty absolute path")
+    path = Path(value)
+    if not path.is_absolute():
+        raise _invalid_snapshot("projectRoot must be absolute")
+    try:
+        resolved = str(path.resolve(strict=False))
+    except (OSError, RuntimeError) as exc:
+        raise _invalid_snapshot(f"projectRoot cannot be canonicalized: {exc}") from exc
+    if resolved != value:
+        raise _invalid_snapshot("projectRoot is not canonical")
+    return value
+
+
+def _expected_root(value: Path | str) -> str:
+    if not isinstance(value, (Path, str)):
+        raise SnapshotError("INVALID_PROJECT_ROOT", "expected_project_root must be a path")
+    try:
+        return str(Path(value).resolve(strict=False))
+    except (OSError, RuntimeError) as exc:
+        raise SnapshotError(
+            "INVALID_PROJECT_ROOT", f"expected_project_root cannot be canonicalized: {exc}"
+        ) from exc
+
+
+def _validate_captured_at(value: Any) -> str:
+    if not isinstance(value, str):
+        raise _invalid_snapshot("capturedAt must be a UTC ISO-8601 timestamp")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise _invalid_snapshot("capturedAt must be a UTC ISO-8601 timestamp") from exc
+    if (
+        parsed.tzinfo is None
+        or parsed.utcoffset() != timezone.utc.utcoffset(parsed)
+        or parsed.isoformat() != value
+    ):
+        raise _invalid_snapshot("capturedAt must be a canonical UTC ISO-8601 timestamp")
+    return value
+
+
+def _validate_patterns(value: Any, *, normalized: bool) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise _invalid_snapshot("policy.exclusions must be an array")
+    patterns: list[str] = []
+    for index, pattern in enumerate(value):
+        if not isinstance(pattern, str) or not pattern or "\x00" in pattern:
+            raise _invalid_snapshot(f"policy.exclusions[{index}] is invalid")
+        patterns.append(pattern)
+    if normalized and patterns != sorted(set(patterns)):
+        raise _invalid_snapshot("policy.exclusions must be sorted and unique")
+    return tuple(patterns)
+
+
+def _validate_policy(value: Any) -> tuple[dict[str, Any], tuple[str, ...]]:
+    if not isinstance(value, Mapping) or set(value) != _POLICY_FIELDS:
+        raise _invalid_snapshot("policy fields are invalid")
+    for field, expected in _FIXED_POLICY.items():
+        if value[field] != expected or type(value[field]) is not type(expected):
+            raise _invalid_snapshot(f"policy.{field} is invalid")
+    exclusions = _validate_patterns(value["exclusions"], normalized=True)
+    return (
+        {
+            "gitMetadata": _FIXED_POLICY["gitMetadata"],
+            "ignoredAndUntracked": _FIXED_POLICY["ignoredAndUntracked"],
+            "symlinks": _FIXED_POLICY["symlinks"],
+            "regularFiles": _FIXED_POLICY["regularFiles"],
+            "directories": _FIXED_POLICY["directories"],
+            "exclusions": list(exclusions),
+            "stabilityPasses": _FIXED_POLICY["stabilityPasses"],
+        },
+        exclusions,
+    )
+
+
+def _validate_relative_path(value: Any) -> str:
+    if not isinstance(value, str) or not value or "\x00" in value:
+        raise _invalid_snapshot("entry paths must be non-empty strings")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise _invalid_snapshot("entry paths must be valid UTF-8") from exc
+    segments = value.split("/")
+    if value.startswith("/") or any(segment in {"", ".", ".."} for segment in segments):
+        raise _invalid_snapshot(f"entry path is not canonical: {value!r}")
+    if value == ".git" or value.startswith(".git/"):
+        raise _invalid_snapshot("entries cannot contain excluded .git metadata")
+    return value
+
+
+def _validate_mode(value: Any, path: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 0o7777:
+        raise _invalid_snapshot(f"entry mode is invalid: {path}")
+    return value
+
+
+def _validate_entry(path: str, value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise _invalid_snapshot(f"entry must be an object: {path}")
+    kind = value.get("kind")
+    if not isinstance(kind, str):
+        raise _invalid_snapshot(f"entry kind is invalid: {path}")
+    fields_by_kind = {
+        "directory": {"kind", "mode"},
+        "special": {"kind", "mode"},
+        "symlink": {"kind", "mode", "target"},
+        "file": {"kind", "mode", "size", "sha256"},
+    }
+    expected_fields = fields_by_kind.get(kind)
+    if expected_fields is None or set(value) != expected_fields:
+        raise _invalid_snapshot(f"entry fields are invalid: {path}")
+    mode = _validate_mode(value["mode"], path)
+    if kind in {"directory", "special"}:
+        return {"kind": kind, "mode": mode}
+    if kind == "symlink":
+        target = value["target"]
+        if not isinstance(target, str) or not target or "\x00" in target:
+            raise _invalid_snapshot(f"symlink target is invalid: {path}")
+        try:
+            target.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise _invalid_snapshot(f"symlink target must be valid UTF-8: {path}") from exc
+        return {"kind": "symlink", "mode": mode, "target": target}
+    size = value["size"]
+    digest = value["sha256"]
+    if isinstance(size, bool) or not isinstance(size, int) or size < 0:
+        raise _invalid_snapshot(f"file size is invalid: {path}")
+    if not isinstance(digest, str) or _SHA256_PATTERN.fullmatch(digest) is None:
+        raise _invalid_snapshot(f"file digest is invalid: {path}")
+    return {"kind": "file", "mode": mode, "size": size, "sha256": digest}
+
+
+def _validate_entries(value: Any, exclusions: tuple[str, ...]) -> dict[str, dict[str, Any]]:
+    if not isinstance(value, Mapping):
+        raise _invalid_snapshot("entries must be an object")
+    entries: dict[str, dict[str, Any]] = {}
+    for raw_path, raw_entry in value.items():
+        path = _validate_relative_path(raw_path)
+        if _is_excluded(path, exclusions):
+            raise _invalid_snapshot(f"entry violates the exclusion policy: {path}")
+        entries[path] = _validate_entry(path, raw_entry)
+    for path in entries:
+        segments = path.split("/")
+        for end in range(1, len(segments)):
+            parent = "/".join(segments[:end])
+            parent_entry = entries.get(parent)
+            if parent_entry is None or parent_entry["kind"] != "directory":
+                raise _invalid_snapshot(f"entry has no directory parent: {path}")
+    return entries
+
+
+def validate_snapshot(
+    value: Any, expected_project_root: Path | str | None = None
+) -> dict[str, Any]:
+    """Validate and normalize one in-memory ownership snapshot.
+
+    The identity authenticates the physical manifest and exclusion list. The remaining fixed
+    fields are validated independently so a caller cannot extend or reinterpret the v1 schema.
+    """
+    if not isinstance(value, Mapping) or set(value) != _TOP_LEVEL_FIELDS:
+        raise _invalid_snapshot("top-level fields are invalid")
+    if value["schemaVersion"] != SCHEMA_VERSION or type(value["schemaVersion"]) is not str:
+        raise _invalid_snapshot(f"schemaVersion must be {SCHEMA_VERSION}")
+    if value["ownershipOnly"] is not True:
+        raise _invalid_snapshot("ownershipOnly must be true")
+    project_root = _canonical_root(value["projectRoot"])
+    if expected_project_root is not None and project_root != _expected_root(expected_project_root):
+        raise SnapshotError(
+            "PROJECT_ROOT_MISMATCH", "snapshot projectRoot differs from expected_project_root"
+        )
+    captured_at = _validate_captured_at(value["capturedAt"])
+    policy, exclusions = _validate_policy(value["policy"])
+    entries = _validate_entries(value["entries"], exclusions)
+    identity = value["identity"]
+    if not isinstance(identity, str) or _IDENTITY_PATTERN.fullmatch(identity) is None:
+        raise _invalid_snapshot("identity must be a lowercase SHA-256 identity")
+    try:
+        expected_identity = _workspace_identity(entries, exclusions)
+    except (TypeError, ValueError, UnicodeError) as exc:
+        raise _invalid_snapshot(f"identity input is not canonical JSON: {exc}") from exc
+    if identity != expected_identity:
+        raise _invalid_snapshot("snapshot identity mismatch")
+    return {
+        "schemaVersion": SCHEMA_VERSION,
+        "ownershipOnly": True,
+        "projectRoot": project_root,
+        "capturedAt": captured_at,
+        "identity": identity,
+        "policy": policy,
+        "entries": entries,
+    }
+
+
 def capture(project_root: Path | str, *, exclusions: Iterable[str] = ()) -> dict[str, Any]:
     root = Path(project_root).resolve(strict=True)
     if not root.is_dir():
         raise SnapshotError("INVALID_PROJECT_ROOT", f"not a directory: {root}")
-    normalized_exclusions = tuple(sorted(set(exclusions)))
+    try:
+        raw_exclusions = list(exclusions)
+    except TypeError as exc:
+        raise SnapshotError("INVALID_EXCLUSIONS", "exclusions must be iterable") from exc
+    normalized_exclusions = tuple(
+        sorted(set(_validate_patterns(raw_exclusions, normalized=False)))
+    )
     first = _scan_tree(root, normalized_exclusions)
     second = _scan_tree(root, normalized_exclusions)
     if first != second:
@@ -189,18 +415,38 @@ def write_immutable(snapshot: Mapping[str, Any], output: Path | str) -> Path:
     return destination
 
 
-def read_snapshot(path: Path | str) -> dict[str, Any]:
+def read_snapshot(
+    path: Path | str, expected_project_root: Path | str | None = None
+) -> dict[str, Any]:
     value = json.loads(Path(path).read_text(encoding="utf-8"))
-    if value.get("schemaVersion") != SCHEMA_VERSION or value.get("ownershipOnly") is not True:
-        raise SnapshotError("INVALID_SNAPSHOT", f"not an ownership-only v1 snapshot: {path}")
-    expected = _workspace_identity(value.get("entries", {}), tuple(value["policy"]["exclusions"]))
-    if value.get("identity") != expected:
-        raise SnapshotError("INVALID_SNAPSHOT", f"snapshot identity mismatch: {path}")
-    return value
+    return validate_snapshot(value, expected_project_root=expected_project_root)
+
+
+def path_matches_any(relative_path: str, patterns: Iterable[str]) -> bool:
+    """Return whether a canonical project-relative path matches any owner path pattern."""
+    if (
+        not isinstance(relative_path, str)
+        or not relative_path
+        or "\x00" in relative_path
+        or relative_path.startswith("/")
+        or any(segment in {"", ".", ".."} for segment in relative_path.split("/"))
+    ):
+        raise SnapshotError("INVALID_PATH", "relative_path must be canonical and project-relative")
+    if isinstance(patterns, (str, bytes)):
+        raise SnapshotError("INVALID_PATH_PATTERN", "patterns must be an iterable of strings")
+    try:
+        normalized_patterns = tuple(patterns)
+    except TypeError as exc:
+        raise SnapshotError("INVALID_PATH_PATTERN", "patterns must be iterable") from exc
+    for index, pattern in enumerate(normalized_patterns):
+        if not isinstance(pattern, str) or not pattern or "\x00" in pattern:
+            raise SnapshotError("INVALID_PATH_PATTERN", f"patterns[{index}] is invalid")
+    return _is_excluded(relative_path, normalized_patterns)
 
 
 def _allowed(relative_path: str, patterns: tuple[str, ...]) -> bool:
-    return any(_is_excluded(relative_path, (pattern,)) for pattern in patterns)
+    """Compatibility shim; owner integrations must use :func:`path_matches_any`."""
+    return path_matches_any(relative_path, patterns)
 
 
 def compare(
@@ -209,16 +455,14 @@ def compare(
     *,
     allowed_mutation_scopes: Iterable[str],
 ) -> dict[str, Any]:
-    if before.get("schemaVersion") != SCHEMA_VERSION or after.get("schemaVersion") != SCHEMA_VERSION:
-        raise SnapshotError("INVALID_SNAPSHOT", "both inputs must be v1 ownership snapshots")
-    if before.get("ownershipOnly") is not True or after.get("ownershipOnly") is not True:
-        raise SnapshotError("INVALID_SNAPSHOT", "ownershipOnly must be true")
-    if before.get("projectRoot") != after.get("projectRoot"):
+    validated_before = validate_snapshot(before)
+    validated_after = validate_snapshot(after)
+    if validated_before["projectRoot"] != validated_after["projectRoot"]:
         raise SnapshotError("PROJECT_ROOT_MISMATCH", "before and after project roots differ")
-    if before.get("policy") != after.get("policy"):
+    if validated_before["policy"] != validated_after["policy"]:
         raise SnapshotError("SNAPSHOT_POLICY_MISMATCH", "before and after snapshot policies differ")
-    before_entries = _mapping_entries(before.get("entries"))
-    after_entries = _mapping_entries(after.get("entries"))
+    before_entries = validated_before["entries"]
+    after_entries = validated_after["entries"]
     before_paths = set(before_entries)
     after_paths = set(after_entries)
     created = sorted(after_paths - before_paths)
@@ -228,8 +472,10 @@ def compare(
     )
     changed_paths = sorted(set(created + deleted + modified))
     allowed_patterns = tuple(sorted(set(allowed_mutation_scopes)))
-    in_scope = [path for path in changed_paths if _allowed(path, allowed_patterns)]
-    out_of_scope = [path for path in changed_paths if not _allowed(path, allowed_patterns)]
+    in_scope = [path for path in changed_paths if path_matches_any(path, allowed_patterns)]
+    out_of_scope = [
+        path for path in changed_paths if not path_matches_any(path, allowed_patterns)
+    ]
     rename_candidates: list[dict[str, str]] = []
     for old_path in deleted:
         old = before_entries[old_path]
@@ -245,9 +491,9 @@ def compare(
     return {
         "schemaVersion": DELTA_VERSION,
         "ownershipOnly": True,
-        "projectRoot": before["projectRoot"],
-        "beforeIdentity": before["identity"],
-        "afterIdentity": after["identity"],
+        "projectRoot": validated_before["projectRoot"],
+        "beforeIdentity": validated_before["identity"],
+        "afterIdentity": validated_after["identity"],
         "allowedMutationScopes": list(allowed_patterns),
         "created": created,
         "modified": modified,
@@ -259,12 +505,6 @@ def compare(
         "scopeState": "WITHIN_ENVELOPE" if not out_of_scope else "OUTSIDE_ENVELOPE",
         "actorAttribution": "NOT_ESTABLISHED",
     }
-
-
-def _mapping_entries(value: Any) -> Mapping[str, Mapping[str, Any]]:
-    if not isinstance(value, Mapping):
-        raise SnapshotError("INVALID_SNAPSHOT", "entries must be an object")
-    return value
 
 
 def _load_patterns(values: list[str]) -> tuple[str, ...]:

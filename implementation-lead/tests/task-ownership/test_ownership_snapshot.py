@@ -40,6 +40,134 @@ class OwnershipSnapshotTests(unittest.TestCase):
     def capture(self) -> dict[str, object]:
         return ownership_snapshot.capture(self.root)
 
+    def clone(self, value: object) -> object:
+        return json.loads(json.dumps(value))
+
+    def test_validate_snapshot_accepts_capture_for_expected_project_root(self) -> None:
+        snapshot = self.capture()
+
+        validated = ownership_snapshot.validate_snapshot(
+            snapshot, expected_project_root=self.root
+        )
+
+        self.assertEqual(snapshot, validated)
+
+    def test_validate_snapshot_rejects_schema_and_top_level_field_tamper(self) -> None:
+        snapshot = self.capture()
+        schema_tamper = self.clone(snapshot)
+        assert isinstance(schema_tamper, dict)
+        schema_tamper["schemaVersion"] = "task-ownership-snapshot-v999"
+        with self.assertRaisesRegex(ownership_snapshot.SnapshotError, "INVALID_SNAPSHOT"):
+            ownership_snapshot.validate_snapshot(schema_tamper)
+
+        extra_field_tamper = self.clone(snapshot)
+        assert isinstance(extra_field_tamper, dict)
+        extra_field_tamper["callerApproved"] = True
+        with self.assertRaisesRegex(ownership_snapshot.SnapshotError, "INVALID_SNAPSHOT"):
+            ownership_snapshot.validate_snapshot(extra_field_tamper)
+
+    def test_validate_snapshot_rejects_fixed_policy_and_exclusion_tamper(self) -> None:
+        snapshot = ownership_snapshot.capture(
+            self.root, exclusions=["tmp/**", "build/**"]
+        )
+        fixed_policy_tamper = self.clone(snapshot)
+        assert isinstance(fixed_policy_tamper, dict)
+        fixed_policy_tamper["policy"]["gitMetadata"] = "included"
+        with self.assertRaisesRegex(ownership_snapshot.SnapshotError, "INVALID_SNAPSHOT"):
+            ownership_snapshot.validate_snapshot(fixed_policy_tamper)
+
+        exclusion_order_tamper = self.clone(snapshot)
+        assert isinstance(exclusion_order_tamper, dict)
+        exclusion_order_tamper["policy"]["exclusions"] = ["tmp/**", "build/**"]
+        exclusion_order_tamper["identity"] = ownership_snapshot._workspace_identity(
+            exclusion_order_tamper["entries"], ("tmp/**", "build/**")
+        )
+        with self.assertRaisesRegex(ownership_snapshot.SnapshotError, "INVALID_SNAPSHOT"):
+            ownership_snapshot.validate_snapshot(exclusion_order_tamper)
+
+    def test_validate_snapshot_rejects_noncanonical_and_unexpected_project_root(self) -> None:
+        snapshot = self.capture()
+        noncanonical = self.clone(snapshot)
+        assert isinstance(noncanonical, dict)
+        noncanonical["projectRoot"] = f"{self.root}/../project"
+        with self.assertRaisesRegex(ownership_snapshot.SnapshotError, "INVALID_SNAPSHOT"):
+            ownership_snapshot.validate_snapshot(noncanonical)
+
+        unexpected = self.clone(snapshot)
+        assert isinstance(unexpected, dict)
+        unexpected["projectRoot"] = str(self.artifacts.resolve())
+        with self.assertRaisesRegex(ownership_snapshot.SnapshotError, "PROJECT_ROOT_MISMATCH"):
+            ownership_snapshot.validate_snapshot(
+                unexpected, expected_project_root=self.root
+            )
+
+    def test_validate_snapshot_rejects_entry_shape_even_with_recomputed_identity(self) -> None:
+        (self.root / "file.txt").write_text("content", encoding="utf-8")
+        snapshot = self.capture()
+        tampered = self.clone(snapshot)
+        assert isinstance(tampered, dict)
+        tampered["entries"]["file.txt"]["callerActor"] = "worker"
+        exclusions = tuple(tampered["policy"]["exclusions"])
+        tampered["identity"] = ownership_snapshot._workspace_identity(
+            tampered["entries"], exclusions
+        )
+
+        with self.assertRaisesRegex(ownership_snapshot.SnapshotError, "INVALID_SNAPSHOT"):
+            ownership_snapshot.validate_snapshot(tampered)
+
+    def test_validate_snapshot_rejects_impossible_entry_paths_and_parent_shape(self) -> None:
+        snapshot = self.capture()
+        git_entry = self.clone(snapshot)
+        assert isinstance(git_entry, dict)
+        git_entry["entries"][".git/config"] = {
+            "kind": "file",
+            "mode": 0o644,
+            "size": 1,
+            "sha256": "a" * 64,
+        }
+        git_entry["identity"] = ownership_snapshot._workspace_identity(
+            git_entry["entries"], tuple(git_entry["policy"]["exclusions"])
+        )
+        with self.assertRaisesRegex(ownership_snapshot.SnapshotError, "INVALID_SNAPSHOT"):
+            ownership_snapshot.validate_snapshot(git_entry)
+
+        missing_parent = self.clone(snapshot)
+        assert isinstance(missing_parent, dict)
+        missing_parent["entries"]["missing/file.txt"] = {
+            "kind": "file",
+            "mode": 0o644,
+            "size": 1,
+            "sha256": "a" * 64,
+        }
+        missing_parent["identity"] = ownership_snapshot._workspace_identity(
+            missing_parent["entries"], tuple(missing_parent["policy"]["exclusions"])
+        )
+        with self.assertRaisesRegex(ownership_snapshot.SnapshotError, "INVALID_SNAPSHOT"):
+            ownership_snapshot.validate_snapshot(missing_parent)
+
+    def test_validate_snapshot_rejects_identity_tamper(self) -> None:
+        snapshot = self.capture()
+        snapshot["identity"] = f"sha256:{'0' * 64}"
+
+        with self.assertRaisesRegex(ownership_snapshot.SnapshotError, "INVALID_SNAPSHOT"):
+            ownership_snapshot.validate_snapshot(snapshot)
+
+    def test_read_snapshot_and_compare_reuse_full_validator(self) -> None:
+        before = self.capture()
+        invalid_after = self.clone(before)
+        assert isinstance(invalid_after, dict)
+        invalid_after["policy"]["stabilityPasses"] = 1
+
+        self.artifacts.mkdir()
+        invalid_path = self.artifacts / "invalid.json"
+        invalid_path.write_text(json.dumps(invalid_after), encoding="utf-8")
+        with self.assertRaisesRegex(ownership_snapshot.SnapshotError, "INVALID_SNAPSHOT"):
+            ownership_snapshot.read_snapshot(invalid_path)
+        with self.assertRaisesRegex(ownership_snapshot.SnapshotError, "INVALID_SNAPSHOT"):
+            ownership_snapshot.compare(
+                before, invalid_after, allowed_mutation_scopes=[]
+            )
+
     def test_preexisting_dirty_and_ignored_files_are_not_worker_delta(self) -> None:
         (self.root / "user.txt").write_text("dirty before", encoding="utf-8")
         (self.root / "state.cache").write_text("ignored by git, not by snapshot", encoding="utf-8")
@@ -129,14 +257,14 @@ class OwnershipSnapshotTests(unittest.TestCase):
         self.assertIn(".scratch/wp-002/SPEC.md", delta["outOfScopePaths"])
 
     def test_single_star_does_not_cross_path_segments_for_python_glob(self) -> None:
-        self.assertFalse(ownership_snapshot._allowed("src/deep/x.py", ("src/*.py",)))
+        self.assertFalse(ownership_snapshot.path_matches_any("src/deep/x.py", ("src/*.py",)))
 
     def test_single_star_does_not_cross_path_segments_for_generic_glob(self) -> None:
-        self.assertFalse(ownership_snapshot._allowed("src/a/b.txt", ("src/*",)))
+        self.assertFalse(ownership_snapshot.path_matches_any("src/a/b.txt", ("src/*",)))
 
     def test_double_star_matches_recursively(self) -> None:
-        self.assertTrue(ownership_snapshot._allowed("src/deep/x.py", ("src/**/*.py",)))
-        self.assertTrue(ownership_snapshot._allowed("src", ("src/**",)))
+        self.assertTrue(ownership_snapshot.path_matches_any("src/deep/x.py", ("src/**/*.py",)))
+        self.assertTrue(ownership_snapshot.path_matches_any("src", ("src/**",)))
 
     def test_mode_symlink_and_rename_are_visible(self) -> None:
         (self.root / "bin").mkdir()

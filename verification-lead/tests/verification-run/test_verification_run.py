@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import contextlib
+import io
 import json
 import os
 import sys
 import tempfile
+import threading
+import time
 import unittest
 import uuid
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -35,7 +40,14 @@ class VerificationRunTests(unittest.TestCase):
         self.product_file = self.project / "product.txt"
         self.product_file.write_text("stable\n", encoding="utf-8")
         self.workflow_root = temporary / "workflow"
-        self.service = verification_run.VerificationService(self.workflow_root)
+        self.guard = verification_run.workflow_store._mint_test_guard_session(
+            store_root=self.workflow_root,
+            identity=f"verification-run-test:{self.workflow_root}",
+            is_active=lambda: True,
+        )
+        self.service = verification_run.VerificationService(
+            self.workflow_root, guard=self.guard
+        )
         self.handoff_module = verification_run.handoff_contract
         self.workflow_module = verification_run.workflow_store
         self.criteria = self.handoff_module.acceptance_criteria_from_ticket(self.ticket)
@@ -64,13 +76,25 @@ class VerificationRunTests(unittest.TestCase):
             "unresolvedImplementationItems": [],
             "completedAt": "2026-08-03T00:00:00+00:00",
         }
-        self.service.workflow.publish_initial_handoff(
-            node_ref=self.handoff_ref,
-            protocol_version="implementation-handoff-v1",
-            planning_identity=self.planning,
-            source_identity=self.source,
-            payload=self.handoff_payload,
-        )
+        encoded_handoff = verification_run.workflow_store.canonical_json(self.handoff_payload)
+        with self.service.workflow._transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO nodes(
+                    node_ref, node_kind, protocol_version, root_ref, planning_identity,
+                    source_identity, verification_status, payload_json, payload_sha256, created_at
+                ) VALUES (?, 'IMPLEMENTATION_HANDOFF', 'implementation-handoff-v1', ?, ?, ?, NULL, ?, ?, ?)
+                """,
+                (
+                    self.handoff_ref,
+                    self.handoff_ref,
+                    self.planning,
+                    self.source,
+                    encoded_handoff,
+                    hashlib.sha256(encoded_handoff).hexdigest(),
+                    "2026-08-03T00:00:00+00:00",
+                ),
+            )
         self.invocation = self.service.workflow.start_invocation(
             root_ref=self.handoff_ref,
             elapsed_seconds=600,
@@ -95,6 +119,47 @@ class VerificationRunTests(unittest.TestCase):
         result = {field: 0 for field in verification_run.workflow_store.BUDGET_FIELDS}
         result.update(overrides)
         return result
+
+    def seed_transaction_free_handoff(
+        self,
+        *,
+        payload_overrides: dict[str, object] | None = None,
+        row_protocol_version: str = "implementation-handoff-v1",
+        row_planning_identity: str | None = None,
+        row_source_identity: str | None = None,
+        row_created_at: str | None = None,
+    ) -> tuple[str, dict[str, object]]:
+        ref = verification_run.workflow_store.allocate_ref("IMPLEMENTATION_HANDOFF")
+        payload = json.loads(json.dumps(self.handoff_payload))
+        payload["implementationHandoffRef"] = ref
+        payload.update(payload_overrides or {})
+        encoded = verification_run.workflow_store.canonical_json(payload)
+        created_at = row_created_at or str(payload["completedAt"])
+        with self.service.workflow._transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO nodes(
+                    node_ref, node_kind, protocol_version, root_ref, planning_identity,
+                    source_identity, verification_status, payload_json, payload_sha256, created_at
+                ) VALUES (?, 'IMPLEMENTATION_HANDOFF', ?, ?, ?, ?, NULL, ?, ?, ?)
+                """,
+                (
+                    ref,
+                    row_protocol_version,
+                    ref,
+                    row_planning_identity or self.planning,
+                    row_source_identity or self.source,
+                    encoded,
+                    hashlib.sha256(encoded).hexdigest(),
+                    created_at,
+                ),
+            )
+        invocation = self.service.workflow.start_invocation(
+            root_ref=ref,
+            elapsed_seconds=60,
+            limits=self.budget(effectfulActions=2, toolCostUnits=4, closureOperations=4),
+        )
+        return ref, invocation
 
     def open(self, *, effectful: int = 10, tool_cost: int = 30):
         return self.service.open_verification(
@@ -138,6 +203,12 @@ class VerificationRunTests(unittest.TestCase):
                 else None
             ),
         }
+
+    def external_executable(self, name: str, source: str, *, mode: int = 0o700) -> Path:
+        path = Path(self.temporary.name) / name
+        path.write_text(source, encoding="utf-8")
+        path.chmod(mode)
+        return path.resolve(strict=True)
 
     def draft(
         self,
@@ -197,6 +268,86 @@ class VerificationRunTests(unittest.TestCase):
             }
         ]
 
+    def test_audited_reopen_admits_only_current_open_v3_run_relationships(self) -> None:
+        opened = self.open()
+        sealed = self.seal(
+            opened,
+            self.draft([self.flow("reopen-v3", [self.step("action", "ACTION", "print('ok')")])]),
+        )
+        reopened_guard = verification_run.workflow_store._mint_test_guard_session(
+            store_root=self.workflow_root,
+            identity="verification-run-test:reopen-v3",
+            is_active=lambda: True,
+        )
+
+        reopened = verification_run.VerificationService(
+            self.workflow_root, guard=reopened_guard
+        )
+
+        view = reopened.read_run(sealed["verificationRunRef"])
+        self.assertEqual("SEALED", view["state"])
+        self.assertEqual("process-v3", view["sealedPlan"]["executorPolicy"]["executorVersion"])
+
+    def interrupt_result_publication_after_ledger(
+        self,
+        *,
+        opened: dict[str, object],
+        sealed: dict[str, object],
+        assessments: list[dict[str, object]],
+    ) -> tuple[str, str, object]:
+        original_allocate = verification_run.workflow_store.allocate_ref
+        old_ref = original_allocate("VERIFICATION_RESULT")
+        retry_ref = original_allocate("VERIFICATION_RESULT")
+        pending_refs = [old_ref, retry_ref]
+
+        def allocate(kind: str) -> str:
+            if kind == "VERIFICATION_RESULT":
+                return pending_refs.pop(0)
+            return original_allocate(kind)
+
+        verification_run.workflow_store.allocate_ref = allocate
+        connection = self.service.workflow._connect()
+        try:
+            connection.execute(
+                """
+                CREATE TRIGGER fail_result_after_ledger
+                BEFORE INSERT ON verification_events
+                WHEN NEW.event_kind = 'RESULT_PUBLISHED'
+                BEGIN SELECT RAISE(ABORT, 'pause after ledger closure'); END
+                """
+            )
+            self.assert_code(
+                "ATOMIC_PUBLICATION_CONFLICT",
+                lambda: self.service.publish_result(
+                    assessor_capability=opened["assessor"]["capability"],
+                    verification_run_ref=sealed["verificationRunRef"],
+                    criterion_assessments=assessments,
+                ),
+            )
+        except BaseException:
+            verification_run.workflow_store.allocate_ref = original_allocate
+            raise
+        finally:
+            connection.execute("DROP TRIGGER IF EXISTS fail_result_after_ledger")
+            connection.close()
+        run = self.service.read_run(sealed["verificationRunRef"])
+        self.assertEqual("SEALED", run["state"])
+        self.assertIsNone(run["closure"])
+        connection = self.service.workflow._connect()
+        try:
+            old_node = connection.execute(
+                "SELECT 1 FROM nodes WHERE node_ref = ?", (old_ref,)
+            ).fetchone()
+            result_events = connection.execute(
+                "SELECT COUNT(*) FROM verification_events WHERE run_ref = ? AND event_kind = 'RESULT_PUBLISHED'",
+                (sealed["verificationRunRef"],),
+            ).fetchone()[0]
+        finally:
+            connection.close()
+        self.assertIsNone(old_node)
+        self.assertEqual(0, result_events)
+        return old_ref, retry_ref, original_allocate
+
     def remediate_failed_result(
         self,
         failed: dict[str, object],
@@ -214,6 +365,7 @@ class VerificationRunTests(unittest.TestCase):
         transaction_store = verification_run.handoff_contract.implementation_transaction.ImplementationTransactionStore(
             self.workflow_root,
             capsule_root,
+            guard=self.guard,
         )
         transaction = transaction_store.start_remediation(
             remediator_capability=remediation_open["remediator"]["capability"],
@@ -270,6 +422,7 @@ class VerificationRunTests(unittest.TestCase):
         publisher = verification_run.handoff_contract.HandoffPublisher(
             self.workflow_root,
             capsule_root,
+            workflow=transaction_store.workflow,
         )
         successor = publisher.publish(
             {
@@ -366,7 +519,7 @@ class VerificationRunTests(unittest.TestCase):
         )
         self.assertEqual("ABSENT\nsealed-value\n", artifact["payload"]["stdout"]["text"])
         public_step = sealed["plan"]["flows"][0]["steps"][0]
-        self.assertEqual("process-v2", public_step["executorVersion"])
+        self.assertEqual("process-v3", public_step["executorVersion"])
         self.assertEqual("SEALED_EMPTY_BASE_V1", public_step["environmentPolicy"])
         self.assertNotIn("sealed-value", json.dumps(sealed["plan"], sort_keys=True))
 
@@ -410,6 +563,444 @@ class VerificationRunTests(unittest.TestCase):
             sealed["plan"]["flows"][0]["steps"][0]["canonicalRequestDigest"],
             execution["attempts"][0]["canonicalRequestDigest"],
         )
+
+    def test_caller_cannot_inject_executable_identity_or_request_digests(self) -> None:
+        opened = self.open()
+        injected = self.step("injected", "READBACK", "print('must-not-seal')")
+        injected["executableIdentity"] = {
+            "canonicalPath": str(Path(sys.executable).resolve()),
+            "contentSha256": "0" * 64,
+            "byteCount": 0,
+            "executableMode": 0o755,
+            "ownerUid": os.getuid(),
+            "ownerGid": os.getgid(),
+        }
+        injected["canonicalRequestDigest"] = "0" * 64
+        injected["repeatRequestDigest"] = "0" * 64
+
+        self.assert_code(
+            "MALFORMED_VERIFICATION_DRAFT",
+            lambda: self.seal(
+                opened,
+                self.draft([self.flow("caller-injection", [injected])]),
+            ),
+        )
+
+    def test_preview_seal_and_repeat_digest_share_one_identity_pipeline(self) -> None:
+        executable = self.external_executable(
+            "digest-tool",
+            "#!/bin/sh\nprintf 'stable\\n'\n",
+        )
+        step = self.step("digest", "READBACK", "print('unused')")
+        step["executable"] = str(executable)
+        step["argv"] = []
+        preview = self.service.preview_process_step(
+            step=step,
+            project_root=self.project,
+            final_source_identity=self.source,
+        )
+        opened = self.open()
+        sealed = self.seal(
+            opened, self.draft([self.flow("digest-pipeline", [step])])
+        )
+        public_step = sealed["plan"]["flows"][0]["steps"][0]
+        self.assertEqual(preview["canonicalRequestDigest"], public_step["canonicalRequestDigest"])
+        self.assertEqual(preview["repeatRequestDigest"], public_step["repeatRequestDigest"])
+        self.assertEqual(
+            preview["executableIdentity"],
+            public_step["canonicalRequest"]["executableIdentity"],
+        )
+        self.assertEqual(
+            public_step["canonicalRequest"]["executable"],
+            public_step["canonicalRequest"]["executableIdentity"]["canonicalPath"],
+        )
+
+        connection = self.service.workflow._connect()
+        try:
+            row = connection.execute(
+                "SELECT * FROM verification_runs WHERE run_ref = ?",
+                (sealed["verificationRunRef"],),
+            ).fetchone()
+            stored_step = self.service._load_plan(row)["flows"][0]["steps"][0]
+        finally:
+            connection.close()
+        changed_source = json.loads(json.dumps(stored_step))
+        changed_source["sourceBinding"]["finalSourceIdentity"] = "sha256:" + "f" * 64
+        self.assertNotEqual(
+            verification_run._digest(verification_run._request_payload(stored_step)),
+            verification_run._digest(verification_run._request_payload(changed_source)),
+        )
+        self.assertEqual(
+            verification_run._digest(verification_run._repeat_request_payload(stored_step)),
+            verification_run._digest(verification_run._repeat_request_payload(changed_source)),
+        )
+
+        executable.chmod(0o755)
+        changed_preview = self.service.preview_process_step(
+            step=step,
+            project_root=self.project,
+            final_source_identity=self.source,
+        )
+        self.assertNotEqual(
+            preview["repeatRequestDigest"], changed_preview["repeatRequestDigest"]
+        )
+
+    def test_pre_execution_content_swap_records_drift_and_starts_no_process(self) -> None:
+        marker = Path(self.temporary.name) / "must-not-exist"
+        executable = self.external_executable(
+            "swappable-tool",
+            f"#!{Path(sys.executable).resolve()}\nfrom pathlib import Path\nPath({str(marker)!r}).write_text('original')\n",
+        )
+        step = self.step("swap", "ACTION", "print('unused')")
+        step["executable"] = str(executable)
+        step["argv"] = []
+        opened = self.open()
+        sealed = self.seal(opened, self.draft([self.flow("swap-flow", [step])]))
+        executable.write_text(
+            f"#!{Path(sys.executable).resolve()}\nfrom pathlib import Path\nPath({str(marker)!r}).write_text('swapped')\n",
+            encoding="utf-8",
+        )
+        executable.chmod(0o700)
+
+        execution = self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="swap-flow",
+            step_id="swap",
+        )
+        attempt = execution["attempts"][0]
+        self.assertEqual("EXECUTABLE_IDENTITY_DRIFT", attempt["status"])
+        self.assertEqual("PRE", attempt["result"]["executableIdentityPhase"])
+        self.assertFalse(attempt["result"]["processStarted"])
+        self.assertFalse(marker.exists())
+        run = self.service.read_run(sealed["verificationRunRef"])
+        drift_events = [
+            event for event in run["events"] if event["eventKind"] == "EXECUTABLE_IDENTITY_DRIFT"
+        ]
+        self.assertEqual(1, len(drift_events))
+        self.assertEqual(attempt["attemptId"], drift_events[0]["payload"]["attemptId"])
+        result = self.service.publish_result(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            criterion_assessments=self.assessment("INCONCLUSIVE"),
+        )
+        self.assertEqual("INCOMPLETE", result["verificationStatus"])
+        self.assertIn("EXECUTABLE_IDENTITY_DRIFT", result["reasonCodes"])
+
+    def test_pre_execution_mode_swap_is_durable_executable_drift(self) -> None:
+        executable = self.external_executable(
+            "mode-tool", "#!/bin/sh\nprintf 'must-not-run\\n'\n", mode=0o700
+        )
+        step = self.step("mode", "READBACK", "print('unused')")
+        step["executable"] = str(executable)
+        step["argv"] = []
+        opened = self.open()
+        sealed = self.seal(opened, self.draft([self.flow("mode-flow", [step])]))
+        executable.chmod(0o755)
+
+        execution = self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="mode-flow",
+            step_id="mode",
+        )
+        attempt = execution["attempts"][0]
+        self.assertEqual("EXECUTABLE_IDENTITY_DRIFT", attempt["status"])
+        self.assertEqual("PRE", attempt["result"]["executableIdentityPhase"])
+        self.assertFalse(attempt["result"]["processStarted"])
+
+    def test_attempt_event_cardinality_and_result_digest_are_enforced(self) -> None:
+        opened = self.open()
+        sealed = self.seal(
+            opened,
+            self.draft(
+                [self.flow("event-binding", [self.step("read", "READBACK", "print('ok')")])]
+            ),
+        )
+        execution = self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="event-binding",
+            step_id="read",
+        )
+        attempt = execution["attempts"][0]
+        run = self.service.read_run(sealed["verificationRunRef"])
+        appended = [
+            event for event in run["events"] if event["eventKind"] == "ATTEMPT_APPENDED"
+        ]
+        self.assertEqual(1, len(appended))
+        self.assertEqual(attempt["attemptId"], appended[0]["payload"]["attemptId"])
+        self.assertEqual(
+            hashlib.sha256(verification_run._canonical_json(attempt["result"])).hexdigest(),
+            appended[0]["payload"]["resultDigest"],
+        )
+        with self.service.workflow._transaction() as connection:
+            self.service._event_locked(
+                connection,
+                sealed["verificationRunRef"],
+                "ATTEMPT_APPENDED",
+                appended[0]["payload"],
+            )
+        self.assert_code(
+            "STORE_CORRUPT",
+            lambda: self.service.publish_result(
+                assessor_capability=opened["assessor"]["capability"],
+                verification_run_ref=sealed["verificationRunRef"],
+                criterion_assessments=self.assessment("SATISFIED"),
+            ),
+        )
+        connection = self.service.workflow._connect()
+        try:
+            ledger_count = connection.execute(
+                "SELECT COUNT(*) FROM verification_events WHERE run_ref = ? AND event_kind = 'LEDGER_COMPLETED'",
+                (sealed["verificationRunRef"],),
+            ).fetchone()[0]
+        finally:
+            connection.close()
+        self.assertEqual(0, ledger_count)
+
+    def test_post_execution_self_update_preserves_output_and_drift_is_run_global(self) -> None:
+        executable = self.external_executable(
+            "self-updating-tool",
+            (
+                f"#!{Path(sys.executable).resolve()}\n"
+                "from pathlib import Path\n"
+                "import os\n"
+                "print('preserved-output')\n"
+                "path = Path(__file__)\n"
+                "path.write_text('#!/bin/sh\\nprintf changed\\n')\n"
+                "path.chmod(0o700)\n"
+            ),
+        )
+        action = self.step("self-update", "ACTION", "print('unused')")
+        action["executable"] = str(executable)
+        action["argv"] = []
+        readback = self.step("later-readback", "READBACK", "print('readback-ok')")
+        opened = self.open()
+        sealed = self.seal(
+            opened,
+            self.draft([self.flow("post-drift", [action, readback])]),
+        )
+        execution = self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="post-drift",
+            step_id="self-update",
+        )
+        attempt = execution["attempts"][0]
+        self.assertEqual("EXECUTABLE_IDENTITY_DRIFT", attempt["status"])
+        self.assertEqual("POST", attempt["result"]["executableIdentityPhase"])
+        self.assertTrue(attempt["result"]["processStarted"])
+        artifact = self.service.read_artifact(
+            assessor_capability=opened["assessor"]["capability"],
+            artifact_ref=attempt["artifactRef"],
+        )
+        self.assertEqual("preserved-output\n", artifact["payload"]["stdout"]["text"])
+        self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="post-drift",
+            step_id="later-readback",
+        )
+        self.assert_code(
+            "CONTRADICTION_WITHOUT_COMPLETE_EVIDENCE",
+            lambda: self.service.publish_result(
+                assessor_capability=opened["assessor"]["capability"],
+                verification_run_ref=sealed["verificationRunRef"],
+                criterion_assessments=self.assessment("CONTRADICTED"),
+            ),
+        )
+        result = self.service.publish_result(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            criterion_assessments=self.assessment("SATISFIED"),
+        )
+        self.assertEqual("INCOMPLETE", result["verificationStatus"])
+        self.assertIn("EXECUTABLE_IDENTITY_DRIFT", result["reasonCodes"])
+
+    def test_exact_contradiction_precedes_later_executable_drift(self) -> None:
+        executable = self.external_executable(
+            "contradiction-drift-tool",
+            (
+                f"#!{Path(sys.executable).resolve()}\n"
+                "from pathlib import Path\n"
+                "print('later-drift')\n"
+                "path = Path(__file__)\n"
+                "path.write_text('#!/bin/sh\\nprintf changed\\n')\n"
+                "path.chmod(0o700)\n"
+            ),
+        )
+        drifting_readback = self.step("drift", "READBACK", "print('unused')")
+        drifting_readback["executable"] = str(executable)
+        drifting_readback["argv"] = []
+        opened = self.open()
+        sealed = self.seal(
+            opened,
+            self.draft(
+                [
+                    self.flow(
+                        "contradiction-evidence",
+                        [self.step("observe", "READBACK", "print('contradicted')")],
+                    ),
+                    self.flow("later-drift", [drifting_readback]),
+                ]
+            ),
+        )
+        self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="contradiction-evidence",
+            step_id="observe",
+        )
+        self.service.declare_contradiction(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            criterion_ref=self.criteria[0],
+        )
+        drift = self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="later-drift",
+            step_id="drift",
+        )
+        self.assertEqual("EXECUTABLE_IDENTITY_DRIFT", drift["attempts"][0]["status"])
+        result = self.service.publish_result(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            criterion_assessments=self.assessment("CONTRADICTED"),
+        )
+        self.assertEqual("VERIFICATION_FAILED", result["verificationStatus"])
+        self.assertIn("CRITERION_CONTRADICTED", result["reasonCodes"])
+        self.assertIn("EXECUTABLE_IDENTITY_DRIFT", result["reasonCodes"])
+
+    def test_interrupted_correlated_seal_retry_keeps_stable_caller_draft_digest(self) -> None:
+        placeholder = "{{CORRELATION:request}}"
+        action = self.step(
+            "correlated-action",
+            "ACTION",
+            "import sys; print(sys.argv[1])",
+            argv_extra=[placeholder],
+        )
+        readback = self.step(
+            "correlated-readback",
+            "READBACK",
+            "import sys; print(sys.argv[1])",
+            argv_extra=[placeholder],
+        )
+        draft = self.draft(
+            [
+                self.flow(
+                    "correlated",
+                    [action, readback],
+                    bindings=[
+                        {
+                            "bindingId": "request",
+                            "actionStepId": "correlated-action",
+                            "readbackStepId": "correlated-readback",
+                        }
+                    ],
+                )
+            ]
+        )
+        opened = self.open()
+        original_verify = self.service._verify_authorizations
+
+        def interrupt_after_finalization(**_kwargs):
+            raise RuntimeError("simulated interruption after tool finalization")
+
+        self.service._verify_authorizations = interrupt_after_finalization
+        try:
+            with self.assertRaisesRegex(RuntimeError, "simulated interruption"):
+                self.seal(opened, draft)
+        finally:
+            self.service._verify_authorizations = original_verify
+
+        sealed = self.seal(opened, draft)
+        self.assertEqual("SEALED", sealed["state"])
+        binding = sealed["plan"]["flows"][0]["correlationBindings"][0]
+        self.assertNotIn("token", binding)
+        run = self.service.read_run(sealed["verificationRunRef"])
+        started = [
+            event for event in run["events"] if event["eventKind"] == "PREFLIGHT_STARTED"
+        ]
+        self.assertEqual(1, len(started))
+
+    def test_preview_and_replay_cli_do_not_construct_or_create_workflow_store(self) -> None:
+        step_path = Path(self.temporary.name) / "preview-step.json"
+        step_path.write_text(
+            json.dumps(self.step("preview", "READBACK", "print('preview')")),
+            encoding="utf-8",
+        )
+        absent_root = Path(self.temporary.name) / "cli-must-remain-absent"
+        output = io.StringIO()
+        with mock.patch.object(
+            verification_run.VerificationService,
+            "__init__",
+            side_effect=AssertionError("store construction is forbidden"),
+        ), contextlib.redirect_stdout(output):
+            result = verification_run.main(
+                [
+                    "--workflow-root",
+                    str(absent_root),
+                    "preview-process-step",
+                    "--step",
+                    str(step_path),
+                    "--project-root",
+                    str(self.project),
+                    "--source-identity",
+                    self.source,
+                ]
+            )
+        self.assertEqual(0, result)
+        preview = json.loads(output.getvalue())
+        self.assertIn("repeatRequestDigest", preview)
+        self.assertFalse(absent_root.exists())
+
+        output = io.StringIO()
+        with mock.patch.object(
+            verification_run.VerificationService,
+            "__init__",
+            side_effect=AssertionError("store construction is forbidden"),
+        ), contextlib.redirect_stdout(output):
+            result = verification_run.main(
+                [
+                    "--workflow-root",
+                    str(absent_root),
+                    "replay-authorization-scope",
+                    "--mechanism",
+                    "EXACT_IDEMPOTENCY",
+                    "--prior-run-ref",
+                    "verification:run:v1:" + "1" * 32,
+                    "--prior-flow-id",
+                    "flow",
+                    "--prior-step-id",
+                    "step",
+                    "--new-request-digest",
+                    preview["repeatRequestDigest"],
+                    "--target-binding-digest",
+                    preview["sourceBindingDigest"],
+                ]
+            )
+        self.assertEqual(0, result)
+        self.assertFalse(absent_root.exists())
+
+        error_output = io.StringIO()
+        with contextlib.redirect_stderr(error_output):
+            result = verification_run.main(
+                [
+                    "--workflow-root",
+                    str(absent_root),
+                    "read-run",
+                    "--run-ref",
+                    "verification:run:v1:" + "2" * 32,
+                ]
+            )
+        self.assertEqual(2, result)
+        self.assertEqual(
+            "AUDIT_GUARD_REQUIRED",
+            json.loads(error_output.getvalue())["error"]["code"],
+        )
+        self.assertFalse(absent_root.exists())
 
     def test_only_the_exact_owning_assessor_can_read_raw_artifacts(self) -> None:
         opened = self.open()
@@ -469,6 +1060,241 @@ class VerificationRunTests(unittest.TestCase):
         self.assertEqual("VERIFIED", result["verificationStatus"])
         self.assertEqual([], self.service.read_run(sealed["verificationRunRef"])["attempts"])
 
+    def test_sealed_attempt_zero_cannot_use_generic_store_for_any_status(self) -> None:
+        opened = self.open()
+        sealed = self.seal(
+            opened,
+            self.draft(
+                [self.flow("unexecuted", [self.step("action", "ACTION", "print('not-run')")])]
+            ),
+        )
+        self.service.workflow.ensure_claim_closure_budget(
+            claimant_capability=opened["assessor"]["capability"],
+            claim_ref=opened["claim"]["claimRef"],
+            amounts=self.budget(closureOperations=1),
+        )
+        forged_refs: list[str] = []
+        for status in ("VERIFIED", "VERIFICATION_FAILED", "INCOMPLETE", "BLOCKED"):
+            result_ref = verification_run.workflow_store.allocate_ref("VERIFICATION_RESULT")
+            forged_refs.append(result_ref)
+            with self.assertRaises(Exception) as raised:
+                self.service.workflow.publish_successor(
+                    claimant_capability=opened["assessor"]["capability"],
+                    claim_ref=opened["claim"]["claimRef"],
+                    node_ref=result_ref,
+                    node_kind="VERIFICATION_RESULT",
+                    protocol_version="verification-result-v1",
+                    planning_identity=self.planning,
+                    source_identity=self.source,
+                    verification_status=status,
+                    payload={
+                        "protocolVersion": "verification-result-v1",
+                        "verificationResultRef": result_ref,
+                        "verificationStatus": status,
+                        "implementationHandoffRef": self.handoff_ref,
+                        "planningSealDigest": self.planning,
+                        "finalSourceIdentity": self.source,
+                        "verificationRunRef": sealed["verificationRunRef"],
+                        "sealedPlanDigest": sealed["sealedPlanDigest"],
+                        "criterionResults": self.assessment("SATISFIED"),
+                        "reasonCodes": [],
+                        "completedAt": "2026-08-03T00:00:00+00:00",
+                    },
+                    verification_run_ref=sealed["verificationRunRef"],
+                )
+            self.assertEqual("PUBLICATION_SURFACE_RETIRED", raised.exception.code)
+        self.assertEqual("SEALED", self.service.read_run(sealed["verificationRunRef"])["state"])
+        self.assertEqual(self.handoff_ref, self.service.workflow.current_tip(self.handoff_ref)["nodeRef"])
+        self.assert_code(
+            "REMEDIATION_REQUIRES_PUBLISHED_FAILURE",
+            lambda: self.service.open_remediation(
+                coordinator_capability=self.coordinator["capability"],
+                failed_verification_result_ref=forged_refs[1],
+                spend_budget=self.budget(remediationTransactions=1),
+                closure_budget=self.budget(closureOperations=1),
+            ),
+        )
+        legitimate = self.service.publish_result(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            criterion_assessments=self.assessment("INCONCLUSIVE"),
+        )
+        self.assertEqual("INCOMPLETE", legitimate["verificationStatus"])
+
+    def test_malformed_transaction_free_legacy_root_is_readable_but_not_new_verification_input(self) -> None:
+        legacy_ref = verification_run.workflow_store.allocate_ref("IMPLEMENTATION_HANDOFF")
+        legacy_payload = {
+            "protocolVersion": "implementation-handoff-v1",
+            "implementationHandoffRef": legacy_ref,
+            "implementationStatus": "IMPLEMENTATION_HANDOFF_COMPLETE",
+            "planningSealDigest": self.planning,
+            "finalSourceIdentity": self.source,
+        }
+        encoded = verification_run.workflow_store.canonical_json(legacy_payload)
+        with self.service.workflow._transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO nodes(
+                    node_ref, node_kind, protocol_version, root_ref, planning_identity,
+                    source_identity, verification_status, payload_json, payload_sha256, created_at
+                ) VALUES (?, 'IMPLEMENTATION_HANDOFF', 'implementation-handoff-v1', ?, ?, ?, NULL, ?, ?, ?)
+                """,
+                (
+                    legacy_ref,
+                    legacy_ref,
+                    self.planning,
+                    self.source,
+                    encoded,
+                    hashlib.sha256(encoded).hexdigest(),
+                    "2026-08-03T00:00:00+00:00",
+                ),
+            )
+        self.assertEqual(legacy_payload, self.service.workflow.read_node(legacy_ref)["payload"])
+        self.assertEqual(legacy_ref, self.service.workflow.current_tip(legacy_ref)["nodeRef"])
+        invocation = self.service.workflow.start_invocation(
+            root_ref=legacy_ref,
+            elapsed_seconds=60,
+            limits=self.budget(effectfulActions=1, toolCostUnits=2, closureOperations=2),
+        )
+        self.assert_code(
+            "HANDOFF_CONTRACT_INVALID",
+            lambda: self.service.open_verification(
+                coordinator_capability=invocation["coordinator"]["capability"],
+                implementation_handoff_ref=legacy_ref,
+                spend_budget=self.budget(effectfulActions=1),
+                closure_budget=self.budget(closureOperations=1),
+            ),
+        )
+        connection = self.service.workflow._connect()
+        try:
+            actor_count = connection.execute(
+                "SELECT COUNT(*) FROM actors WHERE root_ref = ?", (legacy_ref,)
+            ).fetchone()[0]
+            claim_count = connection.execute(
+                "SELECT COUNT(*) FROM claims WHERE root_ref = ?", (legacy_ref,)
+            ).fetchone()[0]
+            reservation_count = connection.execute(
+                "SELECT COUNT(*) FROM budget_reservations WHERE invocation_ref = ?",
+                (invocation["invocationRef"],),
+            ).fetchone()[0]
+        finally:
+            connection.close()
+        self.assertEqual(1, actor_count)  # invocation coordinator only
+        self.assertEqual(0, claim_count)
+        self.assertEqual(0, reservation_count)
+
+    def test_full_contract_transaction_free_root_remains_valid_verification_input(self) -> None:
+        legacy_ref, invocation = self.seed_transaction_free_handoff(
+            row_created_at="2026-08-03T00:00:01+00:00"
+        )
+
+        opened = self.service.open_verification(
+            coordinator_capability=invocation["coordinator"]["capability"],
+            implementation_handoff_ref=legacy_ref,
+            spend_budget=self.budget(effectfulActions=1, toolCostUnits=1),
+            closure_budget=self.budget(closureOperations=1),
+        )
+
+        self.assertEqual(legacy_ref, opened["implementationHandoffRef"])
+        self.assertEqual(legacy_ref, self.service.workflow.current_tip(legacy_ref)["nodeRef"])
+        self.service.workflow.release_unstarted_claim(
+            claimant_capability=opened["assessor"]["capability"],
+            claim_ref=opened["claim"]["claimRef"],
+        )
+
+    def test_full_shape_forged_transaction_free_roots_are_readable_but_not_admitted(self) -> None:
+        alternate_source = "sha256:" + "f" * 64
+        cases = (
+            (
+                "row-protocol",
+                {},
+                {"row_protocol_version": "caller-forged-protocol"},
+                "HANDOFF_CONTRACT_INVALID",
+            ),
+            (
+                "capsule-ref",
+                {"baselineCapsuleRef": "capsule:v1:not-hex"},
+                {},
+                "HANDOFF_CONTRACT_INVALID",
+            ),
+            (
+                "baseline-source",
+                {"baselineSourceIdentity": "sha256:not-a-digest"},
+                {},
+                "HANDOFF_CONTRACT_INVALID",
+            ),
+            (
+                "delta-ref",
+                {"implementationDeltaRef": "implementation:delta:v1:not-hex"},
+                {},
+                "HANDOFF_CONTRACT_INVALID",
+            ),
+            (
+                "completed-at-timezone",
+                {"completedAt": "2026-08-03T00:00:00"},
+                {},
+                "HANDOFF_CONTRACT_INVALID",
+            ),
+            (
+                "completed-at-row-binding",
+                {},
+                {"row_created_at": "2026-08-02T23:59:59+00:00"},
+                "HANDOFF_CONTRACT_INVALID",
+            ),
+            (
+                "project-root",
+                {"projectRoot": str(self.project / "..")},
+                {},
+                "HANDOFF_CONTRACT_INVALID",
+            ),
+            (
+                "planning-binding",
+                {"planningSealDigest": "0" * 64},
+                {"row_planning_identity": "0" * 64},
+                "PLANNING_AUTHORITY_CHANGED",
+            ),
+            (
+                "source-binding",
+                {"finalSourceIdentity": alternate_source},
+                {"row_source_identity": alternate_source},
+                "SOURCE_IDENTITY_MISMATCH",
+            ),
+        )
+        for name, payload_overrides, row_overrides, expected_code in cases:
+            with self.subTest(name=name):
+                legacy_ref, invocation = self.seed_transaction_free_handoff(
+                    payload_overrides=payload_overrides,
+                    **row_overrides,
+                )
+                self.assertEqual(
+                    legacy_ref, self.service.workflow.read_node(legacy_ref)["nodeRef"]
+                )
+                self.assertEqual(
+                    legacy_ref, self.service.workflow.current_tip(legacy_ref)["nodeRef"]
+                )
+                self.assert_code(
+                    expected_code,
+                    lambda: self.service.open_verification(
+                        coordinator_capability=invocation["coordinator"]["capability"],
+                        implementation_handoff_ref=legacy_ref,
+                        spend_budget=self.budget(effectfulActions=1),
+                        closure_budget=self.budget(closureOperations=1),
+                    ),
+                )
+                connection = self.service.workflow._connect()
+                try:
+                    claim_count = connection.execute(
+                        "SELECT COUNT(*) FROM claims WHERE root_ref = ?", (legacy_ref,)
+                    ).fetchone()[0]
+                    reservation_count = connection.execute(
+                        "SELECT COUNT(*) FROM budget_reservations WHERE invocation_ref = ?",
+                        (invocation["invocationRef"],),
+                    ).fetchone()[0]
+                finally:
+                    connection.close()
+                self.assertEqual(0, claim_count)
+                self.assertEqual(0, reservation_count)
+
     def test_result_publication_retry_preserves_assessments_and_closure_budget(self) -> None:
         opened = self.open()
         sealed = self.seal(
@@ -481,17 +1307,18 @@ class VerificationRunTests(unittest.TestCase):
             flow_id="retry",
             step_id="action",
         )
-        original_publish = self.service.workflow.publish_successor
-
-        def fail_once(**_kwargs):
-            raise verification_run.workflow_store.WorkflowStoreError(
-                "SIMULATED_PUBLICATION_INTERRUPTION", "result publication was interrupted"
-            )
-
-        self.service.workflow.publish_successor = fail_once
+        connection = self.service.workflow._connect()
         try:
+            connection.execute(
+                """
+                CREATE TRIGGER fail_result_publication
+                BEFORE INSERT ON verification_events
+                WHEN NEW.event_kind = 'RESULT_PUBLISHED'
+                BEGIN SELECT RAISE(ABORT, 'simulated result publication failure'); END
+                """
+            )
             self.assert_code(
-                "SIMULATED_PUBLICATION_INTERRUPTION",
+                "ATOMIC_PUBLICATION_CONFLICT",
                 lambda: self.service.publish_result(
                     assessor_capability=opened["assessor"]["capability"],
                     verification_run_ref=sealed["verificationRunRef"],
@@ -499,7 +1326,41 @@ class VerificationRunTests(unittest.TestCase):
                 ),
             )
         finally:
-            self.service.workflow.publish_successor = original_publish
+            connection.execute("DROP TRIGGER fail_result_publication")
+            connection.close()
+
+        run_after_failure = self.service.read_run(sealed["verificationRunRef"])
+        self.assertEqual("SEALED", run_after_failure["state"])
+        self.assertIsNone(run_after_failure["closure"])
+        self.assertEqual(self.handoff_ref, self.service.workflow.current_tip(self.handoff_ref)["nodeRef"])
+        connection = self.service.workflow._connect()
+        try:
+            claim_row = connection.execute(
+                "SELECT state FROM claims WHERE claim_ref = ?", (opened["claim"]["claimRef"],)
+            ).fetchone()
+            reservation_row = connection.execute(
+                "SELECT state, closure_used_json FROM budget_reservations WHERE reservation_ref = ?",
+                (opened["budgetReservation"]["reservationRef"],),
+            ).fetchone()
+            result_count = connection.execute(
+                "SELECT COUNT(*) FROM nodes WHERE node_kind = 'VERIFICATION_RESULT'"
+            ).fetchone()[0]
+            published_count = connection.execute(
+                "SELECT COUNT(*) FROM verification_events WHERE run_ref = ? AND event_kind = 'RESULT_PUBLISHED'",
+                (sealed["verificationRunRef"],),
+            ).fetchone()[0]
+        finally:
+            connection.close()
+        self.assertEqual("ACTIVE", claim_row["state"])
+        self.assertEqual("ACTIVE", reservation_row["state"])
+        self.assertEqual(
+            0,
+            self.service.workflow._stored_budget(
+                reservation_row["closure_used_json"], "reservation.closureUsed"
+            )["closureOperations"],
+        )
+        self.assertEqual(0, result_count)
+        self.assertEqual(0, published_count)
 
         self.assert_code(
             "RESULT_RETRY_MISMATCH",
@@ -527,6 +1388,172 @@ class VerificationRunTests(unittest.TestCase):
         finally:
             connection.close()
         self.assertEqual(1, closure_used["closureOperations"])
+
+    def test_failed_verified_publication_retries_as_incomplete_after_source_drift(self) -> None:
+        opened = self.open()
+        sealed = self.seal(
+            opened,
+            self.draft(
+                [self.flow("retry-source-drift", [self.step("observe", "ACTION", "print('ok')")])]
+            ),
+        )
+        self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="retry-source-drift",
+            step_id="observe",
+        )
+        assessments = self.assessment("SATISFIED")
+        old_ref, retry_ref, original_allocate = self.interrupt_result_publication_after_ledger(
+            opened=opened,
+            sealed=sealed,
+            assessments=assessments,
+        )
+        (self.project / "retry-drift.txt").write_text("late drift\n", encoding="utf-8")
+        try:
+            result = self.service.publish_result(
+                assessor_capability=opened["assessor"]["capability"],
+                verification_run_ref=sealed["verificationRunRef"],
+                criterion_assessments=assessments,
+            )
+        finally:
+            verification_run.workflow_store.allocate_ref = original_allocate
+
+        self.assertNotEqual(old_ref, result["verificationResultRef"])
+        self.assertEqual(retry_ref, result["verificationResultRef"])
+        self.assertEqual("INCOMPLETE", result["verificationStatus"])
+        self.assertEqual(assessments, result["criterionResults"])
+        self.assertIn("SOURCE_IDENTITY_DRIFT", result["reasonCodes"])
+        run = self.service.read_run(sealed["verificationRunRef"])
+        self.assertEqual("CLOSED", run["state"])
+        self.assertEqual(retry_ref, run["closure"]["verificationResultRef"])
+        connection = self.service.workflow._connect()
+        try:
+            old_node = connection.execute(
+                "SELECT 1 FROM nodes WHERE node_ref = ?", (old_ref,)
+            ).fetchone()
+            event_payloads = connection.execute(
+                "SELECT payload_json FROM verification_events WHERE run_ref = ? AND event_kind = 'RESULT_PUBLISHED'",
+                (sealed["verificationRunRef"],),
+            ).fetchall()
+        finally:
+            connection.close()
+        self.assertIsNone(old_node)
+        self.assertEqual(
+            [{"verificationResultRef": retry_ref}],
+            [json.loads(bytes(row["payload_json"])) for row in event_payloads],
+        )
+
+    def test_failed_verified_publication_retries_as_blocked_after_planning_loss(self) -> None:
+        opened = self.open()
+        sealed = self.seal(
+            opened,
+            self.draft(
+                [self.flow("retry-planning-loss", [self.step("observe", "ACTION", "print('ok')")])]
+            ),
+        )
+        self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="retry-planning-loss",
+            step_id="observe",
+        )
+        assessments = self.assessment("SATISFIED")
+        old_ref, retry_ref, original_allocate = self.interrupt_result_publication_after_ledger(
+            opened=opened,
+            sealed=sealed,
+            assessments=assessments,
+        )
+        self.spec_file.write_text("# changed planning authority\n", encoding="utf-8")
+        try:
+            result = self.service.publish_result(
+                assessor_capability=opened["assessor"]["capability"],
+                verification_run_ref=sealed["verificationRunRef"],
+                criterion_assessments=assessments,
+            )
+        finally:
+            verification_run.workflow_store.allocate_ref = original_allocate
+
+        self.assertNotEqual(old_ref, result["verificationResultRef"])
+        self.assertEqual(retry_ref, result["verificationResultRef"])
+        self.assertEqual("BLOCKED", result["verificationStatus"])
+        self.assertEqual(assessments, result["criterionResults"])
+        self.assertIn(
+            "PLANNING_AUTHORITY_UNAVAILABLE_AT_PUBLICATION", result["reasonCodes"]
+        )
+        run = self.service.read_run(sealed["verificationRunRef"])
+        self.assertEqual("CLOSED", run["state"])
+        self.assertEqual(retry_ref, run["closure"]["verificationResultRef"])
+        connection = self.service.workflow._connect()
+        try:
+            old_node = connection.execute(
+                "SELECT 1 FROM nodes WHERE node_ref = ?", (old_ref,)
+            ).fetchone()
+            event_payloads = connection.execute(
+                "SELECT payload_json FROM verification_events WHERE run_ref = ? AND event_kind = 'RESULT_PUBLISHED'",
+                (sealed["verificationRunRef"],),
+            ).fetchall()
+        finally:
+            connection.close()
+        self.assertIsNone(old_node)
+        self.assertEqual(
+            [{"verificationResultRef": retry_ref}],
+            [json.loads(bytes(row["payload_json"])) for row in event_payloads],
+        )
+
+    def test_contradiction_added_after_ledger_closure_wins_without_rewriting_assessments(self) -> None:
+        opened = self.open()
+        sealed = self.seal(
+            opened,
+            self.draft(
+                [self.flow("late-contradiction", [self.step("observe", "ACTION", "print('ok')")])]
+            ),
+        )
+        self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="late-contradiction",
+            step_id="observe",
+        )
+        fixed_assessments = self.assessment("SATISFIED")
+        connection = self.service.workflow._connect()
+        try:
+            connection.execute(
+                """
+                CREATE TRIGGER fail_before_late_contradiction
+                BEFORE INSERT ON verification_events
+                WHEN NEW.event_kind = 'RESULT_PUBLISHED'
+                BEGIN SELECT RAISE(ABORT, 'pause after ledger closure'); END
+                """
+            )
+            self.assert_code(
+                "ATOMIC_PUBLICATION_CONFLICT",
+                lambda: self.service.publish_result(
+                    assessor_capability=opened["assessor"]["capability"],
+                    verification_run_ref=sealed["verificationRunRef"],
+                    criterion_assessments=fixed_assessments,
+                ),
+            )
+        finally:
+            connection.execute("DROP TRIGGER fail_before_late_contradiction")
+            connection.close()
+        self.service.declare_contradiction(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            criterion_ref=self.criteria[0],
+        )
+        self.product_file.write_text("late-drift\n", encoding="utf-8")
+
+        result = self.service.publish_result(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            criterion_assessments=fixed_assessments,
+        )
+
+        self.assertEqual("VERIFICATION_FAILED", result["verificationStatus"])
+        self.assertEqual(fixed_assessments, result["criterionResults"])
+        self.assertIn("CRITERION_CONTRADICTED", result["reasonCodes"])
+        self.assertIn("SOURCE_IDENTITY_DRIFT", result["reasonCodes"])
 
     def test_forged_satisfied_assessment_without_execution_is_rejected(self) -> None:
         opened = self.open()
@@ -705,21 +1732,84 @@ class VerificationRunTests(unittest.TestCase):
         draft = self.draft(
             [self.flow("flow", [self.step("action", "ACTION", "print('must-not-run')")])]
         )
-        original_publish = self.service.workflow.publish_successor
-
-        def fail_once(**_kwargs):
-            raise verification_run.workflow_store.WorkflowStoreError(
-                "SIMULATED_PUBLICATION_INTERRUPTION", "preflight publication was interrupted"
-            )
-
-        self.service.workflow.publish_successor = fail_once
+        connection = self.service.workflow._connect()
         try:
+            connection.execute(
+                """
+                CREATE TRIGGER fail_preflight_publication
+                BEFORE INSERT ON verification_events
+                WHEN NEW.event_kind = 'RESULT_PUBLISHED'
+                BEGIN SELECT RAISE(ABORT, 'simulated preflight publication failure'); END
+                """
+            )
             self.assert_code(
-                "SIMULATED_PUBLICATION_INTERRUPTION",
+                "ATOMIC_PUBLICATION_CONFLICT",
                 lambda: self.seal(opened, draft),
             )
         finally:
-            self.service.workflow.publish_successor = original_publish
+            connection.execute("DROP TRIGGER fail_preflight_publication")
+            connection.close()
+
+        failed_run = self.service.read_run(opened["verificationRunRef"])
+        self.assertEqual("PREFLIGHT", failed_run["state"])
+        self.assertIsNone(failed_run["closure"])
+        self.assertEqual(self.handoff_ref, self.service.workflow.current_tip(self.handoff_ref)["nodeRef"])
+        for status in ("VERIFIED", "VERIFICATION_FAILED", "INCOMPLETE", "BLOCKED"):
+            forged_ref = verification_run.workflow_store.allocate_ref("VERIFICATION_RESULT")
+            with self.assertRaises(Exception) as raised:
+                self.service.workflow.publish_successor(
+                    claimant_capability=opened["assessor"]["capability"],
+                    claim_ref=opened["claim"]["claimRef"],
+                    node_ref=forged_ref,
+                    node_kind="VERIFICATION_RESULT",
+                    protocol_version="verification-result-v1",
+                    planning_identity=self.planning,
+                    source_identity=self.source,
+                    verification_status=status,
+                    payload={
+                        "protocolVersion": "verification-result-v1",
+                        "verificationResultRef": forged_ref,
+                        "verificationStatus": status,
+                        "implementationHandoffRef": self.handoff_ref,
+                        "planningSealDigest": self.planning,
+                        "finalSourceIdentity": self.source,
+                        "verificationRunRef": opened["verificationRunRef"],
+                        "sealedPlanDigest": None,
+                        "criterionResults": [],
+                        "reasonCodes": ["CALLER_FORGED"],
+                        "completedAt": "2026-08-03T00:00:00+00:00",
+                    },
+                    verification_run_ref=opened["verificationRunRef"],
+                )
+            self.assertEqual("PUBLICATION_SURFACE_RETIRED", raised.exception.code)
+        connection = self.service.workflow._connect()
+        try:
+            claim_state = connection.execute(
+                "SELECT state FROM claims WHERE claim_ref = ?", (opened["claim"]["claimRef"],)
+            ).fetchone()[0]
+            reservation = connection.execute(
+                "SELECT state, closure_used_json FROM budget_reservations WHERE reservation_ref = ?",
+                (opened["budgetReservation"]["reservationRef"],),
+            ).fetchone()
+            result_count = connection.execute(
+                "SELECT COUNT(*) FROM nodes WHERE node_kind = 'VERIFICATION_RESULT'"
+            ).fetchone()[0]
+            result_event_count = connection.execute(
+                "SELECT COUNT(*) FROM verification_events WHERE run_ref = ? AND event_kind = 'RESULT_PUBLISHED'",
+                (opened["verificationRunRef"],),
+            ).fetchone()[0]
+        finally:
+            connection.close()
+        self.assertEqual("ACTIVE", claim_state)
+        self.assertEqual("ACTIVE", reservation["state"])
+        self.assertEqual(
+            0,
+            self.service.workflow._stored_budget(
+                reservation["closure_used_json"], "reservation.closureUsed"
+            )["closureOperations"],
+        )
+        self.assertEqual(0, result_count)
+        self.assertEqual(0, result_event_count)
 
         result = self.seal(opened, draft)
         self.assertEqual("INCOMPLETE", result["verificationStatus"])
@@ -847,6 +1937,7 @@ class VerificationRunTests(unittest.TestCase):
         transaction_store = verification_run.handoff_contract.implementation_transaction.ImplementationTransactionStore(
             self.workflow_root,
             capsule_root,
+            guard=self.guard,
         )
         transaction = transaction_store.start_remediation(
             remediator_capability=remediation_open["remediator"]["capability"],
@@ -910,6 +2001,7 @@ class VerificationRunTests(unittest.TestCase):
         publisher = verification_run.handoff_contract.HandoffPublisher(
             self.workflow_root,
             capsule_root,
+            workflow=transaction_store.workflow,
         )
         successor = publisher.publish(
             {
@@ -1009,7 +2101,9 @@ class VerificationRunTests(unittest.TestCase):
             flow_id="effect-flow",
             step_id="effect",
         )
-        self.assertEqual("TOOL_ERROR", first_execution["attempts"][0]["status"])
+        self.assertEqual(
+            "EXECUTABLE_IDENTITY_DRIFT", first_execution["attempts"][0]["status"]
+        )
         incomplete = self.service.publish_result(
             assessor_capability=first_open["assessor"]["capability"],
             verification_run_ref=first_sealed["verificationRunRef"],
@@ -1046,7 +2140,7 @@ class VerificationRunTests(unittest.TestCase):
             prior_run_ref=first_sealed["verificationRunRef"],
             prior_flow_id="effect-flow",
             prior_step_id="effect",
-            new_request_digest=preview["canonicalRequestDigest"],
+            new_request_digest=preview["repeatRequestDigest"],
             target_binding_digest=preview["sourceBindingDigest"],
         )
         authorization = self.service.workflow.issue_authorization(
@@ -1299,6 +2393,43 @@ class VerificationRunTests(unittest.TestCase):
         self.assertEqual(["NOT_RUN"], [item["status"] for item in later])
         self.assertEqual("NOT_RUN_PRIOR_CONTRADICTION", later[0]["result"]["reason"])
 
+    def test_exact_contradiction_remains_publishable_after_late_source_drift(self) -> None:
+        opened = self.open()
+        sealed = self.seal(
+            opened,
+            self.draft(
+                [
+                    self.flow(
+                        "contradiction-before-drift",
+                        [self.step("observe", "ACTION", "print('contradicted')")],
+                    )
+                ]
+            ),
+        )
+        self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="contradiction-before-drift",
+            step_id="observe",
+        )
+        self.service.declare_contradiction(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            criterion_ref=self.criteria[0],
+        )
+        self.product_file.write_text("drift-after-contradiction\n", encoding="utf-8")
+
+        result = self.service.publish_result(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            criterion_assessments=self.assessment("CONTRADICTED"),
+        )
+
+        self.assertEqual("VERIFICATION_FAILED", result["verificationStatus"])
+        self.assertIn("CRITERION_CONTRADICTED", result["reasonCodes"])
+        self.assertIn("SOURCE_IDENTITY_DRIFT", result["reasonCodes"])
+        self.assertEqual("CLOSED", self.service.read_run(sealed["verificationRunRef"])["state"])
+
     def test_action_timeout_can_be_satisfied_by_sealed_authoritative_readback(self) -> None:
         state = Path(self.temporary.name) / "timeout-effect"
         action_code = (
@@ -1440,14 +2571,16 @@ class VerificationRunTests(unittest.TestCase):
             flow_id="retained-tool-error",
             step_id="terminal-readback",
         )
-        self.assertEqual("TOOL_ERROR", execution["attempts"][0]["status"])
+        self.assertEqual(
+            "EXECUTABLE_IDENTITY_DRIFT", execution["attempts"][0]["status"]
+        )
         result = self.service.publish_result(
             assessor_capability=opened["assessor"]["capability"],
             verification_run_ref=sealed["verificationRunRef"],
             criterion_assessments=self.assessment("SATISFIED"),
         )
         self.assertEqual("INCOMPLETE", result["verificationStatus"])
-        self.assertIn("PROCESS_OBSERVATION_INCONCLUSIVE", result["reasonCodes"])
+        self.assertIn("EXECUTABLE_IDENTITY_DRIFT", result["reasonCodes"])
         self.assertIn("RETAIN_TERMINAL_READBACK_INCONCLUSIVE", result["reasonCodes"])
 
     def test_readback_timeout_can_be_resolved_by_later_identical_poll(self) -> None:
@@ -1529,14 +2662,16 @@ class VerificationRunTests(unittest.TestCase):
             flow_id="cleanup-error",
             step_id="cleanup",
         )
-        self.assertEqual("TOOL_ERROR", cleanup_execution["attempts"][0]["status"])
+        self.assertEqual(
+            "EXECUTABLE_IDENTITY_DRIFT", cleanup_execution["attempts"][0]["status"]
+        )
         result = self.service.publish_result(
             assessor_capability=opened["assessor"]["capability"],
             verification_run_ref=sealed["verificationRunRef"],
             criterion_assessments=self.assessment("SATISFIED"),
         )
         self.assertEqual("INCOMPLETE", result["verificationStatus"])
-        self.assertIn("PROCESS_OBSERVATION_INCONCLUSIVE", result["reasonCodes"])
+        self.assertIn("EXECUTABLE_IDENTITY_DRIFT", result["reasonCodes"])
 
     def test_cleanup_timeout_is_incomplete(self) -> None:
         opened = self.open()
@@ -1580,13 +2715,160 @@ class VerificationRunTests(unittest.TestCase):
         self.assertEqual("INCOMPLETE", result["verificationStatus"])
         self.assertIn("PROCESS_OBSERVATION_INCONCLUSIVE", result["reasonCodes"])
 
-    def test_legacy_ambient_environment_plan_cannot_execute_under_process_v2(self) -> None:
+    def test_v1_v2_mixed_and_unknown_plans_are_read_only_and_semantically_retired(self) -> None:
         opened = self.open()
+        draft = self.draft(
+            [
+                self.flow(
+                    "legacy-policy",
+                    [
+                        self.step("action", "ACTION", "print('unused')"),
+                        self.step("read", "READBACK", "print('unused')"),
+                        self.step("cleanup", "CLEANUP", "print('unused')"),
+                    ],
+                )
+            ]
+        )
         sealed = self.seal(
             opened,
-            self.draft(
-                [self.flow("legacy-policy", [self.step("read", "READBACK", "print('unused')")])]
+            draft,
+        )
+        connection = self.service.workflow._connect()
+        try:
+            reservation_before = connection.execute(
+                "SELECT spend_used_json FROM budget_reservations WHERE reservation_ref = ?",
+                (opened["budgetReservation"]["reservationRef"],),
+            ).fetchone()[0]
+            run_row = connection.execute(
+                "SELECT * FROM verification_runs WHERE run_ref = ?",
+                (sealed["verificationRunRef"],),
+            ).fetchone()
+            current_plan = self.service._load_plan(run_row)
+        finally:
+            connection.close()
+
+        variants = [
+            ("process-v1", "process-v1", "action"),
+            ("process-v2", "process-v2", "read"),
+            ("mixed", verification_run.PROCESS_EXECUTOR_VERSION, "cleanup"),
+            ("unknown", "process-v999", "action"),
+        ]
+        for label, plan_version, step_id in variants:
+            with self.subTest(label=label):
+                plan = json.loads(json.dumps(current_plan))
+                plan["executorPolicy"]["executorVersion"] = plan_version
+                for step in plan["flows"][0]["steps"]:
+                    step["executorVersion"] = plan_version
+                if label == "mixed":
+                    plan["flows"][0]["steps"][0]["executorVersion"] = "process-v2"
+                encoded = verification_run._canonical_json(plan)
+                with self.service.workflow._transaction() as connection:
+                    connection.execute(
+                        "UPDATE verification_runs SET sealed_plan_json = ?, sealed_plan_sha256 = ? WHERE run_ref = ?",
+                        (
+                            encoded,
+                            hashlib.sha256(encoded).hexdigest(),
+                            sealed["verificationRunRef"],
+                        ),
+                    )
+                self.assertEqual(
+                    plan_version,
+                    self.service.read_run(sealed["verificationRunRef"])["sealedPlan"][
+                        "executorPolicy"
+                    ]["executorVersion"],
+                )
+                self.assert_code(
+                    "SEALED_EXECUTOR_POLICY_RETIRED",
+                    lambda step_id=step_id: self.service.execute_step(
+                        assessor_capability=opened["assessor"]["capability"],
+                        verification_run_ref=sealed["verificationRunRef"],
+                        flow_id="legacy-policy",
+                        step_id=step_id,
+                    ),
+                )
+                self.assert_code(
+                    "SEALED_EXECUTOR_POLICY_RETIRED",
+                    lambda: self.service.publish_result(
+                        assessor_capability=opened["assessor"]["capability"],
+                        verification_run_ref=sealed["verificationRunRef"],
+                        criterion_assessments=self.assessment("INCONCLUSIVE"),
+                    ),
+                )
+                self.assert_code(
+                    "SEALED_EXECUTOR_POLICY_RETIRED",
+                    lambda: self.seal(opened, draft),
+                )
+
+        legacy_v2 = json.loads(json.dumps(current_plan))
+        legacy_v2.pop("executorPolicy")
+        for step in legacy_v2["flows"][0]["steps"]:
+            step["executorVersion"] = "process-v2"
+            step.pop("executableIdentity")
+            step.pop("repeatRequestDigest")
+        encoded = verification_run._canonical_json(legacy_v2)
+        with self.service.workflow._transaction() as connection:
+            connection.execute(
+                "UPDATE verification_runs SET sealed_plan_json = ?, sealed_plan_sha256 = ? WHERE run_ref = ?",
+                (
+                    encoded,
+                    hashlib.sha256(encoded).hexdigest(),
+                    sealed["verificationRunRef"],
+                ),
+            )
+        diagnostic = self.service.read_run(sealed["verificationRunRef"])
+        diagnostic_step = diagnostic["sealedPlan"]["flows"][0]["steps"][0]
+        self.assertEqual("process-v2", diagnostic_step["executorVersion"])
+        self.assertNotIn("repeatRequestDigest", diagnostic_step)
+        self.assertIsNone(diagnostic_step["canonicalRequest"]["executableIdentity"])
+        self.assert_code(
+            "SEALED_EXECUTOR_POLICY_RETIRED",
+            lambda: self.service.execute_step(
+                assessor_capability=opened["assessor"]["capability"],
+                verification_run_ref=sealed["verificationRunRef"],
+                flow_id="legacy-policy",
+                step_id="read",
             ),
+        )
+
+        connection = self.service.workflow._connect()
+        try:
+            reservation_after = connection.execute(
+                "SELECT spend_used_json FROM budget_reservations WHERE reservation_ref = ?",
+                (opened["budgetReservation"]["reservationRef"],),
+            ).fetchone()[0]
+            executions = connection.execute(
+                "SELECT COUNT(*) FROM verification_step_executions WHERE run_ref = ?",
+                (sealed["verificationRunRef"],),
+            ).fetchone()[0]
+            attempts = connection.execute(
+                "SELECT COUNT(*) FROM verification_attempts WHERE run_ref = ?",
+                (sealed["verificationRunRef"],),
+            ).fetchone()[0]
+            ledger = connection.execute(
+                "SELECT COUNT(*) FROM verification_events WHERE run_ref = ? AND event_kind = 'LEDGER_COMPLETED'",
+                (sealed["verificationRunRef"],),
+            ).fetchone()[0]
+        finally:
+            connection.close()
+        self.assertEqual(reservation_before, reservation_after)
+        self.assertEqual((0, 0, 0), (executions, attempts, ledger))
+
+    def test_closed_process_v2_metadata_and_ledger_remain_diagnostic_readable(self) -> None:
+        opened = self.open()
+        draft = self.draft(
+            [self.flow("closed-legacy", [self.step("read", "READBACK", "print('done')")])]
+        )
+        sealed = self.seal(opened, draft)
+        self.service.execute_step(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            flow_id="closed-legacy",
+            step_id="read",
+        )
+        self.service.publish_result(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            criterion_assessments=self.assessment("SATISFIED"),
         )
         with self.service.workflow._transaction() as connection:
             row = connection.execute(
@@ -1594,9 +2876,8 @@ class VerificationRunTests(unittest.TestCase):
                 (sealed["verificationRunRef"],),
             ).fetchone()
             plan = self.service._load_plan(row)
-            stored_step = plan["flows"][0]["steps"][0]
-            stored_step.pop("executorVersion")
-            stored_step.pop("environmentPolicy")
+            plan["executorPolicy"]["executorVersion"] = "process-v2"
+            plan["flows"][0]["steps"][0]["executorVersion"] = "process-v2"
             encoded = verification_run._canonical_json(plan)
             connection.execute(
                 "UPDATE verification_runs SET sealed_plan_json = ?, sealed_plan_sha256 = ? WHERE run_ref = ?",
@@ -1606,14 +2887,173 @@ class VerificationRunTests(unittest.TestCase):
                     sealed["verificationRunRef"],
                 ),
             )
-        self.assert_code(
-            "SEALED_EXECUTOR_POLICY_RETIRED",
-            lambda: self.service.execute_step(
-                assessor_capability=opened["assessor"]["capability"],
-                verification_run_ref=sealed["verificationRunRef"],
-                flow_id="legacy-policy",
-                step_id="read",
+
+        historical = self.service.read_run(sealed["verificationRunRef"])
+        self.assertEqual("CLOSED", historical["state"])
+        self.assertEqual(
+            "process-v2",
+            historical["sealedPlan"]["flows"][0]["steps"][0]["executorVersion"],
+        )
+        self.assertEqual(1, len(historical["attempts"]))
+        self.assertIsNotNone(historical["closure"])
+
+    def test_live_step_execution_blocks_publication_without_mutating_run(self) -> None:
+        opened = self.open()
+        process_started = Path(self.temporary.name) / "live-process-started"
+        release_process = Path(self.temporary.name) / "release-live-process"
+        code = "\n".join(
+            [
+                "from pathlib import Path",
+                "import sys, time",
+                "started, release = Path(sys.argv[1]), Path(sys.argv[2])",
+                "started.write_text('started', encoding='utf-8')",
+                "deadline = time.monotonic() + 15",
+                "while not release.exists():",
+                "    if time.monotonic() >= deadline:",
+                "        raise TimeoutError('test release was not observed')",
+                "    time.sleep(0.01)",
+                "print('released')",
+            ]
+        )
+        sealed = self.seal(
+            opened,
+            self.draft(
+                [
+                    self.flow(
+                        "live-publication-race",
+                        [
+                            self.step(
+                                "blocking-readback",
+                                "READBACK",
+                                code,
+                                argv_extra=[str(process_started), str(release_process)],
+                            )
+                        ],
+                    )
+                ]
             ),
+        )
+        execution_results: list[dict[str, object]] = []
+        execution_errors: list[BaseException] = []
+
+        def execute() -> None:
+            try:
+                execution_results.append(
+                    self.service.execute_step(
+                        assessor_capability=opened["assessor"]["capability"],
+                        verification_run_ref=sealed["verificationRunRef"],
+                        flow_id="live-publication-race",
+                        step_id="blocking-readback",
+                    )
+                )
+            except BaseException as exc:
+                execution_errors.append(exc)
+
+        executor = threading.Thread(target=execute, name="live-verification-executor")
+        executor.start()
+        try:
+            deadline = time.monotonic() + 10
+            while not process_started.exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(process_started.exists(), "real subprocess did not start")
+
+            before = self.service.read_run(sealed["verificationRunRef"])
+            self.assertEqual("STARTED", before["stepExecutions"][0]["state"])
+            self.assertEqual([], before["attempts"])
+            self.assert_code(
+                "STEP_EXECUTION_ACTIVE",
+                lambda: self.service.publish_result(
+                    assessor_capability=opened["assessor"]["capability"],
+                    verification_run_ref=sealed["verificationRunRef"],
+                    criterion_assessments=self.assessment("INCONCLUSIVE"),
+                ),
+            )
+            after = self.service.read_run(sealed["verificationRunRef"])
+            self.assertEqual(before, after)
+            active_claim = self.service.workflow.active_claim(
+                self.service.workflow.read_node(self.handoff_ref)["rootRef"]
+            )
+            self.assertIsNotNone(active_claim)
+            self.assertEqual(opened["claim"]["claimRef"], active_claim["claim_ref"])
+            self.assertEqual(
+                self.handoff_ref,
+                self.service.workflow.current_tip(
+                    self.service.workflow.read_node(self.handoff_ref)["rootRef"]
+                )["nodeRef"],
+            )
+        finally:
+            release_process.write_text("release", encoding="utf-8")
+            executor.join(timeout=10)
+
+        self.assertFalse(executor.is_alive(), "real subprocess did not finish")
+        if execution_errors:
+            raise execution_errors[0]
+        self.assertEqual(1, len(execution_results))
+        self.assertEqual("COMPLETED", execution_results[0]["logicalExecution"])
+        self.assertEqual("EXITED", execution_results[0]["attempts"][0]["status"])
+
+        result = self.service.publish_result(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            criterion_assessments=self.assessment("SATISFIED"),
+        )
+        self.assertEqual("VERIFIED", result["verificationStatus"])
+        closed = self.service.read_run(sealed["verificationRunRef"])
+        self.assertEqual("CLOSED", closed["state"])
+        self.assertEqual("COMPLETED", closed["stepExecutions"][0]["state"])
+        self.assertNotIn(
+            "ATTEMPT_RECORD_INCOMPLETE",
+            [attempt["status"] for attempt in closed["attempts"]],
+        )
+
+    def test_started_step_without_live_owner_keeps_crash_gap_recovery(self) -> None:
+        opened = self.open()
+        sealed = self.seal(
+            opened,
+            self.draft(
+                [
+                    self.flow(
+                        "crash-gap",
+                        [self.step("orphaned-readback", "READBACK", "print('unused')")],
+                    )
+                ]
+            ),
+        )
+        with self.service.workflow._transaction() as connection:
+            _, run, claim = self.service._run_for_actor_locked(
+                connection,
+                opened["assessor"]["capability"],
+                sealed["verificationRunRef"],
+            )
+            plan = self.service._load_plan(run)
+            flow, step, step_index = self.service._find_step(
+                plan, "crash-gap", "orphaned-readback"
+            )
+            self.service._start_step_locked(
+                connection,
+                run=run,
+                claim=claim,
+                flow=flow,
+                step=step,
+                step_index=step_index,
+            )
+
+        result = self.service.publish_result(
+            assessor_capability=opened["assessor"]["capability"],
+            verification_run_ref=sealed["verificationRunRef"],
+            criterion_assessments=self.assessment("INCONCLUSIVE"),
+        )
+        self.assertEqual("INCOMPLETE", result["verificationStatus"])
+        closed = self.service.read_run(sealed["verificationRunRef"])
+        self.assertEqual("CLOSED", closed["state"])
+        self.assertEqual("COMPLETED", closed["stepExecutions"][0]["state"])
+        self.assertEqual(
+            ["ATTEMPT_RECORD_INCOMPLETE"],
+            [attempt["status"] for attempt in closed["attempts"]],
+        )
+        self.assertEqual(
+            "RUNNER_INTERRUPTED_AFTER_STEP_START",
+            closed["attempts"][0]["result"]["reason"],
         )
 
     def test_started_action_requires_every_presealed_cleanup_before_result_closure(self) -> None:

@@ -9,11 +9,16 @@ the aggregate public status.  PROCESS is the deliberately small MVP executor.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import errno
+import fcntl
 import hashlib
 import importlib.util
 import json
 import os
 import re
+import sqlite3
+import stat
 import subprocess
 import sys
 import time
@@ -45,14 +50,20 @@ handoff_contract = _load_module(
     IMPLEMENTATION_ROOT / "tools/implementation-result/implementation_result.py",
 )
 baseline_capsule = handoff_contract.baseline_capsule
+executable_identity = _load_module(
+    "verification_executable_identity",
+    Path(__file__).resolve().with_name("executable_identity.py"),
+)
 
 
 PROTOCOL_VERSION = "verification-result-v1"
-PROCESS_EXECUTOR_VERSION = "process-v2"
+PROCESS_EXECUTOR_VERSION = "process-v3"
 PROCESS_ENVIRONMENT_POLICY = "SEALED_EMPTY_BASE_V1"
 RUN_REF_PATTERN = re.compile(r"^verification:run:v1:[a-f0-9]{32}$")
 RESULT_REF_PATTERN = re.compile(r"^verification:result:v1:[a-f0-9]{32}$")
 HANDOFF_REF_PATTERN = re.compile(r"^implementation:handoff:v1:[a-f0-9]{32}$")
+CAPSULE_REF_PATTERN = re.compile(r"^capsule:v1:[a-f0-9]{32}$")
+DELTA_REF_PATTERN = re.compile(r"^implementation:delta:v1:[a-f0-9]{32}$")
 CLAIM_REF_PATTERN = re.compile(r"^claim:v1:[a-f0-9]{32}$")
 AUTHORIZATION_REF_PATTERN = re.compile(r"^authorization:v1:[a-f0-9]{32}$")
 SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
@@ -64,7 +75,13 @@ STEP_ROLES = {"ACTION", "READBACK", "CLEANUP"}
 TARGET_REQUIREMENTS = {"RETAIN", "DISPOSABLE", "NOT_APPLICABLE"}
 CRITERION_VERDICTS = {"SATISFIED", "CONTRADICTED", "INCONCLUSIVE", "BLOCKED"}
 TERMINAL_STATUSES = {"VERIFIED", "VERIFICATION_FAILED", "INCOMPLETE", "BLOCKED"}
-AMBIGUOUS_ACTION_STATUSES = {"TIMED_OUT", "TOOL_ERROR", "IDENTITY_DRIFT", "ATTEMPT_RECORD_INCOMPLETE"}
+AMBIGUOUS_ACTION_STATUSES = {
+    "TIMED_OUT",
+    "TOOL_ERROR",
+    "IDENTITY_DRIFT",
+    "EXECUTABLE_IDENTITY_DRIFT",
+    "ATTEMPT_RECORD_INCOMPLETE",
+}
 PROCESS_OBSERVATION_UNCERTAINTY_STATUSES = {"TIMED_OUT", "TOOL_ERROR"}
 
 MAX_DRAFT_BYTES = 512 * 1024
@@ -78,6 +95,8 @@ MAX_OUTPUT_BYTES = 64 * 1024
 MAX_PROCESS_TIMEOUT_SECONDS = 60
 MAX_POLL_ATTEMPTS = 10
 MAX_POLL_INTERVAL_MS = 2_000
+
+LIVE_EXECUTION_LOCK_DIRECTORY = ".verification-live-step-locks-v1"
 
 
 class VerificationError(RuntimeError):
@@ -370,8 +389,6 @@ def _normalize_step(raw: Any, locator: str, expected_source: str) -> dict[str, A
         "stepId": _identifier(value["stepId"], f"{locator}.stepId"),
         "role": role,
         "executorKind": "PROCESS",
-        "executorVersion": PROCESS_EXECUTOR_VERSION,
-        "environmentPolicy": PROCESS_ENVIRONMENT_POLICY,
         "executable": executable,
         "argv": normalized_argv,
         "cwd": cwd,
@@ -384,17 +401,47 @@ def _normalize_step(raw: Any, locator: str, expected_source: str) -> dict[str, A
 
 def _request_payload(step: Mapping[str, Any]) -> dict[str, Any]:
     _require_current_process_policy(step)
+    try:
+        identity = executable_identity.validate_executable_identity(
+            step.get("executableIdentity"),
+            expected_canonical_path=step.get("executable"),
+        )
+    except executable_identity.ExecutableIdentityError as exc:
+        raise VerificationError(
+            "SEALED_EXECUTABLE_IDENTITY_INVALID", exc.message
+        ) from exc
     return {
         "executorKind": step["executorKind"],
         "executorVersion": step["executorVersion"],
         "environmentPolicy": step["environmentPolicy"],
         "executable": step["executable"],
+        "executableIdentity": identity,
         "argv": step["argv"],
         "cwd": step["cwd"],
         "environmentDelta": step["environmentDelta"],
         "inputRefs": step["inputRefs"],
         "sourceBinding": step["sourceBinding"],
     }
+
+
+def _repeat_request_payload(step: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the exact-repeat projection, omitting only final source identity."""
+
+    payload = json.loads(_canonical_json(_request_payload(step)))
+    binding = payload.get("sourceBinding")
+    if not isinstance(binding, dict) or "finalSourceIdentity" not in binding:
+        raise VerificationError(
+            "SEALED_REQUEST_MISMATCH",
+            "repeat request source binding has no final source identity",
+        )
+    del binding["finalSourceIdentity"]
+    return payload
+
+
+def _finalize_request_digests(step: dict[str, Any]) -> None:
+    step["canonicalRequestDigest"] = _digest(_request_payload(step))
+    step["repeatRequestDigest"] = _digest(_repeat_request_payload(step))
+    step["sourceBindingDigest"] = _digest(step["sourceBinding"])
 
 
 def _require_current_process_policy(step: Mapping[str, Any]) -> None:
@@ -409,6 +456,87 @@ def _require_current_process_policy(step: Mapping[str, Any]) -> None:
         )
 
 
+def _require_current_process_plan(plan: Mapping[str, Any]) -> None:
+    policy = plan.get("executorPolicy")
+    if policy != {
+        "executorVersion": PROCESS_EXECUTOR_VERSION,
+        "environmentPolicy": PROCESS_ENVIRONMENT_POLICY,
+    }:
+        raise VerificationError(
+            "SEALED_EXECUTOR_POLICY_RETIRED",
+            "sealed plan predates the process-v3 executable-identity policy; historical reads remain available",
+        )
+    flows = plan.get("flows")
+    if not isinstance(flows, list):
+        raise VerificationError("STORE_CORRUPT", "sealed plan flows are malformed")
+    for flow in flows:
+        if not isinstance(flow, Mapping) or not isinstance(flow.get("steps"), list):
+            raise VerificationError("STORE_CORRUPT", "sealed plan flow is malformed")
+        bindings = flow.get("correlationBindings")
+        if not isinstance(bindings, list):
+            raise VerificationError("STORE_CORRUPT", "sealed correlation bindings are malformed")
+        for binding in bindings:
+            if not isinstance(binding, Mapping) or set(binding) != {
+                "bindingId",
+                "actionStepId",
+                "readbackStepId",
+                "token",
+                "tokenSha256",
+            }:
+                raise VerificationError("STORE_CORRUPT", "sealed correlation binding is malformed")
+            token = binding["token"]
+            if (
+                not isinstance(token, str)
+                or hashlib.sha256(token.encode("utf-8")).hexdigest()
+                != binding["tokenSha256"]
+            ):
+                raise VerificationError("STORE_CORRUPT", "sealed correlation token digest differs")
+        for step in flow["steps"]:
+            if not isinstance(step, Mapping):
+                raise VerificationError("STORE_CORRUPT", "sealed PROCESS step is malformed")
+            _require_current_process_policy(step)
+            if set(step) != {
+                "stepId",
+                "role",
+                "executorKind",
+                "executorVersion",
+                "environmentPolicy",
+                "executable",
+                "executableIdentity",
+                "argv",
+                "cwd",
+                "environmentDelta",
+                "inputRefs",
+                "sourceBinding",
+                "pollPolicy",
+                "canonicalRequestDigest",
+                "repeatRequestDigest",
+                "sourceBindingDigest",
+            }:
+                raise VerificationError(
+                    "SEALED_REQUEST_MISMATCH",
+                    "sealed PROCESS step fields differ from process-v3",
+                )
+            try:
+                request_digest = step.get("canonicalRequestDigest")
+                repeat_digest = step.get("repeatRequestDigest")
+                source_digest = step.get("sourceBindingDigest")
+                digests_match = (
+                    _digest(_request_payload(step)) == request_digest
+                    and _digest(_repeat_request_payload(step)) == repeat_digest
+                    and _digest(step.get("sourceBinding")) == source_digest
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise VerificationError(
+                    "SEALED_REQUEST_MISMATCH", "sealed PROCESS request is malformed"
+                ) from exc
+            if not digests_match:
+                raise VerificationError(
+                    "SEALED_REQUEST_MISMATCH",
+                    "sealed PROCESS request, repeat projection, or source binding differs",
+                )
+
+
 def _replace_correlation(value: str, tokens: Mapping[str, str]) -> tuple[str, set[str]]:
     replaced = value
     used: set[str] = set()
@@ -420,15 +548,14 @@ def _replace_correlation(value: str, tokens: Mapping[str, str]) -> tuple[str, se
     return replaced, used
 
 
-def _apply_correlations(
+def _normalize_correlation_bindings(
     flow_id: str,
     steps: list[dict[str, Any]],
     raw_bindings: Any,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+) -> list[dict[str, Any]]:
     if not isinstance(raw_bindings, list) or len(raw_bindings) > MAX_PLAN_ITEMS:
         raise VerificationError("MALFORMED_VERIFICATION_DRAFT", f"flows[{flow_id}].optionalCorrelationBindings is invalid")
     by_step = {step["stepId"]: step for step in steps}
-    tokens: dict[str, str] = {}
     normalized: list[dict[str, Any]] = []
     seen: set[str] = set()
     for index, raw in enumerate(raw_bindings):
@@ -443,13 +570,38 @@ def _apply_correlations(
         if by_step[action_id]["role"] != "ACTION" or by_step[readback_id]["role"] != "READBACK":
             raise VerificationError("MALFORMED_VERIFICATION_DRAFT", f"{locator} roles are invalid")
         seen.add(binding_id)
-        token = f"verification-correlation-v1-{uuid.uuid4().hex}"
-        tokens[binding_id] = token
         normalized.append(
             {
                 "bindingId": binding_id,
                 "actionStepId": action_id,
                 "readbackStepId": readback_id,
+            }
+        )
+    for binding in normalized:
+        placeholder = "{{CORRELATION:" + binding["bindingId"] + "}}"
+        for field in ("actionStepId", "readbackStepId"):
+            step = by_step[binding[field]]
+            values = [*step["argv"], *step["environmentDelta"].values()]
+            if not any(placeholder in value for value in values):
+                raise VerificationError(
+                    "MALFORMED_VERIFICATION_DRAFT",
+                    f"correlation {binding['bindingId']} placeholder must occur in its ACTION and READBACK requests",
+                )
+    return normalized
+
+
+def _apply_correlations(
+    steps: list[dict[str, Any]],
+    bindings: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    tokens: dict[str, str] = {}
+    finalized_bindings: list[dict[str, Any]] = []
+    for binding in bindings:
+        token = f"verification-correlation-v1-{uuid.uuid4().hex}"
+        tokens[binding["bindingId"]] = token
+        finalized_bindings.append(
+            {
+                **binding,
                 "token": token,
                 "tokenSha256": hashlib.sha256(token.encode("utf-8")).hexdigest(),
             }
@@ -474,7 +626,7 @@ def _apply_correlations(
         for binding_id in used:
             usage.setdefault((binding_id, step["stepId"]), set()).add(binding_id)
         correlated_steps.append(copy)
-    for binding in normalized:
+    for binding in finalized_bindings:
         binding_id = binding["bindingId"]
         if (binding_id, binding["actionStepId"]) not in usage or (
             binding_id,
@@ -484,10 +636,7 @@ def _apply_correlations(
                 "MALFORMED_VERIFICATION_DRAFT",
                 f"correlation {binding_id} placeholder must occur in its ACTION and READBACK requests",
             )
-    for step in correlated_steps:
-        step["canonicalRequestDigest"] = _digest(_request_payload(step))
-        step["sourceBindingDigest"] = _digest(step["sourceBinding"])
-    return correlated_steps, normalized
+    return correlated_steps, finalized_bindings
 
 
 def _normalize_authorizations(raw: Any) -> list[dict[str, str]]:
@@ -629,7 +778,9 @@ def _normalize_draft(
         if len(set(local_ids)) != len(local_ids) or global_step_ids.intersection(local_ids):
             raise VerificationError("MALFORMED_VERIFICATION_DRAFT", "stepId must be unique in the run")
         global_step_ids.update(local_ids)
-        correlated, bindings = _apply_correlations(flow_id, steps, flow["optionalCorrelationBindings"])
+        bindings = _normalize_correlation_bindings(
+            flow_id, steps, flow["optionalCorrelationBindings"]
+        )
         flows.append(
             {
                 "flowId": flow_id,
@@ -640,7 +791,7 @@ def _normalize_draft(
                 ),
                 "basisAnchors": _basis_anchors(flow["basisAnchors"], f"{locator}.basisAnchors"),
                 "productTargetRequirement": requirement,
-                "steps": correlated,
+                "steps": steps,
                 "correlationBindings": bindings,
             }
         )
@@ -716,7 +867,7 @@ def _public_step(step: Mapping[str, Any]) -> dict[str, Any]:
         }
         for value in step["argv"]
     ]
-    return {
+    result = {
         "stepId": step["stepId"],
         "role": step["role"],
         "executorKind": step["executorKind"],
@@ -725,6 +876,7 @@ def _public_step(step: Mapping[str, Any]) -> dict[str, Any]:
         "canonicalRequestDigest": step["canonicalRequestDigest"],
         "canonicalRequest": {
             "executable": step["executable"],
+            "executableIdentity": step.get("executableIdentity"),
             "argv": argv,
             "cwd": step["cwd"],
             "environmentDelta": environment,
@@ -734,13 +886,314 @@ def _public_step(step: Mapping[str, Any]) -> dict[str, Any]:
         "sourceBindingDigest": step["sourceBindingDigest"],
         "pollPolicy": step["pollPolicy"],
     }
+    if "repeatRequestDigest" in step:
+        result["repeatRequestDigest"] = step["repeatRequestDigest"]
+    return result
 
 
 class VerificationService:
     """Coordinates claims and owns sealed-run execution and result publication."""
 
-    def __init__(self, workflow_root: Path | str = workflow_store.DEFAULT_STORE_ROOT) -> None:
-        self.workflow = workflow_store.WorkflowStore(workflow_root)
+    def __init__(
+        self,
+        workflow_root: Path | str | None = None,
+        *,
+        guard: Any | None = None,
+        workflow: Any | None = None,
+    ) -> None:
+        if workflow is not None:
+            if not isinstance(workflow, workflow_store.WorkflowStore):
+                raise VerificationError(
+                    "INVALID_WORKFLOW_STORE",
+                    "injected workflow is not an audited WorkflowStore",
+                )
+            if workflow_root is not None:
+                try:
+                    expected_root = Path(workflow_root).expanduser().resolve()
+                except (OSError, RuntimeError) as exc:
+                    raise VerificationError(
+                        "INVALID_WORKFLOW_STORE",
+                        "workflow root cannot be canonicalized",
+                    ) from exc
+                if expected_root != workflow.store_root:
+                    raise VerificationError(
+                        "INVALID_WORKFLOW_STORE",
+                        "injected workflow differs from requested workflow root",
+                    )
+            self.workflow = workflow
+            return
+        if guard is None:
+            raise VerificationError(
+                "AUDIT_GUARD_REQUIRED",
+                "verification service requires a live audited-open guard session",
+            )
+        try:
+            opened = workflow_store.audit_and_open_workflow_store(
+                workflow_root or workflow_store.DEFAULT_STORE_ROOT,
+                guard=guard,
+            )
+        except workflow_store.WorkflowStoreError as exc:
+            raise VerificationError(exc.code, exc.message) from exc
+        self.workflow = opened.store
+
+    @staticmethod
+    def _step_execution_lock_name(run_ref: str, flow_id: str, step_id: str) -> str:
+        identity = _canonical_json(
+            {
+                "protocolVersion": "verification-live-step-lock-v1",
+                "verificationRunRef": run_ref,
+                "flowId": flow_id,
+                "stepId": step_id,
+            }
+        )
+        return f"{hashlib.sha256(identity).hexdigest()}.lock"
+
+    @staticmethod
+    def _require_owner_only_lock_object(
+        observed: os.stat_result,
+        *,
+        locator: str,
+        expected_kind: str,
+    ) -> None:
+        kind_matches = (
+            stat.S_ISDIR(observed.st_mode)
+            if expected_kind == "directory"
+            else stat.S_ISREG(observed.st_mode)
+        )
+        if (
+            not kind_matches
+            or observed.st_uid != os.geteuid()
+            or stat.S_IMODE(observed.st_mode) & 0o077
+            or (expected_kind == "file" and observed.st_nlink != 1)
+        ):
+            raise VerificationError(
+                "STEP_EXECUTION_LOCK_UNSAFE",
+                f"{locator} is not a stable owner-only {expected_kind}",
+            )
+
+    def _open_step_execution_lock_file(
+        self,
+        *,
+        run_ref: str,
+        flow_id: str,
+        step_id: str,
+    ) -> int:
+        """Open one persistent, no-follow lock inode below the audited store root."""
+
+        directory_flags = os.O_RDONLY | os.O_CLOEXEC
+        directory_flags |= getattr(os, "O_DIRECTORY", 0)
+        directory_flags |= getattr(os, "O_NOFOLLOW", 0)
+        file_flags = os.O_RDWR | os.O_CLOEXEC
+        file_flags |= getattr(os, "O_NOFOLLOW", 0)
+        root_fd: int | None = None
+        directory_fd: int | None = None
+        lock_fd: int | None = None
+        keep_lock_fd = False
+        try:
+            root_fd = os.open(self.workflow.store_root, directory_flags)
+            self._require_owner_only_lock_object(
+                os.fstat(root_fd),
+                locator="workflow store root",
+                expected_kind="directory",
+            )
+            try:
+                os.mkdir(
+                    LIVE_EXECUTION_LOCK_DIRECTORY,
+                    0o700,
+                    dir_fd=root_fd,
+                )
+            except FileExistsError:
+                pass
+            directory_fd = os.open(
+                LIVE_EXECUTION_LOCK_DIRECTORY,
+                directory_flags,
+                dir_fd=root_fd,
+            )
+            self._require_owner_only_lock_object(
+                os.fstat(directory_fd),
+                locator="live execution lock directory",
+                expected_kind="directory",
+            )
+            lock_name = self._step_execution_lock_name(run_ref, flow_id, step_id)
+            try:
+                lock_fd = os.open(
+                    lock_name,
+                    file_flags | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                    dir_fd=directory_fd,
+                )
+            except FileExistsError:
+                lock_fd = os.open(lock_name, file_flags, dir_fd=directory_fd)
+            observed = os.fstat(lock_fd)
+            self._require_owner_only_lock_object(
+                observed,
+                locator="live execution lock file",
+                expected_kind="file",
+            )
+            linked = os.stat(lock_name, dir_fd=directory_fd, follow_symlinks=False)
+            if (linked.st_dev, linked.st_ino) != (observed.st_dev, observed.st_ino):
+                raise VerificationError(
+                    "STEP_EXECUTION_LOCK_UNSAFE",
+                    "live execution lock file changed while opening",
+                )
+            keep_lock_fd = True
+            return lock_fd
+        except VerificationError:
+            raise
+        except OSError as exc:
+            raise VerificationError(
+                "STEP_EXECUTION_LOCK_UNAVAILABLE",
+                "live execution ownership lock could not be opened",
+            ) from exc
+        finally:
+            if lock_fd is not None and not keep_lock_fd:
+                os.close(lock_fd)
+            if directory_fd is not None:
+                os.close(directory_fd)
+            if root_fd is not None:
+                os.close(root_fd)
+
+    def _acquire_step_execution_lock(
+        self,
+        *,
+        run_ref: str,
+        flow_id: str,
+        step_id: str,
+    ) -> int:
+        lock_fd = self._open_step_execution_lock_file(
+            run_ref=run_ref,
+            flow_id=flow_id,
+            step_id=step_id,
+        )
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            os.close(lock_fd)
+            if exc.errno in {errno.EACCES, errno.EAGAIN}:
+                raise VerificationError(
+                    "STEP_EXECUTION_ACTIVE",
+                    "a live executor owns this sealed step",
+                ) from exc
+            raise VerificationError(
+                "STEP_EXECUTION_LOCK_UNAVAILABLE",
+                "live execution ownership lock could not be acquired",
+            ) from exc
+        return lock_fd
+
+    def _validate_verifiable_handoff_locked(self, connection, handoff_ref: str) -> dict[str, Any]:
+        row = connection.execute(
+            "SELECT * FROM nodes WHERE node_ref = ? AND node_kind = 'IMPLEMENTATION_HANDOFF'",
+            (handoff_ref,),
+        ).fetchone()
+        if row is None:
+            raise VerificationError("HANDOFF_NOT_FOUND", "implementation handoff is absent")
+        try:
+            view = self.workflow._node_view(row)
+        except workflow_store.WorkflowStoreError as exc:
+            raise VerificationError(exc.code, exc.message) from exc
+        handoff = view["payload"]
+        required = {
+            "protocolVersion",
+            "implementationHandoffRef",
+            "implementationStatus",
+            "projectRoot",
+            "planningSeal",
+            "planningSealDigest",
+            "baselineCapsuleRef",
+            "baselineSourceIdentity",
+            "finalSourceIdentity",
+            "implementationDeltaRef",
+            "criterionAccounting",
+            "unresolvedImplementationItems",
+            "completedAt",
+        }
+        if (
+            set(handoff) != required
+            or row["protocol_version"] != "implementation-handoff-v1"
+            or view["protocolVersion"] != "implementation-handoff-v1"
+            or handoff.get("protocolVersion") != "implementation-handoff-v1"
+            or handoff.get("implementationHandoffRef") != handoff_ref
+            or handoff.get("implementationStatus") != "IMPLEMENTATION_HANDOFF_COMPLETE"
+            or row["verification_status"] is not None
+            or not isinstance(row["planning_identity"], str)
+            or not SHA256_PATTERN.fullmatch(row["planning_identity"])
+            or not isinstance(row["source_identity"], str)
+            or not SOURCE_IDENTITY_PATTERN.fullmatch(row["source_identity"])
+            or handoff.get("planningSealDigest") != row["planning_identity"]
+            or handoff.get("finalSourceIdentity") != row["source_identity"]
+            or handoff.get("unresolvedImplementationItems") != []
+        ):
+            raise VerificationError(
+                "HANDOFF_CONTRACT_INVALID", "implementation handoff contract or node binding differs"
+            )
+        baseline_capsule_ref = handoff["baselineCapsuleRef"]
+        baseline_source_identity = handoff["baselineSourceIdentity"]
+        implementation_delta_ref = handoff["implementationDeltaRef"]
+        completed_at = handoff["completedAt"]
+        if (
+            not isinstance(baseline_capsule_ref, str)
+            or not CAPSULE_REF_PATTERN.fullmatch(baseline_capsule_ref)
+            or not isinstance(baseline_source_identity, str)
+            or not SOURCE_IDENTITY_PATTERN.fullmatch(baseline_source_identity)
+            or not isinstance(implementation_delta_ref, str)
+            or not DELTA_REF_PATTERN.fullmatch(implementation_delta_ref)
+            or not isinstance(completed_at, str)
+        ):
+            raise VerificationError(
+                "HANDOFF_CONTRACT_INVALID",
+                "handoff baseline, delta, or completion binding is malformed",
+            )
+        try:
+            parsed_completed_at = datetime.fromisoformat(completed_at)
+            parsed_node_created_at = datetime.fromisoformat(row["created_at"])
+        except (TypeError, ValueError) as exc:
+            raise VerificationError(
+                "HANDOFF_CONTRACT_INVALID", "handoff/node completion time is not ISO-8601"
+            ) from exc
+        if (
+            parsed_completed_at.tzinfo is None
+            or parsed_node_created_at.tzinfo is None
+            or parsed_completed_at.astimezone(timezone.utc)
+            > parsed_node_created_at.astimezone(timezone.utc)
+        ):
+            raise VerificationError(
+                "HANDOFF_CONTRACT_INVALID",
+                "handoff completion time is unbound to node publication time",
+            )
+        accounting = handoff.get("criterionAccounting")
+        if not isinstance(accounting, list) or not accounting:
+            raise VerificationError("HANDOFF_CONTRACT_INVALID", "handoff criterion accounting is absent")
+        for index, raw in enumerate(accounting):
+            if not isinstance(raw, Mapping) or set(raw) != {
+                "criterionIndex",
+                "criterionRawSha256",
+                "taskIds",
+            }:
+                raise VerificationError(
+                    "HANDOFF_CONTRACT_INVALID", f"handoff criterionAccounting[{index}] is malformed"
+                )
+            task_ids = raw["taskIds"]
+            if (
+                not isinstance(task_ids, list)
+                or task_ids != sorted(task_ids)
+                or len(task_ids) != len(set(task_ids))
+                or any(not isinstance(task, str) or not ID_PATTERN.fullmatch(task) for task in task_ids)
+            ):
+                raise VerificationError(
+                    "HANDOFF_CONTRACT_INVALID",
+                    f"handoff criterionAccounting[{index}].taskIds is non-canonical",
+                )
+        try:
+            project_root = self._project_root(handoff)
+            self._verify_planning(handoff)
+            observed_source = self._capture_source(project_root)
+        except _PreflightTerminal as exc:
+            raise VerificationError(exc.reason_code, exc.message) from exc
+        if observed_source != row["source_identity"]:
+            raise VerificationError(
+                "SOURCE_IDENTITY_MISMATCH", "implementation handoff source is not current"
+            )
+        return view
 
     @staticmethod
     def preview_process_step(
@@ -748,7 +1201,7 @@ class VerificationService:
         step: Mapping[str, Any],
         project_root: Path | str,
         final_source_identity: str,
-    ) -> dict[str, str]:
+    ) -> dict[str, Any]:
         """Canonicalize one non-correlated PROCESS step for authorization scoping."""
 
         if not SOURCE_IDENTITY_PATTERN.fullmatch(final_source_identity):
@@ -766,21 +1219,31 @@ class VerificationService:
                 "correlated steps receive a tool token only during whole-flow sealing",
             )
         try:
-            executable = Path(normalized["executable"]).resolve(strict=True)
+            identity = executable_identity.observe_executable_identity(
+                normalized["executable"]
+            )
             cwd = Path(normalized["cwd"]).resolve(strict=True)
+        except executable_identity.ExecutableIdentityError as exc:
+            raise VerificationError(exc.code, exc.message) from exc
         except OSError as exc:
             raise VerificationError("PROCESS_TARGET_UNAVAILABLE", str(exc)) from exc
-        if not executable.is_file() or not os.access(executable, os.X_OK):
-            raise VerificationError("PROCESS_TARGET_UNAVAILABLE", "executable is unavailable")
         if not cwd.is_dir() or (cwd != root and root not in cwd.parents):
             raise VerificationError("PROCESS_TARGET_OUTSIDE_PROJECT", "cwd is outside project root")
         if normalized["sourceBinding"]["targetIdentityOrRevision"] != str(root):
             raise VerificationError("SOURCE_BINDING_MISMATCH", "source target differs from project root")
-        normalized["executable"] = str(executable)
+        normalized["executorVersion"] = PROCESS_EXECUTOR_VERSION
+        normalized["environmentPolicy"] = PROCESS_ENVIRONMENT_POLICY
+        normalized["executable"] = identity["canonicalPath"]
+        normalized["executableIdentity"] = identity
         normalized["cwd"] = str(cwd)
+        _finalize_request_digests(normalized)
         return {
-            "canonicalRequestDigest": _digest(_request_payload(normalized)),
-            "sourceBindingDigest": _digest(normalized["sourceBinding"]),
+            "executorVersion": PROCESS_EXECUTOR_VERSION,
+            "environmentPolicy": PROCESS_ENVIRONMENT_POLICY,
+            "executableIdentity": identity,
+            "canonicalRequestDigest": normalized["canonicalRequestDigest"],
+            "repeatRequestDigest": normalized["repeatRequestDigest"],
+            "sourceBindingDigest": normalized["sourceBindingDigest"],
         }
 
     def open_verification(
@@ -809,6 +1272,17 @@ class VerificationService:
                 )
                 if expected_handoff != implementation_handoff_ref:
                     raise VerificationError("HANDOFF_IDENTITY_MISMATCH", "handoff is not the current verifiable candidate")
+                handoff_view = self._validate_verifiable_handoff_locked(
+                    connection, implementation_handoff_ref
+                )
+                if (
+                    handoff_view["planningIdentity"] != tip["planning_identity"]
+                    or handoff_view["sourceIdentity"] != tip["source_identity"]
+                ):
+                    raise VerificationError(
+                        "HANDOFF_IDENTITY_MISMATCH",
+                        "current tip and implementation handoff identity differ",
+                    )
                 tip_view = dict(tip)
             assessor = self.workflow.issue_actor(
                 coordinator_capability=coordinator_capability, role="ASSESSOR"
@@ -1105,6 +1579,10 @@ class VerificationService:
     @staticmethod
     def _finalize_paths(plan: Mapping[str, Any], project_root: Path) -> dict[str, Any]:
         finalized = json.loads(_canonical_json(plan))
+        finalized["executorPolicy"] = {
+            "executorVersion": PROCESS_EXECUTOR_VERSION,
+            "environmentPolicy": PROCESS_ENVIRONMENT_POLICY,
+        }
         for review_index, review in enumerate(finalized["sourceReviews"]):
             for anchor_index, anchor in enumerate(review["basisAnchors"]):
                 _check_anchor(anchor, f"sourceReviews[{review_index}].basisAnchors[{anchor_index}]")
@@ -1118,22 +1596,30 @@ class VerificationService:
                         f"flows[{flow_index}].steps[{step_index}].sourceBinding.bindingBasisAnchors[{anchor_index}]",
                     )
                 try:
-                    executable = Path(step["executable"]).resolve(strict=True)
+                    identity = executable_identity.observe_executable_identity(
+                        step["executable"]
+                    )
                     cwd = Path(step["cwd"]).resolve(strict=True)
+                except executable_identity.ExecutableIdentityError as exc:
+                    raise _PreflightTerminal("INCOMPLETE", exc.code, exc.message) from exc
                 except OSError as exc:
                     raise _PreflightTerminal("INCOMPLETE", "PROCESS_TARGET_UNAVAILABLE", str(exc)) from exc
-                if not executable.is_file() or not os.access(executable, os.X_OK):
-                    raise _PreflightTerminal("INCOMPLETE", "PROCESS_TARGET_UNAVAILABLE", "executable is unavailable")
                 if not cwd.is_dir() or (cwd != project_root and project_root not in cwd.parents):
                     raise _PreflightTerminal("BLOCKED", "PROCESS_TARGET_OUTSIDE_PROJECT", "cwd is outside project root")
                 if step["sourceBinding"]["targetIdentityOrRevision"] != str(project_root):
                     raise _PreflightTerminal(
                         "BLOCKED", "SOURCE_BINDING_MISMATCH", "CURRENT_PROJECT_ROOT target differs from project root"
                     )
-                step["executable"] = str(executable)
+                step["executorVersion"] = PROCESS_EXECUTOR_VERSION
+                step["environmentPolicy"] = PROCESS_ENVIRONMENT_POLICY
+                step["executable"] = identity["canonicalPath"]
+                step["executableIdentity"] = identity
                 step["cwd"] = str(cwd)
-                step["canonicalRequestDigest"] = _digest(_request_payload(step))
-                step["sourceBindingDigest"] = _digest(step["sourceBinding"])
+            flow["steps"], flow["correlationBindings"] = _apply_correlations(
+                flow["steps"], flow["correlationBindings"]
+            )
+            for step in flow["steps"]:
+                _finalize_request_digests(step)
         return finalized
 
     @staticmethod
@@ -1246,12 +1732,17 @@ class VerificationService:
                     candidate_methods.append("UNIQUE_CORRELATION")
                 matched = None
                 for mechanism in candidate_methods:
+                    request_digest = (
+                        step["repeatRequestDigest"]
+                        if mechanism == "EXACT_IDEMPOTENCY"
+                        else step["canonicalRequestDigest"]
+                    )
                     scope = self.replay_authorization_scope(
                         mechanism=mechanism,
                         prior_run_ref=prior["run_ref"],
                         prior_flow_id=prior["flow_id"],
                         prior_step_id=prior["step_id"],
-                        new_request_digest=step["canonicalRequestDigest"],
+                        new_request_digest=request_digest,
                         target_binding_digest=step["sourceBindingDigest"],
                     )
                     if scope in authorized_scopes:
@@ -1294,6 +1785,7 @@ class VerificationService:
             self._event_locked(connection, run_ref, event_kind, preflight)
 
     def _seal_plan(self, *, run_ref: str, plan: Mapping[str, Any], preflight: Mapping[str, Any]) -> str:
+        _require_current_process_plan(plan)
         encoded = _canonical_json(plan)
         plan_digest = hashlib.sha256(encoded).hexdigest()
         with self.workflow._transaction() as connection:
@@ -1320,49 +1812,109 @@ class VerificationService:
         self,
         *,
         assessor_capability: str,
-        context: Mapping[str, Any],
         run_ref: str,
-        status: str,
-        reason_code: str,
     ) -> dict[str, Any]:
-        if status not in {"INCOMPLETE", "BLOCKED"}:
-            raise VerificationError("STORE_CORRUPT", "preflight result status is invalid")
-        claim = context["claim"]
         try:
-            self.workflow.ensure_claim_closure_budget(
-                claimant_capability=assessor_capability,
-                claim_ref=claim["claim_ref"],
-                amounts=_budget_vector(closureOperations=1),
-            )
-            result_ref = workflow_store.allocate_ref("VERIFICATION_RESULT")
-            completed_at = _now()
-            payload = {
-                "protocolVersion": PROTOCOL_VERSION,
-                "verificationResultRef": result_ref,
-                "verificationStatus": status,
-                "implementationHandoffRef": context["handoff"]["implementationHandoffRef"],
-                "planningSealDigest": claim["planning_identity"],
-                "finalSourceIdentity": claim["source_identity"],
-                "verificationRunRef": run_ref,
-                "sealedPlanDigest": None,
-                "criterionResults": [],
-                "reasonCodes": [reason_code],
-                "completedAt": completed_at,
-            }
-            node = self.workflow.publish_successor(
-                claimant_capability=assessor_capability,
-                claim_ref=claim["claim_ref"],
-                node_ref=result_ref,
-                node_kind="VERIFICATION_RESULT",
-                protocol_version=PROTOCOL_VERSION,
-                planning_identity=claim["planning_identity"],
-                source_identity=claim["source_identity"],
-                verification_status=status,
-                payload=payload,
-                verification_run_ref=run_ref,
-            )
+            with self.workflow._transaction() as connection:
+                _, run, claim = self._run_for_actor_locked(
+                    connection, assessor_capability, run_ref
+                )
+                if (
+                    run["state"] != "PREFLIGHT"
+                    or claim["state"] != "ACTIVE"
+                    or claim["transition_kind"] != "VERIFY"
+                    or claim["execution_ref"] != run_ref
+                    or run["root_ref"] != claim["root_ref"]
+                    or run["planning_identity"] != claim["planning_identity"]
+                    or run["source_identity"] != claim["source_identity"]
+                ):
+                    raise VerificationError(
+                        "VERIFICATION_RUN_NOT_PUBLISHABLE",
+                        "preflight run identity is not publishable",
+                    )
+                preflight = _decode_json(run["preflight_json"], "terminal preflight")
+                terminal_events = connection.execute(
+                    """
+                    SELECT payload_json, payload_sha256
+                    FROM verification_events
+                    WHERE run_ref = ? AND event_kind = 'PREFLIGHT_TERMINAL'
+                    ORDER BY event_id
+                    """,
+                    (run_ref,),
+                ).fetchall()
+                if len(terminal_events) != 1:
+                    raise VerificationError(
+                        "STORE_CORRUPT", "preflight requires exactly one terminal event"
+                    )
+                event_bytes = bytes(terminal_events[0]["payload_json"])
+                if hashlib.sha256(event_bytes).hexdigest() != terminal_events[0]["payload_sha256"]:
+                    raise VerificationError(
+                        "STORE_CORRUPT", "preflight terminal event digest differs"
+                    )
+                event_payload = _decode_json(event_bytes, "preflight terminal event")
+                terminals = [
+                    item
+                    for item in preflight.get("observations", [])
+                    if isinstance(item, Mapping)
+                    and item.get("observation") == "PREFLIGHT_TERMINAL"
+                ]
+                if preflight.get("stage") != "TERMINAL" or len(terminals) != 1:
+                    raise VerificationError(
+                        "STORE_CORRUPT", "stored terminal preflight is malformed"
+                    )
+                terminal = terminals[0]
+                status = terminal.get("status")
+                reason_code = terminal.get("reasonCode")
+                if (
+                    event_payload != preflight
+                    or status not in {"INCOMPLETE", "BLOCKED"}
+                    or not isinstance(reason_code, str)
+                    or not reason_code
+                ):
+                    raise VerificationError(
+                        "STORE_CORRUPT", "preflight terminal event and run facts differ"
+                    )
+                self.workflow._ensure_claim_closure_budget_locked(
+                    connection,
+                    claimant_capability=assessor_capability,
+                    claim_ref=claim["claim_ref"],
+                    amounts=_budget_vector(closureOperations=1),
+                )
+                result_ref = workflow_store.allocate_ref("VERIFICATION_RESULT")
+                completed_at = _now()
+                payload = {
+                    "protocolVersion": PROTOCOL_VERSION,
+                    "verificationResultRef": result_ref,
+                    "verificationStatus": status,
+                    "implementationHandoffRef": run["implementation_handoff_ref"],
+                    "planningSealDigest": run["planning_identity"],
+                    "finalSourceIdentity": run["source_identity"],
+                    "verificationRunRef": run_ref,
+                    "sealedPlanDigest": None,
+                    "criterionResults": [],
+                    "reasonCodes": [reason_code],
+                    "completedAt": completed_at,
+                }
+                node = self.workflow._close_successor_locked(
+                    connection,
+                    claimant_capability=assessor_capability,
+                    claim_ref=claim["claim_ref"],
+                    node_ref=result_ref,
+                    node_kind="VERIFICATION_RESULT",
+                    protocol_version=PROTOCOL_VERSION,
+                    planning_identity=run["planning_identity"],
+                    source_identity=run["source_identity"],
+                    verification_status=status,
+                    payload=payload,
+                    verification_run_ref=run_ref,
+                    created_at=completed_at,
+                )
         except workflow_store.WorkflowStoreError as exc:
             raise VerificationError(exc.code, exc.message) from exc
+        except sqlite3.IntegrityError as exc:
+            raise VerificationError(
+                "ATOMIC_PUBLICATION_CONFLICT", "preflight result publication conflicted"
+            ) from exc
         if node["payload"] != payload:
             raise VerificationError("PUBLICATION_FAILED", "stored preflight result readback differs")
         return payload
@@ -1432,6 +1984,7 @@ class VerificationService:
                 )
             if existing_run["state"] == "SEALED":
                 stored_plan = self._load_plan(existing_run)
+                _require_current_process_plan(stored_plan)
                 return {
                     "verificationRunRef": run_ref,
                     "implementationHandoffRef": implementation_handoff_ref,
@@ -1459,10 +2012,7 @@ class VerificationService:
                     )
                 return self._publish_preflight_result(
                     assessor_capability=assessor_capability,
-                    context=context,
                     run_ref=run_ref,
-                    status=terminal_status,
-                    reason_code=terminal_reason,
                 )
             if existing_run["state"] != "PREFLIGHT" or stored_preflight.get("stage") != "STARTED":
                 raise VerificationError(
@@ -1521,10 +2071,7 @@ class VerificationService:
             )
             return self._publish_preflight_result(
                 assessor_capability=assessor_capability,
-                context=context,
                 run_ref=run_ref,
-                status=terminal.status,
-                reason_code=terminal.reason_code,
             )
 
         preflight = {
@@ -1682,6 +2229,19 @@ class VerificationService:
         except baseline_capsule.CapsuleError as exc:
             return None, exc.code
 
+    @staticmethod
+    def _observe_executable_for_attempt(
+        path: str,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, int]:
+        started = time.monotonic()
+        try:
+            identity = dict(executable_identity.observe_executable_identity(path))
+            error = None
+        except executable_identity.ExecutableIdentityError as exc:
+            identity = None
+            error = {"code": exc.code, "bytesHashed": exc.bytes_hashed}
+        return identity, error, int((time.monotonic() - started) * 1000)
+
     def _append_attempt(
         self,
         *,
@@ -1720,7 +2280,7 @@ class VerificationService:
                         created_at,
                     ),
                 )
-            connection.execute(
+            cursor = connection.execute(
                 """
                 INSERT INTO verification_attempts(
                     run_ref, flow_id, step_id, step_role, poll_index, status,
@@ -1743,19 +2303,50 @@ class VerificationService:
                     created_at,
                 ),
             )
+            attempt_id = int(cursor.lastrowid)
+            result_digest = hashlib.sha256(encoded_result).hexdigest()
             self._event_locked(
                 connection,
                 run_ref,
                 "ATTEMPT_APPENDED",
                 {
+                    "attemptId": attempt_id,
                     "flowId": flow["flowId"],
                     "stepId": step["stepId"],
                     "pollIndex": poll_index,
                     "status": status,
                     "artifactRef": artifact_ref,
+                    "canonicalRequestDigest": step["canonicalRequestDigest"],
+                    "resultDigest": result_digest,
                 },
             )
+            if status == "EXECUTABLE_IDENTITY_DRIFT":
+                self._event_locked(
+                    connection,
+                    run_ref,
+                    "EXECUTABLE_IDENTITY_DRIFT",
+                    {
+                        "attemptId": attempt_id,
+                        "flowId": flow["flowId"],
+                        "stepId": step["stepId"],
+                        "pollIndex": poll_index,
+                        "canonicalRequestDigest": step["canonicalRequestDigest"],
+                        "phase": result.get("executableIdentityPhase"),
+                        "processStarted": result.get("processStarted"),
+                        "expectedExecutableIdentity": result.get(
+                            "expectedExecutableIdentity"
+                        ),
+                        "observedExecutableIdentity": result.get(
+                            "observedExecutableIdentity"
+                        ),
+                        "identityError": result.get("executableIdentityError"),
+                        "bytesHashed": result.get("executableBytesHashed"),
+                        "durationMs": result.get("durationMs"),
+                        "resultDigest": result_digest,
+                    },
+                )
         return {
+            "attemptId": attempt_id,
             "flowId": flow["flowId"],
             "stepId": step["stepId"],
             "pollIndex": poll_index,
@@ -1776,14 +2367,42 @@ class VerificationService:
         flow_id: str,
         step_id: str,
     ) -> dict[str, Any]:
+        if not isinstance(verification_run_ref, str) or not RUN_REF_PATTERN.fullmatch(
+            verification_run_ref
+        ):
+            raise VerificationError(
+                "MALFORMED_RUN_REF", "verification run ref is malformed"
+            )
         flow_id = _identifier(flow_id, "flowId")
         step_id = _identifier(step_id, "stepId")
+        lock_fd = self._acquire_step_execution_lock(
+            run_ref=verification_run_ref,
+            flow_id=flow_id,
+            step_id=step_id,
+        )
+        try:
+            return self._execute_step_owned(
+                assessor_capability=assessor_capability,
+                verification_run_ref=verification_run_ref,
+                flow_id=flow_id,
+                step_id=step_id,
+            )
+        finally:
+            os.close(lock_fd)
+
+    def _execute_step_owned(
+        self,
+        *,
+        assessor_capability: str,
+        verification_run_ref: str,
+        flow_id: str,
+        step_id: str,
+    ) -> dict[str, Any]:
         with self.workflow._transaction() as connection:
             _, run, claim = self._run_for_actor_locked(connection, assessor_capability, verification_run_ref)
             plan = self._load_plan(run)
+            _require_current_process_plan(plan)
             flow, step, step_index = self._find_step(plan, flow_id, step_id)
-            if _digest(_request_payload(step)) != step["canonicalRequestDigest"]:
-                raise VerificationError("SEALED_REQUEST_MISMATCH", "sealed request digest is corrupt")
             self._start_step_locked(
                 connection,
                 run=run,
@@ -1797,6 +2416,7 @@ class VerificationService:
         expected_source = run["source_identity"]
         poll_count = step["pollPolicy"]["maxAttempts"] if step["role"] == "READBACK" else 1
         attempts: list[dict[str, Any]] = []
+        expected_executable_identity = dict(step["executableIdentity"])
         for poll_index in range(1, poll_count + 1):
             if poll_index > 1:
                 time.sleep(step["pollPolicy"]["intervalMs"] / 1000.0)
@@ -1806,7 +2426,16 @@ class VerificationService:
                     "executor": "PROCESS",
                     "executorVersion": step["executorVersion"],
                     "environmentPolicy": step["environmentPolicy"],
+                    "processStarted": False,
                     "identityError": before_error,
+                    "expectedExecutableIdentity": expected_executable_identity,
+                    "observedExecutableIdentity": None,
+                    "executableIdentityBefore": None,
+                    "executableIdentityAfter": None,
+                    "executableIdentityPhase": None,
+                    "executableIdentityError": None,
+                    "executableBytesHashed": {"before": 0, "after": 0, "total": 0},
+                    "durationMs": 0,
                     "actualSourceBinding": {
                         "mode": "CURRENT_PROJECT_ROOT",
                         "sourceIdentity": source_before,
@@ -1828,6 +2457,68 @@ class VerificationService:
                 )
                 break
 
+            executable_before, executable_before_error, before_identity_ms = (
+                self._observe_executable_for_attempt(step["executable"])
+            )
+            executable_before_bytes = (
+                int(executable_before["byteCount"])
+                if executable_before is not None
+                else int((executable_before_error or {}).get("bytesHashed", 0))
+            )
+            if executable_before_error is None and not executable_identity.executable_identities_equal(
+                expected_executable_identity, executable_before
+            ):
+                executable_before_error = {
+                    "code": "EXECUTABLE_IDENTITY_MISMATCH",
+                    "bytesHashed": executable_before_bytes,
+                }
+            if executable_before_error is not None:
+                pre_result: dict[str, Any] = {
+                    "executor": "PROCESS",
+                    "executorVersion": step["executorVersion"],
+                    "environmentPolicy": step["environmentPolicy"],
+                    "processStarted": False,
+                    "expectedExecutableIdentity": expected_executable_identity,
+                    "observedExecutableIdentity": executable_before,
+                    "executableIdentityBefore": executable_before,
+                    "executableIdentityAfter": None,
+                    "executableIdentityPhase": "PRE",
+                    "executableIdentityError": executable_before_error,
+                    "executableBytesHashed": {
+                        "before": executable_before_bytes,
+                        "after": 0,
+                        "total": executable_before_bytes,
+                    },
+                    "durationMs": before_identity_ms,
+                    "identityObservationDurationMs": {
+                        "before": before_identity_ms,
+                        "after": 0,
+                    },
+                    "exitCode": None,
+                    "errorCode": executable_before_error["code"],
+                    "stdout": _artifact_projection(_bounded_output(b"")),
+                    "stderr": _artifact_projection(_bounded_output(b"")),
+                    "actualSourceBinding": {
+                        "mode": "CURRENT_PROJECT_ROOT",
+                        "sourceIdentity": source_before,
+                        "projectRoot": str(project_root),
+                    },
+                }
+                attempts.append(
+                    self._append_attempt(
+                        run_ref=verification_run_ref,
+                        flow=flow,
+                        step=step,
+                        poll_index=poll_index,
+                        status="EXECUTABLE_IDENTITY_DRIFT",
+                        source_before=source_before,
+                        source_after=source_before,
+                        artifact_payload=None,
+                        result=pre_result,
+                    )
+                )
+                break
+
             environment = dict(step["environmentDelta"])
             started = time.monotonic()
             stdout = b""
@@ -1835,6 +2526,7 @@ class VerificationService:
             exit_code: int | None = None
             status = "EXITED"
             error_code: str | None = None
+            process_started = False
             try:
                 completed = subprocess.run(
                     [step["executable"], *step["argv"]],
@@ -1849,8 +2541,10 @@ class VerificationService:
                 stdout = completed.stdout
                 stderr = completed.stderr
                 exit_code = completed.returncode
+                process_started = True
             except subprocess.TimeoutExpired as exc:
                 status = "TIMED_OUT"
+                process_started = True
                 stdout = exc.stdout if isinstance(exc.stdout, bytes) else (exc.stdout or "").encode("utf-8")
                 stderr = exc.stderr if isinstance(exc.stderr, bytes) else (exc.stderr or "").encode("utf-8")
                 error_code = "PROCESS_TIMEOUT"
@@ -1862,6 +2556,23 @@ class VerificationService:
             source_after, after_error = self._capture_identity_for_attempt(project_root)
             if after_error is not None or source_after != expected_source:
                 status = "IDENTITY_DRIFT"
+            executable_after, executable_after_error, after_identity_ms = (
+                self._observe_executable_for_attempt(step["executable"])
+            )
+            executable_after_bytes = (
+                int(executable_after["byteCount"])
+                if executable_after is not None
+                else int((executable_after_error or {}).get("bytesHashed", 0))
+            )
+            if executable_after_error is None and not executable_identity.executable_identities_equal(
+                expected_executable_identity, executable_after
+            ):
+                executable_after_error = {
+                    "code": "EXECUTABLE_IDENTITY_MISMATCH",
+                    "bytesHashed": executable_after_bytes,
+                }
+            if executable_after_error is not None:
+                status = "EXECUTABLE_IDENTITY_DRIFT"
             stdout_full = _bounded_output(stdout)
             stderr_full = _bounded_output(stderr)
             artifact = {
@@ -1874,9 +2585,31 @@ class VerificationService:
                 "executor": "PROCESS",
                 "executorVersion": step["executorVersion"],
                 "environmentPolicy": step["environmentPolicy"],
+                "processStarted": process_started,
+                "expectedExecutableIdentity": expected_executable_identity,
+                "observedExecutableIdentity": executable_after,
+                "executableIdentityBefore": executable_before,
+                "executableIdentityAfter": executable_after,
+                "executableIdentityPhase": (
+                    "POST" if executable_after_error is not None else None
+                ),
+                "executableIdentityError": executable_after_error,
+                "executableBytesHashed": {
+                    "before": executable_before_bytes,
+                    "after": executable_after_bytes,
+                    "total": executable_before_bytes + executable_after_bytes,
+                },
                 "exitCode": exit_code,
                 "durationMs": elapsed_ms,
-                "errorCode": error_code or after_error,
+                "identityObservationDurationMs": {
+                    "before": before_identity_ms,
+                    "after": after_identity_ms,
+                },
+                "errorCode": (
+                    executable_after_error["code"]
+                    if executable_after_error is not None
+                    else error_code or after_error
+                ),
                 "stdout": _artifact_projection(stdout_full),
                 "stderr": _artifact_projection(stderr_full),
                 "actualSourceBinding": {
@@ -1898,12 +2631,12 @@ class VerificationService:
                     result=process_result,
                 )
             )
-            if status in {"TOOL_ERROR", "IDENTITY_DRIFT"}:
+            if status in {"TOOL_ERROR", "IDENTITY_DRIFT", "EXECUTABLE_IDENTITY_DRIFT"}:
                 break
 
         completed_at = _now()
         with self.workflow._transaction() as connection:
-            connection.execute(
+            completed = connection.execute(
                 """
                 UPDATE verification_step_executions
                 SET state = 'COMPLETED', completed_at = ?
@@ -1911,6 +2644,10 @@ class VerificationService:
                 """,
                 (completed_at, verification_run_ref, flow_id, step_id),
             )
+            if completed.rowcount != 1:
+                raise VerificationError(
+                    "STORE_CORRUPT", "step execution changed before durable completion"
+                )
             self._event_locked(
                 connection,
                 verification_run_ref,
@@ -1947,6 +2684,7 @@ class VerificationService:
             if run["state"] != "SEALED" or claim["state"] != "ACTIVE":
                 raise VerificationError("VERIFICATION_RUN_NOT_EXECUTABLE", "run or claim is closed")
             plan = self._load_plan(run)
+            _require_current_process_plan(plan)
             criterion = next(
                 (
                     item
@@ -1962,6 +2700,9 @@ class VerificationService:
                 "SELECT * FROM verification_attempts WHERE run_ref = ? ORDER BY attempt_id",
                 (verification_run_ref,),
             ).fetchall()
+            self._validate_attempt_event_ledger_locked(
+                connection, verification_run_ref, attempt_rows
+            )
             execution_rows = connection.execute(
                 "SELECT * FROM verification_step_executions WHERE run_ref = ?",
                 (verification_run_ref,),
@@ -1992,7 +2733,7 @@ class VerificationService:
             if hashlib.sha256(artifact_bytes).hexdigest() != row["payload_sha256"]:
                 raise VerificationError("STORE_CORRUPT", "verification artifact digest differs")
             artifact_tokens[row["artifact_ref"]] = artifact_bytes
-        review_complete, flow_complete, _, drift, flow_uncertainty = self._evidence_state(
+        review_complete, flow_complete, _, drift, executable_drift, flow_uncertainty = self._evidence_state(
             plan=plan,
             executions=executions,
             attempts=attempts,
@@ -2005,7 +2746,7 @@ class VerificationService:
         mapped_flow_uncertainty = any(
             flow_uncertainty.get(flow_id, False) for flow_id in criterion["flowIds"]
         )
-        if not complete_obligation or drift or mapped_flow_uncertainty:
+        if not complete_obligation or drift or executable_drift or mapped_flow_uncertainty:
             raise VerificationError(
                 "CONTRADICTION_WITHOUT_COMPLETE_EVIDENCE",
                 "a contradiction declaration needs one presealed exact-identity complete obligation",
@@ -2079,12 +2820,312 @@ class VerificationService:
         }
 
     @staticmethod
+    def _validate_attempt_event_ledger_locked(connection, run_ref: str, attempt_rows) -> None:
+        event_rows = connection.execute(
+            """
+            SELECT event_kind, payload_json, payload_sha256
+            FROM verification_events
+            WHERE run_ref = ?
+              AND event_kind IN ('ATTEMPT_APPENDED', 'EXECUTABLE_IDENTITY_DRIFT')
+            ORDER BY event_id
+            """,
+            (run_ref,),
+        ).fetchall()
+        generic_events: dict[int, Mapping[str, Any]] = {}
+        drift_events: dict[int, Mapping[str, Any]] = {}
+        for event in event_rows:
+            encoded = bytes(event["payload_json"])
+            if hashlib.sha256(encoded).hexdigest() != event["payload_sha256"]:
+                raise VerificationError("STORE_CORRUPT", "attempt event digest differs")
+            payload = _decode_json(encoded, "attempt event")
+            if not isinstance(payload, Mapping):
+                raise VerificationError("STORE_CORRUPT", "attempt event payload is malformed")
+            attempt_id = payload.get("attemptId")
+            target = (
+                drift_events
+                if event["event_kind"] == "EXECUTABLE_IDENTITY_DRIFT"
+                else generic_events
+            )
+            if (
+                isinstance(attempt_id, bool)
+                or not isinstance(attempt_id, int)
+                or attempt_id in target
+            ):
+                raise VerificationError("STORE_CORRUPT", "attempt event linkage is not one-to-one")
+            target[attempt_id] = payload
+
+        expected_ids: set[int] = set()
+        expected_drift_ids: set[int] = set()
+        for row in attempt_rows:
+            attempt_id = int(row["attempt_id"])
+            expected_ids.add(attempt_id)
+            encoded_result = bytes(row["result_json"])
+            result = _decode_json(encoded_result, "verification attempt")
+            if not isinstance(result, Mapping):
+                raise VerificationError("STORE_CORRUPT", "attempt result is malformed")
+            result_digest = hashlib.sha256(encoded_result).hexdigest()
+            expected_generic = {
+                "attemptId": attempt_id,
+                "flowId": row["flow_id"],
+                "stepId": row["step_id"],
+                "pollIndex": row["poll_index"],
+                "status": row["status"],
+                "artifactRef": row["artifact_ref"],
+                "canonicalRequestDigest": row["request_sha256"],
+                "resultDigest": result_digest,
+            }
+            if generic_events.get(attempt_id) != expected_generic:
+                raise VerificationError(
+                    "STORE_CORRUPT", "attempt row and ATTEMPT_APPENDED event differ"
+                )
+            if row["status"] == "EXECUTABLE_IDENTITY_DRIFT":
+                expected_drift_ids.add(attempt_id)
+                expected_drift = {
+                    "attemptId": attempt_id,
+                    "flowId": row["flow_id"],
+                    "stepId": row["step_id"],
+                    "pollIndex": row["poll_index"],
+                    "canonicalRequestDigest": row["request_sha256"],
+                    "phase": result.get("executableIdentityPhase"),
+                    "processStarted": result.get("processStarted"),
+                    "expectedExecutableIdentity": result.get(
+                        "expectedExecutableIdentity"
+                    ),
+                    "observedExecutableIdentity": result.get(
+                        "observedExecutableIdentity"
+                    ),
+                    "identityError": result.get("executableIdentityError"),
+                    "bytesHashed": result.get("executableBytesHashed"),
+                    "durationMs": result.get("durationMs"),
+                    "resultDigest": result_digest,
+                }
+                if drift_events.get(attempt_id) != expected_drift:
+                    raise VerificationError(
+                        "STORE_CORRUPT",
+                        "executable drift attempt and durable event differ",
+                    )
+        if set(generic_events) != expected_ids or set(drift_events) != expected_drift_ids:
+            raise VerificationError("STORE_CORRUPT", "attempt/event cardinality differs")
+
+    @staticmethod
     def _anchor_is_current(anchor: Mapping[str, Any]) -> bool:
         try:
             _check_anchor(anchor, "publication basis anchor")
             return True
         except _PreflightTerminal:
             return False
+
+    @staticmethod
+    def _validate_attempt_executable_binding(
+        attempt: Mapping[str, Any], step: Mapping[str, Any]
+    ) -> None:
+        result = attempt.get("result")
+        if not isinstance(result, Mapping):
+            raise VerificationError("STORE_CORRUPT", "attempt result is not an object")
+        if (
+            result.get("executor") != "PROCESS"
+            or result.get("executorVersion") != PROCESS_EXECUTOR_VERSION
+            or result.get("environmentPolicy") != PROCESS_ENVIRONMENT_POLICY
+        ):
+            raise VerificationError(
+                "STORE_CORRUPT", "attempt executor policy differs from sealed process-v3"
+            )
+        try:
+            sealed_identity = executable_identity.validate_executable_identity(
+                step.get("executableIdentity"),
+                expected_canonical_path=step.get("executable"),
+            )
+            result_expected = executable_identity.validate_executable_identity(
+                result.get("expectedExecutableIdentity"),
+                expected_canonical_path=step.get("executable"),
+            )
+        except executable_identity.ExecutableIdentityError as exc:
+            raise VerificationError("STORE_CORRUPT", exc.message) from exc
+        if sealed_identity != result_expected:
+            raise VerificationError(
+                "STORE_CORRUPT", "attempt expected executable identity differs from seal"
+            )
+        duration = result.get("durationMs")
+        byte_counts = result.get("executableBytesHashed")
+        if (
+            isinstance(duration, bool)
+            or not isinstance(duration, int)
+            or duration < 0
+            or not isinstance(byte_counts, Mapping)
+            or set(byte_counts) != {"before", "after", "total"}
+            or any(
+                isinstance(byte_counts.get(key), bool)
+                or not isinstance(byte_counts.get(key), int)
+                or int(byte_counts[key]) < 0
+                for key in ("before", "after", "total")
+            )
+            or byte_counts["total"] != byte_counts["before"] + byte_counts["after"]
+        ):
+            raise VerificationError(
+                "STORE_CORRUPT", "attempt executable byte/duration accounting is malformed"
+            )
+        status = attempt["status"]
+        if status in {"NOT_RUN", "ATTEMPT_RECORD_INCOMPLETE"}:
+            process_started = result.get("processStarted")
+            if process_started is not False and process_started is not None:
+                raise VerificationError(
+                    "STORE_CORRUPT", "unexecuted attempt has invalid processStarted"
+                )
+            if byte_counts != {"before": 0, "after": 0, "total": 0}:
+                raise VerificationError(
+                    "STORE_CORRUPT", "unexecuted attempt claims executable hashing"
+                )
+            return
+        if status == "IDENTITY_DRIFT" and result.get("processStarted") is False:
+            if (
+                result.get("executableIdentityBefore") is not None
+                or result.get("executableIdentityAfter") is not None
+                or byte_counts != {"before": 0, "after": 0, "total": 0}
+            ):
+                raise VerificationError(
+                    "STORE_CORRUPT", "pre-source-drift attempt unexpectedly observed executable"
+                )
+            return
+        if status == "EXECUTABLE_IDENTITY_DRIFT":
+            phase = result.get("executableIdentityPhase")
+            error = result.get("executableIdentityError")
+            if (
+                phase not in {"PRE", "POST"}
+                or not isinstance(error, Mapping)
+                or set(error) != {"code", "bytesHashed"}
+                or not isinstance(error.get("code"), str)
+                or isinstance(error.get("bytesHashed"), bool)
+                or not isinstance(error.get("bytesHashed"), int)
+                or int(error["bytesHashed"]) < 0
+                or (phase == "PRE" and result.get("processStarted") is not False)
+                or (phase == "POST" and not isinstance(result.get("processStarted"), bool))
+            ):
+                raise VerificationError(
+                    "STORE_CORRUPT", "executable drift attempt shape is malformed"
+                )
+            observed = result.get("observedExecutableIdentity")
+            observed_identity = None
+            if observed is not None:
+                try:
+                    observed_identity = executable_identity.validate_executable_identity(
+                        observed, expected_canonical_path=step.get("executable")
+                    )
+                except executable_identity.ExecutableIdentityError as exc:
+                    raise VerificationError("STORE_CORRUPT", exc.message) from exc
+            before_raw = result.get("executableIdentityBefore")
+            after_raw = result.get("executableIdentityAfter")
+            if phase == "PRE":
+                before_identity = observed_identity
+                expected_before_bytes = (
+                    before_identity["byteCount"]
+                    if before_identity is not None
+                    else error["bytesHashed"]
+                )
+                if (
+                    before_raw != observed
+                    or after_raw is not None
+                    or byte_counts["before"] != expected_before_bytes
+                    or byte_counts["after"] != 0
+                    or before_identity == sealed_identity
+                ):
+                    raise VerificationError(
+                        "STORE_CORRUPT", "PRE executable drift accounting differs"
+                    )
+            else:
+                try:
+                    before_identity = executable_identity.validate_executable_identity(
+                        before_raw, expected_canonical_path=step.get("executable")
+                    )
+                except executable_identity.ExecutableIdentityError as exc:
+                    raise VerificationError("STORE_CORRUPT", exc.message) from exc
+                expected_after_bytes = (
+                    observed_identity["byteCount"]
+                    if observed_identity is not None
+                    else error["bytesHashed"]
+                )
+                if (
+                    before_identity != sealed_identity
+                    or after_raw != observed
+                    or byte_counts["before"] != sealed_identity["byteCount"]
+                    or byte_counts["after"] != expected_after_bytes
+                    or observed_identity == sealed_identity
+                ):
+                    raise VerificationError(
+                        "STORE_CORRUPT", "POST executable drift accounting differs"
+                    )
+            return
+        before_raw = result.get("executableIdentityBefore")
+        after_raw = result.get("executableIdentityAfter")
+        try:
+            before = executable_identity.validate_executable_identity(
+                before_raw, expected_canonical_path=step.get("executable")
+            )
+            after = executable_identity.validate_executable_identity(
+                after_raw, expected_canonical_path=step.get("executable")
+            )
+        except executable_identity.ExecutableIdentityError as exc:
+            raise VerificationError("STORE_CORRUPT", exc.message) from exc
+        if (
+            before != sealed_identity
+            or after != sealed_identity
+            or result.get("executableIdentityError") is not None
+            or result.get("executableIdentityPhase") is not None
+            or result.get("observedExecutableIdentity") != after_raw
+            or not isinstance(result.get("processStarted"), bool)
+            or byte_counts["before"] != before["byteCount"]
+            or byte_counts["after"] != after["byteCount"]
+        ):
+            raise VerificationError(
+                "STORE_CORRUPT", "attempt executable observations differ from sealed identity"
+            )
+
+    @staticmethod
+    def _validate_attempt_artifact_binding(
+        attempt: Mapping[str, Any], artifact_tokens: Mapping[str, bytes]
+    ) -> None:
+        artifact_ref = attempt.get("artifactRef")
+        status = attempt.get("status")
+        no_artifact_statuses = {"NOT_RUN", "ATTEMPT_RECORD_INCOMPLETE"}
+        result = attempt.get("result")
+        if not isinstance(result, Mapping):
+            raise VerificationError("STORE_CORRUPT", "attempt result is not an object")
+        if artifact_ref is None:
+            if status in no_artifact_statuses:
+                return
+            if status in {"IDENTITY_DRIFT", "EXECUTABLE_IDENTITY_DRIFT"} and result.get(
+                "processStarted"
+            ) is False:
+                return
+            raise VerificationError(
+                "STORE_CORRUPT", "started process attempt has no runner-owned artifact"
+            )
+        raw = artifact_tokens.get(str(artifact_ref))
+        if raw is None:
+            raise VerificationError("STORE_CORRUPT", "attempt artifact ref is absent")
+        artifact = _decode_json(raw, "verification process artifact")
+        if not isinstance(artifact, Mapping) or set(artifact) != {
+            "protocolVersion",
+            "canonicalRequestDigest",
+            "stdout",
+            "stderr",
+        }:
+            raise VerificationError("STORE_CORRUPT", "process artifact shape is malformed")
+        stdout = artifact.get("stdout")
+        stderr = artifact.get("stderr")
+        if (
+            artifact.get("protocolVersion") != "verification-process-artifact-v1"
+            or artifact.get("canonicalRequestDigest")
+            != attempt.get("canonicalRequestDigest")
+            or not isinstance(stdout, Mapping)
+            or not isinstance(stderr, Mapping)
+            or set(stdout) != {"sha256", "byteCount", "truncated", "text"}
+            or set(stderr) != {"sha256", "byteCount", "truncated", "text"}
+            or result.get("stdout") != _artifact_projection(stdout)
+            or result.get("stderr") != _artifact_projection(stderr)
+        ):
+            raise VerificationError(
+                "STORE_CORRUPT", "attempt result and process artifact digests differ"
+            )
 
     def _evidence_state(
         self,
@@ -2094,7 +3135,14 @@ class VerificationService:
         attempts: Sequence[Mapping[str, Any]],
         expected_source: str,
         artifact_tokens: Mapping[str, bytes],
-    ) -> tuple[dict[str, bool], dict[str, bool], dict[str, str], bool, dict[str, bool]]:
+    ) -> tuple[
+        dict[str, bool],
+        dict[str, bool],
+        dict[str, str],
+        bool,
+        bool,
+        dict[str, bool],
+    ]:
         review_complete: dict[str, bool] = {}
         for review in plan["sourceReviews"]:
             review_complete[review["sourceReviewId"]] = all(
@@ -2107,6 +3155,7 @@ class VerificationService:
         flow_uncertainty: dict[str, bool] = {}
         correlation: dict[str, str] = {}
         drift = False
+        executable_drift = False
         for flow in plan["flows"]:
             complete = all(self._anchor_is_current(anchor) for anchor in flow["basisAnchors"])
             for step in flow["steps"]:
@@ -2120,8 +3169,15 @@ class VerificationService:
                 for attempt in step_attempts:
                     if attempt["canonicalRequestDigest"] != step["canonicalRequestDigest"]:
                         raise VerificationError("SEALED_REQUEST_MISMATCH", "attempt request differs from sealed request")
-                    if attempt["status"] in {"NOT_RUN", "ATTEMPT_RECORD_INCOMPLETE"}:
+                    if attempt["status"] in {
+                        "NOT_RUN",
+                        "ATTEMPT_RECORD_INCOMPLETE",
+                    }:
                         complete = False
+                    if attempt["status"] == "EXECUTABLE_IDENTITY_DRIFT":
+                        executable_drift = True
+                    self._validate_attempt_executable_binding(attempt, step)
+                    self._validate_attempt_artifact_binding(attempt, artifact_tokens)
                     if (
                         attempt["sourceIdentityBefore"] != expected_source
                         or attempt["sourceIdentityAfter"] != expected_source
@@ -2133,11 +3189,17 @@ class VerificationService:
                 readback_attempts = by_step.get((flow["flowId"], binding["readbackStepId"]), [])
                 token = binding["token"].encode("utf-8")
                 action_match = any(
+                    attempt["status"] != "EXECUTABLE_IDENTITY_DRIFT"
+                    and attempt["status"] != "IDENTITY_DRIFT"
+                    and
                     attempt.get("artifactRef") in artifact_tokens
                     and token in artifact_tokens[attempt["artifactRef"]]
                     for attempt in action_attempts
                 )
                 readback_match = any(
+                    attempt["status"] != "EXECUTABLE_IDENTITY_DRIFT"
+                    and attempt["status"] != "IDENTITY_DRIFT"
+                    and
                     attempt.get("artifactRef") in artifact_tokens
                     and token in artifact_tokens[attempt["artifactRef"]]
                     for attempt in readback_attempts
@@ -2190,7 +3252,14 @@ class VerificationService:
                     if not resolved_by_readback or not bindings_match:
                         unresolved = True
             flow_uncertainty[flow["flowId"]] = unresolved
-        return review_complete, flow_complete, correlation, drift, flow_uncertainty
+        return (
+            review_complete,
+            flow_complete,
+            correlation,
+            drift,
+            executable_drift,
+            flow_uncertainty,
+        )
 
     @staticmethod
     def _has_exact_process_observation(
@@ -2199,13 +3268,34 @@ class VerificationService:
         expected_source: str,
         artifact_tokens: Mapping[str, bytes],
     ) -> bool:
-        return any(
-            attempt["status"] == "EXITED"
-            and attempt["sourceIdentityBefore"] == expected_source
-            and attempt["sourceIdentityAfter"] == expected_source
-            and attempt.get("artifactRef") in artifact_tokens
-            for attempt in attempts
-        )
+        for attempt in attempts:
+            if (
+                attempt["status"] != "EXITED"
+                or attempt["sourceIdentityBefore"] != expected_source
+                or attempt["sourceIdentityAfter"] != expected_source
+                or attempt.get("artifactRef") not in artifact_tokens
+            ):
+                continue
+            result = attempt.get("result")
+            if not isinstance(result, Mapping) or result.get("processStarted") is not True:
+                continue
+            if result.get("executableIdentityError") is not None:
+                continue
+            try:
+                expected = executable_identity.validate_executable_identity(
+                    result.get("expectedExecutableIdentity")
+                )
+                before = executable_identity.validate_executable_identity(
+                    result.get("executableIdentityBefore")
+                )
+                after = executable_identity.validate_executable_identity(
+                    result.get("executableIdentityAfter")
+                )
+            except executable_identity.ExecutableIdentityError:
+                continue
+            if expected == before == after:
+                return True
+        return False
 
     def _finalize_ledger(
         self,
@@ -2214,11 +3304,12 @@ class VerificationService:
         plan: Mapping[str, Any],
         assessments: Sequence[Mapping[str, Any]],
     ) -> None:
+        _require_current_process_plan(plan)
         contradiction = any(item["verdict"] == "CONTRADICTED" for item in assessments)
         reason = "NOT_RUN_PRIOR_CONTRADICTION" if contradiction else "NOT_RUN_UNEXECUTED"
         assessment_digest = _digest(list(assessments))
         created_at = _now()
-        with self.workflow._transaction() as connection:
+        with contextlib.ExitStack() as live_execution_locks, self.workflow._transaction() as connection:
             existing = connection.execute(
                 """
                 SELECT payload_json FROM verification_events
@@ -2260,7 +3351,13 @@ class VerificationService:
                         )
                         status = "NOT_RUN"
                     elif execution["state"] == "STARTED":
-                        connection.execute(
+                        lock_fd = self._acquire_step_execution_lock(
+                            run_ref=run_ref,
+                            flow_id=flow["flowId"],
+                            step_id=step["stepId"],
+                        )
+                        live_execution_locks.callback(os.close, lock_fd)
+                        completed = connection.execute(
                             """
                             UPDATE verification_step_executions
                             SET state = 'COMPLETED', completed_at = ?
@@ -2268,13 +3365,34 @@ class VerificationService:
                             """,
                             (created_at, run_ref, flow["flowId"], step["stepId"]),
                         )
+                        if completed.rowcount != 1:
+                            raise VerificationError(
+                                "STORE_CORRUPT",
+                                "started step changed during crash-gap recovery",
+                            )
                         status = "ATTEMPT_RECORD_INCOMPLETE"
                     if status is not None:
                         result = {
                             "reason": reason if status == "NOT_RUN" else "RUNNER_INTERRUPTED_AFTER_STEP_START",
                             "executor": step["executorKind"],
+                            "executorVersion": step["executorVersion"],
+                            "environmentPolicy": step["environmentPolicy"],
+                            "processStarted": False if status == "NOT_RUN" else None,
+                            "expectedExecutableIdentity": step["executableIdentity"],
+                            "observedExecutableIdentity": None,
+                            "executableIdentityBefore": None,
+                            "executableIdentityAfter": None,
+                            "executableIdentityPhase": None,
+                            "executableIdentityError": None,
+                            "executableBytesHashed": {
+                                "before": 0,
+                                "after": 0,
+                                "total": 0,
+                            },
+                            "durationMs": 0,
                         }
-                        connection.execute(
+                        encoded_result = _canonical_json(result)
+                        cursor = connection.execute(
                             """
                             INSERT INTO verification_attempts(
                                 run_ref, flow_id, step_id, step_role, poll_index, status,
@@ -2289,9 +3407,28 @@ class VerificationService:
                                 step["role"],
                                 status,
                                 step["canonicalRequestDigest"],
-                                _canonical_json(result),
+                                encoded_result,
                                 created_at,
                             ),
+                        )
+                        self._event_locked(
+                            connection,
+                            run_ref,
+                            "ATTEMPT_APPENDED",
+                            {
+                                "attemptId": int(cursor.lastrowid),
+                                "flowId": flow["flowId"],
+                                "stepId": step["stepId"],
+                                "pollIndex": 0,
+                                "status": status,
+                                "artifactRef": None,
+                                "canonicalRequestDigest": step[
+                                    "canonicalRequestDigest"
+                                ],
+                                "resultDigest": hashlib.sha256(
+                                    encoded_result
+                                ).hexdigest(),
+                            },
                         )
             self._event_locked(
                 connection,
@@ -2319,6 +3456,370 @@ class VerificationService:
             return "INCOMPLETE"
         return "VERIFIED"
 
+    def _publish_sealed_result_atomic(
+        self,
+        *,
+        assessor_capability: str,
+        verification_run_ref: str,
+        criterion_assessments: Sequence[Mapping[str, Any]],
+    ) -> dict[str, Any]:
+        """Re-read every terminal fact and publish on one owner transaction."""
+        try:
+            with self.workflow._transaction() as connection:
+                assessor, run, claim = self._run_for_actor_locked(
+                    connection, assessor_capability, verification_run_ref
+                )
+                if (
+                    run["state"] != "SEALED"
+                    or claim["state"] != "ACTIVE"
+                    or claim["transition_kind"] != "VERIFY"
+                    or claim["execution_ref"] != verification_run_ref
+                    or run["claim_ref"] != claim["claim_ref"]
+                    or run["root_ref"] != claim["root_ref"]
+                    or run["assessor_actor_ref"] != assessor["actor_ref"]
+                    or run["planning_identity"] != claim["planning_identity"]
+                    or run["source_identity"] != claim["source_identity"]
+                ):
+                    raise VerificationError(
+                        "VERIFICATION_RUN_NOT_PUBLISHABLE",
+                        "sealed run, claim, and Assessor identity differ",
+                    )
+                tip = self.workflow._current_tip_locked(connection, claim["root_ref"])
+                if (
+                    tip["node_ref"] != claim["tip_ref"]
+                    or tip["planning_identity"] != run["planning_identity"]
+                    or tip["source_identity"] != run["source_identity"]
+                ):
+                    raise VerificationError(
+                        "STALE_WORKFLOW_TIP", "sealed run no longer owns its exact workflow tip"
+                    )
+                plan = self._load_plan(run)
+                _require_current_process_plan(plan)
+                assessments = self._normalize_assessments(
+                    list(criterion_assessments), plan["criteria"]
+                )
+                ledger_events = connection.execute(
+                    """
+                    SELECT payload_json, payload_sha256
+                    FROM verification_events
+                    WHERE run_ref = ? AND event_kind = 'LEDGER_COMPLETED'
+                    ORDER BY event_id
+                    """,
+                    (verification_run_ref,),
+                ).fetchall()
+                if len(ledger_events) != 1:
+                    raise VerificationError(
+                        "STORE_CORRUPT", "sealed publication requires exactly one ledger closure"
+                    )
+                ledger_bytes = bytes(ledger_events[0]["payload_json"])
+                if hashlib.sha256(ledger_bytes).hexdigest() != ledger_events[0]["payload_sha256"]:
+                    raise VerificationError("STORE_CORRUPT", "ledger closure digest differs")
+                ledger = _decode_json(ledger_bytes, "ledger closure event")
+                if ledger.get("assessmentDigest") != _digest(assessments):
+                    raise VerificationError(
+                        "RESULT_RETRY_MISMATCH",
+                        "result retry changed criterion assessments after ledger closure",
+                    )
+
+                execution_rows = connection.execute(
+                    "SELECT * FROM verification_step_executions WHERE run_ref = ?",
+                    (verification_run_ref,),
+                ).fetchall()
+                attempt_rows = connection.execute(
+                    "SELECT * FROM verification_attempts WHERE run_ref = ? ORDER BY attempt_id",
+                    (verification_run_ref,),
+                ).fetchall()
+                self._validate_attempt_event_ledger_locked(
+                    connection, verification_run_ref, attempt_rows
+                )
+                artifact_rows = connection.execute(
+                    "SELECT artifact_ref, payload, payload_sha256 FROM verification_artifacts WHERE run_ref = ?",
+                    (verification_run_ref,),
+                ).fetchall()
+                contradiction_rows = connection.execute(
+                    """
+                    SELECT payload_json, payload_sha256 FROM verification_events
+                    WHERE run_ref = ? AND event_kind = 'CONTRADICTION_DECLARED'
+                    ORDER BY event_id
+                    """,
+                    (verification_run_ref,),
+                ).fetchall()
+
+                expected_steps = {
+                    (flow["flowId"], step["stepId"]): step
+                    for flow in plan["flows"]
+                    for step in flow["steps"]
+                }
+                executions: dict[tuple[str, str], str] = {}
+                for row in execution_rows:
+                    key = (row["flow_id"], row["step_id"])
+                    step = expected_steps.get(key)
+                    if (
+                        step is None
+                        or key in executions
+                        or row["state"] not in {"COMPLETED", "NOT_RUN"}
+                        or row["request_sha256"] != step["canonicalRequestDigest"]
+                    ):
+                        raise VerificationError(
+                            "STORE_CORRUPT", "terminal execution ledger differs from sealed plan"
+                        )
+                    executions[key] = row["state"]
+                if set(executions) != set(expected_steps):
+                    raise VerificationError(
+                        "STORE_CORRUPT", "terminal execution ledger is incomplete"
+                    )
+                attempts = [self._attempt_view(row) for row in attempt_rows]
+                attempts_by_step: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
+                for attempt in attempts:
+                    key = (attempt["flowId"], attempt["stepId"])
+                    step = expected_steps.get(key)
+                    if step is None or attempt["canonicalRequestDigest"] != step["canonicalRequestDigest"]:
+                        raise VerificationError(
+                            "STORE_CORRUPT", "attempt ledger differs from sealed plan"
+                        )
+                    attempts_by_step.setdefault(key, []).append(attempt)
+                if any(key not in attempts_by_step for key in expected_steps):
+                    raise VerificationError("STORE_CORRUPT", "terminal attempt ledger is incomplete")
+
+                artifact_tokens: dict[str, bytes] = {}
+                for row in artifact_rows:
+                    artifact_bytes = bytes(row["payload"])
+                    if hashlib.sha256(artifact_bytes).hexdigest() != row["payload_sha256"]:
+                        raise VerificationError("STORE_CORRUPT", "verification artifact digest differs")
+                    artifact_tokens[row["artifact_ref"]] = artifact_bytes
+                review_complete, flow_complete, correlation, drift, executable_drift, flow_uncertainty = (
+                    self._evidence_state(
+                        plan=plan,
+                        executions=executions,
+                        attempts=attempts,
+                        expected_source=run["source_identity"],
+                        artifact_tokens=artifact_tokens,
+                    )
+                )
+                for flow in plan["flows"]:
+                    action_started = any(
+                        executions.get((flow["flowId"], step["stepId"])) == "COMPLETED"
+                        for step in flow["steps"]
+                        if step["role"] == "ACTION"
+                    )
+                    missing_cleanup = any(
+                        executions.get((flow["flowId"], step["stepId"])) != "COMPLETED"
+                        for step in flow["steps"]
+                        if step["role"] == "CLEANUP"
+                    )
+                    if action_started and missing_cleanup:
+                        raise VerificationError(
+                            "REQUIRED_CLEANUP_NOT_EXECUTED",
+                            "a flow with a started ACTION must attempt every presealed CLEANUP before closure",
+                        )
+
+                criterion_complete: dict[int, bool] = {}
+                for criterion in plan["criteria"]:
+                    complete = all(
+                        review_complete.get(key, False)
+                        for key in criterion["sourceReviewIds"]
+                    )
+                    complete = complete and all(
+                        flow_complete.get(key, False) for key in criterion["flowIds"]
+                    )
+                    criterion_complete[criterion["criterionIndex"]] = complete
+                declared_contradictions: set[tuple[Any, Any]] = set()
+                for row in contradiction_rows:
+                    encoded = bytes(row["payload_json"])
+                    if hashlib.sha256(encoded).hexdigest() != row["payload_sha256"]:
+                        raise VerificationError(
+                            "STORE_CORRUPT", "contradiction event digest differs"
+                        )
+                    event_payload = _decode_json(encoded, "contradiction event")
+                    declared_contradictions.add(
+                        (
+                            event_payload.get("criterionIndex"),
+                            event_payload.get("criterionRawSha256"),
+                        )
+                    )
+                assessment_evidence_incomplete = any(
+                    assessment["verdict"] in {"SATISFIED", "CONTRADICTED"}
+                    and not criterion_complete[assessment["criterionIndex"]]
+                    and (
+                        assessment["criterionIndex"],
+                        assessment["criterionRawSha256"],
+                    )
+                    not in declared_contradictions
+                    for assessment in assessments
+                )
+
+                missing_or_ambiguous = any(
+                    attempt["status"] in {"NOT_RUN", "ATTEMPT_RECORD_INCOMPLETE"}
+                    for attempt in attempts
+                )
+                unresolved_process_uncertainty = any(flow_uncertainty.values())
+                correlation_incomplete = any(value != "MATCH" for value in correlation.values())
+                retain_missing = False
+                retain_inconclusive = False
+                for flow in plan["flows"]:
+                    if flow["productTargetRequirement"] != "RETAIN":
+                        continue
+                    if not flow["steps"] or flow["steps"][-1]["role"] != "READBACK":
+                        retain_missing = True
+                        continue
+                    last_key = (flow["flowId"], flow["steps"][-1]["stepId"])
+                    if executions.get(last_key) != "COMPLETED":
+                        retain_missing = True
+                    elif not self._has_exact_process_observation(
+                        attempts_by_step.get(last_key, []),
+                        expected_source=run["source_identity"],
+                        artifact_tokens=artifact_tokens,
+                    ):
+                        retain_inconclusive = True
+                    last_cleanup = max(
+                        (
+                            index
+                            for index, step in enumerate(flow["steps"])
+                            if step["role"] == "CLEANUP"
+                        ),
+                        default=-1,
+                    )
+                    if last_cleanup >= len(flow["steps"]) - 1:
+                        retain_missing = True
+                retain_violation = retain_missing or retain_inconclusive
+
+                project_root = Path(run["project_root"])
+                current_source, source_error = self._capture_identity_for_attempt(project_root)
+                publication_drift = source_error is not None or current_source != run["source_identity"]
+                planning_blocked = False
+                handoff_row = connection.execute(
+                    "SELECT * FROM nodes WHERE node_ref = ? AND node_kind = 'IMPLEMENTATION_HANDOFF'",
+                    (run["implementation_handoff_ref"],),
+                ).fetchone()
+                if handoff_row is None:
+                    planning_blocked = True
+                    stored_handoff: Mapping[str, Any] | None = None
+                else:
+                    try:
+                        stored_handoff = self.workflow._node_view(handoff_row)["payload"]
+                        self._verify_planning(stored_handoff)
+                    except (_PreflightTerminal, workflow_store.WorkflowStoreError):
+                        planning_blocked = True
+                        stored_handoff = None
+                status = (
+                    "VERIFICATION_FAILED"
+                    if declared_contradictions
+                    else self._aggregate(
+                        assessments,
+                        system_incomplete=(
+                            assessment_evidence_incomplete
+                            or missing_or_ambiguous
+                            or unresolved_process_uncertainty
+                            or drift
+                            or executable_drift
+                            or publication_drift
+                            or correlation_incomplete
+                            or retain_violation
+                        ),
+                        system_blocked=planning_blocked,
+                    )
+                )
+                if status == "VERIFIED" and retain_violation:
+                    raise VerificationError(
+                        "RETAIN_TERMINAL_READBACK_REQUIRED",
+                        "RETAIN flow lacks executed terminal READBACK",
+                    )
+
+                reason_codes: list[str] = []
+                if status == "VERIFICATION_FAILED":
+                    reason_codes.append("CRITERION_CONTRADICTED")
+                if planning_blocked:
+                    reason_codes.append("PLANNING_AUTHORITY_UNAVAILABLE_AT_PUBLICATION")
+                if drift or publication_drift:
+                    reason_codes.append("SOURCE_IDENTITY_DRIFT")
+                if executable_drift:
+                    reason_codes.append("EXECUTABLE_IDENTITY_DRIFT")
+                if missing_or_ambiguous:
+                    reason_codes.append("INCOMPLETE_ATTEMPT_LEDGER")
+                if unresolved_process_uncertainty and status != "VERIFIED":
+                    reason_codes.append("PROCESS_OBSERVATION_INCONCLUSIVE")
+                if correlation_incomplete:
+                    reason_codes.append("CORRELATION_UNAVAILABLE")
+                if retain_missing:
+                    reason_codes.append("RETAIN_TERMINAL_READBACK_MISSING")
+                if retain_inconclusive:
+                    reason_codes.append("RETAIN_TERMINAL_READBACK_INCONCLUSIVE")
+                if any(item["verdict"] == "BLOCKED" for item in assessments):
+                    reason_codes.append("CRITERION_BLOCKED")
+                if any(item["verdict"] == "INCONCLUSIVE" for item in assessments):
+                    reason_codes.append("CRITERION_INCONCLUSIVE")
+                reason_codes = list(dict.fromkeys(reason_codes))
+                if status != "VERIFIED" and not reason_codes:
+                    reason_codes.append("VERIFICATION_NOT_COMPLETE")
+
+                # VERIFIED alone is rechecked immediately before the immutable insert.
+                # Failure/incomplete/blocked remain publishable after live drift.
+                if status == "VERIFIED":
+                    try:
+                        observed = baseline_capsule.capture_identity(project_root)["sourceIdentity"]
+                    except baseline_capsule.CapsuleError as exc:
+                        raise VerificationError(exc.code, exc.message) from exc
+                    if observed != run["source_identity"]:
+                        raise VerificationError(
+                            "SOURCE_IDENTITY_DRIFT", "source changed during VERIFIED publication"
+                        )
+                    if stored_handoff is None:
+                        raise VerificationError(
+                            "PLANNING_AUTHORITY_UNAVAILABLE_AT_PUBLICATION",
+                            "planning authority is unavailable during VERIFIED publication",
+                        )
+                    try:
+                        self._verify_planning(stored_handoff)
+                    except _PreflightTerminal as exc:
+                        raise VerificationError(exc.reason_code, exc.message) from exc
+
+                self.workflow._ensure_claim_closure_budget_locked(
+                    connection,
+                    claimant_capability=assessor_capability,
+                    claim_ref=claim["claim_ref"],
+                    amounts=_budget_vector(closureOperations=1),
+                )
+                result_ref = workflow_store.allocate_ref("VERIFICATION_RESULT")
+                completed_at = _now()
+                payload = {
+                    "protocolVersion": PROTOCOL_VERSION,
+                    "verificationResultRef": result_ref,
+                    "verificationStatus": status,
+                    "implementationHandoffRef": run["implementation_handoff_ref"],
+                    "planningSealDigest": run["planning_identity"],
+                    "finalSourceIdentity": run["source_identity"],
+                    "verificationRunRef": verification_run_ref,
+                    "sealedPlanDigest": run["sealed_plan_sha256"],
+                    "criterionResults": assessments,
+                    "reasonCodes": reason_codes,
+                    "completedAt": completed_at,
+                }
+                node = self.workflow._close_successor_locked(
+                    connection,
+                    claimant_capability=assessor_capability,
+                    claim_ref=claim["claim_ref"],
+                    node_ref=result_ref,
+                    node_kind="VERIFICATION_RESULT",
+                    protocol_version=PROTOCOL_VERSION,
+                    planning_identity=run["planning_identity"],
+                    source_identity=run["source_identity"],
+                    verification_status=status,
+                    payload=payload,
+                    verification_run_ref=verification_run_ref,
+                    created_at=completed_at,
+                )
+        except VerificationError:
+            raise
+        except workflow_store.WorkflowStoreError as exc:
+            raise VerificationError(exc.code, exc.message) from exc
+        except sqlite3.IntegrityError as exc:
+            raise VerificationError(
+                "ATOMIC_PUBLICATION_CONFLICT", "VerificationResult publication conflicted"
+            ) from exc
+        if node["payload"] != payload:
+            raise VerificationError("PUBLICATION_FAILED", "stored VerificationResult readback differs")
+        return payload
+
     def publish_result(
         self,
         *,
@@ -2331,6 +3832,7 @@ class VerificationService:
             if run["state"] != "SEALED" or claim["state"] != "ACTIVE":
                 raise VerificationError("VERIFICATION_RUN_NOT_PUBLISHABLE", "run or claim is not open")
             plan = self._load_plan(run)
+            _require_current_process_plan(plan)
             assessments = self._normalize_assessments(criterion_assessments, plan["criteria"])
             execution_rows = connection.execute(
                 "SELECT * FROM verification_step_executions WHERE run_ref = ?",
@@ -2340,6 +3842,9 @@ class VerificationService:
                 "SELECT * FROM verification_attempts WHERE run_ref = ? ORDER BY attempt_id",
                 (verification_run_ref,),
             ).fetchall()
+            self._validate_attempt_event_ledger_locked(
+                connection, verification_run_ref, attempt_rows
+            )
             artifacts = connection.execute(
                 "SELECT artifact_ref, payload, payload_sha256 FROM verification_artifacts WHERE run_ref = ?",
                 (verification_run_ref,),
@@ -2351,6 +3856,33 @@ class VerificationService:
                 """,
                 (verification_run_ref,),
             ).fetchall()
+            ledger_events = connection.execute(
+                """
+                SELECT event_id FROM verification_events
+                WHERE run_ref = ? AND event_kind = 'LEDGER_COMPLETED'
+                ORDER BY event_id
+                """,
+                (verification_run_ref,),
+            ).fetchall()
+            if len(ledger_events) > 1:
+                raise VerificationError(
+                    "STORE_CORRUPT", "run has more than one ledger closure event"
+                )
+
+        if ledger_events:
+            # The immutable assessment digest is the retry anchor. Evidence and
+            # live currentness may have changed since the unpublished attempt, so
+            # do not re-admit or rewrite the already-fixed semantic assessments.
+            self._finalize_ledger(
+                run_ref=verification_run_ref,
+                plan=plan,
+                assessments=assessments,
+            )
+            return self._publish_sealed_result_atomic(
+                assessor_capability=assessor_capability,
+                verification_run_ref=verification_run_ref,
+                criterion_assessments=assessments,
+            )
 
         executions = {(row["flow_id"], row["step_id"]): row["state"] for row in execution_rows}
         attempts = [self._attempt_view(row) for row in attempt_rows]
@@ -2360,7 +3892,7 @@ class VerificationService:
             if hashlib.sha256(artifact_bytes).hexdigest() != row["payload_sha256"]:
                 raise VerificationError("STORE_CORRUPT", "verification artifact digest differs")
             artifact_tokens[row["artifact_ref"]] = artifact_bytes
-        review_complete, flow_complete, correlation, drift, flow_uncertainty = self._evidence_state(
+        review_complete, flow_complete, correlation, drift, executable_drift, flow_uncertainty = self._evidence_state(
             plan=plan,
             executions=executions,
             attempts=attempts,
@@ -2384,10 +3916,17 @@ class VerificationService:
                     "a flow with a started ACTION must attempt every presealed CLEANUP before closure",
                 )
         criterion_complete: dict[int, bool] = {}
+        criterion_flow_ids: dict[int, set[str]] = {}
         for criterion in plan["criteria"]:
             complete = all(review_complete.get(key, False) for key in criterion["sourceReviewIds"])
             complete = complete and all(flow_complete.get(key, False) for key in criterion["flowIds"])
             criterion_complete[criterion["criterionIndex"]] = complete
+            criterion_flow_ids[criterion["criterionIndex"]] = set(criterion["flowIds"])
+        executable_drift_flows = {
+            str(attempt["flowId"])
+            for attempt in attempts
+            if attempt["status"] == "EXECUTABLE_IDENTITY_DRIFT"
+        }
         declared_contradictions = {
             (
                 event_payload.get("criterionIndex"),
@@ -2410,8 +3949,14 @@ class VerificationService:
                 and not criterion_complete[assessment["criterionIndex"]]
             ) or (
                 assessment["verdict"] == "CONTRADICTED"
-                and not criterion_complete[assessment["criterionIndex"]]
                 and identity not in declared_contradictions
+                and (
+                    not criterion_complete[assessment["criterionIndex"]]
+                    or bool(
+                        criterion_flow_ids[assessment["criterionIndex"]]
+                        & executable_drift_flows
+                    )
+                )
             )
             if conclusive_without_evidence:
                 code = (
@@ -2426,150 +3971,11 @@ class VerificationService:
             plan=plan,
             assessments=assessments,
         )
-        with self.workflow._transaction() as connection:
-            attempt_rows = connection.execute(
-                "SELECT * FROM verification_attempts WHERE run_ref = ? ORDER BY attempt_id",
-                (verification_run_ref,),
-            ).fetchall()
-        attempts = [self._attempt_view(row) for row in attempt_rows]
-        missing_or_ambiguous = any(
-            attempt["status"] in {"NOT_RUN", "ATTEMPT_RECORD_INCOMPLETE"} for attempt in attempts
+        return self._publish_sealed_result_atomic(
+            assessor_capability=assessor_capability,
+            verification_run_ref=verification_run_ref,
+            criterion_assessments=assessments,
         )
-        unresolved_process_uncertainty = any(flow_uncertainty.values())
-        correlation_incomplete = any(value != "MATCH" for value in correlation.values())
-        retain_missing = False
-        retain_inconclusive = False
-        attempts_by_step: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
-        for attempt in attempts:
-            attempts_by_step.setdefault((attempt["flowId"], attempt["stepId"]), []).append(attempt)
-        for flow in plan["flows"]:
-            if flow["productTargetRequirement"] == "RETAIN":
-                if not flow["steps"] or flow["steps"][-1]["role"] != "READBACK":
-                    retain_missing = True
-                    continue
-                last_key = (flow["flowId"], flow["steps"][-1]["stepId"])
-                if executions.get(last_key) != "COMPLETED":
-                    retain_missing = True
-                elif not self._has_exact_process_observation(
-                    attempts_by_step.get(last_key, []),
-                    expected_source=run["source_identity"],
-                    artifact_tokens=artifact_tokens,
-                ):
-                    retain_inconclusive = True
-                last_cleanup = max(
-                    (index for index, step in enumerate(flow["steps"]) if step["role"] == "CLEANUP"),
-                    default=-1,
-                )
-                if last_cleanup >= len(flow["steps"]) - 1:
-                    retain_missing = True
-        retain_violation = retain_missing or retain_inconclusive
-
-        project_root = Path(run["project_root"])
-        current_source, source_error = self._capture_identity_for_attempt(project_root)
-        publication_drift = source_error is not None or current_source != run["source_identity"]
-        planning_blocked = False
-        try:
-            node = self.workflow.read_node(run["implementation_handoff_ref"])
-            self._verify_planning(node["payload"])
-        except (_PreflightTerminal, workflow_store.WorkflowStoreError):
-            planning_blocked = True
-        system_incomplete = (
-            missing_or_ambiguous
-            or unresolved_process_uncertainty
-            or drift
-            or publication_drift
-            or correlation_incomplete
-            or retain_violation
-        )
-        status = self._aggregate(
-            assessments,
-            system_incomplete=system_incomplete,
-            system_blocked=planning_blocked,
-        )
-        if status == "VERIFIED" and retain_violation:
-            raise VerificationError("RETAIN_TERMINAL_READBACK_REQUIRED", "RETAIN flow lacks executed terminal READBACK")
-
-        reason_codes: list[str] = []
-        if status == "VERIFICATION_FAILED":
-            reason_codes.append("CRITERION_CONTRADICTED")
-        if planning_blocked:
-            reason_codes.append("PLANNING_AUTHORITY_UNAVAILABLE_AT_PUBLICATION")
-        if drift or publication_drift:
-            reason_codes.append("SOURCE_IDENTITY_DRIFT")
-        if missing_or_ambiguous:
-            reason_codes.append("INCOMPLETE_ATTEMPT_LEDGER")
-        if unresolved_process_uncertainty and status != "VERIFIED":
-            reason_codes.append("PROCESS_OBSERVATION_INCONCLUSIVE")
-        if correlation_incomplete:
-            reason_codes.append("CORRELATION_UNAVAILABLE")
-        if retain_missing:
-            reason_codes.append("RETAIN_TERMINAL_READBACK_MISSING")
-        if retain_inconclusive:
-            reason_codes.append("RETAIN_TERMINAL_READBACK_INCONCLUSIVE")
-        if any(item["verdict"] == "BLOCKED" for item in assessments):
-            reason_codes.append("CRITERION_BLOCKED")
-        if any(item["verdict"] == "INCONCLUSIVE" for item in assessments):
-            reason_codes.append("CRITERION_INCONCLUSIVE")
-        reason_codes = list(dict.fromkeys(reason_codes))
-        if status != "VERIFIED" and not reason_codes:
-            reason_codes.append("VERIFICATION_NOT_COMPLETE")
-
-        try:
-            self.workflow.ensure_claim_closure_budget(
-                claimant_capability=assessor_capability,
-                claim_ref=claim["claim_ref"],
-                amounts=_budget_vector(closureOperations=1),
-            )
-            result_ref = workflow_store.allocate_ref("VERIFICATION_RESULT")
-            completed_at = _now()
-            payload = {
-                "protocolVersion": PROTOCOL_VERSION,
-                "verificationResultRef": result_ref,
-                "verificationStatus": status,
-                "implementationHandoffRef": run["implementation_handoff_ref"],
-                "planningSealDigest": run["planning_identity"],
-                "finalSourceIdentity": run["source_identity"],
-                "verificationRunRef": verification_run_ref,
-                "sealedPlanDigest": run["sealed_plan_sha256"],
-                "criterionResults": assessments,
-                "reasonCodes": reason_codes,
-                "completedAt": completed_at,
-            }
-
-            validator = None
-            if status == "VERIFIED":
-                expected_source = run["source_identity"]
-
-                def validator() -> None:
-                    observed = baseline_capsule.capture_identity(project_root)["sourceIdentity"]
-                    if observed != expected_source:
-                        raise VerificationError("SOURCE_IDENTITY_DRIFT", "source changed during VERIFIED publication")
-                    stored_handoff = self.workflow.read_node(run["implementation_handoff_ref"])["payload"]
-                    try:
-                        self._verify_planning(stored_handoff)
-                    except _PreflightTerminal as exc:
-                        raise VerificationError(exc.reason_code, exc.message) from exc
-
-            node = self.workflow.publish_successor(
-                claimant_capability=assessor_capability,
-                claim_ref=claim["claim_ref"],
-                node_ref=result_ref,
-                node_kind="VERIFICATION_RESULT",
-                protocol_version=PROTOCOL_VERSION,
-                planning_identity=run["planning_identity"],
-                source_identity=run["source_identity"],
-                verification_status=status,
-                payload=payload,
-                verification_run_ref=verification_run_ref,
-                validate_currentness=validator,
-            )
-        except workflow_store.WorkflowStoreError as exc:
-            raise VerificationError(exc.code, exc.message) from exc
-        except baseline_capsule.CapsuleError as exc:
-            raise VerificationError(exc.code, exc.message) from exc
-        if node["payload"] != payload:
-            raise VerificationError("PUBLICATION_FAILED", "stored VerificationResult readback differs")
-        return payload
 
     def read_run(self, verification_run_ref: str) -> dict[str, Any]:
         if not isinstance(verification_run_ref, str) or not RUN_REF_PATTERN.fullmatch(verification_run_ref):
@@ -2697,6 +4103,11 @@ def main(argv: list[str] | None = None) -> int:
         "--workflow-root",
         default=os.environ.get("IMPLEMENTATION_WORKFLOW_STORE", str(workflow_store.DEFAULT_STORE_ROOT)),
     )
+    parser.add_argument(
+        "--workflow-guard-fd",
+        type=int,
+        help="caller-owned deployment lock fd (required for store-backed commands)",
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
     start = commands.add_parser("start-invocation")
@@ -2765,76 +4176,16 @@ def main(argv: list[str] | None = None) -> int:
     open_remediation.add_argument("--closure", type=Path, required=True)
 
     args = parser.parse_args(argv)
-    service = VerificationService(args.workflow_root)
     try:
-        if args.command == "start-invocation":
-            result = service.workflow.start_invocation(
-                root_ref=args.root_ref,
-                elapsed_seconds=args.elapsed_seconds,
-                limits=_mapping(_read_json(args.limits, "limits"), "limits"),
-            )
-        elif args.command == "issue-authorization":
-            result = service.workflow.issue_authorization(
-                coordinator_capability=args.coordinator_capability,
-                scope_sha256=args.scope_sha256,
-            )
-        elif args.command == "open-verification":
-            result = service.open_verification(
-                coordinator_capability=args.coordinator_capability,
-                implementation_handoff_ref=args.handoff_ref,
-                spend_budget=_mapping(_read_json(args.spend, "spend"), "spend"),
-                closure_budget=_mapping(_read_json(args.closure, "closure"), "closure"),
-            )
-        elif args.command == "seal-run":
-            result = service.seal_run(
-                assessor_capability=args.assessor_capability,
-                claim_ref=args.claim_ref,
-                implementation_handoff_ref=args.handoff_ref,
-                verification_draft=_mapping(_read_json(args.draft, "draft"), "draft"),
-            )
-        elif args.command == "execute-step":
-            result = service.execute_step(
-                assessor_capability=args.assessor_capability,
-                verification_run_ref=args.run_ref,
-                flow_id=args.flow_id,
-                step_id=args.step_id,
-            )
-        elif args.command == "declare-contradiction":
-            result = service.declare_contradiction(
-                assessor_capability=args.assessor_capability,
-                verification_run_ref=args.run_ref,
-                criterion_ref=_mapping(
-                    _read_json(args.criterion_ref, "criterionRef"), "criterionRef"
-                ),
-            )
-        elif args.command == "publish-result":
-            assessments = _read_json(args.assessments, "criterionAssessments")
-            if not isinstance(assessments, list):
-                raise VerificationError(
-                    "MALFORMED_CRITERION_ASSESSMENT",
-                    "criterionAssessments must be an array",
-                )
-            result = service.publish_result(
-                assessor_capability=args.assessor_capability,
-                verification_run_ref=args.run_ref,
-                criterion_assessments=assessments,
-            )
-        elif args.command == "read-run":
-            result = service.read_run(args.run_ref)
-        elif args.command == "read-artifact":
-            result = service.read_artifact(
-                assessor_capability=args.assessor_capability,
-                artifact_ref=args.artifact_ref,
-            )
-        elif args.command == "preview-process-step":
-            result = service.preview_process_step(
+        if args.command == "preview-process-step":
+            result = VerificationService.preview_process_step(
                 step=_mapping(_read_json(args.step, "step"), "step"),
                 project_root=args.project_root,
                 final_source_identity=args.source_identity,
             )
         elif args.command == "replay-authorization-scope":
             result = {
-                "scopeSha256": service.replay_authorization_scope(
+                "scopeSha256": VerificationService.replay_authorization_scope(
                     mechanism=args.mechanism,
                     prior_run_ref=args.prior_run_ref,
                     prior_flow_id=args.prior_flow_id,
@@ -2844,12 +4195,85 @@ def main(argv: list[str] | None = None) -> int:
                 )
             }
         else:
-            result = service.open_remediation(
-                coordinator_capability=args.coordinator_capability,
-                failed_verification_result_ref=args.failed_result_ref,
-                spend_budget=_mapping(_read_json(args.spend, "spend"), "spend"),
-                closure_budget=_mapping(_read_json(args.closure, "closure"), "closure"),
-            )
+            if args.workflow_guard_fd is None:
+                raise VerificationError(
+                    "AUDIT_GUARD_REQUIRED",
+                    "store-backed verification commands require --workflow-guard-fd",
+                )
+            try:
+                guard = workflow_store.guard_session_from_locked_fd(
+                    args.workflow_guard_fd,
+                    store_root=args.workflow_root,
+                )
+            except workflow_store.WorkflowStoreError as exc:
+                raise VerificationError(exc.code, exc.message) from exc
+            service = VerificationService(args.workflow_root, guard=guard)
+            if args.command == "start-invocation":
+                result = service.workflow.start_invocation(
+                    root_ref=args.root_ref,
+                    elapsed_seconds=args.elapsed_seconds,
+                    limits=_mapping(_read_json(args.limits, "limits"), "limits"),
+                )
+            elif args.command == "issue-authorization":
+                result = service.workflow.issue_authorization(
+                    coordinator_capability=args.coordinator_capability,
+                    scope_sha256=args.scope_sha256,
+                )
+            elif args.command == "open-verification":
+                result = service.open_verification(
+                    coordinator_capability=args.coordinator_capability,
+                    implementation_handoff_ref=args.handoff_ref,
+                    spend_budget=_mapping(_read_json(args.spend, "spend"), "spend"),
+                    closure_budget=_mapping(_read_json(args.closure, "closure"), "closure"),
+                )
+            elif args.command == "seal-run":
+                result = service.seal_run(
+                    assessor_capability=args.assessor_capability,
+                    claim_ref=args.claim_ref,
+                    implementation_handoff_ref=args.handoff_ref,
+                    verification_draft=_mapping(_read_json(args.draft, "draft"), "draft"),
+                )
+            elif args.command == "execute-step":
+                result = service.execute_step(
+                    assessor_capability=args.assessor_capability,
+                    verification_run_ref=args.run_ref,
+                    flow_id=args.flow_id,
+                    step_id=args.step_id,
+                )
+            elif args.command == "declare-contradiction":
+                result = service.declare_contradiction(
+                    assessor_capability=args.assessor_capability,
+                    verification_run_ref=args.run_ref,
+                    criterion_ref=_mapping(
+                        _read_json(args.criterion_ref, "criterionRef"), "criterionRef"
+                    ),
+                )
+            elif args.command == "publish-result":
+                assessments = _read_json(args.assessments, "criterionAssessments")
+                if not isinstance(assessments, list):
+                    raise VerificationError(
+                        "MALFORMED_CRITERION_ASSESSMENT",
+                        "criterionAssessments must be an array",
+                    )
+                result = service.publish_result(
+                    assessor_capability=args.assessor_capability,
+                    verification_run_ref=args.run_ref,
+                    criterion_assessments=assessments,
+                )
+            elif args.command == "read-run":
+                result = service.read_run(args.run_ref)
+            elif args.command == "read-artifact":
+                result = service.read_artifact(
+                    assessor_capability=args.assessor_capability,
+                    artifact_ref=args.artifact_ref,
+                )
+            else:
+                result = service.open_remediation(
+                    coordinator_capability=args.coordinator_capability,
+                    failed_verification_result_ref=args.failed_result_ref,
+                    spend_budget=_mapping(_read_json(args.spend, "spend"), "spend"),
+                    closure_budget=_mapping(_read_json(args.closure, "closure"), "closure"),
+                )
     except VerificationError as exc:
         print(
             json.dumps({"error": {"code": exc.code, "message": exc.message}}, sort_keys=True),

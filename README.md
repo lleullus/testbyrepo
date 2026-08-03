@@ -13,7 +13,7 @@ verification-triggered remediation.
   at `63892defd5e8f2bc0a03077ef3daf5ba0112481a`
 - `verification-lead/`: owner-controlled sealed verification runs,
   `verification-result-v1`, linear workflow continuation, and remediation
-  coordination. Its PROCESS executor v2 uses a closed environment and is the current conformance MVP.
+  coordination. Its PROCESS executor v3 binds executable identity and uses a closed environment as the current conformance MVP.
 - `baseline-capsule/`: required Implementation Lead support module, exported
   from `/home/user01/project/baseline-capsule` at
   `ffb6ff36df9788cb777aae06ccf847d03f29fe5f`

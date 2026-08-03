@@ -78,6 +78,12 @@ Drafts, budget vectors, criterion refs, and assessments are read from bounded JS
 command accepts only run/flow/step IDs; it has no request or outcome argument. `read-run` returns a
 redacted plan and complete attempt ledger. Raw bounded process output is available only through
 `read-artifact` with the owning Assessor capability.
+Every store-backed CLI command also requires `--workflow-guard-fd`, naming a caller-owned regular-file
+descriptor for an exclusive deployment lock. The command acquires that lock, binds the minted session
+to the exact canonical workflow root, and keeps the descriptor live through private-copy audit and
+store initialization. It never accepts a caller-constructed always-true guard. Deployment must still
+quiesce or fence old writers that do not participate in this lock. `preview-process-step` and
+`replay-authorization-scope` are store-free and do not require or create a workflow root.
 "Owning" means the exact Assessor actor bound to that VerificationRun, not another Assessor from the
 same outer invocation. Ancestor raw artifacts remain unavailable to a fresh Assessor; the redacted
 ledger is the audit/diagnosis surface.
@@ -225,9 +231,17 @@ The initial callable executor set is closed to `PROCESS`. A sealed step contains
 stepId
 role = ACTION | READBACK | CLEANUP
 executorKind = PROCESS
-executorVersion = process-v2
+executorVersion = process-v3
 environmentPolicy = SEALED_EMPTY_BASE_V1
 executable
+executableIdentity {
+  canonicalPath
+  contentSha256
+  byteCount
+  executableMode
+  ownerUid
+  ownerGid
+}
 argv[]
 cwd
 environmentDelta
@@ -235,17 +249,30 @@ inputRefs = []
 sourceBinding
 pollPolicy
 canonicalRequestDigest
+repeatRequestDigest
 ```
 
 `sourceBinding.mode` is `CURRENT_PROJECT_ROOT` in the MVP. It binds the canonical project root and exact
 handoff source identity. The runner resolves the executable/cwd before seal and later executes directly
-from stored bytes with no shell. `execute_step(runRef, flowId, stepId)` accepts no replacement request.
+as the sealed canonical pathname with no shell. `execute_step(runRef, flowId, stepId)` accepts no replacement request.
+The pre/post executable observer detects durable drift at its observation points;
+it does not claim stored-byte or open-fd execution across the separately documented pre-check-to-exec
+gap.
 
-`process-v2` creates the child environment from an empty map plus the exact sealed `environmentDelta`.
+`process-v3` creates the child environment from an empty map plus the exact sealed `environmentDelta`.
 It never inherits the runner's ambient `PATH`, `HOME`, proxy, tenant, credential, feature-flag, or other
 process values. Required values must be explicit sealed entries. Both executor version and environment
-policy are part of the canonical request digest. An older ambient-overlay plan cannot execute under v2;
-close it without a verified verdict and open a fresh sealed run.
+policy are part of both request digests. `canonicalRequestDigest` covers the finalized request after
+correlation substitution, including the full source binding and tool-observed executable identity.
+`repeatRequestDigest` uses that same canonicalizer and removes only `finalSourceIdentity`; it keeps the
+executor version, environment policy, executable identity, target, anchors, argv, and environment.
+
+The caller supplies neither executable identity nor either digest. Preview and seal finalization use
+the same strict observer: the path must already be canonical and non-symlink, `O_NOFOLLOW` support is
+mandatory, the target must be a readable/executable regular file, bytes are streaming-hashed, and
+pre/post path-plus-fd metadata must remain exact. A retired v1/v2, mixed-version, unknown, or malformed
+sealed plan remains available through historical `read-run`, but cannot resume seal, execute any
+ACTION/READBACK/CLEANUP, declare a contradiction, or publish a new result under process-v3.
 
 The user-visible plan exposes each argv position only as its byte count and SHA-256 while the owner-only
 sealed plan retains the exact non-sensitive execution bytes. Credential, user-data, payment/message
@@ -259,8 +286,10 @@ generic workflow DSL are prohibited.
 ## Cardinality and polling
 
 Each sealed ACTION and CLEANUP logical step can start at most once. A durable start record is written and
-budget consumed before the external process. A crash after start is recorded as an incomplete attempt
-and can never be retried in the same run.
+budget consumed before the external process. An owner-only per-step OS lock is held from before that
+durable start through attempt and completion commit. Result publication cannot reinterpret a live
+execution as a crash; it returns `STEP_EXECUTION_ACTIVE` without mutation. Only a `STARTED` row whose
+lock is provably free is recovered as an incomplete crash-gap attempt; it can never be retried in the same run.
 
 READBACK has one logical execution with `1..10` identical-request polls and a bounded interval. Every
 miss, error, output digest, and terminal poll remains in the ledger. No backoff, fallback, branch,
@@ -289,12 +318,23 @@ concurrent-state ambiguity yields `INCOMPLETE`.
 
 ## Identity drift
 
-Before and after every attempt, recapture the project identity. Drift records
-`IDENTITY_DRIFT`, stops new product ACTIONs, and prevents `VERIFIED`. Remaining steps are closed as
-`NOT_RUN`. Restoration of the old bytes does not resume the run; open a fresh claim and run.
+Before and after every attempt, recapture the project identity. Source drift records
+`IDENTITY_DRIFT`. The runner also re-hashes the sealed direct executable immediately before and after
+every attempt. A pre-execution mismatch records a durable `EXECUTABLE_IDENTITY_DRIFT` attempt/event
+with `processStarted=false` and starts no subprocess. A post-execution mismatch preserves exit,
+stdout, and stderr while recording `processStarted=true`, expected/observed identity, bytes hashed,
+and duration. Either kind of drift prevents `VERIFIED`; executable drift is run-global and cannot be
+cleared by a later READBACK, correlation match, or caller `SATISFIED`. Remaining steps are closed as
+`NOT_RUN`. Restoration of old bytes does not resume the run; open a fresh claim and run.
 
 A durable contradiction established before later drift may still produce `VERIFICATION_FAILED` when
 its mapped evidence was complete at the exact identity. Otherwise drift yields `INCOMPLETE`.
+
+The direct executable guarantee is limited to canonical path, file bytes, executable mode, and owner
+uid/gid across seal and each pre/post observation. It does not seal the dynamic loader, shared
+libraries, interpreter imports, external config/data, ACLs, xattrs, file capabilities, mount policy,
+kernel/OS state, or a hostile swap-and-restore inside the remaining pre-check-to-exec gap. Project-owned
+argv inputs must independently be covered by the project source identity.
 
 ## Contradiction stop
 

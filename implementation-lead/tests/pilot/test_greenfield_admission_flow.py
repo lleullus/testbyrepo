@@ -48,7 +48,15 @@ class GreenfieldAdmissionPilotTests(unittest.TestCase):
             "blockerFiles": [],
         }
         criteria = implementation_result.acceptance_criteria_from_ticket(ticket)
-        publisher = implementation_result.HandoffPublisher(root / "workflow", root / "capsules")
+        workflow_root = root / "workflow"
+        guard = implementation_result.implementation_transaction.workflow_store._mint_test_guard_session(
+            store_root=workflow_root,
+            identity=f"greenfield-pilot:{delegated}",
+            is_active=lambda: True,
+        )
+        publisher = implementation_result.HandoffPublisher(
+            workflow_root, root / "capsules", guard=guard
+        )
         transaction = publisher.transactions.start_initial(
             project_root=project,
             planning_identity=implementation_result.planning_seal_digest(seal),
