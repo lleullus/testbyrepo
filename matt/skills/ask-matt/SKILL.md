@@ -72,9 +72,12 @@ Matt, not the specialist, creates and governs
   invent list/detail views, Korean copy, live updates, mobile support, assets,
   or motion when the confirmed product scope does not include them.
 - A utility CRUD/dashboard exemption identified during `ima2-uiux` design
-  judgment waives only visual concept/image-generation. For that exemption, do
-  not run image-tool bootstrap or generation. It never waives the Matt-owned
-  decision set above.
+  judgment waives only automatic visual concept/image generation during design
+  exploration. A dashboard label alone must not start automatic image
+  exploration, image-tool bootstrap, or generation. This exemption never
+  waives the Matt-owned decision set above, and it does not prevent a later
+  final-approval render when the user explicitly requests one under the Final
+  Approval Render Disposition Gate.
 - When visual concept exploration genuinely applies, keep its non-authority
   candidates under `<planning-workspace>/design-concepts/`, never a product
   devlog or product asset directory. Only adopted decisions in `DESIGN.md` can
@@ -94,6 +97,93 @@ package authority into the same shared understanding; keep questions limited
 to decisions that block it. One explicit user response may approve both the
 completed authority and integrated shared understanding when both are
 presented clearly.
+
+## Final Approval Render Disposition Gate
+
+Apply this gate when Matt creates a new `MATERIAL_RENDERED_UI` authority or
+materially changes one. Do not apply it to `NON_UI`, exact-preservation
+`ENGINEERING_ONLY`, or a `BOUNDED_RENDERED_CONTRACT` that does not require a
+separate C2 `DESIGN.md`. When the latest shared understanding adopts an
+existing complete approved UI/UX authority without changing it, the render
+choice is not applicable; record the unchanged adoption as described below
+instead of asking for a new render.
+
+For every applicable design, ask the final render disposition question only
+after all applicable decisions are written in `DESIGN.md` and `Open Questions`
+is `None`, but before changing `Status: draft` to `Status: approved`, obtaining
+final approval of the integrated shared understanding, or invoking `to-spec`.
+Offer exactly these two choices:
+
+- review a final-approval mockup or concept render; or
+- approve from the completed `DESIGN.md` without an image.
+
+Do not ask again when the user already requested or declined a final render for
+the same current scope, or already reviewed a render that reflects the final
+design. An image produced for early exploration, an image-first fork, or an
+automatic HOTL selection does not count as final-render review.
+
+Record exactly one of these plain Markdown lines as approval-procedure
+evidence, not as a design requirement:
+
+```text
+Final approval render: requested
+Final approval render: reviewed
+Final approval render: declined
+Final approval render: not applicable — unchanged approved authority adopted
+```
+
+For a new or materially changed authority, keep the applicable line in
+`DESIGN.md`. For unchanged adoption, keep the `not applicable` line in the
+latest shared understanding and do not modify the adopted authority merely to
+add process evidence. A `reviewed` record may also carry the reviewed images'
+local absolute paths in a separate `Final approval render paths:` line. Those
+paths are process evidence only and must not be propagated into a Spec or
+Ticket acceptance criterion.
+
+When the user requests a render, record `requested` and keep `DESIGN.md` at
+`Status: draft`. Use only the decisions in the completed draft as generation
+input. The design direction is already decided: do not restart broad
+image-first or human-in-the-loop exploration. Generate only the minimum
+representative render needed for final review. Use one image when one screen is
+sufficient; use more only when materially different key states or viewports
+carry important decisions that one image cannot show. Store the results under
+`<planning-workspace>/design-concepts/` and show the actual images to the user
+with Markdown image tags whose targets are absolute local paths. State that
+each render is non-authoritative review material, not the implementation
+contract and not implementation-time visual verification.
+
+After the current render has actually been shown to and reviewed by the user,
+and every resulting feedback item is resolved in `DESIGN.md`, replace
+`requested` with `reviewed`; only then may the authority proceed to approval.
+
+Convert every adopted visual-feedback item into an explicit `DESIGN.md`
+decision, such as color, hierarchy, density, layout, state presentation, or
+responsive treatment. An element that exists only in an image is not a
+requirement. If feedback materially changes a visual decision, update
+`DESIGN.md` and regenerate the minimum render from that current draft before
+review can become `reviewed`. Do not regenerate for a typo or nonvisual
+explanation change that cannot alter the render. Resolve all feedback and
+reflect every adopted item in `DESIGN.md` before invoking `to-spec`.
+
+If the user requested a render but no image-generation tool is available, fail
+closed: leave the state `requested`, keep `DESIGN.md` at `Status: draft`, and do
+not invoke `to-spec`. Continue only after generation becomes available and the
+user reviews the result, or after the user explicitly withdraws the request
+and chooses document-only approval, changing the state to `declined`.
+
+When the user declines a render, the completed `DESIGN.md` remains the sole
+design authority. Keep `Open Questions` at `None`; require the latest shared
+understanding to adopt that exact authority path and scope and require explicit
+approval from the user or named owner. The absence of an image does not lower
+the authority's completeness standard. One explicit response may decline the
+render, approve the completed `DESIGN.md`, and approve the integrated shared
+understanding together when all three dispositions are presented clearly.
+
+Images, prototypes, a Design Read, and automatic HOTL choices never become
+authority on their own. Every adopted image-derived decision must be explicit
+in `DESIGN.md`; browser or renderer evidence remains implementation-time work.
+After approval, any material design delta returns `DESIGN.md` to `draft` and
+requires the render disposition and any render staleness to be evaluated again.
 
 `NON_UI` and exact-preservation `ENGINEERING_ONLY` work do not enter full UI
 planning. A bounded rendered contract needs only its fixed rendered decisions

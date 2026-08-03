@@ -50,6 +50,65 @@ for new/material UI. An existing finished applicable approved authority,
 including one supplied by the user, may be reused only when the shared
 understanding explicitly adopts it.
 
+## Final Approval Render Disposition Verification
+
+Before drafting or writing `SPEC.md`, independently verify final-approval
+render disposition instead of trusting upstream Matt to have asked the user.
+For a `MATERIAL_RENDERED_UI` authority that Matt created or materially changed,
+require its `DESIGN.md` to contain a terminal disposition. For an existing
+complete approved authority adopted without change, require the latest shared
+understanding to contain the unchanged-adoption disposition. Do not require a
+render disposition for `NON_UI`, exact-preservation `ENGINEERING_ONLY`, or a
+`BOUNDED_RENDERED_CONTRACT` that does not require a separate C2 `DESIGN.md`.
+
+The only passing terminal values are:
+
+```text
+Final approval render: reviewed
+Final approval render: declined
+Final approval render: not applicable — unchanged approved authority adopted
+```
+
+`Final approval render: requested` is an in-progress state and never passes
+this gate. Fail closed and do not draft or write `SPEC.md` when any applicable
+condition below is true:
+
+- final-approval render disposition is absent;
+- the disposition is `requested`, including when the requested image has not
+  yet been presented or is still awaiting review;
+- user image feedback remains unresolved;
+- adopted feedback is not reflected as explicit decisions in `DESIGN.md`;
+- a presented render predates a later material visual decision in the current
+  `DESIGN.md`;
+- `DESIGN.md` remains `Status: draft`;
+- explicit user or named-owner approval is absent; or
+- the latest shared understanding does not explicitly adopt the approved
+  authority's exact local path and applicable scope.
+
+A nonvisual correction that cannot alter the render, such as a typo or
+explanatory-text repair, does not by itself make a render stale. A material
+design delta does: the authority must return to draft, its render disposition
+must be reconsidered, and any affected render must be reviewed again before
+this gate can pass.
+
+Apply the terminal values as follows:
+
+- `reviewed` passes only when a render based on the latest material design was
+  actually shown to the user, all visual feedback was resolved and incorporated
+  into `DESIGN.md`, and the resulting authority was explicitly approved.
+- `declined` passes only when the user explicitly chose image-free approval and
+  the complete image-free `DESIGN.md` was explicitly approved.
+- `not applicable — unchanged approved authority adopted` passes only when the
+  latest shared understanding explicitly says that an existing complete
+  approved authority is adopted without change.
+
+Final-approval images, prototypes, a Design Read, and automatic HOTL selections
+are non-authoritative review material. Only their explicitly adopted decisions
+in `DESIGN.md` can supply authority. Local render paths may remain approval
+process evidence, but must not be copied into Spec or Ticket acceptance
+criteria. This gate is pre-implementation design approval; actual browser or
+renderer verification remains implementation-time work.
+
 A bounded rendered contract does not require a separate pre-Spec `DESIGN.md`
 when the confirmed shared understanding already fixes every rendered decision
 or direct preservation condition in that scope. Preserve them directly in the
