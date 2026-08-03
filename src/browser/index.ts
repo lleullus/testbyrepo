@@ -12,6 +12,8 @@ import type {
   BrowserAttachment,
   ResolvedBrowserConfig,
   BrowserArchiveResult,
+  BrowserModelIdentityEvidence,
+  BrowserReasoningSelectionEvidence,
 } from "./types.js";
 import {
   launchChrome,
@@ -46,7 +48,11 @@ import {
 } from "./pageActions.js";
 import { INPUT_SELECTORS } from "./constants.js";
 import { uploadAttachmentViaDataTransfer } from "./actions/remoteFileTransfer.js";
-import { ensureThinkingTime } from "./actions/thinkingTime.js";
+import {
+  BrowserReasoningSelectionError,
+  ensureBrowserReasoning,
+  shouldRequirePersistedOriginalModelIdentity,
+} from "./actions/thinkingTime.js";
 import { startThinkingStatusMonitor } from "./actions/thinkingStatus.js";
 import {
   activateDeepResearch,
@@ -916,7 +922,7 @@ function buildSkippedModelSelectionEvidence(
   strategy: BrowserModelSelectionEvidence["strategy"],
 ): BrowserModelSelectionEvidence {
   return {
-    requestedModel: desiredModel ?? null,
+    requestedModel: safeBrowserModelEvidenceLabel(desiredModel),
     resolvedLabel: null,
     strategy,
     status: "skipped",
@@ -924,6 +930,17 @@ function buildSkippedModelSelectionEvidence(
     source: "config",
     capturedAt: new Date().toISOString(),
   };
+}
+
+function safeBrowserModelEvidenceLabel(value: string | null | undefined): string | null {
+  const normalized = (value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return /^(?:chatgpt )?(?:gpt )?5(?: [0-9])? pro$/.test(normalized) || normalized === "pro"
+    ? null
+    : (value ?? null);
 }
 
 export async function runBrowserMode(options: BrowserRunOptions): Promise<BrowserRunResult> {
@@ -966,6 +983,11 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
   let lastUrl: string | undefined;
   let promptSubmitted = false;
   let modelSelectionEvidence: BrowserModelSelectionEvidence | undefined;
+  let reasoningSelectionEvidence: BrowserReasoningSelectionEvidence | undefined;
+  const reasoningSelectionHistory: BrowserReasoningSelectionEvidence[] = [];
+  let originalModelIdentity: BrowserModelIdentityEvidence | null =
+    config.originalModelIdentity ?? null;
+  let reasoningTurnIndex = 0;
   let tabLease: BrowserTabLease | null = null;
   let conversationUrlMonitor: ConversationUrlMonitor | null = null;
   const emitRuntimeHint = async (): Promise<void> => {
@@ -985,7 +1007,12 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
       controllerPid: process.pid,
     };
     try {
-      await runtimeHintCb?.(hint, modelSelectionEvidence);
+      await runtimeHintCb?.(
+        hint,
+        modelSelectionEvidence,
+        reasoningSelectionEvidence,
+        reasoningSelectionHistory,
+      );
       await tabLease?.update({
         chromeHost,
         chromePort: chrome.port,
@@ -1517,24 +1544,66 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
       );
     }
     const deepResearch = config.researchMode === "deep";
-    // Handle thinking time selection if specified. Deep Research owns its own effort flow.
-    const thinkingTime = config.thinkingTime;
-    if (thinkingTime && !deepResearch) {
-      const thinkingTargetModel = modelStrategy === "select" ? config.desiredModel : null;
-      await raceWithDisconnect(
-        withRetries(() => ensureThinkingTime(Runtime, thinkingTime, logger, thinkingTargetModel), {
-          retries: 2,
-          delayMs: 300,
+    const ensureReasoningBeforeSubmission = async () => {
+      if (!config.reasoningIntent || deepResearch) return;
+      const turnIndex = reasoningTurnIndex++;
+      let attemptIndex = 0;
+      const runAttempt = async (): Promise<BrowserReasoningSelectionEvidence> => {
+        const currentAttemptIndex = attemptIndex++;
+        try {
+          const evidence = await ensureBrowserReasoning(
+            Runtime,
+            {
+              intent: config.reasoningIntent as NonNullable<typeof config.reasoningIntent>,
+              managedSlot: config.managedSlot,
+              originalModelIdentity,
+              requireOriginalModelIdentity: shouldRequirePersistedOriginalModelIdentity({
+                isResumingConversation,
+                turnIndex,
+              }),
+            },
+            logger,
+          );
+          reasoningSelectionEvidence = {
+            ...evidence,
+            turnIndex,
+            attemptIndex: currentAttemptIndex,
+          };
+        } catch (error) {
+          if (!(error instanceof BrowserReasoningSelectionError)) throw error;
+          reasoningSelectionEvidence = {
+            ...error.evidence,
+            turnIndex,
+            attemptIndex: currentAttemptIndex,
+          };
+        }
+        if (!originalModelIdentity && reasoningSelectionEvidence.originalModelIdentity) {
+          originalModelIdentity = reasoningSelectionEvidence.originalModelIdentity;
+        }
+        reasoningSelectionHistory.push(reasoningSelectionEvidence);
+        await emitRuntimeHint();
+        if (!reasoningSelectionEvidence.verified) {
+          throw new BrowserReasoningSelectionError(
+            `Browser reasoning selection failed before prompt submission (status ${reasoningSelectionEvidence.status}).`,
+            reasoningSelectionEvidence,
+          );
+        }
+        return reasoningSelectionEvidence;
+      };
+      reasoningSelectionEvidence = await raceWithDisconnect(
+        withRetries(runAttempt, {
+          retries: 1,
+          delayMs: 250,
           onRetry: (attempt, error) => {
             if (options.verbose) {
               logger(
-                `[retry] Thinking time (${thinkingTime}) attempt ${attempt + 1}: ${error instanceof Error ? error.message : error}`,
+                `[retry] Browser reasoning (${config.reasoningIntent}) attempt ${attempt + 1}: ${error instanceof Error ? error.message : error}`,
               );
             }
           },
         }),
       );
-    }
+    };
     const profileLockTimeoutMs = manualLogin ? (config.profileLockTimeoutMs ?? 0) : 0;
     let profileLock: ProfileRunLock | null = null;
     const acquireProfileLockIfNeeded = async () => {
@@ -1562,6 +1631,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
       let inputOnlyAttachments = false;
       await raceWithDisconnect(clearPromptComposer(Runtime, logger));
       await raceWithDisconnect(ensurePromptReady(Runtime, config.inputTimeoutMs, logger));
+      await ensureReasoningBeforeSubmission();
       if (submissionAttachments.length > 0) {
         if (!DOM) {
           throw new Error("Chrome DOM domain unavailable while uploading attachments.");
@@ -1770,6 +1840,8 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
         artifacts: savedArtifacts,
         archive,
         modelSelection: modelSelectionEvidence,
+        reasoningSelection: reasoningSelectionEvidence,
+        reasoningSelections: reasoningSelectionHistory,
         tookMs: durationMs,
         answerTokens: tokens,
         answerChars: researchResult.text.length,
@@ -2288,6 +2360,8 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
       savedFiles: fileArtifacts.savedFiles,
       archive,
       modelSelection: modelSelectionEvidence,
+      reasoningSelection: reasoningSelectionEvidence,
+      reasoningSelections: reasoningSelectionHistory,
       tookMs: durationMs,
       answerTokens,
       answerChars,
@@ -2914,6 +2988,11 @@ async function runRemoteBrowserMode(
   let lastUrl: string | undefined;
   let promptSubmitted = false;
   let modelSelectionEvidence: BrowserModelSelectionEvidence | undefined;
+  let reasoningSelectionEvidence: BrowserReasoningSelectionEvidence | undefined;
+  const reasoningSelectionHistory: BrowserReasoningSelectionEvidence[] = [];
+  let originalModelIdentity: BrowserModelIdentityEvidence | null =
+    config.originalModelIdentity ?? null;
+  let reasoningTurnIndex = 0;
   let attachedExistingTab = false;
   let ownsTarget = true;
   let conversationUrlMonitor: ConversationUrlMonitor | null = null;
@@ -2934,6 +3013,8 @@ async function runRemoteBrowserMode(
           controllerPid: process.pid,
         },
         modelSelectionEvidence,
+        reasoningSelectionEvidence,
+        reasoningSelectionHistory,
       );
       await tabLease?.update({
         chromeHost: host,
@@ -3132,25 +3213,64 @@ async function runRemoteBrowserMode(
       );
     }
     const deepResearch = config.researchMode === "deep";
-    // Handle thinking time selection if specified. Deep Research owns its own effort flow.
-    const thinkingTime = config.thinkingTime;
-    if (thinkingTime && !deepResearch) {
-      const thinkingTargetModel = modelStrategy === "select" ? config.desiredModel : null;
-      await withRetries(
-        () => ensureThinkingTime(Runtime, thinkingTime, logger, thinkingTargetModel),
-        {
-          retries: 2,
-          delayMs: 300,
-          onRetry: (attempt, error) => {
-            if (options.verbose) {
-              logger(
-                `[retry] Thinking time (${thinkingTime}) attempt ${attempt + 1}: ${error instanceof Error ? error.message : error}`,
-              );
-            }
-          },
+    const ensureReasoningBeforeSubmission = async () => {
+      if (!config.reasoningIntent || deepResearch) return;
+      const turnIndex = reasoningTurnIndex++;
+      let attemptIndex = 0;
+      const runAttempt = async (): Promise<BrowserReasoningSelectionEvidence> => {
+        const currentAttemptIndex = attemptIndex++;
+        try {
+          const evidence = await ensureBrowserReasoning(
+            Runtime,
+            {
+              intent: config.reasoningIntent as NonNullable<typeof config.reasoningIntent>,
+              managedSlot: config.managedSlot,
+              originalModelIdentity,
+              requireOriginalModelIdentity: shouldRequirePersistedOriginalModelIdentity({
+                isResumingConversation: Boolean(config.resumeConversationUrl),
+                turnIndex,
+              }),
+            },
+            logger,
+          );
+          reasoningSelectionEvidence = {
+            ...evidence,
+            turnIndex,
+            attemptIndex: currentAttemptIndex,
+          };
+        } catch (error) {
+          if (!(error instanceof BrowserReasoningSelectionError)) throw error;
+          reasoningSelectionEvidence = {
+            ...error.evidence,
+            turnIndex,
+            attemptIndex: currentAttemptIndex,
+          };
+        }
+        if (!originalModelIdentity && reasoningSelectionEvidence.originalModelIdentity) {
+          originalModelIdentity = reasoningSelectionEvidence.originalModelIdentity;
+        }
+        reasoningSelectionHistory.push(reasoningSelectionEvidence);
+        await emitRuntimeHint();
+        if (!reasoningSelectionEvidence.verified) {
+          throw new BrowserReasoningSelectionError(
+            `Browser reasoning selection failed before prompt submission (status ${reasoningSelectionEvidence.status}).`,
+            reasoningSelectionEvidence,
+          );
+        }
+        return reasoningSelectionEvidence;
+      };
+      reasoningSelectionEvidence = await withRetries(runAttempt, {
+        retries: 1,
+        delayMs: 250,
+        onRetry: (attempt, error) => {
+          if (options.verbose) {
+            logger(
+              `[retry] Browser reasoning (${config.reasoningIntent}) attempt ${attempt + 1}: ${error instanceof Error ? error.message : error}`,
+            );
+          }
         },
-      );
-    }
+      });
+    };
     const submitOnce = async (prompt: string, submissionAttachments: BrowserAttachment[]) => {
       const baselineSnapshot = await readAssistantSnapshot(Runtime).catch(() => null);
       const baselineAssistantText =
@@ -3162,6 +3282,7 @@ async function runRemoteBrowserMode(
       }));
       await clearPromptComposer(Runtime, logger);
       await ensurePromptReady(Runtime, config.inputTimeoutMs, logger);
+      await ensureReasoningBeforeSubmission();
       if (submissionAttachments.length > 0) {
         if (!DOM) {
           throw new Error("Chrome DOM domain unavailable while uploading attachments.");
@@ -3804,6 +3925,8 @@ async function runRemoteBrowserMode(
       savedFiles: fileArtifacts.savedFiles,
       archive,
       modelSelection: modelSelectionEvidence,
+      reasoningSelection: reasoningSelectionEvidence,
+      reasoningSelections: reasoningSelectionHistory,
       controllerPid: process.pid,
     };
   } catch (error) {

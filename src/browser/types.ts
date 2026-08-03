@@ -13,6 +13,27 @@ export type CookieParam = Protocol.Network.CookieParam;
 export type BrowserModelStrategy = "select" | "current" | "ignore";
 export type BrowserResearchMode = "off" | "deep";
 export type BrowserArchiveMode = "auto" | "always" | "never";
+/**
+ * Browser-only reasoning intents. These deliberately do not share the API
+ * reasoning domain: ChatGPT's Pro control is an effort level, never a model
+ * picker row.
+ */
+export type BrowserReasoningIntent = "light" | "standard" | "high" | "heavy" | "pro";
+export type BrowserReasoningControlKind = "slider" | "dropdown";
+
+/** Capability declared by the managed Browser-slots transport. */
+export interface BrowserManagedSlotCapability {
+  slotId: 1 | 2 | 3 | 4 | 5;
+  expectedControl: BrowserReasoningControlKind;
+  maximumReasoning: "pro" | "high";
+}
+
+/** Redacted identity captured from bounded model-picker signals. */
+export interface BrowserModelIdentityEvidence {
+  fingerprint: string;
+  source: "chatgpt-model-picker";
+  capturedAt: string;
+}
 
 export type BrowserLogger = ((message: string) => void) & {
   verbose?: boolean;
@@ -112,6 +133,16 @@ export interface BrowserAutomationConfig {
   copyProfileSource?: string | null;
   /** Thinking time intensity level for Thinking/Pro models: light, standard, extended, heavy */
   thinkingTime?: ThinkingTimeLevel;
+  /**
+   * Resolved browser reasoning intent. This is distinct from `desiredModel`;
+   * it is normally derived from thinkingTime/model compatibility by the CLI
+   * or MCP adapter and may be supplied by managed slot execution.
+   */
+  reasoningIntent?: BrowserReasoningIntent;
+  /** Managed-slot capability derived from the runner environment. */
+  managedSlot?: BrowserManagedSlotCapability | null;
+  /** Original conversation model identity used to fail closed across later turns/resume. */
+  originalModelIdentity?: BrowserModelIdentityEvidence | null;
   /** Browser-only research mode. "deep" activates ChatGPT Deep Research. */
   researchMode?: BrowserResearchMode;
   /** Archive completed ChatGPT conversations after local artifacts are saved. */
@@ -146,10 +177,12 @@ export interface BrowserRunOptions {
    * and attached-existing tabs are still preserved for recovery/user ownership.
    */
   closeOwnedTabOnComplete?: boolean;
-  /** Optional hook to persist runtime info and current model evidence as soon as Chrome is ready. */
+  /** Optional hook to persist runtime and independently captured browser evidence. */
   runtimeHintCb?: (
     hint: BrowserRuntimeMetadata,
     modelSelection?: BrowserModelSelectionEvidence,
+    reasoningSelection?: BrowserReasoningSelectionEvidence,
+    reasoningSelections?: BrowserReasoningSelectionEvidence[],
   ) => void | Promise<void>;
 }
 
@@ -173,6 +206,8 @@ export interface BrowserRunResult {
   savedFiles?: SavedBrowserFile[];
   archive?: BrowserArchiveResult;
   modelSelection?: BrowserModelSelectionEvidence;
+  reasoningSelection?: BrowserReasoningSelectionEvidence;
+  reasoningSelections?: BrowserReasoningSelectionEvidence[];
   warnings?: BrowserRunWarning[];
   tookMs: number;
   answerTokens: number;
@@ -202,6 +237,9 @@ export type ResolvedBrowserConfig = Required<
     | "remoteChromeBrowserWSEndpoint"
     | "remoteChromeProfileRoot"
     | "thinkingTime"
+    | "reasoningIntent"
+    | "managedSlot"
+    | "originalModelIdentity"
     | "modelStrategy"
     | "maxConcurrentTabs"
     | "researchMode"
@@ -216,6 +254,9 @@ export type ResolvedBrowserConfig = Required<
   desiredModel?: string | null;
   modelStrategy?: BrowserModelStrategy;
   thinkingTime?: ThinkingTimeLevel;
+  reasoningIntent?: BrowserReasoningIntent;
+  managedSlot?: BrowserManagedSlotCapability | null;
+  originalModelIdentity?: BrowserModelIdentityEvidence | null;
   debugPort?: number | null;
   inlineCookiesSource?: string | null;
   remoteChrome?: { host: string; port: number } | null;
@@ -229,3 +270,37 @@ export type ResolvedBrowserConfig = Required<
   researchMode: BrowserResearchMode;
   archiveConversations: BrowserArchiveMode;
 };
+
+export type BrowserReasoningSelectionStatus =
+  | "already-selected"
+  | "switched"
+  | "unavailable"
+  | "ambiguous"
+  | "model-changed"
+  | "model-mismatch"
+  | "original-model-missing";
+
+/**
+ * Structured, redacted proof captured before a ChatGPT prompt is submitted.
+ * Only recognised reasoning labels are retained; page text is never copied.
+ */
+export interface BrowserReasoningSelectionEvidence {
+  requestedIntent: BrowserReasoningIntent;
+  controlKind: BrowserReasoningControlKind | null;
+  availableLevels: BrowserReasoningIntent[];
+  resolvedLevel: BrowserReasoningIntent | null;
+  status: BrowserReasoningSelectionStatus;
+  verified: boolean;
+  modelUnchanged: boolean;
+  originalModelIdentity?: BrowserModelIdentityEvidence | null;
+  observedModelFingerprint?: string | null;
+  managedSlotId?: number;
+  turnIndex?: number;
+  attemptIndex?: number;
+  capturedAt: string;
+  diagnostic: {
+    controlCount: number;
+    matchingControlCount: number;
+    observedKinds: BrowserReasoningControlKind[];
+  };
+}

@@ -8,6 +8,7 @@ import { normalizeChatgptUrl } from "../browser/utils.js";
 import { parseDuration } from "../duration.js";
 import { normalizeBrowserModelStrategy } from "../browser/modelStrategy.js";
 import type {
+  BrowserAutomationConfig,
   BrowserArchiveMode,
   BrowserModelStrategy,
   BrowserResearchMode,
@@ -28,7 +29,9 @@ const BROWSER_MODEL_LABELS: [ModelName, string][] = [
   // Most specific first (e.g., "gpt-5.2-thinking" before "gpt-5.2")
   ["gpt-5.6-sol", "GPT-5.6 Sol"],
   ["gpt-5.6", "GPT-5.6 Sol"],
-  ["gpt-5.5-pro", "Pro"],
+  // ChatGPT's Pro is a reasoning control, not a model-picker row. Select the
+  // base Thinking model and let browser reasoning selection handle Pro.
+  ["gpt-5.5-pro", "Thinking 5.5"],
   ["gpt-5.5-instant", "GPT-5.5 Instant"],
   ["gpt-5.5", "Thinking 5.5"],
   ["gpt-5.4-pro", "Pro"],
@@ -135,7 +138,7 @@ export function normalizeChatGptModelForBrowser(model: ModelName): ModelName {
 
 export async function buildBrowserConfig(
   options: BrowserFlagOptions,
-): Promise<BrowserSessionConfig> {
+): Promise<BrowserSessionConfig & Pick<BrowserAutomationConfig, "reasoningIntent">> {
   if (options.copyProfile && options.browserKeepBrowser) {
     throw new Error(
       "--copy-profile cannot be combined with --browser-keep-browser: the copied profile is a throwaway that is deleted after the run, so it must not be retained.",
@@ -195,7 +198,6 @@ export async function buildBrowserConfig(
     : shouldUseOverride
       ? desiredModelOverride
       : mapModelToBrowserLabel(options.model);
-
   return {
     chromeProfile: options.copyProfile
       ? (options.browserChromeProfile ?? null)

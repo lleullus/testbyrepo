@@ -37,6 +37,17 @@ describe("runBrowserSessionExecution", () => {
           source: "chatgpt-model-picker",
           capturedAt: "2026-07-03T00:00:00.000Z",
         },
+        {
+          requestedIntent: "pro",
+          controlKind: "slider",
+          availableLevels: ["pro"],
+          resolvedLevel: "pro",
+          status: "already-selected",
+          verified: true,
+          modelUnchanged: true,
+          capturedAt: "2026-07-03T00:00:00.000Z",
+          diagnostic: { controlCount: 1, matchingControlCount: 1, observedKinds: ["slider"] },
+        },
       );
       return {
         answerText: "ok",
@@ -82,6 +93,8 @@ describe("runBrowserSessionExecution", () => {
     expect(persistRuntimeHint).toHaveBeenCalledWith(
       expect.objectContaining({ chromePort: 9999, chromeHost: "127.0.0.1", chromeTargetId: "t-1" }),
       expect.objectContaining({ resolvedLabel: "Pro", verified: true }),
+      expect.objectContaining({ requestedIntent: "pro", resolvedLevel: "pro", verified: true }),
+      undefined,
     );
     expect(log).toHaveBeenCalled();
   });
@@ -130,12 +143,12 @@ describe("runBrowserSessionExecution", () => {
     );
   });
 
-  test("logs and returns browser model selection evidence", async () => {
+  test("logs separate browser model and reasoning evidence", async () => {
     const log = vi.fn();
     const result = await runBrowserSessionExecution(
       {
         runOptions: baseRunOptions,
-        browserConfig: { desiredModel: "GPT-5.5 Pro", modelStrategy: "select" },
+        browserConfig: { desiredModel: "Thinking 5.5", modelStrategy: "select" },
         cwd: "/repo",
         log,
       },
@@ -158,25 +171,44 @@ describe("runBrowserSessionExecution", () => {
           answerTokens: 12,
           answerChars: 20,
           modelSelection: {
-            requestedModel: "GPT-5.5 Pro",
-            resolvedLabel: "Pro",
+            requestedModel: "Thinking 5.5",
+            resolvedLabel: "Thinking 5.5",
             strategy: "select" as const,
             status: "already-selected" as const,
             verified: true,
             source: "chatgpt-model-picker" as const,
             capturedAt: "2026-05-13T00:00:00.000Z",
           },
+          reasoningSelection: {
+            requestedIntent: "pro" as const,
+            controlKind: "slider" as const,
+            availableLevels: ["pro" as const],
+            resolvedLevel: "pro" as const,
+            status: "already-selected" as const,
+            verified: true,
+            modelUnchanged: true,
+            capturedAt: "2026-05-13T00:00:00.000Z",
+            diagnostic: {
+              controlCount: 1,
+              matchingControlCount: 1,
+              observedKinds: ["slider" as const],
+            },
+          },
         })),
       },
     );
 
     expect(result.modelSelection).toMatchObject({
-      requestedModel: "GPT-5.5 Pro",
-      resolvedLabel: "Pro",
+      requestedModel: "Thinking 5.5",
+      resolvedLabel: "Thinking 5.5",
       verified: true,
     });
     expect(log).toHaveBeenCalledWith(
-      expect.stringContaining("[browser] Model selection evidence: requested=GPT-5.5 Pro"),
+      expect.stringContaining("[browser] Model selection evidence: requested=Thinking 5.5"),
+    );
+    expect(result.reasoningSelection).toMatchObject({ requestedIntent: "pro", verified: true });
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining("[browser] Reasoning selection evidence: requested=pro"),
     );
   });
 
@@ -223,7 +255,7 @@ describe("runBrowserSessionExecution", () => {
   test("warns when a large browser Pro run finishes suspiciously quickly", () => {
     const warnings = buildBrowserRunWarningsForTest({
       runOptions: { ...baseRunOptions, model: "gpt-5.5-pro" },
-      browserConfig: { desiredModel: "GPT-5.5 Pro" },
+      browserConfig: { desiredModel: "Thinking 5.5", reasoningIntent: "pro" },
       inputTokens: 42_641,
       elapsedMs: 53_000,
       modelSelection: {
@@ -391,6 +423,9 @@ describe("runBrowserSessionExecution", () => {
         chromeTargetId: "target-2",
         tabUrl: "https://chatgpt.com/c/attached",
       }),
+      undefined,
+      undefined,
+      undefined,
     );
     expect(result.runtime).toMatchObject({
       browserTransport: "cdp",

@@ -1,18 +1,25 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import os from "node:os";
 import path from "node:path";
-import { DEFAULT_CHATGPT_COOKIE_NAMES, resolveBrowserConfig } from "../../src/browser/config.js";
+import {
+  assertManagedBrowserReasoningIntent,
+  DEFAULT_CHATGPT_COOKIE_NAMES,
+  resolveBrowserConfig,
+  resolveManagedBrowserSlotCapability,
+} from "../../src/browser/config.js";
 import { CHATGPT_URL, DEEP_RESEARCH_DEFAULT_TIMEOUT_MS } from "../../src/browser/constants.js";
 
 describe("resolveBrowserConfig", () => {
   const originalProfileDir = process.env.ORACLE_BROWSER_PROFILE_DIR;
   const originalMaxTabs = process.env.ORACLE_BROWSER_MAX_CONCURRENT_TABS;
+  const originalSlotId = process.env.ORACLE_BROWSER_SLOT_ID;
 
   beforeEach(() => {
     // Isolate from the caller's environment: a developer/CI export of the max-tabs
     // override must not leak into tests that assert built-in defaults. afterEach
     // below still restores the caller's original value once the suite finishes.
     delete process.env.ORACLE_BROWSER_MAX_CONCURRENT_TABS;
+    delete process.env.ORACLE_BROWSER_SLOT_ID;
   });
 
   afterEach(() => {
@@ -26,6 +33,58 @@ describe("resolveBrowserConfig", () => {
     } else {
       process.env.ORACLE_BROWSER_MAX_CONCURRENT_TABS = originalMaxTabs;
     }
+    if (originalSlotId === undefined) {
+      delete process.env.ORACLE_BROWSER_SLOT_ID;
+    } else {
+      process.env.ORACLE_BROWSER_SLOT_ID = originalSlotId;
+    }
+  });
+
+  test("maps managed slots to their independently verified UI capabilities", () => {
+    expect(resolveManagedBrowserSlotCapability({ ORACLE_BROWSER_SLOT_ID: "1" })).toEqual({
+      slotId: 1,
+      expectedControl: "slider",
+      maximumReasoning: "pro",
+    });
+    expect(resolveManagedBrowserSlotCapability({ ORACLE_BROWSER_SLOT_ID: "2" })).toMatchObject({
+      expectedControl: "slider",
+      maximumReasoning: "pro",
+    });
+    expect(resolveManagedBrowserSlotCapability({ ORACLE_BROWSER_SLOT_ID: "3" })).toEqual({
+      slotId: 3,
+      expectedControl: "dropdown",
+      maximumReasoning: "high",
+    });
+    expect(resolveManagedBrowserSlotCapability({ ORACLE_BROWSER_SLOT_ID: "5" })).toMatchObject({
+      expectedControl: "dropdown",
+      maximumReasoning: "high",
+    });
+  });
+
+  test("rejects managed capability downgrades before prompt submission", () => {
+    expect(() =>
+      assertManagedBrowserReasoningIntent(
+        { slotId: 4, expectedControl: "dropdown", maximumReasoning: "high" },
+        "pro",
+      ),
+    ).toThrow(/requires verified High reasoning/i);
+  });
+
+  test("uses the slot-3 High maximum for an ordinary request regardless of the default model id", () => {
+    process.env.ORACLE_BROWSER_SLOT_ID = "3";
+
+    const resolved = resolveBrowserConfig({ desiredModel: "gpt-5.5-pro" });
+
+    expect(resolved.reasoningIntent).toBe("high");
+    expect(resolved.managedSlot).toMatchObject({ slotId: 3, maximumReasoning: "high" });
+  });
+
+  test("rejects real Pro-only intent on a High-only managed slot", () => {
+    process.env.ORACLE_BROWSER_SLOT_ID = "3";
+
+    expect(() =>
+      resolveBrowserConfig({ desiredModel: "Thinking 5.5", reasoningIntent: "pro" }),
+    ).toThrow(/requires verified High reasoning/i);
   });
 
   test("returns defaults when config missing", () => {

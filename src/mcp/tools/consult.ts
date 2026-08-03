@@ -33,7 +33,11 @@ import { applyConsultPreset } from "../consultPresets.js";
 import { loadUserConfig, type UserConfig } from "../../config.js";
 import { resolveNotificationSettings } from "../../cli/notifier.js";
 import { mapModelToBrowserLabel, resolveBrowserModelLabel } from "../../cli/browserConfig.js";
-import type { BrowserModelStrategy } from "../../browser/types.js";
+import type {
+  BrowserAutomationConfig,
+  BrowserModelStrategy,
+  BrowserReasoningIntent,
+} from "../../browser/types.js";
 import { normalizeThinkingTimeLevel } from "../../oracle/thinkingTime.js";
 
 // Use raw shapes so the MCP SDK (with its bundled Zod) wraps them and emits valid JSON Schema.
@@ -202,6 +206,7 @@ const consultDryRunResolvedShape = z.object({
     .object({
       desiredModel: z.string().nullable().optional(),
       thinkingTime: z.string().nullable().optional(),
+      reasoningIntent: z.string().nullable().optional(),
       modelStrategy: z.string().nullable().optional(),
       researchMode: z.string().nullable().optional(),
       attachments: z.string().optional(),
@@ -322,6 +327,7 @@ export function buildConsultBrowserConfig({
   browserResearchMode,
   browserArchive,
   browserKeepBrowser,
+  proOnlyReasoning = false,
 }: {
   userConfig: UserConfig;
   env: Record<string, string | undefined>;
@@ -333,7 +339,9 @@ export function buildConsultBrowserConfig({
   browserResearchMode?: "deep";
   browserArchive?: "auto" | "always" | "never";
   browserKeepBrowser?: boolean;
-}): BrowserSessionConfig {
+  /** True only for an authorized Pro-only preset/reasoning path. */
+  proOnlyReasoning?: boolean;
+}): BrowserSessionConfig & Pick<BrowserAutomationConfig, "reasoningIntent"> {
   const configuredBrowser = userConfig.browser ?? {};
   const envProfileDir = (env.ORACLE_BROWSER_PROFILE_DIR ?? "").trim();
   const hasProfileDir = envProfileDir.length > 0;
@@ -347,6 +355,7 @@ export function buildConsultBrowserConfig({
     ? true
     : (configuredBrowser.manualLogin ?? process.platform === "win32");
   const configuredThinkingTime = normalizeThinkingTimeLevel(configuredBrowser.thinkingTime);
+  const reasoningIntent: BrowserReasoningIntent | undefined = proOnlyReasoning ? "pro" : undefined;
 
   return {
     ...configuredBrowser,
@@ -361,6 +370,7 @@ export function buildConsultBrowserConfig({
       ? ((envProfileDir || configuredBrowser.manualLoginProfileDir) ?? null)
       : null,
     thinkingTime: browserThinkingTime ?? configuredThinkingTime ?? undefined,
+    reasoningIntent,
     modelStrategy: browserModelStrategy ?? configuredBrowser.modelStrategy,
     researchMode: browserResearchMode ?? configuredBrowser.researchMode,
     archiveConversations: browserArchive ?? configuredBrowser.archiveConversations,
@@ -375,7 +385,7 @@ export function buildConsultDryRunResolved({
 }: {
   resolvedEngine: "api" | "browser";
   runOptions: ReturnType<typeof mapConsultToRunOptions>["runOptions"];
-  browserConfig?: BrowserSessionConfig;
+  browserConfig?: BrowserSessionConfig & Pick<BrowserAutomationConfig, "reasoningIntent">;
 }): ConsultDryRunResolved {
   const guidance: string[] = [];
   const followUpCount = runOptions.browserFollowUps?.filter((entry) => entry.trim()).length ?? 0;
@@ -403,6 +413,7 @@ export function buildConsultDryRunResolved({
   }
   const desiredModel = browserConfig?.desiredModel ?? null;
   const thinkingTime = browserConfig?.thinkingTime ?? null;
+  const reasoningIntent = browserConfig?.reasoningIntent ?? null;
   if (runOptions.model === "gpt-5.5-pro" && thinkingTime === "heavy") {
     guidance.push(
       'gpt-5.5-pro should normally use Pro Extended. Use model:"gpt-5.5" with browserThinkingTime:"heavy" only when you explicitly want Thinking Heavy.',
@@ -436,6 +447,7 @@ export function buildConsultDryRunResolved({
         ? {
             desiredModel,
             thinkingTime,
+            reasoningIntent,
             modelStrategy: browserConfig?.modelStrategy ?? null,
             researchMode: browserConfig?.researchMode ?? null,
             attachments: runOptions.browserAttachments,
@@ -465,6 +477,7 @@ export function formatConsultDryRunResolved(details: ConsultDryRunResolved): str
   if (details.browser) {
     lines.push(`  browser desired model: ${details.browser.desiredModel ?? "(default)"}`);
     lines.push(`  browser thinking time: ${details.browser.thinkingTime ?? "(default)"}`);
+    lines.push(`  browser reasoning intent: ${details.browser.reasoningIntent ?? "(default)"}`);
     lines.push(`  browser model strategy: ${details.browser.modelStrategy ?? "(default)"}`);
     lines.push(`  browser research mode: ${details.browser.researchMode ?? "off"}`);
     lines.push(`  browser attachments: ${details.browser.attachments ?? "auto"}`);
@@ -522,6 +535,7 @@ export async function runConsultTool(
     browserArchive,
     browserFollowUps,
     browserKeepBrowser,
+    preset,
     generateImage,
     outputPath,
     dryRun,
@@ -588,6 +602,7 @@ export async function runConsultTool(
       browserResearchMode,
       browserArchive,
       browserKeepBrowser,
+      proOnlyReasoning: preset === "chatgpt-pro-heavy",
     });
   }
 

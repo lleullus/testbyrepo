@@ -1675,7 +1675,17 @@ function getSessionMode(metadata: SessionMetadata): SessionMode {
 }
 
 function getBrowserConfigFromMetadata(metadata: SessionMetadata): BrowserSessionConfig | undefined {
-  return metadata.options?.browserConfig ?? metadata.browser?.config;
+  const stored = metadata.options?.browserConfig ?? metadata.browser?.config;
+  if (!stored) return undefined;
+  const { inlineCookies: _inlineCookies, ...safeStored } = stored;
+  const originalModelIdentity =
+    metadata.browser?.config?.originalModelIdentity ??
+    metadata.browser?.reasoningSelection?.originalModelIdentity ??
+    metadata.browser?.reasoningSelections
+      ?.map((evidence) => evidence.originalModelIdentity)
+      .find((identity) => identity != null) ??
+    stored.originalModelIdentity;
+  return originalModelIdentity ? { ...safeStored, originalModelIdentity } : safeStored;
 }
 
 async function runRootCommand(options: CliOptions): Promise<void> {
@@ -2075,6 +2085,16 @@ async function runRootCommand(options: CliOptions): Promise<void> {
     }
     browserFollowup = await resolveBrowserFollowupReference(options.followup, sessionStore);
     if (browserFollowup) {
+      const parentMetadata = await sessionStore.readSession(browserFollowup.sessionId);
+      const persistedParentConfig = parentMetadata
+        ? getBrowserConfigFromMetadata(parentMetadata)
+        : undefined;
+      if (persistedParentConfig?.originalModelIdentity) {
+        browserFollowup.browserConfig = {
+          ...browserFollowup.browserConfig,
+          originalModelIdentity: persistedParentConfig.originalModelIdentity,
+        };
+      }
       engine = "browser";
       resolvedOptions.model = browserFollowup.model;
       resolvedOptions.effectiveModelId = browserFollowup.model;

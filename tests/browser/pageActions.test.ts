@@ -36,27 +36,35 @@ afterEach(() => {
 });
 
 describe("ensureModelSelection", () => {
+  test("rejects Pro as a browser model-row intent before DOM evaluation", async () => {
+    const runtime = { evaluate: vi.fn() };
+    await expect(
+      ensureModelSelection(runtime as never, "Pro", (() => {}) as never, "select"),
+    ).rejects.toThrow(/reasoning control, not a browser model row/i);
+    expect(runtime.evaluate).not.toHaveBeenCalled();
+  });
+
   test("logs when model already selected", async () => {
     const runtime = {
       evaluate: vi.fn().mockResolvedValue({
-        result: { value: { status: "already-selected", label: "GPT-5.2 Pro" } },
+        result: { value: { status: "already-selected", label: "GPT-5.2 Thinking" } },
       }),
     } as unknown as ChromeClient["Runtime"];
-    await expect(ensureModelSelection(runtime, "GPT-5.2 Pro", logger)).resolves.toMatchObject({
-      requestedModel: "GPT-5.2 Pro",
-      resolvedLabel: "GPT-5.2 Pro",
+    await expect(ensureModelSelection(runtime, "GPT-5.2 Thinking", logger)).resolves.toMatchObject({
+      requestedModel: "GPT-5.2 Thinking",
+      resolvedLabel: "GPT-5.2 Thinking",
       status: "already-selected",
       strategy: "select",
       verified: true,
     });
-    expect(logger).toHaveBeenCalledWith("Model picker: GPT-5.2 Pro");
+    expect(logger).toHaveBeenCalledWith("Model picker: GPT-5.2 Thinking");
   });
 
   test("throws when option missing", async () => {
     const runtime = {
       evaluate: vi.fn().mockResolvedValue({ result: { value: { status: "option-not-found" } } }),
     } as unknown as ChromeClient["Runtime"];
-    await expect(ensureModelSelection(runtime, "GPT-5 Pro", logger)).rejects.toThrow(
+    await expect(ensureModelSelection(runtime, "GPT-5 Thinking", logger)).rejects.toThrow(
       /Unable to find model option matching/,
     );
   });
@@ -72,8 +80,8 @@ describe("ensureModelSelection", () => {
         },
       }),
     } as unknown as ChromeClient["Runtime"];
-    await expect(ensureModelSelection(runtime, "GPT-5.2 Pro", logger)).rejects.toThrow(
-      /model labels may differ/i,
+    await expect(ensureModelSelection(runtime, "Thinking 5.2", logger)).rejects.toThrow(
+      /Unable to find model option matching/i,
     );
   });
 

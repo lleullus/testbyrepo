@@ -6,7 +6,11 @@ import net from "node:net";
 import type {
   BrowserArchiveMode,
   BrowserArchiveResult,
+  BrowserManagedSlotCapability,
+  BrowserModelIdentityEvidence,
   BrowserModelStrategy,
+  BrowserReasoningIntent,
+  BrowserReasoningSelectionEvidence,
   BrowserResearchMode,
   CookieParam,
 } from "./browser/types.js";
@@ -76,12 +80,43 @@ export interface BrowserSessionConfig {
   copyProfileSource?: string | null;
   /** Thinking time intensity: 'light', 'standard', 'extended', 'heavy' */
   thinkingTime?: ThinkingTimeLevel;
+  /** Browser-only reasoning intent, independently persisted from desiredModel. */
+  reasoningIntent?: BrowserReasoningIntent;
+  /** Managed Browser-slot capability used to validate the reasoning control. */
+  managedSlot?: BrowserManagedSlotCapability | null;
+  /** Redacted identity of the original conversation model. */
+  originalModelIdentity?: BrowserModelIdentityEvidence | null;
   /** Browser-only research mode. "deep" activates ChatGPT Deep Research. */
   researchMode?: BrowserResearchMode;
   /** Archive completed ChatGPT conversations after local artifacts are saved. */
   archiveConversations?: BrowserArchiveMode;
   /** Browser-only: existing ChatGPT conversation URL to resume before submitting. */
   resumeConversationUrl?: string | null;
+}
+
+/** Cookie payloads are runtime-only and must never cross the session-store boundary. */
+export function sanitizeBrowserSessionConfigForPersistence(
+  config: BrowserSessionConfig | undefined,
+): BrowserSessionConfig | undefined {
+  if (!config) return undefined;
+  const { inlineCookies: _inlineCookies, ...safeConfig } = config;
+  return safeConfig;
+}
+
+function sanitizeSessionMetadataForPersistence(metadata: SessionMetadata): SessionMetadata {
+  const options = metadata.options
+    ? {
+        ...metadata.options,
+        browserConfig: sanitizeBrowserSessionConfigForPersistence(metadata.options.browserConfig),
+      }
+    : metadata.options;
+  const browser = metadata.browser
+    ? {
+        ...metadata.browser,
+        config: sanitizeBrowserSessionConfigForPersistence(metadata.browser.config),
+      }
+    : metadata.browser;
+  return { ...metadata, options, browser };
 }
 
 export interface BrowserRuntimeMetadata {
@@ -147,6 +182,9 @@ export interface BrowserMetadata {
   harvest?: BrowserHarvestMetadata;
   archive?: BrowserArchiveResult;
   modelSelection?: BrowserModelSelectionEvidence;
+  reasoningSelection?: BrowserReasoningSelectionEvidence;
+  /** Ordered, cumulative evidence for successful and rejected turn attempts. */
+  reasoningSelections?: BrowserReasoningSelectionEvidence[];
   warnings?: BrowserRunWarning[];
 }
 
@@ -533,7 +571,7 @@ export async function initializeSession(
     baseSlugOverride || createSessionId(options.prompt || DEFAULT_SLUG, options.slug);
   const sessionId = await reserveUniqueSessionDir(baseSlug);
   const mode = options.mode ?? "api";
-  const browserConfig = options.browserConfig;
+  const browserConfig = sanitizeBrowserSessionConfigForPersistence(options.browserConfig);
   const modelList: ModelName[] =
     Array.isArray(options.models) && options.models.length > 0
       ? options.models
@@ -603,7 +641,11 @@ export async function initializeSession(
     },
   };
   await ensureDir(modelsDir(sessionId));
-  await fs.writeFile(metaPath(sessionId), JSON.stringify(metadata, null, 2), "utf8");
+  await fs.writeFile(
+    metaPath(sessionId),
+    JSON.stringify(sanitizeSessionMetadataForPersistence(metadata), null, 2),
+    "utf8",
+  );
   await Promise.all(
     (modelList.length > 0 ? modelList : [metadata.model ?? DEFAULT_MODEL]).map(
       async (modelName) => {
@@ -643,7 +685,7 @@ export async function updateSessionMetadata(
     (await readModernSessionMetadata(sessionId, { reconcile: false, persist: false })) ??
     (await readLegacySessionMetadata(sessionId, { reconcile: false, persist: false })) ??
     ({ id: sessionId } as SessionMetadata);
-  const next = { ...existing, ...updates };
+  const next = sanitizeSessionMetadataForPersistence({ ...existing, ...updates });
   await fs.writeFile(metaPath(sessionId), JSON.stringify(next, null, 2), "utf8");
   return next;
 }
@@ -663,7 +705,10 @@ async function readModernSessionMetadata(
     if (!isSessionMetadataRecord(parsed)) {
       return null;
     }
-    const enriched = await attachModelRuns(parsed, sessionId);
+    const enriched = await attachModelRuns(
+      sanitizeSessionMetadataForPersistence(parsed),
+      sessionId,
+    );
     return options.reconcile ? reconcileSessionMetadata(enriched, options) : enriched;
   } catch {
     return null;
@@ -676,7 +721,7 @@ async function readLegacySessionMetadata(
 ): Promise<SessionMetadata | null> {
   try {
     const raw = await fs.readFile(legacySessionPath(sessionId), "utf8");
-    const parsed = JSON.parse(raw) as SessionMetadata;
+    const parsed = sanitizeSessionMetadataForPersistence(JSON.parse(raw) as SessionMetadata);
     const enriched = await attachModelRuns(parsed, sessionId);
     return options.reconcile ? reconcileSessionMetadata(enriched, options) : enriched;
   } catch {
@@ -936,7 +981,11 @@ async function markZombie(
     completedAt: new Date().toISOString(),
   };
   if (persist) {
-    await fs.writeFile(metaPath(meta.id), JSON.stringify(updated, null, 2), "utf8");
+    await fs.writeFile(
+      metaPath(meta.id),
+      JSON.stringify(sanitizeSessionMetadataForPersistence(updated), null, 2),
+      "utf8",
+    );
   }
   return updated;
 }
@@ -978,7 +1027,11 @@ async function markDeadBrowser(
     response,
   };
   if (persist) {
-    await fs.writeFile(metaPath(meta.id), JSON.stringify(updated, null, 2), "utf8");
+    await fs.writeFile(
+      metaPath(meta.id),
+      JSON.stringify(sanitizeSessionMetadataForPersistence(updated), null, 2),
+      "utf8",
+    );
   }
   return updated;
 }

@@ -209,6 +209,24 @@ describe("summarizeModelRunsForConsult", () => {
 
     expect(config.manualLogin).toBe(process.platform === "win32");
     expect(config.cookieSync).toBe(process.platform !== "win32");
+    expect(config.reasoningIntent).toBeUndefined();
+  });
+
+  test("carries Pro-only intent only from the authorized preset signal", () => {
+    const ordinary = buildConsultBrowserConfig({
+      userConfig: {},
+      env: {},
+      runModel: "gpt-5.5-pro",
+    });
+    const preset = buildConsultBrowserConfig({
+      userConfig: {},
+      env: {},
+      runModel: "gpt-5.5-pro",
+      proOnlyReasoning: true,
+    });
+
+    expect(ordinary.reasoningIntent).toBeUndefined();
+    expect(preset.reasoningIntent).toBe("pro");
   });
 
   test("lets explicit consult inputs override config defaults", () => {
@@ -321,11 +339,9 @@ describe("summarizeModelRunsForConsult", () => {
 
       const result = (await handler({
         dryRun: true,
-        engine: "browser",
-        model: "gpt-5.5-pro",
+        preset: "chatgpt-pro-heavy",
         prompt: "review this",
         files: [],
-        browserThinkingTime: "extended",
         browserModelStrategy: "select",
         generateImage: imagePath,
       })) as {
@@ -344,8 +360,9 @@ describe("summarizeModelRunsForConsult", () => {
           resolvedEngine: "browser",
           model: "gpt-5.5-pro",
           browser: expect.objectContaining({
-            desiredModel: "Pro",
+            desiredModel: "Thinking 5.5",
             thinkingTime: "extended",
+            reasoningIntent: "pro",
             modelStrategy: "select",
             imageOutputPath: path.join(realpathSync(home), "generated", "from-mcp.png"),
           }),

@@ -13,7 +13,11 @@ import { runBrowserMode } from "../browserMode.js";
 import type { BrowserRunResult } from "../browserMode.js";
 import { assembleBrowserPrompt } from "./prompt.js";
 import { BrowserAutomationError } from "../oracle/errors.js";
-import type { BrowserArchiveResult, BrowserLogger } from "./types.js";
+import type {
+  BrowserArchiveResult,
+  BrowserLogger,
+  BrowserReasoningSelectionEvidence,
+} from "./types.js";
 import {
   appendArtifacts,
   saveBrowserTranscriptArtifact,
@@ -31,6 +35,8 @@ export interface BrowserExecutionResult {
   runtime: BrowserRuntimeMetadata;
   archive?: BrowserArchiveResult;
   modelSelection?: BrowserModelSelectionEvidence;
+  reasoningSelection?: BrowserReasoningSelectionEvidence;
+  reasoningSelections?: BrowserReasoningSelectionEvidence[];
   warnings?: BrowserRunWarning[];
   answerText: string;
   artifacts?: SessionArtifact[];
@@ -49,6 +55,8 @@ export interface BrowserSessionRunnerDeps {
   persistRuntimeHint?: (
     runtime: BrowserRuntimeMetadata,
     modelSelection?: BrowserModelSelectionEvidence,
+    reasoningSelection?: BrowserReasoningSelectionEvidence,
+    reasoningSelections?: BrowserReasoningSelectionEvidence[],
   ) => Promise<void> | void;
 }
 
@@ -62,7 +70,7 @@ function buildUnavailableModelSelectionEvidence(
     return undefined;
   }
   return {
-    requestedModel: browserConfig.desiredModel,
+    requestedModel: safeBrowserModelEvidenceLabel(browserConfig.desiredModel),
     resolvedLabel: null,
     strategy: browserConfig.modelStrategy,
     status: "unavailable",
@@ -70,6 +78,17 @@ function buildUnavailableModelSelectionEvidence(
     source: "config",
     capturedAt: new Date().toISOString(),
   };
+}
+
+function safeBrowserModelEvidenceLabel(value: string | null | undefined): string | null {
+  const normalized = (value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return /^(?:chatgpt )?(?:gpt )?5(?: [0-9])? pro$/.test(normalized) || normalized === "pro"
+    ? null
+    : (value ?? null);
 }
 
 function formatModelSelectionEvidence(evidence: BrowserModelSelectionEvidence): string {
@@ -80,18 +99,12 @@ function formatModelSelectionEvidence(evidence: BrowserModelSelectionEvidence): 
   return `[browser] Model selection evidence: requested=${requested}; resolved=${resolved}; status=${evidence.status}; strategy=${strategy}; verified=${verified}.`;
 }
 
-function isRequestedProBrowserRun(
-  runOptions: RunOracleOptions,
-  browserConfig: BrowserSessionConfig,
-  evidence?: BrowserModelSelectionEvidence,
-): boolean {
-  const candidates = [
-    runOptions.model,
-    browserConfig.desiredModel,
-    evidence?.requestedModel,
-    evidence?.resolvedLabel,
-  ];
-  return candidates.some((value) => typeof value === "string" && /\bpro\b/i.test(value));
+function formatReasoningSelectionEvidence(evidence: BrowserReasoningSelectionEvidence): string {
+  return `[browser] Reasoning selection evidence: requested=${evidence.requestedIntent}; control=${evidence.controlKind ?? "unavailable"}; available=${evidence.availableLevels.join(",") || "none"}; resolved=${evidence.resolvedLevel ?? "unavailable"}; verified=${evidence.verified ? "yes" : "no"}; modelUnchanged=${evidence.modelUnchanged ? "yes" : "no"}.`;
+}
+
+function isRequestedProBrowserRun(browserConfig: BrowserSessionConfig): boolean {
+  return browserConfig.reasoningIntent === "pro";
 }
 
 export function buildBrowserRunWarningsForTest(args: {
@@ -112,7 +125,7 @@ function buildBrowserRunWarnings(args: {
   modelSelection?: BrowserModelSelectionEvidence;
 }): BrowserRunWarning[] {
   if (
-    !isRequestedProBrowserRun(args.runOptions, args.browserConfig, args.modelSelection) ||
+    !isRequestedProBrowserRun(args.browserConfig) ||
     args.inputTokens < LARGE_PRO_FAST_INPUT_TOKEN_THRESHOLD ||
     args.elapsedMs >= LARGE_PRO_FAST_ELAPSED_MS_THRESHOLD
   ) {
@@ -143,9 +156,7 @@ export async function runBrowserSessionExecution(
   if (runOptions.verbose) {
     log(
       chalk.dim(
-        `[verbose] Browser config: ${JSON.stringify({
-          ...browserConfig,
-        })}`,
+        `[verbose] Browser config: ${JSON.stringify(redactBrowserConfigForLog(browserConfig))}`,
       ),
     );
     log(chalk.dim(`[verbose] Browser prompt length: ${promptArtifacts.composerText.length} chars`));
@@ -218,16 +229,17 @@ export async function runBrowserSessionExecution(
       generateImagePath: runOptions.generateImage,
       outputPath: runOptions.outputPath,
       followUpPrompts: runOptions.browserFollowUps,
-      runtimeHintCb: async (runtime, modelSelection) => {
+      runtimeHintCb: async (runtime, modelSelection, reasoningSelection, reasoningSelections) => {
         const runtimeWithController = {
           ...runtime,
           controllerPid: runtime.controllerPid ?? process.pid,
         };
-        if (modelSelection) {
-          await persistRuntimeHint(runtimeWithController, modelSelection);
-        } else {
-          await persistRuntimeHint(runtimeWithController);
-        }
+        await persistRuntimeHint(
+          runtimeWithController,
+          modelSelection,
+          reasoningSelection,
+          reasoningSelections,
+        );
       },
     });
   } catch (error) {
@@ -241,6 +253,9 @@ export async function runBrowserSessionExecution(
     browserResult.modelSelection ?? buildUnavailableModelSelectionEvidence(browserConfig);
   if (modelSelection) {
     log(formatModelSelectionEvidence(modelSelection));
+  }
+  if (browserResult.reasoningSelection) {
+    log(formatReasoningSelectionEvidence(browserResult.reasoningSelection));
   }
   const warnings = buildBrowserRunWarnings({
     runOptions,
@@ -317,10 +332,19 @@ export async function runBrowserSessionExecution(
     },
     archive: browserResult.archive,
     modelSelection,
+    reasoningSelection: browserResult.reasoningSelection,
+    reasoningSelections: browserResult.reasoningSelections,
     warnings,
     answerText,
     artifacts: savedArtifacts,
   };
+}
+
+function redactBrowserConfigForLog(browserConfig: BrowserSessionConfig): Record<string, unknown> {
+  const { inlineCookies, ...safeConfig } = browserConfig;
+  return inlineCookies
+    ? { ...safeConfig, inlineCookies: `[redacted:${inlineCookies.length} cookies]` }
+    : safeConfig;
 }
 
 export async function ensureSessionArtifacts(params: {

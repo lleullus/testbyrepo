@@ -1386,9 +1386,9 @@ describe("browser model selection matchers", () => {
     const logger = vi.fn();
 
     await expect(
-      ensureModelSelection(runtime as never, "gpt-5.5-pro", logger as never, "current"),
+      ensureModelSelection(runtime as never, "Thinking 5.5", logger as never, "current"),
     ).resolves.toMatchObject({
-      requestedModel: "gpt-5.5-pro",
+      requestedModel: "Thinking 5.5",
       resolvedLabel: "Thinking 5.5 Heavy",
       status: "already-selected",
       strategy: "current",
@@ -1406,9 +1406,9 @@ describe("browser model selection matchers", () => {
     const logger = vi.fn();
 
     await expect(
-      ensureModelSelection(runtime as never, "gpt-5.5-pro", logger as never, "current"),
+      ensureModelSelection(runtime as never, "Thinking 5.5", logger as never, "current"),
     ).resolves.toMatchObject({
-      requestedModel: "gpt-5.5-pro",
+      requestedModel: "Thinking 5.5",
       resolvedLabel: null,
       status: "already-selected",
       strategy: "current",
@@ -1572,16 +1572,16 @@ describe("ensureModelSelection composer-pill wait", () => {
     const Runtime = makeRuntime([
       { status: "button-missing" },
       { status: "button-missing" },
-      { status: "switched", label: "Pro Extended" },
+      { status: "switched", label: "Thinking 5.5" },
     ]);
 
-    const evidence = await ensureModelSelection(Runtime, "Pro", noopLogger, "select", {
+    const evidence = await ensureModelSelection(Runtime, "Thinking 5.5", noopLogger, "select", {
       buttonWaitMs: 1000,
       buttonPollMs: 1,
     });
 
     expect(evidence.status).toBe("switched");
-    expect(evidence.resolvedLabel).toBe("Pro Extended");
+    expect(evidence.resolvedLabel).toBe("Thinking 5.5");
     expect(evidence.verified).toBe(true);
     expect((Runtime.evaluate as ReturnType<typeof vi.fn>).mock.calls.length).toBe(3);
   });
@@ -1590,7 +1590,7 @@ describe("ensureModelSelection composer-pill wait", () => {
     const Runtime = makeRuntime([{ status: "button-missing" }]);
 
     await expect(
-      ensureModelSelection(Runtime, "Pro", noopLogger, "select", {
+      ensureModelSelection(Runtime, "Thinking 5.5", noopLogger, "select", {
         buttonWaitMs: 5,
         buttonPollMs: 1,
       }),

@@ -7,6 +7,7 @@ import type {
   BrowserSessionConfig,
   BrowserRuntimeMetadata,
   BrowserModelSelectionEvidence,
+  BrowserReasoningSelectionEvidence,
   SessionArtifact,
   SessionModelRun,
 } from "../sessionStore.js";
@@ -88,14 +89,19 @@ export async function performSessionRun({
     write(chunk);
     return muteStdout ? true : process.stdout.write(chunk);
   };
+  let currentBrowserConfig = browserConfig;
   let currentBrowser: SessionMetadata["browser"] = browserConfig
-    ? { config: browserConfig }
+    ? {
+        config: browserConfig,
+        reasoningSelection: sessionMeta.browser?.reasoningSelection,
+        reasoningSelections: sessionMeta.browser?.reasoningSelections,
+      }
     : sessionMeta.browser;
   await sessionStore.updateSession(sessionMeta.id, {
     status: "running",
     startedAt: new Date().toISOString(),
     mode,
-    ...(browserConfig ? { browser: { config: browserConfig } } : {}),
+    ...(browserConfig ? { browser: currentBrowser } : {}),
   });
   const notificationSettings =
     notifications ?? deriveNotificationSettingsFromMetadata(sessionMeta, process.env);
@@ -116,15 +122,38 @@ export async function performSessionRun({
         persistRuntimeHint: async (
           runtime: BrowserRuntimeMetadata,
           modelSelection?: BrowserModelSelectionEvidence,
+          reasoningSelection?: BrowserReasoningSelectionEvidence,
+          reasoningSelections?: BrowserReasoningSelectionEvidence[],
         ) => {
+          const mergedReasoningSelections = mergeReasoningSelections(
+            currentBrowser?.reasoningSelections,
+            reasoningSelections ?? (reasoningSelection ? [reasoningSelection] : undefined),
+          );
+          const latestReasoningSelection =
+            reasoningSelection ??
+            mergedReasoningSelections?.at(-1) ??
+            currentBrowser?.reasoningSelection;
+          const originalModelIdentity =
+            latestReasoningSelection?.originalModelIdentity ??
+            currentBrowserConfig?.originalModelIdentity ??
+            null;
+          currentBrowserConfig = originalModelIdentity
+            ? { ...browserConfig, originalModelIdentity }
+            : browserConfig;
           const browser = {
-            config: browserConfig,
+            ...currentBrowser,
+            config: currentBrowserConfig,
             runtime,
             ...(modelSelection ? { modelSelection } : {}),
+            ...(latestReasoningSelection ? { reasoningSelection: latestReasoningSelection } : {}),
+            ...(mergedReasoningSelections
+              ? { reasoningSelections: mergedReasoningSelections }
+              : {}),
           };
           await sessionStore.updateSession(sessionMeta.id, {
             status: "running",
             browser,
+            options: { ...sessionMeta.options, browserConfig: currentBrowserConfig },
           });
           // Keep this attempt's copy fresh so error paths fall back to the
           // latest persisted browser evidence instead of stale session input.
@@ -147,6 +176,21 @@ export async function performSessionRun({
           usage: result.usage,
         });
       }
+      const completedReasoningSelections = mergeReasoningSelections(
+        currentBrowser?.reasoningSelections,
+        result.reasoningSelections,
+      );
+      const completedReasoningSelection =
+        result.reasoningSelection ??
+        completedReasoningSelections?.at(-1) ??
+        currentBrowser?.reasoningSelection;
+      const completedOriginalModelIdentity =
+        completedReasoningSelection?.originalModelIdentity ??
+        currentBrowserConfig?.originalModelIdentity ??
+        null;
+      currentBrowserConfig = completedOriginalModelIdentity
+        ? { ...browserConfig, originalModelIdentity: completedOriginalModelIdentity }
+        : browserConfig;
       await sessionStore.updateSession(sessionMeta.id, {
         status: "completed",
         completedAt: new Date().toISOString(),
@@ -154,12 +198,16 @@ export async function performSessionRun({
         elapsedMs: result.elapsedMs,
         errorMessage: undefined,
         browser: {
-          config: browserConfig,
+          ...currentBrowser,
+          config: currentBrowserConfig,
           runtime: result.runtime,
           archive: result.archive,
-          modelSelection: result.modelSelection,
+          modelSelection: result.modelSelection ?? currentBrowser?.modelSelection,
+          reasoningSelection: completedReasoningSelection,
+          reasoningSelections: completedReasoningSelections,
           warnings: result.warnings,
         },
+        options: { ...sessionMeta.options, browserConfig: currentBrowserConfig },
         artifacts: mergeArtifacts(sessionMeta.artifacts, result.artifacts),
         response: undefined,
         transport: undefined,
@@ -566,7 +614,7 @@ export async function performSessionRun({
           mode,
           browser: {
             ...currentBrowser,
-            config: browserConfig,
+            config: currentBrowserConfig,
             runtime: recoverableRuntime,
           },
           response: { status: "error", incompleteReason: "chrome-disconnected" },
@@ -591,7 +639,7 @@ export async function performSessionRun({
         mode,
         browser: {
           ...currentBrowser,
-          config: browserConfig,
+          config: currentBrowserConfig,
           runtime: runtime ?? currentBrowser?.runtime,
         },
         response: { status: "running", incompleteReason: "chrome-disconnected" },
@@ -660,7 +708,7 @@ export async function performSessionRun({
         mode,
         browser: {
           ...currentBrowser,
-          config: browserConfig,
+          config: currentBrowserConfig,
           runtime: runtime ?? currentBrowser?.runtime,
         },
         response: { status: "incomplete", incompleteReason: "incomplete-capture" },
@@ -732,7 +780,7 @@ export async function performSessionRun({
       browser: browserConfig
         ? {
             ...currentBrowser,
-            config: browserConfig,
+            config: currentBrowserConfig,
             runtime: browserRuntime ?? currentBrowser?.runtime,
           }
         : undefined,
@@ -769,6 +817,21 @@ function mergeArtifacts(
   }
   const values = Array.from(merged.values());
   return values.length > 0 ? values : undefined;
+}
+
+function mergeReasoningSelections(
+  existing: BrowserReasoningSelectionEvidence[] | undefined,
+  additions: BrowserReasoningSelectionEvidence[] | undefined,
+): BrowserReasoningSelectionEvidence[] | undefined {
+  const merged: BrowserReasoningSelectionEvidence[] = [];
+  const seen = new Set<string>();
+  for (const evidence of [...(existing ?? []), ...(additions ?? [])]) {
+    const key = JSON.stringify(evidence);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(evidence);
+  }
+  return merged.length > 0 ? merged : undefined;
 }
 
 function formatError(error: unknown): string {

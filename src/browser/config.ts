@@ -9,7 +9,13 @@ import {
   DEFAULT_MAX_CONCURRENT_CHATGPT_TABS,
   normalizeMaxConcurrentTabs,
 } from "./tabLeaseRegistry.js";
-import type { BrowserAutomationConfig, ResolvedBrowserConfig } from "./types.js";
+import type {
+  BrowserAutomationConfig,
+  BrowserManagedSlotCapability,
+  BrowserReasoningIntent,
+  ResolvedBrowserConfig,
+} from "./types.js";
+import type { ThinkingTimeLevel } from "../oracle/types.js";
 import { normalizeChatgptUrl } from "./utils.js";
 import os from "node:os";
 import path from "node:path";
@@ -88,6 +94,14 @@ export function resolveBrowserConfig(
   );
   const desiredModel =
     config?.desiredModel ?? DEFAULT_BROWSER_CONFIG.desiredModel ?? DEFAULT_MODEL_TARGET;
+  const managedSlot = config?.managedSlot ?? resolveManagedBrowserSlotCapability(process.env);
+  const reasoningIntent =
+    config?.reasoningIntent ??
+    resolveBrowserReasoningIntent({
+      thinkingTime: config?.thinkingTime,
+      managedSlot,
+    });
+  assertManagedBrowserReasoningIntent(managedSlot, reasoningIntent);
   const modelStrategy =
     normalizeBrowserModelStrategy(config?.modelStrategy) ??
     DEFAULT_BROWSER_CONFIG.modelStrategy ??
@@ -151,6 +165,9 @@ export function resolveBrowserConfig(
     remoteChromeProfileRoot:
       config?.remoteChromeProfileRoot ?? DEFAULT_BROWSER_CONFIG.remoteChromeProfileRoot,
     thinkingTime: config?.thinkingTime,
+    reasoningIntent,
+    managedSlot,
+    originalModelIdentity: config?.originalModelIdentity ?? null,
     researchMode,
     archiveConversations,
     resumeConversationUrl:
@@ -160,6 +177,59 @@ export function resolveBrowserConfig(
     manualLoginCookieSync:
       config?.manualLoginCookieSync ?? DEFAULT_BROWSER_CONFIG.manualLoginCookieSync,
   };
+}
+
+/** Translate the existing slots-runner environment into browser UI capability. */
+export function resolveManagedBrowserSlotCapability(
+  env: Record<string, string | undefined> = process.env,
+): BrowserManagedSlotCapability | null {
+  const raw = (env.ORACLE_BROWSER_SLOT_ID ?? "").trim();
+  if (raw === "1" || raw === "2") {
+    return {
+      slotId: Number(raw) as 1 | 2,
+      expectedControl: "slider",
+      maximumReasoning: "pro",
+    };
+  }
+  if (raw === "3" || raw === "4" || raw === "5") {
+    return {
+      slotId: Number(raw) as 3 | 4 | 5,
+      expectedControl: "dropdown",
+      maximumReasoning: "high",
+    };
+  }
+  return null;
+}
+
+/**
+ * Resolve legacy browser thinking-time aliases into a browser-only intent.
+ * `Pro` is deliberately a reasoning intent rather than a model identifier.
+ */
+export function resolveBrowserReasoningIntent(args: {
+  thinkingTime?: ThinkingTimeLevel | null;
+  managedSlot?: BrowserManagedSlotCapability | null;
+}): BrowserReasoningIntent | undefined {
+  if (args.thinkingTime === "light" || args.thinkingTime === "standard") {
+    return args.thinkingTime;
+  }
+  if (args.thinkingTime === "heavy") return "heavy";
+  if (args.thinkingTime === "extended") {
+    return args.managedSlot?.maximumReasoning === "pro" ? "pro" : "high";
+  }
+  return args.managedSlot?.maximumReasoning;
+}
+
+/** Managed slots fail instead of silently lowering their required maximum. */
+export function assertManagedBrowserReasoningIntent(
+  managedSlot: BrowserManagedSlotCapability | null | undefined,
+  intent: BrowserReasoningIntent | undefined,
+): void {
+  if (!managedSlot) return;
+  if (intent !== managedSlot.maximumReasoning) {
+    throw new Error(
+      `Managed browser slot ${managedSlot.slotId} requires verified ${managedSlot.maximumReasoning === "pro" ? "Pro" : "High"} reasoning; requested ${intent ?? "none"} cannot be submitted.`,
+    );
+  }
 }
 
 function normalizeResearchMode(value: unknown): "off" | "deep" {

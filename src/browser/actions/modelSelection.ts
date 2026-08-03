@@ -38,6 +38,7 @@ export async function ensureModelSelection(
   strategy: BrowserModelStrategy = "select",
   options: { buttonWaitMs?: number; buttonPollMs?: number } = {},
 ): Promise<BrowserModelSelectionEvidence> {
+  assertBrowserModelIntent(desiredModel);
   const buttonWaitMs = options.buttonWaitMs ?? MODEL_BUTTON_WAIT_MS;
   const buttonPollMs = options.buttonPollMs ?? MODEL_BUTTON_POLL_MS;
   const deadline = Date.now() + Math.max(0, buttonWaitMs);
@@ -67,6 +68,25 @@ export async function ensureModelSelection(
     case "already-selected":
     case "switched": {
       const observedLabel = result.label?.trim() || null;
+      if (isReasoningOnlyLabel(observedLabel)) {
+        if (strategy !== "current") {
+          throw new Error(
+            `Model picker resolved the reasoning control "${observedLabel}" instead of a ChatGPT model row; refusing to submit. Use a non-Pro browser model label and request Pro as browser reasoning.`,
+          );
+        }
+        logger(
+          "Model picker: current model label is a reasoning-only control; model label withheld.",
+        );
+        return {
+          requestedModel: desiredModel,
+          resolvedLabel: null,
+          strategy,
+          status: result.status,
+          verified: false,
+          source: "chatgpt-model-picker",
+          capturedAt: new Date().toISOString(),
+        };
+      }
       const label = observedLabel || (strategy === "current" ? null : desiredModel);
       if (strategy !== "current") {
         assertResolvedModelSelection(desiredModel, observedLabel ?? "");
@@ -102,6 +122,25 @@ export async function ensureModelSelection(
       );
     }
   }
+}
+
+/** `Pro` belongs to the ChatGPT reasoning control, never the model picker. */
+function assertBrowserModelIntent(desiredModel: string): void {
+  if (isReasoningOnlyLabel(desiredModel)) {
+    throw new Error(
+      `"${desiredModel}" is a ChatGPT reasoning control, not a browser model row. Select a base model and request Pro reasoning separately.`,
+    );
+  }
+}
+
+function isReasoningOnlyLabel(value: string | null | undefined): boolean {
+  const normalized = normalizeResolvedModelLabel((value ?? "").toLowerCase());
+  return (
+    normalized === "pro" ||
+    normalized === "pro extended" ||
+    normalized === "extended pro" ||
+    /^(?:chatgpt )?(?:gpt )?5(?: [0-9])? pro$/.test(normalized)
+  );
 }
 
 function assertResolvedModelSelection(desiredModel: string, resolvedLabel: string): void {

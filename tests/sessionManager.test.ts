@@ -81,12 +81,29 @@ describe("session lifecycle", () => {
         modelOverrides: {
           "gpt-5.2-pro": { apiModel: "gateway-model", reasoning: { effort: "high" } },
         },
+        mode: "browser",
+        browserConfig: {
+          desiredModel: "Thinking 5.5",
+          reasoningIntent: "pro",
+          managedSlot: { slotId: 1, expectedControl: "slider", maximumReasoning: "pro" },
+          inlineCookies: [
+            {
+              name: "__Secure-next-auth.session-token",
+              value: "must-never-be-persisted",
+              domain: ".chatgpt.com",
+              path: "/",
+            },
+          ],
+          inlineCookiesSource: "inline:test",
+        },
       },
       "/tmp/cwd",
     );
     vi.useRealTimers();
     const baseDir = path.join(sessionModule.getSessionsDir(), metadata.id);
-    const storedMeta = JSON.parse(await readFile(path.join(baseDir, "meta.json"), "utf8"));
+    const storedMetaText = await readFile(path.join(baseDir, "meta.json"), "utf8");
+    const storedMeta = JSON.parse(storedMetaText);
+    expect(storedMetaText).not.toContain("must-never-be-persisted");
     expect(storedMeta.options.file).toEqual(["notes.md"]);
     expect(storedMeta.options.maxFileSizeBytes).toBe(2_097_152);
     expect(storedMeta.options.previousResponseId).toBe("resp-parent-123");
@@ -99,6 +116,17 @@ describe("session lifecycle", () => {
       "challenge the plan",
       "summarize final recommendation",
     ]);
+    expect(storedMeta.options.browserConfig).toMatchObject({
+      desiredModel: "Thinking 5.5",
+      reasoningIntent: "pro",
+      managedSlot: { slotId: 1, expectedControl: "slider", maximumReasoning: "pro" },
+    });
+    expect(storedMeta.options.browserConfig).not.toHaveProperty("inlineCookies");
+    expect(storedMeta.browser.config).toMatchObject({
+      reasoningIntent: "pro",
+      managedSlot: { slotId: 1 },
+    });
+    expect(storedMeta.browser.config).not.toHaveProperty("inlineCookies");
     await expect(readFile(path.join(baseDir, "request.json"), "utf8")).rejects.toThrow();
     const modelMeta = JSON.parse(
       await readFile(path.join(baseDir, "models", "gpt-5.2-pro.json"), "utf8"),
@@ -119,10 +147,44 @@ describe("session lifecycle", () => {
     await sessionModule.updateSessionMetadata(meta.id, {
       status: "complete",
       promptPreview: "value",
+      browser: {
+        config: {
+          inlineCookies: [
+            {
+              name: "session",
+              value: "update-secret-must-not-persist",
+              domain: ".chatgpt.com",
+              path: "/",
+            },
+          ],
+        },
+        reasoningSelection: {
+          requestedIntent: "pro",
+          controlKind: "slider",
+          availableLevels: ["pro"],
+          resolvedLevel: "pro",
+          status: "already-selected",
+          verified: true,
+          modelUnchanged: true,
+          capturedAt: "2026-07-03T00:00:00.000Z",
+          diagnostic: { controlCount: 1, matchingControlCount: 1, observedKinds: ["slider"] },
+        },
+      },
     });
     const updated = await sessionModule.readSessionMetadata(meta.id);
+    const updatedRaw = await readFile(
+      path.join(sessionModule.getSessionsDir(), meta.id, "meta.json"),
+      "utf8",
+    );
+    expect(updatedRaw).not.toContain("update-secret-must-not-persist");
+    expect(updated?.browser?.config).not.toHaveProperty("inlineCookies");
     expect(updated?.status).toBe("complete");
     expect(updated?.promptPreview).toBe("value");
+    expect(updated?.browser?.reasoningSelection).toMatchObject({
+      requestedIntent: "pro",
+      resolvedLevel: "pro",
+      verified: true,
+    });
   });
 
   test("createSessionLogWriter appends logs and supports chunk writes", async () => {

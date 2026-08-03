@@ -74,6 +74,7 @@ import { sendSessionNotification } from "../../src/cli/notifier.ts";
 import { getCliVersion } from "../../src/version.ts";
 import { deriveModelOutputPath } from "../../src/cli/sessionRunner.ts";
 import { resumeBrowserSession } from "../../src/browser/reattach.ts";
+import type { BrowserReasoningSelectionEvidence } from "../../src/browser/types.ts";
 
 const baseSessionMeta: SessionMetadata = {
   id: "sess-1",
@@ -1034,6 +1035,17 @@ describe("performSessionRun", () => {
         source: "chatgpt-model-picker",
         capturedAt: "2026-05-13T00:00:00.000Z",
       },
+      reasoningSelection: {
+        requestedIntent: "pro",
+        controlKind: "slider",
+        availableLevels: ["pro"],
+        resolvedLevel: "pro",
+        status: "already-selected",
+        verified: true,
+        modelUnchanged: true,
+        capturedAt: "2026-05-13T00:00:00.000Z",
+        diagnostic: { controlCount: 1, matchingControlCount: 1, observedKinds: ["slider"] },
+      },
       warnings: [
         {
           code: "browser-pro-fast-large-run",
@@ -1064,6 +1076,7 @@ describe("performSessionRun", () => {
       browser: expect.objectContaining({
         runtime: expect.objectContaining({ chromePid: 123 }),
         modelSelection: expect.objectContaining({ resolvedLabel: "Pro" }),
+        reasoningSelection: expect.objectContaining({ requestedIntent: "pro", verified: true }),
         warnings: [expect.objectContaining({ code: "browser-pro-fast-large-run" })],
       }),
       artifacts: [{ kind: "transcript", path: "/tmp/transcript.md" }],
@@ -1254,6 +1267,7 @@ describe("performSessionRun", () => {
           persistRuntimeHint?: (
             runtime: Record<string, unknown>,
             modelSelection?: Record<string, unknown>,
+            reasoningSelection?: Record<string, unknown>,
           ) => Promise<void>;
         }
       ).persistRuntimeHint?.(
@@ -1272,7 +1286,28 @@ describe("performSessionRun", () => {
           source: "chatgpt-model-picker",
           capturedAt: "2026-07-03T00:00:00.000Z",
         },
+        {
+          requestedIntent: "pro",
+          controlKind: "slider",
+          availableLevels: ["pro"],
+          resolvedLevel: "pro",
+          status: "already-selected",
+          verified: true,
+          modelUnchanged: true,
+          capturedAt: "2026-07-03T00:00:00.000Z",
+          diagnostic: { controlCount: 1, matchingControlCount: 1, observedKinds: ["slider"] },
+        },
       );
+      // Later runtime checkpoints carry no optional evidence and must not erase it.
+      await (
+        deps as { persistRuntimeHint?: (runtime: Record<string, unknown>) => Promise<void> }
+      ).persistRuntimeHint?.({
+        chromePort: 9222,
+        chromeHost: "127.0.0.1",
+        tabUrl: "https://chatgpt.com/c/demo",
+        promptSubmitted: true,
+        conversationId: "demo",
+      });
       throw automationError;
     });
 
@@ -1299,11 +1334,90 @@ describe("performSessionRun", () => {
           tabUrl: "https://chatgpt.com/c/demo",
         }),
         modelSelection: expect.objectContaining({ resolvedLabel: "Pro", verified: true }),
+        reasoningSelection: expect.objectContaining({ requestedIntent: "pro", verified: true }),
       }),
       error: expect.objectContaining({
         details: expect.objectContaining({ code: "prompt-commit-timeout" }),
       }),
     });
+  });
+
+  test("persists ordered successful and rejected reasoning evidence without losing the original model", async () => {
+    const originalModelIdentity = {
+      fingerprint: "original-model-fingerprint",
+      source: "chatgpt-model-picker" as const,
+      capturedAt: "2026-08-03T00:00:00.000Z",
+    };
+    const success: BrowserReasoningSelectionEvidence = {
+      requestedIntent: "high",
+      controlKind: "dropdown",
+      availableLevels: ["standard", "high"],
+      resolvedLevel: "high",
+      status: "already-selected",
+      verified: true,
+      modelUnchanged: true,
+      originalModelIdentity,
+      observedModelFingerprint: originalModelIdentity.fingerprint,
+      turnIndex: 0,
+      attemptIndex: 0,
+      capturedAt: "2026-08-03T00:00:01.000Z",
+      diagnostic: { controlCount: 2, matchingControlCount: 1, observedKinds: ["dropdown"] },
+    };
+    const rejected: BrowserReasoningSelectionEvidence = {
+      ...success,
+      status: "model-mismatch",
+      resolvedLevel: null,
+      verified: false,
+      modelUnchanged: false,
+      observedModelFingerprint: "different-model-fingerprint",
+      turnIndex: 1,
+      capturedAt: "2026-08-03T00:00:02.000Z",
+    };
+    const automationError = new BrowserAutomationError(
+      "Browser reasoning selection failed before prompt submission",
+      { stage: "execute-browser" },
+    );
+    vi.mocked(runBrowserSessionExecution).mockImplementationOnce(async (_args, deps) => {
+      const runtime = {
+        chromePort: 9222,
+        chromeHost: "127.0.0.1",
+        tabUrl: "https://chatgpt.com/c/demo",
+        promptSubmitted: true,
+      };
+      await deps?.persistRuntimeHint?.(runtime, undefined, success, [success]);
+      await deps?.persistRuntimeHint?.(runtime, undefined, rejected, [success, rejected]);
+      throw automationError;
+    });
+
+    await expect(
+      performSessionRun({
+        sessionMeta: { ...baseSessionMeta },
+        runOptions: baseRunOptions,
+        mode: "browser",
+        browserConfig: { reasoningIntent: "high" },
+        cwd: "/tmp",
+        log,
+        write,
+        version: cliVersion,
+      }),
+    ).rejects.toThrow(/reasoning selection failed/i);
+
+    const finalUpdate = sessionStoreMock.updateSession.mock.calls.at(-1)?.[1];
+    expect(finalUpdate?.browser?.reasoningSelections).toMatchObject([
+      { status: "already-selected", verified: true, turnIndex: 0 },
+      { status: "model-mismatch", verified: false, turnIndex: 1 },
+    ]);
+    expect(finalUpdate?.browser?.reasoningSelection).toMatchObject({
+      status: "model-mismatch",
+      observedModelFingerprint: "different-model-fingerprint",
+    });
+    expect(finalUpdate?.browser?.config?.originalModelIdentity).toEqual(originalModelIdentity);
+    const durableEvidenceUpdate = sessionStoreMock.updateSession.mock.calls
+      .map((call) => call[1])
+      .find((update) => update?.browser?.reasoningSelections?.length === 2);
+    expect(durableEvidenceUpdate?.options?.browserConfig?.originalModelIdentity).toEqual(
+      originalModelIdentity,
+    );
   });
 
   test("keeps session running when browser connection is lost", async () => {

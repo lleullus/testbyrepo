@@ -149,6 +149,10 @@ export type {
   SessionStatus,
   SessionModelRun,
 } from "./sessionManager.js";
+export type {
+  BrowserReasoningSelectionEvidence,
+  BrowserReasoningSelectionStatus,
+} from "./browser/types.js";
 
 export async function pruneOldSessions(
   hours?: number,

@@ -124,7 +124,7 @@ describe("applyBrowserDefaultsFromConfig", () => {
     expect(options.browserThinkingTime).toBe("light");
   });
 
-  test("does not inherit thinking time when CLI requests the current model", () => {
+  test("inherits configured reasoning when CLI keeps the current model", () => {
     const options: BrowserDefaultsOptions = { browserModelStrategy: "current" };
     const config: UserConfig = {
       browser: {
@@ -136,7 +136,7 @@ describe("applyBrowserDefaultsFromConfig", () => {
       key === "browserModelStrategy" ? "cli" : "default";
     applyBrowserDefaultsFromConfig(options, config, source);
 
-    expect(options.browserThinkingTime).toBeUndefined();
+    expect(options.browserThinkingTime).toBe("extended");
   });
 
   test("keeps explicit thinking time when CLI requests the current model", () => {
@@ -187,7 +187,7 @@ describe("applyBrowserDefaultsFromConfig", () => {
   );
 
   test.each([
-    { args: ["--browser-model-strategy", "current"], expectedThinkingTime: undefined },
+    { args: ["--browser-model-strategy", "current"], expectedThinkingTime: "heavy" },
     {
       args: ["--browser-model-strategy", "current", "--browser-thinking-time", "extended"],
       expectedThinkingTime: "extended",
