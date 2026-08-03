@@ -194,6 +194,32 @@ class ImplementationAndVerificationContractTests(unittest.TestCase):
         self.assertIn("not final runtime evidence", WINDOWS_REFERENCE)
         self.assertIn("successor handoff", WINDOWS_REFERENCE)
 
+    def test_windows_agentbridge_window_mode_is_explicit_and_fail_closed(self) -> None:
+        self.assertIn("Every newly submitted bounded AgentBridge job JSON", WINDOWS_REFERENCE)
+        self.assertIn("`hiddenConsole`", WINDOWS_REFERENCE)
+        self.assertIn("`interactiveGui`", WINDOWS_REFERENCE)
+        self.assertIn("actual runtime consumer", WINDOWS_REFERENCE)
+        self.assertIn("fail before process start", WINDOWS_REFERENCE)
+        self.assertIn("A missing or unsupported `windowMode`", compact(WINDOWS_REFERENCE))
+        for forbidden_inference in (
+            "file name",
+            "extension",
+            "path",
+            "job name",
+            "`waitForExit`",
+            "`captureScreenshot`",
+            "screenshot presence",
+        ):
+            self.assertIn(forbidden_inference, compact(WINDOWS_REFERENCE))
+
+    def test_windows_agentbridge_maintenance_actions_are_not_ordinary_execution(self) -> None:
+        self.assertIn("`configure-worker-window`", WINDOWS_REFERENCE)
+        self.assertIn("`-ApplyWindowHideStaging`", WINDOWS_REFERENCE)
+        self.assertIn("explicitly authorized AgentBridge\nmaintenance operation", WINDOWS_REFERENCE)
+        self.assertIn("action count, Execute,\nArguments, WorkingDirectory", WINDOWS_REFERENCE)
+        self.assertIn("`Settings.Hidden`", WINDOWS_REFERENCE)
+        self.assertNotIn("windowMode", IMPLEMENTATION_SKILL)
+
     def test_greenfield_joins_handoff_not_retired_result(self) -> None:
         self.assertIn("`implementation-handoff-v1` flow", GREENFIELD_REFERENCE)
         self.assertIn("fresh Verification Assessor", compact(GREENFIELD_REFERENCE))

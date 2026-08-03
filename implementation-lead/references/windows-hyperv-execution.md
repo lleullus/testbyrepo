@@ -59,6 +59,42 @@ Windows checks can close build, packaging, platform integration, installer, or s
 responsibilities. Rendered WPF, WinForms, or WinUI work also follows the approved UI reference and
 frontend guidance.
 
+## AgentBridge window-mode contract
+
+Every newly submitted bounded AgentBridge job JSON must contain exactly one explicit `windowMode`:
+
+```text
+hiddenConsole
+interactiveGui
+```
+
+Use `hiddenConsole` for PowerShell, `cmd.exe`, compilers, test runners, CLIs, and other console work. The
+interactive Worker starts that process with a hidden window while preserving stdout/stderr redirection,
+the process handle, exact exit code, timeout, and process-tree termination. A `hiddenConsole` job with
+non-empty UI Automation `actions` is a contract error and must fail before process start.
+
+Use `interactiveGui` for WPF, WinForms, WinUI, and any process whose actual runtime consumer requires a
+visible user window, foreground interaction, or UI Automation. Its visible GUI execution path remains
+unchanged.
+
+Choose the mode from the actual runtime consumer. Never infer it from a file name, extension, path, job
+name, `waitForExit`, `captureScreenshot`, screenshot presence, or the mere existence of an `actions`
+field. A screenshot request alone does not make a job interactive. A missing or unsupported
+`windowMode` must produce a clear failure result without starting the process. `windowMode` is bounded
+bridge job input only; it creates no Implementation Lead RunState, Worker type, task-record field,
+Completion Record field, or public contract field.
+
+The bounded `status` action must provide readback for the `InteractiveWorker` action count, Execute,
+Arguments, WorkingDirectory, principal LogonType, RunLevel, task state, `Settings.Hidden`, interactive
+AgentAdmin session, Worker process session, queue counts, and deployed bridge/Worker hashes.
+`Settings.Hidden` controls Task Scheduler listing behavior; it does not hide a PowerShell process
+window.
+
+Ordinary Implementation Lead execution must never call `configure-worker-window` or use
+`-ApplyWindowHideStaging`. Those capabilities are restricted to an explicitly authorized AgentBridge
+maintenance operation; they are not product execution, a fallback transport, or an arbitrary-command
+escape hatch.
+
 These observations are provisional implementation facts. They are not final runtime evidence and may
 not be copied into `VerificationResult`. The later Verification Assessor independently seals the final
 Windows product flow, target/revision binding, expected effect, readback, and cleanup.
