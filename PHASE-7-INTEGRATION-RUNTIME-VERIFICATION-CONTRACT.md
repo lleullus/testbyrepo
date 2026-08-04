@@ -1,6 +1,6 @@
 # Phase 7 — 통합·runtime 검증
 
-상태: `DESIGN_CONVERGED`
+상태: `RUNTIME_VERIFICATION_BLOCKED`
 
 ## 목적과 단일 결정
 
@@ -478,6 +478,13 @@ production isolation, direct legacy read/conversion, always-`UNKNOWN`과 histori
 
 ## 완료 판단
 
-Phase 7 design은 `DESIGN_CONVERGED`다. 새 Module이 아직 구현되지 않았으므로 `IMPLEMENTED` 또는
-`RUNTIME_VERIFIED`는 아니다. 이 계약의 실제 runtime evidence가 exact 구현 revision에서 통과하기 전에는
-Phase 8 제거 gate를 실행할 수 없다.
+Phase 7은 `RUNTIME_VERIFICATION_BLOCKED`다. Linux pathname API에는 arbitrary uncooperative writer가
+관여하는 existing regular file, create, delete, symlink 또는 directory adoption의 expected-state 비교와
+canonical mutation을 하나의 linearized conditional operation으로 제공하는 primitive가 없다.
+`LinuxSourceAdoptionAdapter`는 therefore canonical mutation 전에 `AdoptionConflict`로 fail-closed하며,
+advisory occupancy lock을 이 조건의 대체 증명으로 사용하지 않는다. production composition의 Module-owned
+bounded implementation review/check Adapter는 caller callback 없이 isolated process에서 동작하며 bounded
+projection, read-only source, timeout, missing tool과 unreadable result의 fail-closed 의미가 검증됐다.
+그러나 source mutation이 필요한 production flow는 Source Adoption에서 중단된다. 따라서 deterministic
+test Adapter의 24 public flow는 production runtime proof가 아니며 `RUNTIME_VERIFIED`나 Phase 8 gate를 열지
+않는다. 현재 정확한 blocked evidence와 검증 결과는 `PHASE-7-RUNTIME-EVIDENCE.md`에 기록한다.

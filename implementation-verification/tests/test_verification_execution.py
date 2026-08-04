@@ -440,8 +440,24 @@ class VerificationExecutionTests(unittest.TestCase):
         bundled = {
             "status": "COMPLETE",
             "subattempts": [
-                {"request": action, "status": "TIMED_OUT"},
-                {"request": readback, "status": "FINISHED"},
+                {
+                    "request": action,
+                    "status": "TIMED_OUT",
+                    "observed": None,
+                    "artifact": {"action": "timed-out"},
+                    "artifactIdentity": implementation_module._value_identity(
+                        {"action": "timed-out"}
+                    ),
+                },
+                {
+                    "request": readback,
+                    "status": "FINISHED",
+                    "observed": "ok",
+                    "artifact": {"readback": "ok"},
+                    "artifactIdentity": implementation_module._value_identity(
+                        {"readback": "ok"}
+                    ),
+                },
             ],
             "observed": "ok",
             "artifact": {"readback": "ok"},

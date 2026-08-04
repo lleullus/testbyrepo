@@ -6,6 +6,7 @@ import os
 import shutil
 import stat
 import fcntl
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Protocol
 
@@ -27,6 +28,11 @@ from implementation_verification import (
 
 class AdoptionConflict(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class ImplementationBlocker:
+    reason: str
 
 
 class SourceAdoptionAdapter(Protocol):
@@ -51,6 +57,18 @@ class WorkerAdapter(Protocol):
         workspace_root: Path,
         assignment: object,
     ) -> None: ...
+
+
+class ImplementationReviewAdapter(Protocol):
+    def next_assignment(
+        self,
+        work: Path,
+        source: Path,
+    ) -> object | ImplementationBlocker | None: ...
+
+    def close(self, work: Path, source: Path) -> ImplementationBlocker | None: ...
+
+    def check(self, work: Path, source: Path) -> ImplementationBlocker | None: ...
 
 
 _TICKET_FIELDS = ("Status", "Parent-Spec", "Project-Root", "Worker", "UI")
@@ -280,7 +298,7 @@ class ImplementationExecution:
         store: DurableWorkStore,
         worker_adapter: WorkerAdapter,
         adoption: SourceAdoptionAdapter,
-        implementation_review: Callable[[Path, Path], object | None],
+        implementation_review: ImplementationReviewAdapter | Callable[[Path, Path], object | None],
         implementation_effects: Callable[[Path, Path], Iterable[object]] | None = None,
         effect_observer: EffectObservationModule | None = None,
     ) -> None:
@@ -291,6 +309,24 @@ class ImplementationExecution:
         self._implementation_review = implementation_review
         self._implementation_effects = implementation_effects
         self._effect_observer = effect_observer
+
+    def _next_assignment(self, work: Path, source: Path) -> object | ImplementationBlocker | None:
+        if callable(self._implementation_review):
+            return self._implementation_review(work, source)
+        return self._implementation_review.next_assignment(work, source)
+
+    def _close_implementation(self, work: Path, source: Path) -> ImplementationBlocker | None:
+        if callable(self._implementation_review):
+            value = self._implementation_review(work, source)
+            if value is None or isinstance(value, ImplementationBlocker):
+                return value
+            return ImplementationBlocker("final implementation closure check did not pass")
+        return self._implementation_review.close(work, source)
+
+    def _check_implementation(self, work: Path, source: Path) -> ImplementationBlocker | None:
+        if callable(self._implementation_review):
+            return None
+        return self._implementation_review.check(work, source)
 
     def _transition_root(self, transition_identity: str) -> Path:
         return self._state_root / "implementation" / _sha256_bytes(transition_identity.encode())
@@ -664,11 +700,19 @@ class ImplementationExecution:
             _write_json(progress_path, progress)
 
         while True:
-            assignment = self._implementation_review(work, workspace_root)
+            assignment = self._next_assignment(work, workspace_root)
+            if isinstance(assignment, ImplementationBlocker):
+                return self._stop(work, transition_root, project_root, assignment.reason)
             if assignment is None:
                 workspace_manifest, workspace_identity = _capture(workspace_root)
                 progress["reconciledWorkspaceIdentity"] = workspace_identity
                 _write_json(progress_path, progress)
+                workspace_review = self._close_implementation(work, workspace_root)
+                if workspace_review is not None:
+                    return self._stop(work, transition_root, project_root, workspace_review.reason)
+                workspace_check = self._check_implementation(work, workspace_root)
+                if workspace_check is not None:
+                    return self._stop(work, transition_root, project_root, workspace_check.reason)
                 break
             try:
                 current_planning, current_criteria, current_root = _read_planning(work)
@@ -731,7 +775,12 @@ class ImplementationExecution:
             return self._stop(work, transition_root, project_root, "product source mutation domain is busy")
         live_manifest, live_identity = _capture(project_root)
         if live_identity != occupancy.observed_source:
-            raise RuntimeError("live source changed after mutation occupancy observation")
+            return self._stop(
+                work,
+                transition_root,
+                project_root,
+                "product source changed after mutation occupancy observation",
+            )
 
         changes: list[dict[str, object]] = []
         implementation_paths: list[str] = []
@@ -799,8 +848,17 @@ class ImplementationExecution:
         final_planning, final_criteria, final_root = _read_planning(work)
         if final_planning != planning or final_criteria != criteria or final_root != project_root:
             return self._stop(work, transition_root, project_root, "planning changed before Candidate publication")
-        if self._implementation_review(work, project_root) is not None:
-            return self._stop(work, transition_root, project_root, "final implementation closure check did not pass")
+        final_review = self._close_implementation(work, project_root)
+        if final_review is not None:
+            reason = (
+                final_review.reason
+                if isinstance(final_review, ImplementationBlocker)
+                else "final implementation closure check did not pass"
+            )
+            return self._stop(work, transition_root, project_root, reason)
+        final_check = self._check_implementation(work, project_root)
+        if final_check is not None:
+            return self._stop(work, transition_root, project_root, final_check.reason)
 
         retained_root = transition_root / "candidate"
         retained_identity = _copy_exact(project_root, retained_root)

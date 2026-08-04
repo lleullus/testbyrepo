@@ -103,6 +103,41 @@ _READ_AUTHORITY_FIELDS = {
 }
 
 
+def _one_safe_read_projection(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != {"path", "sha256", "byteCount"}:
+        return False
+    path = value["path"]
+    digest = value["sha256"]
+    count = value["byteCount"]
+    if (
+        not isinstance(path, str)
+        or not path
+        or not isinstance(digest, str)
+        or len(digest) != 64
+        or not isinstance(count, int)
+        or isinstance(count, bool)
+        or count < 0
+    ):
+        return False
+    try:
+        int(digest, 16)
+    except ValueError:
+        return False
+    return True
+
+
+def _safe_read_projection(value: object) -> bool:
+    if isinstance(value, list):
+        return bool(value) and all(_one_safe_read_projection(item) for item in value)
+    return _one_safe_read_projection(value)
+
+
+def _evidence_expected(observation: dict[str, object]) -> object:
+    if observation["kind"] == "READ" and not _safe_read_projection(observation["expected"]):
+        return None
+    return observation["expected"]
+
+
 def _read_binding(candidate: Candidate, observation: dict[str, object]) -> dict[str, object]:
     return {
         "work": str(candidate.work),
@@ -244,7 +279,7 @@ def _incomplete_evidence(
         "kind": observation["kind"],
         "criterionIndexes": observation["criterionIndexes"],
         "requests": observation["requests"],
-        "expected": observation["expected"],
+        "expected": _evidence_expected(observation),
         "preCurrentness": pre_currentness.value,
         "postCurrentness": post_currentness.value,
         "runnerStatus": status,
@@ -263,6 +298,17 @@ def _runner_evidence(
     pre_currentness: Currentness,
     post_currentness: Currentness,
 ) -> tuple[dict[str, object], dict[str, object] | None]:
+    if observation["kind"] == "READ" and not _safe_read_projection(observation["expected"]):
+        return (
+            _incomplete_evidence(
+                candidate,
+                observation,
+                "UNSAFE_REDACTION",
+                pre_currentness,
+                post_currentness,
+            ),
+            None,
+        )
     if not isinstance(raw, dict):
         return (
             _incomplete_evidence(
@@ -312,7 +358,20 @@ def _runner_evidence(
     )
     artifact = raw.get("artifact")
     artifact_identity = None if artifact is None else _value_identity(artifact)
-    complete = status == "COMPLETE" and request_binding and artifact_identity is not None
+    all_subattempt_artifacts_bound = True
+    if observation["kind"] in {"SOURCE", "READ", "LOCAL"} and len(requests) > 1:
+        all_subattempt_artifacts_bound = all(
+            isinstance(attempt, dict)
+            and attempt.get("artifact") is not None
+            and attempt.get("artifactIdentity") == _value_identity(attempt["artifact"])
+            for attempt in subattempts
+        )
+    complete = (
+        status == "COMPLETE"
+        and request_binding
+        and artifact_identity is not None
+        and all_subattempt_artifacts_bound
+    )
     evidence = {
         "candidateIdentity": candidate.result_identity,
         "planning": candidate.planning,
@@ -321,7 +380,7 @@ def _runner_evidence(
         "kind": observation["kind"],
         "criterionIndexes": observation["criterionIndexes"],
         "requests": observation["requests"],
-        "expected": observation["expected"],
+        "expected": _evidence_expected(observation),
         "preCurrentness": pre_currentness.value,
         "postCurrentness": post_currentness.value,
         "runnerStatus": status,

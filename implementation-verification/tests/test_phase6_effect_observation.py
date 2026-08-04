@@ -214,7 +214,7 @@ class ReadOnlyRunner:
                 for request in observation["requests"]
             ],
             "observed": observation["expected"],
-            "artifact": {"redacted": self.redaction_safe, "secret": "must-not-survive"},
+            "artifact": {"projection": observation["expected"]},
             "redacted": self.redaction_safe,
         }
 
@@ -603,7 +603,11 @@ class Phase6EffectObservationTests(unittest.TestCase):
             "kind": "READ",
             "criterionIndexes": [1],
             "requests": [{"operation": "get"}],
-            "expected": "created",
+            "expected": {
+                "path": "remote-resource",
+                "sha256": "0" * 64,
+                "byteCount": 0,
+            },
         }
         runner = ReadOnlyRunner()
         module, _ = self.public_verification([read], runner=runner)
@@ -620,7 +624,11 @@ class Phase6EffectObservationTests(unittest.TestCase):
             "kind": "READ",
             "criterionIndexes": [1],
             "requests": [{"operation": "get"}],
-            "expected": "created",
+            "expected": {
+                "path": "remote-resource",
+                "sha256": "0" * 64,
+                "byteCount": 0,
+            },
         }
         runner = ReadOnlyRunner()
         runner.read_authorized = False

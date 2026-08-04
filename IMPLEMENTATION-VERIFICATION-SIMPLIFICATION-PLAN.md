@@ -47,8 +47,23 @@ branch: refactor/simplify-implementation-verification
 ## 실행 체크포인트 — 컨텍스트 복구 authority
 
 ```text
-현재 단계: Phase 6 — 위험한 외부효과
-단계 상태: IMPLEMENTED_COMPONENT_VERIFIED (구현·직접 검증 완료, 독립 다중 검수 대기)
+현재 authority (2026-08-05):
+- 현재 단계: Phase 7 — 통합·runtime 검증
+- 단계 상태: RUNTIME_VERIFICATION_BLOCKED
+- Phase 8 gate: CLOSED — Phase 7 exact-worktree runtime evidence는 invalidated 됐다.
+- 현재 blocker: production Linux Source Adoption은 arbitrary uncooperative writer의 expected-state와
+  canonical mutation을 linearize할 conditional primitive가 없어 mutation 전에 fail-closed한다.
+  Module-owned bounded implementation review/check Adapter는 production path에 구현·검증됐다.
+  external authoritative grant/provenance가 없는 authenticated READ는 production에서 비활성화된다.
+- latest verification: direct regression·production conformance·24 public flow·9 fault flow·legacy-negative를
+  포함한 component discovery `121` tests passed; production smoke는 fail-closed `IMPLEMENTATION_STOPPED`
+  readback을 확인했다.
+- 바로 다음 행동: 현재 배치에서는 conditional Source Adoption을 unsupported로 확정하고 Phase 7을
+  `RUNTIME_VERIFICATION_BLOCKED`, Phase 8을 `CLOSED`로 유지한다.
+
+이하 항목은 유용한 이전 실행 이력이며 위 current authority를 덮어쓰지 않는다.
+이전 단계: Phase 6 — 위험한 외부효과
+이전 단계 상태: IMPLEMENTED_COMPONENT_VERIFIED
 마지막 완료 작업:
 - revision `9693385`에 대한 사용자가 전달한 Oracle 요구사항 검수의 confirmed finding 6건을
   Phase 3~6 계약과 source에 대조해 모두 수용
@@ -268,12 +283,12 @@ Oracle session: revision `9693385`에 대한 사용자가 전달한 Oracle 검�
   confirmed finding 6건 모두 최소 correction과 직접 테스트로 반영
 열린 finding: 없음 — 전달된 Phase 3~6 finding 6건 모두 correction 및 회귀 검증 완료
 사용자 결정 필요: 없음
-현재 blocker: 없음
-바로 다음 행동:
+이전 시점 blocker: 없음
+이전 시점 바로 다음 행동:
 1. 현재 Phase 1~6 correction revision을 커밋한다.
 2. Phase 7 계약의 public/fault/conformance/legacy-unavailable runtime proof 구현 전 source를 재대조한다.
 3. Phase 7 `RUNTIME_VERIFIED` 전에는 legacy removal을 시작하지 않는다.
-금지: Phase 7 선행 구현, legacy 제거
+이전 시점 금지: Phase 7 선행 구현, legacy 제거
 ```
 
 > [!IMPORTANT]
@@ -605,12 +620,12 @@ Phase 2  IMPLEMENTED
 Phase 3  IMPLEMENTED
 Phase 4  IMPLEMENTED
 Phase 5  IMPLEMENTED
-Phase 6  DESIGN_CONVERGED
-Phase 7  DESIGN_CONVERGED
+Phase 6  IMPLEMENTED
+Phase 7  RUNTIME_VERIFICATION_BLOCKED
 Phase 8  DESIGN_CONVERGED
 
-Product implementation       IN_PROGRESS
-Runtime verification         NOT_STARTED
+Product implementation       PHASE_1_TO_6_IMPLEMENTED
+Runtime verification         RUNTIME_VERIFICATION_BLOCKED
 Legacy mechanism removal     NOT_STARTED
 ```
 
