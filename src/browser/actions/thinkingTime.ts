@@ -187,6 +187,9 @@ function buildBrowserReasoningExpression(args: {
 }): string {
   const targetLiteral = JSON.stringify(args.intent);
   const expectedControlLiteral = JSON.stringify(args.managedSlot?.expectedControl ?? null);
+  const maximumReasoningLiteral = JSON.stringify(
+    args.managedSlot?.maximumReasoning ?? null,
+  );
   const originalModelFingerprintLiteral = JSON.stringify(
     args.originalModelIdentity?.fingerprint ?? null,
   );
@@ -195,6 +198,7 @@ function buildBrowserReasoningExpression(args: {
     ${buildClickDispatcher()}
     const TARGET = ${targetLiteral};
     const EXPECTED_CONTROL = ${expectedControlLiteral};
+    const MAXIMUM_REASONING = ${maximumReasoningLiteral};
     const ORIGINAL_MODEL_FINGERPRINT = ${originalModelFingerprintLiteral};
     const MODEL_BUTTON_SELECTOR = ${modelButtonLiteral};
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -609,7 +613,17 @@ function buildBrowserReasoningExpression(args: {
               controlCount: 1, matchingControlCount: 1, observedKinds: refreshedKinds,
             });
           }
-          const resolvedLevel = effortLevelWithinOwner(refreshedControls.owner);
+          let resolvedLevel =
+            levelFor(refreshedSliderControl.readbackNode) ||
+            effortLevelWithinOwner(refreshedControls.owner);
+          if (
+            !resolvedLevel &&
+            EXPECTED_CONTROL === 'slider' &&
+            MAXIMUM_REASONING === TARGET &&
+            refreshedMetrics.now === refreshedMetrics.max
+          ) {
+            resolvedLevel = TARGET;
+          }
           const availableLevels = resolvedLevel ? [resolvedLevel] : [];
           if (refreshedMetrics.now === refreshedMetrics.max && resolvedLevel === TARGET) {
             return {
@@ -669,11 +683,19 @@ function buildBrowserReasoningExpression(args: {
       const refreshedSliderControl = refreshedControls.sliders[0];
       const refreshedSlider = refreshedSliderControl.readbackNode;
       const finalValue = refreshedSlider.value || refreshedSlider.getAttribute?.('aria-valuenow');
-      const resolvedLevel =
+      let resolvedLevel =
         levelFor(refreshedSlider) ||
         (refreshedSliderControl.composite
           ? effortLevelWithinOwner(refreshedControls.owner)
           : null);
+      if (
+        !resolvedLevel &&
+        EXPECTED_CONTROL === 'slider' &&
+        MAXIMUM_REASONING === TARGET &&
+        String(finalValue) === String(max)
+      ) {
+        resolvedLevel = TARGET;
+      }
       const siblingLevels = refreshedControls.dropdownItems.map(levelFor).filter(Boolean);
       const availableLevels = Array.from(new Set([resolvedLevel, ...siblingLevels].filter(Boolean)));
       const modelUnchanged = modelStill();

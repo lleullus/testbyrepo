@@ -1113,6 +1113,632 @@ describe("strict browser reasoning selection", () => {
     expect(initial.ariaWrites).toBe(0);
   });
 
+  it("uses the verified readback level for a composite slider with an unreadable effort label", async () => {
+    class Target {
+      dispatchEvent(_event: unknown): boolean {
+        return true;
+      }
+    }
+    class Node extends Target {
+      public children: Node[] = [];
+      constructor(
+        public textContent: string,
+        private readonly attributes: Record<string, string>,
+      ) {
+        super();
+      }
+      getAttribute(name: string): string | null {
+        return this.attributes[name] ?? null;
+      }
+      getBoundingClientRect(): { width: number; height: number } {
+        return { width: 100, height: 30 };
+      }
+      querySelectorAll(_selector: string): Node[] {
+        return this.children;
+      }
+      focus(): void {}
+      override dispatchEvent(event: unknown): boolean {
+        return true;
+      }
+    }
+    class EventStub {
+      constructor(
+        public readonly type: string,
+        _init?: unknown,
+      ) {}
+    }
+
+    const sliderReadback = new Node("", {
+      role: "slider",
+      tabindex: "-1",
+      "aria-hidden": "true",
+      "aria-valuemin": "0",
+      "aria-valuemax": "4",
+      "aria-valuenow": "4",
+      "aria-valuetext": "Pro",
+    });
+    const powerOwner = new Node("", {
+      role: "menuitem",
+      tabindex: "0",
+      "aria-label": "Power",
+      "aria-keyshortcuts": "ArrowLeft ArrowRight",
+      "data-orientation": "vertical",
+    });
+    powerOwner.children = [sliderReadback];
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const effortMenuItem = new Node("Effort GPT-9.9", { role: "menuitem" });
+    const reasoningOwner = {
+      getAttribute: (name: string) =>
+        name === "data-testid" ? "composer-intelligence-picker-content" : null,
+      getBoundingClientRect: () => ({ width: 100, height: 30 }),
+      querySelectorAll: () => [powerOwner, sliderReadback, modelMenuItem, effortMenuItem],
+    };
+    const documentStub = {
+      querySelector: () => null,
+      querySelectorAll: (selector: string) =>
+        selector.includes("composer-intelligence-picker-content") ? [reasoningOwner] : [],
+    };
+    const expression = buildBrowserReasoningExpressionForTest({
+      intent: "pro",
+      managedSlot: { slotId: 1, expectedControl: "slider", maximumReasoning: "pro" },
+    });
+    const evaluate = new Function(
+      "document",
+      "setTimeout",
+      "window",
+      "EventTarget",
+      "PointerEvent",
+      "MouseEvent",
+      "Event",
+      `return ${expression};`,
+    ) as (...args: unknown[]) => Promise<unknown>;
+
+    await expect(
+      evaluate(
+        documentStub,
+        setTimeout,
+        { PointerEvent: EventStub, KeyboardEvent: EventStub },
+        Target,
+        EventStub,
+        EventStub,
+        EventStub,
+      ),
+    ).resolves.toMatchObject({
+      status: "already-selected",
+      controlKind: "slider",
+      availableLevels: ["pro"],
+      resolvedLevel: "pro",
+      modelUnchanged: true,
+    });
+  });
+
+  it("resolves a label-less composite slider at maximum from the managed maximum", async () => {
+    class Target {
+      dispatchEvent(_event: unknown): boolean {
+        return true;
+      }
+    }
+    class Node extends Target {
+      public children: Node[] = [];
+      constructor(
+        public textContent: string,
+        private readonly attributes: Record<string, string>,
+      ) {
+        super();
+      }
+      getAttribute(name: string): string | null {
+        return this.attributes[name] ?? null;
+      }
+      getBoundingClientRect(): { width: number; height: number } {
+        return { width: 100, height: 30 };
+      }
+      querySelectorAll(_selector: string): Node[] {
+        return this.children;
+      }
+      focus(): void {}
+      override dispatchEvent(event: unknown): boolean {
+        return true;
+      }
+    }
+    class EventStub {
+      constructor(
+        public readonly type: string,
+        _init?: unknown,
+      ) {}
+    }
+
+    const sliderReadback = new Node("", {
+      role: "slider",
+      tabindex: "-1",
+      "aria-hidden": "true",
+      "aria-valuemin": "0",
+      "aria-valuemax": "4",
+      "aria-valuenow": "4",
+    });
+    const powerOwner = new Node("", {
+      role: "menuitem",
+      tabindex: "0",
+      "aria-label": "Power",
+      "aria-keyshortcuts": "ArrowLeft ArrowRight",
+      "data-orientation": "vertical",
+    });
+    powerOwner.children = [sliderReadback];
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const effortMenuItem = new Node("Effort GPT-9.9", { role: "menuitem" });
+    const reasoningOwner = {
+      getAttribute: (name: string) =>
+        name === "data-testid" ? "composer-intelligence-picker-content" : null,
+      getBoundingClientRect: () => ({ width: 100, height: 30 }),
+      querySelectorAll: () => [powerOwner, sliderReadback, modelMenuItem, effortMenuItem],
+    };
+    const documentStub = {
+      querySelector: () => null,
+      querySelectorAll: (selector: string) =>
+        selector.includes("composer-intelligence-picker-content") ? [reasoningOwner] : [],
+    };
+    const expression = buildBrowserReasoningExpressionForTest({
+      intent: "pro",
+      managedSlot: { slotId: 1, expectedControl: "slider", maximumReasoning: "pro" },
+    });
+    const evaluate = new Function(
+      "document",
+      "setTimeout",
+      "window",
+      "EventTarget",
+      "PointerEvent",
+      "MouseEvent",
+      "Event",
+      `return ${expression};`,
+    ) as (...args: unknown[]) => Promise<unknown>;
+
+    await expect(
+      evaluate(
+        documentStub,
+        setTimeout,
+        { PointerEvent: EventStub, KeyboardEvent: EventStub },
+        Target,
+        EventStub,
+        EventStub,
+        EventStub,
+      ),
+    ).resolves.toMatchObject({
+      status: "already-selected",
+      controlKind: "slider",
+      availableLevels: ["pro"],
+      resolvedLevel: "pro",
+      modelUnchanged: true,
+    });
+  });
+
+  it("does not override a read label with the managed maximum", async () => {
+    class Target {
+      dispatchEvent(_event: unknown): boolean {
+        return true;
+      }
+    }
+    class Node extends Target {
+      public children: Node[] = [];
+      constructor(
+        public textContent: string,
+        private readonly attributes: Record<string, string>,
+      ) {
+        super();
+      }
+      getAttribute(name: string): string | null {
+        return this.attributes[name] ?? null;
+      }
+      getBoundingClientRect(): { width: number; height: number } {
+        return { width: 100, height: 30 };
+      }
+      querySelectorAll(_selector: string): Node[] {
+        return this.children;
+      }
+      focus(): void {}
+      override dispatchEvent(event: unknown): boolean {
+        return true;
+      }
+    }
+    class EventStub {
+      constructor(
+        public readonly type: string,
+        _init?: unknown,
+      ) {}
+    }
+
+    const sliderReadback = new Node("", {
+      role: "slider",
+      tabindex: "-1",
+      "aria-hidden": "true",
+      "aria-valuemin": "0",
+      "aria-valuemax": "4",
+      "aria-valuenow": "4",
+      "aria-valuetext": "Standard",
+    });
+    const powerOwner = new Node("", {
+      role: "menuitem",
+      tabindex: "0",
+      "aria-label": "Power",
+      "aria-keyshortcuts": "ArrowLeft ArrowRight",
+      "data-orientation": "vertical",
+    });
+    powerOwner.children = [sliderReadback];
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const effortMenuItem = new Node("Effort Standard", { role: "menuitem" });
+    const reasoningOwner = {
+      getAttribute: (name: string) =>
+        name === "data-testid" ? "composer-intelligence-picker-content" : null,
+      getBoundingClientRect: () => ({ width: 100, height: 30 }),
+      querySelectorAll: () => [powerOwner, sliderReadback, modelMenuItem, effortMenuItem],
+    };
+    const documentStub = {
+      querySelector: () => null,
+      querySelectorAll: (selector: string) =>
+        selector.includes("composer-intelligence-picker-content") ? [reasoningOwner] : [],
+    };
+    const expression = buildBrowserReasoningExpressionForTest({
+      intent: "pro",
+      managedSlot: { slotId: 1, expectedControl: "slider", maximumReasoning: "pro" },
+    });
+    const evaluate = new Function(
+      "document",
+      "setTimeout",
+      "window",
+      "EventTarget",
+      "PointerEvent",
+      "MouseEvent",
+      "Event",
+      `return ${expression};`,
+    ) as (...args: unknown[]) => Promise<unknown>;
+
+    await expect(
+      evaluate(
+        documentStub,
+        setTimeout,
+        { PointerEvent: EventStub, KeyboardEvent: EventStub },
+        Target,
+        EventStub,
+        EventStub,
+        EventStub,
+      ),
+    ).resolves.toMatchObject({
+      status: "unavailable",
+      controlKind: "slider",
+      availableLevels: ["standard"],
+      resolvedLevel: "standard",
+      modelUnchanged: true,
+      diagnostic: { controlCount: 1, matchingControlCount: 1, observedKinds: ["slider"] },
+    });
+  });
+
+  it("resolves a label-less direct slider at maximum from the managed maximum", async () => {
+    class Target {
+      dispatchEvent(_event: unknown): boolean {
+        return true;
+      }
+    }
+    class Slider extends Target {
+      public parentElement: { querySelectorAll: () => unknown[] } | null = null;
+      constructor(
+        private currentValue: string,
+        private readonly attributes: Record<string, string>,
+        private readonly onInput?: () => void,
+      ) {
+        super();
+      }
+      get value(): string {
+        return this.currentValue;
+      }
+      set value(value: string) {
+        this.currentValue = value;
+      }
+      getAttribute(name: string): string | null {
+        return this.attributes[name] ?? null;
+      }
+      setAttribute(name: string, value: string): void {
+        this.attributes[name] = value;
+      }
+      getBoundingClientRect(): { width: number; height: number } {
+        return { width: 100, height: 30 };
+      }
+      matches(selector: string): boolean {
+        return selector.includes('input[type="range"]');
+      }
+      override dispatchEvent(event: unknown): boolean {
+        if ((event as { type?: string }).type === "input") this.onInput?.();
+        return true;
+      }
+    }
+    class Node extends Target {
+      constructor(
+        public textContent: string,
+        private readonly attributes: Record<string, string>,
+      ) {
+        super();
+      }
+      getAttribute(name: string): string | null {
+        return this.attributes[name] ?? null;
+      }
+      getBoundingClientRect(): { width: number; height: number } {
+        return { width: 100, height: 30 };
+      }
+    }
+    class EventStub {
+      constructor(
+        public readonly type: string,
+        _init?: unknown,
+      ) {}
+    }
+
+    const liveSlider = new Slider("4", {
+      "aria-valuemax": "4",
+      "aria-valuetext": "3.7",
+    });
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const reasoningOwner = {
+      getAttribute: (name: string) =>
+        name === "data-testid" ? "composer-intelligence-picker-content" : null,
+      getBoundingClientRect: () => ({ width: 100, height: 30 }),
+      querySelectorAll: (_selector: string) => [liveSlider, modelMenuItem],
+    };
+    const documentStub = {
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => {
+        if (selector.includes("composer-intelligence-picker-content")) return [reasoningOwner];
+        return selector.includes('input[type="range"]') || selector.includes('role="slider"')
+          ? [liveSlider]
+          : [];
+      },
+    };
+    const expression = buildBrowserReasoningExpressionForTest({
+      intent: "pro",
+      managedSlot: { slotId: 1, expectedControl: "slider", maximumReasoning: "pro" },
+    });
+    const evaluate = new Function(
+      "document",
+      "setTimeout",
+      "window",
+      "EventTarget",
+      "PointerEvent",
+      "MouseEvent",
+      "Event",
+      `return ${expression};`,
+    ) as (...args: unknown[]) => Promise<unknown>;
+
+    await expect(
+      evaluate(
+        documentStub,
+        (callback: () => void) => callback(),
+        { PointerEvent: EventStub },
+        Target,
+        EventStub,
+        EventStub,
+        EventStub,
+      ),
+    ).resolves.toMatchObject({
+      status: "already-selected",
+      controlKind: "slider",
+      availableLevels: ["pro"],
+      resolvedLevel: "pro",
+      modelUnchanged: true,
+    });
+  });
+
+  it("does not fall back without a managed slot maximum", async () => {
+    class Target {
+      dispatchEvent(_event: unknown): boolean {
+        return true;
+      }
+    }
+    class Slider extends Target {
+      constructor(
+        private currentValue: string,
+        private readonly attributes: Record<string, string>,
+      ) {
+        super();
+      }
+      get value(): string {
+        return this.currentValue;
+      }
+      set value(value: string) {
+        this.currentValue = value;
+      }
+      getAttribute(name: string): string | null {
+        return this.attributes[name] ?? null;
+      }
+      setAttribute(name: string, value: string): void {
+        this.attributes[name] = value;
+      }
+      getBoundingClientRect(): { width: number; height: number } {
+        return { width: 100, height: 30 };
+      }
+      matches(selector: string): boolean {
+        return selector.includes('input[type="range"]');
+      }
+      override dispatchEvent(event: unknown): boolean {
+        return true;
+      }
+    }
+    class Node extends Target {
+      constructor(
+        public textContent: string,
+        private readonly attributes: Record<string, string>,
+      ) {
+        super();
+      }
+      getAttribute(name: string): string | null {
+        return this.attributes[name] ?? null;
+      }
+      getBoundingClientRect(): { width: number; height: number } {
+        return { width: 100, height: 30 };
+      }
+    }
+    class EventStub {
+      constructor(
+        public readonly type: string,
+        _init?: unknown,
+      ) {}
+    }
+
+    const liveSlider = new Slider("4", {
+      "aria-valuemax": "4",
+      "aria-valuetext": "3.7",
+    });
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const reasoningOwner = {
+      getAttribute: (name: string) =>
+        name === "data-testid" ? "composer-intelligence-picker-content" : null,
+      getBoundingClientRect: () => ({ width: 100, height: 30 }),
+      querySelectorAll: (_selector: string) => [liveSlider, modelMenuItem],
+    };
+    const documentStub = {
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => {
+        if (selector.includes("composer-intelligence-picker-content")) return [reasoningOwner];
+        return selector.includes('input[type="range"]') || selector.includes('role="slider"')
+          ? [liveSlider]
+          : [];
+      },
+    };
+    const expression = buildBrowserReasoningExpressionForTest({
+      intent: "pro",
+      managedSlot: null,
+    });
+    const evaluate = new Function(
+      "document",
+      "setTimeout",
+      "window",
+      "EventTarget",
+      "PointerEvent",
+      "MouseEvent",
+      "Event",
+      `return ${expression};`,
+    ) as (...args: unknown[]) => Promise<unknown>;
+
+    await expect(
+      evaluate(
+        documentStub,
+        (callback: () => void) => callback(),
+        { PointerEvent: EventStub },
+        Target,
+        EventStub,
+        EventStub,
+        EventStub,
+      ),
+    ).resolves.toMatchObject({
+      status: "unavailable",
+      controlKind: "slider",
+      resolvedLevel: null,
+    });
+  });
+
+  it("does not fall back when the managed maximum differs from the requested intent", async () => {
+    class Target {
+      dispatchEvent(_event: unknown): boolean {
+        return true;
+      }
+    }
+    class Slider extends Target {
+      constructor(
+        private currentValue: string,
+        private readonly attributes: Record<string, string>,
+      ) {
+        super();
+      }
+      get value(): string {
+        return this.currentValue;
+      }
+      set value(value: string) {
+        this.currentValue = value;
+      }
+      getAttribute(name: string): string | null {
+        return this.attributes[name] ?? null;
+      }
+      setAttribute(name: string, value: string): void {
+        this.attributes[name] = value;
+      }
+      getBoundingClientRect(): { width: number; height: number } {
+        return { width: 100, height: 30 };
+      }
+      matches(selector: string): boolean {
+        return selector.includes('input[type="range"]');
+      }
+      override dispatchEvent(event: unknown): boolean {
+        return true;
+      }
+    }
+    class Node extends Target {
+      constructor(
+        public textContent: string,
+        private readonly attributes: Record<string, string>,
+      ) {
+        super();
+      }
+      getAttribute(name: string): string | null {
+        return this.attributes[name] ?? null;
+      }
+      getBoundingClientRect(): { width: number; height: number } {
+        return { width: 100, height: 30 };
+      }
+    }
+    class EventStub {
+      constructor(
+        public readonly type: string,
+        _init?: unknown,
+      ) {}
+    }
+
+    const liveSlider = new Slider("4", {
+      "aria-valuemax": "4",
+      "aria-valuetext": "3.7",
+    });
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const reasoningOwner = {
+      getAttribute: (name: string) =>
+        name === "data-testid" ? "composer-intelligence-picker-content" : null,
+      getBoundingClientRect: () => ({ width: 100, height: 30 }),
+      querySelectorAll: (_selector: string) => [liveSlider, modelMenuItem],
+    };
+    const documentStub = {
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => {
+        if (selector.includes("composer-intelligence-picker-content")) return [reasoningOwner];
+        return selector.includes('input[type="range"]') || selector.includes('role="slider"')
+          ? [liveSlider]
+          : [];
+      },
+    };
+    const expression = buildBrowserReasoningExpressionForTest({
+      intent: "pro",
+      managedSlot: { slotId: 1, expectedControl: "slider", maximumReasoning: "high" },
+    });
+    const evaluate = new Function(
+      "document",
+      "setTimeout",
+      "window",
+      "EventTarget",
+      "PointerEvent",
+      "MouseEvent",
+      "Event",
+      `return ${expression};`,
+    ) as (...args: unknown[]) => Promise<unknown>;
+
+    await expect(
+      evaluate(
+        documentStub,
+        (callback: () => void) => callback(),
+        { PointerEvent: EventStub },
+        Target,
+        EventStub,
+        EventStub,
+        EventStub,
+      ),
+    ).resolves.toMatchObject({
+      status: "unavailable",
+      controlKind: "slider",
+      resolvedLevel: null,
+    });
+  });
+
   it("does not confuse a reasoning-pill change with a base-model change", async () => {
     class Target {
       dispatchEvent(_event: unknown): boolean {
