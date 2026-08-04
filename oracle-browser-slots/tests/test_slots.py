@@ -32,6 +32,7 @@ from oracle_browser_slots.coordination import QueueCoordinator
 from oracle_browser_slots.launcher import (
     ChromeLauncher,
     PrepareError,
+    _has_flag,
     _is_chrome_process,
 )
 from oracle_browser_slots.model import AVAILABLE, OCCUPIED, SLOT_IDS, UNAVAILABLE, Settings
@@ -1088,6 +1089,35 @@ class LauncherTests(unittest.TestCase):
             "https://chatgpt.com/",
         )
         self.assertTrue(_is_chrome_process(flattened))
+
+    def test_flattened_cmdline_profile_in_use_blocks_launch(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            settings = settings_for(root)
+            settings.chrome_path.write_text("#!/bin/sh\n", encoding="utf-8")
+            settings.chrome_path.chmod(0o755)
+            launcher = ChromeLauncher(settings, LaunchCDP())
+            slot = settings.slot(1)
+            flattened = (
+                f"/usr/bin/google-chrome --remote-debugging-port={slot.port} "
+                f"--user-data-dir={slot.profile_dir} https://chatgpt.com/",
+            )
+
+            with patch.object(
+                launcher, "_port_is_open", return_value=False
+            ), patch(
+                "oracle_browser_slots.launcher._proc_arguments",
+                return_value=iter((flattened,)),
+            ):
+                with self.assertRaisesRegex(PrepareError, "프로필은 사용 중"):
+                    launcher.ensure_running(slot)
+
+    def test_has_flag_does_not_match_longer_port_token(self):
+        flattened = (
+            "/opt/google/chrome/chrome --remote-debugging-port=192220 "
+            "--user-data-dir=/tmp/slot-1 https://chatgpt.com/",
+        )
+        self.assertFalse(_has_flag(flattened, "--remote-debugging-port=19222"))
 
 
 class SlotServiceTests(unittest.TestCase):
