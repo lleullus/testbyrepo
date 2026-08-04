@@ -48,8 +48,13 @@ branch: refactor/simplify-implementation-verification
 
 ```text
 현재 단계: Phase 6 — 위험한 외부효과
-단계 상태: IMPLEMENTATION_RESEARCHED (구현 전 사전 조사 완료, 구현 미시작)
+단계 상태: IMPLEMENTED_COMPONENT_VERIFIED (구현·직접 검증 완료, 독립 다중 검수 대기)
 마지막 완료 작업:
+- commit `3838243`에서 fixed Effect Observation Module, work-wide unresolved/safety projection,
+  implementation/verification effect seam과 직접 계약 테스트를 구현
+- 후속 계약 대조에서 authenticated READ authority/redaction gate, Adapter-owned canonical target,
+  durable dispatch marker의 complete/incomplete bundle 보존 누락을 확인하고 보강
+- Phase 6 직접 테스트 11개와 Phase 1~6 component 테스트 59개를 실행해 모두 통과 확인
 - 전용 worktree와 refactor/simplify-implementation-verification branch 확인
 - Implementation Lead, Verification Lead, Baseline Capsule의 source·test·CLI·실제 in-repo 소비자 조사
 - baseline-capsule, implementation-lead, verification-lead 전체 테스트 통과 확인
@@ -252,14 +257,15 @@ branch: refactor/simplify-implementation-verification
 - Phase 6 최소 직접 검증 범위를 authority 부재 zero-dispatch, authorized action/readback, ambiguous
   non-reexecution, cleanup/final disposition, cross-Candidate overlap, authenticated pure read, redaction,
   implementation-effect readback-only와 Candidate self-grant 거부로 고정
-Oracle session: Phase 6 구현 사전 조사에는 새 Oracle session을 사용하지 않음; Phase 6 설계 finding은 닫힘
-열린 finding: 없음 — Phase 6 F1~F3 CLOSED, 구현 전 새 blocker 없음
+Oracle session: Phase 6 구현 사전 조사에는 새 Oracle session을 사용하지 않음; 구현 보강 revision에 대한
+  슬롯 1·2·3 독립 DevSpace 검수 제출 대기
+열린 finding: 없음 — 로컬에서 확인한 Phase 6 구현 누락은 보강했으며 독립 검수 finding 대기
 사용자 결정 필요: 없음
 현재 blocker: 없음
 바로 다음 행동:
-1. Effect Observation Module과 fixed test Adapter의 최소 private Interface를 구현한다.
-2. Verification/Implementation execution에 authority·may-have-run·readback·cleanup safety projection을 연결한다.
-3. 위 Phase 6 직접 시나리오와 Phase 1~6 component 검증을 통과한 뒤에만 Phase 7로 간다.
+1. 동일 보강 revision을 Oracle Browser 슬롯 1·2·3에서 서로 다른 관점으로 병렬 검수한다.
+2. 각 finding을 Phase 1~6 계약과 source/test에 대조해 수용·기각하고 필요한 최소 correction만 반영한다.
+3. 세 검수의 material finding이 닫힌 뒤에만 Phase 7로 간다.
 금지: Phase 7 선행 구현, legacy 제거
 ```
 

@@ -14,7 +14,14 @@ class FixedEffectAdapter(Protocol):
     authoritative_readback_enforced: bool
     redaction_enforced: bool
 
-    def authority(self, binding: dict[str, object], effect: dict[str, object]) -> object: ...
+    def canonicalize(self, effect: dict[str, object]) -> object: ...
+
+    def authority(
+        self,
+        binding: dict[str, object],
+        effect: dict[str, object],
+        canonical_effect: dict[str, str],
+    ) -> object: ...
 
     def dispatch(
         self,
@@ -55,6 +62,7 @@ _AUTHORITY_FIELDS = {
     "cleanupRequest",
     "finalDisposition",
     "safetyProperty",
+    "canonicalEffect",
     "outsideWritableScope",
     "current",
     "credentialOpaque",
@@ -63,6 +71,11 @@ _AUTHORITY_FIELDS = {
 }
 _DISPOSITIONS = {"RETAIN", "REMOVE", "RESTORE", "TERMINAL_RECEIPT"}
 _SAFETY_PROPERTIES = {"NO_REPLAY"}
+_CANONICAL_FIELDS = {
+    "targetIdentity",
+    "consequenceIdentity",
+    "occurrenceIdentity",
+}
 
 
 def _identity(value: object) -> str:
@@ -148,27 +161,21 @@ class EffectObservationModule:
         }
 
     @staticmethod
-    def _keys(effect: dict[str, object]) -> tuple[str, str, str]:
-        target = _identity(
-            {"adapterIdentity": effect["adapterIdentity"], "target": effect["target"]}
-        )
-        consequence = _identity(
-            {
-                "adapterIdentity": effect["adapterIdentity"],
-                "intent": effect["intent"],
-                "target": effect["target"],
-                "finalDisposition": effect["finalDisposition"],
-                "safetyProperty": effect["safetyProperty"],
-            }
-        )
-        occurrence = _identity(effect["occurrence"])
-        return target, consequence, occurrence
+    def _canonical_effect(value: object) -> dict[str, str] | None:
+        if (
+            not isinstance(value, dict)
+            or set(value) != _CANONICAL_FIELDS
+            or any(not isinstance(value[field], str) or not value[field] for field in _CANONICAL_FIELDS)
+        ):
+            return None
+        return {field: value[field] for field in sorted(_CANONICAL_FIELDS)}
 
     @staticmethod
     def _authority_matches(
         authority: object,
         binding: dict[str, object],
         effect: dict[str, object],
+        canonical_effect: dict[str, str],
     ) -> bool:
         return (
             isinstance(authority, dict)
@@ -182,6 +189,7 @@ class EffectObservationModule:
             and authority["cleanupRequest"] == effect["cleanupRequest"]
             and authority["finalDisposition"] == effect["finalDisposition"]
             and authority["safetyProperty"] == effect["safetyProperty"]
+            and authority["canonicalEffect"] == canonical_effect
             and authority["outsideWritableScope"] is True
             and authority["current"] is True
             and authority["credentialOpaque"] is True
@@ -243,15 +251,25 @@ class EffectObservationModule:
                 {"status": "UNSAFE_EFFECT_PLAN", "subattempts": [], "artifact": None}
             )
         try:
-            authority = self._adapter.authority(binding, effect)
+            canonical_effect = self._canonical_effect(self._adapter.canonicalize(effect))
+        except Exception:
+            canonical_effect = None
+        if canonical_effect is None:
+            return EffectObservationResult(
+                {"status": "UNSUPPORTED_EFFECT_TARGET", "subattempts": [], "artifact": None}
+            )
+        try:
+            authority = self._adapter.authority(binding, effect, canonical_effect)
         except Exception:
             authority = None
-        if not self._authority_matches(authority, binding, effect):
+        if not self._authority_matches(authority, binding, effect, canonical_effect):
             return EffectObservationResult(
                 {"status": "MISSING_CURRENT_AUTHORITY", "subattempts": [], "artifact": None}
             )
 
-        target_identity, consequence_identity, occurrence_identity = self._keys(effect)
+        target_identity = canonical_effect["targetIdentity"]
+        consequence_identity = canonical_effect["consequenceIdentity"]
+        occurrence_identity = canonical_effect["occurrenceIdentity"]
         overlap: list[dict[str, object]] = []
         for item in prior_facts:
             if (
@@ -275,6 +293,7 @@ class EffectObservationModule:
             )
 
         attempts: list[dict[str, object]] = []
+        durable_markers: list[dict[str, object]] = []
         action_may_have_run = False
         if action_request is not None and not suppress_action:
             marker = {
@@ -287,7 +306,9 @@ class EffectObservationModule:
                 "request": action_request,
                 "mayHaveRun": True,
             }
+            marker["markerIdentity"] = _identity(marker)
             mark_may_have_run(marker)
+            durable_markers.append(marker)
             action_may_have_run = True
             try:
                 value = self._adapter.dispatch(binding, effect, "ACTION", action_request)
@@ -332,7 +353,9 @@ class EffectObservationModule:
                 "request": cleanup_request,
                 "mayHaveRun": True,
             }
+            marker["markerIdentity"] = _identity(marker)
             mark_may_have_run(marker)
+            durable_markers.append(marker)
             cleanup_may_have_run = True
             try:
                 value = self._adapter.dispatch(binding, effect, "CLEANUP", cleanup_request)
@@ -397,6 +420,23 @@ class EffectObservationModule:
         redaction_safe = all(item.get("redacted") is True for item in attempts)
         complete = observed_complete and cleanup_complete and redaction_safe
 
+        bundle = {
+            "binding": binding,
+            "authority": {
+                "identity": _identity(authority),
+                "outsideWritableScope": True,
+                "current": True,
+            },
+            "target": effect["target"],
+            "canonicalEffect": canonical_effect,
+            "fixedRequests": observation["requests"],
+            "durableDispatchMarkers": durable_markers,
+            "subattempts": attempts,
+            "finalDisposition": effect["finalDisposition"],
+            "unresolved": not complete,
+            "redacted": True,
+        }
+
         fact_base: dict[str, object] = {
             "work": str(candidate.work),
             "adapterIdentity": effect["adapterIdentity"],
@@ -420,20 +460,7 @@ class EffectObservationModule:
                 "status": "COMPLETE",
                 "subattempts": attempts,
                 "observed": observation["expected"],
-                "artifact": {
-                    "binding": binding,
-                    "authority": {
-                        "identity": _identity(authority),
-                        "outsideWritableScope": True,
-                        "current": True,
-                    },
-                    "target": effect["target"],
-                    "fixedRequests": observation["requests"],
-                    "subattempts": attempts,
-                    "finalDisposition": effect["finalDisposition"],
-                    "unresolved": False,
-                    "redacted": True,
-                },
+                "artifact": bundle,
             }
             return EffectObservationResult(raw, projection=projection, resolved_identities=resolved)
 
@@ -461,7 +488,7 @@ class EffectObservationModule:
                     "status": "UNRESOLVED_EFFECT",
                     "subattempts": attempts,
                     "observed": None,
-                    "artifact": None,
+                    "artifact": bundle,
                     "target": effect["target"],
                     "liveOwnerAbsent": True,
                 },

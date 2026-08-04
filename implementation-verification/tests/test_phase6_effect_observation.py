@@ -77,7 +77,17 @@ class FixedEffectAdapter:
         self.calls = []
         self.markers = []
 
-    def authority(self, binding, effect):
+    def canonicalize(self, effect):
+        return {
+            "targetIdentity": f"test-target:{effect['target']['resource']}",
+            "consequenceIdentity": (
+                f"{effect['intent']}:{effect['target']['resource']}:"
+                f"{effect['finalDisposition']}"
+            ),
+            "occurrenceIdentity": str(effect["occurrence"]),
+        }
+
+    def authority(self, binding, effect, canonical_effect):
         if not self.authorized:
             return None
         return {
@@ -90,6 +100,7 @@ class FixedEffectAdapter:
             "cleanupRequest": effect["cleanupRequest"],
             "finalDisposition": effect["finalDisposition"],
             "safetyProperty": effect["safetyProperty"],
+            "canonicalEffect": canonical_effect,
             "outsideWritableScope": True,
             "current": True,
             "credentialOpaque": True,
@@ -167,11 +178,32 @@ class FreshVerifier:
 
 class ReadOnlyRunner:
     read_only_enforced = True
+    authenticated_read_enforced = True
     effect_observation_enforced = False
     supported_observations = ("SOURCE", "LOCAL", "READ", "EFFECT")
 
     def __init__(self):
         self.calls = []
+        self.read_authorized = True
+        self.redaction_safe = True
+
+    def read_authority(self, candidate, observation):
+        if not self.read_authorized:
+            return None
+        return {
+            "binding": {
+                "work": str(candidate.work),
+                "candidateIdentity": candidate.result_identity,
+                "planning": candidate.planning,
+                "sourceIdentity": candidate.source["identity"],
+                "observationIdentity": observation["observationIdentity"],
+                "requests": observation["requests"],
+            },
+            "outsideWritableScope": True,
+            "current": True,
+            "credentialOpaque": True,
+            "redactionEnforced": True,
+        }
 
     def run(self, candidate, retained_source, scratch_root, observation):
         self.calls.append(observation["kind"])
@@ -182,7 +214,8 @@ class ReadOnlyRunner:
                 for request in observation["requests"]
             ],
             "observed": observation["expected"],
-            "artifact": {"redacted": True},
+            "artifact": {"redacted": self.redaction_safe, "secret": "must-not-survive"},
+            "redacted": self.redaction_safe,
         }
 
 
@@ -279,6 +312,10 @@ class Phase6EffectObservationTests(unittest.TestCase):
         self.assertEqual("COMPLETE", result.raw["status"])
         self.assertIsNotNone(result.projection)
         self.assertEqual(["ACTION", "READBACK"], [stage for stage, _ in self.adapter.calls])
+        self.assertEqual(
+            ["ACTION"],
+            [item["stage"] for item in result.raw["artifact"]["durableDispatchMarkers"]],
+        )
 
     def test_response_loss_is_not_reexecuted_and_readback_can_resolve_it(self) -> None:
         self.adapter.response_loss = True
@@ -288,9 +325,14 @@ class Phase6EffectObservationTests(unittest.TestCase):
             self.candidate, observation, (), self.adapter.markers.append
         )
 
+        alias = effect_observation()
+        alias["effect"]["target"] = {
+            "environment": "alias-for-test",
+            "resource": "target-1",
+        }
         second = observer.observe(
             self.candidate,
-            observation,
+            alias,
             (first.projection,),
             self.adapter.markers.append,
         )
@@ -413,6 +455,29 @@ class Phase6EffectObservationTests(unittest.TestCase):
         self.assertEqual(interface.VerificationStatus.VERIFIED, result.status)
         self.assertEqual(["READ"], runner.calls)
         self.assertEqual([], self.adapter.calls)
+
+    def test_authenticated_read_without_authority_or_redaction_is_nonconclusive(self) -> None:
+        read = {
+            "observationIdentity": "remote-read",
+            "kind": "READ",
+            "criterionIndexes": [1],
+            "requests": [{"operation": "get"}],
+            "expected": "created",
+        }
+        runner = ReadOnlyRunner()
+        runner.read_authorized = False
+        module, _ = self.public_verification([read], runner=runner)
+        missing = module.verify(self.candidate)
+
+        runner.read_authorized = True
+        runner.redaction_safe = False
+        unsafe = module.verify(self.candidate)
+
+        self.assertEqual(interface.VerificationStatus.UNDETERMINED, missing.status)
+        self.assertEqual(interface.VerificationStatus.UNDETERMINED, unsafe.status)
+        self.assertEqual(["READ"], runner.calls)
+        self.assertIsNone(unsafe.criterion_results[0].evidence[0]["artifact"])
+        self.assertNotIn("must-not-survive", str(unsafe))
 
     def test_candidate_self_grant_is_not_an_effect_authority(self) -> None:
         proposed = effect_observation()

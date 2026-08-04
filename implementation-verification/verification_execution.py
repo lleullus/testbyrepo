@@ -57,8 +57,15 @@ class FreshVerifierAdapter(Protocol):
 
 class EvidenceRunnerAdapter(Protocol):
     read_only_enforced: bool
+    authenticated_read_enforced: bool
     effect_observation_enforced: bool
     supported_observations: tuple[str, ...]
+
+    def read_authority(
+        self,
+        candidate: Candidate,
+        observation: dict[str, object],
+    ) -> object: ...
 
     def run(
         self,
@@ -85,6 +92,54 @@ def _candidate_source(candidate: Candidate) -> tuple[Path, str]:
     if observed != identity:
         raise DurableResultIntegrityError("retained Candidate source differs")
     return root, identity
+
+
+_READ_AUTHORITY_FIELDS = {
+    "binding",
+    "outsideWritableScope",
+    "current",
+    "credentialOpaque",
+    "redactionEnforced",
+}
+
+
+def _read_binding(candidate: Candidate, observation: dict[str, object]) -> dict[str, object]:
+    return {
+        "work": str(candidate.work),
+        "candidateIdentity": candidate.result_identity,
+        "planning": candidate.planning,
+        "sourceIdentity": candidate.source["identity"],
+        "observationIdentity": observation["observationIdentity"],
+        "requests": observation["requests"],
+    }
+
+
+def _read_authority_matches(
+    candidate: Candidate,
+    observation: dict[str, object],
+    authority: object,
+) -> bool:
+    return (
+        isinstance(authority, dict)
+        and set(authority) == _READ_AUTHORITY_FIELDS
+        and authority["binding"] == _read_binding(candidate, observation)
+        and authority["outsideWritableScope"] is True
+        and authority["current"] is True
+        and authority["credentialOpaque"] is True
+        and authority["redactionEnforced"] is True
+    )
+
+
+def _unsafe_read_result(observation: dict[str, object]) -> dict[str, object]:
+    return {
+        "status": "UNSAFE_REDACTION",
+        "subattempts": [
+            {"request": request, "status": "UNSAFE_REDACTION"}
+            for request in observation["requests"]
+        ],
+        "observed": None,
+        "artifact": None,
+    }
 
 
 def _normalize_plan(candidate: Candidate, source_identity: str, proposed: object) -> dict[str, object] | None:
@@ -474,8 +529,14 @@ class VerificationExecution:
         kinds = tuple(
             kind
             for kind in self._runner.supported_observations
-            if kind in {"SOURCE", "LOCAL", "READ"}
+            if kind in {"SOURCE", "LOCAL"}
         )
+        if (
+            "READ" in self._runner.supported_observations
+            and getattr(self._runner, "authenticated_read_enforced", False) is True
+            and callable(getattr(self._runner, "read_authority", None))
+        ):
+            kinds += ("READ",)
         if self._effect_observer is not None and self._effect_observer.available:
             kinds += ("EFFECT",)
         return kinds
@@ -680,6 +741,65 @@ class VerificationExecution:
                 )
                 unresolved_item = None
                 effect_result = None
+            elif kind == "READ" and (
+                getattr(self._runner, "read_only_enforced", False) is not True
+                or kind not in supported_observations
+            ):
+                item = _incomplete_evidence(
+                    candidate,
+                    observation,
+                    "RUNNER_ISOLATION_UNAVAILABLE"
+                    if getattr(self._runner, "read_only_enforced", False) is not True
+                    else "UNSUPPORTED_OBSERVATION",
+                    pre_currentness,
+                    self._observe_currentness(candidate),
+                )
+                unresolved_item = None
+                effect_result = None
+            elif kind == "READ":
+                try:
+                    read_authority = self._runner.read_authority(candidate, observation)
+                except Exception:
+                    read_authority = None
+                if not _read_authority_matches(candidate, observation, read_authority):
+                    item = _incomplete_evidence(
+                        candidate,
+                        observation,
+                        "MISSING_READ_AUTHORITY",
+                        pre_currentness,
+                        self._observe_currentness(candidate),
+                    )
+                    unresolved_item = None
+                    effect_result = None
+                else:
+                    progress["activeObservation"] = {
+                        "position": position,
+                        "observationIdentity": observation["observationIdentity"],
+                        "kind": kind,
+                        "requests": observation["requests"],
+                        "mayHaveRun": True,
+                        "preCurrentness": pre_currentness.value,
+                    }
+                    _write_json(progress_path, progress)
+                    raw = self._runner.run(
+                        candidate,
+                        retained_root,
+                        scratch_root,
+                        observation,
+                    )
+                    if not isinstance(raw, dict) or raw.get("redacted") is not True:
+                        raw = _unsafe_read_result(observation)
+                    _, retained_after = _capture(retained_root)
+                    if retained_after != source_identity:
+                        raise DurableResultIntegrityError("Runner changed retained Candidate source")
+                    item, unresolved_item = _runner_evidence(
+                        candidate,
+                        observation,
+                        raw,
+                        pre_currentness,
+                        self._observe_currentness(candidate),
+                    )
+                    effect_result = None
             elif (
                 (
                     kind != "EFFECT"
