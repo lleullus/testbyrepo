@@ -19,6 +19,10 @@ from implementation_verification import (
 
 
 class _Execution(Protocol):
+    def preflight_implementation(self, work: Path) -> ImplementationStopped | None: ...
+
+    def preflight_verification(self, candidate: Candidate) -> VerificationCompletion | None: ...
+
     def implement(
         self,
         work: Path,
@@ -51,6 +55,7 @@ class VerificationCompletion:
     unresolved_observations: tuple[object, ...] = ()
     resolved_observation_identities: tuple[str, ...] = ()
     effect_safety_projections: tuple[object, ...] = ()
+    publication_safe: bool = True
 
 
 @dataclass(frozen=True)
@@ -91,6 +96,8 @@ class DurableBackend:
         work: Path,
         kind: str,
         semantic_input: object,
+        *,
+        exclude_completed_result_ref: str | None = None,
     ):
         while True:
             decision = self._store.begin(
@@ -98,6 +105,7 @@ class DurableBackend:
                 kind,
                 semantic_input,
                 f"progress:{uuid.uuid4().hex}",
+                exclude_completed_result_ref=exclude_completed_result_ref,
             )
             if decision.disposition is not TransitionDisposition.BUSY:
                 return decision
@@ -114,15 +122,31 @@ class DurableBackend:
         work: Path,
         worker: object,
     ) -> Candidate | ImplementationStopped:
-        decision = self._begin(
-            work,
-            "IMPLEMENT",
-            {"worker": _worker_identity(worker)},
-        )
-        if decision.disposition is TransitionDisposition.COMPLETED:
+        stopped = self._execution.preflight_implementation(work)
+        if stopped is not None:
+            return stopped
+        semantic_input = {"worker": _worker_identity(worker)}
+        excluded_result_ref = None
+        while True:
+            decision = self._begin(
+                work,
+                "IMPLEMENT",
+                semantic_input,
+                exclude_completed_result_ref=excluded_result_ref,
+            )
+            if decision.disposition is not TransitionDisposition.COMPLETED:
+                break
             if not isinstance(decision.result, Candidate):
                 raise DurableWorkError("completed implementation has no Candidate")
-            return decision.result
+            try:
+                currentness = self._execution.observe_currentness(decision.result)
+            except DurableWorkError:
+                currentness = Currentness.UNKNOWN
+            if currentness is Currentness.CURRENT:
+                return decision.result
+            if decision.result.result_identity is None:
+                raise DurableWorkError("completed Candidate has no durable identity")
+            excluded_result_ref = decision.result.result_identity
         result = self._execution.implement(
             work,
             worker,
@@ -170,6 +194,9 @@ class DurableBackend:
     def verify(self, candidate: Candidate) -> VerificationResult:
         if candidate.result_identity is None:
             raise ValueError("verify requires a durable Candidate")
+        preflight = self._execution.preflight_verification(candidate)
+        if preflight is not None and not preflight.publication_safe:
+            return VerificationResult(candidate, preflight.criterion_results)
         durable_candidate = self._store.read_candidate(candidate.result_identity)
         if durable_candidate != candidate:
             raise ValueError("verify requires the exact durable Candidate")
@@ -182,7 +209,7 @@ class DurableBackend:
             if not isinstance(decision.result, VerificationResult):
                 raise DurableWorkError("completed verification has no VerificationResult")
             return decision.result
-        completion = self._execution.verify(
+        completion = preflight or self._execution.verify(
             candidate,
             decision.transition_identity,
             reenter=decision.disposition is TransitionDisposition.REENTER,

@@ -56,14 +56,16 @@ class TemporarySourceAdoption:
         self.before_linearization = before_linearization
         self.calls = 0
 
-    def apply(self, project_root, workspace_root, changes) -> None:
+    def apply(self, project_root, workspace_root, changes, planning_is_current) -> None:
         self.calls += 1
+        if self.before_linearization is not None:
+            self.before_linearization(project_root / str(changes[0]["path"]))
+        if not planning_is_current():
+            raise execution_module.AdoptionConflict("planning changed at source adoption")
         for change in changes:
             relative = str(change["path"])
             target = project_root / relative
             source = workspace_root / relative
-            if self.before_linearization is not None:
-                self.before_linearization(target)
             if physical_entry(target) != change["expected"]:
                 raise execution_module.AdoptionConflict(f"conditional adoption conflict at {relative}")
             intended = change["intended"]
@@ -357,6 +359,38 @@ class ImplementationExecutionTests(unittest.TestCase):
         self.assertIsInstance(result, interface.ImplementationStopped)
         self.assertEqual("latest user", (self.project / "app.txt").read_text(encoding="utf-8"))
 
+    def test_planning_change_at_adoption_linearization_stops_before_write(self) -> None:
+        def drift(_target):
+            self.ticket.write_text(
+                self.ticket.read_text(encoding="utf-8") + "\nchanged at adoption\n",
+                encoding="utf-8",
+            )
+
+        result = self.module(TemporarySourceAdoption(drift)).implement(self.ticket, Worker())
+
+        self.assertIsInstance(result, interface.ImplementationStopped)
+        self.assertEqual("baseline", (self.project / "app.txt").read_text(encoding="utf-8"))
+
+    def test_module_state_overlap_is_rejected_before_source_change(self) -> None:
+        self.execution_root = self.project / ".iv-state"
+        before = execution_module._capture(self.project)[1]
+
+        result = self.module(TemporarySourceAdoption()).implement(self.ticket, Worker())
+
+        self.assertIsInstance(result, interface.ImplementationStopped)
+        self.assertEqual(before, execution_module._capture(self.project)[1])
+        self.assertFalse(self.execution_root.exists())
+
+    def test_database_overlap_is_rejected_before_source_change(self) -> None:
+        self.database = self.project / ".iv-state" / "durable.sqlite3"
+        before = execution_module._capture(self.project)[1]
+
+        result = self.module(TemporarySourceAdoption()).implement(self.ticket, Worker())
+
+        self.assertIsInstance(result, interface.ImplementationStopped)
+        self.assertEqual(before, execution_module._capture(self.project)[1])
+        self.assertFalse(self.database.exists())
+
     def test_adoption_interruption_reentry_performs_no_additional_write(self) -> None:
         calls = 0
 
@@ -387,6 +421,20 @@ class ImplementationExecutionTests(unittest.TestCase):
         self.assertEqual(candidate, inspection.result)
         self.assertEqual(interface.Currentness.NOT_CURRENT, inspection.currentness)
         self.assertEqual("preexisting user bytes", (retained / "notes.txt").read_text(encoding="utf-8"))
+
+    def test_live_drift_starts_new_implementation_instead_of_reusing_candidate(self) -> None:
+        module = self.module(TemporarySourceAdoption())
+        worker = Worker()
+        first = module.implement(self.ticket, worker)
+        (self.project / "app.txt").write_text("live drift", encoding="utf-8")
+
+        second = module.implement(self.ticket, worker)
+
+        self.assertIsInstance(second, interface.Candidate)
+        self.assertNotEqual(first.result_identity, second.result_identity)
+        self.assertEqual(2, worker.calls)
+        self.assertEqual("implemented", (self.project / "app.txt").read_text(encoding="utf-8"))
+        self.assertEqual(interface.Currentness.CURRENT, module.inspect(self.ticket).currentness)
 
     def test_retained_candidate_tamper_makes_inspect_nonconclusive(self) -> None:
         module = self.module(TemporarySourceAdoption())

@@ -568,6 +568,36 @@ class VerificationExecution:
     def _transition_root(self, transition_identity: str) -> Path:
         return self._state_root / "verification" / _value_identity(transition_identity)
 
+    def preflight_verification(self, candidate: Candidate) -> VerificationCompletion | None:
+        source = candidate.source
+        planning = candidate.planning
+        if (
+            not isinstance(source, dict)
+            or not isinstance(source.get("retainedRoot"), str)
+            or not isinstance(planning, dict)
+            or not isinstance(planning.get("projectRoot"), str)
+        ):
+            return None
+        retained_root = Path(source["retainedRoot"]).expanduser().resolve(strict=False)
+        project_root = Path(planning["projectRoot"]).expanduser().resolve(strict=False)
+        verification_root = self._state_root / "verification"
+        database_path = self._store.database_path
+        unsafe_database = _overlaps(database_path, retained_root) or _overlaps(
+            database_path,
+            project_root,
+        )
+        if not (
+            unsafe_database
+            or _overlaps(verification_root, retained_root)
+            or _overlaps(verification_root, project_root)
+            or _overlaps(retained_root, project_root)
+        ):
+            return None
+        return VerificationCompletion(
+            _undetermined_results(candidate, ()),
+            publication_safe=not unsafe_database,
+        )
+
     def _persist_completion(
         self,
         progress_path: Path,
@@ -606,6 +636,9 @@ class VerificationExecution:
         *,
         reenter: bool,
     ) -> VerificationCompletion:
+        preflight = self.preflight_verification(candidate)
+        if preflight is not None:
+            return preflight
         transition_root = self._transition_root(transition_identity)
         transition_root.mkdir(parents=True, exist_ok=True)
         with (transition_root / "execution.lock").open("a+b") as lock:
@@ -972,6 +1005,12 @@ class ModuleExecution:
     def __init__(self, implementation, verification: VerificationExecution) -> None:
         self._implementation = implementation
         self._verification = verification
+
+    def preflight_implementation(self, work):
+        return self._implementation.preflight_implementation(work)
+
+    def preflight_verification(self, candidate):
+        return self._verification.preflight_verification(candidate)
 
     def implement(self, work, worker, transition_identity, *, reenter):
         return self._implementation.implement(

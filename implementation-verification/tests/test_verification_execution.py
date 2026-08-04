@@ -294,6 +294,20 @@ class VerificationExecutionTests(unittest.TestCase):
         self.assertEqual([], runner.calls)
         self.assertEqual(before, (self.retained / "app.txt").read_bytes())
 
+    def test_module_state_overlap_is_rejected_before_verification_changes_source(self) -> None:
+        self.state_root = self.project / ".iv-state"
+        before = implementation_module._capture(self.project)[1]
+        verifier = FreshVerifier(self.two_observations())
+        runner = Runner()
+
+        result = self.module(verifier, runner).verify(self.candidate)
+
+        self.assertEqual(interface.VerificationStatus.UNDETERMINED, result.status)
+        self.assertEqual(before, implementation_module._capture(self.project)[1])
+        self.assertFalse(self.state_root.exists())
+        self.assertEqual(0, verifier.opens)
+        self.assertEqual([], runner.calls)
+
     def test_local_response_loss_closes_undetermined_without_duplicate_then_retries_fresh(self) -> None:
         observations = [observation("local", "LOCAL", (1, 2), "ok", {"argv": ["check"]})]
         verifier = FreshVerifier(observations)

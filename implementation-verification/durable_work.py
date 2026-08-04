@@ -503,6 +503,8 @@ class DurableWorkStore:
         kind: str,
         semantic_input: object,
         progress_ref: str,
+        *,
+        exclude_completed_result_ref: str | None = None,
     ) -> TransitionDecision:
         if kind not in {"IMPLEMENT", "VERIFY"}:
             raise DurableWorkError("unsupported transition kind")
@@ -540,7 +542,11 @@ class DurableWorkStore:
                    ORDER BY rowid DESC LIMIT 1""",
                 (exact_work, kind, stream["head_result_ref"], semantic_digest, semantic_json),
             ).fetchone()
-            if completed is not None and completed["result_ref"] is not None:
+            if (
+                completed is not None
+                and completed["result_ref"] is not None
+                and completed["result_ref"] != exclude_completed_result_ref
+            ):
                 completed_result = self._read_result_locked(connection, completed["result_ref"])
                 if not (
                     isinstance(completed_result, VerificationResult)

@@ -37,6 +37,7 @@ class SourceAdoptionAdapter(Protocol):
         project_root: Path,
         workspace_root: Path,
         changes: tuple[dict[str, object], ...],
+        planning_is_current: Callable[[], bool],
     ) -> None: ...
 
 
@@ -294,6 +295,19 @@ class ImplementationExecution:
     def _transition_root(self, transition_identity: str) -> Path:
         return self._state_root / "implementation" / _sha256_bytes(transition_identity.encode())
 
+    def preflight_implementation(self, work: Path) -> ImplementationStopped | None:
+        _, _, project_root = _read_planning(work)
+        if _overlaps(self._state_root, project_root) or _overlaps(
+            self._store.database_path,
+            project_root,
+        ):
+            return ImplementationStopped(
+                work,
+                "module state overlaps product source",
+                {"identity": "unknown"},
+            )
+        return None
+
     def _stopped_source(self, transition_root: Path, project_root: Path) -> dict[str, object]:
         _, identity = _capture(project_root)
         retained = transition_root / "stopped" / identity
@@ -544,6 +558,9 @@ class ImplementationExecution:
         | ImplementationPending
         | ImplementationStoppedCompletion
     ):
+        stopped = self.preflight_implementation(work)
+        if stopped is not None:
+            return stopped
         transition_root = self._transition_root(transition_identity)
         transition_root.mkdir(parents=True, exist_ok=True)
         with (transition_root / "execution.lock").open("a+b") as lock:
@@ -744,10 +761,27 @@ class ImplementationExecution:
         if changes:
             if getattr(self._adoption, "conditional_mutation", False) is not True:
                 return self._stop(work, transition_root, project_root, "conditional source adoption is unavailable")
+
+            def planning_is_current() -> bool:
+                try:
+                    observed_planning, observed_criteria, observed_root = _read_planning(work)
+                except Exception:
+                    return False
+                return (
+                    observed_planning == planning
+                    and observed_criteria == criteria
+                    and observed_root == project_root
+                )
+
             progress["adoptionMayHaveStarted"] = True
             _write_json(progress_path, progress)
             try:
-                self._adoption.apply(project_root, workspace_root, tuple(changes))
+                self._adoption.apply(
+                    project_root,
+                    workspace_root,
+                    tuple(changes),
+                    planning_is_current,
+                )
             except AdoptionConflict as exc:
                 return self._stop(work, transition_root, project_root, str(exc))
 

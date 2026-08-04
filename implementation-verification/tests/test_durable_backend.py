@@ -38,6 +38,12 @@ class RecordingExecution:
         self.criterion_results = ()
         self.verification_count = 0
 
+    def preflight_implementation(self, work):
+        return None
+
+    def preflight_verification(self, candidate):
+        return None
+
     def implement(self, work, worker, transition_identity, *, reenter):
         if reenter:
             self.started.wait(timeout=5)

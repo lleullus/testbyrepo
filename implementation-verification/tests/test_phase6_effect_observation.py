@@ -233,7 +233,7 @@ class NoWorkerAdapter:
 class NoAdoption:
     conditional_mutation = True
 
-    def apply(self, project_root, workspace_root, changes):
+    def apply(self, project_root, workspace_root, changes, planning_is_current):
         raise AssertionError("already-complete source must not be adopted")
 
 
