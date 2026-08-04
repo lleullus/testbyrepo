@@ -29,7 +29,11 @@ from oracle_browser_slots.cdp import (
     _archived_ui_fallback_expression,
 )
 from oracle_browser_slots.coordination import QueueCoordinator
-from oracle_browser_slots.launcher import ChromeLauncher, PrepareError
+from oracle_browser_slots.launcher import (
+    ChromeLauncher,
+    PrepareError,
+    _is_chrome_process,
+)
 from oracle_browser_slots.model import AVAILABLE, OCCUPIED, SLOT_IDS, UNAVAILABLE, Settings
 from oracle_browser_slots.runner import CANONICAL_ORACLE_CLI, JobRunner
 from oracle_browser_slots.service import SlotService, process_starttime
@@ -1039,6 +1043,51 @@ class LauncherTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(PrepareError, "/proc"):
                     launcher.ensure_running(slot)
+
+    def test_flattened_cmdline_chrome_owner_is_reused(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            settings = settings_for(root)
+            launcher = ChromeLauncher(settings, ReadyCDP())
+            slot = settings.slot(1)
+            flattened = (
+                f"/usr/bin/google-chrome --remote-debugging-port={slot.port} "
+                f"--remote-debugging-address=127.0.0.1 "
+                f"--user-data-dir={slot.profile_dir} https://chatgpt.com/",
+            )
+
+            with patch(
+                "oracle_browser_slots.launcher._proc_arguments",
+                return_value=iter((flattened,)),
+            ):
+                self.assertIsNone(launcher.ensure_running(slot))
+
+    def test_flattened_cmdline_other_port_is_not_owner(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            settings = settings_for(root)
+            launcher = ChromeLauncher(settings, ReadyCDP())
+            slot = settings.slot(1)
+            flattened = (
+                "/usr/bin/google-chrome "
+                f"--remote-debugging-port={slot.port + 1} "
+                f"--user-data-dir={slot.profile_dir} https://chatgpt.com/",
+            )
+
+            with patch(
+                "oracle_browser_slots.launcher._proc_arguments",
+                return_value=iter((flattened,)),
+            ):
+                with self.assertRaisesRegex(PrepareError, "/proc"):
+                    launcher.ensure_running(slot)
+
+    def test_is_chrome_process_accepts_flattened_cmdline(self):
+        flattened = (
+            "/opt/google/chrome/chrome --remote-debugging-port=19222 "
+            "--user-data-dir=/home/user01/.oracle/browser-profiles/slot-1 "
+            "https://chatgpt.com/",
+        )
+        self.assertTrue(_is_chrome_process(flattened))
 
 
 class SlotServiceTests(unittest.TestCase):

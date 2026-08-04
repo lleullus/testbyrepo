@@ -124,7 +124,7 @@ class ChromeLauncher:
     def _profile_process_exists(profile_dir: Path) -> bool:
         expected = f"--user-data-dir={profile_dir}"
         for arguments in _proc_arguments():
-            if expected in arguments:
+            if _has_flag(arguments, expected):
                 return True
         return False
 
@@ -138,13 +138,16 @@ class ChromeLauncher:
         matching_processes = [
             arguments
             for arguments in chrome_processes
-            if expected_port in arguments and expected_profile in arguments
+            if _has_flag(arguments, expected_port)
+            and _has_flag(arguments, expected_profile)
         ]
         if matching_processes:
             return
 
         port_processes = [
-            arguments for arguments in chrome_processes if expected_port in arguments
+            arguments
+            for arguments in chrome_processes
+            if _has_flag(arguments, expected_port)
         ]
         if port_processes:
             raise PrepareError(
@@ -195,5 +198,21 @@ def _proc_arguments() -> Iterator[tuple[str, ...]]:
 def _is_chrome_process(arguments: tuple[str, ...]) -> bool:
     if not arguments:
         return False
-    executable = Path(arguments[0]).name.lower()
+    executable = Path(arguments[0].split(maxsplit=1)[0]).name.lower()
     return "chrome" in executable or "chromium" in executable
+
+
+def _has_flag(arguments: tuple[str, ...], flag: str) -> bool:
+    """True when the flag appears as one argv element or whitespace token.
+
+    Chrome in this runtime can collapse the entire command line into a single
+    argv element (`/proc/<pid>/cmdline` then has one NUL-separated part), so
+    element-exact matching would never see a live slot owner. Token matching
+    keeps the check exact while tolerating that collapsed form.
+    """
+
+    if flag in arguments:
+        return True
+    return any(
+        token == flag for argument in arguments for token in argument.split()
+    )
