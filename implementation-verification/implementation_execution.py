@@ -9,7 +9,9 @@ import fcntl
 from pathlib import Path
 from typing import Callable, Iterable, Protocol
 
+from durable_backend import ImplementationCompletion, ImplementationPending
 from durable_work import DurableResultIntegrityError, DurableWorkStore
+from effect_observation import EffectObservationModule, effect_requests, normalize_effect
 from implementation_verification import (
     Candidate,
     Currentness,
@@ -274,12 +276,16 @@ class ImplementationExecution:
         worker_adapter: WorkerAdapter,
         adoption: SourceAdoptionAdapter,
         implementation_review: Callable[[Path, Path], object | None],
+        implementation_effects: Callable[[Path, Path], Iterable[object]] | None = None,
+        effect_observer: EffectObservationModule | None = None,
     ) -> None:
         self._state_root = Path(state_root).expanduser().resolve(strict=False)
         self._store = store
         self._worker_adapter = worker_adapter
         self._adoption = adoption
         self._implementation_review = implementation_review
+        self._implementation_effects = implementation_effects
+        self._effect_observer = effect_observer
 
     def _transition_root(self, transition_identity: str) -> Path:
         return self._state_root / "implementation" / _sha256_bytes(transition_identity.encode())
@@ -331,6 +337,163 @@ class ImplementationExecution:
         if retained_identity != identity:
             raise DurableResultIntegrityError("retained Candidate source differs")
 
+    @staticmethod
+    def _normalize_implementation_effects(proposed: object) -> list[dict[str, object]] | None:
+        if not isinstance(proposed, (list, tuple)):
+            return None
+        normalized: list[dict[str, object]] = []
+        identities: set[str] = set()
+        for item in proposed:
+            if not isinstance(item, dict) or set(item) != {
+                "observationIdentity",
+                "requests",
+                "expected",
+                "effect",
+            }:
+                return None
+            identity = item["observationIdentity"]
+            effect = normalize_effect(item["effect"])
+            if (
+                not isinstance(identity, str)
+                or not identity
+                or identity in identities
+                or effect is None
+                or not isinstance(item["requests"], (list, tuple))
+                or list(item["requests"]) != effect_requests(effect)
+            ):
+                return None
+            value = {
+                "observationIdentity": identity,
+                "requests": list(item["requests"]),
+                "expected": item["expected"],
+                "effect": effect,
+            }
+            try:
+                _value_identity(value)
+            except (TypeError, ValueError):
+                return None
+            identities.add(identity)
+            normalized.append(value)
+        return normalized
+
+    def _complete_candidate_effects(
+        self,
+        work: Path,
+        transition_root: Path,
+        project_root: Path,
+        progress_path: Path,
+        progress: dict[str, object],
+    ) -> Candidate | ImplementationStopped | ImplementationCompletion | ImplementationPending:
+        candidate_value = progress.get("candidateDraft")
+        effects = progress.get("implementationEffects")
+        if not isinstance(candidate_value, dict) or not isinstance(effects, list):
+            raise RuntimeError("private implementation effect progress is malformed")
+        candidate = self._candidate_from_progress(work, candidate_value)
+        self._validate_retained_source(candidate)
+        index = progress.get("implementationEffectIndex", 0)
+        projections = progress.get("effectSafetyProjections", [])
+        resolved = progress.get("resolvedObservationIdentities", [])
+        if (
+            not isinstance(index, int)
+            or isinstance(index, bool)
+            or not 0 <= index <= len(effects)
+            or not isinstance(projections, list)
+            or not isinstance(resolved, list)
+        ):
+            raise RuntimeError("private implementation effect progress is malformed")
+        if effects and (self._effect_observer is None or not self._effect_observer.available):
+            return self._stop(
+                work,
+                transition_root,
+                project_root,
+                "effect observation authority is unavailable",
+            )
+        prior = list(self._store.effect_safety_facts_for_work(work))
+        marker = progress.get("implementationEffectDispatch")
+        unresolved = progress.get("implementationEffectUnresolved")
+        if isinstance(unresolved, dict):
+            prior.append(unresolved)
+        elif isinstance(marker, dict) and marker.get("mayHaveRun") is True:
+            recovered = dict(marker)
+            recovered.update(
+                {
+                    "work": str(work),
+                    "candidateIdentity": None,
+                    "observationIdentity": effects[index]["observationIdentity"]
+                    if index < len(effects)
+                    else None,
+                    "target": marker.get("targetIdentity"),
+                    "state": "UNRESOLVED",
+                }
+            )
+            recovered["identity"] = _value_identity(recovered)
+            prior.append(recovered)
+            progress["implementationEffectUnresolved"] = recovered
+            _write_json(progress_path, progress)
+
+        while index < len(effects):
+            observation = effects[index]
+
+            def mark_effect(value: dict[str, object]) -> None:
+                progress["implementationEffectDispatch"] = value
+                _write_json(progress_path, progress)
+
+            assert self._effect_observer is not None
+            result = self._effect_observer.observe(
+                candidate,
+                observation,
+                tuple(prior),
+                mark_effect,
+            )
+            if result.projection is None:
+                if result.unresolved is not None:
+                    progress["implementationEffectUnresolved"] = result.unresolved
+                    _write_json(progress_path, progress)
+                    return ImplementationPending(
+                        self._stop(
+                            work,
+                            transition_root,
+                            project_root,
+                            "implementation effect observation is unresolved",
+                        )
+                    )
+                return self._stop(
+                    work,
+                    transition_root,
+                    project_root,
+                    "implementation effect observation did not complete",
+                )
+            projections.append(result.projection)
+            for identity in result.resolved_identities:
+                if identity not in resolved:
+                    resolved.append(identity)
+            prior.append(result.projection)
+            index += 1
+            progress["implementationEffectIndex"] = index
+            progress["effectSafetyProjections"] = projections
+            progress["resolvedObservationIdentities"] = resolved
+            progress.pop("implementationEffectDispatch", None)
+            progress.pop("implementationEffectUnresolved", None)
+            _write_json(progress_path, progress)
+
+        final_planning, final_criteria, final_root = _read_planning(work)
+        _, final_identity = _capture(project_root)
+        if (
+            final_planning != candidate.planning
+            or final_criteria != candidate.acceptance_criteria
+            or final_root != project_root
+            or final_identity != candidate.source["identity"]
+        ):
+            return self._stop(
+                work,
+                transition_root,
+                project_root,
+                "planning or source changed during implementation effect observation",
+            )
+        progress["candidate"] = candidate_value
+        _write_json(progress_path, progress)
+        return ImplementationCompletion(candidate, tuple(resolved), tuple(projections))
+
     def implement(
         self,
         work: Path,
@@ -338,7 +501,7 @@ class ImplementationExecution:
         transition_identity: str,
         *,
         reenter: bool,
-    ) -> Candidate | ImplementationStopped:
+    ) -> Candidate | ImplementationStopped | ImplementationCompletion | ImplementationPending:
         transition_root = self._transition_root(transition_identity)
         transition_root.mkdir(parents=True, exist_ok=True)
         with (transition_root / "execution.lock").open("a+b") as lock:
@@ -352,7 +515,7 @@ class ImplementationExecution:
         transition_identity: str,
         *,
         reenter: bool,
-    ) -> Candidate | ImplementationStopped:
+    ) -> Candidate | ImplementationStopped | ImplementationCompletion | ImplementationPending:
         planning, criteria, project_root = _read_planning(work)
         transition_root = self._transition_root(transition_identity)
         progress_path = transition_root / "progress.json"
@@ -365,7 +528,19 @@ class ImplementationExecution:
             if isinstance(candidate_value, dict):
                 candidate = self._candidate_from_progress(work, candidate_value)
                 self._validate_retained_source(candidate)
+                projections = progress.get("effectSafetyProjections", [])
+                resolved = progress.get("resolvedObservationIdentities", [])
+                if isinstance(projections, list) and isinstance(resolved, list):
+                    return ImplementationCompletion(candidate, tuple(resolved), tuple(projections))
                 return candidate
+            if isinstance(progress.get("candidateDraft"), dict):
+                return self._complete_candidate_effects(
+                    work,
+                    transition_root,
+                    project_root,
+                    progress_path,
+                    progress,
+                )
             if progress.get("adoptionMayHaveStarted") is True:
                 return self._stop(
                     work,
@@ -537,9 +712,39 @@ class ImplementationExecution:
             "implementationChanges": implementation_paths,
             "preservedChanges": sorted(preserved_paths),
         }
-        progress["candidate"] = candidate_value
+        if self._implementation_effects is None:
+            proposed_effects: object = ()
+        else:
+            try:
+                proposed_effects = tuple(self._implementation_effects(work, retained_root))
+            except Exception:
+                return self._stop(
+                    work,
+                    transition_root,
+                    project_root,
+                    "implementation effect plan is unavailable",
+                )
+        effects = self._normalize_implementation_effects(proposed_effects)
+        if effects is None:
+            return self._stop(
+                work,
+                transition_root,
+                project_root,
+                "implementation effect plan is malformed",
+            )
+        progress["candidateDraft"] = candidate_value
+        progress["implementationEffects"] = effects
+        progress["implementationEffectIndex"] = 0
+        progress["effectSafetyProjections"] = []
+        progress["resolvedObservationIdentities"] = []
         _write_json(progress_path, progress)
-        return self._candidate_from_progress(work, candidate_value)
+        return self._complete_candidate_effects(
+            work,
+            transition_root,
+            project_root,
+            progress_path,
+            progress,
+        )
 
     def verify(
         self,

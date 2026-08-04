@@ -245,18 +245,24 @@ class DurableWorkStore:
             (result_ref,),
         ).fetchone()
         if row is None:
-            raise DurableWorkError("durable VerificationResult private state is absent")
+            raise DurableWorkError("durable result private state is absent")
         encoded = bytes(row["payload_json"])
         if hashlib.sha256(encoded).hexdigest() != row["payload_sha256"]:
-            raise DurableWorkError("durable VerificationResult private state differs")
+            raise DurableWorkError("durable result private state differs")
         payload = _decode(encoded)
         if (
             not isinstance(payload, dict)
-            or set(payload) != {"unresolvedObservations", "resolvedObservationIdentities"}
+            or set(payload)
+            != {
+                "unresolvedObservations",
+                "resolvedObservationIdentities",
+                "effectSafetyProjections",
+            }
             or not isinstance(payload["unresolvedObservations"], list)
             or not isinstance(payload["resolvedObservationIdentities"], list)
+            or not isinstance(payload["effectSafetyProjections"], list)
         ):
-            raise DurableWorkError("durable VerificationResult private state is malformed")
+            raise DurableWorkError("durable result private state is malformed")
         return payload
 
     def _read_result_locked(
@@ -277,7 +283,7 @@ class DurableWorkStore:
             raise DurableWorkError("durable result payload is malformed")
         if row["kind"] == "CANDIDATE":
             try:
-                return Candidate(
+                result = Candidate(
                     work=Path(row["work"]),
                     planning=payload["planning"],
                     acceptance_criteria=tuple(payload["acceptanceCriteria"]),
@@ -288,6 +294,8 @@ class DurableWorkStore:
                 )
             except (KeyError, TypeError) as exc:
                 raise DurableWorkError("durable Candidate payload is malformed") from exc
+            self._private_result_state_locked(connection, result_ref)
+            return result
         if row["kind"] != "VERIFICATION" or not isinstance(row["candidate_ref"], str):
             raise DurableWorkError("durable result kind is malformed")
         candidate = self._read_result_locked(connection, row["candidate_ref"])
@@ -364,6 +372,61 @@ class DurableWorkStore:
                         unresolved[item["identity"]] = item
             connection.commit()
             return tuple(unresolved.values())
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def effect_safety_facts(self, candidate: Candidate) -> tuple[object, ...]:
+        if candidate.result_identity is None:
+            raise DurableWorkError("effect safety lookup requires a durable Candidate")
+        connection = self._connect_read_only()
+        if connection is None:
+            raise DurableWorkError("durable Candidate store is absent")
+        try:
+            connection.execute("BEGIN")
+            durable_candidate = self._read_result_locked(connection, candidate.result_identity)
+            if durable_candidate != candidate:
+                raise DurableWorkError("effect safety lookup Candidate differs")
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+        return self.effect_safety_facts_for_work(candidate.work)
+
+    def effect_safety_facts_for_work(self, work: str | Path) -> tuple[object, ...]:
+        exact_work = _canonical_work(work)
+        connection = self._connect_read_only()
+        if connection is None:
+            raise DurableWorkError("durable Candidate store is absent")
+        try:
+            connection.execute("BEGIN")
+            rows = connection.execute(
+                "SELECT result_ref FROM results WHERE work = ? ORDER BY rowid",
+                (exact_work,),
+            ).fetchall()
+            facts: dict[str, object] = {}
+            resolved: set[str] = set()
+            for row in rows:
+                state = self._private_result_state_locked(connection, row["result_ref"])
+                for identity in state["resolvedObservationIdentities"]:
+                    if not isinstance(identity, str):
+                        raise DurableWorkError("resolved observation identity is malformed")
+                    resolved.add(identity)
+                    facts.pop(identity, None)
+                for item in (
+                    list(state["unresolvedObservations"])
+                    + list(state["effectSafetyProjections"])
+                ):
+                    if not isinstance(item, dict) or not isinstance(item.get("identity"), str):
+                        raise DurableWorkError("effect safety fact is malformed")
+                    if item["identity"] not in resolved:
+                        facts[item["identity"]] = item
+            connection.commit()
+            return tuple(facts.values())
         except BaseException:
             connection.rollback()
             raise
@@ -500,8 +563,6 @@ class DurableWorkStore:
             if isinstance(result, Candidate):
                 if transition["kind"] != "IMPLEMENT":
                     raise DurableWorkError("Candidate requires an IMPLEMENT transition")
-                if private_state is not None:
-                    raise DurableWorkError("Candidate cannot publish verification private state")
                 kind = "CANDIDATE"
                 candidate_ref = None
                 payload = self._candidate_payload(result)
@@ -534,31 +595,36 @@ class DurableWorkStore:
                     hashlib.sha256(encoded).hexdigest(),
                 ),
             )
-            if isinstance(result, VerificationResult):
-                if private_state is None:
-                    private_state = {
-                        "unresolvedObservations": [],
-                        "resolvedObservationIdentities": [],
-                    }
-                private_encoded = _encode(private_state)
-                decoded_private = _decode(private_encoded)
-                if (
-                    not isinstance(decoded_private, dict)
-                    or set(decoded_private)
-                    != {"unresolvedObservations", "resolvedObservationIdentities"}
-                    or not isinstance(decoded_private["unresolvedObservations"], list)
-                    or not isinstance(decoded_private["resolvedObservationIdentities"], list)
-                ):
-                    raise DurableWorkError("VerificationResult private state is malformed")
-                connection.execute(
-                    """INSERT INTO result_private_state(result_ref, payload_json, payload_sha256)
-                       VALUES (?, ?, ?)""",
-                    (
-                        result_ref,
-                        private_encoded,
-                        hashlib.sha256(private_encoded).hexdigest(),
-                    ),
-                )
+            if private_state is None:
+                private_state = {
+                    "unresolvedObservations": [],
+                    "resolvedObservationIdentities": [],
+                    "effectSafetyProjections": [],
+                }
+            private_encoded = _encode(private_state)
+            decoded_private = _decode(private_encoded)
+            if (
+                not isinstance(decoded_private, dict)
+                or set(decoded_private)
+                != {
+                    "unresolvedObservations",
+                    "resolvedObservationIdentities",
+                    "effectSafetyProjections",
+                }
+                or not isinstance(decoded_private["unresolvedObservations"], list)
+                or not isinstance(decoded_private["resolvedObservationIdentities"], list)
+                or not isinstance(decoded_private["effectSafetyProjections"], list)
+            ):
+                raise DurableWorkError("result private state is malformed")
+            connection.execute(
+                """INSERT INTO result_private_state(result_ref, payload_json, payload_sha256)
+                   VALUES (?, ?, ?)""",
+                (
+                    result_ref,
+                    private_encoded,
+                    hashlib.sha256(private_encoded).hexdigest(),
+                ),
+            )
             connection.execute(
                 "DELETE FROM mutation_occupancy WHERE transition_ref = ?", (transition_ref,)
             )

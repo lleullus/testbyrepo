@@ -26,7 +26,7 @@ class _Execution(Protocol):
         transition_identity: str,
         *,
         reenter: bool,
-    ) -> Candidate | ImplementationStopped: ...
+    ) -> Candidate | ImplementationStopped | ImplementationCompletion | ImplementationPending: ...
 
     def verify(
         self,
@@ -43,6 +43,20 @@ class _Execution(Protocol):
 class VerificationCompletion:
     criterion_results: tuple[CriterionResult, ...]
     unresolved_observations: tuple[object, ...] = ()
+    resolved_observation_identities: tuple[str, ...] = ()
+    effect_safety_projections: tuple[object, ...] = ()
+
+
+@dataclass(frozen=True)
+class ImplementationCompletion:
+    candidate: Candidate
+    resolved_observation_identities: tuple[str, ...] = ()
+    effect_safety_projections: tuple[object, ...] = ()
+
+
+@dataclass(frozen=True)
+class ImplementationPending:
+    stopped: ImplementationStopped
 
 
 def _worker_identity(worker: object) -> str:
@@ -102,10 +116,28 @@ class DurableBackend:
             decision.transition_identity,
             reenter=decision.disposition is TransitionDisposition.REENTER,
         )
+        if isinstance(result, ImplementationPending):
+            return result.stopped
         if isinstance(result, ImplementationStopped):
             self._store.close_without_result(decision.transition_identity)
             return result
-        published = self._store.publish(decision.transition_identity, result)
+        if isinstance(result, ImplementationCompletion):
+            candidate = result.candidate
+            private_state = {
+                "unresolvedObservations": [],
+                "resolvedObservationIdentities": list(
+                    result.resolved_observation_identities
+                ),
+                "effectSafetyProjections": list(result.effect_safety_projections),
+            }
+        else:
+            candidate = result
+            private_state = None
+        published = self._store.publish(
+            decision.transition_identity,
+            candidate,
+            private_state=private_state,
+        )
         if not isinstance(published, Candidate):
             raise DurableWorkError("implementation published a non-Candidate result")
         return published
@@ -134,13 +166,17 @@ class DurableBackend:
             criterion_results = completion.criterion_results
             private_state = {
                 "unresolvedObservations": list(completion.unresolved_observations),
-                "resolvedObservationIdentities": [],
+                "resolvedObservationIdentities": list(
+                    completion.resolved_observation_identities
+                ),
+                "effectSafetyProjections": list(completion.effect_safety_projections),
             }
         else:
             criterion_results = tuple(completion)
             private_state = {
                 "unresolvedObservations": [],
                 "resolvedObservationIdentities": [],
+                "effectSafetyProjections": [],
             }
         result = VerificationResult(candidate, criterion_results)
         published = self._store.publish(

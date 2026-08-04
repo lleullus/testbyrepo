@@ -310,7 +310,7 @@ class VerificationExecutionTests(unittest.TestCase):
         self.assertEqual(["local", "local"], runner.calls)
         self.assertEqual(2, verifier.opens)
 
-    def test_unresolved_effect_blocks_all_later_same_candidate_effects(self) -> None:
+    def test_generic_runner_cannot_publish_unresolved_effect_state(self) -> None:
         observations = [observation("effect", "EFFECT", (1, 2), "created", {"action": "create"})]
         unresolved = {
             "status": "UNRESOLVED_EFFECT",
@@ -329,21 +329,20 @@ class VerificationExecutionTests(unittest.TestCase):
 
         self.assertEqual(interface.VerificationStatus.UNDETERMINED, first.status)
         self.assertEqual(interface.VerificationStatus.UNDETERMINED, second.status)
-        self.assertEqual(["effect"], runner.calls)
-        self.assertEqual(["SUPPORTED", "UNSAFE"], verifier.effect_safety)
-        self.assertEqual(1, len(self.store.unresolved_observations(self.candidate)))
+        self.assertEqual([], runner.calls)
+        self.assertEqual(["SUPPORTED", "SUPPORTED"], verifier.effect_safety)
+        self.assertEqual(0, len(self.store.unresolved_observations(self.candidate)))
 
-    def test_effect_response_loss_stays_fail_closed_without_reexecution(self) -> None:
+    def test_generic_runner_effect_response_loss_path_is_not_reachable(self) -> None:
         observations = [observation("effect", "EFFECT", (1, 2), "created", {"action": "create"})]
         runner = Runner({"effect": InterruptedError("simulated effect response loss")})
         module = self.module(FreshVerifier(observations), runner)
-        with self.assertRaises(InterruptedError):
-            module.verify(self.candidate)
-        with self.assertRaisesRegex(RuntimeError, "may have run"):
-            module.verify(self.candidate)
+        first = module.verify(self.candidate)
+        second = module.verify(self.candidate)
 
-        self.assertEqual(["effect"], runner.calls)
-        self.assertEqual(self.candidate, module.inspect(self.ticket).result)
+        self.assertEqual(interface.VerificationStatus.UNDETERMINED, first.status)
+        self.assertEqual(interface.VerificationStatus.UNDETERMINED, second.status)
+        self.assertEqual([], runner.calls)
 
     def test_effect_observation_without_phase_six_owned_seam_is_not_executed(self) -> None:
         observations = [observation("effect", "EFFECT", (1, 2), "created", {"action": "create"})]

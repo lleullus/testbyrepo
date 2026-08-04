@@ -6,6 +6,7 @@ from typing import Iterable, Protocol
 
 from durable_backend import VerificationCompletion
 from durable_work import DurableResultIntegrityError, DurableWorkStore
+from effect_observation import EffectObservationModule, effect_requests, normalize_effect
 from implementation_execution import (
     _capture,
     _overlaps,
@@ -93,13 +94,13 @@ def _normalize_plan(candidate: Candidate, source_identity: str, proposed: object
     identities: set[str] = set()
     coverage = [0 for _ in candidate.acceptance_criteria]
     for item in proposed:
-        if not isinstance(item, dict) or set(item) != {
+        if not isinstance(item, dict) or not {
             "observationIdentity",
             "kind",
             "criterionIndexes",
             "requests",
             "expected",
-        }:
+        }.issubset(item):
             return None
         identity = item["observationIdentity"]
         kind = item["kind"]
@@ -109,7 +110,7 @@ def _normalize_plan(candidate: Candidate, source_identity: str, proposed: object
             not isinstance(identity, str)
             or not identity
             or identity in identities
-            or kind not in {"SOURCE", "LOCAL", "EFFECT"}
+            or kind not in {"SOURCE", "LOCAL", "READ", "EFFECT"}
             or not isinstance(indexes, (list, tuple))
             or not indexes
             or len(set(indexes)) != len(indexes)
@@ -128,6 +129,32 @@ def _normalize_plan(candidate: Candidate, source_identity: str, proposed: object
             "requests": list(requests),
             "expected": item["expected"],
         }
+        if kind == "EFFECT":
+            effect_fields = {
+                "observationIdentity",
+                "kind",
+                "criterionIndexes",
+                "requests",
+                "expected",
+                "effect",
+            }
+            if set(item) == effect_fields - {"effect"}:
+                pass
+            elif set(item) != effect_fields:
+                return None
+            else:
+                effect = normalize_effect(item["effect"])
+                if effect is None or list(requests) != effect_requests(effect):
+                    return None
+                normalized["effect"] = effect
+        elif set(item) != {
+            "observationIdentity",
+            "kind",
+            "criterionIndexes",
+            "requests",
+            "expected",
+        }:
+            return None
         try:
             _value_identity(normalized)
         except (TypeError, ValueError):
@@ -434,20 +461,24 @@ class VerificationExecution:
         fresh_verifier: FreshVerifierAdapter,
         runner: EvidenceRunnerAdapter,
         observe_currentness,
+        effect_observer: EffectObservationModule | None = None,
     ) -> None:
         self._state_root = Path(state_root).expanduser().resolve(strict=False)
         self._store = store
         self._fresh_verifier = fresh_verifier
         self._runner = runner
         self._observe_currentness = observe_currentness
+        self._effect_observer = effect_observer
 
     def _supported_observations(self) -> tuple[str, ...]:
-        return tuple(
+        kinds = tuple(
             kind
             for kind in self._runner.supported_observations
-            if kind in {"SOURCE", "LOCAL", "EFFECT"}
-            and (kind != "EFFECT" or getattr(self._runner, "effect_observation_enforced", False) is True)
+            if kind in {"SOURCE", "LOCAL", "READ"}
         )
+        if self._effect_observer is not None and self._effect_observer.available:
+            kinds += ("EFFECT",)
+        return kinds
 
     def _transition_root(self, transition_identity: str) -> Path:
         return self._state_root / "verification" / _value_identity(transition_identity)
@@ -461,9 +492,21 @@ class VerificationExecution:
         progress["criterionResults"] = _results_payload(results)
         _write_json(progress_path, progress)
         unresolved = progress.get("unresolvedObservations", [])
-        if not isinstance(unresolved, list):
+        resolved = progress.get("resolvedObservationIdentities", [])
+        projections = progress.get("effectSafetyProjections", [])
+        if (
+            not isinstance(unresolved, list)
+            or not isinstance(resolved, list)
+            or not all(isinstance(item, str) for item in resolved)
+            or not isinstance(projections, list)
+        ):
             raise RuntimeError("private unresolved observation progress is malformed")
-        return VerificationCompletion(results, tuple(unresolved))
+        return VerificationCompletion(
+            results,
+            tuple(unresolved),
+            tuple(resolved),
+            tuple(projections),
+        )
 
     def _evidence(self, progress: dict[str, object]) -> tuple[dict[str, object], ...]:
         refs = progress.get("evidenceRefs", [])
@@ -500,13 +543,39 @@ class VerificationExecution:
             if "criterionResults" in progress:
                 results = _results_from_payload(candidate, progress["criterionResults"])
                 unresolved = progress.get("unresolvedObservations", [])
-                if not isinstance(unresolved, list):
+                resolved = progress.get("resolvedObservationIdentities", [])
+                projections = progress.get("effectSafetyProjections", [])
+                if (
+                    not isinstance(unresolved, list)
+                    or not isinstance(resolved, list)
+                    or not isinstance(projections, list)
+                ):
                     raise RuntimeError("private unresolved observation progress is malformed")
-                return VerificationCompletion(results, tuple(unresolved))
+                return VerificationCompletion(
+                    results,
+                    tuple(unresolved),
+                    tuple(resolved),
+                    tuple(projections),
+                )
             if reenter and progress.get("contextMayHaveStarted") is True:
                 active = progress.get("activeObservation")
                 if isinstance(active, dict) and active.get("kind") == "EFFECT":
-                    raise RuntimeError("effect observation may have run without a safe unresolved binding")
+                    marker = active.get("effectDispatch")
+                    if not isinstance(marker, dict) or marker.get("mayHaveRun") is not True:
+                        raise RuntimeError("effect observation may have run without a safe unresolved binding")
+                    unresolved = dict(marker)
+                    unresolved.update(
+                        {
+                            "candidateIdentity": candidate.result_identity,
+                            "observationIdentity": active.get("observationIdentity"),
+                            "requests": active.get("requests"),
+                            "target": marker.get("targetIdentity"),
+                            "state": "UNRESOLVED",
+                        }
+                    )
+                    unresolved["identity"] = _value_identity(unresolved)
+                    progress.setdefault("unresolvedObservations", []).append(unresolved)
+                    progress.pop("activeObservation", None)
                 return self._persist_completion(
                     progress_path,
                     progress,
@@ -520,6 +589,8 @@ class VerificationExecution:
                 "contextMayHaveStarted": False,
                 "evidenceRefs": [],
                 "unresolvedObservations": [],
+                "resolvedObservationIdentities": [],
+                "effectSafetyProjections": [],
             }
             _write_json(progress_path, progress)
 
@@ -543,7 +614,12 @@ class VerificationExecution:
                 _undetermined_results(candidate, ()),
             )
 
-        prior_unresolved = self._store.unresolved_observations(candidate)
+        prior_effect_facts = self._store.effect_safety_facts(candidate)
+        prior_unresolved = tuple(
+            item
+            for item in prior_effect_facts
+            if isinstance(item, dict) and item.get("state") == "UNRESOLVED"
+        )
         effect_safety = "UNSAFE" if prior_unresolved else "SUPPORTED"
         supported_observations = self._supported_observations()
         progress["contextMayHaveStarted"] = True
@@ -594,17 +670,21 @@ class VerificationExecution:
         for position, observation in enumerate(observations):
             pre_currentness = self._observe_currentness(candidate)
             kind = observation["kind"]
-            if kind == "EFFECT" and (contradiction or prior_unresolved):
+            if kind == "EFFECT" and contradiction:
                 item = _incomplete_evidence(
                     candidate,
                     observation,
-                    "CONTRADICTION_SHORT_CIRCUIT" if contradiction else "UNSAFE_PRIOR_EFFECT",
+                    "CONTRADICTION_SHORT_CIRCUIT",
                     pre_currentness,
                     self._observe_currentness(candidate),
                 )
                 unresolved_item = None
+                effect_result = None
             elif (
-                getattr(self._runner, "read_only_enforced", False) is not True
+                (
+                    kind != "EFFECT"
+                    and getattr(self._runner, "read_only_enforced", False) is not True
+                )
                 or kind not in supported_observations
                 or (kind == "EFFECT" and pre_currentness is not Currentness.CURRENT)
             ):
@@ -612,12 +692,14 @@ class VerificationExecution:
                     candidate,
                     observation,
                     "RUNNER_ISOLATION_UNAVAILABLE"
-                    if getattr(self._runner, "read_only_enforced", False) is not True
+                    if kind != "EFFECT"
+                    and getattr(self._runner, "read_only_enforced", False) is not True
                     else "UNSUPPORTED_OBSERVATION",
                     pre_currentness,
                     self._observe_currentness(candidate),
                 )
                 unresolved_item = None
+                effect_result = None
             else:
                 progress["activeObservation"] = {
                     "position": position,
@@ -628,12 +710,32 @@ class VerificationExecution:
                     "preCurrentness": pre_currentness.value,
                 }
                 _write_json(progress_path, progress)
-                raw = self._runner.run(
-                    candidate,
-                    retained_root,
-                    scratch_root,
-                    observation,
-                )
+                if kind == "EFFECT":
+                    if self._effect_observer is None:
+                        raise RuntimeError("effect observation seam is absent")
+
+                    def mark_effect(marker: dict[str, object]) -> None:
+                        active = progress.get("activeObservation")
+                        if not isinstance(active, dict):
+                            raise RuntimeError("active effect observation is absent")
+                        active["effectDispatch"] = marker
+                        _write_json(progress_path, progress)
+
+                    effect_result = self._effect_observer.observe(
+                        candidate,
+                        observation,
+                        prior_effect_facts,
+                        mark_effect,
+                    )
+                    raw = effect_result.raw
+                else:
+                    effect_result = None
+                    raw = self._runner.run(
+                        candidate,
+                        retained_root,
+                        scratch_root,
+                        observation,
+                    )
                 _, retained_after = _capture(retained_root)
                 if retained_after != source_identity:
                     raise DurableResultIntegrityError("Runner changed retained Candidate source")
@@ -645,6 +747,15 @@ class VerificationExecution:
                     pre_currentness,
                     post_currentness,
                 )
+                if effect_result is not None:
+                    unresolved_item = effect_result.unresolved
+                    if effect_result.projection is not None:
+                        progress["effectSafetyProjections"].append(effect_result.projection)
+                    progress["resolvedObservationIdentities"].extend(
+                        identity
+                        for identity in effect_result.resolved_identities
+                        if identity not in progress["resolvedObservationIdentities"]
+                    )
             evidence_path = transition_root / "evidence" / f"{position:04d}.json"
             _write_json_once(evidence_path, item)
             evidence.append(item)
