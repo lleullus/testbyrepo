@@ -373,6 +373,46 @@ def _undetermined_results(
     )
 
 
+def _validated_claim(
+    candidate: Candidate,
+    plan: dict[str, object],
+    claim: object,
+    evidence_map: dict[str, dict[str, object]],
+) -> dict[str, object] | None:
+    if not isinstance(claim, dict):
+        return None
+    index = claim.get("criterionIndex")
+    references = claim.get("evidenceObservationIdentities")
+    if (
+        not isinstance(index, int)
+        or isinstance(index, bool)
+        or not 1 <= index <= len(candidate.acceptance_criteria)
+        or not isinstance(claim.get("outcome"), str)
+        or not isinstance(references, (list, tuple))
+        or any(not isinstance(identity, str) for identity in references)
+        or len(set(references)) != len(references)
+    ):
+        return None
+    obligations = {
+        item["observationIdentity"]
+        for item in plan["observations"]
+        if index in item["criterionIndexes"]
+    }
+    if any(identity not in obligations or identity not in evidence_map for identity in references):
+        return None
+    try:
+        outcome = CriterionOutcome(claim["outcome"])
+    except ValueError:
+        outcome = CriterionOutcome.UNDETERMINED
+    return {
+        "criterionIndex": index,
+        "outcome": outcome,
+        "referenceIdentities": tuple(references),
+        "referencedEvidence": tuple(evidence_map[identity] for identity in references),
+        "obligationIdentities": obligations,
+    }
+
+
 def _assess_results(
     candidate: Candidate,
     plan: dict[str, object],
@@ -382,46 +422,26 @@ def _assess_results(
 ) -> tuple[CriterionResult, ...]:
     if not isinstance(claims, (list, tuple)) or len(claims) != len(candidate.acceptance_criteria):
         return _undetermined_results(candidate, evidence)
+    evidence_map = _evidence_by_identity(evidence)
     by_index: dict[int, dict[str, object]] = {}
     for claim in claims:
-        if not isinstance(claim, dict):
+        validated = _validated_claim(candidate, plan, claim, evidence_map)
+        if validated is None:
             return _undetermined_results(candidate, evidence)
-        index = claim.get("criterionIndex")
-        if (
-            not isinstance(index, int)
-            or isinstance(index, bool)
-            or not 1 <= index <= len(candidate.acceptance_criteria)
-            or index in by_index
-            or not isinstance(claim.get("outcome"), str)
-            or not isinstance(claim.get("evidenceObservationIdentities"), (list, tuple))
-        ):
+        index = validated["criterionIndex"]
+        if index in by_index:
             return _undetermined_results(candidate, evidence)
-        by_index[index] = claim
+        by_index[index] = validated
     if len(by_index) != len(candidate.acceptance_criteria):
         return _undetermined_results(candidate, evidence)
 
-    observations = plan["observations"]
-    evidence_map = _evidence_by_identity(evidence)
     results: list[CriterionResult] = []
     for index, criterion in enumerate(candidate.acceptance_criteria, start=1):
-        obligation_ids = {
-            item["observationIdentity"]
-            for item in observations
-            if index in item["criterionIndexes"]
-        }
         claim = by_index[index]
-        reference_ids = claim["evidenceObservationIdentities"]
-        if (
-            len(set(reference_ids)) != len(reference_ids)
-            or any(identity not in obligation_ids or identity not in evidence_map for identity in reference_ids)
-        ):
-            results.append(CriterionResult(criterion, CriterionOutcome.UNDETERMINED))
-            continue
-        referenced = tuple(evidence_map[identity] for identity in reference_ids)
-        try:
-            claimed_outcome = CriterionOutcome(claim["outcome"])
-        except ValueError:
-            claimed_outcome = CriterionOutcome.UNDETERMINED
+        reference_ids = claim["referenceIdentities"]
+        obligation_ids = claim["obligationIdentities"]
+        referenced = claim["referencedEvidence"]
+        claimed_outcome = claim["outcome"]
         if claimed_outcome is CriterionOutcome.SATISFIED:
             allowed = (
                 set(reference_ids) == obligation_ids
@@ -452,20 +472,24 @@ def _assess_results(
     return tuple(results)
 
 
-def _has_supported_contradiction(claims: object, evidence: tuple[dict[str, object], ...]) -> bool:
+def _has_supported_contradiction(
+    candidate: Candidate,
+    plan: dict[str, object],
+    claims: object,
+    evidence: tuple[dict[str, object], ...],
+) -> bool:
     if not isinstance(claims, (list, tuple)):
         return False
     evidence_map = _evidence_by_identity(evidence)
     for claim in claims:
-        if not isinstance(claim, dict) or claim.get("outcome") != CriterionOutcome.NOT_SATISFIED.value:
+        validated = _validated_claim(candidate, plan, claim, evidence_map)
+        if validated is None or validated["outcome"] is not CriterionOutcome.NOT_SATISFIED:
             continue
-        identities = claim.get("evidenceObservationIdentities")
-        if not isinstance(identities, (list, tuple)) or not identities:
+        referenced = validated["referencedEvidence"]
+        if not referenced:
             continue
-        referenced = [evidence_map.get(identity) for identity in identities]
         if all(
-            item is not None
-            and item.get("complete") is True
+            item.get("complete") is True
             and item.get("preCurrentness") == Currentness.CURRENT.value
             for item in referenced
         ):
@@ -622,20 +646,19 @@ class VerificationExecution:
                 active = progress.get("activeObservation")
                 if isinstance(active, dict) and active.get("kind") == "EFFECT":
                     marker = active.get("effectDispatch")
-                    if not isinstance(marker, dict) or marker.get("mayHaveRun") is not True:
-                        raise RuntimeError("effect observation may have run without a safe unresolved binding")
-                    unresolved = dict(marker)
-                    unresolved.update(
-                        {
-                            "candidateIdentity": candidate.result_identity,
-                            "observationIdentity": active.get("observationIdentity"),
-                            "requests": active.get("requests"),
-                            "target": marker.get("targetIdentity"),
-                            "state": "UNRESOLVED",
-                        }
-                    )
-                    unresolved["identity"] = _value_identity(unresolved)
-                    progress.setdefault("unresolvedObservations", []).append(unresolved)
+                    if isinstance(marker, dict) and marker.get("mayHaveRun") is True:
+                        unresolved = dict(marker)
+                        unresolved.update(
+                            {
+                                "candidateIdentity": candidate.result_identity,
+                                "observationIdentity": active.get("observationIdentity"),
+                                "requests": active.get("requests"),
+                                "target": marker.get("targetIdentity"),
+                                "state": "UNRESOLVED",
+                            }
+                        )
+                        unresolved["identity"] = _value_identity(unresolved)
+                        progress.setdefault("unresolvedObservations", []).append(unresolved)
                     progress.pop("activeObservation", None)
                 return self._persist_completion(
                     progress_path,
@@ -675,10 +698,10 @@ class VerificationExecution:
                 _undetermined_results(candidate, ()),
             )
 
-        prior_effect_facts = self._store.effect_safety_facts(candidate)
+        current_effect_facts = list(self._store.effect_safety_facts(candidate))
         prior_unresolved = tuple(
             item
-            for item in prior_effect_facts
+            for item in current_effect_facts
             if isinstance(item, dict) and item.get("state") == "UNRESOLVED"
         )
         effect_safety = "UNSAFE" if prior_unresolved else "SUPPORTED"
@@ -731,7 +754,16 @@ class VerificationExecution:
         for position, observation in enumerate(observations):
             pre_currentness = self._observe_currentness(candidate)
             kind = observation["kind"]
-            if kind == "EFFECT" and contradiction:
+            safety_resolution = (
+                kind == "EFFECT"
+                and contradiction
+                and self._effect_observer is not None
+                and self._effect_observer.requires_safety_resolution(
+                    observation,
+                    tuple(current_effect_facts),
+                )
+            )
+            if kind == "EFFECT" and contradiction and not safety_resolution:
                 item = _incomplete_evidence(
                     candidate,
                     observation,
@@ -844,7 +876,7 @@ class VerificationExecution:
                     effect_result = self._effect_observer.observe(
                         candidate,
                         observation,
-                        prior_effect_facts,
+                        tuple(current_effect_facts),
                         mark_effect,
                     )
                     raw = effect_result.raw
@@ -869,8 +901,19 @@ class VerificationExecution:
                 )
                 if effect_result is not None:
                     unresolved_item = effect_result.unresolved
+                    resolved_identities = set(effect_result.resolved_identities)
+                    if resolved_identities:
+                        current_effect_facts = [
+                            fact
+                            for fact in current_effect_facts
+                            if not (
+                                isinstance(fact, dict)
+                                and fact.get("identity") in resolved_identities
+                            )
+                        ]
                     if effect_result.projection is not None:
                         progress["effectSafetyProjections"].append(effect_result.projection)
+                        current_effect_facts.append(effect_result.projection)
                     progress["resolvedObservationIdentities"].extend(
                         identity
                         for identity in effect_result.resolved_identities
@@ -884,12 +927,25 @@ class VerificationExecution:
             if unresolved_item is not None:
                 unresolved.append(unresolved_item)
                 progress["unresolvedObservations"].append(unresolved_item)
+                if isinstance(unresolved_item, dict):
+                    unresolved_identity = unresolved_item.get("identity")
+                    current_effect_facts = [
+                        fact
+                        for fact in current_effect_facts
+                        if not (
+                            isinstance(fact, dict)
+                            and fact.get("identity") == unresolved_identity
+                        )
+                    ]
+                    current_effect_facts.append(unresolved_item)
             _write_json(progress_path, progress)
             try:
                 partial_claims = context.assess(candidate, plan, tuple(evidence))
             except Exception:
                 partial_claims = ()
             contradiction = contradiction or _has_supported_contradiction(
+                candidate,
+                plan,
                 partial_claims,
                 tuple(evidence),
             )

@@ -26,7 +26,13 @@ class _Execution(Protocol):
         transition_identity: str,
         *,
         reenter: bool,
-    ) -> Candidate | ImplementationStopped | ImplementationCompletion | ImplementationPending: ...
+    ) -> (
+        Candidate
+        | ImplementationStopped
+        | ImplementationCompletion
+        | ImplementationPending
+        | ImplementationStoppedCompletion
+    ): ...
 
     def verify(
         self,
@@ -57,6 +63,13 @@ class ImplementationCompletion:
 @dataclass(frozen=True)
 class ImplementationPending:
     stopped: ImplementationStopped
+
+
+@dataclass(frozen=True)
+class ImplementationStoppedCompletion:
+    stopped: ImplementationStopped
+    resolved_observation_identities: tuple[str, ...] = ()
+    effect_safety_projections: tuple[object, ...] = ()
 
 
 def _worker_identity(worker: object) -> str:
@@ -117,6 +130,18 @@ class DurableBackend:
             reenter=decision.disposition is TransitionDisposition.REENTER,
         )
         if isinstance(result, ImplementationPending):
+            return result.stopped
+        if isinstance(result, ImplementationStoppedCompletion):
+            self._store.close_without_result(
+                decision.transition_identity,
+                private_safety={
+                    "unresolvedObservations": [],
+                    "resolvedObservationIdentities": list(
+                        result.resolved_observation_identities
+                    ),
+                    "effectSafetyProjections": list(result.effect_safety_projections),
+                },
+            )
             return result.stopped
         if isinstance(result, ImplementationStopped):
             self._store.close_without_result(decision.transition_identity)

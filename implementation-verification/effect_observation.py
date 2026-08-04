@@ -232,6 +232,34 @@ class EffectObservationModule:
             }
         return attempt
 
+    def requires_safety_resolution(
+        self,
+        observation: dict[str, object],
+        prior_facts: tuple[object, ...],
+    ) -> bool:
+        effect = normalize_effect(observation.get("effect"))
+        if (
+            not self.available
+            or effect is None
+            or effect["adapterIdentity"] != self._adapter.identity
+        ):
+            return False
+        try:
+            canonical = self._canonical_effect(self._adapter.canonicalize(effect))
+        except Exception:
+            canonical = None
+        if canonical is None:
+            return False
+        return any(
+            isinstance(item, dict)
+            and item.get("state") == "UNRESOLVED"
+            and item.get("adapterIdentity") == effect["adapterIdentity"]
+            and item.get("targetIdentity") == canonical["targetIdentity"]
+            and item.get("consequenceIdentity") == canonical["consequenceIdentity"]
+            and item.get("occurrenceIdentity") == canonical["occurrenceIdentity"]
+            for item in prior_facts
+        )
+
     def observe(
         self,
         candidate: Candidate,

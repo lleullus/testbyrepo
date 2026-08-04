@@ -288,6 +288,38 @@ class Phase6EffectObservationTests(unittest.TestCase):
             verifier,
         )
 
+    def ready_implementation_ticket(self, name):
+        root = Path(self.temporary.name)
+        spec = root / f"{name}-SPEC.md"
+        spec.write_text(
+            "# Spec\nStatus: approved\nOwner: owner\n\n"
+            + "".join(
+                f"## {section}\nvalue\n\n"
+                for section in (
+                    "Problem",
+                    "Desired Outcome",
+                    "Requirements",
+                    "Non-Goals",
+                    "Implementation Constraints",
+                    "Verification Expectations",
+                    "UI / UX",
+                    "Open Questions",
+                )
+            ),
+            encoding="utf-8",
+        )
+        ticket = root / f"{name}-TICKET.md"
+        ticket.write_text(
+            "# Ticket\nStatus: ready\n"
+            f"Parent-Spec: {spec}\nProject-Root: {self.project}\n"
+            "Worker: \nUI: no\n\n"
+            "## Goal\nDone.\n\n## Acceptance Criteria\n- app is implemented\n\n"
+            "## Scope\napp.txt\n\n## Non-Goals\nNone.\n\n## Blockers\nNone.\n\n"
+            "## Verification\nRead.\n\n## References\nNone.\n",
+            encoding="utf-8",
+        )
+        return ticket
+
     def test_missing_external_authority_dispatches_nothing(self) -> None:
         self.adapter.authorized = False
         module, _ = self.public_verification([effect_observation()])
@@ -340,6 +372,42 @@ class Phase6EffectObservationTests(unittest.TestCase):
         self.assertEqual("COMPLETE", first.raw["status"])
         self.assertEqual("COMPLETE", second.raw["status"])
         self.assertEqual(1, [stage for stage, _ in self.adapter.calls].count("ACTION"))
+
+    def test_same_occurrence_in_one_verification_dispatches_action_once(self) -> None:
+        first = effect_observation()
+        first["observationIdentity"] = "effect-1"
+        second = effect_observation()
+        second["observationIdentity"] = "effect-2"
+        module, _ = self.public_verification([first, second])
+
+        result = module.verify(self.candidate)
+
+        stages = [stage for stage, _ in self.adapter.calls]
+        self.assertEqual(interface.VerificationStatus.VERIFIED, result.status)
+        self.assertEqual(1, stages.count("ACTION"))
+        self.assertEqual(2, stages.count("READBACK"))
+
+    def test_pre_dispatch_effect_crash_reenters_as_undetermined(self) -> None:
+        class PreDispatchCrashAdapter(FixedEffectAdapter):
+            def __init__(self):
+                super().__init__()
+                self.crash = True
+
+            def canonicalize(self, effect):
+                if self.crash:
+                    self.crash = False
+                    raise SystemExit("simulated pre-dispatch crash")
+                return super().canonicalize(effect)
+
+        adapter = PreDispatchCrashAdapter()
+        module, _ = self.public_verification([effect_observation()], adapter=adapter)
+        with self.assertRaises(SystemExit):
+            module.verify(self.candidate)
+
+        result = module.verify(self.candidate)
+
+        self.assertEqual(interface.VerificationStatus.UNDETERMINED, result.status)
+        self.assertEqual([], adapter.calls)
 
     def test_inconclusive_readback_persists_and_blocks_same_and_new_candidate_action(self) -> None:
         self.adapter.response_loss = True
@@ -437,6 +505,96 @@ class Phase6EffectObservationTests(unittest.TestCase):
         self.assertEqual(
             ["ACTION", "READBACK", "CLEANUP", "CLEANUP_READBACK"],
             [stage for stage, _ in self.adapter.calls],
+        )
+
+    def test_contradiction_still_resolves_prior_cleanup(self) -> None:
+        self.adapter.cleanup_complete = False
+        first_module, _ = self.public_verification([effect_observation(cleanup=True)])
+        first = first_module.verify(self.candidate)
+        self.assertEqual(interface.VerificationStatus.UNDETERMINED, first.status)
+
+        class ContradictingRunner(ReadOnlyRunner):
+            def run(self, candidate, retained_source, scratch_root, observation):
+                if observation["kind"] != "SOURCE":
+                    return super().run(candidate, retained_source, scratch_root, observation)
+                self.calls.append("SOURCE")
+                return {
+                    "status": "COMPLETE",
+                    "subattempts": [
+                        {"request": request, "status": "FINISHED"}
+                        for request in observation["requests"]
+                    ],
+                    "observed": "contradiction",
+                    "artifact": {"observed": "contradiction"},
+                }
+
+        source = {
+            "observationIdentity": "source-contradiction",
+            "kind": "SOURCE",
+            "criterionIndexes": [1],
+            "requests": [{"path": "app.txt"}],
+            "expected": "implemented",
+        }
+        recovery = effect_observation(cleanup=True)
+
+        class ContradictingContext:
+            identity = "fresh-contradicting-context"
+
+            def plan(self, candidate, retained_source, supported_observations):
+                return [source, recovery]
+
+            def assess(self, candidate, plan, evidence):
+                complete_source = any(
+                    item["observationIdentity"] == "source-contradiction"
+                    and item["complete"]
+                    for item in evidence
+                )
+                return [
+                    {
+                        "criterionIndex": 1,
+                        "outcome": "NOT_SATISFIED" if complete_source else "UNDETERMINED",
+                        "evidenceObservationIdentities": (
+                            ["source-contradiction"] if complete_source else []
+                        ),
+                    }
+                ]
+
+        class ContradictingVerifier:
+            fresh_context_enforced = True
+            read_only_enforced = True
+
+            def open(self, candidate, retained_source, supported_observations, effect_safety):
+                return ContradictingContext()
+
+        self.adapter.calls.clear()
+        self.adapter.cleanup_complete = True
+        verification = verification_module.VerificationExecution(
+            self.state_root,
+            self.store,
+            ContradictingVerifier(),
+            ContradictingRunner(),
+            lambda result: interface.Currentness.CURRENT,
+            effect_module.EffectObservationModule(self.adapter),
+        )
+        module = interface.ImplementationVerificationModule(
+            backend_module.DurableBackend(
+                self.store,
+                verification_module.ModuleExecution(object(), verification),
+            )
+        )
+
+        result = module.verify(self.candidate)
+
+        stages = [stage for stage, _ in self.adapter.calls]
+        self.assertEqual(interface.VerificationStatus.NOT_SATISFIED, result.status)
+        self.assertNotIn("ACTION", stages)
+        self.assertNotIn("CLEANUP", stages)
+        self.assertEqual(["READBACK", "CLEANUP_READBACK"], stages)
+        self.assertFalse(
+            any(
+                item.get("state") == "UNRESOLVED"
+                for item in self.store.effect_safety_facts(self.candidate)
+            )
         )
 
     def test_pure_authenticated_read_bypasses_effect_module(self) -> None:
@@ -557,6 +715,47 @@ class Phase6EffectObservationTests(unittest.TestCase):
         self.assertEqual(1, action_count)
         self.assertEqual(action_count, [stage for stage, _ in adapter.calls].count("ACTION"))
         self.assertTrue(self.store.effect_safety_facts(candidate))
+
+    def test_completed_implementation_effect_survives_stopped_candidate_publication(self) -> None:
+        ticket = self.ready_implementation_ticket("STOPPED-EFFECT")
+        drifted = False
+
+        def drift_after_readback(stage):
+            nonlocal drifted
+            if stage == "READBACK" and not drifted:
+                (self.project / "drift.txt").write_text("user change", encoding="utf-8")
+                drifted = True
+
+        self.adapter.after_dispatch = drift_after_readback
+        observer = effect_module.EffectObservationModule(self.adapter)
+        implementation = implementation_module.ImplementationExecution(
+            self.state_root,
+            self.store,
+            NoWorkerAdapter(),
+            NoAdoption(),
+            lambda work, source: None,
+            lambda work, source: [
+                {
+                    key: value
+                    for key, value in effect_observation().items()
+                    if key not in {"kind", "criterionIndexes"}
+                }
+            ],
+            observer,
+        )
+        module = interface.ImplementationVerificationModule(
+            backend_module.DurableBackend(self.store, implementation)
+        )
+
+        stopped = module.implement(ticket, NoWorker())
+        facts_after_stop = self.store.effect_safety_facts_for_work(ticket)
+        self.adapter.after_dispatch = None
+        candidate = module.implement(ticket, NoWorker())
+
+        self.assertIsInstance(stopped, interface.ImplementationStopped)
+        self.assertTrue(any(item.get("state") == "COMPLETED" for item in facts_after_stop))
+        self.assertIsInstance(candidate, interface.Candidate)
+        self.assertEqual(1, [stage for stage, _ in self.adapter.calls].count("ACTION"))
 
 
 if __name__ == "__main__":

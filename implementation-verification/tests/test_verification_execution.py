@@ -365,6 +365,60 @@ class VerificationExecutionTests(unittest.TestCase):
 
         self.assertEqual(interface.VerificationStatus.UNDETERMINED, result.status)
 
+    def test_malformed_evidence_reference_is_undetermined(self) -> None:
+        observations = [
+            observation("source", "SOURCE", (1, 2), "implemented", {"path": "app.txt"})
+        ]
+        claims = [
+            {
+                "criterionIndex": 1,
+                "outcome": "SATISFIED",
+                "evidenceObservationIdentities": [{"malformed": True}],
+            },
+            {
+                "criterionIndex": 2,
+                "outcome": "SATISFIED",
+                "evidenceObservationIdentities": ["source"],
+            },
+        ]
+
+        result = self.module(FreshVerifier(observations, claims), Runner()).verify(self.candidate)
+
+        self.assertEqual(interface.VerificationStatus.UNDETERMINED, result.status)
+
+    def test_cross_criterion_evidence_cannot_create_short_circuit(self) -> None:
+        observations = self.two_observations()
+        plan = verification_module._normalize_plan(
+            self.candidate,
+            self.candidate.source["identity"],
+            observations,
+        )
+        self.assertIsNotNone(plan)
+        raw = Runner.complete(observations[0], "wrong")
+        evidence, _ = verification_module._runner_evidence(
+            self.candidate,
+            plan["observations"][0],
+            raw,
+            interface.Currentness.CURRENT,
+            interface.Currentness.CURRENT,
+        )
+        claims = [
+            {
+                "criterionIndex": 2,
+                "outcome": "NOT_SATISFIED",
+                "evidenceObservationIdentities": ["source"],
+            }
+        ]
+
+        self.assertFalse(
+            verification_module._has_supported_contradiction(
+                self.candidate,
+                plan,
+                claims,
+                (evidence,),
+            )
+        )
+
     def test_complete_evidence_keeps_all_prefixed_heterogeneous_subattempts(self) -> None:
         action = {"action": "start"}
         readback = {"readback": "status"}

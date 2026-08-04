@@ -266,6 +266,30 @@ class ImplementationExecutionTests(unittest.TestCase):
         self.assertEqual("configured", (self.project / "config.txt").read_text(encoding="utf-8"))
         self.assertEqual(("app.txt", "config.txt"), result.implementation_changes)
 
+    def test_planning_change_before_second_assignment_stops_second_worker(self) -> None:
+        changed = False
+
+        def change_ticket() -> None:
+            nonlocal changed
+            if not changed:
+                self.ticket.write_text(
+                    self.ticket.read_text(encoding="utf-8") + "\n",
+                    encoding="utf-8",
+                )
+                changed = True
+
+        worker = Worker()
+        result = self.module(
+            TemporarySourceAdoption(),
+            worker_adapter=TemporaryWorkerAdapter(external=change_ticket),
+            required={"config.txt": "configured"},
+        ).implement(self.ticket, worker)
+
+        self.assertIsInstance(result, interface.ImplementationStopped)
+        self.assertEqual(1, worker.calls)
+        self.assertEqual("baseline", (self.project / "app.txt").read_text(encoding="utf-8"))
+        self.assertFalse((self.project / "config.txt").exists())
+
     def test_module_owned_adapter_does_not_call_worker_code_against_canonical_source(self) -> None:
         class WorkerWithCanonicalWrite(Worker):
             def __init__(self) -> None:

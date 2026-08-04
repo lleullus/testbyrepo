@@ -175,6 +175,13 @@ class DurableWorkStore:
             )"""
         )
         connection.execute(
+            """CREATE TABLE IF NOT EXISTS transition_private_safety (
+                transition_ref TEXT PRIMARY KEY REFERENCES transitions(transition_ref),
+                payload_json BLOB NOT NULL,
+                payload_sha256 TEXT NOT NULL
+            )"""
+        )
+        connection.execute(
             """CREATE UNIQUE INDEX IF NOT EXISTS one_active_transition_per_work
                ON transitions(work) WHERE state = 'ACTIVE'"""
         )
@@ -193,6 +200,14 @@ class DurableWorkStore:
         connection.execute(
             """CREATE TRIGGER IF NOT EXISTS result_private_state_no_delete
                BEFORE DELETE ON result_private_state BEGIN SELECT RAISE(ABORT, 'immutable private result state'); END"""
+        )
+        connection.execute(
+            """CREATE TRIGGER IF NOT EXISTS transition_private_safety_no_update
+               BEFORE UPDATE ON transition_private_safety BEGIN SELECT RAISE(ABORT, 'immutable transition safety'); END"""
+        )
+        connection.execute(
+            """CREATE TRIGGER IF NOT EXISTS transition_private_safety_no_delete
+               BEFORE DELETE ON transition_private_safety BEGIN SELECT RAISE(ABORT, 'immutable transition safety'); END"""
         )
 
     @contextmanager
@@ -408,15 +423,45 @@ class DurableWorkStore:
                 "SELECT result_ref FROM results WHERE work = ? ORDER BY rowid",
                 (exact_work,),
             ).fetchall()
+            transition_rows = connection.execute(
+                """SELECT s.payload_json, s.payload_sha256
+                   FROM transition_private_safety AS s
+                   JOIN transitions AS t ON t.transition_ref = s.transition_ref
+                   WHERE t.work = ? ORDER BY t.rowid""",
+                (exact_work,),
+            ).fetchall()
+            states = [
+                self._private_result_state_locked(connection, row["result_ref"])
+                for row in rows
+            ]
+            for row in transition_rows:
+                encoded = bytes(row["payload_json"])
+                if hashlib.sha256(encoded).hexdigest() != row["payload_sha256"]:
+                    raise DurableWorkError("durable transition safety differs")
+                state = _decode(encoded)
+                if (
+                    not isinstance(state, dict)
+                    or set(state)
+                    != {
+                        "unresolvedObservations",
+                        "resolvedObservationIdentities",
+                        "effectSafetyProjections",
+                    }
+                    or not isinstance(state["unresolvedObservations"], list)
+                    or not isinstance(state["resolvedObservationIdentities"], list)
+                    or not isinstance(state["effectSafetyProjections"], list)
+                ):
+                    raise DurableWorkError("durable transition safety is malformed")
+                states.append(state)
             facts: dict[str, object] = {}
             resolved: set[str] = set()
-            for row in rows:
-                state = self._private_result_state_locked(connection, row["result_ref"])
+            for state in states:
                 for identity in state["resolvedObservationIdentities"]:
                     if not isinstance(identity, str):
                         raise DurableWorkError("resolved observation identity is malformed")
                     resolved.add(identity)
                     facts.pop(identity, None)
+            for state in states:
                 for item in (
                     list(state["unresolvedObservations"])
                     + list(state["effectSafetyProjections"])
@@ -648,7 +693,12 @@ class DurableWorkStore:
                 raise DurableWorkError("atomic result publication conflict")
             return self._read_result_locked(connection, result_ref)
 
-    def close_without_result(self, transition_ref: str) -> None:
+    def close_without_result(
+        self,
+        transition_ref: str,
+        *,
+        private_safety: object | None = None,
+    ) -> None:
         with self._transaction() as connection:
             transition = connection.execute(
                 "SELECT * FROM transitions WHERE transition_ref = ?", (transition_ref,)
@@ -657,6 +707,32 @@ class DurableWorkStore:
                 raise DurableWorkError("transition is absent")
             if transition["state"] == "CLOSED":
                 return
+            if private_safety is not None:
+                encoded = _encode(private_safety)
+                decoded = _decode(encoded)
+                if (
+                    not isinstance(decoded, dict)
+                    or set(decoded)
+                    != {
+                        "unresolvedObservations",
+                        "resolvedObservationIdentities",
+                        "effectSafetyProjections",
+                    }
+                    or not isinstance(decoded["unresolvedObservations"], list)
+                    or not isinstance(decoded["resolvedObservationIdentities"], list)
+                    or not isinstance(decoded["effectSafetyProjections"], list)
+                ):
+                    raise DurableWorkError("transition private safety is malformed")
+                connection.execute(
+                    """INSERT INTO transition_private_safety(
+                           transition_ref, payload_json, payload_sha256
+                       ) VALUES (?, ?, ?)""",
+                    (
+                        transition_ref,
+                        encoded,
+                        hashlib.sha256(encoded).hexdigest(),
+                    ),
+                )
             connection.execute(
                 "DELETE FROM mutation_occupancy WHERE transition_ref = ?", (transition_ref,)
             )

@@ -50,6 +50,13 @@ branch: refactor/simplify-implementation-verification
 현재 단계: Phase 6 — 위험한 외부효과
 단계 상태: IMPLEMENTED_COMPONENT_VERIFIED (구현·직접 검증 완료, 독립 다중 검수 대기)
 마지막 완료 작업:
+- revision `9693385`에 대한 사용자가 전달한 Oracle 요구사항 검수의 confirmed finding 6건을
+  Phase 3~6 계약과 source에 대조해 모두 수용
+- same-transition effect safety fact 갱신, stopped implementation의 private safety-only closure,
+  contradiction 뒤 unresolved cleanup/readback continuation과 pre-dispatch restart safe closure를 구현
+- exact criterion/evidence claim validator를 partial contradiction과 final assessment에 공통 적용하고,
+  매 sequential Worker dispatch 직전 planning/AC/current root 재확인을 구현
+- 위 6개 경로를 고정한 직접 회귀 테스트 7개와 Phase 1~6 component 테스트 66개를 모두 통과 확인
 - commit `3838243`에서 fixed Effect Observation Module, work-wide unresolved/safety projection,
   implementation/verification effect seam과 직접 계약 테스트를 구현
 - 후속 계약 대조에서 authenticated READ authority/redaction gate, Adapter-owned canonical target,
@@ -257,15 +264,15 @@ branch: refactor/simplify-implementation-verification
 - Phase 6 최소 직접 검증 범위를 authority 부재 zero-dispatch, authorized action/readback, ambiguous
   non-reexecution, cleanup/final disposition, cross-Candidate overlap, authenticated pure read, redaction,
   implementation-effect readback-only와 Candidate self-grant 거부로 고정
-Oracle session: Phase 6 구현 사전 조사에는 새 Oracle session을 사용하지 않음; 구현 보강 revision에 대한
-  슬롯 1·2·3 독립 DevSpace 검수 제출 대기
-열린 finding: 없음 — 로컬에서 확인한 Phase 6 구현 누락은 보강했으며 독립 검수 finding 대기
+Oracle session: revision `9693385`에 대한 사용자가 전달한 Oracle 검수 결과를 로컬 source·재현과 대조;
+  confirmed finding 6건 모두 최소 correction과 직접 테스트로 반영
+열린 finding: 없음 — 전달된 Phase 3~6 finding 6건 모두 correction 및 회귀 검증 완료
 사용자 결정 필요: 없음
 현재 blocker: 없음
 바로 다음 행동:
-1. 동일 보강 revision을 Oracle Browser 슬롯 1·2·3에서 서로 다른 관점으로 병렬 검수한다.
-2. 각 finding을 Phase 1~6 계약과 source/test에 대조해 수용·기각하고 필요한 최소 correction만 반영한다.
-3. 세 검수의 material finding이 닫힌 뒤에만 Phase 7로 간다.
+1. 현재 Phase 1~6 correction revision을 커밋한다.
+2. Phase 7 계약의 public/fault/conformance/legacy-unavailable runtime proof 구현 전 source를 재대조한다.
+3. Phase 7 `RUNTIME_VERIFIED` 전에는 legacy removal을 시작하지 않는다.
 금지: Phase 7 선행 구현, legacy 제거
 ```
 

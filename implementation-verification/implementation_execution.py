@@ -9,7 +9,11 @@ import fcntl
 from pathlib import Path
 from typing import Callable, Iterable, Protocol
 
-from durable_backend import ImplementationCompletion, ImplementationPending
+from durable_backend import (
+    ImplementationCompletion,
+    ImplementationPending,
+    ImplementationStoppedCompletion,
+)
 from durable_work import DurableResultIntegrityError, DurableWorkStore
 from effect_observation import EffectObservationModule, effect_requests, normalize_effect
 from implementation_verification import (
@@ -376,6 +380,20 @@ class ImplementationExecution:
             normalized.append(value)
         return normalized
 
+    @staticmethod
+    def _stop_with_safety(
+        stopped: ImplementationStopped,
+        resolved: list[object],
+        projections: list[object],
+    ) -> ImplementationStopped | ImplementationStoppedCompletion:
+        if not resolved and not projections:
+            return stopped
+        return ImplementationStoppedCompletion(
+            stopped,
+            tuple(identity for identity in resolved if isinstance(identity, str)),
+            tuple(projections),
+        )
+
     def _complete_candidate_effects(
         self,
         work: Path,
@@ -383,7 +401,13 @@ class ImplementationExecution:
         project_root: Path,
         progress_path: Path,
         progress: dict[str, object],
-    ) -> Candidate | ImplementationStopped | ImplementationCompletion | ImplementationPending:
+    ) -> (
+        Candidate
+        | ImplementationStopped
+        | ImplementationCompletion
+        | ImplementationPending
+        | ImplementationStoppedCompletion
+    ):
         candidate_value = progress.get("candidateDraft")
         effects = progress.get("implementationEffects")
         if not isinstance(candidate_value, dict) or not isinstance(effects, list):
@@ -402,11 +426,15 @@ class ImplementationExecution:
         ):
             raise RuntimeError("private implementation effect progress is malformed")
         if effects and (self._effect_observer is None or not self._effect_observer.available):
-            return self._stop(
-                work,
-                transition_root,
-                project_root,
-                "effect observation authority is unavailable",
+            return self._stop_with_safety(
+                self._stop(
+                    work,
+                    transition_root,
+                    project_root,
+                    "effect observation authority is unavailable",
+                ),
+                resolved,
+                projections,
             )
         prior = list(self._store.effect_safety_facts_for_work(work))
         marker = progress.get("implementationEffectDispatch")
@@ -457,11 +485,15 @@ class ImplementationExecution:
                             "implementation effect observation is unresolved",
                         )
                     )
-                return self._stop(
-                    work,
-                    transition_root,
-                    project_root,
-                    "implementation effect observation did not complete",
+                return self._stop_with_safety(
+                    self._stop(
+                        work,
+                        transition_root,
+                        project_root,
+                        "implementation effect observation did not complete",
+                    ),
+                    resolved,
+                    projections,
                 )
             projections.append(result.projection)
             for identity in result.resolved_identities:
@@ -484,11 +516,15 @@ class ImplementationExecution:
             or final_root != project_root
             or final_identity != candidate.source["identity"]
         ):
-            return self._stop(
-                work,
-                transition_root,
-                project_root,
-                "planning or source changed during implementation effect observation",
+            return self._stop_with_safety(
+                self._stop(
+                    work,
+                    transition_root,
+                    project_root,
+                    "planning or source changed during implementation effect observation",
+                ),
+                resolved,
+                projections,
             )
         progress["candidate"] = candidate_value
         _write_json(progress_path, progress)
@@ -501,7 +537,13 @@ class ImplementationExecution:
         transition_identity: str,
         *,
         reenter: bool,
-    ) -> Candidate | ImplementationStopped | ImplementationCompletion | ImplementationPending:
+    ) -> (
+        Candidate
+        | ImplementationStopped
+        | ImplementationCompletion
+        | ImplementationPending
+        | ImplementationStoppedCompletion
+    ):
         transition_root = self._transition_root(transition_identity)
         transition_root.mkdir(parents=True, exist_ok=True)
         with (transition_root / "execution.lock").open("a+b") as lock:
@@ -515,7 +557,13 @@ class ImplementationExecution:
         transition_identity: str,
         *,
         reenter: bool,
-    ) -> Candidate | ImplementationStopped | ImplementationCompletion | ImplementationPending:
+    ) -> (
+        Candidate
+        | ImplementationStopped
+        | ImplementationCompletion
+        | ImplementationPending
+        | ImplementationStoppedCompletion
+    ):
         planning, criteria, project_root = _read_planning(work)
         transition_root = self._transition_root(transition_identity)
         progress_path = transition_root / "progress.json"
@@ -605,6 +653,26 @@ class ImplementationExecution:
                 progress["reconciledWorkspaceIdentity"] = workspace_identity
                 _write_json(progress_path, progress)
                 break
+            try:
+                current_planning, current_criteria, current_root = _read_planning(work)
+            except Exception:
+                return self._stop(
+                    work,
+                    transition_root,
+                    project_root,
+                    "planning changed before Worker dispatch",
+                )
+            if (
+                current_planning != planning
+                or current_criteria != criteria
+                or current_root != project_root
+            ):
+                return self._stop(
+                    work,
+                    transition_root,
+                    project_root,
+                    "planning changed before Worker dispatch",
+                )
             if getattr(self._worker_adapter, "isolation_enforced", False) is not True:
                 return self._stop(work, transition_root, project_root, "Worker isolation is unavailable")
             workspace_manifest, workspace_identity = _capture(workspace_root)
