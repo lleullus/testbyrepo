@@ -47,8 +47,8 @@ branch: refactor/simplify-implementation-verification
 ## 실행 체크포인트 — 컨텍스트 복구 authority
 
 ```text
-현재 단계: Phase 5 — Verification 실행
-단계 상태: IMPLEMENTED (fresh verifier와 Runner-owned evidence 직접 검증 통과)
+현재 단계: Phase 6 — 위험한 외부효과
+단계 상태: IMPLEMENTATION_RESEARCHED (구현 전 사전 조사 완료, 구현 미시작)
 마지막 완료 작업:
 - 전용 worktree와 refactor/simplify-implementation-verification branch 확인
 - Implementation Lead, Verification Lead, Baseline Capsule의 source·test·CLI·실제 in-repo 소비자 조사
@@ -236,14 +236,31 @@ branch: refactor/simplify-implementation-verification
   concurrent single execution, request substitution, multi-subattempt completeness, response loss와
   unresolved effect lifetime을 포함한 Phase 5 직접 테스트 16개 통과 확인
 - Phase 1~5 component 테스트 48개를 실행해 모두 통과 확인
-Oracle session: Phase 5 구현에는 새 Oracle session을 사용하지 않음; Phase 5 설계 finding은 닫힘
-열린 finding: 없음 — Phase 5 F1~F3 CLOSED
+- Phase 5 구현을 전용 branch commit `477b5ed`로 보존
+- `PHASE-6-DANGEROUS-EFFECT-CONTRACT.md` 전체와 current authorization/replay/action/readback/cleanup
+  source·대표 test를 읽어 Phase 6 구현 seam을 사전 조사
+- Phase 5의 durable effect may-have-run marker, same-Candidate unresolved lifetime과 fresh Verifier에
+  semantic prior 대신 `SUPPORTED`/`UNSAFE` fact만 전달하는 경로를 Phase 6 재사용 기반으로 확인
+- current effect evidence는 generic runner result뿐이라 exact external authority provenance,
+  fixed action/readback/cleanup/final disposition과 complete EffectEvidenceBundle 검증이 없음을 확인
+- current unresolved lookup은 same Candidate에만 한정돼 같은 work의 새 Candidate와 겹치는 canonical
+  target/action consequence를 차단하려면 Effect Adapter-owned target canonicalization과 work history
+  safety lookup이 필요함을 확인
+- Phase 4 implementation review에는 effectful check seam이 없고 Candidate publication은 private safety
+  state를 받지 않으므로, implementation effect completion의 nonsemantic safety projection을 Candidate에
+  atomic하게 보존하는 연결이 필요함을 확인
+- Phase 6 최소 직접 검증 범위를 authority 부재 zero-dispatch, authorized action/readback, ambiguous
+  non-reexecution, cleanup/final disposition, cross-Candidate overlap, authenticated pure read, redaction,
+  implementation-effect readback-only와 Candidate self-grant 거부로 고정
+Oracle session: Phase 6 구현 사전 조사에는 새 Oracle session을 사용하지 않음; Phase 6 설계 finding은 닫힘
+열린 finding: 없음 — Phase 6 F1~F3 CLOSED, 구현 전 새 blocker 없음
 사용자 결정 필요: 없음
 현재 blocker: 없음
 바로 다음 행동:
-1. Phase 5 변경을 전용 브랜치에 커밋한다.
-2. 커밋 뒤 `PHASE-6-DANGEROUS-EFFECT-CONTRACT.md`를 읽고 Phase 6 사전 조사만 수행한다.
-금지: Phase 6 구현, legacy 제거
+1. Effect Observation Module과 fixed test Adapter의 최소 private Interface를 구현한다.
+2. Verification/Implementation execution에 authority·may-have-run·readback·cleanup safety projection을 연결한다.
+3. 위 Phase 6 직접 시나리오와 Phase 1~6 component 검증을 통과한 뒤에만 Phase 7로 간다.
+금지: Phase 7 선행 구현, legacy 제거
 ```
 
 > [!IMPORTANT]
