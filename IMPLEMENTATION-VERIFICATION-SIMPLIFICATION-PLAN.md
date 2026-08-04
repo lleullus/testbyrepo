@@ -47,8 +47,8 @@ branch: refactor/simplify-implementation-verification
 ## 실행 체크포인트 — 컨텍스트 복구 authority
 
 ```text
-현재 단계: Phase 2 — 외부 Interface와 복구 의미 구현
-단계 상태: IMPLEMENTED (새 Interface 직접 검증 통과)
+현재 단계: Phase 3 — durable work state와 동시성 구현
+단계 상태: IMPLEMENTED (durable state 직접 검증 통과)
 마지막 완료 작업:
 - 전용 worktree와 refactor/simplify-implementation-verification branch 확인
 - Implementation Lead, Verification Lead, Baseline Capsule의 source·test·CLI·실제 in-repo 소비자 조사
@@ -183,14 +183,22 @@ branch: refactor/simplify-implementation-verification
 - VerificationResult가 exact Candidate와 전체 AC를 결속하고 criterion 결과에서만 aggregate를
   도출하며 inspect 결과에서 candidate를 복구하도록 구현
 - `implementation-verification/run_tests.py`의 Interface 직접 테스트 5개 통과 확인
-Oracle session: Phase 2 구현에는 새 Oracle session을 사용하지 않음; Phase 2 설계 finding은 닫힘
-열린 finding: 없음 — Phase 2 F1/F2/F3와 follow-up F1/F2 CLOSED, F4 REJECTION_JUSTIFIED
+- `implementation-verification/durable_work.py`에 exact Ticket별 stream, immutable result/head,
+  work별 단일 active transition과 restart re-entry를 구현
+- Candidate와 VerificationResult에 Module-owned opaque result identity를 결속하고 result에서 exact
+  durable Candidate를 복구하도록 구현
+- result append, head 이동, occupancy 해제와 transition 종료를 한 SQLite transaction으로 묶음
+- overlapping canonical Project-Root mutation occupancy와 occupancy 뒤 source recheck를 구현
+- absent store의 read-only inspect, concurrent begin, atomic rollback, restart readback, Candidate recovery,
+  mutation occupancy를 포함한 새 component 테스트 11개 통과 확인
+Oracle session: Phase 3 구현에는 새 Oracle session을 사용하지 않음; Phase 3 설계 finding은 닫힘
+열린 finding: 없음 — Phase 3 F1/follow-up F1 CLOSED, F2 REJECTION_JUSTIFIED
 사용자 결정 필요: 없음
 현재 blocker: 없음
 바로 다음 행동:
-1. Phase 3 시작 시 전체 계획과 `PHASE-3-DURABLE-WORK-STATE-CONTRACT.md`를 순서대로 읽는다.
-2. Phase 3 durable state 구현 전에는 Phase 4 이후 계약을 구현 근거로 사용하지 않는다.
-금지: Phase 3 선행 구현, legacy 제거
+1. Phase 4 시작 시 전체 계획과 `PHASE-4-IMPLEMENTATION-EXECUTION-CONTRACT.md`를 순서대로 읽는다.
+2. Phase 4 구현 전에는 Phase 5 이후 계약을 구현 근거로 사용하지 않는다.
+금지: Phase 4 선행 구현, legacy 제거
 ```
 
 > [!IMPORTANT]
@@ -519,7 +527,7 @@ Oracle finding별 반론·근거·최소 correction·복잡성 delta·판정 기
 ```text
 Phase 1  IMPLEMENTED
 Phase 2  IMPLEMENTED
-Phase 3  DESIGN_CONVERGED
+Phase 3  IMPLEMENTED
 Phase 4  DESIGN_CONVERGED
 Phase 5  DESIGN_CONVERGED
 Phase 6  DESIGN_CONVERGED

@@ -133,14 +133,14 @@ class InterfaceTests(unittest.TestCase):
         )
         self.backend.inspection = interface.Inspection(
             result=verified,
-            currentness=interface.Currentness.STALE,
+            currentness=interface.Currentness.NOT_CURRENT,
         )
 
         inspection = self.module.inspect(self.ticket)
 
         self.assertIs(verified, inspection.result)
         self.assertIs(self.candidate, inspection.result.candidate)
-        self.assertEqual(interface.Currentness.STALE, inspection.currentness)
+        self.assertEqual(interface.Currentness.NOT_CURRENT, inspection.currentness)
         self.assertEqual([("inspect", self.work)], self.backend.calls)
 
 

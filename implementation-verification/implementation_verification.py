@@ -20,7 +20,7 @@ class VerificationStatus(str, Enum):
 
 class Currentness(str, Enum):
     CURRENT = "CURRENT"
-    STALE = "STALE"
+    NOT_CURRENT = "NOT_CURRENT"
     UNKNOWN = "UNKNOWN"
 
 
@@ -32,6 +32,7 @@ class Candidate:
     source: object
     implementation_changes: tuple[object, ...]
     preserved_changes: tuple[object, ...]
+    result_identity: str | None = None
 
     @property
     def independent_verification_pending(self) -> bool:
@@ -61,11 +62,14 @@ class VerificationResult:
     candidate: Candidate
     criterion_results: tuple[CriterionResult, ...]
     status: VerificationStatus = field(init=False)
+    result_identity: str | None = field(init=False)
 
     def __init__(
         self,
         candidate: Candidate,
         criterion_results: Iterable[CriterionResult],
+        *,
+        result_identity: str | None = None,
     ) -> None:
         results = tuple(criterion_results)
         if tuple(result.criterion for result in results) != candidate.acceptance_criteria:
@@ -79,6 +83,7 @@ class VerificationResult:
         object.__setattr__(self, "candidate", candidate)
         object.__setattr__(self, "criterion_results", results)
         object.__setattr__(self, "status", status)
+        object.__setattr__(self, "result_identity", result_identity)
 
 
 @dataclass(frozen=True)
