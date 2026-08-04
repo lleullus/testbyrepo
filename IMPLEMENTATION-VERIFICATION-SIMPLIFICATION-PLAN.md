@@ -207,9 +207,21 @@ branch: refactor/simplify-implementation-verification
   조건 불일치 시 latest live bytes를 보존한 채 Candidate publication을 금지
 - final canonical source를 transition result lifetime 동안 retained source로 보존하고 Candidate의 exact
   planning·전체 AC·implementation/preserved partition 및 `inspect` currentness에 결속
+- public `verify`가 transition이나 verifier를 시작하기 전에 전달 Candidate 전체를 durable Candidate와
+  대조하고, publication transaction도 같은 exact 결속을 다시 강제하도록 보강
+- `UNDETERMINED`를 terminal result reuse에서 제외해 같은 exact Candidate의 fresh verification
+  transition을 열 수 있게 하고 `VERIFIED`/`NOT_SATISFIED`의 terminal reuse는 유지
+- caller Worker의 isolation 자기 선언과 직접 method 호출을 제거하고 Module-owned Worker Adapter가
+  private workspace의 bounded assignment만 순차 실행하도록 변경
+- current assignment identity·before/reconciled workspace identity·may-have-started만 private progress에
+  남겨 다중 implementation gap과 response-loss 재진입을 duplicate dispatch 없이 처리
+- retained Candidate source를 `inspect` 때 다시 읽어 identity를 검증하고, 변조·소실 시 historical
+  Candidate를 `CURRENT`로 반환하지 않고 `NoConclusiveResult`로 fail-closed
 - dirty baseline, disjoint/same-path concurrent change, same-value 비귀속, 동일 요청 단일 Worker 실행,
-  Worker/adoption 응답 유실, retained source와 zero-mutation을 포함한 Phase 4 직접 테스트 10개 통과 확인
-- Phase 1~4 component 테스트 25개를 실행해 모두 통과 확인
+  순차 assignment, Worker 직접 실행 차단, Worker/adoption 응답 유실, retained source 변조와
+  zero-mutation을 포함한 Phase 4 직접 테스트 14개 통과 확인
+- exact Candidate 변조 publication 차단과 `UNDETERMINED` fresh retry를 포함한 Phase 1~4 component
+  테스트 32개를 실행해 모두 통과 확인
 Oracle session: Phase 4 구현에는 새 Oracle session을 사용하지 않음; Phase 4 설계 finding은 닫힘
 열린 finding: 없음 — Phase 4 F1~F3 CLOSED
 사용자 결정 필요: 없음
@@ -547,7 +559,7 @@ Oracle finding별 반론·근거·최소 correction·복잡성 delta·판정 기
 Phase 1  IMPLEMENTED
 Phase 2  IMPLEMENTED
 Phase 3  IMPLEMENTED
-Phase 4  DESIGN_CONVERGED
+Phase 4  IMPLEMENTED
 Phase 5  DESIGN_CONVERGED
 Phase 6  DESIGN_CONVERGED
 Phase 7  DESIGN_CONVERGED

@@ -21,10 +21,15 @@ from implementation_verification import (
     NoConclusiveResult,
     PublicResult,
     VerificationResult,
+    VerificationStatus,
 )
 
 
 class DurableWorkError(RuntimeError):
+    pass
+
+
+class DurableResultIntegrityError(DurableWorkError):
     pass
 
 
@@ -269,6 +274,23 @@ class DurableWorkStore:
             raise DurableWorkError("durable VerificationResult status differs")
         return result
 
+    def read_candidate(self, result_ref: str) -> Candidate:
+        connection = self._connect_read_only()
+        if connection is None:
+            raise DurableWorkError("durable Candidate store is absent")
+        try:
+            connection.execute("BEGIN")
+            result = self._read_result_locked(connection, result_ref)
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+        if not isinstance(result, Candidate):
+            raise DurableWorkError("durable result is not a Candidate")
+        return result
+
     @staticmethod
     def _validate_lineage_locked(
         connection: sqlite3.Connection,
@@ -332,11 +354,16 @@ class DurableWorkStore:
                 (exact_work, kind, stream["head_result_ref"], semantic_digest, semantic_json),
             ).fetchone()
             if completed is not None and completed["result_ref"] is not None:
-                return TransitionDecision(
-                    TransitionDisposition.COMPLETED,
-                    completed["transition_ref"],
-                    self._read_result_locked(connection, completed["result_ref"]),
-                )
+                completed_result = self._read_result_locked(connection, completed["result_ref"])
+                if not (
+                    isinstance(completed_result, VerificationResult)
+                    and completed_result.status is VerificationStatus.UNDETERMINED
+                ):
+                    return TransitionDecision(
+                        TransitionDisposition.COMPLETED,
+                        completed["transition_ref"],
+                        completed_result,
+                    )
             transition_ref = f"transition:{uuid.uuid4().hex}"
             connection.execute(
                 """INSERT INTO transitions(
@@ -398,15 +425,11 @@ class DurableWorkStore:
             else:
                 if transition["kind"] != "VERIFY" or result.candidate.result_identity is None:
                     raise DurableWorkError("VerificationResult requires a durable Candidate")
-                candidate_row = connection.execute(
-                    "SELECT kind, work FROM results WHERE result_ref = ?",
-                    (result.candidate.result_identity,),
-                ).fetchone()
-                if (
-                    candidate_row is None
-                    or candidate_row["kind"] != "CANDIDATE"
-                    or candidate_row["work"] != transition["work"]
-                ):
+                durable_candidate = self._read_result_locked(
+                    connection,
+                    result.candidate.result_identity,
+                )
+                if not isinstance(durable_candidate, Candidate) or durable_candidate != result.candidate:
                     raise DurableWorkError("VerificationResult candidate is not durable for this work")
                 kind = "VERIFICATION"
                 candidate_ref = result.candidate.result_identity
@@ -572,6 +595,12 @@ class DurableWorkStore:
         else:
             try:
                 currentness = observe_currentness(result)
+            except DurableResultIntegrityError:
+                result = NoConclusiveResult(
+                    Path(exact_work),
+                    "durable result source cannot be verified",
+                )
+                currentness = Currentness.UNKNOWN
             except Exception:
                 currentness = Currentness.UNKNOWN
             if not isinstance(currentness, Currentness):

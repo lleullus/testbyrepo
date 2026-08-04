@@ -145,6 +145,41 @@ class DurableWorkTests(unittest.TestCase):
         self.assertEqual(candidate.result_identity, recovered.candidate.result_identity)
         self.assertEqual(interface.VerificationStatus.VERIFIED, recovered.status)
 
+    def test_verification_publication_rejects_candidate_content_changed_under_durable_identity(self) -> None:
+        implementation = self.begin()
+        candidate = self.store.publish(implementation.transition_identity, self.candidate)
+        verification = self.store.begin(
+            self.work,
+            "VERIFY",
+            {"candidate": candidate.result_identity},
+            "verification-progress",
+        )
+        changed = interface.Candidate(
+            work=candidate.work,
+            planning=candidate.planning,
+            acceptance_criteria=candidate.acceptance_criteria,
+            source="changed-source",
+            implementation_changes=candidate.implementation_changes,
+            preserved_changes=candidate.preserved_changes,
+            result_identity=candidate.result_identity,
+        )
+        result = interface.VerificationResult(
+            changed,
+            (
+                interface.CriterionResult(
+                    "AC-1",
+                    interface.CriterionOutcome.SATISFIED,
+                    ("evidence-for-changed-source",),
+                ),
+            ),
+        )
+
+        with self.assertRaisesRegex(durable.DurableWorkError, "not durable"):
+            self.store.publish(verification.transition_identity, result)
+
+        self.assertEqual(candidate, self.store.inspect(self.work).result)
+        self.assertEqual("ACTIVE", self.store.transition_state(verification.transition_identity)["state"])
+
     def test_overlapping_mutation_domain_has_one_winner_and_atomic_release(self) -> None:
         root = Path(self.temporary.name)
         second_ticket = root / "TICKET-002.md"

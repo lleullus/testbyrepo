@@ -9,7 +9,7 @@ import fcntl
 from pathlib import Path
 from typing import Callable, Iterable, Protocol
 
-from durable_work import DurableWorkStore
+from durable_work import DurableResultIntegrityError, DurableWorkStore
 from implementation_verification import (
     Candidate,
     Currentness,
@@ -31,6 +31,18 @@ class SourceAdoptionAdapter(Protocol):
         project_root: Path,
         workspace_root: Path,
         changes: tuple[dict[str, object], ...],
+    ) -> None: ...
+
+
+class WorkerAdapter(Protocol):
+    isolation_enforced: bool
+
+    def run(
+        self,
+        worker: object,
+        work: Path,
+        workspace_root: Path,
+        assignment: object,
     ) -> None: ...
 
 
@@ -194,6 +206,11 @@ def _identity(manifest: dict[str, dict[str, object]]) -> str:
     return _sha256_bytes(encoded)
 
 
+def _value_identity(value: object) -> str:
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return _sha256_bytes(encoded)
+
+
 def _capture(root: Path) -> tuple[dict[str, dict[str, object]], str]:
     first = _capture_once(root)
     second = _capture_once(root)
@@ -234,6 +251,14 @@ def _write_json(path: Path, value: dict[str, object]) -> None:
         os.close(directory)
 
 
+def _write_json_once(path: Path, value: dict[str, object]) -> None:
+    if path.exists():
+        if _read_json(path) != value:
+            raise RuntimeError("immutable private record differs")
+        return
+    _write_json(path, value)
+
+
 def _read_json(path: Path) -> dict[str, object]:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
@@ -246,13 +271,15 @@ class ImplementationExecution:
         self,
         state_root: str | Path,
         store: DurableWorkStore,
+        worker_adapter: WorkerAdapter,
         adoption: SourceAdoptionAdapter,
-        implementation_check: Callable[[Path, Path], bool],
+        implementation_review: Callable[[Path, Path], object | None],
     ) -> None:
         self._state_root = Path(state_root).expanduser().resolve(strict=False)
         self._store = store
+        self._worker_adapter = worker_adapter
         self._adoption = adoption
-        self._implementation_check = implementation_check
+        self._implementation_review = implementation_review
 
     def _transition_root(self, transition_identity: str) -> Path:
         return self._state_root / "implementation" / _sha256_bytes(transition_identity.encode())
@@ -288,6 +315,22 @@ class ImplementationExecution:
             preserved_changes=tuple(value["preservedChanges"]),
         )
 
+    @staticmethod
+    def _validate_retained_source(candidate: Candidate) -> None:
+        source = candidate.source
+        if not isinstance(source, dict):
+            raise DurableResultIntegrityError("Candidate source record is malformed")
+        identity = source.get("identity")
+        retained_root = source.get("retainedRoot")
+        if not isinstance(identity, str) or not isinstance(retained_root, str):
+            raise DurableResultIntegrityError("Candidate source record is malformed")
+        try:
+            _, retained_identity = _capture(Path(retained_root))
+        except Exception as exc:
+            raise DurableResultIntegrityError("retained Candidate source is unreadable") from exc
+        if retained_identity != identity:
+            raise DurableResultIntegrityError("retained Candidate source differs")
+
     def implement(
         self,
         work: Path,
@@ -320,7 +363,9 @@ class ImplementationExecution:
                 return self._stop(work, transition_root, project_root, "planning changed during implementation")
             candidate_value = progress.get("candidate")
             if isinstance(candidate_value, dict):
-                return self._candidate_from_progress(work, candidate_value)
+                candidate = self._candidate_from_progress(work, candidate_value)
+                self._validate_retained_source(candidate)
+                return candidate
             if progress.get("adoptionMayHaveStarted") is True:
                 return self._stop(
                     work,
@@ -358,25 +403,59 @@ class ImplementationExecution:
         if baseline_identity != progress["baselineIdentity"]:
             raise RuntimeError("private baseline source differs")
 
-        if not self._implementation_check(work, workspace_root):
-            if progress.get("workerMayHaveStarted") is not True:
-                run = getattr(worker, "run", None)
-                if not callable(run) or getattr(worker, "private_workspace_isolation", False) is not True:
-                    return self._stop(work, transition_root, project_root, "Worker isolation is unavailable")
-                _, before_identity = _capture(workspace_root)
-                progress["assignment"] = {"beforeWorkspaceIdentity": before_identity}
-                progress["workerMayHaveStarted"] = True
+        workspace_manifest, workspace_identity = _capture(workspace_root)
+        if progress.get("workerMayHaveStarted") is True:
+            assignment_record = progress.get("assignment")
+            if not isinstance(assignment_record, dict) or not isinstance(
+                assignment_record.get("beforeWorkspaceIdentity"), str
+            ):
+                raise RuntimeError("active Worker assignment progress is malformed")
+            progress["reconciledWorkspaceIdentity"] = workspace_identity
+            if workspace_identity == assignment_record["beforeWorkspaceIdentity"]:
                 _write_json(progress_path, progress)
-                run(work, workspace_root)
-            workspace_manifest, workspace_identity = _capture(workspace_root)
-            progress["reconciledWorkspaceIdentity"] = workspace_identity
+                return self._stop(
+                    work,
+                    transition_root,
+                    project_root,
+                    "Worker response was lost without an observable workspace result",
+                )
+            progress["workerMayHaveStarted"] = False
+            progress.pop("assignment", None)
             _write_json(progress_path, progress)
-            if not self._implementation_check(work, workspace_root):
-                return self._stop(work, transition_root, project_root, "implementation closure check did not pass")
-        else:
+
+        while True:
+            assignment = self._implementation_review(work, workspace_root)
+            if assignment is None:
+                workspace_manifest, workspace_identity = _capture(workspace_root)
+                progress["reconciledWorkspaceIdentity"] = workspace_identity
+                _write_json(progress_path, progress)
+                break
+            if getattr(self._worker_adapter, "isolation_enforced", False) is not True:
+                return self._stop(work, transition_root, project_root, "Worker isolation is unavailable")
             workspace_manifest, workspace_identity = _capture(workspace_root)
-            progress["reconciledWorkspaceIdentity"] = workspace_identity
+            assignment_record = {
+                "assignmentIdentity": _value_identity(
+                    {"assignment": assignment, "beforeWorkspaceIdentity": workspace_identity}
+                ),
+                "assignment": assignment,
+                "beforeWorkspaceIdentity": workspace_identity,
+            }
+            progress["assignment"] = assignment_record
+            progress["workerMayHaveStarted"] = True
             _write_json(progress_path, progress)
+            self._worker_adapter.run(worker, work, workspace_root, assignment)
+            workspace_manifest, reconciled_identity = _capture(workspace_root)
+            progress["reconciledWorkspaceIdentity"] = reconciled_identity
+            progress["workerMayHaveStarted"] = False
+            progress.pop("assignment", None)
+            _write_json(progress_path, progress)
+            if reconciled_identity == workspace_identity:
+                return self._stop(
+                    work,
+                    transition_root,
+                    project_root,
+                    "Worker produced no source change for the bounded assignment",
+                )
 
         current_planning, current_criteria, current_root = _read_planning(work)
         if current_planning != planning or current_criteria != criteria or current_root != project_root:
@@ -411,10 +490,13 @@ class ImplementationExecution:
             else:
                 preserved_paths.add(path)
 
-        progress["adoptionPlan"] = {
+        adoption_plan = {
             "expectedLiveIdentity": live_identity,
             "changes": changes,
         }
+        adoption_plan_path = transition_root / "adoption-plan.json"
+        _write_json_once(adoption_plan_path, adoption_plan)
+        progress["adoptionPlanRef"] = str(adoption_plan_path)
         _write_json(progress_path, progress)
         if changes:
             if getattr(self._adoption, "conditional_mutation", False) is not True:
@@ -440,7 +522,7 @@ class ImplementationExecution:
         final_planning, final_criteria, final_root = _read_planning(work)
         if final_planning != planning or final_criteria != criteria or final_root != project_root:
             return self._stop(work, transition_root, project_root, "planning changed before Candidate publication")
-        if not self._implementation_check(work, project_root):
+        if self._implementation_review(work, project_root) is not None:
             return self._stop(work, transition_root, project_root, "final implementation closure check did not pass")
 
         retained_root = transition_root / "candidate"
@@ -472,14 +554,13 @@ class ImplementationExecution:
         candidate = result.candidate if isinstance(result, VerificationResult) else result
         if not isinstance(candidate, Candidate):
             return Currentness.UNKNOWN
+        self._validate_retained_source(candidate)
         try:
             planning, criteria, project_root = _read_planning(candidate.work)
             _, source_identity = _capture(project_root)
         except Exception:
             return Currentness.UNKNOWN
         source = candidate.source
-        if not isinstance(source, dict):
-            return Currentness.UNKNOWN
         if (
             planning == candidate.planning
             and criteria == candidate.acceptance_criteria

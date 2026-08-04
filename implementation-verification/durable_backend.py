@@ -106,6 +106,9 @@ class DurableBackend:
     def verify(self, candidate: Candidate) -> VerificationResult:
         if candidate.result_identity is None:
             raise ValueError("verify requires a durable Candidate")
+        durable_candidate = self._store.read_candidate(candidate.result_identity)
+        if durable_candidate != candidate:
+            raise ValueError("verify requires the exact durable Candidate")
         decision = self._begin(
             candidate.work,
             "VERIFY",

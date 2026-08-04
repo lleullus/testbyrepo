@@ -36,6 +36,7 @@ class RecordingExecution:
         self.block_first_dispatch = False
         self.interrupt_first_dispatch = False
         self.criterion_results = ()
+        self.verification_count = 0
 
     def implement(self, work, worker, transition_identity, *, reenter):
         if reenter:
@@ -53,6 +54,7 @@ class RecordingExecution:
         return self.workspace_result
 
     def verify(self, candidate, transition_identity, *, reenter):
+        self.verification_count += 1
         return self.criterion_results
 
     def observe_currentness(self, result):
@@ -142,6 +144,46 @@ class DurableBackendTests(unittest.TestCase):
         self.assertEqual(interface.VerificationStatus.VERIFIED, result.status)
         self.assertEqual(result, inspection.result)
         self.assertEqual(candidate.result_identity, inspection.result.candidate.result_identity)
+
+    def test_public_verify_rejects_changed_candidate_before_execution_or_publication(self) -> None:
+        candidate = self.module().implement(self.ticket, "worker-a")
+        changed = interface.Candidate(
+            work=candidate.work,
+            planning=candidate.planning,
+            acceptance_criteria=candidate.acceptance_criteria,
+            source="changed-source",
+            implementation_changes=candidate.implementation_changes,
+            preserved_changes=candidate.preserved_changes,
+            result_identity=candidate.result_identity,
+        )
+
+        with self.assertRaisesRegex(ValueError, "exact durable Candidate"):
+            self.module().verify(changed)
+
+        inspection = self.module().inspect(self.ticket)
+        self.assertEqual(0, self.execution.verification_count)
+        self.assertEqual(candidate, inspection.result)
+
+    def test_undetermined_result_allows_fresh_verification_of_same_candidate(self) -> None:
+        candidate = self.module().implement(self.ticket, "worker-a")
+        self.execution.criterion_results = (
+            interface.CriterionResult("AC-1", interface.CriterionOutcome.UNDETERMINED),
+        )
+        first = self.module().verify(candidate)
+        self.execution.criterion_results = (
+            interface.CriterionResult(
+                "AC-1",
+                interface.CriterionOutcome.SATISFIED,
+                ("fresh-evidence",),
+            ),
+        )
+
+        second = self.module().verify(candidate)
+
+        self.assertEqual(interface.VerificationStatus.UNDETERMINED, first.status)
+        self.assertEqual(interface.VerificationStatus.VERIFIED, second.status)
+        self.assertNotEqual(first.result_identity, second.result_identity)
+        self.assertEqual(2, self.execution.verification_count)
 
 
 if __name__ == "__main__":

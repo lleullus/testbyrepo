@@ -84,22 +84,36 @@ class TemporarySourceAdoption:
 
 
 class Worker:
-    private_workspace_isolation = True
     durable_identity = "worker-a"
 
-    def __init__(self, desired: str = "implemented", external=None, interrupt=False) -> None:
-        self.desired = desired
-        self.external = external
-        self.interrupt = interrupt
+    def __init__(self) -> None:
         self.calls = 0
         self.workspace = None
 
-    def run(self, work, workspace) -> None:
+
+class TemporaryWorkerAdapter:
+    isolation_enforced = True
+
+    def __init__(self, external=None, interrupt=False, started=None, release=None) -> None:
+        self.external = external
+        self.interrupt = interrupt
+        self.started = started
+        self.release = release
+        self.calls = 0
+
+    def run(self, worker, work, workspace, assignment) -> None:
         self.calls += 1
-        self.workspace = workspace
-        (workspace / "app.txt").write_text(self.desired, encoding="utf-8")
+        worker.calls += 1
+        worker.workspace = workspace
+        target = workspace / assignment["path"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(assignment["value"], encoding="utf-8")
         if self.external is not None:
             self.external()
+        if self.started is not None:
+            self.started.set()
+        if self.release is not None:
+            self.release.wait(timeout=5)
         if self.interrupt:
             self.interrupt = False
             raise InterruptedError("simulated Worker response loss")
@@ -154,13 +168,23 @@ class ImplementationExecutionTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def module(self, adoption, desired="implemented"):
+    def module(self, adoption, desired="implemented", worker_adapter=None, required=None):
         store = durable.DurableWorkStore(self.database)
+        expected = {"app.txt": desired, **(required or {})}
+
+        def review(work, source):
+            for relative, value in expected.items():
+                target = source / relative
+                if not target.is_file() or target.read_text(encoding="utf-8") != value:
+                    return {"path": relative, "value": value}
+            return None
+
         execution = execution_module.ImplementationExecution(
             self.execution_root,
             store,
+            worker_adapter or TemporaryWorkerAdapter(),
             adoption,
-            lambda work, source: (source / "app.txt").read_text(encoding="utf-8") == desired,
+            review,
         )
         return interface.ImplementationVerificationModule(
             backend_module.DurableBackend(store, execution)
@@ -180,8 +204,11 @@ class ImplementationExecutionTests(unittest.TestCase):
         self.assertEqual("implemented", (retained / "app.txt").read_text(encoding="utf-8"))
 
     def test_disjoint_live_change_is_preserved_beside_worker_change(self) -> None:
-        worker = Worker(external=lambda: (self.project / "notes.txt").write_text("concurrent user", encoding="utf-8"))
-        result = self.module(TemporarySourceAdoption()).implement(self.ticket, worker)
+        worker = Worker()
+        adapter = TemporaryWorkerAdapter(
+            external=lambda: (self.project / "notes.txt").write_text("concurrent user", encoding="utf-8")
+        )
+        result = self.module(TemporarySourceAdoption(), worker_adapter=adapter).implement(self.ticket, worker)
 
         self.assertEqual("implemented", (self.project / "app.txt").read_text(encoding="utf-8"))
         self.assertEqual("concurrent user", (self.project / "notes.txt").read_text(encoding="utf-8"))
@@ -189,16 +216,22 @@ class ImplementationExecutionTests(unittest.TestCase):
         self.assertIn("notes.txt", result.preserved_changes)
 
     def test_different_same_path_live_change_stops_without_overwrite(self) -> None:
-        worker = Worker(external=lambda: (self.project / "app.txt").write_text("concurrent user", encoding="utf-8"))
-        result = self.module(TemporarySourceAdoption()).implement(self.ticket, worker)
+        worker = Worker()
+        adapter = TemporaryWorkerAdapter(
+            external=lambda: (self.project / "app.txt").write_text("concurrent user", encoding="utf-8")
+        )
+        result = self.module(TemporarySourceAdoption(), worker_adapter=adapter).implement(self.ticket, worker)
 
         self.assertIsInstance(result, interface.ImplementationStopped)
         self.assertEqual("concurrent user", (self.project / "app.txt").read_text(encoding="utf-8"))
 
     def test_same_final_live_change_is_preserved_without_worker_credit(self) -> None:
-        worker = Worker(external=lambda: (self.project / "app.txt").write_text("implemented", encoding="utf-8"))
+        worker = Worker()
+        worker_adapter = TemporaryWorkerAdapter(
+            external=lambda: (self.project / "app.txt").write_text("implemented", encoding="utf-8")
+        )
         adoption = TemporarySourceAdoption()
-        result = self.module(adoption).implement(self.ticket, worker)
+        result = self.module(adoption, worker_adapter=worker_adapter).implement(self.ticket, worker)
 
         self.assertIsInstance(result, interface.Candidate)
         self.assertEqual(0, adoption.calls)
@@ -206,8 +239,11 @@ class ImplementationExecutionTests(unittest.TestCase):
         self.assertIn("app.txt", result.preserved_changes)
 
     def test_worker_response_loss_reenters_workspace_without_duplicate_dispatch(self) -> None:
-        worker = Worker(interrupt=True)
-        module = self.module(TemporarySourceAdoption())
+        worker = Worker()
+        module = self.module(
+            TemporarySourceAdoption(),
+            worker_adapter=TemporaryWorkerAdapter(interrupt=True),
+        )
         with self.assertRaises(InterruptedError):
             module.implement(self.ticket, worker)
 
@@ -217,18 +253,67 @@ class ImplementationExecutionTests(unittest.TestCase):
         self.assertEqual(1, worker.calls)
         self.assertEqual("implemented", (self.project / "app.txt").read_text(encoding="utf-8"))
 
+    def test_sequential_assignments_close_multiple_implementation_gaps(self) -> None:
+        worker = Worker()
+        result = self.module(
+            TemporarySourceAdoption(),
+            required={"config.txt": "configured"},
+        ).implement(self.ticket, worker)
+
+        self.assertIsInstance(result, interface.Candidate)
+        self.assertEqual(2, worker.calls)
+        self.assertEqual("implemented", (self.project / "app.txt").read_text(encoding="utf-8"))
+        self.assertEqual("configured", (self.project / "config.txt").read_text(encoding="utf-8"))
+        self.assertEqual(("app.txt", "config.txt"), result.implementation_changes)
+
+    def test_module_owned_adapter_does_not_call_worker_code_against_canonical_source(self) -> None:
+        class WorkerWithCanonicalWrite(Worker):
+            def __init__(self) -> None:
+                super().__init__()
+                self.direct_run_called = False
+
+            def run(self, work, workspace) -> None:
+                self.direct_run_called = True
+                (self.project / "notes.txt").write_text("overwritten", encoding="utf-8")
+
+        worker = WorkerWithCanonicalWrite()
+        worker.project = self.project
+        result = self.module(TemporarySourceAdoption()).implement(self.ticket, worker)
+
+        self.assertIsInstance(result, interface.Candidate)
+        self.assertFalse(worker.direct_run_called)
+        self.assertEqual("preexisting user bytes", (self.project / "notes.txt").read_text(encoding="utf-8"))
+
+    def test_response_loss_without_workspace_change_stops_without_redispatch(self) -> None:
+        class InterruptedBeforeMutation(TemporaryWorkerAdapter):
+            def run(self, worker, work, workspace, assignment) -> None:
+                self.calls += 1
+                worker.calls += 1
+                raise InterruptedError("simulated response loss before workspace mutation")
+
+        worker = Worker()
+        module = self.module(
+            TemporarySourceAdoption(),
+            worker_adapter=InterruptedBeforeMutation(),
+        )
+        with self.assertRaises(InterruptedError):
+            module.implement(self.ticket, worker)
+
+        result = module.implement(self.ticket, worker)
+
+        self.assertIsInstance(result, interface.ImplementationStopped)
+        self.assertEqual(1, worker.calls)
+        self.assertEqual("baseline", (self.project / "app.txt").read_text(encoding="utf-8"))
+
     def test_concurrent_same_request_keeps_one_private_worker_call(self) -> None:
         started = threading.Event()
         release = threading.Event()
 
-        class BlockingWorker(Worker):
-            def run(self, work, workspace) -> None:
-                super().run(work, workspace)
-                started.set()
-                release.wait(timeout=5)
-
-        worker = BlockingWorker()
-        module = self.module(TemporarySourceAdoption())
+        worker = Worker()
+        module = self.module(
+            TemporarySourceAdoption(),
+            worker_adapter=TemporaryWorkerAdapter(started=started, release=release),
+        )
         with ThreadPoolExecutor(max_workers=2) as executor:
             first = executor.submit(module.implement, self.ticket, worker)
             self.assertTrue(started.wait(timeout=5))
@@ -278,6 +363,17 @@ class ImplementationExecutionTests(unittest.TestCase):
         self.assertEqual(candidate, inspection.result)
         self.assertEqual(interface.Currentness.NOT_CURRENT, inspection.currentness)
         self.assertEqual("preexisting user bytes", (retained / "notes.txt").read_text(encoding="utf-8"))
+
+    def test_retained_candidate_tamper_makes_inspect_nonconclusive(self) -> None:
+        module = self.module(TemporarySourceAdoption())
+        candidate = module.implement(self.ticket, Worker())
+        retained = Path(candidate.source["retainedRoot"])
+        (retained / "app.txt").write_text("tampered", encoding="utf-8")
+
+        inspection = module.inspect(self.ticket)
+
+        self.assertIsInstance(inspection.result, interface.NoConclusiveResult)
+        self.assertEqual(interface.Currentness.UNKNOWN, inspection.currentness)
 
     def test_already_complete_source_publishes_zero_mutation_candidate(self) -> None:
         (self.project / "app.txt").write_text("implemented", encoding="utf-8")
