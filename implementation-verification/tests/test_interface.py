@@ -19,7 +19,7 @@ SPEC.loader.exec_module(interface)
 class FakeBackend:
     def __init__(self) -> None:
         self.implementation_result = None
-        self.criterion_results = ()
+        self.verification_result = None
         self.inspection = None
         self.calls = []
 
@@ -29,7 +29,7 @@ class FakeBackend:
 
     def verify(self, candidate):
         self.calls.append(("verify", candidate))
-        return self.criterion_results
+        return self.verification_result
 
     def inspect(self, work):
         self.calls.append(("inspect", work))
@@ -82,12 +82,15 @@ class InterfaceTests(unittest.TestCase):
         self.assertNotIsInstance(result, interface.Candidate)
 
     def test_verify_derives_status_and_preserves_the_exact_candidate(self) -> None:
-        self.backend.criterion_results = (
-            interface.CriterionResult(
-                "AC-1", interface.CriterionOutcome.SATISFIED, ("evidence-1",)
-            ),
-            interface.CriterionResult(
-                "AC-2", interface.CriterionOutcome.UNDETERMINED
+        self.backend.verification_result = interface.VerificationResult(
+            self.candidate,
+            (
+                interface.CriterionResult(
+                    "AC-1", interface.CriterionOutcome.SATISFIED, ("evidence-1",)
+                ),
+                interface.CriterionResult(
+                    "AC-2", interface.CriterionOutcome.UNDETERMINED
+                ),
             ),
         )
 
@@ -98,26 +101,32 @@ class InterfaceTests(unittest.TestCase):
         self.assertEqual(("AC-1", "AC-2"), tuple(item.criterion for item in result.criterion_results))
         self.assertEqual([("verify", self.candidate)], self.backend.calls)
 
-        self.backend.criterion_results = (
-            interface.CriterionResult(
-                "AC-1", interface.CriterionOutcome.SATISFIED, ("evidence-1",)
-            ),
-            interface.CriterionResult(
-                "AC-2", interface.CriterionOutcome.NOT_SATISFIED, ("evidence-2",)
+        self.backend.verification_result = interface.VerificationResult(
+            self.candidate,
+            (
+                interface.CriterionResult(
+                    "AC-1", interface.CriterionOutcome.SATISFIED, ("evidence-1",)
+                ),
+                interface.CriterionResult(
+                    "AC-2", interface.CriterionOutcome.NOT_SATISFIED, ("evidence-2",)
+                ),
             ),
         )
         failed = self.module.verify(self.candidate)
         self.assertEqual(interface.VerificationStatus.NOT_SATISFIED, failed.status)
 
     def test_verify_rejects_missing_or_reordered_acceptance_criteria(self) -> None:
-        self.backend.criterion_results = (
-            interface.CriterionResult(
-                "AC-2", interface.CriterionOutcome.SATISFIED, ("evidence-2",)
-            ),
-        )
-
         with self.assertRaisesRegex(ValueError, "every exact acceptance criterion once"):
-            self.module.verify(self.candidate)
+            self.backend.verification_result = interface.VerificationResult(
+                self.candidate,
+                (
+                    interface.CriterionResult(
+                        "AC-2", interface.CriterionOutcome.SATISFIED, ("evidence-2",)
+                    ),
+                ),
+            )
+
+        self.assertEqual([], self.backend.calls)
 
     def test_inspect_returns_historical_result_with_currentness_and_candidate_recovery(self) -> None:
         verified = interface.VerificationResult(

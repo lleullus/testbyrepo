@@ -104,7 +104,7 @@ class Inspection:
 class _Backend(Protocol):
     def implement(self, work: Path, worker: object) -> Candidate | ImplementationStopped: ...
 
-    def verify(self, candidate: Candidate) -> Iterable[CriterionResult]: ...
+    def verify(self, candidate: Candidate) -> VerificationResult: ...
 
     def inspect(self, work: Path) -> Inspection: ...
 
@@ -138,7 +138,10 @@ class ImplementationVerificationModule:
         return result
 
     def verify(self, candidate: Candidate) -> VerificationResult:
-        return VerificationResult(candidate, self._backend.verify(candidate))
+        result = self._backend.verify(candidate)
+        if result.candidate != candidate:
+            raise ValueError("verification result differs from the requested Candidate")
+        return result
 
     def inspect(self, work: str | Path) -> Inspection:
         exact_work = _canonical_work(work)

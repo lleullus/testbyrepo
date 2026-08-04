@@ -191,6 +191,12 @@ branch: refactor/simplify-implementation-verification
 - overlapping canonical Project-Root mutation occupancy와 occupancy 뒤 source recheck를 구현
 - absent store의 read-only inspect, concurrent begin, atomic rollback, restart readback, Candidate recovery,
   mutation occupancy를 포함한 새 component 테스트 11개 통과 확인
+- `implementation-verification/durable_backend.py`로 Phase 2 public Interface와 DurableWorkStore를 연결
+- public `implement`의 동일 요청 결과 재사용, concurrent single Worker dispatch와 response-loss
+  re-entry를 durable transition을 통해 구현
+- public `verify` publication과 `inspect`의 exact Candidate 복구를 같은 durable result chain에 연결
+- store 직접 테스트가 아니라 `ImplementationVerificationModule`을 통과하는 Phase 3 회귀 테스트를
+  추가하고 새 component 테스트 15개 통과 확인
 Oracle session: Phase 3 구현에는 새 Oracle session을 사용하지 않음; Phase 3 설계 finding은 닫힘
 열린 finding: 없음 — Phase 3 F1/follow-up F1 CLOSED, F2 REJECTION_JUSTIFIED
 사용자 결정 필요: 없음
