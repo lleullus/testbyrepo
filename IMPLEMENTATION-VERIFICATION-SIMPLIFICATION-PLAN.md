@@ -47,8 +47,8 @@ branch: refactor/simplify-implementation-verification
 ## 실행 체크포인트 — 컨텍스트 복구 authority
 
 ```text
-현재 단계: Phase 3 — durable work state와 동시성 구현
-단계 상태: IMPLEMENTED (durable state 직접 검증 통과)
+현재 단계: Phase 4 — Implementation 실행
+단계 상태: IMPLEMENTED (private Worker workspace와 source adoption 직접 검증 통과)
 마지막 완료 작업:
 - 전용 worktree와 refactor/simplify-implementation-verification branch 확인
 - Implementation Lead, Verification Lead, Baseline Capsule의 source·test·CLI·실제 in-repo 소비자 조사
@@ -197,14 +197,27 @@ branch: refactor/simplify-implementation-verification
 - public `verify` publication과 `inspect`의 exact Candidate 복구를 같은 durable result chain에 연결
 - store 직접 테스트가 아니라 `ImplementationVerificationModule`을 통과하는 Phase 3 회귀 테스트를
   추가하고 새 component 테스트 15개 통과 확인
-Oracle session: Phase 3 구현에는 새 Oracle session을 사용하지 않음; Phase 3 설계 finding은 닫힘
-열린 finding: 없음 — Phase 3 F1/follow-up F1 CLOSED, F2 REJECTION_JUSTIFIED
+- `implementation-verification/implementation_execution.py`에 exact ready Ticket과 stable baseline을
+  결속하고 Module-owned private candidate workspace에서만 Worker를 실행하는 Phase 4 실행체를 구현
+- Worker may-have-started와 canonical adoption may-have-started private progress를 durable하게 남기고,
+  재진입 시 duplicate Worker dispatch와 canonical write 자동 재개를 금지
+- mutation occupancy 뒤 B/W/L을 path별로 비교해 disjoint change만 채택하고, 같은 최종 값은
+  external/unattributed로 보존하며, 서로 다른 same-path change는 canonical overwrite 전에 중단
+- Source Adoption Adapter의 expected-state conditional mutation seam과 immutable adoption plan을 연결하고,
+  조건 불일치 시 latest live bytes를 보존한 채 Candidate publication을 금지
+- final canonical source를 transition result lifetime 동안 retained source로 보존하고 Candidate의 exact
+  planning·전체 AC·implementation/preserved partition 및 `inspect` currentness에 결속
+- dirty baseline, disjoint/same-path concurrent change, same-value 비귀속, 동일 요청 단일 Worker 실행,
+  Worker/adoption 응답 유실, retained source와 zero-mutation을 포함한 Phase 4 직접 테스트 10개 통과 확인
+- Phase 1~4 component 테스트 25개를 실행해 모두 통과 확인
+Oracle session: Phase 4 구현에는 새 Oracle session을 사용하지 않음; Phase 4 설계 finding은 닫힘
+열린 finding: 없음 — Phase 4 F1~F3 CLOSED
 사용자 결정 필요: 없음
 현재 blocker: 없음
 바로 다음 행동:
-1. Phase 4 시작 시 전체 계획과 `PHASE-4-IMPLEMENTATION-EXECUTION-CONTRACT.md`를 순서대로 읽는다.
-2. Phase 4 구현 전에는 Phase 5 이후 계약을 구현 근거로 사용하지 않는다.
-금지: Phase 4 선행 구현, legacy 제거
+1. Phase 5 시작 시 전체 계획과 `PHASE-5-VERIFICATION-EXECUTION-CONTRACT.md`를 순서대로 읽는다.
+2. Phase 5 구현 전에는 Phase 6 이후 계약을 구현 근거로 사용하지 않는다.
+금지: Phase 6 선행 구현, legacy 제거
 ```
 
 > [!IMPORTANT]
