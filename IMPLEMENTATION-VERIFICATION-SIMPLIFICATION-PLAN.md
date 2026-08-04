@@ -47,8 +47,8 @@ branch: refactor/simplify-implementation-verification
 ## 실행 체크포인트 — 컨텍스트 복구 authority
 
 ```text
-현재 단계: Phase 4 — Implementation 실행
-단계 상태: IMPLEMENTED (private Worker workspace와 source adoption 직접 검증 통과)
+현재 단계: Phase 5 — Verification 실행
+단계 상태: IMPLEMENTED (fresh verifier와 Runner-owned evidence 직접 검증 통과)
 마지막 완료 작업:
 - 전용 worktree와 refactor/simplify-implementation-verification branch 확인
 - Implementation Lead, Verification Lead, Baseline Capsule의 source·test·CLI·실제 in-repo 소비자 조사
@@ -222,14 +222,28 @@ branch: refactor/simplify-implementation-verification
   zero-mutation을 포함한 Phase 4 직접 테스트 14개 통과 확인
 - exact Candidate 변조 publication 차단과 `UNDETERMINED` fresh retry를 포함한 Phase 1~4 component
   테스트 32개를 실행해 모두 통과 확인
-Oracle session: Phase 4 구현에는 새 Oracle session을 사용하지 않음; Phase 4 설계 finding은 닫힘
-열린 finding: 없음 — Phase 4 F1~F3 CLOSED
+- `implementation-verification/verification_execution.py`에 fresh Verifier Adapter, fixed full-AC
+  observation plan과 read-only Evidence Runner Adapter를 구현하고 public `verify(candidate)`에 연결
+- runner-owned immutable evidence에 exact Candidate/planning/source, fixed request, 모든 started
+  subattempt, artifact identity와 observation 전후 currentness를 결속
+- malformed/incomplete/tool/isolation evidence의 conclusive claim을 `UNDETERMINED`로 낮추고, complete
+  direct contradiction만 `NOT_SATISFIED`로 보존하며 아직 시작하지 않은 effect를 short-circuit
+- local observation response loss를 duplicate execution 없이 `UNDETERMINED`로 닫고 다음 호출에서 새
+  fresh context를 만들며, effect response loss는 safe binding 없이는 active transition을 유지
+- VerificationResult publication과 같은 transaction에 private unresolved-effect binding을 저장하고,
+  authoritative resolution 전 모든 same-Candidate verification에서 effect 실행을 차단
+- source/local positive, full-AC coverage 거부, tool failure, drift precedence, read-only isolation,
+  concurrent single execution, request substitution, multi-subattempt completeness, response loss와
+  unresolved effect lifetime을 포함한 Phase 5 직접 테스트 16개 통과 확인
+- Phase 1~5 component 테스트 48개를 실행해 모두 통과 확인
+Oracle session: Phase 5 구현에는 새 Oracle session을 사용하지 않음; Phase 5 설계 finding은 닫힘
+열린 finding: 없음 — Phase 5 F1~F3 CLOSED
 사용자 결정 필요: 없음
 현재 blocker: 없음
 바로 다음 행동:
-1. Phase 5 시작 시 전체 계획과 `PHASE-5-VERIFICATION-EXECUTION-CONTRACT.md`를 순서대로 읽는다.
-2. Phase 5 구현 전에는 Phase 6 이후 계약을 구현 근거로 사용하지 않는다.
-금지: Phase 6 선행 구현, legacy 제거
+1. Phase 5 변경을 전용 브랜치에 커밋한다.
+2. 커밋 뒤 `PHASE-6-DANGEROUS-EFFECT-CONTRACT.md`를 읽고 Phase 6 사전 조사만 수행한다.
+금지: Phase 6 구현, legacy 제거
 ```
 
 > [!IMPORTANT]
@@ -560,7 +574,7 @@ Phase 1  IMPLEMENTED
 Phase 2  IMPLEMENTED
 Phase 3  IMPLEMENTED
 Phase 4  IMPLEMENTED
-Phase 5  DESIGN_CONVERGED
+Phase 5  IMPLEMENTED
 Phase 6  DESIGN_CONVERGED
 Phase 7  DESIGN_CONVERGED
 Phase 8  DESIGN_CONVERGED

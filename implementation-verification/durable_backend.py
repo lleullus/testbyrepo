@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Protocol
 
@@ -33,9 +34,15 @@ class _Execution(Protocol):
         transition_identity: str,
         *,
         reenter: bool,
-    ) -> Iterable[CriterionResult]: ...
+    ) -> Iterable[CriterionResult] | VerificationCompletion: ...
 
     def observe_currentness(self, result: PublicResult) -> Currentness: ...
+
+
+@dataclass(frozen=True)
+class VerificationCompletion:
+    criterion_results: tuple[CriterionResult, ...]
+    unresolved_observations: tuple[object, ...] = ()
 
 
 def _worker_identity(worker: object) -> str:
@@ -118,13 +125,29 @@ class DurableBackend:
             if not isinstance(decision.result, VerificationResult):
                 raise DurableWorkError("completed verification has no VerificationResult")
             return decision.result
-        criterion_results = self._execution.verify(
+        completion = self._execution.verify(
             candidate,
             decision.transition_identity,
             reenter=decision.disposition is TransitionDisposition.REENTER,
         )
+        if isinstance(completion, VerificationCompletion):
+            criterion_results = completion.criterion_results
+            private_state = {
+                "unresolvedObservations": list(completion.unresolved_observations),
+                "resolvedObservationIdentities": [],
+            }
+        else:
+            criterion_results = tuple(completion)
+            private_state = {
+                "unresolvedObservations": [],
+                "resolvedObservationIdentities": [],
+            }
         result = VerificationResult(candidate, criterion_results)
-        published = self._store.publish(decision.transition_identity, result)
+        published = self._store.publish(
+            decision.transition_identity,
+            result,
+            private_state=private_state,
+        )
         if not isinstance(published, VerificationResult):
             raise DurableWorkError("verification published a non-verification result")
         return published
