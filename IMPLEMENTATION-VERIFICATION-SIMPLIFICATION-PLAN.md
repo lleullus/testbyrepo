@@ -47,8 +47,8 @@ branch: refactor/simplify-implementation-verification
 ## 실행 체크포인트 — 컨텍스트 복구 authority
 
 ```text
-현재 단계: Phase 8 — 구 메커니즘 제거
-단계 상태: DESIGN_CONVERGED (DevSpace Oracle initial/follow-up finding 독립 판정 완료)
+현재 단계: Phase 1 — 목적 보존 테스트 구현
+단계 상태: IMPLEMENTED (목적 보존 직접 검증 통과)
 마지막 완료 작업:
 - 전용 worktree와 refactor/simplify-implementation-verification branch 확인
 - Implementation Lead, Verification Lead, Baseline Capsule의 source·test·CLI·실제 in-repo 소비자 조사
@@ -171,15 +171,20 @@ branch: refactor/simplify-implementation-verification
   conformance를 요구하며 legacy call sentinel로 새 경로 독립성을 증명하는 단일 결정을 선정
 - 2026-08-04 Phase 7 baseline으로 `baseline-capsule/run_tests.py`,
   `implementation-lead/run_tests.py`, `verification-lead/run_tests.py`를 다시 실행해 모두 통과 확인
-Oracle session: Phase 8 follow-up 1 `slots-followup-phase8fo-fefabdec5c` 완료
-열린 finding: 없음 — H1/H2/M1/M2 CLOSED, 새 material finding·ceremony 회귀 없음
+- 2026-08-04 현재 설계 산출물 28개를 전용 branch commit `3e10c81`로 보존
+- 구현 후보 결과의 exact planning/source/AC 결속과 final verdict 비포함을 runtime assertion으로 고정
+- 검증 성공·실패 결과의 exact candidate 결속과 criterion evidence 결속을 runtime assertion으로 고정
+- evidence 부족은 `INCOMPLETE`, 충분한 exact contradiction은 `VERIFICATION_FAILED`라는 결과 의미를
+  runtime assertion으로 고정
+- 변경한 목적 보존 테스트 4개를 직접 실행해 모두 통과 확인
+Oracle session: Phase 1 구현에는 새 Oracle session을 사용하지 않음; Phase 1 설계 finding F1~F3은 닫힘
+열린 finding: 없음 — Phase 1 F1/F2/F3 CLOSED
 사용자 결정 필요: 없음
 현재 blocker: 없음
 바로 다음 행동:
-1. 별도 구현 승인 전에는 product code/data/legacy mechanism을 변경하지 않는다.
-2. 구현 뒤 exact revision에서 Phase 7 `RUNTIME_VERIFIED`를 먼저 충족한다.
-3. Phase 8 hard gate와 deletion-revision 재검증을 통과할 때만 실제 legacy removal을 완료한다.
-금지: 제품 코드 변경, 새 Module runtime verification 수행, legacy 제거
+1. Phase 2 시작 시 전체 계획과 `PHASE-2-EXTERNAL-INTERFACE-RECOVERY-CONTRACT.md`를 순서대로 읽는다.
+2. Phase 2 Interface 구현 전에는 Phase 3 이후 계약을 구현 근거로 사용하지 않는다.
+금지: Phase 2 Interface 선행 구현, 제품 source 변경, legacy 제거
 ```
 
 > [!IMPORTANT]
@@ -506,7 +511,7 @@ Oracle finding별 반론·근거·최소 correction·복잡성 delta·판정 기
 ## 6. 전체 상태
 
 ```text
-Phase 1  DESIGN_CONVERGED
+Phase 1  IMPLEMENTED
 Phase 2  DESIGN_CONVERGED
 Phase 3  DESIGN_CONVERGED
 Phase 4  DESIGN_CONVERGED

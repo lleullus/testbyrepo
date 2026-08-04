@@ -458,6 +458,10 @@ class VerificationRunTests(unittest.TestCase):
         )
 
         self.assertEqual("VERIFIED", result["verificationStatus"])
+        self.assertEqual(self.handoff_ref, result["implementationHandoffRef"])
+        self.assertEqual(self.planning, result["planningSealDigest"])
+        self.assertEqual(self.source, result["finalSourceIdentity"])
+        self.assertEqual(self.assessment("SATISFIED"), result["criterionResults"])
         self.assertEqual([], result["reasonCodes"])
         artifact = self.service.read_artifact(
             assessor_capability=opened["assessor"]["capability"],
@@ -870,6 +874,10 @@ class VerificationRunTests(unittest.TestCase):
             criterion_assessments=self.assessment("CONTRADICTED"),
         )
         self.assertEqual("VERIFICATION_FAILED", result["verificationStatus"])
+        self.assertEqual(self.handoff_ref, result["implementationHandoffRef"])
+        self.assertEqual(self.planning, result["planningSealDigest"])
+        self.assertEqual(self.source, result["finalSourceIdentity"])
+        self.assertEqual(self.assessment("CONTRADICTED"), result["criterionResults"])
         self.assertIn("CRITERION_CONTRADICTED", result["reasonCodes"])
         self.assertIn("EXECUTABLE_IDENTITY_DRIFT", result["reasonCodes"])
 
@@ -2513,6 +2521,7 @@ class VerificationRunTests(unittest.TestCase):
             criterion_assessments=self.assessment("SATISFIED"),
         )
         self.assertEqual("INCOMPLETE", result["verificationStatus"])
+        self.assertEqual(self.assessment("SATISFIED"), result["criterionResults"])
         self.assertIn("PROCESS_OBSERVATION_INCONCLUSIVE", result["reasonCodes"])
 
     def test_retain_terminal_readback_timeout_is_incomplete(self) -> None:

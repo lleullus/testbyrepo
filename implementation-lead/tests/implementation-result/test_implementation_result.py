@@ -163,9 +163,20 @@ class ImplementationHandoffTests(unittest.TestCase):
             handoff["implementationHandoffRef"], r"^implementation:handoff:v1:[a-f0-9]{32}$"
         )
         self.assertEqual(transaction["implementationDeltaRef"], handoff["implementationDeltaRef"])
+        self.assertEqual(self.planning_seal(), handoff["planningSeal"])
+        self.assertEqual(
+            implementation_result.planning_seal_digest(self.planning_seal()),
+            handoff["planningSealDigest"],
+        )
         self.assertEqual(transaction["finalSourceIdentity"], handoff["finalSourceIdentity"])
+        self.assertEqual(
+            [{**self.criteria()[0], "taskIds": ["task-1"]}],
+            handoff["criterionAccounting"],
+        )
+        self.assertEqual([], handoff["unresolvedImplementationItems"])
         self.assertNotIn("sourceEvidence", handoff)
         self.assertNotIn("runtimeObservations", handoff)
+        self.assertNotIn("criterionResults", handoff)
         self.assertNotIn("verificationStatus", handoff)
         stored = self.publisher.workflow.read_node(handoff["implementationHandoffRef"])
         self.assertEqual(handoff, stored["payload"])
