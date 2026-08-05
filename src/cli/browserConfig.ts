@@ -82,8 +82,8 @@ export interface BrowserFlagOptions {
   browserManualLoginProfileDir?: string | null;
   copyProfile?: string;
   remoteHost?: string;
-  /** Thinking time intensity: 'light', 'standard', 'extended', 'heavy' */
-  browserThinkingTime?: ThinkingTimeLevel;
+  /** Thinking time intensity: 'light', 'standard', 'extended', 'heavy', or explicit 'pro' reasoning. */
+  browserThinkingTime?: ThinkingTimeLevel | "pro";
   browserResearch?: BrowserResearchMode;
   browserArchive?: BrowserArchiveMode;
   browserModelLabel?: string;
@@ -258,7 +258,11 @@ export async function buildBrowserConfig(
     allowCookieErrors: options.browserAllowCookieErrors ?? true,
     remoteChrome,
     browserTabRef: options.browserTab ?? undefined,
-    thinkingTime: normalizeThinkingTimeLevel(options.browserThinkingTime) ?? undefined,
+    thinkingTime:
+      options.browserThinkingTime === "pro"
+        ? undefined
+        : (normalizeThinkingTimeLevel(options.browserThinkingTime) ?? undefined),
+    reasoningIntent: options.browserThinkingTime === "pro" ? "pro" : undefined,
     researchMode: options.browserResearch === "deep" ? "deep" : "off",
     archiveConversations: options.browserArchive,
   };

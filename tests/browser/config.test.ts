@@ -61,21 +61,47 @@ describe("resolveBrowserConfig", () => {
     });
   });
 
-  test("rejects managed capability downgrades before prompt submission", () => {
+  test("rejects explicit reasoning above a managed capability", () => {
+    for (const intent of ["light", "standard", "high", "heavy", "pro"] as const) {
+      expect(() =>
+        assertManagedBrowserReasoningIntent(
+          { slotId: 1, expectedControl: "slider", maximumReasoning: "pro" },
+          intent,
+        ),
+      ).not.toThrow();
+    }
+    expect(() =>
+      assertManagedBrowserReasoningIntent(
+        { slotId: 4, expectedControl: "dropdown", maximumReasoning: "high" },
+        "heavy",
+      ),
+    ).toThrow(/supports reasoning up to High/i);
     expect(() =>
       assertManagedBrowserReasoningIntent(
         { slotId: 4, expectedControl: "dropdown", maximumReasoning: "high" },
         "pro",
       ),
-    ).toThrow(/requires verified High reasoning/i);
+    ).toThrow(/supports reasoning up to High/i);
+    expect(() =>
+      assertManagedBrowserReasoningIntent(
+        { slotId: 4, expectedControl: "dropdown", maximumReasoning: "high" },
+        "standard",
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertManagedBrowserReasoningIntent(
+        { slotId: 4, expectedControl: "dropdown", maximumReasoning: "high" },
+        "high",
+      ),
+    ).not.toThrow();
   });
 
-  test("uses the slot-3 High maximum for an ordinary request regardless of the default model id", () => {
+  test("does not turn a managed capability into a reasoning default", () => {
     process.env.ORACLE_BROWSER_SLOT_ID = "3";
 
     const resolved = resolveBrowserConfig({ desiredModel: "gpt-5.5-pro" });
 
-    expect(resolved.reasoningIntent).toBe("high");
+    expect(resolved.reasoningIntent).toBeUndefined();
     expect(resolved.managedSlot).toMatchObject({ slotId: 3, maximumReasoning: "high" });
   });
 
@@ -84,7 +110,14 @@ describe("resolveBrowserConfig", () => {
 
     expect(() =>
       resolveBrowserConfig({ desiredModel: "Thinking 5.5", reasoningIntent: "pro" }),
-    ).toThrow(/requires verified High reasoning/i);
+    ).toThrow(/supports reasoning up to High/i);
+  });
+
+  test("maps explicit extended reasoning to High without promoting Pro slots", () => {
+    process.env.ORACLE_BROWSER_SLOT_ID = "1";
+
+    expect(resolveBrowserConfig({ thinkingTime: "extended" }).reasoningIntent).toBe("high");
+    expect(resolveBrowserConfig({ thinkingTime: "heavy" }).reasoningIntent).toBe("heavy");
   });
 
   test("returns defaults when config missing", () => {

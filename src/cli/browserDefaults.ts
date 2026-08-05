@@ -33,7 +33,7 @@ export interface BrowserDefaultsOptions {
   browserHideWindow?: boolean;
   browserKeepBrowser?: boolean;
   browserModelStrategy?: BrowserModelStrategy;
-  browserThinkingTime?: ThinkingTimeLevel;
+  browserThinkingTime?: ThinkingTimeLevel | "pro";
   browserResearch?: BrowserResearchMode;
   browserArchive?: BrowserArchiveMode;
   browserManualLogin?: boolean;

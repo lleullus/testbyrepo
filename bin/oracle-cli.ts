@@ -82,7 +82,10 @@ import {
   createPerfTrace,
   isTraceValueFlag,
 } from "../src/cli/perfTrace.js";
-import { resolveBrowserFollowupReference } from "../src/cli/followup.js";
+import {
+  applyBrowserFollowupReasoning,
+  resolveBrowserFollowupReference,
+} from "../src/cli/followup.js";
 
 interface CliOptions extends OptionValues {
   prompt?: string;
@@ -146,7 +149,7 @@ interface CliOptions extends OptionValues {
   browserManualLogin?: boolean;
   browserManualLoginProfileDir?: string;
   copyProfile?: string;
-  browserThinkingTime?: "light" | "standard" | "extended" | "heavy";
+  browserThinkingTime?: "light" | "standard" | "extended" | "heavy" | "pro";
   browserResearch?: "off" | "deep";
   browserFollowUp?: string[];
   browserAllowCookieErrors?: boolean;
@@ -781,7 +784,7 @@ program
   .addOption(
     new Option(
       "--browser-thinking-time <level>",
-      "Thinking time intensity for Thinking/Pro models: light, standard, extended, heavy, or ChatGPT UI aliases.",
+      "Thinking time intensity for Thinking/Pro models: light, standard, extended, heavy, pro, or ChatGPT UI aliases.",
     )
       .argParser(parseThinkingTimeOption)
       .hideHelp(),
@@ -2125,7 +2128,10 @@ async function runRootCommand(options: CliOptions): Promise<void> {
   const browserConfig = await (async (): Promise<BrowserSessionConfig | undefined> => {
     if (sessionMode !== "browser") return undefined;
     if (browserFollowup) {
-      return browserFollowup.browserConfig;
+      return applyBrowserFollowupReasoning(
+        browserFollowup.browserConfig,
+        getSource("browserThinkingTime") === "cli" ? options.browserThinkingTime : undefined,
+      );
     }
     const { buildBrowserConfig, resolveBrowserModelLabel } =
       await import("../src/cli/browserConfig.js");

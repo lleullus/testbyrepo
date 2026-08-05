@@ -158,13 +158,16 @@ export function parseSearchOption(value: string): boolean {
   throw new InvalidArgumentError('Search mode must be "on" or "off".');
 }
 
-export function parseThinkingTimeOption(value: string): ThinkingTimeLevel {
+export function parseThinkingTimeOption(value: string): ThinkingTimeLevel | "pro" {
+  if (value.trim().toLowerCase() === "pro") {
+    return "pro";
+  }
   const normalized = normalizeThinkingTimeLevel(value);
   if (normalized) {
     return normalized;
   }
   throw new InvalidArgumentError(
-    'Thinking time must be one of "light", "standard", "extended", "heavy", or a ChatGPT UI alias like "instant", "medium", "high", or "extra-high".',
+    'Thinking time must be one of "light", "standard", "extended", "heavy", "pro", or a ChatGPT UI alias like "instant", "medium", "high", or "extra-high".',
   );
 }
 

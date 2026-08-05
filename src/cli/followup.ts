@@ -4,7 +4,7 @@ import { buildConversationUrl } from "../browser/reattachHelpers.js";
 import { resolveRecoveryUrl } from "../browser/recoverConversation.js";
 import { isRecoverableChatGptConversationUrl } from "../browser/reattachability.js";
 import { DEFAULT_MODEL } from "../oracle/config.js";
-import type { ModelName } from "../oracle/types.js";
+import type { ModelName, ThinkingTimeLevel } from "../oracle/types.js";
 
 export interface BrowserFollowupResolution {
   sessionId: string;
@@ -15,6 +15,16 @@ export interface BrowserFollowupResolution {
 
 export interface FollowupSessionReader {
   readSession(sessionId: string): Promise<SessionMetadata | null>;
+}
+
+export function applyBrowserFollowupReasoning(
+  config: BrowserSessionConfig,
+  explicitReasoning?: ThinkingTimeLevel | "pro",
+): BrowserSessionConfig {
+  const { thinkingTime: _thinkingTime, reasoningIntent: _reasoningIntent, ...rest } = config;
+  if (explicitReasoning === "pro") return { ...rest, reasoningIntent: "pro" };
+  if (explicitReasoning !== undefined) return { ...rest, thinkingTime: explicitReasoning };
+  return rest;
 }
 
 /**

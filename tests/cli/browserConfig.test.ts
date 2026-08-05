@@ -41,6 +41,16 @@ describe("buildBrowserConfig", () => {
     expect(config.desiredModel).toBe("GPT-5.5 Instant");
   });
 
+  test("preserves explicit Pro reasoning without deriving it from the model", async () => {
+    const config = await buildBrowserConfig({
+      model: "gpt-5.5",
+      browserThinkingTime: "pro",
+    });
+
+    expect(config.thinkingTime).toBeUndefined();
+    expect(config.reasoningIntent).toBe("pro");
+  });
+
   test("sets model strategy when provided", async () => {
     const config = await buildBrowserConfig({
       model: "gpt-5.2-pro",

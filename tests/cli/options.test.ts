@@ -194,6 +194,7 @@ describe("parseThinkingTimeOption", () => {
     ["extended", "extended"],
     ["high", "extended"],
     ["heavy", "heavy"],
+    ["pro", "pro"],
     ["extra-high", "heavy"],
     ["extra high", "heavy"],
     ["extrahigh", "heavy"],

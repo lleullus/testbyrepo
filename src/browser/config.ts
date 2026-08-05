@@ -214,20 +214,28 @@ export function resolveBrowserReasoningIntent(args: {
   }
   if (args.thinkingTime === "heavy") return "heavy";
   if (args.thinkingTime === "extended") {
-    return args.managedSlot?.maximumReasoning === "pro" ? "pro" : "high";
+    return "high";
   }
-  return args.managedSlot?.maximumReasoning;
+  return undefined;
 }
 
-/** Managed slots fail instead of silently lowering their required maximum. */
+/** Managed slots reject explicit reasoning above their declared capability. */
 export function assertManagedBrowserReasoningIntent(
   managedSlot: BrowserManagedSlotCapability | null | undefined,
   intent: BrowserReasoningIntent | undefined,
 ): void {
   if (!managedSlot) return;
-  if (intent !== managedSlot.maximumReasoning) {
+  const intentRank: Record<BrowserReasoningIntent, number> = {
+    light: 0,
+    standard: 1,
+    high: 2,
+    heavy: 3,
+    pro: 4,
+  };
+  const maximumRank = managedSlot.maximumReasoning === "pro" ? intentRank.pro : intentRank.high;
+  if (intent !== undefined && intentRank[intent] > maximumRank) {
     throw new Error(
-      `Managed browser slot ${managedSlot.slotId} requires verified ${managedSlot.maximumReasoning === "pro" ? "Pro" : "High"} reasoning; requested ${intent ?? "none"} cannot be submitted.`,
+      `Managed browser slot ${managedSlot.slotId} supports reasoning up to ${managedSlot.maximumReasoning === "pro" ? "Pro" : "High"}; requested ${intent} cannot be submitted.`,
     );
   }
 }

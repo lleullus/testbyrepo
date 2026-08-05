@@ -325,6 +325,166 @@ describe("strict browser reasoning selection", () => {
     expect(sliderReadback.getAttribute("aria-valuenow")).toBe("4");
   });
 
+  it.each([
+    { initial: "standard", target: "heavy", key: "ArrowRight" },
+    { initial: "heavy", target: "standard", key: "ArrowLeft" },
+  ] as const)(
+    "moves a composite slider from $initial to $target by fresh labels",
+    async ({ initial, target, key }) => {
+      class Target {
+        dispatchEvent(_event: unknown): boolean {
+          return true;
+        }
+      }
+      class Node extends Target {
+        public children: Node[] = [];
+
+        constructor(
+          public textContent: string,
+          private readonly attributes: Record<string, string>,
+          private readonly onDispatch?: (event: unknown) => void,
+          private readonly onRead?: (value: string) => void,
+        ) {
+          super();
+        }
+
+        getAttribute(name: string): string | null {
+          const value = this.attributes[name] ?? null;
+          if (name === "aria-valuetext" && value) this.onRead?.(value);
+          return value;
+        }
+
+        getBoundingClientRect(): { width: number; height: number } {
+          return { width: 100, height: 30 };
+        }
+
+        querySelectorAll(_selector: string): Node[] {
+          return this.children;
+        }
+
+        focus(): void {}
+
+        override dispatchEvent(event: unknown): boolean {
+          this.onDispatch?.(event);
+          return true;
+        }
+      }
+      class EventStub {
+        public readonly key?: string;
+
+        constructor(
+          public readonly type: string,
+          init?: { key?: string },
+        ) {
+          this.key = init?.key;
+        }
+      }
+
+      const levels = ["light", "standard", "high", "heavy", "pro"] as const;
+      let currentIndex = levels.indexOf(initial);
+      const targetIndex = levels.indexOf(target);
+      const arrowKeys: string[] = [];
+      const observedLabels: string[] = [];
+      const readbacks: Node[] = [];
+      const modelMenuItem = new Node("GPT-5.6 Sol", { role: "menuitem" });
+      const makeReadback = (level: (typeof levels)[number]) => {
+        const readback = new Node(
+          "",
+          {
+            role: "slider",
+            tabindex: "-1",
+            "aria-hidden": "true",
+            "aria-valuemin": "0",
+            "aria-valuemax": "4",
+            "aria-valuenow": String(levels.indexOf(level)),
+            "aria-valuetext": level,
+          },
+          undefined,
+          (value) => observedLabels.push(value),
+        );
+        readbacks.push(readback);
+        return readback;
+      };
+      let liveReadback = makeReadback(initial);
+      let liveEffort = new Node(`Effort ${initial}`, { role: "menuitem" });
+      const powerOwner = new Node(
+        "",
+        {
+          role: "menuitem",
+          tabindex: "0",
+          "aria-label": "Power",
+          "aria-keyshortcuts": "ArrowLeft ArrowRight",
+          "data-orientation": "vertical",
+        },
+        (event) => {
+          const eventKey = (event as { key?: string; type?: string }).key;
+          if ((event as { type?: string }).type !== "keydown" || eventKey !== key) return;
+          arrowKeys.push(eventKey);
+          currentIndex += key === "ArrowRight" ? 1 : -1;
+          const nextLevel = levels[currentIndex];
+          liveReadback = makeReadback(nextLevel);
+          liveEffort = new Node(`Effort ${nextLevel}`, { role: "menuitem" });
+          powerOwner.children = [liveReadback];
+        },
+      );
+      powerOwner.children = [liveReadback];
+      const reasoningOwner = {
+        getAttribute: (name: string) =>
+          name === "data-testid" ? "composer-intelligence-picker-content" : null,
+        getBoundingClientRect: () => ({ width: 100, height: 30 }),
+        querySelectorAll: (selector: string) => {
+          if (selector.includes('[role="menuitem"]')) {
+            return [powerOwner, modelMenuItem, liveEffort];
+          }
+          if (selector.includes('[role="slider"]')) return [liveReadback];
+          return [];
+        },
+      };
+      const documentStub = {
+        querySelector: () => null,
+        querySelectorAll: (selector: string) =>
+          selector.includes("composer-intelligence-picker-content") ? [reasoningOwner] : [],
+      };
+      const expression = buildBrowserReasoningExpressionForTest({
+        intent: target,
+        managedSlot: { slotId: 1, expectedControl: "slider", maximumReasoning: "pro" },
+      });
+      const evaluate = new Function(
+        "document",
+        "setTimeout",
+        "window",
+        "EventTarget",
+        "PointerEvent",
+        "MouseEvent",
+        "Event",
+        `return ${expression};`,
+      ) as (...args: unknown[]) => Promise<unknown>;
+
+      await expect(
+        evaluate(
+          documentStub,
+          (callback: () => void) => callback(),
+          { KeyboardEvent: EventStub },
+          Target,
+          EventStub,
+          EventStub,
+          EventStub,
+        ),
+      ).resolves.toMatchObject({
+        status: "switched",
+        controlKind: "slider",
+        resolvedLevel: target,
+        modelUnchanged: true,
+      });
+      expect(currentIndex).toBe(targetIndex);
+      expect(arrowKeys).toEqual(
+        Array.from({ length: Math.abs(targetIndex - levels.indexOf(initial)) }, () => key),
+      );
+      expect(new Set(readbacks).size).toBe(arrowKeys.length + 1);
+      expect(observedLabels).toEqual(expect.arrayContaining([initial, "high", target]));
+    },
+  );
+
   it("times out when an exact Pro composite slider never applies its update", async () => {
     class Target {
       dispatchEvent(_event: unknown): boolean {
@@ -1030,7 +1190,7 @@ describe("strict browser reasoning selection", () => {
         return selector.includes('input[type="range"]');
       }
       override dispatchEvent(event: unknown): boolean {
-        if ((event as { type?: string }).type === "input") this.onInput?.();
+        if ((event as { type?: string }).type === "keydown") this.onInput?.();
         return true;
       }
     }
@@ -1102,7 +1262,7 @@ describe("strict browser reasoning selection", () => {
       evaluate(
         documentStub,
         (callback: () => void) => callback(),
-        { PointerEvent: EventStub },
+        { PointerEvent: EventStub, KeyboardEvent: EventStub },
         Target,
         EventStub,
         EventStub,

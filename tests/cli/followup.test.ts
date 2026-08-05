@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import type { SessionMetadata } from "../../src/sessionStore.js";
 import {
+  applyBrowserFollowupReasoning,
   resolveBrowserFollowupReference,
   resolveBrowserResumeConversationUrl,
 } from "../../src/cli/followup.js";
@@ -13,6 +14,50 @@ const baseMetadata: SessionMetadata = {
 };
 
 describe("browser follow-up resolution", () => {
+  test("keeps the current UI reasoning when a follow-up does not specify one", () => {
+    const originalModelIdentity = {
+      fingerprint: "model-fingerprint",
+      source: "chatgpt-model-picker" as const,
+      capturedAt: "2026-01-01T00:00:00.000Z",
+    };
+
+    expect(
+      applyBrowserFollowupReasoning({
+        thinkingTime: "heavy",
+        reasoningIntent: "pro",
+        originalModelIdentity,
+        remoteChrome: { host: "127.0.0.1", port: 19222 },
+      }),
+    ).toEqual({
+      originalModelIdentity,
+      remoteChrome: { host: "127.0.0.1", port: 19222 },
+    });
+  });
+
+  test("overrides only reasoning for an explicit follow-up level", () => {
+    const parent = {
+      thinkingTime: "standard" as const,
+      reasoningIntent: "pro" as const,
+      resumeConversationUrl: "https://chatgpt.com/c/resume-me",
+      originalModelIdentity: {
+        fingerprint: "model-fingerprint",
+        source: "chatgpt-model-picker" as const,
+        capturedAt: "2026-01-01T00:00:00.000Z",
+      },
+    };
+
+    expect(applyBrowserFollowupReasoning(parent, "heavy")).toEqual({
+      thinkingTime: "heavy",
+      resumeConversationUrl: parent.resumeConversationUrl,
+      originalModelIdentity: parent.originalModelIdentity,
+    });
+    expect(applyBrowserFollowupReasoning(parent, "pro")).toEqual({
+      reasoningIntent: "pro",
+      resumeConversationUrl: parent.resumeConversationUrl,
+      originalModelIdentity: parent.originalModelIdentity,
+    });
+  });
+
   test("derives a resume URL from conversationId", () => {
     const metadata: SessionMetadata = {
       ...baseMetadata,

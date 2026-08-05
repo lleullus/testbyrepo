@@ -187,9 +187,7 @@ function buildBrowserReasoningExpression(args: {
 }): string {
   const targetLiteral = JSON.stringify(args.intent);
   const expectedControlLiteral = JSON.stringify(args.managedSlot?.expectedControl ?? null);
-  const maximumReasoningLiteral = JSON.stringify(
-    args.managedSlot?.maximumReasoning ?? null,
-  );
+  const maximumReasoningLiteral = JSON.stringify(args.managedSlot?.maximumReasoning ?? null);
   const originalModelFingerprintLiteral = JSON.stringify(
     args.originalModelIdentity?.fingerprint ?? null,
   );
@@ -420,17 +418,18 @@ function buildBrowserReasoningExpression(args: {
       const uniqueLevels = Array.from(new Set(levels));
       return uniqueLevels.length === 1 ? uniqueLevels[0] : null;
     };
-    const dispatchArrowRight = (node) => {
-      const KeyboardEventCtor = window?.KeyboardEvent;
+    const dispatchArrow = (node, key) => {
+      const KeyboardEventCtor = window?.KeyboardEvent || window?.Event;
       if (!node || typeof KeyboardEventCtor !== 'function') return false;
+      const keyCode = key === 'ArrowLeft' ? 37 : 39;
       try { node.focus?.(); } catch {}
       try {
         node.dispatchEvent(new KeyboardEventCtor('keydown', {
-          key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39,
+          key, code: key, keyCode, which: keyCode,
           bubbles: true, cancelable: true,
         }));
         node.dispatchEvent(new KeyboardEventCtor('keyup', {
-          key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39,
+          key, code: key, keyCode, which: keyCode,
           bubbles: true, cancelable: true,
         }));
         return true;
@@ -477,6 +476,14 @@ function buildBrowserReasoningExpression(args: {
         await sleep(100);
       }
       return false;
+    };
+    const LEVEL_RANK = { light: 0, standard: 1, high: 2, heavy: 3, pro: 4 };
+    const sliderLevel = (control, owner) =>
+      levelFor(control?.readbackNode) || effortLevelWithinOwner(owner);
+    const sliderAtMaximum = (node) => {
+      const max = node?.max || node?.getAttribute?.('aria-valuemax');
+      const now = node?.value || node?.getAttribute?.('aria-valuenow');
+      return max != null && max !== '' && now != null && now !== '' && String(now) === String(max);
     };
     let controls = discoverControls();
     if (!controlMatchesExpectation(controls)) {
@@ -538,74 +545,133 @@ function buildBrowserReasoningExpression(args: {
       });
     }
     if ((EXPECTED_CONTROL === 'slider' || (!EXPECTED_CONTROL && sliders.length === 1)) && sliders.length === 1) {
-      const sliderControl = sliders[0];
-      const slider = sliderControl.readbackNode;
-      if (sliderControl.composite) {
-        const initialMetrics = readNumericSliderMetrics(slider);
-        if (!initialMetrics) {
-          return fail('unavailable', {
-            controlKind: 'slider', controlCount: sliders.length + dropdownItems.length,
-            matchingControlCount: 0, observedKinds,
+      const initialSliderControl = sliders[0];
+      const initialSlider = initialSliderControl.readbackNode;
+      const initialMetrics = initialSliderControl.composite
+        ? readNumericSliderMetrics(initialSlider)
+        : null;
+      if (initialSliderControl.composite && !initialMetrics) {
+        return fail('unavailable', {
+          controlKind: 'slider', controlCount: sliders.length + dropdownItems.length,
+          matchingControlCount: 0, observedKinds,
+        });
+      }
+      const initialLevel = sliderLevel(initialSliderControl, controls.owner);
+      let observedEffortLabel = initialLevel !== null;
+      const initialAtMaximum = sliderAtMaximum(initialSlider);
+      const canUseProMaximumFallback =
+        TARGET === 'pro' && MAXIMUM_REASONING === 'pro' && !observedEffortLabel && initialAtMaximum;
+      const availableLevels = initialLevel ? [initialLevel] : [];
+      if (!initialLevel && !canUseProMaximumFallback) {
+        return fail('unavailable', {
+          controlKind: 'slider', availableLevels, modelUnchanged: true,
+          controlCount: sliders.length + dropdownItems.length,
+          matchingControlCount: 1, observedKinds,
+        });
+      }
+      if (initialLevel === TARGET || canUseProMaximumFallback) {
+        return {
+          status: 'already-selected',
+          controlKind: 'slider', availableLevels: canUseProMaximumFallback ? ['pro'] : availableLevels,
+          resolvedLevel: TARGET,
+          modelUnchanged: true,
+          originalModelFingerprint,
+          observedModelFingerprint,
+          diagnostic: diagnostic(1, 1, ['slider']),
+        };
+      }
+
+      let currentLevel = initialLevel;
+      const maxSteps = Math.max(5, (initialMetrics?.max ?? 0) - (initialMetrics?.min ?? 0) + 2);
+      for (let step = 0; step < maxSteps; step += 1) {
+        const liveControls = discoverControls();
+        const liveKinds = [
+          ...(liveControls.sliders.length ? ['slider'] : []),
+          ...(liveControls.dropdownItems.length ? ['dropdown'] : []),
+        ];
+        if (
+          liveControls.ownerCount !== 1 ||
+          !liveControls.owner ||
+          liveControls.sliders.length !== 1 ||
+          liveControls.dropdownItems.length > 0
+        ) {
+          return fail(
+            liveControls.ownerCount > 1 || liveControls.sliders.length > 1 || liveControls.dropdownItems.length > 0
+              ? 'ambiguous'
+              : 'unavailable',
+            {
+              controlKind: liveControls.sliders.length ? 'slider' : null,
+              controlCount: liveControls.sliders.length + liveControls.dropdownItems.length,
+              matchingControlCount: liveControls.sliders.length,
+              observedKinds: liveKinds,
+            },
+          );
+        }
+        const liveControl = liveControls.sliders[0];
+        const liveLevel = sliderLevel(liveControl, liveControls.owner);
+        if (liveLevel) observedEffortLabel = true;
+        const liveAtMaximum = sliderAtMaximum(liveControl.readbackNode);
+        observedModelFingerprint = stableModelFingerprint(liveControls.owner);
+        if (observedModelFingerprint !== originalModelFingerprint) {
+          return fail('model-changed', {
+            controlKind: 'slider', modelUnchanged: false,
+            controlCount: 1, matchingControlCount: 1, observedKinds: liveKinds,
           });
         }
-        const wasAtMaximum = initialMetrics.now === initialMetrics.max;
-        if (!wasAtMaximum) {
-          for (let step = initialMetrics.now; step < initialMetrics.max; step += 1) {
-            if (!dispatchArrowRight(sliderControl.interactionNode)) {
-              return fail('unavailable', {
-                controlKind: 'slider', controlCount: sliders.length + dropdownItems.length,
-                matchingControlCount: 0, observedKinds,
-              });
-            }
-            await sleep(50);
+        if (!liveLevel || !(liveLevel in LEVEL_RANK)) {
+          if (TARGET === 'pro' && MAXIMUM_REASONING === 'pro' && !observedEffortLabel && liveAtMaximum) {
+            return {
+              status: 'switched', controlKind: 'slider', availableLevels: ['pro'], resolvedLevel: 'pro',
+              modelUnchanged: true, originalModelFingerprint, observedModelFingerprint,
+              diagnostic: diagnostic(1, 1, ['slider']),
+            };
           }
+          return fail('unavailable', {
+            controlKind: 'slider', availableLevels: [], resolvedLevel: null,
+            modelUnchanged: true, controlCount: 1, matchingControlCount: 1, observedKinds: liveKinds,
+          });
         }
-
-        // React can commit the keyboard-driven effort update after replacing
-        // the composite control. Verify all owner-scoped facts from the same
-        // fresh observation instead of trusting the node that received input.
-        const verificationDeadline = Date.now() + 2_500;
-        while (true) {
+        currentLevel = liveLevel;
+        if (currentLevel === TARGET) {
+          return {
+            status: 'switched', controlKind: 'slider', availableLevels: [TARGET], resolvedLevel: TARGET,
+            modelUnchanged: true, originalModelFingerprint, observedModelFingerprint,
+            diagnostic: diagnostic(1, 1, ['slider']),
+          };
+        }
+        const direction = LEVEL_RANK[TARGET] > LEVEL_RANK[currentLevel] ? 'ArrowRight' : 'ArrowLeft';
+        if (!dispatchArrow(liveControl.interactionNode, direction)) {
+          return fail('unavailable', {
+            controlKind: 'slider', availableLevels: [currentLevel], resolvedLevel: currentLevel,
+            modelUnchanged: true, controlCount: 1, matchingControlCount: 1, observedKinds: liveKinds,
+          });
+        }
+        const stepDeadline = Date.now() + 2_500;
+        let progressed = false;
+        while (Date.now() < stepDeadline) {
+          await sleep(100);
           const refreshedControls = discoverControls();
           const refreshedKinds = [
             ...(refreshedControls.sliders.length ? ['slider'] : []),
             ...(refreshedControls.dropdownItems.length ? ['dropdown'] : []),
           ];
-          if (refreshedControls.ownerCount !== 1 || !refreshedControls.owner) {
-            return fail(refreshedControls.ownerCount > 1 ? 'ambiguous' : 'unavailable', {
-              controlKind: null,
+          if (
+            refreshedControls.ownerCount !== 1 ||
+            !refreshedControls.owner ||
+            refreshedControls.sliders.length !== 1 ||
+            refreshedControls.dropdownItems.length > 0
+          ) {
+            return fail('unavailable', {
+              controlKind: 'slider', availableLevels: currentLevel ? [currentLevel] : [],
+              resolvedLevel: currentLevel || null, modelUnchanged: true,
               controlCount: refreshedControls.sliders.length + refreshedControls.dropdownItems.length,
-              matchingControlCount: 0,
-              observedKinds: refreshedKinds,
+              matchingControlCount: refreshedControls.sliders.length, observedKinds: refreshedKinds,
             });
           }
-          if (refreshedControls.sliders.length !== 1 || refreshedControls.dropdownItems.length > 0) {
-            return fail(
-              refreshedControls.sliders.length > 1 || refreshedControls.dropdownItems.length > 0
-                ? 'ambiguous'
-                : 'unavailable',
-              {
-                controlKind: refreshedControls.sliders.length > 0 ? 'slider' : null,
-                controlCount: refreshedControls.sliders.length + refreshedControls.dropdownItems.length,
-                matchingControlCount: refreshedControls.sliders.length,
-                observedKinds: refreshedKinds,
-              },
-            );
-          }
-          const refreshedSliderControl = refreshedControls.sliders[0];
-          if (!refreshedSliderControl.composite) {
-            return fail('unavailable', {
-              controlKind: 'slider', controlCount: 1, matchingControlCount: 0,
-              observedKinds: refreshedKinds,
-            });
-          }
-          const refreshedMetrics = readNumericSliderMetrics(refreshedSliderControl.readbackNode);
-          if (!refreshedMetrics) {
-            return fail('unavailable', {
-              controlKind: 'slider', controlCount: 1, matchingControlCount: 0,
-              observedKinds: refreshedKinds,
-            });
-          }
+          const refreshedControl = refreshedControls.sliders[0];
+          const refreshedLevel = sliderLevel(refreshedControl, refreshedControls.owner);
+          if (refreshedLevel) observedEffortLabel = true;
+          const refreshedAtMaximum = sliderAtMaximum(refreshedControl.readbackNode);
           observedModelFingerprint = stableModelFingerprint(refreshedControls.owner);
           if (observedModelFingerprint !== originalModelFingerprint) {
             return fail('model-changed', {
@@ -613,114 +679,60 @@ function buildBrowserReasoningExpression(args: {
               controlCount: 1, matchingControlCount: 1, observedKinds: refreshedKinds,
             });
           }
-          let resolvedLevel =
-            levelFor(refreshedSliderControl.readbackNode) ||
-            effortLevelWithinOwner(refreshedControls.owner);
-          if (
-            !resolvedLevel &&
-            EXPECTED_CONTROL === 'slider' &&
-            MAXIMUM_REASONING === TARGET &&
-            refreshedMetrics.now === refreshedMetrics.max
-          ) {
-            resolvedLevel = TARGET;
+          if (!refreshedLevel || !(refreshedLevel in LEVEL_RANK)) {
+            if (
+              TARGET === 'pro' &&
+              MAXIMUM_REASONING === 'pro' &&
+              !observedEffortLabel &&
+              refreshedAtMaximum
+            ) {
+              return {
+                status: 'switched', controlKind: 'slider', availableLevels: ['pro'], resolvedLevel: 'pro',
+                modelUnchanged: true, originalModelFingerprint, observedModelFingerprint,
+                diagnostic: diagnostic(1, 1, ['slider']),
+              };
+            }
+            continue;
           }
-          const availableLevels = resolvedLevel ? [resolvedLevel] : [];
-          if (refreshedMetrics.now === refreshedMetrics.max && resolvedLevel === TARGET) {
+          if (refreshedLevel === TARGET) {
             return {
-              status: wasAtMaximum ? 'already-selected' : 'switched',
-              controlKind: 'slider', availableLevels, resolvedLevel,
-              modelUnchanged: true,
-              originalModelFingerprint,
-              observedModelFingerprint,
+              status: 'switched', controlKind: 'slider', availableLevels: [TARGET], resolvedLevel: TARGET,
+              modelUnchanged: true, originalModelFingerprint, observedModelFingerprint,
               diagnostic: diagnostic(1, 1, ['slider']),
             };
           }
-          if (Date.now() >= verificationDeadline) {
-            return fail('unavailable', {
-              controlKind: 'slider', availableLevels, resolvedLevel,
-              modelUnchanged: true, controlCount: 1,
-              matchingControlCount: 1, observedKinds: refreshedKinds,
-            });
+          if (refreshedLevel === currentLevel) {
+            continue;
           }
-          await sleep(100);
+          const previousRank = LEVEL_RANK[currentLevel];
+          const refreshedRank = LEVEL_RANK[refreshedLevel];
+          const targetRank = LEVEL_RANK[TARGET];
+          const movedTowardTarget = direction === 'ArrowRight'
+            ? refreshedRank > previousRank && refreshedRank < targetRank
+            : refreshedRank < previousRank && refreshedRank > targetRank;
+          if (movedTowardTarget) {
+            currentLevel = refreshedLevel;
+            progressed = true;
+            break;
+          }
+          return fail('unavailable', {
+            controlKind: 'slider', availableLevels: [refreshedLevel], resolvedLevel: refreshedLevel,
+            modelUnchanged: true, controlCount: 1, matchingControlCount: 1, observedKinds: refreshedKinds,
+          });
+        }
+        if (!progressed) {
+          return fail('unavailable', {
+            controlKind: 'slider', availableLevels: currentLevel ? [currentLevel] : [],
+            resolvedLevel: currentLevel || null, modelUnchanged: true,
+            controlCount: 1, matchingControlCount: 1, observedKinds: ['slider'],
+          });
         }
       }
-
-      const max = slider.max || slider.getAttribute?.('aria-valuemax');
-      const current = slider.value || slider.getAttribute?.('aria-valuenow');
-      if (max == null || max === '') {
-        return fail('unavailable', {
-          controlKind: 'slider', controlCount: sliders.length + dropdownItems.length,
-          matchingControlCount: 1, observedKinds,
-        });
-      }
-      if (String(current) !== String(max)) {
-        // React tracks assignments made through the instance setter. Use the
-        // native prototype setter when available so the following input event
-        // is observable by the controlled slider rather than silently ignored.
-        try {
-          const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(slider), 'value');
-          if (descriptor?.set) descriptor.set.call(slider, String(max));
-          else slider.value = String(max);
-        } catch {}
-        try { slider.dispatchEvent(new Event('input', { bubbles: true })); } catch {}
-        try { slider.dispatchEvent(new Event('change', { bubbles: true })); } catch {}
-        await sleep(150);
-      }
-      // React may replace the control after an input event. Re-discover it;
-      // never treat writes to the old node or ARIA attributes as verification.
-      const refreshedControls = discoverControls();
-      if (refreshedControls.sliders.length !== 1 || refreshedControls.dropdownItems.length > 0) {
-        return fail('unavailable', {
-          controlKind: 'slider', controlCount: refreshedControls.sliders.length + refreshedControls.dropdownItems.length,
-          matchingControlCount: refreshedControls.sliders.length,
-          observedKinds: [
-            ...(refreshedControls.sliders.length ? ['slider'] : []),
-            ...(refreshedControls.dropdownItems.length ? ['dropdown'] : []),
-          ],
-        });
-      }
-      const refreshedSliderControl = refreshedControls.sliders[0];
-      const refreshedSlider = refreshedSliderControl.readbackNode;
-      const finalValue = refreshedSlider.value || refreshedSlider.getAttribute?.('aria-valuenow');
-      let resolvedLevel =
-        levelFor(refreshedSlider) ||
-        (refreshedSliderControl.composite
-          ? effortLevelWithinOwner(refreshedControls.owner)
-          : null);
-      if (
-        !resolvedLevel &&
-        EXPECTED_CONTROL === 'slider' &&
-        MAXIMUM_REASONING === TARGET &&
-        String(finalValue) === String(max)
-      ) {
-        resolvedLevel = TARGET;
-      }
-      const siblingLevels = refreshedControls.dropdownItems.map(levelFor).filter(Boolean);
-      const availableLevels = Array.from(new Set([resolvedLevel, ...siblingLevels].filter(Boolean)));
-      const modelUnchanged = modelStill();
-      if (!modelUnchanged) {
-        return fail('model-changed', {
-          controlKind: 'slider', availableLevels, resolvedLevel,
-          modelUnchanged: false, controlCount: sliders.length + dropdownItems.length,
-          matchingControlCount: 1, observedKinds,
-        });
-      }
-      if (String(finalValue) !== String(max) || resolvedLevel !== TARGET) {
-        return fail('unavailable', {
-          controlKind: 'slider', availableLevels, resolvedLevel,
-          modelUnchanged: true, controlCount: sliders.length + dropdownItems.length,
-          matchingControlCount: 1, observedKinds,
-        });
-      }
-      return {
-        status: String(current) === String(max) ? 'already-selected' : 'switched',
-        controlKind: 'slider', availableLevels, resolvedLevel,
-        modelUnchanged: true,
-        originalModelFingerprint,
-        observedModelFingerprint,
-        diagnostic: diagnostic(refreshedControls.sliders.length, 1, ['slider']),
-      };
+      return fail('unavailable', {
+        controlKind: 'slider', availableLevels: currentLevel ? [currentLevel] : [],
+        resolvedLevel: currentLevel || null, modelUnchanged: true,
+        controlCount: 1, matchingControlCount: 1, observedKinds: ['slider'],
+      });
     }
     const availableLevels = Array.from(new Set(dropdownItems.map(levelFor).filter(Boolean)));
     const matches = dropdownItems.filter((node) => levelFor(node) === TARGET);
