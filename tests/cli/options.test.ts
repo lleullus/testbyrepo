@@ -312,9 +312,9 @@ describe("inferModelFromLabel", () => {
     expect(inferModelFromLabel("ChatGPT 5.5 Instant")).toBe("gpt-5.5-instant");
     expect(inferModelFromLabel("5.5 FAST")).toBe("gpt-5.5-instant");
     expect(inferModelFromLabel("GPT-5.5 Pro")).toBe("gpt-5.5-pro");
-    expect(inferModelFromLabel("Pro Extended")).toBe("gpt-5.5-pro");
-    // New ChatGPT UI (2026-05): bare "Pro" label maps to default (gpt-5.5-pro)
-    expect(inferModelFromLabel("Pro")).toBe("gpt-5.5-pro");
+    expect(inferModelFromLabel("Pro Extended")).toBe("gpt-5.6-sol");
+    // New ChatGPT UI (2026-05): bare "Pro" label maps to the configured default.
+    expect(inferModelFromLabel("Pro")).toBe("gpt-5.6-sol");
     expect(inferModelFromLabel("Thinking Heavy")).toBe("gpt-5.5");
   });
 
@@ -347,8 +347,8 @@ describe("inferModelFromLabel", () => {
     expect(inferModelFromLabel("Codex Max Studio")).toBe("gpt-5.1-codex");
   });
 
-  test("falls back to pro when the label references pro", () => {
-    expect(inferModelFromLabel("ChatGPT Pro")).toBe("gpt-5.5-pro");
+  test("falls back to the configured default when the label references pro", () => {
+    expect(inferModelFromLabel("ChatGPT Pro")).toBe("gpt-5.6-sol");
     expect(inferModelFromLabel("GPT-5.2 Pro")).toBe("gpt-5.2-pro");
     expect(inferModelFromLabel("GPT-5 Pro (Classic)")).toBe("gpt-5-pro");
   });
@@ -364,8 +364,8 @@ describe("inferModelFromLabel", () => {
     expect(inferModelFromLabel("Grok-4-1")).toBe("grok-4.1");
   });
 
-  test("falls back to gpt-5.5-pro when label empty and to gpt-5.2 for other ambiguous strings", () => {
-    expect(inferModelFromLabel("")).toBe("gpt-5.5-pro");
+  test("falls back to gpt-5.6-sol when label empty and to gpt-5.2 for other ambiguous strings", () => {
+    expect(inferModelFromLabel("")).toBe("gpt-5.6-sol");
     expect(inferModelFromLabel("something else")).toBe("gpt-5.2");
   });
 });
