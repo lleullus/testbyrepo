@@ -11,9 +11,9 @@ planning, implementation, and independent verification.
 - `implementation-lead/`: implementation of one exact ready local Markdown
   Ticket by a user-designated Implementation Subagent, followed by Lead review
   of the real project diff, implementation checks, and Markdown AC coverage.
-- `verification-lead/`: independent read-only verification of the same exact
-  Ticket by a user-designated Fresh Verification Subagent, with one direct-
-  evidence result for each Markdown AC.
+- `verification-lead/`: direct Verification Lead scenario design and read-only
+  verification of the same exact Ticket, with one direct-evidence result for
+  each Markdown AC and limited remediation of directly evidenced failures.
 - `repo-snapshot/`: independent Git working-tree snapshot skill; its credential
   remains outside this repository at `/home/user01/.config/repo-snapshot/token`
 
