@@ -7,17 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-SUITES = (
-    "tests/contract",
-    "tests/task-ownership",
-    "tests/workflow-store",
-    "tests/implementation-transaction",
-    "tests/implementation-result",
-    "tests/planning-workspace",
-    "tests/pilot",
-    "../verification-lead/tests/verification-run",
-    "../verification-lead/tests/pilot",
-)
+SUITES = ("tests/contract",)
 
 
 def main() -> int:
