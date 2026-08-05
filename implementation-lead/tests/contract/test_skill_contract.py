@@ -20,10 +20,24 @@ class ActiveSkillContractTests(unittest.TestCase):
         self.assertIn("must not report", IMPLEMENTATION_SKILL)
 
     def test_verification_skill_names_direct_verification_and_remediation_contract(self) -> None:
+        verification_skill = " ".join(VERIFICATION_SKILL.split())
         self.assertIn("same exact ready local Markdown Ticket", VERIFICATION_SKILL)
         self.assertIn("current project", VERIFICATION_SKILL)
         self.assertIn("allowed verification surface", VERIFICATION_SKILL)
+        self.assertIn("user-facing lead session", verification_skill)
+        self.assertIn("delegated subagent", verification_skill)
+        self.assertIn("user-facing commentary channel", verification_skill)
+        self.assertIn("stop as `unsupported` before any direct evidence acquisition", verification_skill)
         self.assertIn("Verification Lead itself designs one or", VERIFICATION_SKILL)
+        self.assertIn("Planning inspection may read the Ticket, source, and product entrypoint", verification_skill)
+        self.assertIn("must not be preserved or reused as direct AC evidence", verification_skill)
+        self.assertIn("new evidence observation", verification_skill)
+        self.assertIn("`Verification Scenarios`", verification_skill)
+        self.assertIn("stable scenario ID, AC", verification_skill)
+        self.assertIn("procedure and verification surface", verification_skill)
+        self.assertIn("commentary emission is a precondition for evidence acquisition, not an approval gate", verification_skill)
+        self.assertIn("`replaces <old scenario ID>` relationship", verification_skill)
+        self.assertIn("Do not relabel evidence acquired for the old scenario as evidence for its replacement", verification_skill)
         for scenario_field in (
             "observation target",
             "procedure",
@@ -37,6 +51,9 @@ class ActiveSkillContractTests(unittest.TestCase):
         self.assertIn("read-only", VERIFICATION_SKILL)
         self.assertIn("product files unmodified", VERIFICATION_SKILL)
         self.assertIn("exactly one result row for every Markdown AC", VERIFICATION_SKILL)
+        self.assertIn("all applicable stable scenario IDs actually presented to the user and executed", verification_skill)
+        self.assertIn("each scenario's admissible direct evidence", verification_skill)
+        self.assertIn("An unshared scenario execution cannot support `SATISFIED`", verification_skill)
         for status in ("SATISFIED", "NOT_SATISFIED", "UNDETERMINED"):
             self.assertIn(status, VERIFICATION_SKILL)
         self.assertIn("`SATISFIED` and `UNDETERMINED` ACs are never remediation targets", VERIFICATION_SKILL)
