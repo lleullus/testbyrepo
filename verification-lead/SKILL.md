@@ -13,7 +13,13 @@ description: Use to independently verify one exact ready local Markdown Ticket d
 2. For every Markdown AC in the Ticket, Verification Lead itself designs one or
    more verification scenarios before execution. Each scenario records the
    observation target, procedure, expected result, direct evidence to collect,
-   and decision criteria.
+   and decision criteria. Before the first evidence acquisition, present every
+   designed scenario to the user in a concise AC-by-AC table containing those
+   fields. This is a human-readable projection of the internal observation plan,
+   not a caller-provided input, approval token, plan identifier, or separate
+   artifact. Continue without waiting for confirmation unless an existing
+   authority, ambiguity, or effect-safety rule requires a user decision. If a
+   scenario changes before execution, present its replacement before executing it.
 3. For any runtime/product-flow obligation, direct evidence is admissible only
    when the actually executed surface reaches the observable product-contract
    boundary required by the AC. A surface narrower than that boundary is not
@@ -29,7 +35,9 @@ description: Use to independently verify one exact ready local Markdown Ticket d
 4. Keep product files unmodified while directly executing every scenario and
    collecting direct evidence. Produce exactly one result row for every Markdown AC,
    with exactly one of `SATISFIED`, `NOT_SATISFIED`, or
-   `UNDETERMINED` and the direct evidence supporting that row.
+   `UNDETERMINED`, the user-visible scenario actually executed, and the direct
+   evidence supporting that row. Do not report an unshared replacement scenario
+   as though it were the scenario previously presented to the user.
 5. Before marking an AC `SATISFIED`, decompose every conjunctive observable
    obligation and map each one to admissible direct evidence. Execute every
    applicable product flow listed in the Ticket's `## Verification` section

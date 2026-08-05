@@ -97,6 +97,13 @@ Fresh Verifier는 evidence-producing execution 전에 exact planning, 전체 AC,
 제품 entrypoint를 읽고 한 개의 bounded observation plan을 만든다. plan은 Module 내부 fact이며
 caller-visible `seal-run`, plan digest, flow/step ID가 아니다.
 
+첫 evidence acquisition 전에 Verification Lead는 각 AC의 planned observation을 관찰 대상, 절차와
+검증 surface, expected result, 수집할 direct evidence와 decision criteria를 포함한 간결한 표로
+사용자에게 보여준다. 이 표는 내부 plan의 human-readable projection이며 caller-owned input, approval
+token, plan identifier, 별도 artifact 또는 추가 workflow transition이 아니다. 기존 authority,
+ambiguity 또는 effect-safety 규칙이 사용자 결정을 요구하지 않는 한 확인을 기다리지 않고 진행한다.
+실행 전에 scenario가 바뀌면 replacement를 실행 전에 다시 보여준다.
+
 plan은 최소한 다음 의미를 가진다.
 
 ```text
@@ -310,8 +317,9 @@ criterion 결과는 Phase 2 의미만 사용한다.
 
 authority prohibition, tool failure와 evidence incompleteness를 별도 `BLOCKED`/`INCOMPLETE` public status로
 나누지 않는다. 그것들은 `UNDETERMINED` reason으로 설명한다. result는 exact Candidate와 각 AC verdict,
-direct evidence observation을 대조 가능하게 하지만 plan digest, flow/step ref, capability, raw ledger와
-budget을 caller에게 요구하지 않는다.
+실제로 실행한 user-visible scenario와 direct evidence observation을 대조 가능하게 하지만 plan digest,
+flow/step ref, capability, raw ledger와 budget을 caller에게 요구하지 않는다. 실행 전에 공유하지 않은
+replacement scenario를 이전에 공유한 scenario인 것처럼 publication하지 않는다.
 
 Phase 3의 한 atomic commit으로 VerificationResult append, predecessor/head 이동과 active transition
 종료를 수행하고 exact committed result를 readback한다. 응답 유실 뒤 `inspect(work)`는 complete result와
