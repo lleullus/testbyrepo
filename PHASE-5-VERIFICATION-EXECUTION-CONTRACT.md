@@ -105,35 +105,69 @@ carry forward하지 않으며, Phase 6이 이전 ambiguous effect를 안전하�
 
 Verification Lead itself, as the user-facing lead session, reads exact planning,
 the full AC set, Candidate source, and the actual product entrypoint before
-evidence-producing execution to make one bounded observation plan. This planning
-inspection is permitted only to design scenarios. Its observations are not direct
-AC evidence, must not be preserved or reused as direct AC evidence, and require a
-new evidence observation after commentary emission even when the target is the
-same. The plan is a Module-internal fact, not caller-visible `seal-run`, plan
-digest, or flow/step ID.
+evidence-producing execution to make one bounded observation plan and identify
+every prerequisite that can change scenario executability. The inspection covers
+the required entrypoint and surface; agents, model/thinking/tool and executable
+requirements; fixtures, sentinels, failure hooks, provider targets, inputs and
+isolated workspace; authority, credentials, network/effects, cleanup/readback;
+and any proof method for a universal or negative condition. This planning
+inspection is read-only. Its observations are not direct AC evidence and must not
+be preserved or reused as direct AC evidence. The plan is a Module-internal fact,
+not caller-visible `seal-run`, plan digest, or flow/step ID.
 
-After designing scenarios for every AC and before any direct evidence
-acquisition, Verification Lead emits a user-facing commentary table headed
-`Verification Scenarios`. Each scenario row contains a stable scenario ID, AC,
-observation target, procedure and verification surface, expected result, direct
-evidence to collect, and decision criteria. Completed commentary emission is a
-precondition for evidence acquisition, not an approval gate. The table is a
-human-readable projection of the internal immutable observation plan; it does not
-elevate that plan into user-owned input, approval token, durable artifact, or
-state machine. Verification Lead continues without waiting for confirmation unless
-an existing authority, ambiguity, or effect-safety rule requires a user decision.
+If the user designates a Readiness Research Agent, Verification Lead invokes
+it through the Host Subagent Invocation Mechanism with the exact Ticket,
+identified prerequisite questions, current project and allowed planning surface.
+The agent may investigate current availability and preparation options read-only.
+It cannot mutate, acquire direct evidence, select or approve scenarios, assign
+readiness or decide verdicts. Its report is advisory; Verification Lead directly
+verifies each readiness fact before using it.
+
+After designing scenarios for every AC and directly checking every identified
+prerequisite, Verification Lead emits one user-facing commentary table headed
+`Verification Scenarios`. Each row contains a stable scenario ID, AC, observation
+target, procedure and verification surface, expected result, direct evidence to
+collect, decision criteria, readiness, required preparation or dependency, and
+authority or approval needed. Readiness is exactly `READY`, `NOT_READY`,
+`UNSUPPORTED` or `UNSAFE`; it is a pre-execution fact, not an AC verdict.
+
+Verification Lead asks the user to explicitly approve the scenario plan and
+stated preparation scope. Before approval it performs neither environment
+preparation nor direct evidence acquisition. A rejection or change requires a
+revised complete table and new approval. Approval is only a workflow gate. It is
+not direct evidence and cannot grant authority for canonical, shared,
+credential-bearing, external or dangerous effects. The table remains a
+human-readable projection of the internal observation plan, not a durable
+artifact or state machine.
+
+After approval, Verification Lead prepares only the approved environment.
+Disposable isolated agents, fixtures, inputs, failure hooks, provider test
+targets and scratch workspaces are allowed only when they preserve product files
+and meaning, do not mutate shared/external state or credentials, and exercise the
+required product entrypoint and contract surface. Any broader effect remains
+subject to its separate exact authority and safety gate; chat approval is not
+that authority.
+
+After preparation and before any direct evidence acquisition, Verification Lead
+directly rechecks every prerequisite and emits updated readiness facts. It
+executes only `READY` scenarios. Every remaining `NOT_READY`, `UNSUPPORTED` or
+`UNSAFE` scenario and affected AC is reported before execution and is not
+attempted. Direct evidence always requires a new observation after approval and
+readiness recheck, even when planning inspection read the same target.
 
 If a scenario changes before or during execution, Verification Lead stops using
-the old scenario. Before any replacement direct evidence acquisition, it emits
-user-facing commentary with a new stable replacement scenario ID and its
-`replaces <old scenario ID>` relationship. Evidence acquired for the old scenario
-remains bound to that scenario and must not be relabeled as replacement evidence.
+the old scenario. A replacement repeats prerequisite identification, the complete
+table with a new stable ID and `replaces <old scenario ID>` relationship, explicit
+approval, preparation and readiness recheck before any replacement evidence.
+Evidence acquired for the old scenario remains bound to it and must not be
+relabeled as replacement evidence.
 
 plan은 최소한 다음 의미를 가진다.
 
 ```text
 exact Candidate/planning/전체 AC binding
 각 scenario의 stable scenario ID와 AC binding
+각 scenario의 readiness, preparation dependency와 authority/approval need
 각 AC가 요구하는 관찰 수준
 ordered fixed observations
 각 observation이 대상으로 하는 AC 집합
@@ -146,6 +180,8 @@ Module은 다음 조건을 만족할 때만 plan을 고정한다.
 - 모든 exact AC가 정확히 한 번 coverage 계산에 포함된다.
 - 각 AC에 적어도 하나의 direct observation obligation이 있다.
 - 각 observation이 대상으로 하는 AC와 역방향 coverage가 일치한다.
+- 각 scenario의 실행 가능성을 바꿀 prerequisite를 조사하고 Verification Lead가 readiness fact를 직접
+  확인했다.
 - component check의 조합을 planning이 요구한 end-to-end product observation으로 가장하지 않는다.
 - source-only AC에 불필요한 runtime action을 추가하지 않고, runtime AC를 source review로 축소하지 않는다.
 - 각 scenario의 request, target, order와 expected observable이 첫 evidence acquisition 뒤 바뀌지
@@ -155,10 +191,10 @@ Module은 다음 조건을 만족할 때만 plan을 고정한다.
   명시하고 임의 local command로 대체하지 않는다.
 
 plan 고정 뒤 의미 누락이나 실행 중 변경이 발견되면 기존 scenario를 수정해 성공시키지 않는다. 기존
-scenario 사용을 중단하고, 새 stable ID와 대체 관계를 가진 replacement scenario를 user-facing
-commentary로 먼저 공개한 뒤에만 새 direct evidence observation을 수행한다. 기존 scenario에서 얻은
-evidence는 해당 scenario에만 남으며 replacement evidence로 재표기하지 않는다. replacement를
-공개하거나 실행할 수 없으면 영향받은 AC는 필요한 admissible direct evidence가 없으므로
+scenario 사용을 중단하고 replacement의 prerequisite 조사, 새 stable ID와 대체 관계가 포함된 complete
+table, 사용자 명시 승인, preparation과 readiness 재확인을 반복한 뒤에만 새 direct evidence observation을
+수행한다. 기존 scenario evidence는 replacement evidence로 재표기하지 않는다. replacement가 최종
+`READY`가 아니면 실행하지 않으며 영향받은 AC는 필요한 admissible evidence가 없으므로
 `UNDETERMINED`다.
 
 ## Candidate read-only와 격리된 실행
@@ -187,9 +223,10 @@ evidence로 제출할 수 없다.
 
 ## runner-owned evidence
 
-Evidence Runner는 plan에 고정된 exact observation request만 받으며, 그 scenario의 user-facing
-commentary emission이 완료된 뒤에만 direct evidence observation을 수행한다. planning inspection은
-이 precondition을 충족하는 direct evidence가 아니며, 같은 target도 표 출력 뒤 새로 관찰해야 한다.
+Evidence Runner는 plan에 고정된 exact observation request만 받으며, 그 scenario가 사용자에게 공개되고
+명시적으로 승인된 preparation을 거쳐 최종 `READY`로 재확인된 뒤에만 direct evidence observation을
+수행한다. planning inspection, research-agent report, preparation result와 readiness check는 direct
+evidence가 아니며, 같은 target도 이 gate 뒤 새로 관찰해야 한다.
 caller나 Verifier가 execution 시점에 request, target 또는 outcome을 바꾸지 못한다. Runner는 각
 observation에 대해 다음을 하나의 immutable evidence item으로 만든다.
 
@@ -335,7 +372,7 @@ publication 전에 Module은 다음을 한 번 다시 계산한다.
 
 - exact Candidate/planning/전체 AC와 immutable plan의 일치
 - 모든 AC가 결과에 정확히 한 번 존재하는지
-- 각 AC 결과 행이 사용자에게 실제로 공개되고 실행된 모든 applicable stable scenario IDs와 각
+- 각 AC 결과 행이 모든 applicable stable scenario IDs, final readiness/execution facts와 각 executed
   scenario의 admissible direct evidence를 연결하는지
 - 각 conclusion이 mapped runner-owned direct evidence에 의해 허용되는지
 - evidence integrity와 Candidate binding
@@ -354,10 +391,11 @@ criterion 결과는 Phase 2 의미만 사용한다.
 authority prohibition, tool failure와 evidence incompleteness를 별도 `BLOCKED`/`INCOMPLETE` public status로
 나누지 않는다. 그것들은 `UNDETERMINED` reason으로 설명한다. result의 AC별 정확히 한 행은 exact
 Candidate와 verdict를, 실제 사용자에게 공개되고 실행된 모든 applicable stable scenario IDs를, 그리고
-각 scenario의 admissible direct evidence를 대조 가능하게 연결한다. 공개되지 않은 scenario 실행은
-`SATISFIED`의 근거가 될 수 없다. plan digest, flow/step ref, capability, raw ledger와 budget을 caller에게
-요구하지 않는다. 실행 전에 공유하지 않은 replacement scenario를 이전에 공유한 scenario인 것처럼
-publication하지 않으며, 기존 scenario evidence를 replacement evidence로 재표기하지 않는다.
+각 scenario의 final readiness/execution facts와 admissible direct evidence를 대조 가능하게 연결한다.
+공개·승인되지 않았거나 final `READY`가 아닌 scenario 실행은 `SATISFIED`의 근거가 될 수 없다. plan
+digest, flow/step ref, capability, raw ledger와 budget을 caller에게 요구하지 않는다. 실행 전에 공유·승인하지
+않은 replacement scenario를 이전 scenario인 것처럼 publication하지 않으며, 기존 scenario evidence를
+replacement evidence로 재표기하지 않는다.
 
 Phase 3의 한 atomic commit으로 VerificationResult append, predecessor/head 이동과 active transition
 종료를 수행하고 exact committed result를 readback한다. 응답 유실 뒤 `inspect(work)`는 complete result와
@@ -367,8 +405,10 @@ Phase 3의 한 atomic commit으로 VerificationResult append, predecessor/head �
 
 - fresh Verifier를 만들지 못하면 evidence를 실행하지 않고 `UNDETERMINED` 또는 safe no-result close다.
 - user-facing commentary channel이 없으면 direct evidence acquisition 전에 `unsupported`로 중단한다.
-- planning inspection은 scenario 설계용일 뿐이며, 표 출력 뒤 새 evidence observation 없이는 direct
+- planning inspection과 optional Readiness Research Agent report는 scenario/readiness 설계용일 뿐 direct
   AC evidence가 아니다.
+- 사용자 명시 승인 전에는 environment preparation과 direct evidence acquisition을 시작하지 않는다.
+- final readiness가 `READY`가 아닌 scenario는 실행하지 않고 해당 fact와 affected AC를 실행 전에 보고한다.
 - 모든 AC를 적절한 observation으로 계획하지 못하면 약한 plan으로 성공시키지 않는다.
 - source/runner isolation이 없으면 Candidate source를 수정하지 않고 `UNDETERMINED`다.
 - implementation check나 Worker prose만 있으면 결론적 AC verdict를 만들지 않는다.
