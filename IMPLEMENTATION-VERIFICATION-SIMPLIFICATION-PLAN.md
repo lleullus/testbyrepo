@@ -48,7 +48,7 @@ branch: refactor/simplify-implementation-verification
 
 ```text
 현재 authority (2026-08-05):
-- 현재 단계: Phase 8 — `REMOVAL_WORKTREE_VERIFIED_PENDING_DELETION_REVISION`
+- 현재 단계: Phase 8 — `LEGACY_MECHANISM_REMOVED`
 - Phase 7 구현 terminal: `ACCEPTED_SUPPORTED_RANGE_VERIFIED`
 - mutation-capable runtime 상태: `UNSUPPORTED_PRE_MUTATION_FAIL_CLOSED` — production Linux Source Adoption은
   arbitrary uncooperative writer의 expected-state와 canonical mutation을 linearize할 conditional primitive가
@@ -59,14 +59,13 @@ branch: refactor/simplify-implementation-verification
   set은 `[]`이고 authenticated READ는 unsupported다.
 - Phase 8 범위 gate: 충족. `phase8_supported_range_gate.py`는 fixed local evidence와 current census를 직접
   실행하고 exact worktree manifest에 결속한다.
-- destructive prerequisite: 부분 확인. historical data는 검증된 `STATIC_ARCHIVE`로 보존했고 installed 두 Lead를
-  새 Module 계약으로 one-way cutover했다. 반복된 point-in-time zero census와 retired entrypoint absence는
-  확인했지만 bounded quiescence window의 시작·종료 evidence는 deletion revision prerequisite다.
+- destructive prerequisite: 완료. historical data는 검증된 `STATIC_ARCHIVE`로 보존했고 installed 두 Lead를
+  merged tree의 새 Module 계약으로 one-way cutover했다. merged deletion revision
+  `bba476fc8b6ffefb7b8bf6934a1e75cd0eb6517e`에서 bounded window 시작·종료 census가 모두 0이었다.
 - deletion-worktree evidence: Phase 7 gate `ACCEPTED_SUPPORTED_RANGE_VERIFIED`, legacy source 0,
   mechanism-coupled test 0, legacy process 0, archive 전 항목 readback 통과.
-- 바로 다음 행동: deletion revision을 commit한 뒤 exact committed HEAD에서 동일 gate, census, smoke,
-  archive-verify, installed-surface와 bounded quiescence window proof를 재검증한다. 그 전에는
-  `LEGACY_MECHANISM_REMOVED`를 선언하지 않는다.
+- 바로 다음 행동: 없음. merged deletion revision에서 gate, census, smoke, archive-verify,
+  installed-surface와 bounded quiescence window proof를 재검증해 `LEGACY_MECHANISM_REMOVED`를 확정했다.
 
 이하 항목은 유용한 이전 실행 이력이며 위 current authority를 덮어쓰지 않는다.
 이전 단계: Phase 6 — 위험한 외부효과
@@ -629,7 +628,7 @@ Phase 4  IMPLEMENTED
 Phase 5  IMPLEMENTED
 Phase 6  IMPLEMENTED
 Phase 7  ACCEPTED_SUPPORTED_RANGE_VERIFIED
-Phase 8  REMOVAL_WORKTREE_VERIFIED_PENDING_DELETION_REVISION
+Phase 8  LEGACY_MECHANISM_REMOVED
 
 Product implementation       PHASE_1_TO_6_IMPLEMENTED
 Accepted supported range     ACCEPTED_SUPPORTED_RANGE_VERIFIED

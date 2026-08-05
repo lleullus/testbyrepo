@@ -27,10 +27,9 @@ stop smoke. It covers zero-mutation Candidate, `verify`/`inspect`, mutation requ
 `ImplementationStopped`, Worker/Verifier/Runner/review/check physical isolation, and legacy sentinel 0. It does
 not mean mutation-capable `RUNTIME_VERIFIED`; Source Adoption remains
 `UNSUPPORTED_PRE_MUTATION_FAIL_CLOSED`, enabled production Effect Adapter set is `[]`, and authenticated READ is
-unsupported. Phase 8 destructive authorization remains false pending deletion-revision proof of
-`DURABLE_DATA_DISPOSITION`, `ACTIVE_CALLER_CUTOVER`, and bounded
-`CONTINUOUS_LEGACY_WRITE_QUIESCENCE`; the current worktree has only repeated point-in-time zero censuses and
-retired-entrypoint absence.
+unsupported. Phase 8 later completed `DURABLE_DATA_DISPOSITION`, `ACTIVE_CALLER_CUTOVER`, and the bounded
+`CONTINUOUS_LEGACY_WRITE_QUIESCENCE` verification window on merged deletion revision
+`bba476fc8b6ffefb7b8bf6934a1e75cd0eb6517e`; this does not expand the Phase 7 supported runtime range.
 
 ## Tested Source Identity
 

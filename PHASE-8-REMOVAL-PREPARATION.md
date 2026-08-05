@@ -1,8 +1,9 @@
 # Phase 8 Removal Preparation
 
-Status: `REMOVAL_WORKTREE_VERIFIED_PENDING_DELETION_REVISION`
+Status: `LEGACY_MECHANISM_REMOVED`
 
-Prepared on 2026-08-05. The removal worktree head is `c48ab0fdc52aee77bb2b686370c4e6630578474b`; the
+Prepared on 2026-08-05. The merged deletion revision is
+`bba476fc8b6ffefb7b8bf6934a1e75cd0eb6517e`; the
 preparation census was taken at revision `e75e81b0c8162c6e22578d09b61f5dc60b8d5688` with enabled production
 Effect Adapter set `[]`.
 
@@ -13,10 +14,9 @@ The exact source and Adapter set pass Phase 7 `ACCEPTED_SUPPORTED_RANGE_VERIFIED
 Adoption remains `UNSUPPORTED_PRE_MUTATION_FAIL_CLOSED`, so no mutation-bearing production flow is claimed.
 Enabled production Effect Adapter set remains `[]` and authenticated READ remains unsupported.
 
-The removal worktree completed `DURABLE_DATA_DISPOSITION` and `ACTIVE_CALLER_CUTOVER`. Repeated point-in-time
-zero censuses and retired-entrypoint absence were observed, but the bounded `CONTINUOUS_LEGACY_WRITE_QUIESCENCE`
-window remains a deletion-revision prerequisite. Historical data remains in the verified `STATIC_ARCHIVE`; the
-active legacy mechanism and its coupled tests are absent from this dirty worktree.
+The merged revision completed `DURABLE_DATA_DISPOSITION`, `ACTIVE_CALLER_CUTOVER`, and the bounded
+`CONTINUOUS_LEGACY_WRITE_QUIESCENCE` verification window. Historical data remains in the verified
+`STATIC_ARCHIVE`; the active legacy mechanism and its coupled tests are absent.
 
 The deletion worktree was rechecked by the runtime gate and the bounded removal census.
 
@@ -116,11 +116,9 @@ prerequisites. Every item in that preparation state was resolved as follows:
   (`STATIC_ARCHIVE`) and verified readback manifest.
 - The one-way caller cutover target and representative production flow are operational without legacy fallback.
 
-## Deletion Revision Prerequisite
+## Deletion Revision Verification
 
-All evidence above was produced on the current dirty worktree (head `c48ab0fdc52aee77bb2b686370c4e6630578474b`),
-which is **not yet committed**. `LEGACY_MECHANISM_REMOVED` closes only after the deletion revision is committed,
-the bounded quiescence window is evidenced, and the same gate, census, smoke, archive-verify, and installed-surface
-checks are re-run and pass on that exact committed revision. The existing gate output's HEAD, tracked diff hash,
-and untracked-file identity bind the current dirty-worktree run; no permanent ledger is required. Until then this
-document must not be read as a committed deletion revision.
+The committed removal change was merged as `bba476fc8b6ffefb7b8bf6934a1e75cd0eb6517e`. After installed callers were
+cut over to that merged tree, the bounded window began with a zero census and ended with a second zero census.
+Between them the full tests, gate, supported-range and mutation-stop smokes, archive verification, and installed
+skill discovery all passed. The merged tree remained clean and no permanent evidence ledger was introduced.

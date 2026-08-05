@@ -1,6 +1,6 @@
 # Phase 8 — 구 메커니즘 제거
 
-상태: `REMOVAL_WORKTREE_VERIFIED_PENDING_DELETION_REVISION`
+상태: `LEGACY_MECHANISM_REMOVED`
 
 ## 목적과 단일 결정
 
@@ -310,11 +310,11 @@ order와 item-level disposition에서 실패한다. 따라서 Phase 8 design을 
 
 ## 완료 판단
 
-Phase 8의 dirty deletion-worktree gate는 `ACCEPTED_SUPPORTED_RANGE_VERIFIED`다. 이는 mutation-capable
+Phase 8의 merged deletion revision `bba476fc8b6ffefb7b8bf6934a1e75cd0eb6517e` gate는
+`ACCEPTED_SUPPORTED_RANGE_VERIFIED`다. 이는 mutation-capable
 `RUNTIME_VERIFIED`가 아니며 Source Adoption은 `UNSUPPORTED_PRE_MUTATION_FAIL_CLOSED`다. historical result
 19개와 referenced capsule 19개는 manifest `2080a8fc83d2d4604a3278f197f3ad3b884acfdac3ab4d6b28a071b18d9a7405`의
 `STATIC_ARCHIVE`로 전 항목 readback했다. installed 두 Lead는 새 Module 계약으로 discovery되고, legacy
-source, mechanism-coupled test, legacy process census는 현재 반복 census에서 모두 0이다. 이 evidence는
-현재 dirty worktree에 결속되며, commit 후 exact deletion revision에서 동일 gate, census, smoke, archive,
-installed-surface proof와 bounded quiescence window를 다시 통과하기 전에는 `LEGACY_MECHANISM_REMOVED`로
-판정하지 않는다.
+source, mechanism-coupled test, filesystem residue와 legacy process는 bounded verification window의 시작과
+종료 census에서 모두 0이었다. 같은 window에서 gate, smoke, archive와 installed-surface proof가 통과했으므로
+`LEGACY_MECHANISM_REMOVED`로 판정한다.
