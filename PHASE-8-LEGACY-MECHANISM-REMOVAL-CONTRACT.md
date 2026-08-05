@@ -1,6 +1,6 @@
 # Phase 8 — 구 메커니즘 제거
 
-상태: `DESIGN_CONVERGED`
+상태: `REMOVAL_WORKTREE_VERIFIED_PENDING_DELETION_REVISION`
 
 ## 목적과 단일 결정
 
@@ -10,14 +10,18 @@ Phase 1~7의 사용자 가치를 새 Implementation Verification Module이 실�
 
 이번 단계의 단일 결정은 다음이다.
 
-> 삭제는 새 경로의 exact revision·enabled Adapter set에 대한 Phase 7 `RUNTIME_VERIFIED` 뒤에만 시작한다.
+> 삭제는 새 경로의 exact revision·enabled Adapter set에 대한 Phase 7
+> `ACCEPTED_SUPPORTED_RANGE_VERIFIED` 뒤에만 시작한다. 이 판정은 mutation-capable
+> `RUNTIME_VERIFIED`와 동의어가 아니며 unsupported Source Adoption을 성공으로 취급하지 않는다.
 > durable user data와 active mechanism을 먼저 분리하고, 실제 consumer를 새 Interface로 한 번만 cut over한
 > 뒤 compatibility read/write, dual-run과 fallback 없이 dependency 바깥에서 안쪽 순서로 구 mechanism을
 > 제거한다. 삭제가 반영된 새 revision에서 Phase 7 proof와 legacy-absence proof를 다시 통과해야만
 > `LEGACY_MECHANISM_REMOVED`라고 판정한다.
 
-Phase 8은 이 삭제 gate와 순서를 설계한다. 현재 새 Module은 구현되지 않았고 Phase 7 runtime evidence도
-없으므로 이 문서는 어떤 제품 code, user state 또는 legacy file의 현재 삭제를 허가하지 않는다.
+Phase 8은 이 삭제 gate와 순서를 적용하는 중이다. Phase 7 accepted supported range를 dirty removal
+worktree에서 다시 확인했고, user data는 검증된 `STATIC_ARCHIVE`에 보존했다. 삭제 worktree의 legacy
+mechanism absence는 확인했지만, deletion revision commit과 그 revision에서의 최종 재검증 전에는 removal
+완료로 판정하지 않는다.
 
 ## 삭제 실행의 hard precondition
 
@@ -25,15 +29,19 @@ Phase 8은 이 삭제 gate와 순서를 설계한다. 현재 새 Module은 구�
 
 1. Phase 1~7 design이 모두 `DESIGN_CONVERGED`다.
 2. Phase 1~6을 구현한 새 `implement`, `verify`, `inspect`와 production Adapter가 존재한다.
-3. Phase 7의 public/fault/conformance/legacy-unavailable evidence가 exact source revision, Adapter revision,
-   mode·branch와 enabled set에 결속돼 `RUNTIME_VERIFIED`다.
+3. Phase 7 accepted supported-range evidence가 exact source revision, Adapter revision, mode·branch와 enabled
+   set에 결속돼 `ACCEPTED_SUPPORTED_RANGE_VERIFIED`다. 이는 zero-mutation Candidate, `verify`/`inspect`,
+   mutation request의 no-write `ImplementationStopped`, physical isolation과 legacy sentinel 0만을 뜻하며,
+   mutation-capable `RUNTIME_VERIFIED`는 아니다.
 4. active caller/skill/automation과 durable legacy root를 다시 census한 bounded removal manifest가 있다.
 5. legacy workflow의 live owner, active transition, unresolved may-have-run effect나 미완료 cleanup이 0이다.
    하나라도 있으면 자동 변환·재실행·폐기하지 않고 removal을 멈춘다.
 6. durable historical data 각각에 `IMPORT`, `STATIC_ARCHIVE`, `DISCARD_AS_TEST_DATA` 중 근거 있는 disposition이
    정해졌고, user data를 test data로 추정하지 않는다.
 
-Phase 7의 현재 `DESIGN_CONVERGED`나 기존 254-test baseline은 2·3을 만족하지 않는다.
+실행 시 `DURABLE_DATA_DISPOSITION`, `ACTIVE_CALLER_CUTOVER`를 충족하고, 반복된 point-in-time zero census와
+retired entrypoint absence를 확인했다. bounded `CONTINUOUS_LEGACY_WRITE_QUIESCENCE` window의 시작·종료
+evidence는 deletion revision 최종 prerequisite로 남긴다.
 
 ## 현재 source와 local durable surface의 관찰
 
@@ -194,7 +202,7 @@ per-file approval workflow, permanent dependency graph, tombstone DB, compatibil
 
 ## 실패와 중단 의미
 
-- Phase 7 runtime proof가 없거나 revision/Adapter scope가 다르면 삭제하지 않는다.
+- Phase 7 accepted supported-range proof가 없거나 revision/Adapter scope가 다르면 삭제하지 않는다.
 - active legacy work/effect가 하나라도 있으면 강제 close, replay, 자동 migration 없이 중단한다.
 - record의 semantic/source binding을 새 model에 완전히 표현할 수 없으면 긍정 result로 import하지 않고
   static archive로 보존한다.
@@ -302,6 +310,11 @@ order와 item-level disposition에서 실패한다. 따라서 Phase 8 design을 
 
 ## 완료 판단
 
-Phase 8 design은 `DESIGN_CONVERGED`다. 현재 product implementation, Phase 7 runtime verification, data
-disposition과 legacy removal은 시작되지 않았다. hard precondition과 deletion-revision 재검증이 실제로
-통과하기 전에는 `LEGACY_MECHANISM_REMOVED`라고 부르지 않는다.
+Phase 8의 dirty deletion-worktree gate는 `ACCEPTED_SUPPORTED_RANGE_VERIFIED`다. 이는 mutation-capable
+`RUNTIME_VERIFIED`가 아니며 Source Adoption은 `UNSUPPORTED_PRE_MUTATION_FAIL_CLOSED`다. historical result
+19개와 referenced capsule 19개는 manifest `2080a8fc83d2d4604a3278f197f3ad3b884acfdac3ab4d6b28a071b18d9a7405`의
+`STATIC_ARCHIVE`로 전 항목 readback했다. installed 두 Lead는 새 Module 계약으로 discovery되고, legacy
+source, mechanism-coupled test, legacy process census는 현재 반복 census에서 모두 0이다. 이 evidence는
+현재 dirty worktree에 결속되며, commit 후 exact deletion revision에서 동일 gate, census, smoke, archive,
+installed-surface proof와 bounded quiescence window를 다시 통과하기 전에는 `LEGACY_MECHANISM_REMOVED`로
+판정하지 않는다.

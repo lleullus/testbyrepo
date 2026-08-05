@@ -6,7 +6,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from implementation_verification import ImplementationStopped
+from implementation_verification import Candidate, Currentness, VerificationResult, VerificationStatus
 from production_adapters import TerraWorker
 from production_entrypoint import create_production_module
 
@@ -15,11 +15,11 @@ def main() -> int:
     opencode = shutil.which("opencode")
     if opencode is None:
         raise RuntimeError("OpenCode executable is unavailable")
-    with tempfile.TemporaryDirectory(prefix="iv-production-smoke-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="iv-production-supported-range-") as temporary:
         root = Path(temporary)
         product = root / "product"
         product.mkdir()
-        (product / "app.txt").write_text("baseline", encoding="utf-8")
+        (product / "app.txt").write_text("implemented", encoding="utf-8")
         spec = root / "SPEC.md"
         spec.write_text(
             "# Spec\nStatus: approved\nOwner: smoke\n\n"
@@ -52,20 +52,28 @@ def main() -> int:
             root / "state",
             opencode,
         )
-        result = module.implement(
+        candidate = module.implement(
             ticket,
             TerraWorker(),
         )
-        if not isinstance(result, ImplementationStopped):
-            raise RuntimeError(f"production smoke failed to stop at source adoption: {result}")
-        if result.reason != "conditional source adoption is unavailable":
-            raise RuntimeError(f"production smoke had unexpected blocker: {result.reason}")
+        if not isinstance(candidate, Candidate) or candidate.implementation_changes:
+            raise RuntimeError(f"supported-range implementation did not publish a zero-mutation Candidate: {candidate}")
+        result = module.verify(candidate)
+        if not isinstance(result, VerificationResult) or result.status is not VerificationStatus.VERIFIED:
+            raise RuntimeError(f"supported-range verification did not publish VERIFIED: {result}")
+        inspection = module.inspect(ticket)
+        if inspection.result != result or inspection.currentness is not Currentness.CURRENT:
+            raise RuntimeError(f"supported-range inspect readback differs: {inspection}")
+        if (product / "app.txt").read_text(encoding="utf-8") != "implemented":
+            raise RuntimeError("supported-range flow changed canonical source")
         print(
             json.dumps(
                 {
-                    "canonicalSource": (product / "app.txt").read_text(encoding="utf-8"),
-                    "reason": result.reason,
-                    "status": "IMPLEMENTATION_STOPPED",
+                    "candidateImplementationChanges": len(candidate.implementation_changes),
+                    "canonicalSource": "implemented",
+                    "inspectionCurrentness": inspection.currentness.value,
+                    "inspectionResult": type(inspection.result).__name__,
+                    "verificationStatus": result.status.value,
                 },
                 sort_keys=True,
             )

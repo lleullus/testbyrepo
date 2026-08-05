@@ -48,18 +48,25 @@ branch: refactor/simplify-implementation-verification
 
 ```text
 현재 authority (2026-08-05):
-- 현재 단계: Phase 7 — 통합·runtime 검증
-- 단계 상태: RUNTIME_VERIFICATION_BLOCKED
-- Phase 8 gate: CLOSED — Phase 7 exact-worktree runtime evidence는 invalidated 됐다.
-- 현재 blocker: production Linux Source Adoption은 arbitrary uncooperative writer의 expected-state와
-  canonical mutation을 linearize할 conditional primitive가 없어 mutation 전에 fail-closed한다.
-  Module-owned bounded implementation review/check Adapter는 production path에 구현·검증됐다.
-  external authoritative grant/provenance가 없는 authenticated READ는 production에서 비활성화된다.
-- latest verification: direct regression·production conformance·24 public flow·9 fault flow·legacy-negative를
-  포함한 component discovery `121` tests passed; production smoke는 fail-closed `IMPLEMENTATION_STOPPED`
-  readback을 확인했다.
-- 바로 다음 행동: 현재 배치에서는 conditional Source Adoption을 unsupported로 확정하고 Phase 7을
-  `RUNTIME_VERIFICATION_BLOCKED`, Phase 8을 `CLOSED`로 유지한다.
+- 현재 단계: Phase 8 — `REMOVAL_WORKTREE_VERIFIED_PENDING_DELETION_REVISION`
+- Phase 7 구현 terminal: `ACCEPTED_SUPPORTED_RANGE_VERIFIED`
+- mutation-capable runtime 상태: `UNSUPPORTED_PRE_MUTATION_FAIL_CLOSED` — production Linux Source Adoption은
+  arbitrary uncooperative writer의 expected-state와 canonical mutation을 linearize할 conditional primitive가
+  없어 mutation 전에 fail-closed한다. 이 label은 full `RUNTIME_VERIFIED`와 동의어가 아니다.
+- accepted supported range: production zero-mutation `implement -> verify -> inspect`의 exact
+  Candidate/`VERIFIED`/`CURRENT` readback, mutation request의 no-write `IMPLEMENTATION_STOPPED`,
+  Worker/Verifier/Runner/review/check physical isolation, legacy sentinel 0. enabled production Effect Adapter
+  set은 `[]`이고 authenticated READ는 unsupported다.
+- Phase 8 범위 gate: 충족. `phase8_supported_range_gate.py`는 fixed local evidence와 current census를 직접
+  실행하고 exact worktree manifest에 결속한다.
+- destructive prerequisite: 부분 확인. historical data는 검증된 `STATIC_ARCHIVE`로 보존했고 installed 두 Lead를
+  새 Module 계약으로 one-way cutover했다. 반복된 point-in-time zero census와 retired entrypoint absence는
+  확인했지만 bounded quiescence window의 시작·종료 evidence는 deletion revision prerequisite다.
+- deletion-worktree evidence: Phase 7 gate `ACCEPTED_SUPPORTED_RANGE_VERIFIED`, legacy source 0,
+  mechanism-coupled test 0, legacy process 0, archive 전 항목 readback 통과.
+- 바로 다음 행동: deletion revision을 commit한 뒤 exact committed HEAD에서 동일 gate, census, smoke,
+  archive-verify, installed-surface와 bounded quiescence window proof를 재검증한다. 그 전에는
+  `LEGACY_MECHANISM_REMOVED`를 선언하지 않는다.
 
 이하 항목은 유용한 이전 실행 이력이며 위 current authority를 덮어쓰지 않는다.
 이전 단계: Phase 6 — 위험한 외부효과
@@ -621,12 +628,13 @@ Phase 3  IMPLEMENTED
 Phase 4  IMPLEMENTED
 Phase 5  IMPLEMENTED
 Phase 6  IMPLEMENTED
-Phase 7  RUNTIME_VERIFICATION_BLOCKED
-Phase 8  DESIGN_CONVERGED
+Phase 7  ACCEPTED_SUPPORTED_RANGE_VERIFIED
+Phase 8  REMOVAL_WORKTREE_VERIFIED_PENDING_DELETION_REVISION
 
 Product implementation       PHASE_1_TO_6_IMPLEMENTED
-Runtime verification         RUNTIME_VERIFICATION_BLOCKED
-Legacy mechanism removal     NOT_STARTED
+Accepted supported range     ACCEPTED_SUPPORTED_RANGE_VERIFIED
+Mutation-capable runtime     UNSUPPORTED_PRE_MUTATION_FAIL_CLOSED
+Legacy mechanism removal     PENDING_DELETION_REVISION
 ```
 
 ## 7. 폐기한 자료

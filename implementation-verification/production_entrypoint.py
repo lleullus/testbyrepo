@@ -8,13 +8,11 @@ from implementation_execution import ImplementationExecution
 from implementation_verification import ImplementationVerificationModule
 from production_adapters import (
     LinuxEvidenceRunnerAdapter,
-    LinuxFreshVerifierAdapter,
-    LinuxImplementationReviewAdapter,
     LinuxSourceAdoptionAdapter,
-    LinuxWorkerAdapter,
-    ProcessImplementationCheck,
-    ProcessImplementationReview,
-    ProcessVerifier,
+    LinuxTerraWorkerAdapter,
+    OpenCodeFreshVerifierAdapter,
+    OpenCodeImplementationReviewAdapter,
+    OpenCodeRunner,
 )
 from verification_execution import ModuleExecution, VerificationExecution
 
@@ -56,26 +54,19 @@ def _compose_module(
 
 def create_production_module(
     state_root: str | Path,
-    verifier_argv: tuple[str, ...],
-    implementation_review: ProcessImplementationReview,
-    implementation_check: ProcessImplementationCheck,
+    opencode_executable: str | Path,
+    *,
+    timeout_seconds: float = 300,
 ) -> ImplementationVerificationModule:
     root = Path(state_root).expanduser().resolve(strict=False)
-    if not isinstance(implementation_review, ProcessImplementationReview):
-        raise TypeError("production implementation review must be ProcessImplementationReview")
-    if not isinstance(implementation_check, ProcessImplementationCheck):
-        raise TypeError("production implementation check must be ProcessImplementationCheck")
+    runner = OpenCodeRunner(opencode_executable, timeout_seconds=timeout_seconds)
 
     return _compose_module(
         root,
-        LinuxImplementationReviewAdapter(
-            implementation_review,
-            implementation_check,
-            effect_adapter_enabled=bool(ENABLED_PRODUCTION_EFFECT_ADAPTERS),
-        ),
-        LinuxWorkerAdapter(),
+        OpenCodeImplementationReviewAdapter(runner),
+        LinuxTerraWorkerAdapter(),
         LinuxSourceAdoptionAdapter(),
-        LinuxFreshVerifierAdapter(ProcessVerifier(verifier_argv)),
+        OpenCodeFreshVerifierAdapter(runner),
         LinuxEvidenceRunnerAdapter(),
         effect_observer=None,
     )

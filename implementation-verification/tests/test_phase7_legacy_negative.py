@@ -93,15 +93,23 @@ class Phase7LegacyNegativeTests(Phase7PublicContractTests):
         os.open = guarded_os_open
         sqlite3.connect = guarded_sqlite_connect
         try:
-            module = entrypoint.create_production_module(
+            module = entrypoint._compose_module(
                 self.state,
-                ("/usr/bin/python3", "-c", "print('[]')"),
-                production.ProcessImplementationReview(
-                    ("/usr/bin/python3", "-c", "import json;print(json.dumps({'decision':'CLOSE'}))")
+                production.LinuxImplementationReviewAdapter(
+                    production.ProcessImplementationReview(
+                        ("/usr/bin/python3", "-c", "import json;print(json.dumps({'decision':'CLOSE'}))")
+                    ),
+                    production.ProcessImplementationCheck(
+                        ("/usr/bin/python3", "-c", "import json;print(json.dumps({'status':'PASSED'}))")
+                    ),
+                    effect_adapter_enabled=False,
                 ),
-                production.ProcessImplementationCheck(
-                    ("/usr/bin/python3", "-c", "import json;print(json.dumps({'status':'PASSED'}))")
+                production.LinuxWorkerAdapter(),
+                production.LinuxSourceAdoptionAdapter(),
+                production.LinuxFreshVerifierAdapter(
+                    production.ProcessVerifier(("/usr/bin/python3", "-c", "print('[]')"))
                 ),
+                production.LinuxEvidenceRunnerAdapter(),
             )
             result = module.implement(self.ticket, self.worker())
             inspection = module.inspect(self.ticket)

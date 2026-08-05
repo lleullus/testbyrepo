@@ -275,10 +275,10 @@ class ProductionAdapterConformanceTests(unittest.TestCase):
             "## Verification\nRead app.\n\n## References\nNone.\n",
             encoding="utf-8",
         )
-        module = entrypoint.create_production_module(
+        module = entrypoint._compose_module(
             self.root / "state",
-            ("/usr/bin/python3", "-c", "print('[]')"),
-            production.ProcessImplementationReview(
+            production.LinuxImplementationReviewAdapter(
+                production.ProcessImplementationReview(
                 (
                     "/usr/bin/python3",
                     "-c",
@@ -287,10 +287,16 @@ class ProductionAdapterConformanceTests(unittest.TestCase):
                     "print(json.dumps({'decision':'CLOSE'} if p.read_text()=='implemented' else "
                     "{'decision':'ASSIGN','assignment':{'path':'app.txt','value':'implemented'}}))",
                 )
-            ),
-            production.ProcessImplementationCheck(
+                ),
+                production.ProcessImplementationCheck(
                 ("/usr/bin/python3", "-c", "import json;print(json.dumps({'status':'PASSED'}))")
+                ),
+                effect_adapter_enabled=False,
             ),
+            production.LinuxWorkerAdapter(),
+            production.LinuxSourceAdoptionAdapter(),
+            production.LinuxFreshVerifierAdapter(production.ProcessVerifier(("/usr/bin/python3", "-c", "print('[]')"))),
+            production.LinuxEvidenceRunnerAdapter(),
         )
         result = module.implement(
             ticket,
@@ -343,15 +349,21 @@ class ProductionAdapterConformanceTests(unittest.TestCase):
             "## Verification\nRead app.\n\n## References\nNone.\n",
             encoding="utf-8",
         )
-        module = entrypoint.create_production_module(
+        module = entrypoint._compose_module(
             self.root / "state",
-            ("/usr/bin/python3", "-c", "print('[]')"),
-            production.ProcessImplementationReview(
-                ("/usr/bin/python3", "-c", "import json;print(json.dumps({'decision':'CLOSE'}))")
+            production.LinuxImplementationReviewAdapter(
+                production.ProcessImplementationReview(
+                    ("/usr/bin/python3", "-c", "import json;print(json.dumps({'decision':'CLOSE'}))")
+                ),
+                production.ProcessImplementationCheck(
+                    ("/usr/bin/python3", "-c", "import json;print(json.dumps({'status':'PASSED'}))")
+                ),
+                effect_adapter_enabled=False,
             ),
-            production.ProcessImplementationCheck(
-                ("/usr/bin/python3", "-c", "import json;print(json.dumps({'status':'PASSED'}))")
-            ),
+            production.LinuxWorkerAdapter(),
+            production.LinuxSourceAdoptionAdapter(),
+            production.LinuxFreshVerifierAdapter(production.ProcessVerifier(("/usr/bin/python3", "-c", "print('[]')"))),
+            production.LinuxEvidenceRunnerAdapter(),
         )
 
         result = module.implement(ticket, production.ProcessWorker("unused-zero-mutation-worker", ("/usr/bin/false",)))

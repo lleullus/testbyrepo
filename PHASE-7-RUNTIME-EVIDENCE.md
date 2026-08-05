@@ -1,6 +1,6 @@
 # Phase 7 Runtime Evidence
 
-Status: `RUNTIME_VERIFICATION_BLOCKED`
+Status: `ACCEPTED_SUPPORTED_RANGE_VERIFIED`
 
 Updated on 2026-08-05 in `/home/user01/project/iis-skills-simplify-leads` without committing.
 
@@ -17,8 +17,20 @@ directory state but leaves production implementation adoption unsupported. `crea
 caller-supplied implementation review callback. Its Module-owned bounded implementation review/check Adapter runs
 exact configured processes against a bounded projection and read-only source namespace, and fails closed for
 timeout, missing tool, unsafe effect requirement, or unreadable result. Source mutation still stops at Source
-Adoption, so the 24 deterministic public flows cannot establish production runtime verification. Authenticated READ is also
-disabled because no external authoritative grant/provenance exists. Phase 8 remains closed.
+Adoption, so the 24 deterministic public flows cannot establish mutation-capable runtime verification.
+Authenticated READ is also disabled because no external authoritative grant/provenance exists.
+
+The accepted terminal scope is `ACCEPTED_SUPPORTED_RANGE_VERIFIED`, mechanically checked by
+`phase8_supported_range_gate.py` against the exact tested worktree, enabled Adapter set, production conformance,
+legacy-negative flow, a zero-mutation production `implement -> verify -> inspect` smoke, and the no-write mutation
+stop smoke. It covers zero-mutation Candidate, `verify`/`inspect`, mutation request no-write
+`ImplementationStopped`, Worker/Verifier/Runner/review/check physical isolation, and legacy sentinel 0. It does
+not mean mutation-capable `RUNTIME_VERIFIED`; Source Adoption remains
+`UNSUPPORTED_PRE_MUTATION_FAIL_CLOSED`, enabled production Effect Adapter set is `[]`, and authenticated READ is
+unsupported. Phase 8 destructive authorization remains false pending deletion-revision proof of
+`DURABLE_DATA_DISPOSITION`, `ACTIVE_CALLER_CUTOVER`, and bounded
+`CONTINUOUS_LEGACY_WRITE_QUIESCENCE`; the current worktree has only repeated point-in-time zero censuses and
+retired-entrypoint absence.
 
 ## Tested Source Identity
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -160,6 +161,478 @@ class ProcessImplementationCheck:
             raise ValueError("implementation check timeout must be positive")
         if not isinstance(self.requires_effect_adapter, bool):
             raise TypeError("implementation check effect requirement must be boolean")
+
+
+@dataclass(frozen=True)
+class TerraWorker:
+    """The fixed Worker designation for the production OpenCode route."""
+
+    durable_identity: str = "opencode-terra-private-worker-v1"
+
+    def __post_init__(self) -> None:
+        if self.durable_identity != "opencode-terra-private-worker-v1":
+            raise ValueError("production Worker designation must be fixed Terra")
+
+
+class OpenCodeInvocationError(RuntimeError):
+    pass
+
+
+_FIXED_OPENCODE_AGENTS = frozenset(("terra", "luna"))
+_MAX_OPENCODE_OUTPUT_BYTES = 1_000_000
+_MAX_PROMPT_BYTES = 256_000
+_MAX_SOURCE_FILES = 256
+_MAX_SOURCE_FILE_BYTES = 32_000
+
+
+def _strict_json_value(value: object) -> object:
+    encoded = _json_bytes(value)
+    return json.loads(encoded.decode("utf-8"))
+
+
+def _redact_absolute_paths(value: str) -> str:
+    return re.sub(r"(?<![A-Za-z0-9_])/(?:[^\s`'\"<>]+)", "<path>", value)
+
+
+def _ticket_prompt_projection(work: Path) -> dict[str, object]:
+    raw = work.read_bytes()
+    if len(raw) > _MAX_PROMPT_BYTES:
+        raise ValueError("Ticket exceeds the bounded OpenCode projection")
+    text = raw.decode("utf-8")
+    # The Ticket metadata contains canonical planning paths, which the host agent
+    # must not receive. Section content remains the bounded task authority.
+    sections = text[text.find("## ") :] if "## " in text else ""
+    return {
+        "sha256": _sha256_bytes(raw),
+        "sections": _redact_absolute_paths(sections),
+    }
+
+
+def _source_prompt_projection(source: Path) -> dict[str, object]:
+    manifest, identity = _capture(source.resolve(strict=True))
+    entries: list[dict[str, object]] = []
+    for relative, entry in manifest.items():
+        if len(entries) >= _MAX_SOURCE_FILES:
+            raise ValueError("source exceeds the bounded OpenCode projection")
+        item: dict[str, object] = {"path": relative, "kind": entry["kind"]}
+        if entry["kind"] == "file":
+            raw = (source / relative).read_bytes()
+            if len(raw) <= _MAX_SOURCE_FILE_BYTES:
+                try:
+                    item["text"] = _redact_absolute_paths(raw.decode("utf-8"))
+                except UnicodeDecodeError:
+                    item["sha256"] = _sha256_bytes(raw)
+                    item["byteCount"] = len(raw)
+            else:
+                item["sha256"] = _sha256_bytes(raw)
+                item["byteCount"] = len(raw)
+        elif entry["kind"] == "symlink":
+            item["targetSha256"] = _sha256_bytes(os.readlink(source / relative).encode("utf-8"))
+        entries.append(item)
+    value = {"identity": identity, "entries": entries}
+    if len(_json_bytes(value)) > _MAX_PROMPT_BYTES:
+        raise ValueError("source exceeds the bounded OpenCode projection")
+    return value
+
+
+def _candidate_prompt_projection(candidate: Candidate, retained_source: Path) -> dict[str, object]:
+    return {
+        "candidateIdentity": candidate.result_identity,
+        "ticket": _ticket_prompt_projection(candidate.work),
+        "acceptanceCriteria": list(candidate.acceptance_criteria),
+        "source": _source_prompt_projection(retained_source),
+        "implementationChanges": list(candidate.implementation_changes),
+        "preservedChanges": list(candidate.preserved_changes),
+    }
+
+
+def _evidence_prompt_projection(evidence: tuple[dict[str, object], ...]) -> list[dict[str, object]]:
+    projection: list[dict[str, object]] = []
+    fields = (
+        "observationIdentity",
+        "kind",
+        "criterionIndexes",
+        "expected",
+        "runnerStatus",
+        "observed",
+        "complete",
+        "preCurrentness",
+        "postCurrentness",
+    )
+    for item in evidence:
+        projection.append(
+            {
+                field: _redact_absolute_paths(value) if isinstance(value := item.get(field), str) else value
+                for field in fields
+                if field in item
+            }
+        )
+    if len(_json_bytes(projection)) > _MAX_PROMPT_BYTES:
+        raise ValueError("evidence exceeds the bounded OpenCode projection")
+    return projection
+
+
+def _plan_prompt_projection(plan: dict[str, object]) -> dict[str, object]:
+    observations = plan.get("observations")
+    if not isinstance(observations, list):
+        raise ValueError("verification plan is malformed")
+    return {
+        "candidateIdentity": plan.get("candidateIdentity"),
+        "sourceIdentity": plan.get("sourceIdentity"),
+        "acceptanceCriteria": plan.get("acceptanceCriteria"),
+        "observations": observations,
+    }
+
+
+def _luna_plan_items(value: object) -> list[object]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        return [value]
+    raise ValueError("Luna plan is not an observation object or array")
+
+
+def _luna_assessment_items(value: object) -> list[object]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        if "responses" in value:
+            if set(value) != {"responses"} or not isinstance(value["responses"], list):
+                raise ValueError("Luna assessment envelope is malformed")
+            return value["responses"]
+        return [value]
+    raise ValueError("Luna assessment is not a result object or array")
+
+
+class OpenCodeRunner:
+    """Host-owned fixed-agent runner for projections that cannot cross bwrap."""
+
+    def __init__(self, executable: str | Path, *, timeout_seconds: float = 300) -> None:
+        path = Path(executable)
+        if not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
+            raise ValueError("OpenCode executable must be an absolute executable")
+        if not isinstance(timeout_seconds, (int, float)) or timeout_seconds <= 0:
+            raise ValueError("OpenCode timeout must be positive")
+        self._executable = path
+        self._timeout_seconds = float(timeout_seconds)
+
+    @staticmethod
+    def _agent_metadata(events: list[dict[str, object]], agent: str) -> bool:
+        observed_agents: list[str] = []
+        session_values: list[str] = []
+
+        def visit(value: object) -> None:
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    normalized = key.lower().replace("_", "")
+                    if normalized in {"agent", "agentname", "agentid"}:
+                        if not isinstance(child, str):
+                            raise OpenCodeInvocationError("OpenCode agent metadata is malformed")
+                        observed_agents.append(child)
+                    elif normalized in {"session", "sessionid"}:
+                        if not isinstance(child, str):
+                            raise OpenCodeInvocationError("OpenCode session metadata is malformed")
+                        session_values.append(child)
+                    visit(child)
+            elif isinstance(value, list):
+                for child in value:
+                    visit(child)
+
+        for event in events:
+            visit(event)
+        if observed_agents and any(value != agent for value in observed_agents):
+            raise OpenCodeInvocationError("OpenCode selected a different agent")
+        if session_values and len(set(session_values)) != 1:
+            raise OpenCodeInvocationError("OpenCode session metadata is inconsistent")
+        return bool(observed_agents)
+
+    def _preflight_agent(self, agent: str) -> None:
+        try:
+            completed = subprocess.run(
+                (str(self._executable), "agent", "list"),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=self._timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise OpenCodeInvocationError("OpenCode agent preflight timed out") from exc
+        except OSError as exc:
+            raise OpenCodeInvocationError("OpenCode agent preflight is unavailable") from exc
+        if completed.returncode != 0:
+            raise OpenCodeInvocationError("OpenCode agent preflight failed")
+        names = {
+            match.group(1)
+            for line in completed.stdout.decode("utf-8", errors="replace").splitlines()
+            if (match := re.match(r"^([A-Za-z0-9][A-Za-z0-9._-]*)\s+\(primary\)$", line))
+        }
+        if agent not in names:
+            raise OpenCodeInvocationError("requested OpenCode agent is unavailable")
+
+    @staticmethod
+    def _parse_events(raw: bytes, agent: str) -> tuple[object, bool]:
+        if len(raw) > _MAX_OPENCODE_OUTPUT_BYTES:
+            raise OpenCodeInvocationError("OpenCode JSONL output exceeds its bound")
+        try:
+            lines = raw.decode("utf-8").splitlines()
+        except UnicodeDecodeError as exc:
+            raise OpenCodeInvocationError("OpenCode JSONL output is malformed") from exc
+        if len(lines) != 3 or any(not line for line in lines):
+            raise OpenCodeInvocationError("OpenCode JSONL event sequence is invalid")
+        try:
+            events = [json.loads(line) for line in lines]
+        except json.JSONDecodeError as exc:
+            raise OpenCodeInvocationError("OpenCode JSONL output is malformed") from exc
+        if (
+            any(not isinstance(event, dict) for event in events)
+            or [event.get("type") for event in events] != ["step_start", "text", "step_finish"]
+        ):
+            raise OpenCodeInvocationError("OpenCode JSONL event sequence is invalid")
+        text_event = events[1]
+        part = text_event.get("part")
+        if (
+            not isinstance(part, dict)
+            or part.get("type") != "text"
+            or not isinstance(text := part.get("text"), str)
+        ):
+            raise OpenCodeInvocationError("OpenCode text event is malformed")
+        decoder = json.JSONDecoder()
+        try:
+            value, index = decoder.raw_decode(text.lstrip())
+        except json.JSONDecodeError as exc:
+            raise OpenCodeInvocationError("OpenCode text is not strict JSON") from exc
+        if text.lstrip()[index:].strip() or not isinstance(value, (dict, list)):
+            raise OpenCodeInvocationError("OpenCode text is not one JSON object or array")
+        return value, OpenCodeRunner._agent_metadata(events, agent)
+
+    def invoke(self, agent: str, request: dict[str, object]) -> object:
+        if agent not in _FIXED_OPENCODE_AGENTS:
+            raise ValueError("OpenCode agent is not fixed for this route")
+        self._preflight_agent(agent)
+        encoded_request = _json_bytes(request)
+        if len(encoded_request) > _MAX_PROMPT_BYTES:
+            raise OpenCodeInvocationError("OpenCode request exceeds its bound")
+        operation = request.get("operation")
+        decision_rule = (
+            " For ASSIGNMENT, return exactly {\"decision\":\"CLOSE\"} when the projection already "
+            "satisfies the Ticket; otherwise return exactly {\"decision\":\"ASSIGN\",\"assignment\":{\"path\":"
+            "\"relative path\",\"value\":\"complete file text\"}}. Never return an assignment by itself."
+            if operation == "ASSIGNMENT"
+            else ""
+        )
+        prompt = (
+            f"You are the fixed {agent} agent for a bounded implementation-verification decision. "
+            "Use only the JSON projection below. Do not use tools, paths, sessions, or prior context. "
+            "Return exactly one JSON object or array matching the requested operation, with no Markdown or prose."
+            + decision_rule
+            + "\n"
+            + encoded_request.decode("utf-8")
+        )
+        if len(prompt.encode("utf-8")) > _MAX_PROMPT_BYTES:
+            raise OpenCodeInvocationError("OpenCode prompt exceeds its bound")
+        try:
+            with tempfile.TemporaryDirectory(prefix="iv-opencode-host-") as temporary:
+                completed = subprocess.run(
+                    (
+                        str(self._executable),
+                        "run",
+                        "--agent",
+                        agent,
+                        "--format",
+                        "json",
+                        "--dir",
+                        temporary,
+                        prompt,
+                    ),
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=self._timeout_seconds,
+                    check=False,
+                )
+        except subprocess.TimeoutExpired as exc:
+            raise OpenCodeInvocationError("OpenCode invocation timed out") from exc
+        except OSError as exc:
+            raise OpenCodeInvocationError("OpenCode invocation is unavailable") from exc
+        if completed.returncode != 0:
+            raise OpenCodeInvocationError("OpenCode invocation failed")
+        if completed.stderr:
+            raise OpenCodeInvocationError("OpenCode invocation emitted an unsafe warning")
+        value, _ = self._parse_events(completed.stdout, agent)
+        return value
+
+
+class LocalImplementationCheck:
+    """A deterministic Module-owned source stability check, never an agent claim."""
+
+    def check(self, work: Path, source: Path) -> ImplementationBlocker | None:
+        try:
+            _capture(source.resolve(strict=True))
+        except Exception:
+            return ImplementationBlocker("production local implementation check is unavailable")
+        return None
+
+
+class OpenCodeImplementationReviewAdapter:
+    variant = "host-opencode-terra-review-private-worker-v1"
+
+    def __init__(self, runner: OpenCodeRunner, check: LocalImplementationCheck | None = None) -> None:
+        self._runner = runner
+        self._check = check or LocalImplementationCheck()
+
+    @staticmethod
+    def _request(work: Path, source: Path, operation: str) -> dict[str, object]:
+        return {
+            "operation": operation,
+            "ticket": _strict_json_value(_ticket_prompt_projection(work)),
+            "source": _strict_json_value(_source_prompt_projection(source)),
+            "responseContract": (
+                {"decision": "ASSIGN", "assignment": {"path": "relative path", "value": "file text"}}
+                if operation == "ASSIGNMENT"
+                else {"decision": "CLOSE"}
+            ),
+        }
+
+    def _review(self, work: Path, source: Path, operation: str) -> object | ImplementationBlocker:
+        try:
+            return self._runner.invoke("terra", self._request(work, source, operation))
+        except (OpenCodeInvocationError, ValueError):
+            return ImplementationBlocker("production Terra review is unavailable")
+
+    def next_assignment(self, work: Path, source: Path) -> object | ImplementationBlocker | None:
+        result = self._review(work, source, "ASSIGNMENT")
+        if isinstance(result, ImplementationBlocker):
+            return result
+        if result == {"decision": "CLOSE"}:
+            return None
+        if not isinstance(result, dict):
+            return ImplementationBlocker("production Terra assignment is invalid")
+        assignment = result.get("assignment")
+        if (
+            result.get("decision") != "ASSIGN"
+            or set(result) != {"decision", "assignment"}
+            or not isinstance(assignment, dict)
+            or set(assignment) != {"path", "value"}
+            or not isinstance(assignment.get("path"), str)
+            or not isinstance(assignment.get("value"), str)
+        ):
+            return ImplementationBlocker("production Terra assignment is invalid")
+        path = Path(assignment["path"])
+        if path.is_absolute() or ".." in path.parts or not path.parts:
+            return ImplementationBlocker("production Terra assignment is invalid")
+        return assignment
+
+    def close(self, work: Path, source: Path) -> ImplementationBlocker | None:
+        result = self._review(work, source, "CLOSURE")
+        if isinstance(result, ImplementationBlocker):
+            return result
+        if result != {"decision": "CLOSE"}:
+            return ImplementationBlocker("production Terra closure did not pass")
+        return None
+
+    def check(self, work: Path, source: Path) -> ImplementationBlocker | None:
+        return self._check.check(work, source)
+
+
+class _OpenCodeFreshVerifierContext:
+    def __init__(self, runner: OpenCodeRunner, candidate: Candidate, retained_source: Path) -> None:
+        self.identity = f"fresh-opencode-luna:{uuid.uuid4().hex}"
+        self._runner = runner
+        self._candidate = candidate
+        self._retained_source = retained_source.resolve(strict=True)
+        self._assessments: dict[str, list[object]] = {}
+
+    def plan(
+        self,
+        candidate: Candidate,
+        retained_source: Path,
+        supported_observations: tuple[str, ...],
+    ) -> object:
+        if candidate != self._candidate or retained_source.resolve(strict=True) != self._retained_source:
+            raise ValueError("fresh verifier input changed")
+        return _luna_plan_items(self._runner.invoke(
+            "luna",
+            {
+                "operation": "PLAN",
+                "candidate": _strict_json_value(_candidate_prompt_projection(candidate, self._retained_source)),
+                "supportedObservations": list(supported_observations),
+                "responseContract": [
+                    {
+                        "observationIdentity": "unique string",
+                        "kind": "exactly one of the supplied supportedObservations values",
+                        "criterionIndexes": [1],
+                        "requests": [{"path": "relative source path for SOURCE"}],
+                        "expected": "exact observed source text for SOURCE",
+                    }
+                ],
+                "rules": (
+                    "For SOURCE, kind must be SOURCE, each request must be {path: relative source path}, "
+                    "and expected must be the exact source text that the request returns."
+                ),
+            },
+        ))
+
+    def assess(
+        self,
+        candidate: Candidate,
+        plan: dict[str, object],
+        evidence: tuple[dict[str, object], ...],
+    ) -> object:
+        if candidate != self._candidate:
+            raise ValueError("fresh verifier Candidate changed")
+        plan_projection = _strict_json_value(_plan_prompt_projection(plan))
+        evidence_projection = _strict_json_value(_evidence_prompt_projection(evidence))
+        assessment_identity = _artifact_identity(
+            {"plan": plan_projection, "evidence": evidence_projection}
+        )
+        cached = self._assessments.get(assessment_identity)
+        if cached is not None:
+            return _strict_json_value(cached)
+        result = self._runner.invoke(
+            "luna",
+            {
+                "operation": "ASSESS",
+                "candidate": _strict_json_value(_candidate_prompt_projection(candidate, self._retained_source)),
+                "plan": plan_projection,
+                "evidence": evidence_projection,
+                "responseContract": [
+                    {
+                        "criterionIndex": 1,
+                        "outcome": "SATISFIED, NOT_SATISFIED, or UNDETERMINED",
+                        "evidenceObservationIdentities": ["observation identity"],
+                    }
+                ],
+            },
+        )
+        items = _luna_assessment_items(result)
+        for claim in items:
+            if not isinstance(claim, dict):
+                raise ValueError("Luna assessment is malformed")
+            if claim.get("outcome") == "SATISFIED":
+                references = claim.get("evidenceObservationIdentities")
+                if not isinstance(references, list) or not references:
+                    raise ValueError("Luna satisfied assessment lacks evidence")
+        self._assessments[assessment_identity] = items
+        return _strict_json_value(items)
+
+
+class OpenCodeFreshVerifierAdapter:
+    fresh_context_enforced = True
+    read_only_enforced = True
+    variant = "host-opencode-luna-fresh-projection-v1"
+
+    def __init__(self, runner: OpenCodeRunner) -> None:
+        self._runner = runner
+
+    def open(
+        self,
+        candidate: Candidate,
+        retained_source: Path,
+        supported_observations: tuple[str, ...],
+        effect_safety: str,
+    ) -> _OpenCodeFreshVerifierContext:
+        return _OpenCodeFreshVerifierContext(self._runner, candidate, retained_source)
 
 
 class LinuxImplementationReviewAdapter:
@@ -357,6 +830,54 @@ class LinuxWorkerAdapter:
         if completed.returncode != 0:
             error = completed.stderr.decode("utf-8", errors="replace")[-4000:]
             raise RuntimeError(f"isolated Worker failed ({completed.returncode}): {error}")
+
+
+class LinuxTerraWorkerAdapter:
+    """Applies Terra's bounded assignment only inside the private workspace."""
+
+    isolation_enforced = True
+    variant = "bubblewrap-deterministic-terra-assignment-worker-v1"
+
+    _EXECUTOR = (
+        "/usr/bin/python3",
+        "-c",
+        "import json,pathlib;"
+        "r=json.loads(pathlib.Path('/input/request.json').read_text());"
+        "a=r['assignment'];p=pathlib.Path('/workspace')/a['path'];"
+        "p.parent.mkdir(parents=True,exist_ok=True);p.write_text(a['value'],encoding='utf-8')",
+    )
+
+    def run(
+        self,
+        worker: object,
+        work: Path,
+        workspace_root: Path,
+        assignment: object,
+    ) -> None:
+        if not isinstance(worker, TerraWorker):
+            raise TypeError("production Worker designation must be fixed Terra")
+        if not isinstance(assignment, dict) or set(assignment) != {"path", "value"}:
+            raise ValueError("Terra assignment is invalid")
+        with tempfile.TemporaryDirectory(prefix="iv-terra-worker-input-") as temporary:
+            request = Path(temporary) / "request.json"
+            request.write_bytes(_json_bytes({"assignment": assignment}))
+            request.chmod(0o444)
+            command = _sandbox_command(
+                writable=((workspace_root.resolve(strict=True), "/workspace"),),
+                readable=((request, "/input/request.json"),),
+                cwd="/workspace",
+                argv=self._EXECUTOR,
+            )
+            completed = subprocess.run(
+                command,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=300,
+                check=False,
+            )
+        if completed.returncode != 0:
+            raise RuntimeError("isolated Terra Worker failed")
 
 
 @dataclass(frozen=True)
