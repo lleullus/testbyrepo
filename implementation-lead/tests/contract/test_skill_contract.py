@@ -12,6 +12,8 @@ VERIFICATION_EXECUTION_CONTRACT = (ROOT / "PHASE-5-VERIFICATION-EXECUTION-CONTRA
 
 class ActiveSkillContractTests(unittest.TestCase):
     def test_implementation_skill_names_direct_subagent_and_review_contract(self) -> None:
+        implementation_skill = " ".join(IMPLEMENTATION_SKILL.split())
+        implementation_skill_lower = implementation_skill.lower()
         self.assertIn("exact ready local Markdown Ticket", IMPLEMENTATION_SKILL)
         self.assertIn("Implementation Subagent", IMPLEMENTATION_SKILL)
         self.assertIn("Host Subagent Invocation Mechanism", IMPLEMENTATION_SKILL)
@@ -19,6 +21,63 @@ class ActiveSkillContractTests(unittest.TestCase):
         self.assertIn("actual project diff", IMPLEMENTATION_SKILL)
         self.assertIn("every Markdown acceptance criterion (AC)", IMPLEMENTATION_SKILL)
         self.assertIn("must not report", IMPLEMENTATION_SKILL)
+
+        self.assertIn(
+            "If the user explicitly designates one or more implementation research models, invoke "
+            "`Implementation Research Agent` roles using only those designated models",
+            implementation_skill,
+        )
+        self.assertIn(
+            "using only those designated models through the host's `Host Subagent Invocation Mechanism`",
+            implementation_skill,
+        )
+        self.assertIn(
+            "If the user does not designate an implementation research model, the Implementation Lead performs "
+            "the needed research directly and must not assign a separate research agent",
+            implementation_skill,
+        )
+        self.assertIn(
+            "Parallel research is allowed only when the user designates multiple research models and explicitly "
+            "chooses parallel execution",
+            implementation_skill,
+        )
+        self.assertIn(
+            "without such a model designation, do not create additional delegation cost",
+            implementation_skill,
+        )
+        for research_surface in (
+            "implementation and integration surfaces",
+            "pre-existing or concurrent changes",
+            "required files, executables, dependencies, and focused-check availability",
+            "scope, dependency, authority, or contract conflicts",
+        ):
+            self.assertIn(research_surface, implementation_skill)
+        self.assertIn(
+            "Its findings are advisory and do not bind the Implementation Subagent's internal design, exact file "
+            "list, implementation sequence, or technical steps",
+            implementation_skill,
+        )
+        self.assertIn("do not assign an AC or whole-Ticket verdict", implementation_skill)
+        self.assertIn(
+            "The Implementation Lead directly confirms the material current-project facts used for the assignment "
+            "decision",
+            implementation_skill,
+        )
+        self.assertIn(
+            "Any further delegated research is limited to research models already designated by the user",
+            implementation_skill,
+        )
+        self.assertIn(
+            "only then invoke the user-designated `Implementation Subagent`",
+            implementation_skill,
+        )
+        for role_only_research_bypass in (
+            "models or roles",
+            "model or role",
+            "multiple research models or roles",
+            "models or roles already designated",
+        ):
+            self.assertNotIn(role_only_research_bypass, implementation_skill_lower)
 
     def test_verification_skill_names_direct_verification_and_remediation_contract(self) -> None:
         verification_skill = " ".join(VERIFICATION_SKILL.split())
