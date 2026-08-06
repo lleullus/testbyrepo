@@ -196,7 +196,7 @@ rendered obligation.
 ## Main Flow
 
 1. Run the Central UI / UX Routing audit before deciding whether grilling is needed. When its material-UI route applies, complete the Matt-owned authority flow, using active `ima2-uiux` only for design judgment, before finalizing shared understanding.
-2. Decide whether grilling is needed. When it is, immediately start the selected `grill-with-docs` or `grill-me` flow and output its first interview turn in the current conversation. Do not stop at a route recommendation or summary. Skip grilling only when the decisions are already clear.
+2. Decide whether grilling is needed. When it is, immediately start the selected `grill-with-docs` or `grill-me` flow by presenting a recommendation, a necessary explicit gate, or, when the contract is already complete, the contract-only shared understanding. Do not stop at a route recommendation or summary. Skip grilling only when the decisions are already clear.
    A target with an existing canonical project root and inspectable repository
    context remains codebase-backed even when the current package/application
    scope has no implementation source yet; route it to `grill-with-docs`.
@@ -256,7 +256,7 @@ The user's current goal, the amount of uncertainty, and whether a project/codeba
 
 ## Output
 
-The result of starting the selected planning flow, not merely a recommended planning path. When grilling is selected, output the first interview turn; do not output only a path explanation or summary instead of starting the interview.
+The result of starting the selected planning flow, not merely a recommended planning path. When grilling is selected, present a recommendation, a necessary explicit gate, or the complete contract-only shared understanding; do not output only a path explanation or summary.
 
 ## Planning Completion
 

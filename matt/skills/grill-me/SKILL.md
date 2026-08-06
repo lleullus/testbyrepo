@@ -1,6 +1,6 @@
 ---
 name: grill-me
-description: Use when ask-matt routes a non-codebase brief, or when a user presents a non-codebase plan with unresolved decisions, to clarify it through a dependency-aware, adaptive interview.
+description: Use when ask-matt routes a non-codebase brief, or when a user presents a non-codebase plan with unresolved decisions, to clarify it through dependency-aware recommendation review.
 ---
 
 # Grill Me
@@ -15,7 +15,7 @@ The user's plan or design and the decisions that remain unclear.
 
 ## Process
 
-Run a `grilling` session using its dependency-aware decision-graph and adaptive batching policy. Do not begin from a prepared checklist. Before the first question and after every answer, use `grilling` to select the next most gating unresolved decision; ask it alone and briefly name the concrete downstream decisions it controls. When no gating decision exists, batch only genuinely independent decisions. Provide a recommended answer for every question and, when possible, a brief reason. Write questions and any resulting notes in the user's conversation language.
+Run `grilling` as the sole owner of the interaction policy. Supply the user's brief, confirmed conversation context, adopted authorities, and any directly resolvable facts; do not duplicate its recommendation, gate, approval, or delta rules. Do not begin from a prepared checklist or turn an implementation-owned choice into a user decision. Write in the user's conversation language.
 
 ## Contract boundary
 

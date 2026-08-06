@@ -1,6 +1,6 @@
 ---
 name: grill-with-docs
-description: Use when ask-matt routes a codebase-backed brief, or when a user presents a codebase-backed plan with unresolved decisions, to clarify it through a dependency-aware, adaptive interview using domain vocabulary when needed.
+description: Use when ask-matt routes a codebase-backed brief, or when a user presents a codebase-backed plan with unresolved decisions, to clarify it through evidence-backed, dependency-aware recommendation review using domain vocabulary when needed.
 ---
 
 # Grill With Docs
@@ -15,11 +15,11 @@ The user's goal, relevant codebase context, and existing domain documentation wh
 
 ## Process
 
-Run a `grilling` session using its dependency-aware decision-graph and adaptive batching policy. Do not begin from a prepared checklist. Before the first question and after every answer, use `grilling` to select the next most gating unresolved decision; ask it alone and briefly name the concrete downstream decisions it controls. Verify codebase facts directly before ranking decisions, and do not turn an inspectable fact or an implementation-owned choice into a user decision. Use `domain-modeling` when terminology or an architectural decision needs attention. Write questions and any documentation in the user's conversation language.
+Run `grilling` as the sole owner of the interaction policy. Before its first response, and after a material delta when needed, inspect the minimum sufficient code, documentation, approved authorities, external contracts, and runtime evidence needed to keep the current recommendation contractually coherent. Supply those facts and constraints to `grilling`; do not duplicate its recommendation, gate, approval, or delta rules. Do not turn an inspectable fact or an implementation-owned choice into a user decision. Use `domain-modeling` when terminology or an architectural decision needs attention. Write in the user's conversation language.
 
 ## Planning boundary
 
-Drive the interview toward:
+Drive planning toward:
 
 - the desired observable outcome;
 - existing behavior and invariants that must be preserved;
@@ -93,7 +93,7 @@ prior planning artifact uses it.
 
 ## Output
 
-A clarified planning basis with resolved decisions, constraints, and open questions. Do not create implementation work as part of the interview.
+A clarified planning basis with resolved decisions, constraints, and open questions. Do not create implementation work as part of planning.
 
 ## Next Action
 

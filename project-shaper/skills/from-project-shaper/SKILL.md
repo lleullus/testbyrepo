@@ -78,7 +78,7 @@ Otherwise ask one question only:
 
 > Shall Matt plan this package within this frame, or should any included/excluded boundary be corrected first?
 
-Recommend accepting the frame when it faithfully projects the approved map. This is a frame confirmation, not the full Matt requirements interview.
+Recommend accepting the frame when it faithfully projects the approved map. This is a frame confirmation, not the full Matt planning review.
 
 ## Continue Into Matt
 
@@ -137,4 +137,4 @@ A missing implementation path, technical uncertainty, or codebase difficulty is 
 
 ## Output
 
-The first package-framing checkpoint or, when already confirmed in the current conversation, the first normal Matt interview turn. Do not stop at a route recommendation.
+The first package-framing checkpoint or, when already confirmed in the current conversation, the first recommendation, necessary explicit gate, or complete contract-only shared understanding produced by the normal Matt flow. Do not stop at a route recommendation.
