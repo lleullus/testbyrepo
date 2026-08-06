@@ -36,15 +36,23 @@ description: Use to independently verify one exact ready local Markdown Ticket d
    required preparation or dependency, and authority or approval needed.
    Readiness is exactly one of `READY`, `NOT_READY`, `UNSUPPORTED`, or `UNSAFE`
    and is a pre-execution fact, not an AC verdict.
-5. After directly checking every identified prerequisite, output one user-facing
+5. After directly checking every identified prerequisite, synthesize the
+   readiness findings into the verification choices that are materially
+   available. For each choice, state its required preparation, cost and risk,
+   directly provable scope, reachable final verdict, and remaining uncertainty.
+   If an unassessed plausible alternative could materially improve those outcomes
+   at reasonable cost and risk, continue planning inspection before making a
+   recommendation. Recommend the choice that best fits the user's original
+   requested outcome, and never present or recommend limited verification as if
+   it could support a broader final verdict. Then output one user-facing
    commentary table headed `Verification Scenarios` containing every scenario
-   and field above. Ask the user to explicitly approve the scenario plan and its
-   stated preparation scope. Before that approval, do not prepare the environment
-   or acquire direct evidence. If the user rejects or changes the plan, revise the
-   scenarios and readiness facts, show the complete table again, and request new
-   approval. Approval is a workflow gate only; it is not direct evidence or
-   authority for a canonical, shared, credential-bearing, external, or dangerous
-   effect.
+   and field above, and ask the user to explicitly approve the scenario plan and
+   its stated preparation scope. Before that approval, do not prepare the
+   environment or acquire direct evidence. If the user rejects or changes the
+   plan, revise the scenarios and readiness facts, show the complete table again,
+   and request new approval. Approval is a workflow gate only; it is not direct
+   evidence or authority for a canonical, shared, credential-bearing, external,
+   or dangerous effect.
 6. After approval, prepare only the approved verification environment. Disposable
    isolated agents, fixtures, inputs, failure hooks, provider test targets, and
    scratch workspaces are allowed only when they leave product files and meaning
