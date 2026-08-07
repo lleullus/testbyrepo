@@ -20,6 +20,10 @@ class ActiveSkillContractTests(unittest.TestCase):
         self.assertIn("current project directly", IMPLEMENTATION_SKILL)
         self.assertIn("actual project diff", IMPLEMENTATION_SKILL)
         self.assertIn("every Markdown acceptance criterion (AC)", IMPLEMENTATION_SKILL)
+        self.assertIn("known remaining implementation work", implementation_skill)
+        self.assertIn("same user-designated Implementation Subagent", implementation_skill)
+        self.assertIn("no known correctable in-scope due-now implementation work remains", implementation_skill)
+        self.assertIn("requires direct runtime evidence", implementation_skill)
         self.assertIn("must not report", IMPLEMENTATION_SKILL)
 
         self.assertIn(
@@ -89,37 +93,38 @@ class ActiveSkillContractTests(unittest.TestCase):
         self.assertIn("user-facing commentary channel", verification_skill)
         self.assertIn("stop as `unsupported` before any direct evidence acquisition", verification_skill)
         self.assertIn("Verification Lead itself designs one or", VERIFICATION_SKILL)
-        self.assertIn("Planning inspection is read-only", verification_skill)
+        self.assertIn("performs a read-only lead-first planning inspection", verification_skill)
         self.assertIn("must not be preserved or reused as direct AC evidence", verification_skill)
-        self.assertIn("identify the prerequisites that can change whether each AC scenario is executable", verification_skill)
+        self.assertIn("identify the required product entrypoint", verification_skill)
         for prerequisite in (
-            "agent, model, thinking, tool, executable, browser, and process requirements",
-            "fixtures, sentinels, failure hooks, provider targets, inputs, and isolated workspace",
-            "authority, credentials, network or external effects, cleanup and readback",
-            "proof method required for a universal or negative condition",
+            "agent, model, thinking, tool, executable",
+            "fixture, sentinel, failure-hook, provider-target",
+            "authority, credential, network, cleanup, readback",
+            "universal, and negative-proof requirements",
         ):
             self.assertIn(prerequisite, verification_skill)
-        self.assertIn("If the user designates a `Readiness Research Agent`", verification_skill)
-        self.assertIn("invoke it through the host's `Host Subagent Invocation Mechanism`", verification_skill)
+        self.assertIn("Invoke one or more `Readiness Research Agent`s", verification_skill)
+        self.assertIn("through the host's `Host Subagent Invocation Mechanism`", verification_skill)
         self.assertIn(
-            "It must not mutate the product or environment, acquire direct evidence, select or approve scenarios, "
-            "assign readiness, or decide AC verdicts",
+            "It must not perform broad product discovery, take ownership of an AC range, design or select scenarios, "
+            "assign readiness, acquire direct AC evidence, mutate the product or environment, or decide AC verdicts",
             verification_skill,
         )
-        self.assertIn("Its report is advisory; Verification Lead directly verifies every readiness fact", verification_skill)
+        self.assertIn("Its report is advisory; Verification Lead directly verifies every readiness fact used below", verification_skill)
         self.assertIn("new evidence observation", verification_skill)
         self.assertIn("`Verification Scenarios`", verification_skill)
         self.assertIn("stable scenario ID, AC", verification_skill)
         self.assertIn("procedure and verification surface", verification_skill)
-        self.assertIn("Readiness is exactly one of `READY`, `NOT_READY`, `UNSUPPORTED`, or `UNSAFE`", verification_skill)
+        self.assertIn("Readiness is a pre-execution fact, not an AC verdict, and is exactly one of", verification_skill)
+        self.assertIn("`PREPARABLE` when a material prerequisite is currently absent", verification_skill)
         self.assertIn("is a pre-execution fact, not an AC verdict", verification_skill)
         self.assertIn("required preparation or dependency, and authority or approval needed", verification_skill)
         self.assertIn("After directly checking every identified prerequisite", verification_skill)
-        self.assertIn("explicitly approve the scenario plan and its stated preparation scope", verification_skill)
+        self.assertIn("explicitly approve the disclosed scenario plan and preparation scope", verification_skill)
         self.assertIn("Before that approval, do not prepare the environment or acquire direct evidence", verification_skill)
         self.assertIn(
-            "If the user rejects or changes the plan, revise the scenarios and readiness facts, show the complete table again, "
-            "and request new approval",
+            "If the user rejects or changes the plan, revise the choices, scenario paragraphs, readiness facts, and bottom "
+            "summary table, then request new approval",
             verification_skill,
         )
         self.assertIn("Approval is a workflow gate only", verification_skill)
@@ -130,14 +135,14 @@ class ActiveSkillContractTests(unittest.TestCase):
         self.assertIn("After preparation and before any direct evidence acquisition, directly recheck every prerequisite", verification_skill)
         self.assertIn("Execute only `READY` scenarios", verification_skill)
         self.assertIn(
-            "Report every remaining `NOT_READY`, `UNSUPPORTED`, or `UNSAFE` scenario and its affected AC before execution; "
-            "do not attempt it",
+            "Report every remaining `PREPARABLE`, `NOT_READY`, `UNSUPPORTED`, or `UNSAFE` scenario and its affected AC "
+            "before execution; do not attempt it",
             verification_skill,
         )
         self.assertIn("`replaces <old scenario ID>` relationship", verification_skill)
         self.assertIn(
-            "show the revised complete table, obtain explicit approval, prepare and recheck readiness, and only then acquire "
-            "replacement evidence",
+            "show the revised complete scenario paragraphs and bottom summary table, obtain explicit approval, prepare and "
+            "recheck readiness, and only then acquire replacement evidence",
             verification_skill,
         )
         self.assertIn("Do not relabel evidence acquired for the old scenario as evidence for its replacement", verification_skill)
@@ -165,14 +170,14 @@ class ActiveSkillContractTests(unittest.TestCase):
         self.assertIn("same cause and the same minimal change", VERIFICATION_SKILL)
         self.assertIn("minimum product change directly required", VERIFICATION_SKILL)
         self.assertIn("changed files and scope", VERIFICATION_SKILL)
-        self.assertIn("does not contain a final verdict", VERIFICATION_SKILL)
+        self.assertIn("Agent narration or metadata does not determine", VERIFICATION_SKILL)
         self.assertIn("directly re-verifies", VERIFICATION_SKILL)
-        self.assertIn("at most once", VERIFICATION_SKILL)
-        self.assertIn("does not start chained remediation", VERIFICATION_SKILL)
+        self.assertIn("at most three cycles", verification_skill)
+        self.assertIn("cannot start chained remediation", verification_skill)
 
         ordered_contract = (
             "After directly checking every identified prerequisite",
-            "explicitly approve the scenario plan and its stated preparation scope",
+            "explicitly approve the disclosed scenario plan and preparation scope",
             "After approval, prepare only the approved verification environment",
             "After preparation and before any direct evidence acquisition, directly recheck every prerequisite",
             "Execute only `READY` scenarios",
@@ -210,17 +215,12 @@ class ActiveSkillContractTests(unittest.TestCase):
             "module.implement",
             "module.verify",
             "module.inspect",
-            "candidate",
             "opencode worker",
             "opencode verifier",
             "terraworker",
             "fresh luna",
             "implementation-handoff",
             "verification-result",
-            "actor",
-            "capability",
-            "claim",
-            "replay",
             "verification-run",
             "workflow-store",
             "baseline capsule",

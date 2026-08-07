@@ -66,9 +66,24 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
    implementation steps and their checks from the resulting project, and map
    every Markdown acceptance criterion (AC) to implementation and check
    coverage.
-8. Report the implementation result and uncovered or ambiguous AC coverage as
-   input to independent verification. The Implementation Lead must not report
-   final `VERIFIED` status.
+8. Distinguish verification-only uncertainty from known remaining
+   implementation work. When review establishes a concrete Ticket-authorized
+   source or integration omission, whether a bounded defect in the Subagent's
+   work or missed due-now Ticket work, do not defer it to Verification Lead.
+   Resume or reinvoke the same user-designated Implementation Subagent with only
+   that bounded finding and the authorized Ticket boundary, then re-review the
+   actual diff, checks, and affected AC coverage. Continue only while a concrete
+   bounded in-scope correction remains.
+9. Do not dispatch mutation when the finding requires a new product, scope,
+   Spec, or Behavior-authority decision; is pre-existing and out of scope; or is
+   blocked by environment, ownership, dependency, or authorization. Stop or
+   report that exact boundary and next owner. Begin independent verification
+   only after no known correctable in-scope due-now implementation work remains.
+   Source-review uncertainty that requires direct runtime evidence may still be
+   reported to independent verification.
+10. Report the implementation result and remaining verification-only ambiguous
+    AC coverage as input to independent verification. The Implementation Lead
+    must not report final `VERIFIED` status.
 
 The feasibility phase, including any research report, must not reapprove or
 rewrite the Ticket or parent Spec, strengthen or add ACs, split the Ticket,
