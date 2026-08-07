@@ -17,7 +17,7 @@ without choosing or beginning the implementation.
 - The most recently user-confirmed contract-only shared understanding.
 - The exact existing product project root and work slug.
 - The planning owner, if one is named.
-- The completed Behavior Design Lead result and every approved scoped Behavior authority adopted by the confirmed shared understanding.
+- The completed Behavior Design result and every approved scoped Behavior authority adopted by the confirmed shared understanding.
 
 ## Terminal UI / UX Authority Gate
 
@@ -123,8 +123,8 @@ replace the product outcome and scope confirmed for this Spec.
 
 ## Behavior Authority Gate
 
-Before drafting or writing `SPEC.md`, independently verify that Behavior Design
-Lead completed for this planning unit in a separate lead context. Require the
+Before drafting or writing `SPEC.md`, independently verify that Matt completed
+the full mandatory Behavior Design phase for this planning unit. Require the
 latest confirmed shared understanding to identify every applicable approved
 Behavior authority and exact scope.
 
@@ -141,7 +141,7 @@ Fail closed and do not draft or write `SPEC.md` when Behavior Design did not
 complete, an applicable authority is missing/draft/outside the project planning
 root, an authority scope is inapplicable or incomplete, a behavior decision is
 unresolved, or Behavior and UI authorities conflict. Return the exact defect to
-Matt or Behavior Design Lead; do not invent, copy, summarize, or override the
+Matt's Behavior Design phase; do not invent, copy, summarize, or override the
 missing behavior inside the Spec.
 
 ## Normative source lock

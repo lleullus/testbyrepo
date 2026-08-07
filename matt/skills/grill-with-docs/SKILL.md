@@ -75,9 +75,9 @@ Do not ask the user to select private package/module identity, dependencies,
 source/config/test paths, internal structure, commands, or a mutation envelope
 when those choices are not externally consumed constraints.
 
-Before Behavior Design Lead, produce only a provisional product frame. Invoke
-the independent Lead required by `ask-matt`; if it returns product decisions,
-resolve them through `grilling` and resume the Lead. Before recommending
+Before Behavior Design, produce only a provisional product frame. Matt then
+directly performs the mandatory phase required by `ask-matt`; when it identifies
+product decisions, resolve them through `grilling` and continue the phase. Before recommending
 `to-spec`, present one integrated contract-only shared understanding containing
 the approved Behavior authorities and obtain explicit user confirmation. State it without anticipated root
 causes, files, modules, endpoints, internal abstractions, implementation order,
@@ -100,4 +100,4 @@ A clarified planning basis with resolved decisions, constraints, and open questi
 
 ## Next Action
 
-Use `to-spec` only after Behavior Design Lead completes and the user confirms the integrated understanding. Do not start implementation or invoke Implementation Lead, a Worker, `/implement`, `/tdd`, `/code-review`, or another execution chain.
+Use `to-spec` only after Behavior Design completes and the user confirms the integrated understanding. Do not start implementation or invoke Implementation Lead, a Worker, `/implement`, `/tdd`, `/code-review`, or another execution chain.

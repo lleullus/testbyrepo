@@ -19,9 +19,9 @@ Run `grilling` as the sole owner of the interaction policy. Supply the user's br
 
 ## Contract boundary
 
-Before Behavior Design Lead, produce only a provisional product frame. Invoke
-the independent Lead required by `ask-matt`; if it returns product decisions,
-resolve them through `grilling` and resume the Lead. Before recommending
+Before Behavior Design, produce only a provisional product frame. Matt then
+directly performs the mandatory phase required by `ask-matt`; when it identifies
+product decisions, resolve them through `grilling` and continue the phase. Before recommending
 `to-spec`, present one integrated contract-only shared understanding containing
 the approved Behavior authorities and obtain explicit user confirmation.
 Exclude proposed mechanisms,
@@ -55,6 +55,6 @@ implementation work.
 
 ## Next Action
 
-Use `to-spec` only after Behavior Design Lead completes and the user confirms
+Use `to-spec` only after Behavior Design completes and the user confirms
 the integrated contract-only shared understanding. Do not start implementation or invoke Implementation Lead, a
 Worker, `/implement`, `/tdd`, `/code-review`, or another execution chain.

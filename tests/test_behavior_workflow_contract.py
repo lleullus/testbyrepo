@@ -8,16 +8,30 @@ ROOT = Path(__file__).parents[1]
 
 
 class BehaviorWorkflowContractTests(unittest.TestCase):
-    def test_behavior_lead_is_mandatory_independent_and_project_local(self) -> None:
+    def test_behavior_design_is_mandatory_matt_performed_and_project_local(self) -> None:
         lead = (ROOT / "behavior-design-lead" / "SKILL.md").read_text(encoding="utf-8")
         matt = (ROOT / "matt" / "skills" / "ask-matt" / "SKILL.md").read_text(encoding="utf-8")
-        normalized_matt = " ".join(matt.split())
         self.assertIn("Every Matt planning unit uses this same procedure", lead)
-        self.assertIn("host's subagent invocation mechanism", lead)
-        self.assertIn("must not simulate the role inline", lead)
+        self.assertIn("Matt directly performs this complete phase", lead)
+        self.assertIn("This phase has no\nseparate execution role or context", lead)
         self.assertIn("docs/planning/behavior/", lead)
-        self.assertIn("Every Matt planning unit must run", matt)
-        self.assertIn("must not perform the leaf inline", normalized_matt)
+        self.assertIn("Every Matt planning unit must complete", matt)
+        self.assertIn("Matt directly reads and performs the complete canonical leaf", matt)
+        self.assertIn("the phase has no separate execution role or context", matt)
+        for heading in (
+            "## Existing Authority First",
+            "## Lead-First Investigation",
+            "## Behavioral Design",
+            "## Counterexample Stress Test",
+            "## Product Decision Return",
+            "## Authority Output",
+            "## Completion",
+        ):
+            self.assertIn(heading, lead)
+        for contract in (lead, matt):
+            self.assertNotIn("Behavior subagent", contract)
+            self.assertNotIn("subagent invocation mechanism", contract)
+            self.assertNotIn("separate lead context", contract)
 
     def test_spec_ticket_and_leads_consume_behavior_authority(self) -> None:
         to_spec = (ROOT / "matt" / "skills" / "to-spec" / "SKILL.md").read_text(encoding="utf-8")

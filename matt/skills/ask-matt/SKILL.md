@@ -196,42 +196,40 @@ rendered obligation.
 
 ## Central Behavior Design
 
-Every Matt planning unit must run the canonical independent Behavior Design
-Lead in a separate lead context before Matt presents a final shared
-understanding:
+Every Matt planning unit must complete the canonical Behavior Design phase
+before Matt presents a final shared understanding:
 
 ```text
 /home/user01/project/iis-skills/behavior-design-lead/SKILL.md
 ```
 
-Matt supplies a provisional frame: desired outcome, included and excluded
-scope, Non-Goals, preserved behavior, external constraints, UI authority when
+Matt forms a provisional frame: desired outcome, included and excluded scope,
+Non-Goals, preserved behavior, external constraints, UI authority when
 applicable, exact project root, planning owner, and known unresolved decisions.
 This frame is not approved or normative.
 
-Invoke the Lead through the host's subagent invocation mechanism. Matt must not
-perform the leaf inline, substitute self-review, or report completion from its
-own analysis. When product decisions return, resume the same Lead context with
-the resolved answers.
+Matt directly reads and performs the complete canonical leaf in the current
+conversation context; the phase has no separate execution role or context.
+Matt must inspect the project's
+`docs/planning/behavior/INDEX.md` and applicable scoped authorities, conduct the
+required first-hand investigation, behavior model, and counterexample stress
+test, and either adopt unchanged approved authorities, revise their canonical
+documents, or create authorities for genuinely new persistent behavior
+boundaries. Matt must not waive the phase because the work appears clear,
+reduce its completion test, or treat a per-work Behavior document as a
+substitute.
 
-Behavior Design Lead must inspect the project's `docs/planning/behavior/INDEX.md`
-and applicable scoped authorities, investigate the behavior independently, and
-either adopt unchanged approved authorities, revise their canonical documents,
-or create authorities for genuinely new persistent behavior boundaries. Matt
-must not perform this lead role in its own context, waive it because the work
-appears clear, or treat a per-work Behavior document as a substitute.
-
-When the Lead returns `BEHAVIOR DECISIONS REQUIRED`, resolve the full current
-bundle through the active Grill interaction policy, then return the answers to
-the same lead context. A later round is allowed only when those answers expose a
-new material dependency. Package-boundary changes return to Project Shaper;
+When the phase reaches `BEHAVIOR DECISIONS REQUIRED`, resolve the full current
+bundle through the active Grill interaction policy, then continue Behavior
+Design with the answers. A later round is allowed only when those answers expose
+a new material dependency. Package-boundary changes return to Project Shaper;
 rendered presentation decisions return to the UI authority flow.
 
-When the Lead returns `BEHAVIOR AUTHORITY APPROVAL REQUIRED`, Matt may present
+When the phase reaches `BEHAVIOR AUTHORITY APPROVAL REQUIRED`, Matt may present
 the completed draft authorities and one clearly labeled proposed integrated
-contract-only shared understanding for joint approval. After approval, resume
-the same Lead context so it marks the authorities approved and returns
-`BEHAVIOR DESIGN: COMPLETE`. Only then does Matt record the jointly approved
+contract-only shared understanding for joint approval. After approval, continue
+the phase, mark the authorities approved, and establish `BEHAVIOR DESIGN:
+COMPLETE`. Only then does Matt record the jointly approved
 understanding as final or, when no joint approval occurred, present the final
 understanding for confirmation. The final understanding must identify every
 approved Behavior authority and exact applicable scope. Unchanged approved
@@ -246,20 +244,21 @@ Spec, and affected unfinished Tickets to `draft`.
 ## Main Flow
 
 1. Run the Central UI / UX Routing audit before deciding whether grilling is needed. When its material-UI route applies, complete the Matt-owned authority flow, using active `ima2-uiux` only for design judgment, before finalizing shared understanding.
-2. Decide whether grilling is needed to resolve the provisional frame. When it is, immediately start the selected `grill-with-docs` or `grill-me` flow by presenting a recommendation or necessary explicit gate. Do not stop at a route recommendation or summary. Skip grilling only when no current product decision needs it; this never skips Behavior Design Lead.
+2. Decide whether grilling is needed to resolve the provisional frame. When it is, immediately start the selected `grill-with-docs` or `grill-me` flow by presenting a recommendation or necessary explicit gate. Do not stop at a route recommendation or summary. Skip grilling only when no current product decision needs it; this never skips the Behavior Design phase.
    A target with an existing canonical project root and inspectable repository
    context remains codebase-backed even when the current package/application
    scope has no implementation source yet; route it to `grill-with-docs`.
    Route to `grill-me` when the product root or repository context itself is not
    yet available. Do not classify from words such as greenfield, initialize, or
    bootstrap.
-3. Run Central Behavior Design in its separate lead context. Resolve every
-   returned product-decision bundle through Grill. When new or changed
-   authorities are approval-ready, use the joint approval flow above, resume the
-   same Lead, and require it to complete against the resulting frame.
+3. Directly perform the complete Central Behavior Design phase in the current
+   conversation context. Resolve every product-decision bundle through Grill,
+   then continue the phase. When new or changed authorities are approval-ready,
+   use the joint approval flow above and require the phase to complete against
+   the resulting frame.
 4. Use `to-spec` when the desired outcome, preserved observable behavior and
    invariants, explicit boundaries, non-goals, and observable completion
-   evidence are clear, Behavior Design Lead is complete, every applicable
+   evidence are clear, Behavior Design is complete, every applicable
    Behavior authority is approved, and the user has confirmed one integrated
    contract-only shared understanding. That understanding is normative for
    outcome and scope; the approved Behavior authorities it adopts are normative

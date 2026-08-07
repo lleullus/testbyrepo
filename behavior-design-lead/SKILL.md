@@ -1,6 +1,6 @@
 ---
 name: behavior-design-lead
-description: Use as an independent lead for every Matt planning unit, after Matt has bounded the provisional product frame and before final shared-understanding confirmation, to create, reuse, or revise approved project behavioral authorities.
+description: Use as the mandatory Behavior Design phase that Matt directly performs for every planning unit after bounding the provisional product frame and before final shared-understanding confirmation.
 ---
 
 # Behavior Design Lead
@@ -9,26 +9,20 @@ Write findings, questions, and authorities in the user's conversation language.
 
 ## Purpose
 
-Independently design the user-observable behavior of one Matt planning unit so
-implementation does not invent product policy. This is a separate lead context,
-not a role Matt may perform in the same context. The Lead owns its first-hand
-investigation, behavior model, counterexample stress test, and conclusion.
-
-Matt invokes this leaf through the host's subagent invocation mechanism as a
-distinct Behavior Design Lead role. The host may choose its configured agent,
-but Matt must not simulate the role inline or treat its own self-review as Lead
-completion. Preserve the same Behavior Lead context while resolving a returned
-decision bundle; resume that context with the user's answers rather than
-starting an unrelated review.
+Design the user-observable behavior of one Matt planning unit so implementation
+does not invent product policy. Matt directly performs this complete phase in
+the current conversation context and owns its first-hand investigation,
+behavior model, counterexample stress test, and conclusion. This phase has no
+separate execution role or context.
 
 Every Matt planning unit uses this same procedure and completion test. Do not
-create simple/complex, inline/required, lightweight/deep, or skip routes.
+create simple/complex, delegated/direct, lightweight/deep, or skip routes.
 
 ## Position And Authority
 
 ```text
 Matt / Grill provisional frame
--> independent Behavior Design Lead
+-> Matt directly performs Behavior Design
 -> bundled product-decision return when needed
 -> approved scoped Behavior authorities
 -> final integrated shared understanding
@@ -158,7 +152,8 @@ Decisions:
    Effect if unresolved: <different observable outcomes still possible>
 ```
 
-Matt/Grill owns recommendation, approval, and delta interaction. Resume after
+Temporarily enter the Matt/Grill interaction policy for recommendation,
+approval, and delta handling, then continue this Behavior Design phase after
 the bundle is answered. Ask another round only when those answers expose a new
 material dependency. Return package-boundary changes to Project Shaper and
 rendered presentation decisions to the UI authority flow.
@@ -191,9 +186,9 @@ Unresolved behavior decisions: None
 ```
 
 Matt may present those completed drafts with one proposed integrated shared
-understanding for joint approval. After approval, resume this same Lead context,
-mark the authorities `approved`, and perform the completion check. This is not
-`BEHAVIOR DESIGN: COMPLETE` and never permits `to-spec` by itself.
+understanding for joint approval. After approval, continue this Behavior Design
+phase, mark the authorities `approved`, and perform the completion check. This
+is not `BEHAVIOR DESIGN: COMPLETE` and never permits `to-spec` by itself.
 
 Before completion, verify that every applicable authority has exactly one
 canonical index entry and that no second authority claims the same behavioral

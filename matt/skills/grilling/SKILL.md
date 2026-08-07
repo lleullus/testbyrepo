@@ -25,8 +25,8 @@ only round presentation. Present every currently unblocked material user-owned
 decision in the dependency frontier in one numbered recommendation-first round.
 Defer decisions whose prerequisites remain open, omit inspectable facts and
 implementation-owned choices, and recompute the frontier after each response.
-Carry this mode through product-decision bundles returned by Behavior Design
-Lead. Never infer, default to, or fall back to this mode from decision count,
+Carry this mode through product-decision bundles identified during Behavior
+Design. Never infer, default to, or fall back to this mode from decision count,
 scope size, or a request for many questions.
 
 Create a dependency from decision A to decision B only when different answers to A would materially change whether B needs to be decided, B's core scope, ownership, lifecycle, or authority, B's viable choices, or the evidence needed to resolve B. A change only to wording, emphasis, explanation, examples, or recommendation rationale does not create such a dependency.
@@ -35,7 +35,7 @@ Lead with the decision that most affects scope, ownership, lifecycle, authority,
 
 Ask an explicit gate only when progress requires a value or permission that only the user or named owner can provide, would cross a confirmed scope or authority boundary, needs separate safety or irreversibility consent, or leaves no responsible default after inspectable facts are resolved. Downstream impact, technical difficulty, and implementation uncertainty alone are not gates. Independent gates for the same owner and scope may share one clearly separated block, but each requires an explicit answer and a general approval never closes them.
 
-End each recommendation with clear approve-or-delta semantics. When the user clearly responds in that mode, treat the other presented recommendations as provisionally accepted unless the delta materially affects them; a question or ambiguous comment is not approval. Acceptance remains provisional until Behavior Design Lead completes, applicable Behavior authorities are approved, and the user explicitly confirms one integrated contract-only shared understanding. Before then, the output is only a provisional frame or product-decision resolution.
+End each recommendation with clear approve-or-delta semantics. When the user clearly responds in that mode, treat the other presented recommendations as provisionally accepted unless the delta materially affects them; a question or ambiguous comment is not approval. Acceptance remains provisional until Behavior Design completes, applicable Behavior authorities are approved, and the user explicitly confirms one integrated contract-only shared understanding. Before then, the output is only a provisional frame or product-decision resolution.
 
 After every response, reconsider the changed item and any recommendation whose meaning or support materially changed because of another decision, a verified fact, adopted authority, material assumption, or required artifact state. Preserve everything else and never continue a prepared queue.
 
@@ -44,9 +44,9 @@ If a fact can be found in the codebase or an authoritative source, look it up ra
 ## Output
 
 Evidence-backed recommendations, explicit gates when needed, a provisional
-frame for Behavior Design Lead, and the confirmed integrated shared
-understanding after the Lead completes.
+frame for Behavior Design, and the confirmed integrated shared understanding
+after the phase completes.
 
 ## Next Action
 
-Suggest `to-spec` only after Behavior Design Lead completes and the user confirms the integrated understanding. Do not begin implementation or invoke Implementation Lead, a Worker, `/implement`, `/tdd`, `/code-review`, or another execution chain.
+Suggest `to-spec` only after Behavior Design completes and the user confirms the integrated understanding. Do not begin implementation or invoke Implementation Lead, a Worker, `/implement`, `/tdd`, `/code-review`, or another execution chain.

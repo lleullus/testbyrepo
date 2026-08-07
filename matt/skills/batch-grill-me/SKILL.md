@@ -22,12 +22,12 @@ and pass it to `ask-matt`, or after a Project Shaper brief preflight to the
 package's Matt flow. `grilling` remains the sole owner of the dependency graph,
 frontier rounds, recommendation, gate, approval, and delta policy.
 
-Carry this mode through product-decision bundles returned by the independent
-Behavior Design Lead. Clear it when the user cancels it, the final integrated
+Carry this mode through product-decision bundles identified during the
+Matt-performed Behavior Design phase. Clear it when the user cancels it, the final integrated
 shared understanding is confirmed, or work changes to another planning unit or
 Work Package.
 
-Do not create a Batch artifact, finalize a shared understanding, invoke
-Behavior Design Lead directly, write a Spec/Ticket, dispatch an invented
+Do not create a Batch artifact, finalize a shared understanding, perform
+Behavior Design itself, write a Spec/Ticket, dispatch an invented
 research role, or start implementation. `UPSTREAM.md` preserves the external
 source; it is not executable authority.

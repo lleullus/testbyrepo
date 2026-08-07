@@ -91,13 +91,13 @@ After the frame is confirmed:
 
 1. Treat only this Work Package as the current planning unit.
 2. Enter the central `ask-matt` Main Flow, including its UI audit and mandatory
-   independent Behavior Design Lead. The central flow chooses
+   Matt-performed Behavior Design phase. The central flow chooses
    `grill-with-docs` for codebase-backed unresolved decisions or `grill-me`
-   otherwise. A Grill skip never skips Behavior Design Lead.
+   otherwise. A Grill skip never skips Behavior Design.
 3. Ask only package-internal product or operational decisions. Do not ask the user to choose files, modules, schemas, APIs, libraries, algorithms, or implementation order.
 4. Use the brief's `Suggested-Work-Slug` to prepare the one project-local work
    directory under `docs/planning/work/`. Reuse it for `DESIGN.md`, Spec, and
-   Tickets. Behavior Design Lead uses the persistent `docs/planning/behavior/`
+   Tickets. Behavior Design uses the persistent `docs/planning/behavior/`
    authorities. Keep the initiative map and brief at their original local paths.
 5. Follow the normal `to-spec` and `to-tickets` authority contracts. Do not add
    Project Shaper metadata unless the user adopts it as package scope.
