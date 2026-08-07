@@ -15,7 +15,7 @@ The user's goal, relevant codebase context, and existing domain documentation wh
 
 ## Process
 
-Run `grilling` as the sole owner of the interaction policy. Before its first response, and after a material delta when needed, inspect the minimum sufficient code, documentation, approved authorities, external contracts, and runtime evidence needed to keep the current recommendation contractually coherent. Supply those facts and constraints to `grilling`; do not duplicate its recommendation, gate, approval, or delta rules. Do not turn an inspectable fact or an implementation-owned choice into a user decision. Use `domain-modeling` when terminology or an architectural decision needs attention. Write in the user's conversation language.
+Run `grilling` as the sole owner of the interaction policy. Before its first response, and after a material delta when needed, inspect the minimum sufficient code, documentation, approved authorities, external contracts, and runtime evidence needed to keep the current recommendation contractually coherent. Supply those facts and constraints to `grilling`; do not duplicate its recommendation, gate, approval, delta, or explicit batch-mode rules. Do not turn an inspectable fact or an implementation-owned choice into a user decision. Clarify terminology or architectural decisions within this review when they need attention. Write in the user's conversation language.
 
 ## Planning boundary
 
@@ -75,8 +75,11 @@ Do not ask the user to select private package/module identity, dependencies,
 source/config/test paths, internal structure, commands, or a mutation envelope
 when those choices are not externally consumed constraints.
 
-Before recommending `to-spec`, present one contract-only shared understanding
-and obtain explicit user confirmation. State it without anticipated root
+Before Behavior Design Lead, produce only a provisional product frame. Invoke
+the independent Lead required by `ask-matt`; if it returns product decisions,
+resolve them through `grilling` and resume the Lead. Before recommending
+`to-spec`, present one integrated contract-only shared understanding containing
+the approved Behavior authorities and obtain explicit user confirmation. State it without anticipated root
 causes, files, modules, endpoints, internal abstractions, implementation order,
 or test seams. If removing one of those mechanisms changes the user's intended
 contract, ask whether the mechanism itself is an explicit requirement.
@@ -97,4 +100,4 @@ A clarified planning basis with resolved decisions, constraints, and open questi
 
 ## Next Action
 
-Use `to-spec` when the user confirms the understanding. Do not start implementation or invoke Implementation Lead, a Worker, `/implement`, `/tdd`, `/code-review`, or another execution chain.
+Use `to-spec` only after Behavior Design Lead completes and the user confirms the integrated understanding. Do not start implementation or invoke Implementation Lead, a Worker, `/implement`, `/tdd`, `/code-review`, or another execution chain.

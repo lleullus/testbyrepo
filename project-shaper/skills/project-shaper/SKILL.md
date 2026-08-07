@@ -43,7 +43,7 @@ Use Project Shaper when at least one of these is true:
 
 Do not use Project Shaper when the input already describes one coherent observable change, even if implementing it will touch many technical layers. Technical complexity alone does not make an initiative.
 
-When the work is already one Matt-sized unit, route directly to `ask-matt`. When one already-bounded unit needs several planning sessions, use `wayfinder`; do not use `wayfinder` as a substitute for initiative decomposition.
+When the work is already one Matt-sized unit, route directly to `ask-matt`. Do not use Project Shaper as a substitute for bounded planning merely because that planning may span several sessions.
 
 ## Authority Boundary
 
@@ -170,16 +170,15 @@ Use the exact contracts in:
 - `references/matt-handoff-contract.md`
 
 Resolve `../../../planning-workspace/planning_workspace.py` from this skill's
-canonical physical directory. Prepare the default external workspace or the
-user's exact external durable workspace once, then pass the returned canonical
-`planningWorkspace` back as `--workspace` for every map and brief operation in
-this shaping flow. Never use product `.scratch` as a new destination.
+canonical physical directory. Require the existing canonical project root and
+prepare its initiative artifact directory with `--kind initiative`. Never use
+an external or `.scratch` destination.
 
 Write:
 
 ```text
-<initiative-planning-workspace>/PROJECT-MAP.md
-<initiative-planning-workspace>/matt-briefs/WP-NNN.md
+<Project-Root>/docs/planning/initiatives/<initiative-slug>/PROJECT-MAP.md
+<Project-Root>/docs/planning/initiatives/<initiative-slug>/matt-briefs/WP-NNN.md
 ```
 
 A map starts as `draft`. Mark it `approved` only after the user confirms the initiative boundary, package split, MVP cut, and dependency graph and no shaping-level open question remains.

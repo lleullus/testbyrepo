@@ -15,12 +15,16 @@ The user's plan or design and the decisions that remain unclear.
 
 ## Process
 
-Run `grilling` as the sole owner of the interaction policy. Supply the user's brief, confirmed conversation context, adopted authorities, and any directly resolvable facts; do not duplicate its recommendation, gate, approval, or delta rules. Do not begin from a prepared checklist or turn an implementation-owned choice into a user decision. Write in the user's conversation language.
+Run `grilling` as the sole owner of the interaction policy. Supply the user's brief, confirmed conversation context, adopted authorities, and directly resolvable facts; do not duplicate its recommendation, gate, approval, delta, or explicit batch-mode rules. Do not begin from a prepared checklist or turn an implementation-owned choice into a user decision. Inspect supplied documents and authoritative public sources directly rather than asking the user for discoverable facts. Write in the user's conversation language.
 
 ## Contract boundary
 
-Before recommending `to-spec`, present one contract-only shared understanding
-and obtain explicit user confirmation. Exclude proposed mechanisms,
+Before Behavior Design Lead, produce only a provisional product frame. Invoke
+the independent Lead required by `ask-matt`; if it returns product decisions,
+resolve them through `grilling` and resume the Lead. Before recommending
+`to-spec`, present one integrated contract-only shared understanding containing
+the approved Behavior authorities and obtain explicit user confirmation.
+Exclude proposed mechanisms,
 implementation structure, sequencing, and test arrangements unless the user
 deliberately requires them as part of the outcome contract.
 
@@ -51,6 +55,6 @@ implementation work.
 
 ## Next Action
 
-Use `to-spec` only after the user confirms the contract-only shared
-understanding. Do not start implementation or invoke Implementation Lead, a
+Use `to-spec` only after Behavior Design Lead completes and the user confirms
+the integrated contract-only shared understanding. Do not start implementation or invoke Implementation Lead, a
 Worker, `/implement`, `/tdd`, `/code-review`, or another execution chain.

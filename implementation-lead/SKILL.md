@@ -9,8 +9,19 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
 
 1. Accept one exact ready local Markdown Ticket and one user-designated
    `Implementation Subagent` role. Before any project mutation, revalidate that
-   the Ticket remains `ready` and that the current project is its exact
-   `Project-Root`.
+   the Ticket remains `ready`, the current project is its exact `Project-Root`,
+   the Ticket is under that project's canonical `docs/planning` root, and its
+   `Parent-Spec` resolves to an exact readable `Status: approved` Spec. Resolve
+   every path-and-scope item in the Ticket's `## Behavior Authorities`; require
+   each target to be a readable Markdown `Status: approved` authority whose
+   canonical parent is exactly one of the project's
+   `docs/planning/behavior/contexts/`, `lifecycles/`, or `invariants/`
+   directories, and which the parent Spec also adopts for a scope containing
+   the Ticket scope. `behavior/INDEX.md` and files elsewhere in the tree are not
+   authorities. If any authority is missing, draft, inapplicable, outside the
+   canonical authority directories, conflicting, or leaves observable policy
+   undetermined, report
+   `Implementation Assignment: BLOCKED` before mutation.
 2. If the user explicitly designates one or more implementation research models,
    invoke `Implementation Research Agent` roles using only those designated models
    through the host's `Host Subagent Invocation Mechanism` for read-only
@@ -73,8 +84,12 @@ designated role. Research invocation does not authorize mutation. The
 Implementation Subagent is invoked for project mutation only after the Lead
 reports `Implementation Assignment: FEASIBLE`.
 
-The Ticket is the authoritative acceptance-criteria source. Research findings
-and Implementation Subagent narration do not replace the actual diff or project
+The compound direct implementation contract is: Ticket for this increment's
+acceptance ownership, parent Spec for outcome/delivery scope/Non-Goals and
+non-behavior constraints, and Ticket-declared approved Behavior authorities for
+their exact semantic scopes. Do not import duties from the Behavior index or an
+authority scope absent from the Ticket. Research findings and Implementation
+Subagent narration do not replace this contract, the actual diff, or project
 checks.
 
 ## Supported Range

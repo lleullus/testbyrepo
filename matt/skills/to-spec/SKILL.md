@@ -15,8 +15,9 @@ without choosing or beginning the implementation.
 ## Inputs
 
 - The most recently user-confirmed contract-only shared understanding.
-- The exact product project root, work slug, and current external planning workspace when already prepared.
+- The exact existing product project root and work slug.
 - The planning owner, if one is named.
+- The completed Behavior Design Lead result and every approved scoped Behavior authority adopted by the confirmed shared understanding.
 
 ## Terminal UI / UX Authority Gate
 
@@ -120,10 +121,36 @@ preserves UX and has no due-now direct rendered-result exercise. Any UI
 authority supplies rendered-design detail only; it cannot expand, reverse, or
 replace the product outcome and scope confirmed for this Spec.
 
+## Behavior Authority Gate
+
+Before drafting or writing `SPEC.md`, independently verify that Behavior Design
+Lead completed for this planning unit in a separate lead context. Require the
+latest confirmed shared understanding to identify every applicable approved
+Behavior authority and exact scope.
+
+Resolve each project-relative authority path from the exact Project Root. Every
+target must be a readable regular Markdown file whose canonical parent is
+exactly one of `<Project-Root>/docs/planning/behavior/contexts/`,
+`lifecycles/`, or `invariants/`; `behavior/INDEX.md` and files elsewhere in the
+tree are not authorities. It must contain exactly one non-empty `Owner:` and
+`Scope:`, and have exact `Status: approved`. Its scope must cover the behavior
+needed by this Spec without expanding the confirmed delivery scope. Unchanged
+approved authorities may be adopted without reapproval.
+
+Fail closed and do not draft or write `SPEC.md` when Behavior Design did not
+complete, an applicable authority is missing/draft/outside the project planning
+root, an authority scope is inapplicable or incomplete, a behavior decision is
+unresolved, or Behavior and UI authorities conflict. Return the exact defect to
+Matt or Behavior Design Lead; do not invent, copy, summarize, or override the
+missing behavior inside the Spec.
+
 ## Normative source lock
 
-The most recently user-confirmed contract-only shared understanding is the sole
-normative source for the Spec.
+The most recently user-confirmed contract-only shared understanding is the
+normative source for product outcome, delivery scope, Non-Goals, and deliberate
+constraints. The approved Behavior authorities that understanding explicitly
+adopts are normative only for their exact behavioral scopes. Applicable UI
+authorities remain normative only for rendered design and interaction.
 
 Repository code, prior Specs, Tickets, tests, documentation, prototypes, and
 runtime observations may explain the problem, verify current behavior, or
@@ -141,29 +168,24 @@ confirmation of that delta. Do not silently include it in the draft.
 
 Do not re-interview the user for decisions already established. If the product
 root, work slug, owner, or a material decision is unknown, request only what is
-needed to write an accurate Spec. If no planning workspace exists in current
-context, prepare the default or user-supplied external workspace with
-`../../../planning-workspace/planning_workspace.py` resolved from this skill's
-canonical physical directory. If one exists, pass its exact canonical path back
-to the same tool as `--workspace` and reuse it. When the intended absolute
-product root is fixed but not provisioned yet, use the helper's explicit
-`--future-project-root` path; it must not create that root. Spec drafting and
-approval may continue with the returned rootless workspace. Do not manually
-create, repair, or adopt a workspace after any helper failure.
+needed to write an accurate Spec. Resolve
+`../../../planning-workspace/planning_workspace.py` from this skill's canonical
+physical directory and prepare or revalidate the work artifact directory under
+the existing canonical project root. If the project root does not exist or the
+helper fails, do not draft or write the Spec and do not create or adopt an
+external fallback.
 
 ## Output Contract
 
 Write exactly one file at:
 
 ```text
-<planning-workspace>/SPEC.md
+<Project-Root>/docs/planning/work/<work-slug>/SPEC.md
 ```
 
-`planning-workspace` must be the tool-validated canonical external directory,
-disjoint from the product root. Report the written Spec by canonical absolute
-path. Do not create a new `.scratch` planning destination in the product root.
-For a future root, disjointness is provisional until the root exists; preserve
-the same workspace identity for the later strict revalidation.
+The work directory must be the exact `artifactWorkspace` returned by the helper.
+Report the written Spec by canonical absolute path. Do not write to `.scratch`,
+an external planning directory, or another work slug.
 
 The document begins with a title, then these exact metadata keys:
 
@@ -181,11 +203,19 @@ It contains these exact headings:
 ## Non-Goals
 ## Implementation Constraints
 ## Verification Expectations
+## Behavior Authorities
 ## UI / UX
 ## Open Questions
 ```
 
-Write the Spec in the user's conversation language. For non-UI work, the exact
+Write the Spec in the user's conversation language. `## Behavior Authorities`
+contains one path-and-scope item for every adopted authority:
+
+```text
+- <project-relative local path> | Scope: <exact applicable scope>
+```
+
+Do not restate Behavior rules in the Spec. For non-UI work, the exact
 body of `## UI / UX` is `Not applicable`. For new/material UI, record one exact
 local path to the adopted UI/UX authority and its applicable rendered scope;
 resolve a relative path from the Spec directory and retain its canonical target
@@ -204,6 +234,11 @@ For a Spec that adopts an external UI authority, any later change to that
 authority's scoped decisions invalidates the prior adoption. Keep or return the
 Spec to `draft` until the changed UI delta is reflected in shared understanding
 and explicitly approved; do not silently consume the changed document.
+
+Any semantic change to an adopted Behavior authority returns that authority,
+this Spec, and affected unfinished Tickets to `draft`. A conflict among the
+shared understanding, Behavior authority, Spec, or UI authority blocks approval
+without an inferred priority.
 
 A Spec does not require a complete implementation approach before approval.
 
@@ -275,8 +310,8 @@ path.
 Apply these section rules:
 
 - `Desired Outcome` describes the observable end state.
-- `Requirements` contain observable behavior, preserved behavior, and approved
-   product decisions.
+- `Requirements` contain delivery requirements and approved product decisions
+  not already owned by adopted Behavior or UI authorities.
 - `Non-Goals` identify only approved work or behavior that the implementation
   must not add.
 - `Implementation Constraints` contain only deliberately fixed product or
@@ -284,7 +319,8 @@ Apply these section rules:
   invariants, and technical mechanisms whose use is itself an approved
   requirement.
 - `Verification Expectations` describe observable evidence of the Desired
-  Outcome and preserved invariants.
+  Outcome and applicable authority scopes without restating their semantic or
+  rendered rules.
 - `Open Questions` contain unresolved product, scope, boundary, or material
   evidence-backed contract-contradiction decisions. Choosing between otherwise
   valid internal implementations is not an Open Question.

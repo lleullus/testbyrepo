@@ -8,7 +8,19 @@ description: Use to independently verify one exact ready local Markdown Ticket d
 ## Active Contract
 
 1. Accept the same exact ready local Markdown Ticket used for implementation,
-   the current project, and the allowed verification surface. Verification Lead
+   the current project, and the allowed verification surface. Before readiness
+   research, scenario approval, direct evidence acquisition, and every
+   remediation mutation dispatch, revalidate that the Ticket remains `ready`,
+   lives under the exact Project Root's `docs/planning`, and resolves to a
+   readable `Status: approved` parent Spec. Resolve every Ticket-declared
+   Behavior path/scope and require an approved Markdown authority whose
+   canonical parent is exactly one of the project's
+   `docs/planning/behavior/contexts/`, `lifecycles/`, or `invariants/`
+   directories, and which that Spec adopts for a containing scope.
+   `behavior/INDEX.md` and files elsewhere in the tree are not authorities.
+   Stop before evidence or mutation on any missing, draft, inapplicable,
+   noncanonical, conflicting, or underdetermined authority.
+   Verification Lead
    itself is the user-facing lead session and verifier; no additional verification
    role is an input. Verification Lead must not run as a delegated subagent. If a
    user-facing commentary channel is unavailable, stop as `unsupported` before
@@ -27,10 +39,12 @@ description: Use to independently verify one exact ready local Markdown Ticket d
    explore. This lead-owned product understanding, scenario framing, and
    prerequisite identification must not be delegated. Planning observations must
    not be preserved or reused as direct AC evidence. Derive verification
-   obligations only from the exact AC and the product flows required by the
-   Ticket's `## Verification` section. Product inspection may identify how to
-   trigger or observe those obligations, but implementation behavior alone must
-   not create or expand them.
+   obligations from the Ticket's acceptance ownership and applicable authority
+   scopes: exact AC and `## Verification` define this increment, the parent Spec
+   defines delivery boundaries, and Ticket-declared Behavior authorities define
+   expected semantic results. Product inspection may identify how to trigger or
+   observe those obligations, but implementation behavior or Behavior scopes
+   absent from the Ticket must not create or expand them.
 3. Readiness research is optional. Invoke one or more `Readiness Research Agent`s
    only when the user has explicitly designated them; never infer or select one,
    and invoke none when the user has not made that designation. Invoke them only
@@ -208,10 +222,11 @@ description: Use to independently verify one exact ready local Markdown Ticket d
    conflict, or unavailable lifecycle readback is `UNDETERMINED`, not product
    failure. If any exact AC row is missing, `NOT_SATISFIED`, or `UNDETERMINED`, do
    not report whole-Ticket success.
-12. The Ticket Markdown is the authoritative AC source. Implementation
-   narration, implementation description, product diff, or implementation
-   checks alone are not direct verification evidence and must not replace
-   evidence gathered by executing the scenario.
+12. The Ticket remains the acceptance-ownership source; its approved parent Spec
+    and Ticket-declared Behavior authorities supply only their scoped delivery
+    and semantic meaning. Implementation narration, implementation description,
+    product diff, or implementation checks alone are not direct verification
+    evidence and must not replace evidence gathered by executing the scenario.
 13. Only an AC that direct evidence shows is `NOT_SATISFIED` may trigger a
    `Remediation Agent` through the host's `Host Subagent Invocation Mechanism`.
    `SATISFIED` and `UNDETERMINED` ACs are never remediation targets.

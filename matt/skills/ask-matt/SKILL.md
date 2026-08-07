@@ -46,18 +46,19 @@ design-judgment specialist inside the Matt flow before contract-only shared
 understanding can be finalized. Matt owns the planning boundary and output
 contract; `ima2-uiux` itself remains unchanged. Pass the bounded planning
 context before the specialist acts. Do not follow its implementation handoff,
-load `ima2-front`, write product code, mutate product files, or create a
-product-root design artifact in this Matt flow.
+load `ima2-front`, write product code, mutate product files outside
+`docs/planning/**`, or create a product source artifact in this Matt flow.
 
-Before Matt writes a package authority, prepare or revalidate the same
-external planning workspace that later Spec, Tickets, Wayfinder, and Handoff
-artifacts will use. Resolve
+Before Matt writes a planning authority, prepare or revalidate the one
+project-local planning root and work artifact directory that later Design,
+Spec, and Tickets use. Resolve
 `../../../planning-workspace/planning_workspace.py` from this skill's canonical
-physical directory. Request the product root or work slug only when this first
-artifact requires it, and do not prepare a second workspace later.
+physical directory with the existing canonical project root and work slug.
+Durable planning is blocked until that project root exists. Do not accept or
+prepare an external workspace.
 
 Matt, not the specialist, creates and governs
-`<planning-workspace>/DESIGN.md` for new/material UI:
+`<artifact-workspace>/DESIGN.md` for new/material UI:
 
 - Use a non-empty H1 followed before the first H2 by exact plain Markdown
   metadata lines `Status: draft`, non-empty `Owner:`, and explicit `Scope:`.
@@ -79,7 +80,7 @@ Matt, not the specialist, creates and governs
   final-approval render when the user explicitly requests one under the Final
   Approval Render Disposition Gate.
 - When visual concept exploration genuinely applies, keep its non-authority
-  candidates under `<planning-workspace>/design-concepts/`, never a product
+  candidates under `<artifact-workspace>/design-concepts/`, never a product
   devlog or product asset directory. Only adopted decisions in `DESIGN.md` can
   become authority.
 - The compact intent-discovery fork chooses direction only. A Design Read,
@@ -147,7 +148,7 @@ image-first or human-in-the-loop exploration. Generate only the minimum
 representative render needed for final review. Use one image when one screen is
 sufficient; use more only when materially different key states or viewports
 carry important decisions that one image cannot show. Store the results under
-`<planning-workspace>/design-concepts/` and show the actual images to the user
+`<artifact-workspace>/design-concepts/` and show the actual images to the user
 with Markdown image tags whose targets are absolute local paths. State that
 each render is non-authoritative review material, not the implementation
 contract and not implementation-time visual verification.
@@ -193,24 +194,77 @@ the scoped authority through its `## UI / UX` section; it does not require a
 separate C2 `DESIGN.md`. Reclassify when later clarification changes the
 rendered obligation.
 
+## Central Behavior Design
+
+Every Matt planning unit must run the canonical independent Behavior Design
+Lead in a separate lead context before Matt presents a final shared
+understanding:
+
+```text
+/home/user01/project/iis-skills/behavior-design-lead/SKILL.md
+```
+
+Matt supplies a provisional frame: desired outcome, included and excluded
+scope, Non-Goals, preserved behavior, external constraints, UI authority when
+applicable, exact project root, planning owner, and known unresolved decisions.
+This frame is not approved or normative.
+
+Invoke the Lead through the host's subagent invocation mechanism. Matt must not
+perform the leaf inline, substitute self-review, or report completion from its
+own analysis. When product decisions return, resume the same Lead context with
+the resolved answers.
+
+Behavior Design Lead must inspect the project's `docs/planning/behavior/INDEX.md`
+and applicable scoped authorities, investigate the behavior independently, and
+either adopt unchanged approved authorities, revise their canonical documents,
+or create authorities for genuinely new persistent behavior boundaries. Matt
+must not perform this lead role in its own context, waive it because the work
+appears clear, or treat a per-work Behavior document as a substitute.
+
+When the Lead returns `BEHAVIOR DECISIONS REQUIRED`, resolve the full current
+bundle through the active Grill interaction policy, then return the answers to
+the same lead context. A later round is allowed only when those answers expose a
+new material dependency. Package-boundary changes return to Project Shaper;
+rendered presentation decisions return to the UI authority flow.
+
+When the Lead returns `BEHAVIOR AUTHORITY APPROVAL REQUIRED`, Matt may present
+the completed draft authorities and one clearly labeled proposed integrated
+contract-only shared understanding for joint approval. After approval, resume
+the same Lead context so it marks the authorities approved and returns
+`BEHAVIOR DESIGN: COMPLETE`. Only then does Matt record the jointly approved
+understanding as final or, when no joint approval occurred, present the final
+understanding for confirmation. The final understanding must identify every
+approved Behavior authority and exact applicable scope. Unchanged approved
+authorities are adopted without reapproval. The pre-completion approval state
+never permits `to-spec`.
+
+Behavior owns semantic product behavior; `DESIGN.md` owns rendered expression
+and interaction. Neither silently overrides the other. A conflict blocks final
+confirmation. A material Behavior delta returns the authority, every adopting
+Spec, and affected unfinished Tickets to `draft`.
+
 ## Main Flow
 
 1. Run the Central UI / UX Routing audit before deciding whether grilling is needed. When its material-UI route applies, complete the Matt-owned authority flow, using active `ima2-uiux` only for design judgment, before finalizing shared understanding.
-2. Decide whether grilling is needed. When it is, immediately start the selected `grill-with-docs` or `grill-me` flow by presenting a recommendation, a necessary explicit gate, or, when the contract is already complete, the contract-only shared understanding. Do not stop at a route recommendation or summary. Skip grilling only when the decisions are already clear.
+2. Decide whether grilling is needed to resolve the provisional frame. When it is, immediately start the selected `grill-with-docs` or `grill-me` flow by presenting a recommendation or necessary explicit gate. Do not stop at a route recommendation or summary. Skip grilling only when no current product decision needs it; this never skips Behavior Design Lead.
    A target with an existing canonical project root and inspectable repository
    context remains codebase-backed even when the current package/application
    scope has no implementation source yet; route it to `grill-with-docs`.
    Route to `grill-me` when the product root or repository context itself is not
    yet available. Do not classify from words such as greenfield, initialize, or
    bootstrap.
-3. Use `to-spec` when the desired outcome, preserved observable behavior and
+3. Run Central Behavior Design in its separate lead context. Resolve every
+   returned product-decision bundle through Grill. When new or changed
+   authorities are approval-ready, use the joint approval flow above, resume the
+   same Lead, and require it to complete against the resulting frame.
+4. Use `to-spec` when the desired outcome, preserved observable behavior and
    invariants, explicit boundaries, non-goals, and observable completion
-   evidence are clear, and the user has confirmed one contract-only shared
-   understanding. That confirmed shared understanding is the sole normative
-   planning baseline. Repository facts, prior planning artifacts, prototypes,
-   and anticipated implementation approaches may provide context, but must not
-   add to, strengthen, narrow, or silently reinterpret the contract without an
-   explicit user-confirmed delta.
+   evidence are clear, Behavior Design Lead is complete, every applicable
+   Behavior authority is approved, and the user has confirmed one integrated
+   contract-only shared understanding. That understanding is normative for
+   outcome and scope; the approved Behavior authorities it adopts are normative
+   for their exact behavior scopes. Repository facts, prior planning artifacts,
+   prototypes, and anticipated implementation approaches remain context only.
 
    A complete or known implementation mechanism is not required. Matt does not
    search for or prove one. Keep planning open only when verified evidence or
@@ -227,7 +281,7 @@ rendered obligation.
    remaining material bootstrap choices are fixed or explicitly delegated to
    Implementation Lead/Worker. Do not ask the user to invent a private package
    identity, future file list, dependency, or mutation envelope.
-4. Use `to-tickets` only from an approved Spec. It creates the smallest set of
+5. Use `to-tickets` only from an approved Spec. It creates the smallest set of
    independently observable desired-state Tickets, not an anticipated internal
    implementation sequence.
 
@@ -239,14 +293,6 @@ format, transport, storage model, component, algorithm, or implementation
 sequence than its normative source.
 
 Planning stops at a ready Ticket. Do not invoke Implementation Lead, a Worker, `/implement`, `/tdd`, `/code-review`, or another execution chain.
-
-## Optional Paths
-
-- `wayfinder`: only for a large, unclear effort that needs multiple sessions to make the route visible. Do not require it for ordinary work.
-- `research`: only when reliable information is needed to resolve a planning question.
-- `prototype`: only when a specific logic or UI question cannot be settled in conversation. Its result is not authority until the user adopts a decision.
-- `handoff`: only when a session must continue elsewhere. It preserves context but is not an authority document.
-- `domain-modeling` and `codebase-design`: use when their vocabulary or decisions are needed for the current planning question.
 
 Do not direct users to `triage`, `improve-codebase-architecture`, remote trackers, or execution skills as active paths in this local planning flow.
 

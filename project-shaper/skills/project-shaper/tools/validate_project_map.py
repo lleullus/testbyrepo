@@ -444,6 +444,22 @@ def validate(project_map: Path) -> Report:
     root_value = meta.get("Project-Root", "")
     if root_value and not Path(root_value).is_absolute():
         report.error("map.project_root", "Project-Root must be absolute.", map_path, meta_lines.get("Project-Root"))
+    elif root_value:
+        project_root = Path(root_value).expanduser()
+        try:
+            canonical_root = project_root.resolve(strict=True)
+        except OSError:
+            report.error("map.project_root", "Project-Root must be an existing canonical directory.", map_path)
+        else:
+            if canonical_root != project_root or not canonical_root.is_dir():
+                report.error("map.project_root", "Project-Root must be an existing canonical directory.", map_path)
+            expected_parent = canonical_root / "docs" / "planning" / "initiatives" / meta.get("Initiative-Slug", "")
+            if map_path.parent != expected_parent:
+                report.error(
+                    "map.location",
+                    "PROJECT-MAP.md must be in <Project-Root>/docs/planning/initiatives/<Initiative-Slug>/.",
+                    map_path,
+                )
     slug = meta.get("Initiative-Slug", "")
     if slug and not SLUG_RE.fullmatch(slug):
         report.error("map.slug", "Initiative-Slug must be lowercase kebab-case.", map_path, meta_lines.get("Initiative-Slug"))

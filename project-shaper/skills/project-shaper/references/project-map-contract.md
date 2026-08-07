@@ -3,13 +3,13 @@
 ## Path
 
 ```text
-<initiative-planning-workspace>/PROJECT-MAP.md
+<Project-Root>/docs/planning/initiatives/<initiative-slug>/PROJECT-MAP.md
 ```
 
-The initiative planning workspace is the canonical external directory returned
-by the shared `planning-workspace` tool. It must be disjoint from the canonical
-product `Project-Root`. Existing maps inside product `.scratch` remain readable
-planning input but are not destinations for newly generated maps or briefs.
+The initiative directory is the canonical project-local directory returned by
+the shared `planning-workspace` tool with `--kind initiative`. The directory
+name must equal `Initiative-Slug`. Existing external or `.scratch` maps remain
+readable context but are not current authority destinations.
 
 ## Top metadata
 

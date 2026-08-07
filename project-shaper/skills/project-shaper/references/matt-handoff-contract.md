@@ -3,12 +3,12 @@
 ## Path
 
 ```text
-<initiative-planning-workspace>/matt-briefs/WP-NNN.md
+<Project-Root>/docs/planning/initiatives/<initiative-slug>/matt-briefs/WP-NNN.md
 ```
 
-The brief stays under the same canonical external workspace as its parent map.
-`Project-Root` metadata continues to identify the product repository, not this
-planning workspace.
+The brief stays under the same canonical project-local initiative directory as
+its parent map. `Project-Root` metadata identifies that containing product
+repository.
 
 ## Purpose
 
