@@ -64,9 +64,9 @@ Do not repair the map or brief silently.
   adopts own only their exact semantic and rendered scopes.
 - Repository facts, references, and the parent map must not silently add detailed package requirements.
 
-## Opening Turn
+## Package Frame Input
 
-Read the package block and brief. Present a concise package-framing checkpoint:
+Read the package block and brief. Form this provisional package-frame node:
 
 ```text
 이번 Matt 기획 단위: <WP-NNN and title>
@@ -77,17 +77,19 @@ Read the package block and brief. Present a concise package-framing checkpoint:
 
 Use the user's language rather than the Korean labels above when different.
 
-If the same user explicitly confirmed this exact package frame in the current conversation, do not ask them to confirm it again. Immediately start the appropriate normal Matt path.
-
-Otherwise ask one question only:
-
-> Shall Matt plan this package within this frame, or should any included/excluded boundary be corrected first?
-
-Recommend accepting the frame when it faithfully projects the approved map. This is a frame confirmation, not the full Matt planning review.
+If the same user explicitly confirmed this exact package frame in the current
+conversation, treat the node as settled. Otherwise do not ask a standalone frame
+question. Use the approved map projection as the recommended provisional input,
+enter the complete `ask-matt` initial Grill/Behavior/UI synthesis, and include
+frame acceptance or correction as one user-owned decision in that first
+integrated frontier. It follows the active normal or Batch presentation mode.
+If the user changes the frame, ask a later round only when that answer newly
+unlocks a material dependency under `ask-matt`'s rule. A package frame never
+creates its own preliminary waiting turn.
 
 ## Continue Into Matt
 
-After the frame is confirmed:
+Using that settled or provisional frame:
 
 1. Treat only this Work Package as the current planning unit.
 2. Enter the central `ask-matt` Main Flow, including its UI audit and mandatory

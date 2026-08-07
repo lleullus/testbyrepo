@@ -75,10 +75,14 @@ Do not ask the user to select private package/module identity, dependencies,
 source/config/test paths, internal structure, commands, or a mutation envelope
 when those choices are not externally consumed constraints.
 
-Before Behavior Design, produce only a provisional product frame. Matt then
-directly performs the mandatory phase required by `ask-matt`; when it identifies
-product decisions, resolve them through `grilling` and continue the phase. Before recommending
-`to-spec`, present one integrated contract-only shared understanding containing
+Before the first user-facing decision response, apply `ask-matt`'s Central UI /
+UX Routing, use the inspected evidence to form the provisional frame, and
+perform the complete Behavior Design analysis. When material UI requires
+`ima2-uiux` judgment, complete it far enough to identify its currently
+determinable user-owned decisions. Merge every currently identifiable Grill,
+Behavior, and UI decision into one dependency graph and present its current
+frontier through `grilling`; do not create a later round merely because Behavior
+or UI was analyzed after an earlier question. Before recommending `to-spec`, present one integrated contract-only shared understanding containing
 the approved Behavior authorities and obtain explicit user confirmation. State it without anticipated root
 causes, files, modules, endpoints, internal abstractions, implementation order,
 or test seams. If removing one of those mechanisms changes the user's intended

@@ -23,7 +23,7 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
             "## Lead-First Investigation",
             "## Behavioral Design",
             "## Counterexample Stress Test",
-            "## Product Decision Return",
+            "## Product Decision Synthesis",
             "## Authority Output",
             "## Completion",
         ):
@@ -65,6 +65,41 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
         self.assertIn("explicit-only IIS interaction adapter", adapter)
         self.assertIn("does not activate it", adapter)
         self.assertIn("Never infer, default to, or fall back", grilling)
+
+    def test_questions_follow_initial_integrated_analysis_without_late_rounds(self) -> None:
+        lead = (ROOT / "behavior-design-lead" / "SKILL.md").read_text(encoding="utf-8")
+        matt = (ROOT / "matt" / "skills" / "ask-matt" / "SKILL.md").read_text(encoding="utf-8")
+        grilling = (ROOT / "matt" / "skills" / "grilling" / "SKILL.md").read_text(encoding="utf-8")
+        batch = (ROOT / "matt" / "skills" / "batch-grill-me" / "SKILL.md").read_text(encoding="utf-8")
+        normalized_grilling = " ".join(grilling.split())
+        self.assertIn("before Matt's first user-facing decision", lead)
+        self.assertIn("not a separate user-facing stage", lead)
+        self.assertIn("Before the first decision response", matt)
+        self.assertIn("whole current frontier in this response", grilling)
+        self.assertIn("Late fact-finding, late Behavior analysis", normalized_grilling)
+        self.assertIn("late Behavior analysis never creates a valid Batch", batch)
+        for contract in (lead, matt, grilling):
+            self.assertIn("newly identifiable", contract)
+
+    def test_project_frame_and_ui_decisions_join_the_first_frontier(self) -> None:
+        matt = (ROOT / "matt" / "skills" / "ask-matt" / "SKILL.md").read_text(encoding="utf-8")
+        grill_me = (ROOT / "matt" / "skills" / "grill-me" / "SKILL.md").read_text(encoding="utf-8")
+        grill_docs = (
+            ROOT / "matt" / "skills" / "grill-with-docs" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        grilling = (ROOT / "matt" / "skills" / "grilling" / "SKILL.md").read_text(encoding="utf-8")
+        shaper = (
+            ROOT / "project-shaper" / "skills" / "from-project-shaper" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("before the\nfirst user-facing decision response", matt)
+        self.assertIn("Grill, Behavior, UI, and applicable Project Shaper frame decisions", matt)
+        self.assertIn("do not ask a standalone frame\nquestion", shaper)
+        self.assertIn("first\nintegrated frontier", shaper)
+        self.assertNotIn("Otherwise ask one question only", shaper)
+        for contract in (grill_me, grill_docs, grilling):
+            normalized = " ".join(contract.split())
+            self.assertIn("Central UI / UX Routing", normalized)
+            self.assertIn("ima2-uiux", contract)
 
 
 if __name__ == "__main__":

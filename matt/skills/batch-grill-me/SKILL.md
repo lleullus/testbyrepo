@@ -22,10 +22,12 @@ and pass it to `ask-matt`, or after a Project Shaper brief preflight to the
 package's Matt flow. `grilling` remains the sole owner of the dependency graph,
 frontier rounds, recommendation, gate, approval, and delta policy.
 
-Carry this mode through product-decision bundles identified during the
-Matt-performed Behavior Design phase. Clear it when the user cancels it, the final integrated
-shared understanding is confirmed, or work changes to another planning unit or
-Work Package.
+Apply this mode to the current frontier produced by the initial integrated
+Grill and Behavior synthesis. Apply it again only to a delta frontier that a
+user answer newly unlocks; late Behavior analysis never creates a valid Batch
+round. Clear it when the user cancels it, the final integrated shared
+understanding is confirmed, or work changes to another planning unit or Work
+Package.
 
 Do not create a Batch artifact, finalize a shared understanding, perform
 Behavior Design itself, write a Spec/Ticket, dispatch an invented

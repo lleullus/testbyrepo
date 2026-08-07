@@ -49,6 +49,16 @@ context before the specialist acts. Do not follow its implementation handoff,
 load `ima2-front`, write product code, mutate product files outside
 `docs/planning/**`, or create a product source artifact in this Matt flow.
 
+When this specialist judgment is required, complete enough of it before the
+first user-facing decision response to identify every currently determinable
+material user-owned rendered decision. Merge those decisions into the same
+initial dependency graph as Grill and Behavior. Do not postpone specialist
+judgment until after the first frontier or use late UI analysis to justify an
+extra round. Final authority writing, render disposition, and approval still
+follow their gates below. After an answer, revisit UI judgment only where that
+answer materially changes it, and apply the same newly-identifiable dependency
+rule as Behavior Design.
+
 Before Matt writes a planning authority, prepare or revalidate the one
 project-local planning root and work artifact directory that later Design,
 Spec, and Tickets use. Resolve
@@ -210,20 +220,26 @@ This frame is not approved or normative.
 
 Matt directly reads and performs the complete canonical leaf in the current
 conversation context; the phase has no separate execution role or context.
-Matt must inspect the project's
+Before the first user-facing decision question, Matt must inspect the project's
 `docs/planning/behavior/INDEX.md` and applicable scoped authorities, conduct the
 required first-hand investigation, behavior model, and counterexample stress
 test, and either adopt unchanged approved authorities, revise their canonical
 documents, or create authorities for genuinely new persistent behavior
-boundaries. Matt must not waive the phase because the work appears clear,
-reduce its completion test, or treat a per-work Behavior document as a
-substitute.
+boundaries. Combine every currently identifiable user-owned decision from that
+analysis with Grill's scope, authority, constraint, and UI decisions in one
+dependency graph. Matt must not waive the phase because the work appears clear,
+reduce its completion test, treat a per-work Behavior document as a substitute,
+or start questioning before this synthesis is complete.
 
-When the phase reaches `BEHAVIOR DECISIONS REQUIRED`, resolve the full current
-bundle through the active Grill interaction policy, then continue Behavior
-Design with the answers. A later round is allowed only when those answers expose
-a new material dependency. Package-boundary changes return to Project Shaper;
-rendered presentation decisions return to the UI authority flow.
+`BEHAVIOR DECISIONS REQUIRED` is an internal contribution to that initial
+decision graph, not a separate user-facing stage after Grill has already asked
+questions. Present the graph through the active Grill interaction policy. After
+an answer, update the affected Behavior model and dependency descendants. A
+later round is allowed only when the answer creates or resolves a material
+dependency that makes a downstream decision newly identifiable; late research,
+late Behavior analysis, question count, or response-length preference does not
+qualify. Package-boundary changes return to Project Shaper; rendered
+presentation decisions return to the UI authority flow.
 
 When the phase reaches `BEHAVIOR AUTHORITY APPROVAL REQUIRED`, Matt may present
 the completed draft authorities and one clearly labeled proposed integrated
@@ -243,20 +259,39 @@ Spec, and affected unfinished Tickets to `draft`.
 
 ## Main Flow
 
-1. Run the Central UI / UX Routing audit before deciding whether grilling is needed. When its material-UI route applies, complete the Matt-owned authority flow, using active `ima2-uiux` only for design judgment, before finalizing shared understanding.
-2. Decide whether grilling is needed to resolve the provisional frame. When it is, immediately start the selected `grill-with-docs` or `grill-me` flow by presenting a recommendation or necessary explicit gate. Do not stop at a route recommendation or summary. Skip grilling only when no current product decision needs it; this never skips the Behavior Design phase.
-   A target with an existing canonical project root and inspectable repository
-   context remains codebase-backed even when the current package/application
-   scope has no implementation source yet; route it to `grill-with-docs`.
-   Route to `grill-me` when the product root or repository context itself is not
-   yet available. Do not classify from words such as greenfield, initialize, or
-   bootstrap.
-3. Directly perform the complete Central Behavior Design phase in the current
-   conversation context. Resolve every product-decision bundle through Grill,
-   then continue the phase. When new or changed authorities are approval-ready,
-   use the joint approval flow above and require the phase to complete against
-   the resulting frame.
-4. Use `to-spec` when the desired outcome, preserved observable behavior and
+1. Run the Central UI / UX Routing audit and select `grill-with-docs` or
+   `grill-me` for the current evidence context, but do not present a user-facing
+   decision yet. A target with an existing canonical project root and
+   inspectable repository context remains codebase-backed even when the current
+   package/application scope has no implementation source yet; route it to
+   `grill-with-docs`. Route to `grill-me` when the product root or repository
+   context itself is not yet available. Do not classify from words such as
+   greenfield, initialize, or bootstrap.
+2. Before the first decision response, perform the selected Grill analysis and
+   complete Existing Authority First, Lead-First Investigation, Behavioral
+   Design, and Counterexample Stress Test. When material UI lacks an applicable
+   approved authority, also complete the required `ima2-uiux` design judgment
+   far enough to identify its currently determinable user-owned decisions.
+   Merge all Grill, Behavior, UI, and applicable Project Shaper frame decisions
+   into one dependency graph. Resolve inspectable facts directly and exclude
+   implementation-owned choices.
+3. Present the complete current unblocked frontier through `grilling`. Batch
+   mode numbers every decision; normal mode may compress related decisions into
+   coherent recommendation blocks, but neither mode may hide an already
+   identifiable unblocked material decision for a later turn. If the frontier
+   is empty, proceed without a question. Skipping a question never skips
+   Behavior Design.
+4. After each answer, update only materially affected recommendations, Behavior
+   and UI analysis, and dependency descendants. Ask another round only for
+   decisions that the answer made newly identifiable under the dependency rule
+   above. Continue until the frontier is empty. When material UI applies,
+   complete the Matt-owned authority, render-disposition, and approval flow
+   before finalizing shared understanding; do not rediscover user-owned design
+   decisions that the initial specialist judgment could have identified.
+5. When new or changed Behavior authorities are approval-ready, use the joint
+   approval flow above and require the phase to complete against the resolved
+   frame.
+6. Use `to-spec` when the desired outcome, preserved observable behavior and
    invariants, explicit boundaries, non-goals, and observable completion
    evidence are clear, Behavior Design is complete, every applicable
    Behavior authority is approved, and the user has confirmed one integrated
@@ -280,7 +315,7 @@ Spec, and affected unfinished Tickets to `draft`.
    remaining material bootstrap choices are fixed or explicitly delegated to
    Implementation Lead/Worker. Do not ask the user to invent a private package
    identity, future file list, dependency, or mutation envelope.
-5. Use `to-tickets` only from an approved Spec. It creates the smallest set of
+7. Use `to-tickets` only from an approved Spec. It creates the smallest set of
    independently observable desired-state Tickets, not an anticipated internal
    implementation sequence.
 

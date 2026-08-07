@@ -21,9 +21,11 @@ create simple/complex, delegated/direct, lightweight/deep, or skip routes.
 ## Position And Authority
 
 ```text
-Matt / Grill provisional frame
--> Matt directly performs Behavior Design
--> bundled product-decision return when needed
+User input and current evidence
+-> Matt performs full Grill and Behavior synthesis before the first question
+-> one integrated decision graph and current frontier
+-> user answers
+-> only newly unlocked dependency questions when necessary
 -> approved scoped Behavior authorities
 -> final integrated shared understanding
 -> Spec adoption
@@ -38,12 +40,18 @@ design, or implementation sequence.
 
 ## Inputs
 
-Receive the provisional outcome, included and excluded scope, Non-Goals,
-preserved observable behavior, external constraints, adopted UI authority,
-project root, planning owner, and known unresolved decisions. The project root
-must already exist. Resolve the canonical planning root with
+Work from the current goal, confirmed conversation context, provisional outcome
+and scope hypotheses, possible Non-Goals, preserved observable behavior,
+external constraints, adopted UI authority, project root, planning owner, and
+known unresolved decisions. The project root must already exist. Resolve the canonical planning root with
 `../planning-workspace/planning_workspace.py` and use only
 `<Project-Root>/docs/planning/behavior/`.
+
+Complete Existing Authority First, Lead-First Investigation, Behavioral Design,
+and Counterexample Stress Test before Matt's first user-facing decision
+question. At that point unresolved items remain proposed product decisions, not
+approved policy, but they must already be identified wherever the available
+evidence and dependency graph make that possible.
 
 ## Existing Authority First
 
@@ -137,10 +145,11 @@ hold-expiry ordering, and concurrent claims. Counterexamples include retry
 creating duplicate confirmation, expiry and confirmation both succeeding, a
 late success reviving cancellation, or readback contradicting availability.
 
-## Product Decision Return
+## Product Decision Synthesis
 
-Complete the investigation before returning the currently identifiable product
-decisions as one dependency-aware bundle. Use:
+Before the first user-facing decision round, contribute every currently
+identifiable material user-owned decision to the same dependency graph used by
+Grill. Represent this internal contribution as:
 
 ```text
 BEHAVIOR DECISIONS REQUIRED
@@ -152,11 +161,20 @@ Decisions:
    Effect if unresolved: <different observable outcomes still possible>
 ```
 
-Temporarily enter the Matt/Grill interaction policy for recommendation,
-approval, and delta handling, then continue this Behavior Design phase after
-the bundle is answered. Ask another round only when those answers expose a new
-material dependency. Return package-boundary changes to Project Shaper and
-rendered presentation decisions to the UI authority flow.
+This is not a separate user-facing stage, return, or waiting point after an
+initial Grill round. Merge it with Grill's scope, authority, constraint, and UI
+decisions before Grill presents the first current frontier. Behavior Design
+itself must not create an extra user round.
+
+After each answer, reconsider only the affected model, counterexamples, and
+dependency descendants. A later decision round is allowed only when that answer
+creates or resolves a material dependency such that a downstream decision's
+existence, core scope or owner, viable choices, applicable authority or
+lifecycle, or required evidence is newly identifiable and could not have been
+determined accurately before the answer. Late inspection, late Behavior
+analysis, question count, or presentation brevity never justifies another
+round. Return package-boundary changes to Project Shaper and rendered
+presentation decisions to the UI authority flow.
 
 ## Authority Output
 
@@ -170,7 +188,8 @@ docs/planning/behavior/invariants/<scope>.md
 ```
 
 An authority becomes `approved` only when its research and model are complete,
-counterexamples are resolved, Product Decision Return is `None`, and the user
+counterexamples are resolved, Product Decision Synthesis has no unresolved
+decision, and the user
 or named product owner explicitly approves it. Approval of changed authorities
 and the integrated shared understanding may occur in one response. An unchanged
 approved authority is adopted without reapproval.
