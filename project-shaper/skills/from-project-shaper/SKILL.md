@@ -137,4 +137,7 @@ A missing implementation path, technical uncertainty, or codebase difficulty is 
 
 ## Output
 
-The first package-framing checkpoint or, when already confirmed in the current conversation, the first recommendation, necessary explicit gate, or complete contract-only shared understanding produced by the normal Matt flow. Do not stop at a route recommendation.
+The first integrated frontier, with package-frame confirmation or correction
+included when not already settled in the current conversation, or the complete
+contract-only shared understanding when no user-owned decision remains. Do not
+stop at a route recommendation or standalone package-framing checkpoint.

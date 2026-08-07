@@ -44,4 +44,10 @@ None
 
 ## Matt Start
 
-Plan only this Work Package. First restate its Outcome, Included Product Scope, and Excluded Sibling Scope and obtain the user's confirmation or correction unless the same user already confirmed this exact frame in the current conversation. Then continue the normal `ask-matt` flow inside the confirmed package boundary. Do not absorb sibling scope; return a shaping delta to Project Shaper when the package boundary itself must change.
+Plan only this Work Package. Use its Outcome, Included Product Scope, and
+Excluded Sibling Scope as a provisional frame. Unless the same user already
+confirmed this exact frame in the current conversation, include its confirmation
+or correction as one decision in the first integrated frontier of the normal
+`ask-matt` flow; do not ask a standalone frame question. Continue inside the
+settled package boundary. Do not absorb sibling scope; return a shaping delta to
+Project Shaper when the package boundary itself must change.

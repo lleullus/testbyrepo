@@ -91,11 +91,31 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
         shaper = (
             ROOT / "project-shaper" / "skills" / "from-project-shaper" / "SKILL.md"
         ).read_text(encoding="utf-8")
+        handoff = (
+            ROOT
+            / "project-shaper"
+            / "skills"
+            / "project-shaper"
+            / "references"
+            / "matt-handoff-contract.md"
+        ).read_text(encoding="utf-8")
+        brief = (
+            ROOT
+            / "project-shaper"
+            / "skills"
+            / "project-shaper"
+            / "templates"
+            / "MATT-BRIEF.template.md"
+        ).read_text(encoding="utf-8")
         self.assertIn("before the\nfirst user-facing decision response", matt)
         self.assertIn("Grill, Behavior, UI, and applicable Project Shaper frame decisions", matt)
         self.assertIn("do not ask a standalone frame\nquestion", shaper)
         self.assertIn("first\nintegrated frontier", shaper)
         self.assertNotIn("Otherwise ask one question only", shaper)
+        for contract in (handoff, brief):
+            normalized = " ".join(contract.split())
+            self.assertIn("first integrated frontier", normalized)
+            self.assertIn("standalone frame question", normalized)
         for contract in (grill_me, grill_docs, grilling):
             normalized = " ".join(contract.split())
             self.assertIn("Central UI / UX Routing", normalized)

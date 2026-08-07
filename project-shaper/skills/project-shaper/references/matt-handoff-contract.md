@@ -66,11 +66,14 @@ It must state all of these meanings:
 - `Adopted Initiative Decisions` contains only decisions the user explicitly adopted while shaping and that materially constrain this package boundary.
 - `Decisions Reserved For Matt` contains unresolved package-internal product, scope, boundary, non-goal, or completion-evidence decisions. It must not contain implementation-owned choices.
 - `Reference Material` supplies context only. A reference does not import normative authority.
-- `Matt Start` instructs Matt to plan only this package, confirm or correct the package frame, then run the normal `ask-matt` flow.
+- `Matt Start` instructs Matt to plan only this package, use the approved map
+  projection as a provisional frame, and include confirmation or correction of
+  that frame in the first integrated frontier of the normal `ask-matt` flow.
 
-## Opening handshake
+## Opening frontier
 
-`from-project-shaper` must begin with a package-framing checkpoint containing:
+`from-project-shaper` contributes this package-frame node to the first integrated
+Matt frontier:
 
 ```text
 Work Package
@@ -79,9 +82,14 @@ Includes
 Excludes
 ```
 
-If the same user explicitly confirmed the exact frame in the current conversation, the adapter may immediately begin the normal Matt interview. Otherwise it asks for one confirmation or correction of the frame before grilling package details.
+If the same user explicitly confirmed the exact frame in the current
+conversation, treat the node as settled. Otherwise include confirmation or
+correction as one user-owned decision in the complete initial
+Grill/Behavior/UI frontier. Do not ask a standalone frame question before that
+synthesis.
 
-This checkpoint confirms the active planning frame, not a complete package contract.
+This decision confirms the active planning frame, not a complete package
+contract.
 
 ## Scope escape
 
