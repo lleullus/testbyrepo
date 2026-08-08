@@ -238,7 +238,7 @@ an answer, update the affected Behavior model and dependency descendants. A
 later round is allowed only when the answer creates or resolves a material
 dependency that makes a downstream decision newly identifiable; late research,
 late Behavior analysis, question count, or response-length preference does not
-qualify. Package-boundary changes return to Project Shaper; rendered
+qualify. Package-boundary changes return to Scope Shaper; rendered
 presentation decisions return to the UI authority flow.
 
 When the phase reaches `BEHAVIOR AUTHORITY APPROVAL REQUIRED`, Matt may present
@@ -272,7 +272,7 @@ Spec, and affected unfinished Tickets to `draft`.
    Design, and Counterexample Stress Test. When material UI lacks an applicable
    approved authority, also complete the required `ima2-uiux` design judgment
    far enough to identify its currently determinable user-owned decisions.
-   Merge all Grill, Behavior, UI, and applicable Project Shaper frame decisions
+   Merge all Grill, Behavior, UI, and applicable Scope Shaper package-frame decisions
    into one dependency graph. Resolve inspectable facts directly and exclude
    implementation-owned choices.
 3. Present the complete current unblocked frontier through `grilling`. Batch

@@ -18,8 +18,8 @@ Grill or another route.
 
 After activation, select the normal IIS lifecycle route. Bind
 `interaction-mode: batch-grill-me` only to the current exact Matt planning unit
-and pass it to `ask-matt`, or after a Project Shaper brief preflight to the
-package's Matt flow. `grilling` remains the sole owner of the dependency graph,
+and pass it to `ask-matt`, including after a confirmed Scope result or Work
+Package preflight. `grilling` remains the sole owner of the dependency graph,
 frontier rounds, recommendation, gate, approval, and delta policy.
 
 Apply this mode to the current frontier produced by the initial integrated

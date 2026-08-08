@@ -81,41 +81,24 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
         for contract in (lead, matt, grilling):
             self.assertIn("newly identifiable", contract)
 
-    def test_project_frame_and_ui_decisions_join_the_first_frontier(self) -> None:
+    def test_scope_package_frame_and_ui_decisions_join_the_first_frontier(self) -> None:
         matt = (ROOT / "matt" / "skills" / "ask-matt" / "SKILL.md").read_text(encoding="utf-8")
         grill_me = (ROOT / "matt" / "skills" / "grill-me" / "SKILL.md").read_text(encoding="utf-8")
         grill_docs = (
             ROOT / "matt" / "skills" / "grill-with-docs" / "SKILL.md"
         ).read_text(encoding="utf-8")
         grilling = (ROOT / "matt" / "skills" / "grilling" / "SKILL.md").read_text(encoding="utf-8")
-        shaper = (
-            ROOT / "project-shaper" / "skills" / "from-project-shaper" / "SKILL.md"
-        ).read_text(encoding="utf-8")
-        handoff = (
-            ROOT
-            / "project-shaper"
-            / "skills"
-            / "project-shaper"
-            / "references"
-            / "matt-handoff-contract.md"
-        ).read_text(encoding="utf-8")
+        shaper = (ROOT / "scope-shaper" / "SKILL.md").read_text(encoding="utf-8")
         brief = (
             ROOT
-            / "project-shaper"
-            / "skills"
-            / "project-shaper"
+            / "scope-shaper"
             / "templates"
-            / "MATT-BRIEF.template.md"
+            / "WORK-PACKAGE.template.md"
         ).read_text(encoding="utf-8")
         self.assertIn("before the\nfirst user-facing decision response", matt)
-        self.assertIn("Grill, Behavior, UI, and applicable Project Shaper frame decisions", matt)
-        self.assertIn("do not ask a standalone frame\nquestion", shaper)
-        self.assertIn("first\nintegrated frontier", shaper)
-        self.assertNotIn("Otherwise ask one question only", shaper)
-        for contract in (handoff, brief):
-            normalized = " ".join(contract.split())
-            self.assertIn("first integrated frontier", normalized)
-            self.assertIn("standalone frame question", normalized)
+        self.assertIn("Grill, Behavior, UI, and applicable Scope Shaper package-frame decisions", matt)
+        self.assertIn("later explicit user action naming the", shaper)
+        self.assertIn("first integrated frontier", " ".join(brief.split()))
         for contract in (grill_me, grill_docs, grilling):
             normalized = " ".join(contract.split())
             self.assertIn("Central UI / UX Routing", normalized)

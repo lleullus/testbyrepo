@@ -173,7 +173,7 @@ existence, core scope or owner, viable choices, applicable authority or
 lifecycle, or required evidence is newly identifiable and could not have been
 determined accurately before the answer. Late inspection, late Behavior
 analysis, question count, or presentation brevity never justifies another
-round. Return package-boundary changes to Project Shaper and rendered
+round. Return package-boundary changes to Scope Shaper and rendered
 presentation decisions to the UI authority flow.
 
 ## Authority Output
