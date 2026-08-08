@@ -18,7 +18,7 @@ export type BrowserArchiveMode = "auto" | "always" | "never";
  * reasoning domain: ChatGPT's Pro control is an effort level, never a model
  * picker row.
  */
-export type BrowserReasoningIntent = "light" | "standard" | "high" | "heavy" | "pro";
+export type BrowserReasoningIntent = "instant" | "medium" | "high" | "extra-high" | "pro";
 export type BrowserReasoningControlKind = "slider" | "dropdown";
 
 /** Capability declared by the managed Browser-slots transport. */

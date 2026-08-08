@@ -66,7 +66,7 @@ describe("resolveBrowserConfig", () => {
   });
 
   test("rejects explicit reasoning above a managed capability", () => {
-    for (const intent of ["light", "standard", "high", "heavy", "pro"] as const) {
+    for (const intent of ["instant", "medium", "high", "extra-high", "pro"] as const) {
       expect(() =>
         assertManagedBrowserReasoningIntent(
           { slotId: 1, expectedControl: "slider", maximumReasoning: "pro" },
@@ -77,7 +77,7 @@ describe("resolveBrowserConfig", () => {
     expect(() =>
       assertManagedBrowserReasoningIntent(
         { slotId: 4, expectedControl: "dropdown", maximumReasoning: "high" },
-        "heavy",
+        "extra-high",
       ),
     ).toThrow(/supports reasoning up to High/i);
     expect(() =>
@@ -89,7 +89,7 @@ describe("resolveBrowserConfig", () => {
     expect(() =>
       assertManagedBrowserReasoningIntent(
         { slotId: 4, expectedControl: "dropdown", maximumReasoning: "high" },
-        "standard",
+        "medium",
       ),
     ).not.toThrow();
     expect(() =>
@@ -121,7 +121,9 @@ describe("resolveBrowserConfig", () => {
     process.env.ORACLE_BROWSER_SLOT_ID = "1";
 
     expect(resolveBrowserConfig({ thinkingTime: "extended" }).reasoningIntent).toBe("high");
-    expect(resolveBrowserConfig({ thinkingTime: "heavy" }).reasoningIntent).toBe("heavy");
+    expect(resolveBrowserConfig({ thinkingTime: "heavy" }).reasoningIntent).toBe("extra-high");
+    expect(resolveBrowserConfig({ thinkingTime: "standard" }).reasoningIntent).toBe("medium");
+    expect(resolveBrowserConfig({ thinkingTime: "light" }).reasoningIntent).toBe("instant");
   });
 
   test("returns defaults when config missing", () => {

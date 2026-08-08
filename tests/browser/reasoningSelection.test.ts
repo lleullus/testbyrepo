@@ -13,7 +13,7 @@ describe("strict browser reasoning selection", () => {
           value: {
             status: "already-selected",
             controlKind: "dropdown",
-            availableLevels: ["standard", "high"],
+            availableLevels: ["medium", "high"],
             resolvedLevel: "high",
             modelUnchanged: true,
             originalModelFingerprint: "new-conversation-model",
@@ -326,8 +326,8 @@ describe("strict browser reasoning selection", () => {
   });
 
   it.each([
-    { initial: "standard", target: "heavy", key: "ArrowRight" },
-    { initial: "heavy", target: "standard", key: "ArrowLeft" },
+    { initial: "medium", target: "extra-high", key: "ArrowRight" },
+    { initial: "extra-high", target: "medium", key: "ArrowLeft" },
   ] as const)(
     "moves a composite slider from $initial to $target by fresh labels",
     async ({ initial, target, key }) => {
@@ -380,7 +380,7 @@ describe("strict browser reasoning selection", () => {
         }
       }
 
-      const levels = ["light", "standard", "high", "heavy", "pro"] as const;
+      const levels = ["instant", "medium", "high", "extra-high", "pro"] as const;
       let currentIndex = levels.indexOf(initial);
       const targetIndex = levels.indexOf(target);
       const arrowKeys: string[] = [];
@@ -586,7 +586,7 @@ describe("strict browser reasoning selection", () => {
     ).resolves.toMatchObject({
       status: "unavailable",
       controlKind: "slider",
-      resolvedLevel: "heavy",
+      resolvedLevel: "extra-high",
       modelUnchanged: true,
       originalModelFingerprint: expect.any(String),
       observedModelFingerprint: expect.any(String),
@@ -715,7 +715,7 @@ describe("strict browser reasoning selection", () => {
           value: {
             status: "switched",
             controlKind: "dropdown",
-            availableLevels: ["standard", "high"],
+            availableLevels: ["medium", "high"],
             resolvedLevel: "high",
             modelUnchanged: true,
             originalModelFingerprint: "model-fingerprint-a",
@@ -742,7 +742,7 @@ describe("strict browser reasoning selection", () => {
     expect(evidence).toMatchObject({
       requestedIntent: "high",
       controlKind: "dropdown",
-      availableLevels: ["standard", "high"],
+      availableLevels: ["medium", "high"],
       resolvedLevel: "high",
       verified: true,
       modelUnchanged: true,
@@ -777,7 +777,7 @@ describe("strict browser reasoning selection", () => {
           value: {
             status: "model-mismatch",
             controlKind: "dropdown",
-            availableLevels: ["standard", "high"],
+            availableLevels: ["medium", "high"],
             resolvedLevel: null,
             modelUnchanged: false,
             originalModelFingerprint: "model-fingerprint-a",
@@ -1019,7 +1019,7 @@ describe("strict browser reasoning selection", () => {
     ).resolves.toMatchObject({
       status: "switched",
       controlKind: "dropdown",
-      availableLevels: ["standard", "high"],
+      availableLevels: ["medium", "high"],
       resolvedLevel: "high",
       modelUnchanged: true,
     });
@@ -1563,8 +1563,8 @@ describe("strict browser reasoning selection", () => {
     ).resolves.toMatchObject({
       status: "unavailable",
       controlKind: "slider",
-      availableLevels: ["standard"],
-      resolvedLevel: "standard",
+      availableLevels: ["medium"],
+      resolvedLevel: "medium",
       modelUnchanged: true,
       diagnostic: { controlCount: 1, matchingControlCount: 1, observedKinds: ["slider"] },
     });

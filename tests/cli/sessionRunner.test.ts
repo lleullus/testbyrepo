@@ -1351,7 +1351,7 @@ describe("performSessionRun", () => {
     const success: BrowserReasoningSelectionEvidence = {
       requestedIntent: "high",
       controlKind: "dropdown",
-      availableLevels: ["standard", "high"],
+      availableLevels: ["medium", "high"],
       resolvedLevel: "high",
       status: "already-selected",
       verified: true,

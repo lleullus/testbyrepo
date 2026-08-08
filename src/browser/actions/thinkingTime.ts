@@ -233,10 +233,10 @@ function buildBrowserReasoningExpression(args: {
       if (!text || text.includes('gpt ')) return null;
       const words = text.split(' ');
       if (words.includes('pro')) return 'pro';
-      if ((words.includes('extra') && words.includes('high')) || words.includes('heavy')) return 'heavy';
+      if ((words.includes('extra') && words.includes('high')) || words.includes('heavy')) return 'extra-high';
       if (words.includes('high') || words.includes('extended')) return 'high';
-      if (words.includes('standard') || words.includes('medium')) return 'standard';
-      if (words.includes('light') || words.includes('instant')) return 'light';
+      if (words.includes('standard') || words.includes('medium')) return 'medium';
+      if (words.includes('light') || words.includes('instant')) return 'instant';
       return null;
     };
     // Model identity must not be derived from a reasoning pill: ChatGPT can
@@ -408,10 +408,10 @@ function buildBrowserReasoningExpression(args: {
         .map((node) => {
           const words = normalize(ownedSemanticText(node)).split(' ');
           if (words.includes('pro')) return 'pro';
-          if ((words.includes('extra') && words.includes('high')) || words.includes('heavy')) return 'heavy';
+          if ((words.includes('extra') && words.includes('high')) || words.includes('heavy')) return 'extra-high';
           if (words.includes('high') || words.includes('extended')) return 'high';
-          if (words.includes('standard') || words.includes('medium')) return 'standard';
-          if (words.includes('light')) return 'light';
+          if (words.includes('standard') || words.includes('medium')) return 'medium';
+          if (words.includes('light') || words.includes('instant')) return 'instant';
           return null;
         })
         .filter(Boolean);
@@ -477,7 +477,7 @@ function buildBrowserReasoningExpression(args: {
       }
       return false;
     };
-    const LEVEL_RANK = { light: 0, standard: 1, high: 2, heavy: 3, pro: 4 };
+    const LEVEL_RANK = { instant: 0, medium: 1, high: 2, 'extra-high': 3, pro: 4 };
     const sliderLevel = (control, owner) =>
       levelFor(control?.readbackNode) || effortLevelWithinOwner(owner);
     const sliderAtMaximum = (node) => {

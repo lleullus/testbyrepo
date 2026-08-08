@@ -216,10 +216,9 @@ export function resolveBrowserReasoningIntent(args: {
   thinkingTime?: ThinkingTimeLevel | null;
   managedSlot?: BrowserManagedSlotCapability | null;
 }): BrowserReasoningIntent | undefined {
-  if (args.thinkingTime === "light" || args.thinkingTime === "standard") {
-    return args.thinkingTime;
-  }
-  if (args.thinkingTime === "heavy") return "heavy";
+  if (args.thinkingTime === "light") return "instant";
+  if (args.thinkingTime === "standard") return "medium";
+  if (args.thinkingTime === "heavy") return "extra-high";
   if (args.thinkingTime === "extended") {
     return "high";
   }
@@ -233,10 +232,10 @@ export function assertManagedBrowserReasoningIntent(
 ): void {
   if (!managedSlot) return;
   const intentRank: Record<BrowserReasoningIntent, number> = {
-    light: 0,
-    standard: 1,
+    instant: 0,
+    medium: 1,
     high: 2,
-    heavy: 3,
+    "extra-high": 3,
     pro: 4,
   };
   const maximumRank = managedSlot.maximumReasoning === "pro" ? intentRank.pro : intentRank.high;
