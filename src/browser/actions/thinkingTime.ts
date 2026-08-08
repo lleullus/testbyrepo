@@ -559,20 +559,20 @@ function buildBrowserReasoningExpression(args: {
       const initialLevel = sliderLevel(initialSliderControl, controls.owner);
       let observedEffortLabel = initialLevel !== null;
       const initialAtMaximum = sliderAtMaximum(initialSlider);
-      const canUseProMaximumFallback =
-        TARGET === 'pro' && MAXIMUM_REASONING === 'pro' && !observedEffortLabel && initialAtMaximum;
+      const canUseManagedMaximumFallback =
+        TARGET === MAXIMUM_REASONING && MAXIMUM_REASONING !== null && !observedEffortLabel && initialAtMaximum;
       const availableLevels = initialLevel ? [initialLevel] : [];
-      if (!initialLevel && !canUseProMaximumFallback) {
+      if (!initialLevel && !canUseManagedMaximumFallback) {
         return fail('unavailable', {
           controlKind: 'slider', availableLevels, modelUnchanged: true,
           controlCount: sliders.length + dropdownItems.length,
           matchingControlCount: 1, observedKinds,
         });
       }
-      if (initialLevel === TARGET || canUseProMaximumFallback) {
+      if (initialLevel === TARGET || canUseManagedMaximumFallback) {
         return {
           status: 'already-selected',
-          controlKind: 'slider', availableLevels: canUseProMaximumFallback ? ['pro'] : availableLevels,
+          controlKind: 'slider', availableLevels: canUseManagedMaximumFallback ? [TARGET] : availableLevels,
           resolvedLevel: TARGET,
           modelUnchanged: true,
           originalModelFingerprint,
@@ -619,9 +619,9 @@ function buildBrowserReasoningExpression(args: {
           });
         }
         if (!liveLevel || !(liveLevel in LEVEL_RANK)) {
-          if (TARGET === 'pro' && MAXIMUM_REASONING === 'pro' && !observedEffortLabel && liveAtMaximum) {
+          if (TARGET === MAXIMUM_REASONING && MAXIMUM_REASONING !== null && !observedEffortLabel && liveAtMaximum) {
             return {
-              status: 'switched', controlKind: 'slider', availableLevels: ['pro'], resolvedLevel: 'pro',
+              status: 'switched', controlKind: 'slider', availableLevels: [TARGET], resolvedLevel: TARGET,
               modelUnchanged: true, originalModelFingerprint, observedModelFingerprint,
               diagnostic: diagnostic(1, 1, ['slider']),
             };
@@ -681,13 +681,13 @@ function buildBrowserReasoningExpression(args: {
           }
           if (!refreshedLevel || !(refreshedLevel in LEVEL_RANK)) {
             if (
-              TARGET === 'pro' &&
-              MAXIMUM_REASONING === 'pro' &&
+              TARGET === MAXIMUM_REASONING &&
+              MAXIMUM_REASONING !== null &&
               !observedEffortLabel &&
               refreshedAtMaximum
             ) {
               return {
-                status: 'switched', controlKind: 'slider', availableLevels: ['pro'], resolvedLevel: 'pro',
+                status: 'switched', controlKind: 'slider', availableLevels: [TARGET], resolvedLevel: TARGET,
                 modelUnchanged: true, originalModelFingerprint, observedModelFingerprint,
                 diagnostic: diagnostic(1, 1, ['slider']),
               };

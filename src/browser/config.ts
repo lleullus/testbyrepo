@@ -191,9 +191,16 @@ export function resolveManagedBrowserSlotCapability(
       maximumReasoning: "pro",
     };
   }
-  if (raw === "3" || raw === "4" || raw === "5") {
+  if (raw === "3" || raw === "4") {
     return {
-      slotId: Number(raw) as 3 | 4 | 5,
+      slotId: Number(raw) as 3 | 4,
+      expectedControl: "slider",
+      maximumReasoning: "high",
+    };
+  }
+  if (raw === "5") {
+    return {
+      slotId: 5,
       expectedControl: "dropdown",
       maximumReasoning: "high",
     };

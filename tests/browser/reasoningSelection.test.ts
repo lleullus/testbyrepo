@@ -1412,8 +1412,8 @@ describe("strict browser reasoning selection", () => {
       tabindex: "-1",
       "aria-hidden": "true",
       "aria-valuemin": "0",
-      "aria-valuemax": "4",
-      "aria-valuenow": "4",
+      "aria-valuemax": "2",
+      "aria-valuenow": "2",
     });
     const powerOwner = new Node("", {
       role: "menuitem",
@@ -1437,8 +1437,8 @@ describe("strict browser reasoning selection", () => {
         selector.includes("composer-intelligence-picker-content") ? [reasoningOwner] : [],
     };
     const expression = buildBrowserReasoningExpressionForTest({
-      intent: "pro",
-      managedSlot: { slotId: 1, expectedControl: "slider", maximumReasoning: "pro" },
+      intent: "high",
+      managedSlot: { slotId: 3, expectedControl: "slider", maximumReasoning: "high" },
     });
     const evaluate = new Function(
       "document",
@@ -1464,8 +1464,8 @@ describe("strict browser reasoning selection", () => {
     ).resolves.toMatchObject({
       status: "already-selected",
       controlKind: "slider",
-      availableLevels: ["pro"],
-      resolvedLevel: "pro",
+      availableLevels: ["high"],
+      resolvedLevel: "high",
       modelUnchanged: true,
     });
   });

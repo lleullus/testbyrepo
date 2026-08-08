@@ -52,7 +52,11 @@ describe("resolveBrowserConfig", () => {
     });
     expect(resolveManagedBrowserSlotCapability({ ORACLE_BROWSER_SLOT_ID: "3" })).toEqual({
       slotId: 3,
-      expectedControl: "dropdown",
+      expectedControl: "slider",
+      maximumReasoning: "high",
+    });
+    expect(resolveManagedBrowserSlotCapability({ ORACLE_BROWSER_SLOT_ID: "4" })).toMatchObject({
+      expectedControl: "slider",
       maximumReasoning: "high",
     });
     expect(resolveManagedBrowserSlotCapability({ ORACLE_BROWSER_SLOT_ID: "5" })).toMatchObject({
