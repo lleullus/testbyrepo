@@ -16,7 +16,7 @@ This machine uses WSL Linux Chrome over loopback CDP:
 
 ```bash
 ORACLE_CLI="/home/user01/.nvm/versions/node/v24.18.0/bin/oracle"
-ORACLE_SLOTS="/home/user01/project/oracle-no-background/oracle-browser-slots/bin/oracle-browser-slots"
+ORACLE_SLOTS="/home/user01/project/oracle/oracle-browser-slots/bin/oracle-browser-slots"
 ```
 
 Runtime identity:
@@ -129,8 +129,8 @@ attachment.
 Preconditions before the first live request:
 
 1. Verify DevSpace health: `systemctl --user is-active devspace-http.service`
-   must return `active` and `curl --fail --silent --show-error
-   http://127.0.0.1:8787/healthz` must succeed. If unhealthy, ask the user to
+   must return `active` and `curl --fail --silent --show-error http://127.0.0.1:8787/healthz`
+   must succeed. If unhealthy, ask the user to
    start it through the devspace-launcher skill flow and do not submit.
 2. Resolve every supplied path with `realpath` and require it to sit inside one
    of the allowed roots: `/home/user01/project`,

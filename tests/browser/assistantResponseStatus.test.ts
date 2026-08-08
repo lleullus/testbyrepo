@@ -431,8 +431,6 @@ describe("assistant turn identity binding", () => {
     expression: string,
   ): Promise<Record<string, unknown> | null> {
     class FakeMutationObserver {
-      constructor(_callback: () => void) {}
-
       observe(): void {}
 
       disconnect(): void {}

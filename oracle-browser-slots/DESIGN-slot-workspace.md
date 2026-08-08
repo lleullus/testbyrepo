@@ -20,10 +20,10 @@
 
 현재 시스템은 두 계층으로 나뉜다.
 
-| 계층 | 역할 | 슬롯 개념 | 워크스페이스 처리 |
-|---|---|---|---|
-| stock Oracle CLI | ChatGPT 브라우저 자동화(네비게이션·입력·수집) | 없음 | 실행 단위당 `--chatgpt-url` 1개 |
-| oracle-browser-slots | 슬롯 1..3, 고정 포트, 프로필, 점유/큐, argv 검증 | 있음(1차 개념) | 전역 env 1개만 존재 |
+| 계층                 | 역할                                             | 슬롯 개념      | 워크스페이스 처리               |
+| -------------------- | ------------------------------------------------ | -------------- | ------------------------------- |
+| stock Oracle CLI     | ChatGPT 브라우저 자동화(네비게이션·입력·수집)    | 없음           | 실행 단위당 `--chatgpt-url` 1개 |
+| oracle-browser-slots | 슬롯 1..5, 고정 포트, 프로필, 점유/큐, argv 검증 | 있음(1차 개념) | 전역 env 1개만 존재             |
 
 stock Oracle에는 "슬롯"이라는 개념이 없고, `--browser-port`는 단지 Chrome DevTools 포트일 뿐이다.  
 슬롯·포트·프로필·점유는 전부 커스텀 래퍼(`oracle-browser-slots`)의 설계이므로, "슬롯별 워크스페이스" 정책도 래퍼가 소유해야 한다. **stock Oracle은 무수정을 원칙으로 한다.**
@@ -32,8 +32,8 @@ stock Oracle에는 "슬롯"이라는 개념이 없고, `--browser-port`는 단�
 
 - 포트는 `Settings.slot(slot_id)`에서 `port_base + slot_id - 1`로 파생된다 (`oracle_browser_slots/model.py:117-124`).
 - `ORACLE_BROWSER_SLOTS_PORT_BASE`가 바뀌면 포트가 모두 이동한다. 포트를 키로 삼으면 설정이 깨진다.
-- 슬롯에는 프로필(`slot-1`..`slot-3`)과 계정이 묶여 있어, "슬롯 = 계정 = 워크스페이스"가 의미상 일관된다.
-- **결정: 매핑 키는 슬롯 ID(`1|2|3`)로 한다.**
+- 슬롯에는 프로필(`slot-1`..`slot-5`)과 계정이 묶여 있어, "슬롯 = 계정 = 워크스페이스"가 의미상 일관된다.
+- **결정: 매핑 키는 슬롯 ID(`1|2|3|4|5`)로 한다.**
 
 ---
 
@@ -41,37 +41,37 @@ stock Oracle에는 "슬롯"이라는 개념이 없고, `--browser-port`는 단�
 
 ### 2.1 stock Oracle (무수정 대상)
 
-| 항목 | 위치 | 내용 |
-|---|---|---|
-| `--chatgpt-url` 옵션 선언 | `bin/oracle-cli.ts:635` | 워크스페이스/폴더 URL 지정 |
-| `--browser-url` 은닉 alias | `bin/oracle-cli.ts:642` | `--chatgpt-url`과 동일 의미 |
-| `--browser-port`/`--browser-debug-port` | `bin/oracle-cli.ts:719,724` | Chrome DevTools 포트 고정 |
-| URL 해석 | `src/cli/browserConfig.ts:190-191` | `options.chatgptUrl ?? options.browserUrl` → 정규화 |
-| 포트 해석 | `src/cli/browserConfig.ts:207,300-307` | `browserPort ?? browserDebugPort`, 1..65535 검증 |
-| 실행 설정 병합 | `src/browser/config.ts:75-79,111-113` | env `ORACLE_BROWSER_PORT`도 `debugPort`로 수용 |
-| Chrome 실행 | `src/browser/chromeLifecycle.ts:18,43-49` | `debugPort`를 chrome-launcher `port`로 전달 |
-| 로컬 모드 네비게이션 | `src/browser/index.ts:1356-1393` | base URL → 로그인 → `config.url`(워크스페이스)로 이동 |
-| 원격 Chrome 모드 네비게이션 | `src/browser/index.ts:3060-3067` | `config.resumeConversationUrl` 없으면 `config.url`로 이동 |
-| 입력/전송 | `src/browser/index.ts:3218-3224` | 같은 탭에서 `runProviderSubmissionFlow(chatgptDomProvider)` |
+| 항목                                    | 위치                                      | 내용                                                        |
+| --------------------------------------- | ----------------------------------------- | ----------------------------------------------------------- |
+| `--chatgpt-url` 옵션 선언               | `bin/oracle-cli.ts:635`                   | 워크스페이스/폴더 URL 지정                                  |
+| `--browser-url` 은닉 alias              | `bin/oracle-cli.ts:642`                   | `--chatgpt-url`과 동일 의미                                 |
+| `--browser-port`/`--browser-debug-port` | `bin/oracle-cli.ts:719,724`               | Chrome DevTools 포트 고정                                   |
+| URL 해석                                | `src/cli/browserConfig.ts:190-191`        | `options.chatgptUrl ?? options.browserUrl` → 정규화         |
+| 포트 해석                               | `src/cli/browserConfig.ts:207,300-307`    | `browserPort ?? browserDebugPort`, 1..65535 검증            |
+| 실행 설정 병합                          | `src/browser/config.ts:75-79,111-113`     | env `ORACLE_BROWSER_PORT`도 `debugPort`로 수용              |
+| Chrome 실행                             | `src/browser/chromeLifecycle.ts:18,43-49` | `debugPort`를 chrome-launcher `port`로 전달                 |
+| 로컬 모드 네비게이션                    | `src/browser/index.ts:1356-1393`          | base URL → 로그인 → `config.url`(워크스페이스)로 이동       |
+| 원격 Chrome 모드 네비게이션             | `src/browser/index.ts:3060-3067`          | `config.resumeConversationUrl` 없으면 `config.url`로 이동   |
+| 입력/전송                               | `src/browser/index.ts:3218-3224`          | 같은 탭에서 `runProviderSubmissionFlow(chatgptDomProvider)` |
 
 핵심: 원격 Chrome 모드(`--remote-chrome`)에서도 `config.url`이 곧 이동·입력 대상이다. 즉 **래퍼가 `--chatgpt-url`을 argv에 주입하면 stock은 그 워크스페이스로 이동해서 입력한다.**
 
 ### 2.2 oracle-browser-slots (변경 대상)
 
-| 항목 | 위치 | 내용 |
-|---|---|---|
-| 슬롯 정의 | `oracle_browser_slots/model.py:13,117-124` | `SLOT_IDS=(1,2,3)`, 포트 파생, 프로필 경로 |
-| 설정 | `oracle_browser_slots/model.py:44-115` | `Settings.from_env()`, 전부 env 기반 |
-| 전역 워크스페이스 env | `oracle_browser_slots/model.py:52,111` | `ORACLE_BROWSER_SLOTS_CHATGPT_URL` (기본 `https://chatgpt.com/`) |
-| Chrome 시작 명령 | `oracle_browser_slots/launcher.py:101-113` | `--remote-debugging-port=<slot.port>` + 초기 탭 `settings.chatgpt_url` |
-| run 경로 | `oracle_browser_slots/runner.py:58-146` | 슬롯 명시, 검증 → 파일 준비 → 점유 → 실행 |
-| submit 경로 | `oracle_browser_slots/runner.py:168-192` (`claim_for_auto`) + `allocator.py` | 첫 가용 슬롯 자동 배정 |
-| argv 검증/주입 공통 지점 | `oracle_browser_slots/runner.py:428-509` | `_validated_oracle_command(slot_id, argv)` |
-| 필수 플래그 | `oracle_browser_slots/runner.py:23-26` | `--engine browser`, `--browser-model-strategy current` (누락 시 주입, 충돌 시 거부) |
-| 금지 transport 플래그 | `oracle_browser_slots/runner.py:27-33` | manual-login/chrome-path/keep-browser/remote-host/bridge |
-| CLI 진입 | `oracle_browser_slots/cli.py:17-178` | prepare/status/run/submit/followup, `Settings.from_env()` 실패 시 exit 2 |
-| followup | `oracle_browser_slots/cli.py:93-101`, `followup.py` | 원본 슬롯 고정, 대화 URL 재개 |
-| 테스트 | `tests/test_slots.py` 등 | unittest 스타일, FakeLauncher/FakeCDP 패턴 |
+| 항목                     | 위치                                                                         | 내용                                                                                |
+| ------------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| 슬롯 정의                | `oracle_browser_slots/model.py:13,117-124`                                   | `SLOT_IDS=(1,2,3,4,5)`, 포트 파생, 프로필 경로                                      |
+| 설정                     | `oracle_browser_slots/model.py:44-115`                                       | `Settings.from_env()`, 전부 env 기반                                                |
+| 전역 워크스페이스 env    | `oracle_browser_slots/model.py:52,111`                                       | `ORACLE_BROWSER_SLOTS_CHATGPT_URL` (기본 `https://chatgpt.com/`)                    |
+| Chrome 시작 명령         | `oracle_browser_slots/launcher.py:101-113`                                   | `--remote-debugging-port=<slot.port>` + 초기 탭 `settings.chatgpt_url`              |
+| run 경로                 | `oracle_browser_slots/runner.py:58-146`                                      | 슬롯 명시, 검증 → 파일 준비 → 점유 → 실행                                           |
+| submit 경로              | `oracle_browser_slots/runner.py:168-192` (`claim_for_auto`) + `allocator.py` | 첫 가용 슬롯 자동 배정                                                              |
+| argv 검증/주입 공통 지점 | `oracle_browser_slots/runner.py:428-509`                                     | `_validated_oracle_command(slot_id, argv)`                                          |
+| 필수 플래그              | `oracle_browser_slots/runner.py:23-26`                                       | `--engine browser`, `--browser-model-strategy current` (누락 시 주입, 충돌 시 거부) |
+| 금지 transport 플래그    | `oracle_browser_slots/runner.py:27-33`                                       | manual-login/chrome-path/keep-browser/remote-host/bridge                            |
+| CLI 진입                 | `oracle_browser_slots/cli.py:17-178`                                         | prepare/status/run/submit/followup, `Settings.from_env()` 실패 시 exit 2            |
+| followup                 | `oracle_browser_slots/cli.py:93-101`, `followup.py`                          | 원본 슬롯 고정, 대화 URL 재개                                                       |
+| 테스트                   | `tests/test_slots.py` 등                                                     | unittest 스타일, FakeLauncher/FakeCDP 패턴                                          |
 
 `run`(runner.py:71)과 `submit`(runner.py:175) 모두 `_validated_oracle_command`를 통과하므로, **슬롯별 `--chatgpt-url` 주입은 이 한 지점만 고치면 두 경로에 모두 적용된다.**
 
@@ -102,7 +102,7 @@ stock Oracle에는 "슬롯"이라는 개념이 없고, `--browser-port`는 단�
 ### D1. 매핑 키는 슬롯 ID
 
 - 포트 파생(`port_base + slot_id - 1`)에 내성이 있어야 하므로 슬롯 ID를 키로 쓴다.
-- 설정 키는 문자열 `"1"`, `"2"`, `"3"`만 허용한다 (JSON 객체 키 특성상 문자열).
+- 설정 키는 문자열 `"1"`, `"2"`, `"3"`, `"4"`, `"5"`만 허용한다 (JSON 객체 키 특성상 문자열).
 
 ### D2. 설정 형식: env JSON 맵 (설정 파일 도입 없음)
 
@@ -146,12 +146,12 @@ stock Oracle에는 "슬롯"이라는 개념이 없고, `--browser-port`는 단�
 
 ### D8. 검증 규칙
 
-| 대상 | 규칙 | 실패 시 |
-|---|---|---|
-| JSON 문법 | `json.loads` 성공 | `ValueError` → exit 2 |
-| 키 | `"1"|"2"|"3"`만 허용 | `ValueError` → exit 2 |
-| URL 스킴 | `http:` 또는 `https:` | `ValueError` → exit 2 |
-| URL 호스트 | 비어있지 않은 hostname | `ValueError` → exit 2 |
+| 대상        | 규칙                               | 실패 시               |
+| ----------- | ---------------------------------- | --------------------- |
+| JSON 문법   | `json.loads` 성공                  | `ValueError` → exit 2 |
+| 키          | 숫자 문자열 `1`부터 `5`만 허용     | `ValueError` → exit 2 |
+| URL 스킴    | `http:` 또는 `https:`              | `ValueError` → exit 2 |
+| URL 호스트  | 비어있지 않은 hostname             | `ValueError` → exit 2 |
 | argv 안전성 | 값이 `-` 또는 `--`로 시작하면 거부 | `ValueError` → exit 2 |
 
 호스트 제한(`chatgpt.com`/`chat.openai.com` 강제)은 두지 않는다. 래퍼는 운영자 본인의 env를 신뢰하되, "플래그로 오인될 값"만 차단한다. (검토 질문 Q4 참고)
@@ -214,53 +214,54 @@ stock Oracle에는 "슬롯"이라는 개념이 없고, `--browser-port`는 단�
 
 신규 파일 `tests/test_workspace_mapping.py` (기존 unittest 스타일):
 
-| 테스트 | 검증 내용 |
-|---|---|
-| `test_from_env_default` | env 없이 `slot_chatgpt_url`이 기본값 |
-| `test_from_env_global_only` | 전역만 설정 시 모든 슬롯이 전역 값 |
-| `test_from_env_slot_map` | 슬롯 매핑이 전역보다 우선 |
-| `test_from_env_partial_map` | 일부 슬롯만 매핑, 나머지는 전역/기본 |
-| `test_from_env_invalid_json` | 잘못된 JSON → `ValueError` |
-| `test_from_env_invalid_key` | `"4"`/`"x"` 키 → `ValueError` |
-| `test_from_env_invalid_url` | 비-http(s), 호스트 없음, `--` 시작 → `ValueError` |
-| `test_run_injects_slot_url` | `run` 경로에서 매핑 URL 주입 |
-| `test_submit_injects_slot_url` | `claim_for_auto` 경로에서 매핑 URL 주입 |
-| `test_explicit_url_wins` | 호출자 `--chatgpt-url` 명시 시 미주입 |
-| `test_browser_url_alias_wins` | `--browser-url` 명시 시 미주입 |
-| `test_duplicate_chatgpt_url_rejected` | 중복 지정 거부 |
-| `test_no_mapping_no_injection` | 매핑 없는 슬롯 argv 불변 |
-| `test_validate_auto_no_injection` | `slot_id=None` 경로에서는 미주입 |
-| `test_launcher_uses_slot_url` | `_command`가 슬롯 URL을 초기 탭으로 사용 |
+| 테스트                                | 검증 내용                                         |
+| ------------------------------------- | ------------------------------------------------- |
+| `test_from_env_default`               | env 없이 `slot_chatgpt_url`이 기본값              |
+| `test_from_env_global_only`           | 전역만 설정 시 모든 슬롯이 전역 값                |
+| `test_from_env_slot_map`              | 슬롯 매핑이 전역보다 우선                         |
+| `test_from_env_partial_map`           | 일부 슬롯만 매핑, 나머지는 전역/기본              |
+| `test_from_env_invalid_json`          | 잘못된 JSON → `ValueError`                        |
+| `test_from_env_invalid_key`           | `"4"`/`"x"` 키 → `ValueError`                     |
+| `test_from_env_invalid_url`           | 비-http(s), 호스트 없음, `--` 시작 → `ValueError` |
+| `test_run_injects_slot_url`           | `run` 경로에서 매핑 URL 주입                      |
+| `test_submit_injects_slot_url`        | `claim_for_auto` 경로에서 매핑 URL 주입           |
+| `test_explicit_url_wins`              | 호출자 `--chatgpt-url` 명시 시 미주입             |
+| `test_browser_url_alias_wins`         | `--browser-url` 명시 시 미주입                    |
+| `test_duplicate_chatgpt_url_rejected` | 중복 지정 거부                                    |
+| `test_no_mapping_no_injection`        | 매핑 없는 슬롯 argv 불변                          |
+| `test_validate_auto_no_injection`     | `slot_id=None` 경로에서는 미주입                  |
+| `test_launcher_uses_slot_url`         | `_command`가 슬롯 URL을 초기 탭으로 사용          |
 
 ---
 
 ## 6. 데이터 흐름 예시
 
 설정:
+
 ```bash
 export ORACLE_BROWSER_SLOTS_CHATGPT_URLS='{"2":"https://chatgpt.com/g/g-p-xxxx/project-b"}'
 ```
 
-| 시나리오 | 명령 | 결과 argv (변경분) |
-|---|---|---|
-| A. 슬롯 2 자동 배정 | `submit ... -- <oracle> --engine browser -p "..."` | `--chatgpt-url https://chatgpt.com/g/g-p-xxxx/project-b` 주입 |
-| B. 매핑 없는 슬롯 1 | `run --slot 1 ...` | 주입 없음, 기존 동작 |
-| C. 호출자 명시 | `run --slot 2 ... --chatgpt-url https://.../custom` | 호출자 값 유지 |
-| D. prepare | `prepare --slot 2` | Chrome 초기 탭 = 슬롯 2 워크스페이스 |
-| E. followup | `followup ...` | 매핑 미적용, 대화 URL 재개 |
+| 시나리오            | 명령                                                | 결과 argv (변경분)                                            |
+| ------------------- | --------------------------------------------------- | ------------------------------------------------------------- |
+| A. 슬롯 2 자동 배정 | `submit ... -- <oracle> --engine browser -p "..."`  | `--chatgpt-url https://chatgpt.com/g/g-p-xxxx/project-b` 주입 |
+| B. 매핑 없는 슬롯 1 | `run --slot 1 ...`                                  | 주입 없음, 기존 동작                                          |
+| C. 호출자 명시      | `run --slot 2 ... --chatgpt-url https://.../custom` | 호출자 값 유지                                                |
+| D. prepare          | `prepare --slot 2`                                  | Chrome 초기 탭 = 슬롯 2 워크스페이스                          |
+| E. followup         | `followup ...`                                      | 매핑 미적용, 대화 URL 재개                                    |
 
 ---
 
 ## 7. 영향·리스크
 
-| 리스크 | 설명 | 대응 |
-|---|---|---|
-| Cloudflare/로그인 | stock의 이중 이동(base → target)이 그대로 적용됨. 워크스페이스 접근은 슬롯 계정 권한에 의존 | 매핑 URL은 해당 슬롯 계정이 접근 가능한 워크스페이스여야 함. 기존 대응(수동 clearance, cookie sync) 동일 |
-| 기존 동작 회귀 | env 미설정 시 주입 없음 → argv 불변 | N4 테스트로 보장 |
-| argv 오염 | 슬롯 URL이 플래그로 해석될 가능성 | D8 검증(`-`/`--` 시작 거부) |
-| `--browser-url` alias 혼동 | stock에서 동일 의미인데 래퍼가 한쪽만 인식하면 사용자 혼란 | 둘 다 추적, 둘 중 하나라도 있으면 명시로 간주 |
-| 전역 env 의미 변화 | 기존 `ORACLE_BROWSER_SLOTS_CHATGPT_URL`은 launcher 초기 탭에만 반영됐는데, 이 설계는 run/submit argv에도 반영(기본값과 다를 경우) | 의도된 승격이며 README에 명시 (검토 질문 Q2) |
-| followup과의 상호작용 | 슬롯 매핑이 대화 재개를 방해하면 안 됨 | D7: followup 경로는 변경하지 않음 |
+| 리스크                     | 설명                                                                                                                              | 대응                                                                                                     |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Cloudflare/로그인          | stock의 이중 이동(base → target)이 그대로 적용됨. 워크스페이스 접근은 슬롯 계정 권한에 의존                                       | 매핑 URL은 해당 슬롯 계정이 접근 가능한 워크스페이스여야 함. 기존 대응(수동 clearance, cookie sync) 동일 |
+| 기존 동작 회귀             | env 미설정 시 주입 없음 → argv 불변                                                                                               | N4 테스트로 보장                                                                                         |
+| argv 오염                  | 슬롯 URL이 플래그로 해석될 가능성                                                                                                 | D8 검증(`-`/`--` 시작 거부)                                                                              |
+| `--browser-url` alias 혼동 | stock에서 동일 의미인데 래퍼가 한쪽만 인식하면 사용자 혼란                                                                        | 둘 다 추적, 둘 중 하나라도 있으면 명시로 간주                                                            |
+| 전역 env 의미 변화         | 기존 `ORACLE_BROWSER_SLOTS_CHATGPT_URL`은 launcher 초기 탭에만 반영됐는데, 이 설계는 run/submit argv에도 반영(기본값과 다를 경우) | 의도된 승격이며 README에 명시 (검토 질문 Q2)                                                             |
+| followup과의 상호작용      | 슬롯 매핑이 대화 재개를 방해하면 안 됨                                                                                            | D7: followup 경로는 변경하지 않음                                                                        |
 
 ---
 
