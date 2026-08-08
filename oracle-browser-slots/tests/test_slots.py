@@ -1289,6 +1289,38 @@ class PreparePersistenceTests(unittest.TestCase):
 
 
 class JobRunnerTests(unittest.TestCase):
+    def test_compatible_slots_use_exact_model_and_reasoning_capabilities(self):
+        with TemporaryDirectory() as directory:
+            service = SlotService(settings_for(Path(directory)))
+            runner = JobRunner(service, oracle_cli_path=TEST_ORACLE_CLI)
+
+            self.assertEqual(
+                runner.compatible_slots(
+                    [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol", "--browser-thinking-time", "heavy"]
+                ),
+                (1, 2),
+            )
+            self.assertEqual(
+                runner.compatible_slots(
+                    [TEST_ORACLE_CLI, "--model=gpt-5.6", "--browser-thinking-time=extended"]
+                ),
+                (3, 4, 5),
+            )
+            self.assertEqual(
+                runner.compatible_slots(
+                    [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol", "--browser-thinking-time", "standard"]
+                ),
+                (),
+            )
+            self.assertEqual(
+                runner.compatible_slots([TEST_ORACLE_CLI, "--model", "gpt-5.5-pro"]),
+                (),
+            )
+            self.assertEqual(
+                runner.compatible_slots([TEST_ORACLE_CLI, "--model", "gpt-5.6-sol"]),
+                (1, 2, 3, 4, 5),
+            )
+
     def test_missing_oracle_flags_are_injected_for_selected_slot(self):
         with TemporaryDirectory() as directory:
             settings = settings_for(Path(directory))
@@ -1931,8 +1963,8 @@ class AutoAllocatorTests(unittest.TestCase):
             self.assertEqual(len(duplicate_events), 1)
             self.assertEqual(duplicate_events[0]["event"], "rejected")
             self.assertEqual(duplicate_events[0]["outcome"], "rejected")
-            self.assertEqual(duplicate_events[0]["assigned_slot"], 1)
-            self.assertEqual(duplicate_events[0]["existing_assigned_slot"], 1)
+            self.assertIsNone(duplicate_events[0]["assigned_slot"])
+            self.assertIsNone(duplicate_events[0]["existing_assigned_slot"])
             self.assertIn("동일 request ID", duplicate_events[0]["reason"])
 
             child_release.set()
@@ -2032,6 +2064,38 @@ class AutoAllocatorTests(unittest.TestCase):
             self.assertEqual(sum(result["record"]["event"] == "finished" for result in results), 1)
             self.assertEqual(sum(result["record"]["outcome"] == "success" for result in results), 1)
 
+    def test_completed_request_replay_never_starts_a_second_child(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root)
+            commands: list[list[str]] = []
+
+            def popen(argv, *, env, close_fds):
+                commands.append(argv)
+                return ReturnCodeChild(0)
+
+            allocator = AutoAllocator(
+                service,
+                runner=self._runner(service, popen),
+                poll_interval=0.01,
+            )
+            first = allocator.submit(
+                "completed-request", [TEST_ORACLE_CLI, "-p", "first"]
+            )
+            duplicate_events: list[dict[str, object]] = []
+            replay = allocator.submit(
+                "completed-request",
+                [TEST_ORACLE_CLI, "-p", "must not submit duplicate"],
+                emit=duplicate_events.append,
+            )
+
+            self.assertEqual(first["record"]["outcome"], "success")
+            self.assertEqual(replay["exit_code"], 2)
+            self.assertEqual(len(commands), 1)
+            self.assertEqual(len(duplicate_events), 1)
+            self.assertEqual(duplicate_events[0]["event"], "rejected")
+            self.assertTrue(duplicate_events[0]["duplicate_request"])
+
     def test_duplicate_queue_request_is_rejected_with_existing_queue_position(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -2081,11 +2145,9 @@ class AutoAllocatorTests(unittest.TestCase):
             self.assertEqual(len(duplicate_events), 1)
             self.assertEqual(duplicate_events[0]["event"], "rejected")
             self.assertEqual(duplicate_events[0]["outcome"], "rejected")
-            self.assertEqual(duplicate_events[0]["queue_position"], 1)
-            self.assertEqual(duplicate_events[0]["existing_queue_position"], 1)
-            self.assertEqual(
-                duplicate_events[0]["existing_request_location"], {"queue_position": 1}
-            )
+            self.assertIsNone(duplicate_events[0]["queue_position"])
+            self.assertIsNone(duplicate_events[0]["existing_queue_position"])
+            self.assertEqual(duplicate_events[0]["existing_request_location"], {"assigned_slot": None})
 
             self.assertTrue(
                 service.finish_job(

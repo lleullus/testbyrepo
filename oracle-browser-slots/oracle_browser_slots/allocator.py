@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
+import os
 import signal
 import threading
 import time
@@ -71,6 +74,29 @@ class AutoAllocator:
             )
             self._emit(emit, record)
             return {"accepted": False, "exit_code": 2, "record": record}
+
+        try:
+            self._reserve_request(request_id)
+        except FileExistsError:
+            result = self._duplicate_result(
+                request_id,
+                queue_position=None,
+                assigned_slot=None,
+                reason="동일 request ID의 자동 submit이 이미 접수되었습니다.",
+                operator_action="기존 요청의 결과를 확인하고 새 lifecycle에는 다른 request ID를 사용하십시오.",
+            )
+            self._emit(emit, result["record"])
+            return result
+        except OSError:
+            record = self._request_record(
+                request_id,
+                event="failed",
+                outcome="failed",
+                reason="자동 submit request ID를 영구 예약할 수 없습니다.",
+                operator_action="상태 경로의 권한과 디스크 상태를 확인하십시오.",
+            )
+            self._emit(emit, record)
+            return {"accepted": False, "exit_code": 1, "record": record}
 
         try:
             normalized_command = self.runner.validate_auto_command(command)
@@ -158,7 +184,20 @@ class AutoAllocator:
             "cancel_requested": False,
             "cancel_signal": None,
             "prepared": prepared,
+            "compatible_slots": self.runner.compatible_slots(normalized_command),
         }
+        if not state["compatible_slots"]:
+            if prepared is not None:
+                prepared.cleanup()
+            record = self._request_record(
+                request_id,
+                event="rejected",
+                outcome="rejected",
+                reason="요청된 model/reasoning 조합을 지원하는 managed slot이 없습니다.",
+                operator_action="요청 수준을 변경하지 말고 지원되는 model/reasoning 조합을 사용하십시오.",
+            )
+            self._emit(emit, record)
+            return {"accepted": False, "exit_code": 2, "record": record}
         previous_handlers: dict[int, Any] = {}
         install_handlers = threading.current_thread() is threading.main_thread()
 
@@ -210,6 +249,23 @@ class AutoAllocator:
                 state["prepared"] = None
             for signal_number, previous_handler in previous_handlers.items():
                 signal.signal(signal_number, previous_handler)
+
+    def _reserve_request(self, request_id: str) -> None:
+        reservation_root = self.service.settings.state_root / "allocator-requests"
+        reservation_root.mkdir(parents=True, exist_ok=True)
+        request_key = hashlib.sha256(request_id.encode("utf-8")).hexdigest()
+        path = reservation_root / f"{request_key}.json"
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            payload = json.dumps(
+                {"request_id": request_id, "reserved_at": utc_now()},
+                ensure_ascii=False,
+                sort_keys=True,
+            ).encode("utf-8")
+            os.write(descriptor, payload + b"\n")
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
 
     def _allocate_or_queue(
         self,
@@ -270,7 +326,7 @@ class AutoAllocator:
             if attempt["assignment"] is not None:
                 return {"kind": "assignment", "assignment": attempt["assignment"]}
 
-            diagnostics = self._diagnostics()
+            diagnostics = self._diagnostics(state["compatible_slots"])
             if self._should_wait(diagnostics, state["attempted_slots"]):
                 self._enqueue_locked(request_id, identity, state, coordinator, emit)
                 return {"kind": "queued"}
@@ -322,7 +378,7 @@ class AutoAllocator:
                     )
                 last_position = position
 
-                diagnostics = self._diagnostics()
+                diagnostics = self._diagnostics(state["compatible_slots"])
                 self._raise_if_cancelled(state)
                 has_eligible_available = self._has_eligible_available(
                     diagnostics, state["attempted_slots"]
@@ -389,7 +445,7 @@ class AutoAllocator:
                         state["entry"] = None
                         return {"kind": "assignment", "assignment": attempt["assignment"]}
 
-                    diagnostics = self._diagnostics()
+                    diagnostics = self._diagnostics(state["compatible_slots"])
                     if not self._should_wait(diagnostics, state["attempted_slots"]):
                         removed, _ = coordinator.remove_unlocked(
                             request_id, identity[0], identity[1]
@@ -423,7 +479,7 @@ class AutoAllocator:
         queued_at: str | None,
         emit: LifecycleEmitter | None,
     ) -> dict[str, Any]:
-        for slot_id in SLOT_IDS:
+        for slot_id in state["compatible_slots"]:
             if slot_id in state["attempted_slots"]:
                 continue
             self._raise_if_cancelled(state)
@@ -806,12 +862,17 @@ class AutoAllocator:
             operator_action,
         )
 
-    def _diagnostics(self) -> list[dict[str, Any]]:
+    def _diagnostics(self, slot_ids: Sequence[int] = SLOT_IDS) -> list[dict[str, Any]]:
         try:
-            return [dict(record) for record in self.service.status_all()]
+            allowed = set(slot_ids)
+            return [
+                dict(record)
+                for record in self.service.status_all()
+                if record.get("slot_id") in allowed
+            ]
         except Exception as exc:
             records: list[dict[str, Any]] = []
-            for slot_id in SLOT_IDS:
+            for slot_id in slot_ids:
                 slot = self.service.settings.slot(slot_id)
                 records.append(
                     {
@@ -843,7 +904,7 @@ class AutoAllocator:
         self, diagnostics: list[dict[str, Any]], attempted_slots: list[int]
     ) -> bool:
         return self._has_status(diagnostics, OCCUPIED) and bool(
-            set(SLOT_IDS) - set(attempted_slots)
+            {record.get("slot_id") for record in diagnostics} - set(attempted_slots)
         )
 
     @staticmethod

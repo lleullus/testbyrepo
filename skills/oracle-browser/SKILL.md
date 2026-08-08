@@ -142,6 +142,11 @@ Submission:
 - Do not pass `--file` for DevSpace-mode files; they must not be ZIP-attached.
 - In the prompt, explicitly instruct ChatGPT to read the listed absolute paths
   through the DevSpace MCP plugin, and list each absolute path.
+- In every initial and followup prompt, explicitly instruct ChatGPT to perform
+  the investigation itself. It must not read or invoke the `oracle-browser`
+  skill, run the Oracle CLI or browser-slot wrapper, ask another Oracle, or
+  delegate the work to a DevSpace subagent. DevSpace tools may be used only to
+  inspect the listed paths and gather evidence for the current answer.
 - Never include the owner password, `auth.json`, tokens, or OAuth credentials in
   the prompt; the plugin depends on ChatGPT-side owner-password OAuth approval.
 - The dry run, slot, and wrapper requirements above still apply unchanged.

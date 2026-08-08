@@ -33,6 +33,8 @@ FORBIDDEN_TRANSPORT_FLAGS = (
     "--remote-host",
     "--bridge",
 )
+MODEL_FLAGS = ("--model", "--models")
+REASONING_FLAG = "--browser-thinking-time"
 
 
 class _RunInterrupted(Exception):
@@ -70,6 +72,7 @@ class JobRunner:
             raise ValueError("실행할 command가 없습니다.")
 
         try:
+            self.assert_slot_compatible(slot_id, command)
             command = self._validated_oracle_command(slot_id, command)
         except OracleTransportError as exc:
             record = self.service.run_rejection(
@@ -155,6 +158,35 @@ class JobRunner:
             raise ValueError("실행할 command가 없습니다.")
         return self._validated_oracle_command(None, command)
 
+    def compatible_slots(self, argv: Sequence[str]) -> tuple[int, ...]:
+        """Return slots with an approved capability for the canonical request."""
+
+        models = self._option_values(argv, MODEL_FLAGS)
+        reasoning_values = self._option_values(argv, (REASONING_FLAG,))
+        if len(models) > 1 or len(reasoning_values) > 1:
+            return ()
+        model = models[0] if models else "gpt-5.6-sol"
+        normalized_model = model.strip().lower()
+        if normalized_model not in ("gpt-5.6", "gpt-5.6-sol"):
+            return ()
+        if not reasoning_values:
+            return (1, 2, 3, 4, 5)
+        reasoning = reasoning_values[0]
+        normalized_reasoning = reasoning.strip().lower().replace("_", "-").replace(" ", "-")
+        if normalized_reasoning in ("heavy", "extra-high", "extrahigh", "xhigh", "pro"):
+            return (1, 2)
+        if normalized_reasoning in ("extended", "high"):
+            return (3, 4, 5)
+        return ()
+
+    def assert_slot_compatible(self, slot_id: int, argv: Sequence[str]) -> None:
+        if slot_id in self.compatible_slots(argv):
+            return
+        raise OracleTransportError(
+            f"슬롯 {slot_id}은 요청된 model/reasoning 조합과 호환되지 않습니다.",
+            "요청 수준을 변경하지 말고 해당 조합을 지원하는 managed slot을 사용하십시오.",
+        )
+
     def prepare_file_request(
         self,
         argv: Sequence[str],
@@ -179,6 +211,7 @@ class JobRunner:
 
         command = list(argv)
         try:
+            self.assert_slot_compatible(slot_id, command)
             command = self._validated_oracle_command(
                 slot_id,
                 command,
@@ -537,6 +570,27 @@ class JobRunner:
                 normalized, ("--chatgpt-url", injection)
             )
         return normalized
+
+    @staticmethod
+    def _option_values(argv: Sequence[str], flags: Sequence[str]) -> list[str]:
+        values: list[str] = []
+        index = 1
+        while index < len(argv):
+            token = argv[index]
+            if token == "--":
+                break
+            if token in flags:
+                if index + 1 < len(argv) and not argv[index + 1].startswith("--"):
+                    values.append(argv[index + 1])
+                    index += 1
+            else:
+                for flag in flags:
+                    prefix = f"{flag}="
+                    if token.startswith(prefix):
+                        values.append(token[len(prefix) :])
+                        break
+            index += 1
+        return values
 
     @staticmethod
     def _caller_chatgpt_url(argv: list[str]) -> str | None:

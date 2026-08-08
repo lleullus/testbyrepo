@@ -570,6 +570,110 @@ class FollowupExecutionTests(unittest.TestCase):
             self.assertEqual((next_parent.session_id, mode), (child_id, "implicit"))
             self.assertEqual(service.status(2)["status"], AVAILABLE)
 
+    def test_duplicate_request_id_never_creates_a_second_child(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root)
+            oracle_home = root / "oracle-home"
+            write_stock_session(oracle_home, service.settings, "duplicate-parent", slot_id=1)
+            held = service.claim_job(1, "held-for-duplicate")
+            self.assertTrue(held["accepted"])
+            waiting = threading.Event()
+            factory = FakeOracleFactory(oracle_home)
+            followup = FollowupRunner(
+                service,
+                runner=JobRunner(service, popen_factory=factory, oracle_cli_path=TEST_ORACLE_CLI),
+                repository=OracleSessionRepository(service.settings, oracle_home=oracle_home),
+                poll_interval=0.01,
+            )
+            first_result: dict[str, object] = {}
+
+            def invoke_first():
+                first_result["result"] = followup.run(
+                    "duplicate-followup",
+                    "ctx-main",
+                    [TEST_ORACLE_CLI, "-p", "first"],
+                    emit=lambda record: waiting.set() if record["event"] == "waiting" else None,
+                )
+
+            first = threading.Thread(target=invoke_first)
+            first.start()
+            self.assertTrue(waiting.wait(timeout=5))
+
+            duplicate = followup.run(
+                "duplicate-followup", "ctx-main", [TEST_ORACLE_CLI, "-p", "duplicate"]
+            )
+            self.assertEqual(duplicate["exit_code"], 2)
+            self.assertEqual(duplicate["record"]["event"], "rejected")
+            self.assertIn("동일 request ID", duplicate["record"]["reason"])
+            self.assertEqual(factory.calls, [])
+
+            service.finish_job(
+                1,
+                "held-for-duplicate",
+                held["record"]["started_at"],
+                "success",
+                0,
+                "release",
+                "없음",
+            )
+            first.join(timeout=5)
+            self.assertFalse(first.is_alive())
+            self.assertEqual(len(factory.calls), 1)
+            retry = followup.run(
+                "duplicate-followup", "ctx-main", [TEST_ORACLE_CLI, "-p", "retry"]
+            )
+            self.assertEqual(retry["exit_code"], 2)
+            self.assertEqual(len(factory.calls), 1)
+
+    def test_incompatible_occupied_origin_rejects_before_wait_or_child(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root)
+            oracle_home = root / "oracle-home"
+            write_stock_session(
+                oracle_home, service.settings, "incompatible-parent", slot_id=3
+            )
+            held = service.claim_job(3, "held-incompatible-origin")
+            self.assertTrue(held["accepted"])
+            factory = FakeOracleFactory(oracle_home)
+            events: list[dict[str, object]] = []
+
+            result = FollowupRunner(
+                service,
+                runner=JobRunner(
+                    service,
+                    popen_factory=factory,
+                    oracle_cli_path=TEST_ORACLE_CLI,
+                ),
+                repository=OracleSessionRepository(
+                    service.settings, oracle_home=oracle_home
+                ),
+                poll_interval=0.01,
+            ).run(
+                "incompatible-occupied-origin",
+                "ctx-main",
+                [
+                    TEST_ORACLE_CLI,
+                    "--model",
+                    "gpt-5.6-sol",
+                    "--browser-thinking-time",
+                    "pro",
+                    "-p",
+                    "must not wait or run",
+                ],
+                emit=events.append,
+            )
+
+            self.assertEqual(result["exit_code"], 2)
+            self.assertEqual(events[-1]["event"], "rejected")
+            self.assertFalse(any(event["event"] == "waiting" for event in events))
+            self.assertIn("호환되지 않습니다", result["record"]["reason"])
+            self.assertEqual(factory.calls, [])
+            self.assertEqual(service.status(3)["status"], OCCUPIED)
+            self.assertEqual(service.status(1)["status"], AVAILABLE)
+            self.assertEqual(service.status(2)["status"], AVAILABLE)
+
     def test_archived_parent_restores_before_spawning_stock_child(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

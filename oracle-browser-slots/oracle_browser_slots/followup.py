@@ -904,6 +904,23 @@ class FollowupRunner:
         self.poll_interval = poll_interval or service.settings.queue_poll_interval
         self.sleep = sleep
 
+    def _reserve_request(self, request_id: str) -> None:
+        reservation_root = self.service.settings.state_root / "followup-requests"
+        reservation_root.mkdir(parents=True, exist_ok=True)
+        request_key = hashlib.sha256(request_id.encode("utf-8")).hexdigest()
+        path = reservation_root / f"{request_key}.json"
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            payload = json.dumps(
+                {"request_id": request_id, "reserved_at": utc_now()},
+                ensure_ascii=False,
+                sort_keys=True,
+            ).encode("utf-8")
+            os.write(descriptor, payload + b"\n")
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
     def run(
         self,
         request_id: str,
@@ -922,6 +939,28 @@ class FollowupRunner:
                 exit_code=2,
                 reason="request ID가 비어 있습니다.",
                 operator_action="비어 있지 않은 --request-id를 지정하십시오.",
+                emit=emit,
+            )
+        try:
+            self._reserve_request(request_id)
+        except FileExistsError:
+            return self._terminal(
+                request_id,
+                selection_mode=selection_mode,
+                event="rejected",
+                exit_code=2,
+                reason="동일 request ID의 follow-up이 이미 접수되었습니다.",
+                operator_action="기존 요청의 결과를 확인하고 새 lifecycle에는 다른 request ID를 사용하십시오.",
+                emit=emit,
+            )
+        except OSError:
+            return self._terminal(
+                request_id,
+                selection_mode=selection_mode,
+                event="failed",
+                exit_code=1,
+                reason="follow-up request ID를 안전하게 예약할 수 없습니다.",
+                operator_action="managed browser 상태 경로의 권한과 디스크 상태를 확인하십시오.",
                 emit=emit,
             )
         try:
@@ -963,6 +1002,7 @@ class FollowupRunner:
                 argv, parent.session_id, child_session_id
             )
             command = self.runner.validate_auto_command(command)
+            self.runner.assert_slot_compatible(parent.slot_id, command)
         except (FollowupError, OracleTransportError, ValueError) as exc:
             reason = exc.reason if isinstance(exc, (FollowupError, OracleTransportError)) else str(exc)
             action = (
