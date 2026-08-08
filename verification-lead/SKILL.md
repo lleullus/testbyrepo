@@ -20,13 +20,21 @@ description: Use to independently verify one exact ready local Markdown Ticket d
    `behavior/INDEX.md` and files elsewhere in the tree are not authorities.
    Stop before evidence or mutation on any missing, draft, inapplicable,
    noncanonical, conflicting, or underdetermined authority.
-   Verification Lead
-   itself is the user-facing lead session and verifier; no additional verification
-   role is an input. Verification Lead must not run as a delegated subagent. If a
-   user-facing commentary channel is unavailable, stop as `unsupported` before
-   any direct evidence acquisition. This restriction does not prevent the
-   planning-only research or `Remediation Agent` dispatches specified below.
-2. Before any readiness-research dispatch and before execution, Verification
+   This workflow has exactly three official roles: (1) `Runtime Runner`, the
+   pre-approval runtime-readiness investigator for an initial or replacement
+   scenario plan defined in clause 3; (2)
+   `Verification Lead`, the user-facing lead session and verifier; and (3)
+   `Remediation Agent`, the minimum-product-change role available only for an AC
+   shown by direct evidence to be `NOT_SATISFIED`. No fourth workflow role may be
+   introduced or inferred. Verification Lead owns AC decomposition, candidate
+   and question framing, direct review of Runtime Runner results, final scenario
+   design and selection, readiness and approval decisions, post-approval direct
+   verification execution, and AC verdicts. Verification Lead must not run as a
+   delegated subagent. If a user-facing commentary channel is unavailable, stop
+   as `unsupported` before any direct evidence acquisition. This restriction does
+   not prevent the `Runtime Runner` or `Remediation Agent` dispatches specified
+   below.
+2. Before any `Runtime Runner` dispatch and before execution, Verification
    Lead itself performs a read-only lead-first planning inspection. Decompose
    every AC into observable obligations; identify the required product entrypoint,
    contract boundary, state transitions, evidence method, and cross-AC
@@ -45,22 +53,149 @@ description: Use to independently verify one exact ready local Markdown Ticket d
    expected semantic results. Product inspection may identify how to trigger or
    observe those obligations, but implementation behavior or Behavior scopes
    absent from the Ticket must not create or expand them.
-3. Readiness research is optional. Invoke one or more `Readiness Research Agent`s
-   only when the user has explicitly designated them; never infer or select one,
-   and invoke none when the user has not made that designation. Invoke them only
-   after the lead-first inspection above, through the host's
-   `Host Subagent Invocation Mechanism`. Each assignment must ask a narrow,
-   concrete unresolved question about whether an already identified runtime
-   prerequisite or preparation path is actually available. Give it the exact
-   Ticket, candidate procedure, known entrypoints or symbols, required runtime,
-   allowed planning surface, evidence to return, and stopping condition. It may
-   investigate that availability and adjacent bounded preparation options
-   read-only. It must not perform broad product discovery, take ownership of an
-   AC range, design or select scenarios, assign readiness, acquire direct AC
-   evidence, mutate the product or environment, or decide AC verdicts. Its report
-   is advisory; Verification Lead directly verifies every readiness fact used
-   below. When no agent is designated, Verification Lead performs all readiness
-   investigation directly.
+
+   For each runtime obligation, candidate design and readiness investigation are
+   one lead-owned search for a scenario that directly decides the same obligation
+   through the Ticket-required product flow and product-contract boundary. Before
+   a candidate may enter the user-facing plan, record within its existing scenario
+   record a current, complete, and nonconflicting `Readiness Basis`: the actual
+   product entrypoint and required boundary; reachable initial-state predicates
+   and state identity; each ordered step's precondition, action, and
+   next-step-relevant postcondition; the exact input or trigger and how it can be
+   supplied and confirmed; the applicable actual executable, browser, process,
+   and tool capabilities; the authoritative observation or readback source,
+   required correlation, and decision boundary; and the current availability of
+   every material fixture, provider target, authority, credential, isolation
+   surface, and other prerequisite. Tie each material fact to the narrowest
+   sufficient current source anchor that Verification Lead directly reads, or to
+   exact candidate-bound artifacts and output returned by `Runtime Runner` from
+   the selected actual tool or a bounded non-evidence runtime probe on the same
+   current project, source, execution surface, and authority context.
+   Verification Lead must directly read those anchors, artifacts, and outputs
+   before accepting any fact into the basis. This basis is part of the scenario
+   record, not a separate artifact.
+
+   Runtime Runner is a candidate-bound raw-material supplier, not a decision or
+   trust source. Its narration, summary, conclusion, recommendation, and any
+   readiness, preparation, or blocker classification are untrusted and establish
+   no fact. Verification Lead may use a Runner-supplied fact in a `Readiness
+   Basis`, candidate blocker, alternative evaluation, readiness decision, or
+   clause 4 stopping condition only when it independently establishes that fact
+   from the applicable current source anchor and, for a runtime fact, the
+   complete, nonselective raw actual-tool artifacts or output or bounded-probe
+   result. Verification Lead must determine from that material itself that it is
+   bound to the exact Ticket, current project and source, supplied candidate and
+   initial-state identity, actual input or trigger, selected execution surface,
+   and applicable authority; is current, complete, and nonselective for the
+   claimed fact without omitting a material check that started, failed, returned
+   empty, produced a tool error, or contradicted another result; has no unresolved
+   internal or source/runtime contradiction; complied with this clause's mutation
+   and AC-deciding-observation limits; and substantively supports the exact fact
+   claimed. Merely reading the material or repeating Runtime Runner's account does
+   not satisfy this rule. Throughout clauses 2 through 5, direct reading, review,
+   or evaluation of Runner-supplied material means this independent
+   determination.
+
+   If any required determination fails, do not adopt the fact, keep the candidate
+   unresolved, and either assign the exact missing or contradictory fact for
+   bounded reinvestigation under this clause or continue the same obligation's
+   search for a supported alternative. When binding, completeness, integrity, or
+   probe-boundary compliance cannot be determined from the returned raw material,
+   or Runner self-report is the only support, require a separate bounded
+   confirmation of only that unresolved fact under the same limits; Verification
+   Lead need not personally rerun every command or probe. A reinvestigation or
+   confirmation supplements rather than erases earlier material attempt outcomes.
+
+   Source review establishes only static contract, state, transition,
+   supported-surface, and authority-requirement facts. Current executable,
+   browser, process, tool, fixture, target, credential, or authority capability
+   and availability require direct output from that selected actual surface,
+   obtained and returned by `Runtime Runner` and directly reviewed by Verification
+   Lead. When dynamic entrypoint, initial-state or transition reachability, exact
+   input or trigger delivery, or observation attachment cannot otherwise be
+   directly established, have Runtime Runner use an already-available,
+   disposable, bounded non-evidence runtime probe. The probe must not prepare
+   state reused by verification, mutate product files or the verification
+   environment, shared or external state, or credentials, or reach the first
+   observation that can decide the mapped AC obligation. It may use only its own
+   disposable transient state, which it must discard, and neither its state nor
+   its result may be preserved or reused as direct AC evidence. If that boundary
+   prevents a material readiness fact from being confirmed, do not infer the
+   fact.
+
+   A missing, conflicting, or internally inconsistent `Readiness Basis` rejects
+   only that candidate; it does not establish that the obligation is `NOT_READY`
+   or `UNSUPPORTED`. Continue the same obligation's lead-owned search.
+   Verification Lead frames the materially plausible supported alternative space
+   exposed by the Ticket and applicable authorities, current product, allowed
+   verification surface, and actual tool capabilities, then assigns Runtime
+   Runner the exact unresolved runtime questions for candidate-bound
+   investigation. Runtime Runner may expose additional supported alternatives
+   within that supplied obligation, required product flow, and contract boundary,
+   but Verification Lead alone decides whether to form, design, or select a
+   candidate from them. Where relevant, assess a different initial state or
+   state-transition ordering, exact input or trigger, separate retained state,
+   supported caller or entrypoint, fixture, input, sentinel, process, browser, or
+   tool capability, extension or plugin point, configuration or provider target,
+   disposable scratch or isolation surface, and observation, readback, or
+   correlation surface. An alternative must preserve the same AC obligation,
+   Ticket-required product flow, and required product-contract boundary;
+   narrowing or redefining any of them is not an alternative.
+3. After the lead-first inspection above, Verification Lead invokes one or more
+   instances of the official `Runtime Runner` role through the host's
+   `Host Subagent Invocation Mechanism` for runtime obligations whose readiness
+   depends on actual executable, browser, process, tool, preparation, probe, or
+   supported-alternative facts. Runtime Runner is selected and assigned by
+   Verification Lead as part of this workflow; it is not optional advice and does
+   not require the user to designate a model or additional role. Each assignment
+   must give the exact Ticket, the Lead-decomposed obligation, Lead-framed
+   candidate or alternative scope, known entrypoints or symbols, unresolved
+   `Readiness Basis` facts, required runtime, allowed surface before initial or
+   replacement scenario approval, evidence to return, and stopping condition.
+
+   Runtime Runner performs runtime-readiness investigation only before initial or
+   replacement scenario approval, including when clause 8 returns an affected
+   obligation to clauses 2 through 5. It may assist read-only source inspection
+   within the supplied obligation and candidate framing; confirm actual
+   executable, browser, process, and tool capability and availability; perform
+   the bounded non-evidence runtime probes allowed by clause 2; and explore
+   materially plausible supported alternatives and bounded preparation paths that
+   preserve the supplied obligation, Ticket-required product flow, and
+   product-contract boundary. For each supplied candidate and each separately
+   identified alternative, it returns the exact current source anchors and the
+   complete, nonselective, candidate-bound raw material needed for clause 2
+   review: the exact Ticket, current project and source, candidate and
+   initial-state identity, input or trigger, selected executable, browser,
+   process, tool, and authority context for each material check; the exact
+   actual-tool action or bounded-probe invocation; all material artifacts and raw
+   output; the probe boundary, boundary-relevant readback, and result; and the raw
+   availability or absence result underlying any preparation or blocker
+   statement. For every material actual-tool or bounded-probe check that started,
+   the return retains its success, nonzero exit, timeout, empty output, tool
+   error, contradictory result, and expected-artifact absence as applicable;
+   later success must not remove an earlier material outcome. It returns enough
+   raw performed-step and stopping-point material for Verification Lead to decide
+   whether a probe remained before the first observation that can decide the
+   mapped AC obligation. `Nonselective` covers material checks for the supplied
+   candidate and claimed fact, not unrelated activity or a general execution log.
+
+   Runtime Runner must not interpret or decompose AC obligations, replace the
+   Lead's initial product understanding, finally design or select candidates or
+   scenarios, assign readiness or status, seek or accept user approval, acquire
+   direct AC evidence or reach the first AC-deciding observation, prepare or
+   mutate the product or verification environment, shared or external state, or
+   credentials, decide an AC verdict, or perform remediation. Runtime Runner is
+   the candidate-bound raw-material supplier described in clause 2, not a
+   decision or trust source; its return is readiness input only. Its prose,
+   summary, conclusion, recommendation, readiness or preparation judgment, and
+   blocker classification remain untrusted even when accompanied by raw
+   material. Verification Lead applies clause 2's independent-determination rule
+   to the returned anchors, artifacts, raw output, attempt coverage, binding, and
+   probe boundary; decides which facts the raw material establishes; and retains
+   sole ownership of candidate design and selection, alternative-set
+   completeness, stopping conditions, readiness, scenario planning, and approval.
+   No Runner assertion itself establishes a fact, and no Runner return is direct
+   AC evidence.
 4. For every Markdown AC in the Ticket, Verification Lead itself designs one or
    more verification scenarios before execution. Each scenario records a stable
    scenario ID, AC, observation target, procedure and verification surface,
@@ -84,59 +219,129 @@ description: Use to independently verify one exact ready local Markdown Ticket d
    boundary, storage identity, and post-boundary readback when persistence or
    recovery matters.
 
-   Readiness is a pre-execution fact, not an AC verdict, and is exactly one of:
-   `READY` when every material prerequisite is directly confirmed;
-   `PREPARABLE` when a material prerequisite is currently absent but a concrete,
-   bounded, allowed preparation path has been established for approval;
-   `NOT_READY` when a required prerequisite is absent and no concrete, bounded,
-   allowed preparation path remains after directly assessing the materially
-   plausible alternatives exposed by the product and verification surface;
-   `UNSUPPORTED` when the required contract boundary cannot be exercised or
-   observed on the allowed surface; or `UNSAFE` when every known path requires a
-   disallowed effect or risk. Routine use of an already available disposable
-   workspace or input does not by itself force `PREPARABLE`. Failure to find an
-   existing fixture, hook, or target is not enough for `NOT_READY`: where relevant,
-   assess supported extension or plugin points, provider or configuration targets,
+   For every planned continuation edge, the preceding step's
+   next-step-relevant postcondition must satisfy the next step's precondition
+   under the same state identity, and all predicates required concurrently at
+   the same boundary must be jointly satisfiable. A candidate with an unsatisfied
+   continuation edge or jointly unsatisfiable predicates is neither `READY` nor
+   `PREPARABLE`. Its inconsistency invalidates only that candidate and requires
+   continued investigation of materially plausible supported alternatives for
+   the same obligation. Changing the initial state, transition ordering,
+   retained-state identity, input, trigger, caller, or entrypoint forms a
+   different candidate and is valid only when it preserves the same obligation,
+   required product flow, and contract boundary.
+
+   Verification Lead assigns readiness as a pre-execution fact, not an AC
+   verdict, and assigns exactly one of:
+   `READY` when the scenario's `Readiness Basis` is current, complete,
+   nonconflicting, and directly confirms every material prerequisite;
+   `PREPARABLE` when each currently absent material prerequisite is exactly
+   identified and directly confirmed absent, every other basis fact is current,
+   complete, and nonconflicting, and the exact bounded, allowed procedure that
+   creates the prerequisite has been directly confirmed on the actual supported
+   surface, including its required capability, authority, and success check, so
+   that only user-approved execution of that procedure and the clause 7 recheck
+   remain; an internally inconsistent candidate is never `PREPARABLE`;
+   `NOT_READY`, `UNSUPPORTED`, and `UNSAFE` may be assigned only when no `READY`
+   or `PREPARABLE` candidate exists and the unsuccessful stopping condition below
+   has been satisfied. Verification Lead determines exactly one from the complete
+   alternative set, not from a single candidate: `NOT_READY` when at least one
+   materially plausible alternative has an allowed, non-unsafe, technically
+   supported product and verification path to exercise and observe the required
+   boundary apart from one or more currently absent material prerequisites, and
+   every such allowed alternative is blocked by directly confirmed absent
+   prerequisites for which no concrete, bounded, allowed preparation path
+   remains; `UNSAFE` when no alternative qualifies for `NOT_READY`, at least one
+   materially plausible technically supported alternative can exercise and
+   observe the required boundary, and every such technically supported
+   alternative requires a disallowed effect or risk; or `UNSUPPORTED` when no
+   materially plausible technically supported alternative can exercise and
+   observe the required product-contract boundary. A currently absent
+   prerequisite does not by itself make an otherwise technically supported path
+   `UNSUPPORTED`. Routine use of an already available disposable workspace or
+   input does not by itself force `PREPARABLE`. Failure to find an existing
+   fixture, hook, or target is not enough for `NOT_READY`: where relevant, assess
+   supported extension or plugin points, provider or configuration targets,
    fixtures, inputs, sentinels, process isolation, and scratch workspaces before
    ruling out bounded preparation.
-5. After directly checking every identified prerequisite, synthesize the
-   readiness findings into the verification choices that are materially
-   available. For each choice, state in one concise paragraph its required
-   preparation, cost and risk, directly provable scope, reachable final verdict,
-   and remaining uncertainty. If an unassessed plausible alternative could
-   materially improve those outcomes at reasonable cost and risk, continue
-   lead-owned planning inspection before making a recommendation. Recommend the
+
+   The search for an obligation may stop successfully only when a `READY` or
+   `PREPARABLE` candidate with a complete and nonconflicting `Readiness Basis`
+   has been established. When no such candidate exists, the search may stop
+   unsuccessfully only after every materially plausible supported alternative
+   exposed by the Ticket and applicable authorities, current product, allowed
+   verification surface, and actual tool capabilities has been evaluated from
+   exact candidate-bound materials that Verification Lead directly reviewed. For
+   runtime facts, `directly evaluated` means Verification Lead directly read the
+   applicable current source anchors and the actual-tool or bounded-probe
+   artifacts and output returned by Runtime Runner; it does not require
+   Verification Lead personally to run the command or probe. For each candidate
+   separately, those current source anchors, actual-tool output, or bounded-probe
+   results must establish at least one of: one or more material prerequisites are absent and
+   no concrete, bounded, allowed preparation path remains; the candidate cannot
+   exercise or observe the required product-contract boundary on the actual
+   allowed surface; or the candidate requires a disallowed effect or risk.
+   Different candidates may have different blockers; no shared prerequisite or
+   shared blocker is required. Failure of an initial candidate, absence of an
+   existing fixture, or one failed capability check or probe does not satisfy the
+   unsuccessful condition. Until either stopping condition is satisfied, keep the
+   candidates internal and unresolved, do not assign `NOT_READY`, `UNSUPPORTED`,
+   or `UNSAFE`, and continue the lead-owned search.
+5. After Verification Lead has directly reviewed the applicable current source
+   anchors and, for runtime facts, the exact Runtime Runner artifacts and output
+   for every identified prerequisite, and has satisfied either the successful or
+   unsuccessful clause 4 stopping condition for every runtime obligation,
+   synthesize the readiness findings into the verification choices that are
+   materially available. For each choice, state in one concise paragraph its
+   required preparation, cost and risk, directly provable scope, reachable final
+   verdict, and remaining uncertainty. If an obligation has neither an
+   established `READY` or `PREPARABLE` candidate nor a satisfied unsuccessful
+   stopping condition, continue lead-owned planning inspection and do not
+   recommend a choice or request scenario approval. Once a `READY` or
+   `PREPARABLE` candidate with a complete and nonconflicting `Readiness Basis`
+   has been established, unevaluated alternatives do not block its presentation
+   or approval and need not be investigated merely to complete the alternative
+   set. Cost and risk may distinguish among established choices. Recommend the
    choice that best fits the user's original requested outcome, and never present
    or recommend limited verification as if it could support a broader final
    verdict.
 
    Present the scenario plan under `Verification Scenarios` as one compact but
-   complete paragraph per scenario. Begin each paragraph with its scenario ID,
-   ACs, and readiness, then state its observation target, procedure and product
-   surface, expected result, direct evidence and decision criteria, and required
-   preparation, dependencies, or authority. For each runtime scenario, disclose
-   all applicable clause 4 runtime fields. Ordering, absence, and cross-surface
-   claims also disclose their correlation method, authoritative observation
-   sources, completeness basis, and decision boundary. Do not compress those
-   details into a wide table. Ask the user to explicitly approve
-   the disclosed scenario plan and preparation scope, then place at the bottom a
-   minimal summary table containing only `ID`, `AC`, `Readiness`, and `Required
-   preparation or authority`. Before that approval, do not prepare the environment
-   or acquire direct evidence. If the user rejects or changes the plan, revise the
+   complete paragraph per scenario, and include only candidates whose
+   `Readiness Basis` supports their assigned readiness. Begin each paragraph with
+   its scenario ID, ACs, and readiness, then state its observation target,
+   procedure and product surface, expected result, direct evidence and decision
+   criteria, required preparation, dependencies, or authority, and the concise
+   basis with its supporting source anchors and exact Runtime Runner actual-tool
+   or non-evidence-probe artifacts and output directly reviewed by Verification
+   Lead. For `PREPARABLE`, disclose the exact
+   confirmed-absent prerequisite, directly confirmed bounded preparation
+   procedure, actual supported surface and authority, and success check; describe
+   it only as requiring that confirmed preparation before the clause 7 recheck,
+   not as currently executable. For each runtime scenario, disclose all
+   applicable clause 4 runtime fields. Ordering, absence, and cross-surface claims
+   also disclose their correlation method, authoritative observation sources,
+   completeness basis, and decision boundary. Do not compress those details into
+   a wide table. Ask the user to explicitly approve the disclosed scenario plan
+   and preparation scope, then place at the bottom a minimal summary table
+   containing only `ID`, `AC`, `Readiness`, and `Required preparation or
+   authority`. Before that approval, do not prepare the environment or acquire
+   direct evidence; clause 2 probes are not preparation and their disposable
+   state cannot be reused. If the user rejects or changes the plan, revise the
    choices, scenario paragraphs, readiness facts, and bottom summary table, then
    request new approval. Approval is a workflow gate only; it is not direct
    evidence or authority for a canonical, shared, credential-bearing, external,
    or dangerous effect.
 6. After approval, prepare only the approved verification environment. Disposable
-   isolated agents, fixtures, inputs, failure hooks, provider test targets, and
-   scratch workspaces are allowed only when they leave product files and meaning
-   unchanged, do not mutate shared or external state or credentials, and exercise
-   the required product entrypoint and contract surface. Any broader effect still
-   requires the separate exact authority and safety checks that govern that
-   effect; chat approval does not supply them. A fixture, hook, sentinel, or
-   provider target may control or confirm a trigger through an isolated,
-   already-supported surface, but its report is not direct evidence of the
-   resulting product behavior.
+   isolated runtime instances, fixtures, inputs, failure hooks, provider test
+   targets, and scratch workspaces are allowed only when they leave product files
+   and meaning unchanged, do not mutate shared or external state or credentials,
+   and exercise the required product entrypoint and contract surface. Any broader
+   effect still requires the separate exact authority and safety checks that
+   govern that effect; chat approval does not supply them. A fixture, hook,
+   sentinel, or provider target may control or confirm a trigger through an
+   isolated, already-supported surface, but its report is not direct evidence of
+   the resulting product behavior.
 7. After preparation and before any direct evidence acquisition, directly recheck
    every prerequisite and emit the updated readiness facts. A `PREPARABLE`
    scenario becomes `READY` only after its approved preparation succeeds and its
@@ -146,18 +351,33 @@ description: Use to independently verify one exact ready local Markdown Ticket d
    deficiency only afterward. After the scenario plan is approved and readiness
    is rechecked, acquire a new evidence observation for any direct evidence, even
    when it reads the same target as planning inspection.
-8. If a scenario changes before or during execution, stop using it. Treat its
-   replacement as a new scenario: identify its prerequisites, give it a new stable
-   scenario ID and `replaces <old scenario ID>` relationship, show the revised
-   complete scenario paragraphs and bottom summary table, obtain explicit
-   approval, prepare and recheck readiness, and only then acquire replacement
-   evidence. Do not relabel evidence acquired for the old scenario as evidence
-   for its replacement. A material change to the input, trigger, injection or
-   interruption, exercised product path, observation source, expected or forbidden
-   outcome, decision boundary, lifecycle or storage identity, readback, correlation
-   or completeness basis, or obligation-to-evidence mapping changes the scenario.
-   A product remediation alone does not change an otherwise identical approved
-   scenario; recheck its readiness and collect fresh evidence under the same ID.
+8. If approved preparation, the clause 7 recheck, or execution reveals, on an
+   unchanged relevant product, execution, and authority surface, that an approved
+   scenario's `Readiness Basis` was missing, conflicting, false, or not
+   independently established under clause 2 when presented, stop and return the
+   affected obligation and every approved scenario that relied on the same failed
+   basis to clauses 2 through 5. An executed product result that contradicts an
+   expected or forbidden AC outcome at the required boundary is not by itself a
+   `Readiness Basis` defect. Revalidate the complete approved runtime scenario set
+   only when that failed basis was shared across the set. Do not use the ordinary
+   single-scenario replacement procedure until the required alternative search
+   has either established a replacement `READY` or `PREPARABLE` candidate with a
+   complete and nonconflicting `Readiness Basis`, or satisfied the clause 4
+   unsuccessful stopping condition.
+
+   If a scenario otherwise changes before or during execution, stop using it.
+   Treat its replacement as a new scenario: identify its prerequisites, give it
+   a new stable scenario ID and `replaces <old scenario ID>` relationship, show
+   the revised complete scenario paragraphs and bottom summary table, obtain
+   explicit approval, prepare and recheck readiness, and only then acquire
+   replacement evidence. Do not relabel evidence acquired for the old scenario
+   as evidence for its replacement. A material change to the input, trigger,
+   injection or interruption, exercised product path, observation source,
+   expected or forbidden outcome, decision boundary, lifecycle or storage
+   identity, readback, correlation or completeness basis, or
+   obligation-to-evidence mapping changes the scenario. A product remediation
+   alone does not change an otherwise identical approved scenario; recheck its
+   readiness and collect fresh evidence under the same ID.
 9. For any runtime/product-flow obligation, direct evidence is admissible only
    when the actually executed surface reaches the observable product-contract
    boundary required by the AC. A surface narrower than that boundary is not
@@ -305,7 +525,9 @@ description: Use to independently verify one exact ready local Markdown Ticket d
 
 ## Supported Range
 
-The active range covers direct scenario design and read-only observation of the
-current project through the allowed verification surface, remediation dispatch
-only for directly evidenced failures, and direct re-verification. The final
-result is independent of the Implementation Lead's conclusion.
+The active range covers Runtime Runner investigation before initial or replacement
+scenario approval, Verification Lead scenario design and direct read-only
+observation through the allowed verification surface, Remediation Agent dispatch
+only for directly evidenced failures, and Verification Lead direct
+re-verification. The final result is independent of the Implementation Lead's
+conclusion.
