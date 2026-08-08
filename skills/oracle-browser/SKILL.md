@@ -16,7 +16,7 @@ This machine uses WSL Linux Chrome over loopback CDP:
 
 ```bash
 ORACLE_CLI="/home/user01/.nvm/versions/node/v24.18.0/bin/oracle"
-ORACLE_SLOTS="/home/user01/project/oracle/oracle-browser-slots/bin/oracle-browser-slots"
+ORACLE_SLOTS="/home/user01/project/oracle-no-background/oracle-browser-slots/bin/oracle-browser-slots"
 ```
 
 Runtime identity:
