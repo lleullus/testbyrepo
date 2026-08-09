@@ -77,7 +77,7 @@ reasoning level. Prefer the ChatGPT UI intent names; stock Oracle normalizes
 them to its canonical names:
 
 - `instant` (`light`) uses slots 1 or 2;
-- `medium` (`standard`) uses slots 1 or 2;
+- `medium` (`standard`) uses slots 1 or 2 first, then falls back to slots 3, 4, or 5;
 - `high` (`extended`) prefers slots 3, 4, or 5, then falls back to slots 1 or 2;
 - `extra-high` (`heavy`, also `extrahigh` or `xhigh`) uses slots 1 or 2;
 - `pro` uses slots 1 or 2;

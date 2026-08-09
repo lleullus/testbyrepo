@@ -177,8 +177,10 @@ class JobRunner:
             return (1, 2)
         if normalized_reasoning in ("extended", "high"):
             return (3, 4, 5, 1, 2)
-        if normalized_reasoning in ("light", "standard", "instant", "medium"):
+        if normalized_reasoning in ("light", "instant"):
             return (1, 2)
+        if normalized_reasoning in ("standard", "medium"):
+            return (1, 2, 3, 4, 5)
         return ()
 
     def assert_slot_compatible(self, slot_id: int, argv: Sequence[str]) -> None:
