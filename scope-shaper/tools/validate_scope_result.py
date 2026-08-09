@@ -14,6 +14,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from iis_path_contract import (  # noqa: E402
+    PathContractError,
+    canonical_project_root,
+    require_canonical_owned_directory,
+    require_canonical_regular_file,
+    require_work_slug,
+)
+
+
 class ValidationError(Exception):
     pass
 
@@ -38,9 +51,10 @@ def _metadata(text: str, key: str) -> str:
 
 def _section(text: str, heading: str, level: int = 2) -> str:
     marker = "#" * level + " " + heading
-    m = re.search(rf"(?m)^{re.escape(marker)}\s*$", text)
-    if not m:
-        raise ValidationError(f"missing section: {marker}")
+    matches = list(re.finditer(rf"(?m)^{re.escape(marker)}\s*$", text))
+    if len(matches) != 1:
+        raise ValidationError(f"expected exactly one section: {marker}")
+    m = matches[0]
     start = m.end()
     next_heading = re.search(rf"(?m)^#{{1,{level}}}\s+", text[start:])
     end = start + next_heading.start() if next_heading else len(text)
@@ -49,9 +63,10 @@ def _section(text: str, heading: str, level: int = 2) -> str:
 
 def _subsection(block: str, heading: str, level: int) -> str:
     marker = "#" * level + " " + heading
-    m = re.search(rf"(?m)^{re.escape(marker)}\s*$", block)
-    if not m:
-        raise ValidationError(f"missing subsection: {marker}")
+    matches = list(re.finditer(rf"(?m)^{re.escape(marker)}\s*$", block))
+    if len(matches) != 1:
+        raise ValidationError(f"expected exactly one subsection: {marker}")
+    m = matches[0]
     start = m.end()
     next_heading = re.search(rf"(?m)^#{{1,{level}}}\s+", block[start:])
     end = start + next_heading.start() if next_heading else len(block)
@@ -62,6 +77,8 @@ def _items(block: str) -> tuple[str, ...]:
     stripped = block.strip()
     if stripped == "None":
         return ()
+    if any(not line.startswith("- ") for line in stripped.splitlines()):
+        raise ValidationError("expected Markdown list items or exact None")
     items = tuple(x.strip() for x in re.findall(r"(?m)^-\s+(.+?)\s*$", block))
     if not items:
         raise ValidationError("expected Markdown list items or exact None")
@@ -102,11 +119,13 @@ def _parse_packages(text: str) -> dict[str, Package]:
 def _release_cut(text: str) -> tuple[set[str], set[str], set[str]]:
     proposal = _section(text, "Work Package Proposal")
     cut = _subsection(proposal, "Release Cut", 3)
-    return (
-        set(_items(_subsection(cut, "MVP", 4))),
-        set(_items(_subsection(cut, "Next", 4))),
-        set(_items(_subsection(cut, "Deferred", 4))),
+    groups = tuple(
+        _items(_subsection(cut, heading, 4))
+        for heading in ("MVP", "Next", "Deferred")
     )
+    if any(len(items) != len(set(items)) for items in groups):
+        raise ValidationError("release-cut groups must not contain duplicate Work Packages")
+    return tuple(set(items) for items in groups)  # type: ignore[return-value]
 
 
 def _cycle(packages: dict[str, Package]) -> bool:
@@ -133,10 +152,37 @@ def _normalize_lines(items: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(" ".join(x.split()) for x in items)
 
 
+def _path_error(action) -> None:
+    try:
+        action()
+    except PathContractError as exc:
+        raise ValidationError(str(exc)) from exc
+
+
+def _validate_scope_path(path: Path, project_root: str, work_slug: str) -> Path:
+    try:
+        root = canonical_project_root(project_root, writable=True)
+        require_work_slug(work_slug)
+    except PathContractError as exc:
+        raise ValidationError(str(exc)) from exc
+
+    current = root
+    for component in ("docs", "planning", "scope-shaping", work_slug):
+        current = current / component
+        _path_error(lambda current=current: require_canonical_owned_directory(current, writable=True))
+    expected = current / "SCOPE-SHAPING-RESULT.md"
+    if path != expected:
+        raise ValidationError(f"Scope result must be exactly {expected}")
+    return root
+
+
 def _validate_package_file(source: Path, project_root: str, package: Package) -> str:
+    package_root = source.parent / "work-packages"
+    _path_error(lambda: require_canonical_owned_directory(package_root, writable=True))
     path = source.parent / "work-packages" / f"{package.package_id}.md"
-    if not path.is_file():
-        raise ValidationError(f"missing Work Package file: {path}")
+    _path_error(lambda: require_canonical_regular_file(path))
+    if path.parent != package_root or path.name != f"{package.package_id}.md":
+        raise ValidationError(f"invalid Work Package path: {path}")
     text = path.read_text(encoding="utf-8")
     if _metadata(text, "Status") != "ready-for-matt":
         raise ValidationError(f"{path}: Status must be ready-for-matt")
@@ -145,6 +191,10 @@ def _validate_package_file(source: Path, project_root: str, package: Package) ->
     if _metadata(text, "Work-Package") != package.package_id:
         raise ValidationError(f"{path}: Work-Package drift")
     work_slug = _metadata(text, "Suggested-Work-Slug")
+    try:
+        require_work_slug(work_slug)
+    except PathContractError as exc:
+        raise ValidationError(f"{path}: invalid Suggested-Work-Slug: {exc}") from exc
     source_ref = _metadata(text, "Source-Scope-Result")
     if (path.parent / source_ref).resolve() != source.resolve():
         raise ValidationError(f"{path}: Source-Scope-Result drift")
@@ -166,32 +216,43 @@ def _validate_package_file(source: Path, project_root: str, package: Package) ->
     return work_slug
 
 
+def _validate_common_sections(text: str) -> None:
+    claims = _section(text, "Verified Material Claims")
+    if not claims:
+        raise ValidationError("Verified Material Claims must not be empty")
+    boundary = _section(text, "Planning Boundary")
+    outcome = _subsection(boundary, "Outcome", 3)
+    if not outcome:
+        raise ValidationError("Planning Boundary Outcome must not be empty")
+    _items(_subsection(boundary, "Includes", 3))
+    _items(_subsection(boundary, "Excludes", 3))
+    for heading in (
+        "Planning Constraints",
+        "Candidate Outcome Areas",
+        "Decisions Reserved For Matt",
+        "Delivery Context",
+    ):
+        _items(_section(text, heading))
+    if _section(text, "Unresolved Material Questions").strip() != "None":
+        raise ValidationError("Unresolved Material Questions must be None")
+    _section(text, "Confirmation")
+    _metadata(text, "Confirmed By")
+    _metadata(text, "Confirmed Scope")
+
+
 def validate(path: Path) -> None:
-    if not path.is_file():
-        raise ValidationError(f"not a readable file: {path}")
+    raw_path = path.expanduser()
+    _path_error(lambda: require_canonical_regular_file(raw_path))
+    path = raw_path
     text = path.read_text(encoding="utf-8")
     if _metadata(text, "Status") != "confirmed":
         raise ValidationError("Status must be confirmed")
     _metadata(text, "Owner")
-    _metadata(text, "Work-Slug")
+    work_slug = _metadata(text, "Work-Slug")
     project_root = _metadata(text, "Project-Root")
-    root = Path(project_root)
-    if not root.is_absolute():
-        raise ValidationError("Project-Root must be absolute")
-    root = root.resolve()
-    if not root.is_dir():
-        raise ValidationError("Project-Root must be an existing directory")
-    planning_root = (root / "docs" / "planning").resolve()
-    if not path.resolve().is_relative_to(planning_root):
-        raise ValidationError("Scope result must be under Project-Root/docs/planning")
-    _section(text, "Confirmation")
-    _metadata(text, "Confirmed By")
-    _metadata(text, "Confirmed Scope")
+    _validate_scope_path(path, project_root, work_slug)
+    _validate_common_sections(text)
     shape = _metadata(text, "Planning-Shape")
-    if _section(text, "Unresolved Material Questions").strip() != "None":
-        raise ValidationError("Unresolved Material Questions must be None")
-    _section(text, "Planning Constraints")
-    _section(text, "Decisions Reserved For Matt")
     if shape == "bounded":
         if re.search(r"(?m)^## Work Package Proposal\s*$", text):
             raise ValidationError("bounded result must not contain Work Package Proposal")
@@ -222,6 +283,8 @@ def validate(path: Path) -> None:
             raise ValidationError(f"MVP is not dependency-closed at {package_id}")
 
     units = _items(_subsection(_section(text, "Work Package Proposal"), "Next Planning Units", 3))
+    if len(units) != len(set(units)):
+        raise ValidationError("Next Planning Units must not contain duplicates")
     expected_paths = {f"./work-packages/{pid}.md" for pid in sorted(mvp | next_set)}
     if set(units) != expected_paths:
         raise ValidationError("Next Planning Units must list every non-deferred package exactly once")
@@ -233,12 +296,38 @@ def validate(path: Path) -> None:
         work_slugs.add(work_slug)
 
 
+def validate_selected_work_package(path: Path) -> Path:
+    raw_path = path.expanduser()
+    _path_error(lambda: require_canonical_regular_file(raw_path))
+    if raw_path.parent.name != "work-packages" or not re.fullmatch(r"WP-\d{3}\.md", raw_path.name):
+        raise ValidationError("selected Work Package path must end in work-packages/WP-NNN.md")
+    _path_error(lambda: require_canonical_owned_directory(raw_path.parent, writable=True))
+    text = raw_path.read_text(encoding="utf-8")
+    package_id = _metadata(text, "Work-Package")
+    if raw_path.name != f"{package_id}.md":
+        raise ValidationError("selected Work Package filename does not match Work-Package metadata")
+    source_ref = _metadata(text, "Source-Scope-Result")
+    if source_ref != "../SCOPE-SHAPING-RESULT.md":
+        raise ValidationError("selected Work Package must reference its sibling Scope result")
+    source = raw_path.parent.parent / "SCOPE-SHAPING-RESULT.md"
+    validate(source)
+    source_text = source.read_text(encoding="utf-8")
+    if _metadata(source_text, "Planning-Shape") != "initiative":
+        raise ValidationError("selected Work Package source must be an initiative")
+    units = _items(
+        _subsection(_section(source_text, "Work Package Proposal"), "Next Planning Units", 3)
+    )
+    if f"./work-packages/{package_id}.md" not in units:
+        raise ValidationError("selected Work Package must be a non-deferred Next Planning Unit")
+    return source
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("scope_result", type=Path)
     args = parser.parse_args()
     try:
-        validate(args.scope_result.resolve())
+        validate(args.scope_result)
     except (OSError, ValidationError) as exc:
         print(f"INVALID: {exc}", file=sys.stderr)
         return 1

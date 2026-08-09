@@ -35,6 +35,13 @@ endpoint, abstraction, 구현 순서와 test seam은 그 자체가 승인된
 적는다. 내부 테스트 파일, mock, collaborator 또는 test seam은
 미리 고정하지 않는다.
 
+## Behavior Authorities
+
+- <project-relative local path> | Scope: <exact applicable scope>
+
+승인된 canonical Behavior authority의 경로와 적용 scope만 적는다. Behavior
+규칙 자체를 Spec에 복사하지 않는다.
+
 ## UI / UX
 
 UI 작업이 아니면 본문 전체를 정확히 `Not applicable`으로 적는다. 새롭거나

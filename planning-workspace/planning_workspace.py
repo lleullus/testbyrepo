@@ -5,15 +5,22 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import re
-import stat
 import sys
 from pathlib import Path
 from typing import Sequence
 
 
-WORK_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from iis_path_contract import (  # noqa: E402
+    PathContractError,
+    WORK_SLUG_PATTERN,
+    canonical_project_root,
+    require_owned_directory,
+)
+
 KINDS = {"work": "work", "initiative": "initiatives"}
 
 
@@ -26,31 +33,16 @@ class WorkspaceError(RuntimeError):
 
 def _owned_directory(path: Path, code: str, *, writable: bool) -> None:
     try:
-        details = path.lstat()
-    except OSError as exc:
-        raise WorkspaceError(code, f"cannot inspect {path}: {exc}") from exc
-    if stat.S_ISLNK(details.st_mode) or not stat.S_ISDIR(details.st_mode):
-        raise WorkspaceError(code, f"must be a non-symlink directory: {path}")
-    if details.st_uid != os.geteuid():
-        raise WorkspaceError(code, f"directory is not owned by the current user: {path}")
-    if details.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
-        raise WorkspaceError(code, f"directory has unsafe group/other write permission: {path}")
-    if writable and not os.access(path, os.W_OK | os.X_OK):
-        raise WorkspaceError(code, f"directory is not writable and searchable: {path}")
+        require_owned_directory(path, writable=writable)
+    except PathContractError as exc:
+        raise WorkspaceError(code, str(exc)) from exc
 
 
 def _canonical_project_root(raw: str) -> Path:
-    path = Path(raw).expanduser()
-    if not path.is_absolute():
-        raise WorkspaceError("INVALID_PROJECT_ROOT", "project root must be absolute")
     try:
-        canonical = path.resolve(strict=True)
-    except OSError as exc:
-        raise WorkspaceError("INVALID_PROJECT_ROOT", f"cannot resolve project root: {exc}") from exc
-    if canonical != path or not canonical.is_dir():
-        raise WorkspaceError("INVALID_PROJECT_ROOT", "project root must be one existing canonical directory")
-    _owned_directory(canonical, "INVALID_PROJECT_ROOT", writable=True)
-    return canonical
+        return canonical_project_root(raw, writable=True)
+    except PathContractError as exc:
+        raise WorkspaceError("INVALID_PROJECT_ROOT", str(exc)) from exc
 
 
 def _ensure_child(parent: Path, name: str) -> Path:

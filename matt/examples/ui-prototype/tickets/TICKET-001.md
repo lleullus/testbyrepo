@@ -2,7 +2,7 @@
 
 Status: ready
 Parent-Spec: ../SPEC.md
-Project-Root: /home/user01/project/matt/examples/ui-prototype
+Project-Root: /home/user01/project/iis-skills/matt/examples/ui-prototype
 Worker:
 UI: yes
 
@@ -34,6 +34,10 @@ None
 ## Verification
 
 실제 사용 시 좁은 화면과 넓은 화면에서 렌더링을 확인하고, `../UI-UX.md`의 승인된 결정과 대조한다.
+
+## Behavior Authorities
+
+- ../docs/planning/behavior/contexts/ui-information-action-order.md | Scope: 대상 화면에서 정보가 단일 주요 행동보다 먼저 제공되는 의미적 순서
 
 ## References
 

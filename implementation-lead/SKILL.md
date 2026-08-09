@@ -18,10 +18,35 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
    `docs/planning/behavior/contexts/`, `lifecycles/`, or `invariants/`
    directories, and which the parent Spec also adopts for a scope containing
    the Ticket scope. `behavior/INDEX.md` and files elsewhere in the tree are not
-   authorities. If any authority is missing, draft, inapplicable, outside the
-   canonical authority directories, conflicting, or leaves observable policy
-   undetermined, report
-   `Implementation Assignment: BLOCKED` before mutation.
+    authorities. If any authority is missing, draft, inapplicable, outside the
+    canonical authority directories, conflicting, or leaves observable policy
+    undetermined, report
+    `Implementation Assignment: BLOCKED` before mutation. Also require the Ticket
+    to declare exactly one `UI: yes` or `UI: no`. For `UI: yes`, read the parent
+    Spec's `## UI / UX` and identify exactly one applicable authority form: an
+    external local UI authority, or the approved parent Spec itself when a bounded
+    rendered contract declares it to be the scoped UI authority. Resolve an
+    external path from the Spec directory and require at least one path-only
+    Ticket `## References` item to resolve from the Ticket directory to the
+    same canonical target. The target must be a readable regular Markdown file, and an
+    external authority must contain exactly one top-metadata `Status: approved`,
+    one non-empty `Owner:`, and one explicit `Scope:`. It must still contain the
+    complete rendered-design and interaction decisions applicable to the Ticket's
+    rendered scope, with no unresolved decision in that scope. A Matt-created
+    `DESIGN.md` must have exact `Open Questions: None`; when
+    `MATERIAL_RENDERED_UI` requires terminal render disposition, the current
+    authority must contain one valid terminal disposition. A bounded parent-Spec
+    authority must contain every applicable rendered decision or direct
+    preservation condition and declare its scoped authority role. Require the
+    applicable rendered scope to contain the Ticket's rendered obligation and
+    reject a conflict with the Ticket, parent Spec, or Behavior authority. For
+    `UI: no`, require the parent Spec's `## UI / UX` to be exact
+    `Not applicable` and do not require a UI authority. On UI failure, report
+    `Implementation Assignment: BLOCKED` before mutation with the affected AC or
+    rendered boundary, the parent-Spec-adopted target, the Ticket-referenced
+    target, the exact missing, draft, incomplete, unresolved, target-mismatch,
+    scope-mismatch, stale-disposition, or conflict fact, and the Spec/UI authority
+    owner as next owner.
 2. If the user explicitly designates one or more implementation research models,
    invoke `Implementation Research Agent` roles using only those designated models
    through the host's `Host Subagent Invocation Mechanism` for read-only
@@ -87,11 +112,17 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
 7. Review the actual project diff against the Ticket scope, confirm the
    implementation steps and their checks from the resulting project, and map
    every Markdown acceptance criterion (AC) to implementation and check
-   coverage. After implementation, for each materially distinct route, trace in
-   the resulting project and actual diff from the actual trigger or contract
-   boundary through the applicable real caller, registration/export, product
-   configuration, executable/dependency/startup wiring, and integration link to
-   the Ticket-owned outcome/readback surface. From the minimum set of safe,
+   coverage. For `UI: yes`, also review whether the rendered result matches the
+   authority's applicable scope and whether applicable responsive conditions;
+   loading, empty, error, success, or permission states; and accessibility
+   semantics, focus, or keyboard behavior have an evident implementation path.
+   Do not defer an obvious source-visible omission to Verification Lead, but do
+   not issue the final UI or verification verdict. After implementation, for
+   each materially distinct route, trace in the resulting project and actual
+   diff from the actual trigger or contract boundary through the applicable real
+   caller, registration/export, product configuration,
+   executable/dependency/startup wiring, and integration link to the
+   Ticket-owned outcome/readback surface. From the minimum set of safe,
    authorized actual-product focused checks for those routes, obtain current
    direct raw product-boundary evidence; an existing supported product-level
    check may be reused, and a Ticket-created executable, startup, or entry may
@@ -174,12 +205,17 @@ Implementation Subagent is invoked for project mutation only after the Lead
 reports `Implementation Assignment: FEASIBLE`.
 
 The compound direct implementation contract is: Ticket for this increment's
-acceptance ownership, parent Spec for outcome/delivery scope/Non-Goals and
-non-behavior constraints, and Ticket-declared approved Behavior authorities for
-their exact semantic scopes. Do not import duties from the Behavior index or an
-authority scope absent from the Ticket. Research findings and Implementation
-Subagent narration do not replace this contract, the actual diff, or project
-checks.
+acceptance ownership; parent Spec for outcome, delivery scope, Non-Goals, and
+non-behavior constraints; Ticket-declared approved Behavior authorities for
+their exact semantic scopes; and, for `UI: yes`, the applicable complete
+approved UI authority for rendered design, interaction, responsive behavior,
+accessibility presentation, and applicable visual and interaction states in its
+exact rendered scope. UI authority supplies meaning only for rendered
+obligations already owned by the Ticket and parent Spec; it cannot add ACs,
+expand product scope, or reverse the parent Spec. Do not import duties from the
+Behavior index or an authority scope absent from the Ticket. Research findings
+and Implementation Subagent narration do not replace this contract, the actual
+diff, or project checks.
 
 ## Supported Range
 

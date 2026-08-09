@@ -32,9 +32,15 @@ Owner: 예시 planning owner
 
 넓은 화면과 좁은 화면에서 승인된 제시 순서를 관찰해 확인한다.
 
+## Behavior Authorities
+
+- ./docs/planning/behavior/contexts/ui-information-action-order.md | Scope: 대상 화면에서 정보가 단일 주요 행동보다 먼저 제공되는 의미적 순서
+
 ## UI / UX
 
-사용자가 채택한 결정은 `UI-UX.md`에 승인된 참조로 기록되어 있다. `PROTOTYPE-NOTE.md`는 검토 배경일 뿐 권위가 아니다.
+- ./UI-UX.md | Scope: 대상 화면의 정보와 단일 주요 행동의 rendered ordering 및 narrow/wide viewport 보존
+
+`PROTOTYPE-NOTE.md`는 검토 배경일 뿐 권위가 아니다.
 
 ## Open Questions
 

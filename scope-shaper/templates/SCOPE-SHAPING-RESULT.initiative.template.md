@@ -4,7 +4,7 @@ Status: confirmed
 Owner: <owner>
 Project-Root: <absolute project root>
 Work-Slug: <slug>
-Planning-Shape: bounded | initiative
+Planning-Shape: initiative
 
 ## Original Request
 

@@ -51,6 +51,42 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
             self.assertIn("lifecycles/", contract)
             self.assertIn("invariants/", contract)
 
+    def test_ui_authority_reaches_both_leads_and_is_revalidated(self) -> None:
+        to_spec = (ROOT / "matt" / "skills" / "to-spec" / "SKILL.md").read_text(encoding="utf-8")
+        to_tickets = (ROOT / "matt" / "skills" / "to-tickets" / "SKILL.md").read_text(encoding="utf-8")
+        implementation = (ROOT / "implementation-lead" / "SKILL.md").read_text(encoding="utf-8")
+        verification = (ROOT / "verification-lead" / "SKILL.md").read_text(encoding="utf-8")
+        for producer in (to_spec, to_tickets):
+            self.assertIn("complete", producer)
+            self.assertIn("approved", producer)
+        for lead in (implementation, verification):
+            normalized = " ".join(lead.split())
+            for required in (
+                "UI: yes",
+                "same canonical target",
+                "Status: approved",
+                "applicable rendered",
+                "Open Questions: None",
+                "MATERIAL_RENDERED_UI",
+                "bounded parent-Spec",
+            ):
+                self.assertIn(required, normalized)
+            self.assertIn("UI: no", normalized)
+
+    def test_ui_authority_blocks_unresolved_or_incomplete_approved_content(self) -> None:
+        to_tickets = (ROOT / "matt" / "skills" / "to-tickets" / "SKILL.md").read_text(encoding="utf-8")
+        implementation = (ROOT / "implementation-lead" / "SKILL.md").read_text(encoding="utf-8")
+        verification = (ROOT / "verification-lead" / "SKILL.md").read_text(encoding="utf-8")
+        for lead in (to_tickets, implementation, verification):
+            normalized = " ".join(lead.split())
+            self.assertIn("complete", normalized)
+            self.assertIn("no unresolved", normalized)
+            self.assertIn("incomplete", normalized)
+            self.assertIn("Owner:", normalized)
+            self.assertIn("Scope:", normalized)
+            self.assertIn("Open Questions: None", normalized)
+            self.assertIn("terminal disposition", normalized)
+
     def test_behavior_approval_state_precedes_completion_without_unlocking_spec(self) -> None:
         lead = (ROOT / "behavior-design-lead" / "SKILL.md").read_text(encoding="utf-8")
         matt = (ROOT / "matt" / "skills" / "ask-matt" / "SKILL.md").read_text(encoding="utf-8")

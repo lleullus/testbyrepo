@@ -1,6 +1,6 @@
 ---
 name: ask-matt
-description: Use when a user presents or pastes a project, feature, product, or architecture brief for planning, clarification, specification, or ticket preparation, including a declarative brief without an explicit command; do not intercept explicit implementation requests.
+description: Use for an ordinary bounded planning request, or for a later explicit continuation from one exact confirmed bounded Scope result or one exact ready-for-matt Work Package. Do not intercept an initiative-scale request that has not completed Scope Shaper or an explicit implementation request.
 ---
 
 # Ask Matt
@@ -256,6 +256,53 @@ Behavior owns semantic product behavior; `DESIGN.md` owns rendered expression
 and interaction. Neither silently overrides the other. A conflict blocks final
 confirmation. A material Behavior delta returns the authority, every adopting
 Spec, and affected unfinished Tickets to `draft`.
+
+## Entry Routing And Scope Handoff Preflight
+
+Before Grill, Behavior Design, UI routing, workspace creation, or Spec writing,
+classify and validate the entry:
+
+1. An ordinary bounded request enters the normal flow only when it does not name
+   a Scope result or Work Package, does not explicitly request Scope Shaper, and
+   does not contain several potentially independent product outcomes. Technical
+   depth, file count, or implementation layers alone do not make an initiative.
+2. A direct brief returns to Scope Shaper when outcomes may be independently
+   accepted, deferred, or rejected; when an MVP/Next/Deferred cut among outcomes
+   is material; when product dependencies among outcomes remain undecided; or
+   when split versus merge is itself unresolved.
+3. A bounded Scope continuation must name one exact absolute local Markdown path
+   at
+   `<Project-Root>/docs/planning/scope-shaping/<Work-Slug>/SCOPE-SHAPING-RESULT.md`.
+   Run the canonical `scope-shaper/tools/validate_scope_result.py` validator and
+   require `Status: confirmed`, `Planning-Shape: bounded`, exact
+   `Project-Root`, matching lowercase kebab-case `Work-Slug`, and exact
+   `Unresolved Material Questions: None`. Inherit its Planning Boundary and
+   Planning Constraints, carry Decisions Reserved For Matt into the first
+   integrated frontier, and use Delivery Context only as non-normative evidence.
+4. An initiative continuation must name one exact raw, non-symlink local path at
+   `<Project-Root>/docs/planning/scope-shaping/<scope-slug>/work-packages/WP-NNN.md`.
+   Apply the validator's selected-Work-Package raw-path gate before validating
+   its source. Require `Status: ready-for-matt`, matching `Project-Root`, a
+   matching `Work-Package` filename, lowercase kebab-case
+   `Suggested-Work-Slug`, the same canonical confirmed initiative source, and
+   exact source/package Outcome, Includes, Excludes, Dependencies, and Decisions
+   Reserved For Matt. The package must be one of the source's non-deferred Next
+   Planning Units. Plan only that package and apply source Planning Constraints
+   whose scope contains it.
+5. A named initiative Scope result without one exact selected ready Work Package
+   never enters Ask Matt. Draft, invalid, unresolved, wrong-project,
+   noncanonical, symlinked, deferred, or drifted sources or packages also stop
+   here.
+
+On failure, do not begin the normal flow. Report:
+
+```text
+ASK MATT: BLOCKED
+Input: <exact source or Work Package path>
+Reason: <invalid status, wrong project, unresolved questions, path or slug drift,
+         invalid or deferred package, boundary drift, or exact defect>
+Next action: <return to Scope Shaper or select one exact ready Work Package>
+```
 
 ## Main Flow
 

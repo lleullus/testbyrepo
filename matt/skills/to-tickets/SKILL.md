@@ -199,10 +199,14 @@ Implementation Lead selects focused source, check, and provisional smoke facts
 needed for implementation and integration closure and reports current-session
 AC coverage without assigning a final verdict. The independent Verification
 Lead directly maps every exact AC to approved scenarios, owns execution,
-readback, cleanup, and the AC verdicts, and does not rely on a separate handoff
-artifact, assessor, runner, or result schema. Do not prescribe an internal
-verification seam that could substitute for the approved observable product
-behavior.
+readback, cleanup, and the AC verdicts. It does not delegate AC decomposition,
+scenario design or selection, readiness decisions, direct AC evidence, or
+verdicts to a separate assessor or runner, and does not require a separate
+handoff artifact or result schema. The active `Runtime Runner` may provide only
+pre-approval, candidate-bound runtime-readiness raw material under Verification
+Lead's contract; it does not own scenarios, readiness, direct AC evidence, or
+verdicts. Do not prescribe an internal verification seam that could substitute
+for the approved observable product behavior.
 
 ## Blocker rules
 
@@ -249,17 +253,24 @@ may differ because relative paths resolve from the Ticket directory.
 
 Do not wrap that authority path in backticks or combine it with a label, colon
 prefix, parenthetical explanation, or URL. The target must be a readable
-regular file with exactly one top-metadata `Status: approved` entry, and its
-content must establish complete approved UI/UX authority for this Ticket's
-rendered scope; a status-only or Design Read/style-only document is
-insufficient for new/material UI. Other References remain context only and
-cannot supply product or UI authority. Put any explanation outside the
-authority list item.
+regular file with exactly one top-metadata `Status: approved` entry, exactly one
+non-empty `Owner:`, and exactly one explicit `Scope:` containing this Ticket's
+rendered obligation. Its content must establish complete approved UI/UX
+authority for that scope with no unresolved rendered-design or interaction
+decision; an incomplete, status-only, or Design Read/style-only document is insufficient for
+new/material UI. A Matt-created `DESIGN.md` must retain exact
+`Open Questions: None`. When `MATERIAL_RENDERED_UI` requires terminal render
+disposition, the current authority must retain one valid terminal disposition.
+For a bounded parent-Spec authority, the approved Spec must still contain every
+applicable rendered decision or direct preservation condition and declare its
+scoped authority role. Other References remain context only and cannot supply
+product or UI authority. Put any explanation outside the authority list item.
 
-If the adopted authority's scoped decisions changed after Spec approval, or
-the relationship to the approved Spec cannot be established, do not create or
-ready the Ticket. Return the changed UI delta to the Spec owner for explicit
-approval instead of adopting the current file silently.
+If the adopted authority's metadata, completeness, unresolved-decision state,
+terminal disposition, or scoped decisions changed after Spec approval, or the
+relationship to the approved Spec cannot be established, do not create or ready
+the Ticket. Return the changed UI delta to the Spec/UI authority owner for
+explicit approval instead of adopting the current file silently.
 
 ## Behavior authority rules
 

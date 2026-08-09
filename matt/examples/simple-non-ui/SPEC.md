@@ -3,7 +3,7 @@
 Status: approved
 Owner: 예시 planning owner
 
-이 문서의 `approved`는 사용자가 이미 확인하고 미해결 제품 결정이 없다는 계약 상태 예시일 뿐, 실제 제품 요구사항이나 실행 fixture가 아니다. 일반 non-UI 흐름에는 Wayfinder나 prototype이 필요하지 않다.
+이 문서의 `approved`는 사용자가 이미 확인하고 미해결 제품 결정이 없다는 계약 상태 예시일 뿐, 실제 제품 요구사항이나 실행 fixture가 아니다. 일반 non-UI 흐름에는 별도 initiative shaping이나 prototype이 필요하지 않다.
 
 ## Problem
 
@@ -31,6 +31,10 @@ Owner: 예시 planning owner
 ## Verification Expectations
 
 대상 동작과 명시된 비대상 경로를 기존 프로젝트의 검증 방법으로 확인한다.
+
+## Behavior Authorities
+
+- ./docs/planning/behavior/contexts/non-ui-operation.md | Scope: 정의된 입력에서 조정되는 non-UI 동작과 명시된 비대상 경로의 보존
 
 ## UI / UX
 

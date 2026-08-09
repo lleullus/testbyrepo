@@ -37,6 +37,13 @@ None
 Acceptance Criteria를 관찰할 안정적인 결과 또는 검증 경계를 적는다.
 실제 focused test seam은 Implementation Lead가 현재 저장소를 보고 선택한다.
 
+## Behavior Authorities
+
+- <project-relative local path> | Scope: <exact applicable scope>
+
+Parent Spec이 채택한 동일한 authority와 포함되는 exact scope를 적고 Behavior
+규칙 자체는 복사하지 않는다.
+
 ## References
 
 - ../SPEC.md

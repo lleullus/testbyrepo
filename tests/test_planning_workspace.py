@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -50,6 +52,27 @@ class PlanningWorkspaceTests(unittest.TestCase):
             (project / "docs").symlink_to(elsewhere, target_is_directory=True)
             with self.assertRaises(planning_workspace.WorkspaceError):
                 planning_workspace.prepare(str(project), "reservation-flow")
+
+    def test_planning_workspace_cli_works_from_arbitrary_cwd(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.home()) as raw, tempfile.TemporaryDirectory() as cwd:
+            project = Path(raw).resolve()
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(MODULE_PATH),
+                    "prepare",
+                    "--project-root",
+                    str(project),
+                    "--work-slug",
+                    "reservation-flow",
+                ],
+                cwd=cwd,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((project / "docs" / "planning" / "work" / "reservation-flow").is_dir())
 
 
 if __name__ == "__main__":

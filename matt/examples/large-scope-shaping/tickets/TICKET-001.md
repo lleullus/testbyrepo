@@ -1,8 +1,8 @@
-# TICKET-001: 큰 변경에서 확정한 작은 동작 구현
+# TICKET-001: initiative에서 선택한 작은 동작 구현
 
 Status: ready
 Parent-Spec: ../SPEC.md
-Project-Root: /home/user01/project/matt/examples/large-wayfinder
+Project-Root: /home/user01/project/iis-skills/matt/examples/large-scope-shaping
 Worker:
 UI: no
 
@@ -24,7 +24,7 @@ Parent Spec에서 확정한 작은 non-UI 동작 하나를 완료한다.
 ## Non-Goals
 
 - 큰 변경 전체 구현
-- Wayfinder 후보의 추가 채택
+- sibling Work Package의 추가 채택
 - UI 변경
 
 ## Blockers
@@ -35,9 +35,14 @@ None
 
 실제 사용 시 대상 프로젝트의 기존 검증으로 Acceptance Criteria와 비대상 영역을 확인한다.
 
+## Behavior Authorities
+
+- ../docs/planning/behavior/contexts/selected-outcome.md | Scope: selected Work Package의 작은 non-UI 동작과 sibling outcome의 비대상 경계
+
 ## References
 
 - ../SPEC.md
-- ../WAYFINDER.md
+- ../docs/planning/scope-shaping/example-initiative/SCOPE-SHAPING-RESULT.md
+- ../docs/planning/scope-shaping/example-initiative/work-packages/WP-001.md
 
-`../WAYFINDER.md`는 탐색 배경이며 구현 권위가 아니다.
+Scope result와 Work Package는 lineage와 planning context이며 Spec 또는 Behavior authority를 대체하지 않는다.

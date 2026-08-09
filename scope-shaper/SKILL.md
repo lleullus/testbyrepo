@@ -1,6 +1,6 @@
 ---
 name: scope-shaper
-description: "Use when the user explicitly requests Scope Shaper for one proposed change, or when an IIS request contains several potentially independent product outcomes. Investigate the connected planning landscape with the exact user-designated Investigation Runner roster, verify material claims directly, and produce either one bounded Ask Matt handoff or a conditional Work Package proposal in the same result. End at observable scope and unavoidable constraints; leave detailed product policy, UI/UX, and implementation design to their IIS owners."
+description: "Use when the user explicitly requests Scope Shaper for one proposed change, or when an IIS request contains several potentially independent product outcomes. Explicit Scope Shaper requests and initiative-scale IIS requests take precedence over Ask Matt. Investigate the connected planning landscape with the exact user-designated Investigation Runner roster, verify material claims directly, and produce either one bounded Ask Matt handoff or a conditional Work Package proposal in the same result. End at observable scope and unavoidable constraints; leave detailed product policy, UI/UX, and implementation design to their IIS owners."
 compatibility: "Requires read access to one exact existing project root and a host subagent invocation mechanism. Confirmed artifacts are written only under that project's docs/planning tree."
 ---
 
@@ -402,8 +402,10 @@ It owns:
 - Work Package definitions and release cut when applicable; and
 - the confirmation record.
 
-Use `templates/SCOPE-SHAPING-RESULT.template.md`. Write it only after user
-confirmation with `Status: confirmed` and `Unresolved Material Questions: None`.
+Use `templates/SCOPE-SHAPING-RESULT.bounded.template.md` for a bounded result
+and `templates/SCOPE-SHAPING-RESULT.initiative.template.md` for an initiative.
+Write the selected template only after user confirmation with
+`Status: confirmed` and `Unresolved Material Questions: None`.
 
 ### Bounded Continuation
 
@@ -435,12 +437,13 @@ python3 <scope-shaper-directory>/tools/validate_scope_result.py \
   <absolute-SCOPE-SHAPING-RESULT.md-path>
 ```
 
-The validator checks structural integrity and boundary drift: confirmed source,
-required planning sections, open material questions, unique package IDs, valid
-acyclic dependencies, release-cut membership, MVP dependency closure, expected
-package files, source links, and package Outcome/Includes/Excludes/Dependencies
-matching the source. It does not grade product judgment, depth classification,
-or exact explanatory prose.
+The validator checks structural integrity and boundary drift: canonical owned
+non-symlink source and Work Package paths, confirmed source, required planning
+sections, open material questions, lowercase kebab-case work slugs, unique
+package IDs, valid acyclic dependencies, release-cut membership, MVP dependency
+closure, expected package files, source links, and package
+Outcome/Includes/Excludes/Dependencies matching the source. It does not grade
+product judgment, depth classification, or exact explanatory prose.
 
 ## Handoff
 
