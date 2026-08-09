@@ -1069,6 +1069,29 @@ class FollowupRunner:
                 emit=emit,
             )
 
+        if prepared is not None:
+            try:
+                prepared_record = self.runner.attachment_prepared_record(
+                    prepared,
+                    operation="followup",
+                    request_id=request_id,
+                    slot_id=parent.slot_id,
+                )
+                self._emit(
+                    emit,
+                    self._annotate_runner_record(
+                        prepared_record,
+                        request_id,
+                        selection_mode,
+                        context_id,
+                        parent,
+                        child_session_id,
+                    ),
+                )
+            except BaseException:
+                prepared.cleanup()
+                raise
+
         cancellation: dict[str, int | bool | None] = {
             "requested": False,
             "signal": None,
@@ -1089,6 +1112,45 @@ class FollowupRunner:
                     previous_handlers[signal_number] = signal.getsignal(signal_number)
                     signal.signal(signal_number, cancel_handler)
 
+            status = self.service.status(parent.slot_id)
+            if status.get("status") not in {AVAILABLE, OCCUPIED}:
+                return self._terminal(
+                    request_id,
+                    selection_mode=selection_mode,
+                    event="failed",
+                    exit_code=1,
+                    reason=(
+                        f"부모의 원 슬롯 {parent.slot_id}을 사용할 수 없습니다: "
+                        f"{status.get('reason', status.get('status'))}"
+                    ),
+                    operator_action=(
+                        f"다른 슬롯으로 전환하지 않았습니다. "
+                        f"{status.get('operator_action', '')}"
+                    ).strip(),
+                    context_id=context_id,
+                    parent=parent,
+                    child_session_id=child_session_id,
+                    emit=emit,
+                )
+
+            if status.get("status") == OCCUPIED:
+                waiting_emitted = True
+                waiting = self._record(
+                    request_id,
+                    event="waiting",
+                    outcome="waiting",
+                    selection_mode=selection_mode,
+                    context_id=context_id,
+                    parent=parent,
+                    child_session_id=child_session_id,
+                    reason=(
+                        f"부모의 원 슬롯 {parent.slot_id}이 점유 중이므로 이 슬롯만 "
+                        "자동 만료 없이 기다립니다."
+                    ),
+                    operator_action="호출자 취소 또는 원 슬롯 해제를 기다리십시오.",
+                )
+                self._emit(emit, waiting)
+
             while claim is None:
                 if cancellation["requested"]:
                     return self._cancel_before_claim(
@@ -1100,8 +1162,16 @@ class FollowupRunner:
                         cancellation["signal"],
                         emit,
                     )
-                status = self.service.status(parent.slot_id)
-                if status.get("status") == OCCUPIED:
+                attempted = self.runner.claim_for_auto(
+                    parent.slot_id,
+                    request_id,
+                    command,
+                    apply_workspace_mapping=False,
+                )
+                if attempted.get("accepted"):
+                    claim = attempted
+                    break
+                if attempted.get("record", {}).get("status") == OCCUPIED:
                     if not waiting_emitted:
                         waiting_emitted = True
                         waiting = self._record(
@@ -1113,43 +1183,13 @@ class FollowupRunner:
                             parent=parent,
                             child_session_id=child_session_id,
                             reason=(
-                                f"부모의 원 슬롯 {parent.slot_id}이 점유 중이므로 이 슬롯만 "
-                                "자동 만료 없이 기다립니다."
+                                f"부모의 원 슬롯 {parent.slot_id}이 status 이후 점유되어 "
+                                "이 슬롯만 자동 만료 없이 기다립니다."
                             ),
                             operator_action="호출자 취소 또는 원 슬롯 해제를 기다리십시오.",
                         )
                         self._emit(emit, waiting)
                     self.sleep(self.poll_interval)
-                    continue
-                if status.get("status") != AVAILABLE:
-                    return self._terminal(
-                        request_id,
-                        selection_mode=selection_mode,
-                        event="failed",
-                        exit_code=1,
-                        reason=(
-                            f"부모의 원 슬롯 {parent.slot_id}을 사용할 수 없습니다: "
-                            f"{status.get('reason', status.get('status'))}"
-                        ),
-                        operator_action=(
-                            f"다른 슬롯으로 전환하지 않았습니다. {status.get('operator_action', '')}"
-                        ).strip(),
-                        context_id=context_id,
-                        parent=parent,
-                        child_session_id=child_session_id,
-                        emit=emit,
-                    )
-
-                attempted = self.runner.claim_for_auto(
-                    parent.slot_id,
-                    request_id,
-                    command,
-                    apply_workspace_mapping=False,
-                )
-                if attempted.get("accepted"):
-                    claim = attempted
-                    break
-                if attempted.get("record", {}).get("status") == OCCUPIED:
                     continue
                 record = attempted.get("record", {})
                 return self._terminal(

@@ -89,6 +89,7 @@ class PreparedAttachment:
     original_file_inputs: tuple[str, ...]
     request_id: str
     requires_session_manifest: bool
+    include_file_report: bool
     _cleaned: bool = False
 
     def write_manifest(
@@ -381,6 +382,9 @@ class FileAttachmentPolicy:
                     original_file_inputs=tuple(_merged_file_inputs(groups)),
                     request_id=request_id,
                     requires_session_manifest=_requires_session_manifest(command),
+                    include_file_report=_has_option_before_terminator(
+                        command, "--files-report"
+                    ),
                 )
         except AttachmentPreparationError:
             if temporary_directory is not None:
@@ -689,6 +693,15 @@ def _normalize_file_command(
 
 def _requires_session_manifest(argv: Sequence[str]) -> bool:
     return not any(token.split("=", 1)[0] in SESSIONLESS_FLAGS for token in argv[1:])
+
+
+def _has_option_before_terminator(argv: Sequence[str], flag: str) -> bool:
+    for token in argv[1:]:
+        if token == "--":
+            return False
+        if token == flag:
+            return True
+    return False
 
 
 def _display_relative_path(path: Path, cwd: Path) -> str:

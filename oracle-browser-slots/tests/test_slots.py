@@ -1320,6 +1320,12 @@ class JobRunnerTests(unittest.TestCase):
             )
             self.assertEqual(
                 runner.compatible_slots(
+                    [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol", "--browser-thinking-time", "low"]
+                ),
+                (1, 2),
+            )
+            self.assertEqual(
+                runner.compatible_slots(
                     [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol", "--browser-thinking-time", "medium"]
                 ),
                 (1, 2, 3, 4, 5),
@@ -1880,6 +1886,148 @@ class AutoAllocatorTests(unittest.TestCase):
             popen_factory=popen_factory,
             oracle_cli_path=TEST_ORACLE_CLI,
         )
+
+    def test_submit_rejects_incompatibility_and_missing_identity_before_file_preparation(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root)
+            runner = self._runner(
+                service,
+                lambda _argv, **_kwargs: self.fail("child must not start"),
+            )
+            allocator = AutoAllocator(service, runner=runner, poll_interval=0.01)
+
+            with patch.object(runner, "prepare_file_request") as prepare:
+                incompatible = allocator.submit(
+                    "incompatible-before-zip",
+                    [
+                        TEST_ORACLE_CLI,
+                        "--browser-thinking-time",
+                        "unsupported",
+                        "--file",
+                        "/must/not/be/read",
+                    ],
+                )
+            self.assertEqual(incompatible["exit_code"], 2)
+            prepare.assert_not_called()
+
+            with patch(
+                "oracle_browser_slots.allocator.current_process_identity",
+                return_value=None,
+            ), patch.object(runner, "prepare_file_request") as prepare:
+                missing_identity = allocator.submit(
+                    "identity-before-zip",
+                    [TEST_ORACLE_CLI, "--file", "/must/not/be/read"],
+                )
+            self.assertEqual(missing_identity["exit_code"], 1)
+            prepare.assert_not_called()
+
+    def test_allocator_diagnostics_probe_only_deduplicated_compatible_slots(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root, ready_slots=(3, 5))
+            allocator = AutoAllocator(service, poll_interval=0.01)
+
+            with patch.object(service, "status", wraps=service.status) as status, patch.object(
+                service,
+                "status_all",
+                side_effect=AssertionError("allocator admission must not probe all slots"),
+            ):
+                diagnostics = allocator._diagnostics((5, 3, 5))
+
+            self.assertEqual([record["slot_id"] for record in diagnostics], [3, 5])
+            self.assertEqual(
+                [call.args[0] for call in status.call_args_list],
+                [3, 5],
+            )
+
+    def test_non_head_waiter_probes_viability_once_until_promoted(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root)
+            held = [
+                service.claim_job(slot_id, f"held-{slot_id}")
+                for slot_id in SLOT_IDS
+            ]
+            self.assertTrue(all(result["accepted"] for result in held))
+            first_queued = threading.Event()
+            second_queued = threading.Event()
+            first = AutoAllocator(
+                service,
+                runner=self._runner(
+                    service, lambda _argv, **_kwargs: ReturnCodeChild(0)
+                ),
+                poll_interval=0.01,
+            )
+            second = AutoAllocator(
+                service,
+                runner=self._runner(
+                    service, lambda _argv, **_kwargs: ReturnCodeChild(0)
+                ),
+                poll_interval=0.01,
+            )
+            results: dict[str, dict[str, object]] = {}
+
+            def submit(allocator, request_id, queued):
+                results[request_id] = allocator.submit(
+                    request_id,
+                    [TEST_ORACLE_CLI, "-p", request_id],
+                    emit=lambda record: queued.set()
+                    if record["event"] == "queued"
+                    else None,
+                )
+
+            first_thread = threading.Thread(
+                target=submit, args=(first, "probe-head", first_queued)
+            )
+            second_thread = threading.Thread(
+                target=submit, args=(second, "probe-non-head", second_queued)
+            )
+            first_thread.start()
+            self.assertTrue(first_queued.wait(timeout=5))
+            with patch.object(
+                second, "_diagnostics", wraps=second._diagnostics
+            ) as diagnostics:
+                second_thread.start()
+                self.assertTrue(second_queued.wait(timeout=5))
+                deadline = time.monotonic() + 1
+                while (
+                    not any(call.args for call in diagnostics.call_args_list)
+                    and time.monotonic() < deadline
+                ):
+                    time.sleep(0.01)
+                viability_calls = [
+                    call
+                    for call in diagnostics.call_args_list
+                    if call.args == (SLOT_IDS,)
+                ]
+                self.assertEqual(len(viability_calls), 1)
+                time.sleep(0.05)
+                viability_calls = [
+                    call
+                    for call in diagnostics.call_args_list
+                    if call.args == (SLOT_IDS,)
+                ]
+                self.assertEqual(len(viability_calls), 1)
+
+                self.assertTrue(
+                    service.finish_job(
+                        1,
+                        "held-1",
+                        held[0]["record"]["started_at"],
+                        "success",
+                        0,
+                        "release",
+                        "없음",
+                    )["released"]
+                )
+                first_thread.join(timeout=5)
+                second_thread.join(timeout=5)
+
+            self.assertFalse(first_thread.is_alive())
+            self.assertFalse(second_thread.is_alive())
+            self.assertEqual(results["probe-head"]["exit_code"], 0)
+            self.assertEqual(results["probe-non-head"]["exit_code"], 0)
 
     def test_submit_uses_first_available_slot_in_order(self):
         with TemporaryDirectory() as directory:
@@ -2760,10 +2908,26 @@ class AttachmentPolicyTests(unittest.TestCase):
                 oracle_cli_path=TEST_ORACLE_CLI,
                 attachment_policy=policy,
             )
-            result = runner.run(1, "upload-failure", [TEST_ORACLE_CLI, "--file", str(source)])
+            events: list[dict[str, object]] = []
+            result = runner.run(
+                1,
+                "upload-failure",
+                [TEST_ORACLE_CLI, "--file", str(source)],
+                emit=events.append,
+            )
             self.assertEqual(result["exit_code"], 7)
             self.assertEqual(result["record"]["outcome"], "failed")
             self.assertEqual(len(popen_calls), 1)
+            self.assertEqual(
+                [event["event"] for event in events],
+                ["attachment_prepared", "started", "finished"],
+            )
+            prepared_event = events[0]
+            self.assertEqual(prepared_event["selected_file_count"], 1)
+            self.assertEqual(prepared_event["selected_file_bytes"], source.stat().st_size)
+            self.assertEqual(prepared_event["generated_zip"]["name"], "oracle-attachments.zip")
+            self.assertNotIn("selected_files", prepared_event)
+            self.assertNotIn(str(root), json.dumps(prepared_event))
             self.assertEqual(service.status(1)["status"], AVAILABLE)
             generated_zip = Path(popen_calls[0][popen_calls[0].index("--file") + 1])
             self.assertFalse(generated_zip.exists())
@@ -2784,6 +2948,42 @@ class AttachmentPolicyTests(unittest.TestCase):
             self.assertFalse(rejected["accepted"])
             self.assertIn("selection failed", rejected["record"]["reason"])
             claim.assert_not_called()
+
+    def test_attachment_event_failure_cleans_zip_without_claim(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            settings = settings_for(root)
+            service = SlotService(
+                settings,
+                cdp=FakeCDP({1: LoginResult(True, "ready", "없음")}),
+                launcher=FakeLauncher(),
+            )
+            self.assertEqual(service.prepare(1)["status"], AVAILABLE)
+            source = root / "source.txt"
+            source.write_text("source", encoding="utf-8")
+            policy = self._policy(root, selector=lambda _groups, _cwd: [source])
+            runner = JobRunner(
+                service,
+                popen_factory=lambda _argv, **_kwargs: self.fail("child must not start"),
+                oracle_cli_path=TEST_ORACLE_CLI,
+                attachment_policy=policy,
+            )
+
+            def failing_emit(record):
+                if record["event"] == "attachment_prepared":
+                    raise RuntimeError("event sink failed")
+
+            with patch.object(service, "claim_job", wraps=service.claim_job) as claim:
+                with self.assertRaisesRegex(RuntimeError, "event sink failed"):
+                    runner.run(
+                        1,
+                        "event-failure",
+                        [TEST_ORACLE_CLI, "--file", str(source)],
+                        emit=failing_emit,
+                    )
+
+            claim.assert_not_called()
+            self.assertEqual(list((root / "zip-temp").iterdir()), [])
 
     def test_successful_child_with_missing_or_failed_manifest_fails_and_releases_slot(self):
         for manifest_result in (
@@ -3008,6 +3208,7 @@ class AttachmentPolicyTests(unittest.TestCase):
                 )
                 return ReturnCodeChild(0)
 
+            events: list[dict[str, object]] = []
             result = AutoAllocator(
                 service,
                 runner=JobRunner(
@@ -3020,9 +3221,16 @@ class AttachmentPolicyTests(unittest.TestCase):
             ).submit(
                 "submit-zip",
                 [TEST_ORACLE_CLI, "--file", str(source)],
+                emit=events.append,
             )
             self.assertEqual(result["exit_code"], 0)
             self.assertEqual(len(child_commands), 1)
+            prepared_events = [
+                event for event in events if event["event"] == "attachment_prepared"
+            ]
+            self.assertEqual(len(prepared_events), 1)
+            self.assertEqual(events[0]["event"], "attachment_prepared")
+            self.assertEqual(prepared_events[0]["selected_file_count"], 1)
             command = child_commands[0]
             self.assertEqual(command.count("--file"), 1)
             self.assertEqual(command[command.index("--browser-attachments") + 1], "always")
@@ -3030,6 +3238,10 @@ class AttachmentPolicyTests(unittest.TestCase):
             self.assertTrue(manifest_path.exists())
             self.assertFalse(Path(command[command.index("--file") + 1]).exists())
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                prepared_events[0]["generated_zip"]["sha256"],
+                manifest["zip"]["sha256"],
+            )
             self.assertEqual(manifest["prompt_submission"]["submitted"], True)
 
             second_policy = self._policy(root, selector=lambda _groups, _cwd: [source])

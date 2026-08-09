@@ -116,6 +116,21 @@ class JobRunner:
             self._emit(emit, record)
             return {"accepted": False, "exit_code": 2, "record": record}
 
+        if prepared is not None:
+            try:
+                self._emit(
+                    emit,
+                    self.attachment_prepared_record(
+                        prepared,
+                        operation="run",
+                        request_id=job_id,
+                        slot_id=slot_id,
+                    ),
+                )
+            except BaseException:
+                prepared.cleanup()
+                raise
+
         try:
             claim = self.service.claim_job(slot_id, job_id)
         except BaseException:
@@ -177,7 +192,7 @@ class JobRunner:
             return (1, 2)
         if normalized_reasoning in ("extended", "high"):
             return (3, 4, 5, 1, 2)
-        if normalized_reasoning in ("light", "instant"):
+        if normalized_reasoning in ("light", "instant", "low"):
             return (1, 2)
         if normalized_reasoning in ("standard", "medium"):
             return (1, 2, 3, 4, 5)
@@ -202,6 +217,45 @@ class JobRunner:
         if prepared is None:
             return list(argv), None
         return prepared.command, prepared
+
+    @staticmethod
+    def attachment_prepared_record(
+        prepared: PreparedAttachment,
+        *,
+        operation: str,
+        request_id: str,
+        slot_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Describe one prepared ZIP without treating it as upload evidence."""
+
+        record: dict[str, Any] = {
+            "operation": operation,
+            "event": "attachment_prepared",
+            "outcome": "prepared",
+            "request_id": request_id,
+            "job_id": request_id,
+            "slot_id": slot_id,
+            "assigned_slot": slot_id,
+            "selected_file_count": len(prepared.selected_files),
+            "selected_file_bytes": sum(
+                selected.size_bytes for selected in prepared.selected_files
+            ),
+            "generated_zip": {
+                "name": prepared.zip_name,
+                "size_bytes": prepared.zip_size_bytes,
+                "sha256": prepared.zip_sha256,
+            },
+            "requires_session_manifest": prepared.requires_session_manifest,
+        }
+        if prepared.include_file_report:
+            record["selected_files"] = [
+                {
+                    "relative_path": selected.relative_path,
+                    "size_bytes": selected.size_bytes,
+                }
+                for selected in prepared.selected_files
+            ]
+        return record
 
     def claim_for_auto(
         self,

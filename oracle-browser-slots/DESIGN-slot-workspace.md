@@ -1,3 +1,7 @@
+> **Historical, non-authoritative, superseded design draft. Do not use this
+> document as the current contract.** Current behavior is defined by
+> `README.md`, `oracle_browser_slots/`, and `tests/`.
+
 # 오라클 브라우저 슬롯별 워크스페이스 통합 — 상세 설계
 
 버전: v0.1 (검토 요청용 초안)  

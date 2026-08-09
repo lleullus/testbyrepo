@@ -14,7 +14,9 @@ import threading
 import time
 import unittest
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
+from oracle_browser_slots.attachments import FileAttachmentPolicy
 from oracle_browser_slots.cdp import CDPError, LoginResult
 from oracle_browser_slots.followup import (
     FollowupError,
@@ -249,6 +251,9 @@ class FakeOracleFactory:
                 "archive": {"archived": False},
             },
         }
+        file_value = option_value(command, "--file")
+        if file_value is not None:
+            child["options"]["file"] = [file_value]
         child_directory = self.oracle_home / "sessions" / child_id
         child_directory.mkdir(parents=True)
         (child_directory / "meta.json").write_text(
@@ -515,28 +520,35 @@ class FollowupExecutionTests(unittest.TestCase):
                     emit=events.append,
                 )
 
-            thread = threading.Thread(target=invoke)
-            thread.start()
-            deadline = time.monotonic() + 5
-            while not any(event["event"] == "waiting" for event in events) and time.monotonic() < deadline:
-                time.sleep(0.01)
-            self.assertTrue(any(event["event"] == "waiting" for event in events))
-            self.assertEqual(factory.calls, [])
+            with patch.object(service, "status", wraps=service.status) as status:
+                thread = threading.Thread(target=invoke)
+                thread.start()
+                deadline = time.monotonic() + 5
+                while (
+                    not any(event["event"] == "waiting" for event in events)
+                    and time.monotonic() < deadline
+                ):
+                    time.sleep(0.01)
+                self.assertTrue(any(event["event"] == "waiting" for event in events))
+                self.assertEqual(factory.calls, [])
+
+                released = service.finish_job(
+                    2,
+                    "held-slot-two",
+                    held["record"]["started_at"],
+                    "success",
+                    0,
+                    "release",
+                    "없음",
+                )
+                self.assertTrue(released["released"])
+                thread.join(timeout=5)
+                self.assertFalse(thread.is_alive())
+                self.assertEqual(status.call_count, 1)
+                self.assertEqual(status.call_args.args, (2,))
+
             self.assertEqual(service.status(1)["status"], AVAILABLE)
             self.assertEqual(service.status(3)["status"], AVAILABLE)
-
-            released = service.finish_job(
-                2,
-                "held-slot-two",
-                held["record"]["started_at"],
-                "success",
-                0,
-                "release",
-                "없음",
-            )
-            self.assertTrue(released["released"])
-            thread.join(timeout=5)
-            self.assertFalse(thread.is_alive())
 
             result = result_holder["result"]
             self.assertEqual(result["exit_code"], 0)
@@ -569,6 +581,78 @@ class FollowupExecutionTests(unittest.TestCase):
             next_parent, mode = repository.select_parent("ctx-main")
             self.assertEqual((next_parent.session_id, mode), (child_id, "implicit"))
             self.assertEqual(service.status(2)["status"], AVAILABLE)
+
+    def test_file_followup_emits_one_prepared_event_before_status_claim_and_child(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root)
+            oracle_home = root / "oracle-home"
+            write_stock_session(
+                oracle_home, service.settings, "file-followup-parent", slot_id=2
+            )
+            source = root / "source.txt"
+            source.write_text("source evidence", encoding="utf-8")
+            temporary_root = root / "zip-temp"
+            temporary_root.mkdir()
+            policy = FileAttachmentPolicy(
+                selector=lambda _groups, _cwd: [source],
+                oracle_home=oracle_home,
+                temporary_root=temporary_root,
+            )
+            events: list[dict[str, object]] = []
+            factory = FakeOracleFactory(oracle_home)
+            result = FollowupRunner(
+                service,
+                runner=JobRunner(
+                    service,
+                    popen_factory=factory,
+                    oracle_cli_path=TEST_ORACLE_CLI,
+                    attachment_policy=policy,
+                ),
+                repository=OracleSessionRepository(
+                    service.settings, oracle_home=oracle_home
+                ),
+            ).run(
+                "file-followup",
+                "ctx-main",
+                [
+                    TEST_ORACLE_CLI,
+                    "--files-report",
+                    "--file",
+                    str(source),
+                    "-p",
+                    "continue with file",
+                ],
+                emit=events.append,
+            )
+
+            self.assertEqual(result["exit_code"], 0)
+            prepared = [
+                event for event in events if event["event"] == "attachment_prepared"
+            ]
+            self.assertEqual(len(prepared), 1)
+            self.assertLess(
+                events.index(prepared[0]),
+                next(
+                    index
+                    for index, event in enumerate(events)
+                    if event["event"] == "started"
+                ),
+            )
+            self.assertEqual(prepared[0]["operation"], "followup")
+            self.assertEqual(prepared[0]["assigned_slot"], 2)
+            self.assertEqual(
+                prepared[0]["selected_files"],
+                [
+                    {
+                        "relative_path": os.path.relpath(source, Path.cwd()).replace(
+                            os.sep, "/"
+                        ),
+                        "size_bytes": source.stat().st_size,
+                    }
+                ],
+            )
+            self.assertNotIn(str(temporary_root), json.dumps(prepared[0]))
 
     def test_duplicate_request_id_never_creates_a_second_child(self):
         with TemporaryDirectory() as directory:

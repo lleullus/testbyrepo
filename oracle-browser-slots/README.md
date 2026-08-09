@@ -75,21 +75,34 @@ in the occupancy record; status and run will mark the slot `사용 불가` until
 explicit `prepare` recovers it.
 
 `submit` accepts a request ID and the same canonical stock Oracle argv without a
-slot. It claims the first available slot in 1, 2, 3, 4, 5 order, injects that slot's
-fixed `--remote-chrome`, and emits lifecycle JSONL on stderr. When all usable
+slot. It claims the first available slot in the model/reasoning-compatible
+preference order implemented by `JobRunner.compatible_slots`, injects that slot's
+fixed `--remote-chrome`, and emits lifecycle JSONL on stderr. The implementation
+and its routing regression tests are authoritative. When all usable
 slots are occupied it emits a FIFO queue record and waits without automatic
 expiry. `submit` accepts no caller-supplied `--remote-chrome`; the selected
 slot endpoint is always authoritative. Ctrl-C or SIGTERM cancels a waiting
 request or safely stops a running child without retrying it elsewhere.
 
-`--opencode-conversation-id` is optional for ordinary `run` and `submit`. When
+Before packaging, `submit` rejects a request with no compatible managed slot
+and verifies the current process identity. A queued request takes one initial
+compatible-route viability snapshot; afterward only the FIFO head performs
+repeated slot diagnostics and claim attempts. Non-head waiters inspect queue
+identity, position, cancellation, and dead-entry purge without repeatedly
+probing Chrome/CDP.
+
+`--opencode-conversation-id` is optional for ordinary `run` and `submit`. It is
+an exact caller-owned context key, not a wrapper-attested provenance claim. When
 present, the wrapper gives the stock run a unique session slug, waits for that
 canonical child to terminate, and atomically records the exact OpenCode
 conversation ID and originating managed slot/profile in the stock session's
-`meta.json`. The ID must come from the caller's current OpenCode conversation;
-the wrapper never infers ownership from a session filename, current directory,
-or unrelated global sessions. Without this option, existing `run` and `submit`
-argv and behavior are unchanged. For context-aware requests, the wrapper owns
+`meta.json`. The caller uses the runtime-provided current conversation ID when
+available; otherwise the conversation owner creates one collision-resistant key
+once, distributes it to delegated work, and reuses that exact string only for
+the same conversation. The wrapper never infers ownership from a session
+filename, current directory, or unrelated global sessions. Without this option,
+existing `run` and `submit` argv and behavior are unchanged. For context-aware
+requests, the wrapper owns
 `--browser-archive` and passes `never`; callers cannot override that policy.
 
 `followup` requires that durable OpenCode conversation ID. Without
@@ -104,6 +117,12 @@ fails without falling back to the implicit candidate. No eligible parent means
 failure before a child is spawned or a prompt is submitted, never a new-chat
 fallback.
 
+Implicit selection requires the exact caller context key. An explicit parent is
+a deliberate adoption and may carry a different or missing parent context; the
+new child is registered under the current caller context. This exception does
+not bypass parent termination, stable conversation, managed origin slot/profile,
+or final authoritative readback requirements.
+
 The parent origin slot is authoritative for `followup`. If occupied, the caller
 waits only for that slot without automatic expiry and can cancel with Ctrl-C,
 SIGTERM, or SIGHUP. If that slot is unprepared or unavailable, the request fails
@@ -111,6 +130,12 @@ with its recovery action and never checks or claims another slot. Once claimed,
 the wrapper invokes the canonical stock CLI with `--followup <parent-session-id>`
 and the fixed origin `--remote-chrome`; stock Oracle performs the ChatGPT
 automation and creates a separate child session.
+
+After parent selection, command validation, compatibility, and attachment
+preparation, `followup` performs one full origin-slot status check. If occupied,
+later polls use only exact-slot atomic claim attempts; they do not repeatedly
+run state-mutating CDP status probes. The existing post-claim readiness check
+still runs before the child starts.
 
 When an otherwise eligible parent was archived, `followup` restores that exact
 ChatGPT conversation through the originating slot's CDP session after claiming
@@ -139,7 +164,7 @@ byte count, and SHA-256. A successful child becomes the newest eligible implicit
 parent for the next call because it inherits the exact OpenCode conversation and
 origin-slot evidence.
 
-When `run` or `submit` receives `--file` (or one of its stock aliases), the
+When `run`, `submit`, or `followup` receives `--file` (or one of its stock aliases), the
 wrapper reuses stock Oracle 0.16.1 file selection, creates one deflated ZIP,
 and passes only that ZIP to the canonical Oracle child. Source and generated-ZIP
 size preflight caps are not applied by this wrapper; operating-system, disk,
@@ -151,6 +176,14 @@ directory and points to it from `meta.json`; sessionless validation commands
 such as `--dry-run` still report and clean up the generated ZIP but do not
 require a session manifest. The generated ZIP is removed after the child
 exits, including failure and interruption paths.
+
+Every file-bearing `run`, `submit`, and `followup` emits exactly one
+`attachment_prepared` lifecycle record after ZIP write/hash and before any
+queue, claim, wait, or child start. It contains selected-file count and aggregate
+bytes, generated ZIP name/bytes/SHA-256, and whether a session manifest is
+required. Relative selected paths and sizes are included only when the original
+argv contains `--files-report` before its first standalone `--`. The record is
+preparation evidence, not upload or prompt-submission evidence.
 
 ## Runtime boundaries
 
@@ -171,6 +204,11 @@ Tests and non-production runs can isolate the runtime with:
 - `ORACLE_BROWSER_SLOTS_CDP_REQUEST_TIMEOUT`
 - `ORACLE_BROWSER_SLOTS_QUEUE_POLL_INTERVAL`
 - `ORACLE_BROWSER_SLOTS_ORACLE_CLI` for an explicit absolute-path test binary only
+
+`ORACLE_BROWSER_SLOTS_ORACLE_CLI` changes only the child execution seam used by
+tests and non-production runs. File selection parity remains tied to the
+canonical stock Oracle 0.16.1 installation; the override is not a supported
+alternate production Oracle distribution.
 
 ## Slot-wise ChatGPT workspace URLs
 

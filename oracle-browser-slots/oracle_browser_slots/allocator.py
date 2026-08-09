@@ -121,6 +121,30 @@ class AutoAllocator:
             self._emit(emit, record)
             return {"accepted": False, "exit_code": 2, "record": record}
 
+        compatible_slots = self.runner.compatible_slots(normalized_command)
+        if not compatible_slots:
+            record = self._request_record(
+                request_id,
+                event="rejected",
+                outcome="rejected",
+                reason="요청된 model/reasoning 조합을 지원하는 managed slot이 없습니다.",
+                operator_action="요청 수준을 변경하지 말고 지원되는 model/reasoning 조합을 사용하십시오.",
+            )
+            self._emit(emit, record)
+            return {"accepted": False, "exit_code": 2, "record": record}
+
+        identity = current_process_identity()
+        if identity is None:
+            record = self._request_record(
+                request_id,
+                event="failed",
+                outcome="failed",
+                reason="현재 submit process의 Linux process starttime을 확인할 수 없습니다.",
+                operator_action="/proc 상태를 확인한 뒤 submit을 다시 실행하십시오.",
+            )
+            self._emit(emit, record)
+            return {"accepted": False, "exit_code": 1, "record": record}
+
         prepared: PreparedAttachment | None = None
         try:
             normalized_command, prepared = self.runner.prepare_file_request(
@@ -159,19 +183,19 @@ class AutoAllocator:
             self._emit(emit, record)
             return {"accepted": False, "exit_code": 2, "record": record}
 
-        identity = current_process_identity()
-        if identity is None:
-            if prepared is not None:
+        if prepared is not None:
+            try:
+                self._emit(
+                    emit,
+                    self.runner.attachment_prepared_record(
+                        prepared,
+                        operation="submit",
+                        request_id=request_id,
+                    ),
+                )
+            except BaseException:
                 prepared.cleanup()
-            record = self._request_record(
-                request_id,
-                event="failed",
-                outcome="failed",
-                reason="현재 submit process의 Linux process starttime을 확인할 수 없습니다.",
-                operator_action="/proc 상태를 확인한 뒤 submit을 다시 실행하십시오.",
-            )
-            self._emit(emit, record)
-            return {"accepted": False, "exit_code": 1, "record": record}
+                raise
 
         state: dict[str, Any] = {
             "entry": None,
@@ -184,20 +208,9 @@ class AutoAllocator:
             "cancel_requested": False,
             "cancel_signal": None,
             "prepared": prepared,
-            "compatible_slots": self.runner.compatible_slots(normalized_command),
+            "compatible_slots": compatible_slots,
+            "viability_snapshot_taken": False,
         }
-        if not state["compatible_slots"]:
-            if prepared is not None:
-                prepared.cleanup()
-            record = self._request_record(
-                request_id,
-                event="rejected",
-                outcome="rejected",
-                reason="요청된 model/reasoning 조합을 지원하는 managed slot이 없습니다.",
-                operator_action="요청 수준을 변경하지 말고 지원되는 model/reasoning 조합을 사용하십시오.",
-            )
-            self._emit(emit, record)
-            return {"accepted": False, "exit_code": 2, "record": record}
         previous_handlers: dict[int, Any] = {}
         install_handlers = threading.current_thread() is threading.main_thread()
 
@@ -327,6 +340,7 @@ class AutoAllocator:
                 return {"kind": "assignment", "assignment": attempt["assignment"]}
 
             diagnostics = self._diagnostics(state["compatible_slots"])
+            state["viability_snapshot_taken"] = True
             if self._should_wait(diagnostics, state["attempted_slots"]):
                 self._enqueue_locked(request_id, identity, state, coordinator, emit)
                 return {"kind": "queued"}
@@ -378,81 +392,22 @@ class AutoAllocator:
                     )
                 last_position = position
 
-                diagnostics = self._diagnostics(state["compatible_slots"])
-                self._raise_if_cancelled(state)
-                has_eligible_available = self._has_eligible_available(
-                    diagnostics, state["attempted_slots"]
-                )
-                has_occupied = self._has_status(diagnostics, OCCUPIED)
-
-                if not has_occupied and not has_eligible_available:
-                    removed, _ = coordinator.remove_unlocked(
-                        request_id, identity[0], identity[1]
-                    )
-                    if not removed:
-                        raise CoordinationError(
-                            "자동 배정 queue에서 현재 요청을 원자적으로 제거하지 못했습니다.",
-                            "queue 파일과 상태 경로를 확인하십시오.",
-                        )
-                    state["entry"] = None
-                    result = self._no_slot_result(
-                        request_id,
-                        diagnostics,
-                        state["attempted_slots"],
-                        reassignment_reasons=state["reassignment_reasons"],
-                        reason="대기 중 더는 해제를 기다릴 점유 슬롯이 없고 사용 가능한 슬롯도 없습니다.",
-                        operator_action="슬롯별 operator_action을 수행한 뒤 prepare와 submit을 다시 실행하십시오.",
-                    )
-                    self._emit(emit, result["record"])
-                    return {"kind": "terminal", "result": result}
-
-                if position == 1 and has_eligible_available:
-                    attempt = self._try_assign_locked(
-                        request_id,
-                        command,
-                        state,
-                        queue_position=position,
-                        queued_at=state["queued_at"],
-                        emit=emit,
-                    )
-                    if attempt["terminal"] is not None:
-                        removed, _ = coordinator.remove_unlocked(
-                            request_id, identity[0], identity[1]
-                        )
-                        if not removed:
-                            raise CoordinationError(
-                                "자동 배정 queue에서 실패한 요청을 제거하지 못했습니다.",
-                                "queue 파일과 상태 경로를 확인하십시오.",
-                            )
-                        state["entry"] = None
-                        return {"kind": "terminal", "result": attempt["terminal"]}
-                    if attempt["assignment"] is not None:
-                        removed, _ = coordinator.remove_unlocked(
-                            request_id, identity[0], identity[1]
-                        )
-                        if not removed:
-                            self._release_unstarted(
-                                request_id,
-                                attempt["assignment"],
-                                reason="queue head를 제거하지 못해 child 제출을 중단했습니다.",
-                                operator_action="queue 파일을 확인하고 prepare로 슬롯 상태를 점검하십시오.",
-                            )
-                            state["assignment"] = None
-                            raise CoordinationError(
-                                "자동 배정 queue head를 원자적으로 제거하지 못했습니다.",
-                                "queue 파일과 상태 경로를 확인하고 슬롯 상태를 점검하십시오.",
-                            )
-                        state["entry"] = None
-                        return {"kind": "assignment", "assignment": attempt["assignment"]}
-
+                diagnostics: list[dict[str, Any]] | None = None
+                if not state["viability_snapshot_taken"]:
                     diagnostics = self._diagnostics(state["compatible_slots"])
-                    if not self._should_wait(diagnostics, state["attempted_slots"]):
+                    state["viability_snapshot_taken"] = True
+                    self._raise_if_cancelled(state)
+                    if not self._should_wait(
+                        diagnostics, state["attempted_slots"]
+                    ) and not self._has_eligible_available(
+                        diagnostics, state["attempted_slots"]
+                    ):
                         removed, _ = coordinator.remove_unlocked(
                             request_id, identity[0], identity[1]
                         )
                         if not removed:
                             raise CoordinationError(
-                                "자동 배정 queue에서 현재 요청을 제거하지 못했습니다.",
+                                "자동 배정 queue에서 현재 요청을 원자적으로 제거하지 못했습니다.",
                                 "queue 파일과 상태 경로를 확인하십시오.",
                             )
                         state["entry"] = None
@@ -461,11 +416,107 @@ class AutoAllocator:
                             diagnostics,
                             state["attempted_slots"],
                             reassignment_reasons=state["reassignment_reasons"],
-                            reason="FIFO head가 사용할 수 있는 슬롯을 확보하지 못했습니다.",
-                            operator_action="슬롯별 원인과 operator_action을 확인하십시오.",
+                            reason="대기 시작 시 사용할 수 있거나 해제를 기다릴 슬롯이 없습니다.",
+                            operator_action="슬롯별 operator_action을 수행한 뒤 prepare와 submit을 다시 실행하십시오.",
                         )
                         self._emit(emit, result["record"])
                         return {"kind": "terminal", "result": result}
+
+                if position == 1:
+                    if diagnostics is None:
+                        diagnostics = self._diagnostics(state["compatible_slots"])
+                        self._raise_if_cancelled(state)
+                    has_eligible_available = self._has_eligible_available(
+                        diagnostics, state["attempted_slots"]
+                    )
+                    has_occupied = self._has_status(diagnostics, OCCUPIED)
+
+                    if not has_occupied and not has_eligible_available:
+                        removed, _ = coordinator.remove_unlocked(
+                            request_id, identity[0], identity[1]
+                        )
+                        if not removed:
+                            raise CoordinationError(
+                                "자동 배정 queue에서 현재 요청을 원자적으로 제거하지 못했습니다.",
+                                "queue 파일과 상태 경로를 확인하십시오.",
+                            )
+                        state["entry"] = None
+                        result = self._no_slot_result(
+                            request_id,
+                            diagnostics,
+                            state["attempted_slots"],
+                            reassignment_reasons=state["reassignment_reasons"],
+                            reason="대기 중 더는 해제를 기다릴 점유 슬롯이 없고 사용 가능한 슬롯도 없습니다.",
+                            operator_action="슬롯별 operator_action을 수행한 뒤 prepare와 submit을 다시 실행하십시오.",
+                        )
+                        self._emit(emit, result["record"])
+                        return {"kind": "terminal", "result": result}
+
+                    if has_eligible_available:
+                        attempt = self._try_assign_locked(
+                            request_id,
+                            command,
+                            state,
+                            queue_position=position,
+                            queued_at=state["queued_at"],
+                            emit=emit,
+                        )
+                        if attempt["terminal"] is not None:
+                            removed, _ = coordinator.remove_unlocked(
+                                request_id, identity[0], identity[1]
+                            )
+                            if not removed:
+                                raise CoordinationError(
+                                    "자동 배정 queue에서 실패한 요청을 제거하지 못했습니다.",
+                                    "queue 파일과 상태 경로를 확인하십시오.",
+                                )
+                            state["entry"] = None
+                            return {"kind": "terminal", "result": attempt["terminal"]}
+                        if attempt["assignment"] is not None:
+                            removed, _ = coordinator.remove_unlocked(
+                                request_id, identity[0], identity[1]
+                            )
+                            if not removed:
+                                self._release_unstarted(
+                                    request_id,
+                                    attempt["assignment"],
+                                    reason="queue head를 제거하지 못해 child 제출을 중단했습니다.",
+                                    operator_action="queue 파일을 확인하고 prepare로 슬롯 상태를 점검하십시오.",
+                                )
+                                state["assignment"] = None
+                                raise CoordinationError(
+                                    "자동 배정 queue head를 원자적으로 제거하지 못했습니다.",
+                                    "queue 파일과 상태 경로를 확인하고 슬롯 상태를 점검하십시오.",
+                                )
+                            state["entry"] = None
+                            return {
+                                "kind": "assignment",
+                                "assignment": attempt["assignment"],
+                            }
+
+                        diagnostics = self._diagnostics(state["compatible_slots"])
+                        if not self._should_wait(
+                            diagnostics, state["attempted_slots"]
+                        ):
+                            removed, _ = coordinator.remove_unlocked(
+                                request_id, identity[0], identity[1]
+                            )
+                            if not removed:
+                                raise CoordinationError(
+                                    "자동 배정 queue에서 현재 요청을 제거하지 못했습니다.",
+                                    "queue 파일과 상태 경로를 확인하십시오.",
+                                )
+                            state["entry"] = None
+                            result = self._no_slot_result(
+                                request_id,
+                                diagnostics,
+                                state["attempted_slots"],
+                                reassignment_reasons=state["reassignment_reasons"],
+                                reason="FIFO head가 사용할 수 있는 슬롯을 확보하지 못했습니다.",
+                                operator_action="슬롯별 원인과 operator_action을 확인하십시오.",
+                            )
+                            self._emit(emit, result["record"])
+                            return {"kind": "terminal", "result": result}
 
             time.sleep(self.poll_interval)
 
@@ -863,16 +914,11 @@ class AutoAllocator:
         )
 
     def _diagnostics(self, slot_ids: Sequence[int] = SLOT_IDS) -> list[dict[str, Any]]:
-        try:
-            allowed = set(slot_ids)
-            return [
-                dict(record)
-                for record in self.service.status_all()
-                if record.get("slot_id") in allowed
-            ]
-        except Exception as exc:
-            records: list[dict[str, Any]] = []
-            for slot_id in slot_ids:
+        records: list[dict[str, Any]] = []
+        for slot_id in sorted(set(slot_ids)):
+            try:
+                records.append(dict(self.service.status(slot_id)))
+            except Exception as exc:
                 slot = self.service.settings.slot(slot_id)
                 records.append(
                     {
@@ -884,7 +930,7 @@ class AutoAllocator:
                         "port": slot.port,
                     }
                 )
-            return records
+        return records
 
     @staticmethod
     def _has_status(diagnostics: list[dict[str, Any]], status: str) -> bool:
