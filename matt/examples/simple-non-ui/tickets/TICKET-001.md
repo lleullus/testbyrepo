@@ -33,7 +33,7 @@ None
 
 ## Verification
 
-실제 사용 시 대상 프로젝트의 기존 검증 방법으로 두 Acceptance Criteria를 확인한다.
+- 실제 사용 시 대상 프로젝트의 기존 검증 방법으로 두 Acceptance Criteria를 확인한다.
 
 ## Behavior Authorities
 

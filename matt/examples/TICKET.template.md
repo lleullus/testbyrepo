@@ -34,8 +34,9 @@ None
 
 ## Verification
 
-Acceptance Criteria를 관찰할 안정적인 결과 또는 검증 경계를 적는다.
-실제 focused test seam은 Implementation Lead가 현재 저장소를 보고 선택한다.
+- Acceptance Criteria를 관찰할 안정적인 제품 흐름, 기대 효과, 결과 또는
+  readback 경계를 적는다. 실제 focused test seam은 Implementation Lead가
+  현재 저장소를 보고 선택한다.
 
 ## Behavior Authorities
 

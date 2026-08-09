@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib.util
+import re
 import unittest
 from pathlib import Path
 
@@ -7,9 +9,44 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 IMPLEMENTATION_SKILL = (ROOT / "implementation-lead/SKILL.md").read_text(encoding="utf-8")
 VERIFICATION_SKILL = (ROOT / "verification-lead/SKILL.md").read_text(encoding="utf-8")
+TO_TICKETS_SKILL = (ROOT / "matt/skills/to-tickets/SKILL.md").read_text(encoding="utf-8")
+EXAMPLES = ROOT / "matt/examples"
+COVERAGE_GATE_PATH = ROOT / "verification-lead/coverage_gate.py"
+COVERAGE_GATE_SPEC = importlib.util.spec_from_file_location("coverage_gate", COVERAGE_GATE_PATH)
+assert COVERAGE_GATE_SPEC and COVERAGE_GATE_SPEC.loader
+coverage_gate = importlib.util.module_from_spec(COVERAGE_GATE_SPEC)
+COVERAGE_GATE_SPEC.loader.exec_module(coverage_gate)
+
+
+def section(text: str, heading: str) -> str:
+    match = re.search(rf"(?ms)^## {re.escape(heading)}\s*$\n(.*?)(?=^## |\Z)", text)
+    if not match:
+        raise AssertionError(f"missing section: {heading}")
+    return match.group(1).strip()
 
 
 class ActiveSkillContractTests(unittest.TestCase):
+    def test_ticket_verification_is_compatible_with_coverage_gate_roots(self) -> None:
+        self.assertIn(
+            "Serialize each materially distinct Verification product flow as one exact\n"
+            "top-level `- ` list item",
+            TO_TICKETS_SKILL,
+        )
+
+        tickets = [EXAMPLES / "TICKET.template.md"]
+        tickets.extend(
+            EXAMPLES / name / "tickets/TICKET-001.md"
+            for name in ("simple-non-ui", "ui-prototype", "large-scope-shaping")
+        )
+        for ticket_path in tickets:
+            with self.subTest(ticket=ticket_path):
+                self.assertTrue(
+                    coverage_gate._top_level_items(
+                        section(ticket_path.read_text(encoding="utf-8"), "Verification"),
+                        "Verification",
+                    )
+                )
+
     def test_implementation_skill_names_direct_subagent_and_review_contract(self) -> None:
         implementation_skill = " ".join(IMPLEMENTATION_SKILL.split())
         implementation_skill_lower = implementation_skill.lower()

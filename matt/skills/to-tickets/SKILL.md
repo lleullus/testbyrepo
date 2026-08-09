@@ -195,6 +195,13 @@ observable product flow, expected effect, and readback at the product-contract
 level. Do not preselect an internal focused test seam, command, or test file
 unless that surface is itself an approved external contract.
 
+Serialize each materially distinct Verification product flow as one exact
+top-level `- ` list item in authored order. Use two-space-indented continuation
+lines only when one flow needs multiple lines. Do not use ordered, task-list,
+nested-only, prose-only, empty, or mixed-marker bodies. Preserve the authored
+product-flow grouping and meaning; do not merge materially distinct flows or
+split one flow into implementation seams.
+
 Implementation Lead selects focused source, check, and provisional smoke facts
 needed for implementation and integration closure and reports current-session
 AC coverage without assigning a final verdict. The independent Verification

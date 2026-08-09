@@ -33,7 +33,7 @@ None
 
 ## Verification
 
-실제 사용 시 대상 프로젝트의 기존 검증으로 Acceptance Criteria와 비대상 영역을 확인한다.
+- 실제 사용 시 대상 프로젝트의 기존 검증으로 Acceptance Criteria와 비대상 영역을 확인한다.
 
 ## Behavior Authorities
 
