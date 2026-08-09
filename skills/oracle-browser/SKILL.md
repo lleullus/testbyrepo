@@ -49,9 +49,14 @@ Before the first Oracle call in a task:
 5. Submit the live request through the wrapper with `--engine browser` and
    `--browser-model-strategy current`. Never invoke a live stock Oracle request
    directly.
+6. Every browser initial, followup, dry-run, and legacy exact-tab managed
+   invocation must pass `--browser-timeout 2h`. Status and session inspection
+   commands are not response-capture requests and do not need this option.
 
-Use a long shell-tool timeout such as `3600000` milliseconds for a live run.
-The timeout belongs to the shell tool, not to Oracle's CLI arguments.
+Use a shell-tool timeout of at least `18000000` milliseconds (5 hours) for a
+live run. This external limit leaves room for two 2-hour capture attempts (the
+automatic reload retry), plus preparation and cleanup. The timeout belongs to
+the shell tool, not to Oracle's CLI arguments.
 
 ```bash
 env -u ORACLE_BROWSER_INACTIVITY_TIMEOUT_SECONDS \
@@ -61,6 +66,7 @@ env -u ORACLE_BROWSER_INACTIVITY_TIMEOUT_SECONDS \
   "$ORACLE_CLI" \
   --engine browser \
   --browser-model-strategy current \
+  --browser-timeout 2h \
   -p "Review the supplied evidence. Lead with material findings, cite concrete evidence, and identify missing verification." \
   --file /absolute/path/to/file
 ```
@@ -109,6 +115,7 @@ env -u ORACLE_BROWSER_INACTIVITY_TIMEOUT_SECONDS \
   --dry-run summary \
   --engine browser \
   --browser-model-strategy current \
+  --browser-timeout 2h \
   -p "<task>" \
   --file /absolute/path/to/file
 ```
@@ -221,6 +228,7 @@ env -u ORACLE_BROWSER_INACTIVITY_TIMEOUT_SECONDS \
   "$ORACLE_CLI" \
   --engine browser \
   --browser-model-strategy current \
+  --browser-timeout 2h \
   -p "<follow-up question>"
 ```
 
@@ -240,8 +248,9 @@ For a legacy parent that has a completed answer and stable chat URL but lacks
 1. Finalize it with `oracle session <id> --render` and prepare its known slot.
 2. Never forge session metadata or pass `--followup` through `run`/`submit`.
 3. Only when the user explicitly requests that exact chat, open and verify the
-   exact URL in the known slot, dry-run `--browser-tab <url>`, then use managed
-   `run` with that exact tab and the current conversation context ID.
+   exact URL in the known slot, dry-run `--browser-tab <url>` with
+   `--browser-timeout 2h`, then use managed `run` with that exact tab, the
+   current conversation context ID, and `--browser-timeout 2h`.
 4. Verify the child completed on the same URL and report that this is verified
    chat continuity, not authoritative wrapper followup lineage.
 
