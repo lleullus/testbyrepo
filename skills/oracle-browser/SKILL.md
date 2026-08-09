@@ -36,7 +36,9 @@ are local WSL Chrome endpoints, not a network Bridge.
 
 Before the first Oracle call in a task:
 
-1. Run `"$ORACLE_CLI" --help` once for the session.
+1. Run `"$ORACLE_CLI" --help --verbose` once for the session. Basic `--help`
+   is intentionally curated; verbose help includes supported advanced browser
+   controls such as `--browser-thinking-time`.
 2. Run `"$ORACLE_SLOTS" status` and require at least one managed slot to be
    available. If a slot needs operator preparation, run
    `"$ORACLE_SLOTS" prepare --slot <id>` and require `사용 가능`.
@@ -67,6 +69,25 @@ The wrapper owns `--slug`, `--remote-chrome`, `--wait`, and browser archive
 policy for context-aware calls. Do not pass those options unless a documented
 wrapper command explicitly requires them. A context-aware initial request keeps
 its conversation unarchived so a later request can continue it.
+
+## Reasoning Level Routing
+
+Pass `--browser-thinking-time` only when the user explicitly requests a
+reasoning level. Prefer the ChatGPT UI intent names; stock Oracle normalizes
+them to its canonical names:
+
+- `instant` (`light`) uses slots 1 or 2;
+- `medium` (`standard`) uses slots 1 or 2;
+- `high` (`extended`) prefers slots 3, 4, or 5, then falls back to slots 1 or 2;
+- `extra-high` (`heavy`, also `extrahigh` or `xhigh`) uses slots 1 or 2;
+- `pro` uses slots 1 or 2;
+- omitting the option leaves the current UI effort unchanged and permits any
+  managed slot.
+
+The order above is the auto-allocation preference. An explicit `run --slot`
+must still choose a compatible slot. Never lower, raise, or omit an explicitly
+requested reasoning level merely to use an available slot, and never infer a
+default reasoning level from a slot's maximum capability.
 
 Do not invoke Oracle with `--browser-manual-login`, `--browser-chrome-path`, or
 `--browser-keep-browser` on this WSL runtime. Oracle 0.16.1's bundled launcher

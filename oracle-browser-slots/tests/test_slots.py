@@ -1304,13 +1304,31 @@ class JobRunnerTests(unittest.TestCase):
                 runner.compatible_slots(
                     [TEST_ORACLE_CLI, "--model=gpt-5.6", "--browser-thinking-time=extended"]
                 ),
-                (3, 4, 5),
+                (3, 4, 5, 1, 2),
             )
             self.assertEqual(
                 runner.compatible_slots(
                     [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol", "--browser-thinking-time", "standard"]
                 ),
-                (),
+                (1, 2),
+            )
+            self.assertEqual(
+                runner.compatible_slots(
+                    [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol", "--browser-thinking-time", "instant"]
+                ),
+                (1, 2),
+            )
+            self.assertEqual(
+                runner.compatible_slots(
+                    [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol", "--browser-thinking-time", "medium"]
+                ),
+                (1, 2),
+            )
+            self.assertEqual(
+                runner.compatible_slots(
+                    [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol", "--browser-thinking-time", "high"]
+                ),
+                (3, 4, 5, 1, 2),
             )
             self.assertEqual(
                 runner.compatible_slots([TEST_ORACLE_CLI, "--model", "gpt-5.5-pro"]),

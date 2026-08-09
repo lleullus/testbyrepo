@@ -2846,6 +2846,9 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  if (routingCliArgs.includes("--help") && routingCliArgs.includes("--verbose")) {
+    program.options.forEach((option) => option.hideHelp(false));
+  }
   const handleSigint = (): void => {
     console.log(chalk.yellow("\nCancelled."));
     process.exitCode = 130;
