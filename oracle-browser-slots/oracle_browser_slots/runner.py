@@ -416,7 +416,11 @@ class JobRunner:
         manifest_result: dict[str, Any] | None = None
         cleanup_result: dict[str, Any] | None = None
         post_child_failures: list[str] = []
+        submission_may_have_occurred = child is not None
         if prepared is not None:
+            submission_may_have_occurred = (
+                child is not None and prepared.requires_session_manifest
+            )
             try:
                 cleanup_result = prepared.cleanup()
                 if not isinstance(cleanup_result, dict):
@@ -484,14 +488,16 @@ class JobRunner:
                     f"{reason} post-child attachment 보장에 실패했습니다: "
                     f"{'; '.join(post_child_failures)}."
                 )
-                if child is not None:
+                if submission_may_have_occurred:
                     reason = (
                         f"{reason} 프롬프트가 이미 제출되었을 수 있으므로 자동 재시도하지 않았습니다."
                     )
-                operator_action = (
-                    "manifest와 generated ZIP cleanup 상태를 확인하십시오. "
-                    "프롬프트가 이미 제출되었을 수 있으므로 Oracle 요청을 재실행하지 마십시오."
-                )
+                    operator_action = (
+                        "manifest와 generated ZIP cleanup 상태를 확인하십시오. "
+                        "프롬프트가 이미 제출되었을 수 있으므로 Oracle 요청을 재실행하지 마십시오."
+                    )
+                else:
+                    operator_action = "generated ZIP cleanup 상태를 확인하십시오."
             else:
                 child_outcome = None
                 child_exit_code = None
@@ -515,7 +521,8 @@ class JobRunner:
             final_record["generated_zip_cleanup"] = cleanup_result
         if post_child_failures:
             final_record["post_child_failures"] = post_child_failures
-            final_record["prompt_submission_may_have_occurred"] = child is not None
+            if submission_may_have_occurred:
+                final_record["prompt_submission_may_have_occurred"] = True
             final_record["child_outcome"] = child_outcome
             final_record["child_exit_code"] = child_exit_code
         self._emit(emit, final_record)

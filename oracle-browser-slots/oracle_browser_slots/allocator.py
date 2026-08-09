@@ -429,7 +429,9 @@ class AutoAllocator:
                     has_eligible_available = self._has_eligible_available(
                         diagnostics, state["attempted_slots"]
                     )
-                    has_occupied = self._has_status(diagnostics, OCCUPIED)
+                    has_occupied = self._has_eligible_occupied(
+                        diagnostics, state["attempted_slots"]
+                    )
 
                     if not has_occupied and not has_eligible_available:
                         removed, _ = coordinator.remove_unlocked(
@@ -946,12 +948,20 @@ class AutoAllocator:
             for record in diagnostics
         )
 
+    @staticmethod
+    def _has_eligible_occupied(
+        diagnostics: list[dict[str, Any]], attempted_slots: list[int]
+    ) -> bool:
+        return any(
+            record.get("status") == OCCUPIED
+            and record.get("slot_id") not in attempted_slots
+            for record in diagnostics
+        )
+
     def _should_wait(
         self, diagnostics: list[dict[str, Any]], attempted_slots: list[int]
     ) -> bool:
-        return self._has_status(diagnostics, OCCUPIED) and bool(
-            {record.get("slot_id") for record in diagnostics} - set(attempted_slots)
-        )
+        return self._has_eligible_occupied(diagnostics, attempted_slots)
 
     @staticmethod
     def _queued_duplicate(

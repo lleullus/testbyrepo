@@ -8,6 +8,7 @@ import sys
 from typing import Sequence
 
 from .allocator import AutoAllocator
+from .attachments import command_requires_session
 from .followup import FollowupError, FollowupRunner, OracleSessionRepository
 from .model import AVAILABLE, SLOT_IDS, Settings
 from .runner import JobRunner
@@ -103,12 +104,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     context_id = args.opencode_conversation_id
     child_session_id: str | None = None
     repository: OracleSessionRepository | None = None
+    session_backed = command_requires_session(command)
     if context_id is not None:
         repository = OracleSessionRepository(settings)
         try:
             context_id = repository.normalize_context_id(context_id)
             request_id = args.request_id if args.command == "submit" else args.job_id
-            command, child_session_id = repository.prepare_new_run_command(command, request_id)
+            command, child_session_id = repository.prepare_new_run_command(
+                command, request_id, session_backed=session_backed
+            )
         except FollowupError as exc:
             emit(
                 {
@@ -134,8 +138,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if (
         repository is not None
         and child_session_id is not None
+        and session_backed
         and result.get("accepted") is True
         and isinstance(slot_id, int)
+        and result.get("record", {}).get("outcome") != "spawn_error"
     ):
         try:
             readback = repository.record_origin(

@@ -381,7 +381,7 @@ class FileAttachmentPolicy:
                     oracle_home=self.oracle_home,
                     original_file_inputs=tuple(_merged_file_inputs(groups)),
                     request_id=request_id,
-                    requires_session_manifest=_requires_session_manifest(command),
+                    requires_session_manifest=command_requires_session(command),
                     include_file_report=_has_option_before_terminator(
                         command, "--files-report"
                     ),
@@ -691,8 +691,13 @@ def _normalize_file_command(
     return normalized
 
 
-def _requires_session_manifest(argv: Sequence[str]) -> bool:
-    return not any(token.split("=", 1)[0] in SESSIONLESS_FLAGS for token in argv[1:])
+def command_requires_session(argv: Sequence[str]) -> bool:
+    for token in argv[1:]:
+        if token == "--":
+            break
+        if token.split("=", 1)[0] in SESSIONLESS_FLAGS:
+            return False
+    return True
 
 
 def _has_option_before_terminator(argv: Sequence[str], flag: str) -> bool:

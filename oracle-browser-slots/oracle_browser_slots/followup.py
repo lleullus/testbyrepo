@@ -22,6 +22,7 @@ from .attachments import (
     AttachmentPreparationError,
     AttachmentPreparationInterrupted,
     PreparedAttachment,
+    command_requires_session,
 )
 from .cdp import CDPError
 from .model import AVAILABLE, OCCUPIED, SLOT_IDS, Settings, utc_now
@@ -170,8 +171,12 @@ class OracleSessionRepository:
         self,
         argv: Sequence[str],
         request_id: str,
-    ) -> tuple[list[str], str]:
-        child_session_id = self.new_session_id("context", request_id)
+        *,
+        session_backed: bool = True,
+    ) -> tuple[list[str], str | None]:
+        child_session_id = (
+            self.new_session_id("context", request_id) if session_backed else None
+        )
         command = self._prepare_owned_command(
             argv,
             child_session_id=child_session_id,
@@ -183,7 +188,7 @@ class OracleSessionRepository:
         self,
         argv: Sequence[str],
         parent_session_id: str,
-        child_session_id: str,
+        child_session_id: str | None,
     ) -> list[str]:
         return self._prepare_owned_command(
             argv,
@@ -565,7 +570,7 @@ class OracleSessionRepository:
         self,
         argv: Sequence[str],
         *,
-        child_session_id: str,
+        child_session_id: str | None,
         parent_session_id: str | None,
     ) -> list[str]:
         command = list(argv)
@@ -596,7 +601,8 @@ class OracleSessionRepository:
         normalized = list(command)
         if parent_session_id is not None:
             normalized.extend(("--followup", parent_session_id))
-        normalized.extend(("--slug", child_session_id))
+        if child_session_id is not None:
+            normalized.extend(("--slug", child_session_id))
         if wait_count == 0:
             normalized.append("--wait")
         normalized.extend(("--browser-archive", "never"))
@@ -980,7 +986,13 @@ class FollowupRunner:
                 emit=emit,
             )
 
-        child_session_id = self.repository.new_session_id("followup", request_id)
+        session_backed = command_requires_session(argv)
+        owned_session_id = (
+            self.repository.new_session_id("followup", request_id)
+            if session_backed
+            else None
+        )
+        child_session_id = owned_session_id if session_backed else None
         selected = self._record(
             request_id,
             event="parent_selected",
@@ -999,7 +1011,7 @@ class FollowupRunner:
 
         try:
             command = self.repository.prepare_followup_command(
-                argv, parent.session_id, child_session_id
+                argv, parent.session_id, owned_session_id
             )
             command = self.runner.validate_auto_command(command)
             self.runner.assert_slot_compatible(parent.slot_id, command)
@@ -1355,7 +1367,9 @@ class FollowupRunner:
                 parent=parent,
                 child_session_id=child_session_id,
                 emit=emit,
-                prompt_submission_may_have_occurred=execution_started,
+                prompt_submission_may_have_occurred=(
+                    execution_started and session_backed
+                ),
                 accepted=execution_started,
             )
         finally:
@@ -1364,9 +1378,25 @@ class FollowupRunner:
             for signal_number, previous_handler in previous_handlers.items():
                 signal.signal(signal_number, previous_handler)
 
+        if (
+            not session_backed
+            or child_result.get("record", {}).get("outcome") == "spawn_error"
+        ):
+            result = dict(child_result)
+            result["record"] = self._annotate_runner_record(
+                child_result["record"],
+                request_id,
+                selection_mode,
+                context_id,
+                parent,
+                child_session_id,
+            )
+            return result
+
+        assert owned_session_id is not None
         try:
             readback = self.repository.record_followup(
-                child_session_id,
+                owned_session_id,
                 parent=parent,
                 selection_mode=selection_mode,
                 context_id=context_id,
@@ -1429,7 +1459,7 @@ class FollowupRunner:
         selection_mode: str,
         context_id: str,
         parent: ParentSession,
-        child_session_id: str,
+        child_session_id: str | None,
         signal_number: int | bool | None,
         emit: LifecycleEmitter | None,
     ) -> dict[str, Any]:
@@ -1455,7 +1485,7 @@ class FollowupRunner:
         selection_mode: str,
         context_id: str,
         parent: ParentSession,
-        child_session_id: str,
+        child_session_id: str | None,
         claim: dict[str, Any],
         signal_number: int | bool | None,
         emit: LifecycleEmitter | None,
@@ -1562,7 +1592,7 @@ class FollowupRunner:
         selection_mode: str,
         context_id: str,
         parent: ParentSession,
-        child_session_id: str,
+        child_session_id: str | None,
     ) -> dict[str, Any]:
         record = dict(source)
         record.update(
