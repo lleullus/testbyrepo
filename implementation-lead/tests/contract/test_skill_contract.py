@@ -7,7 +7,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 IMPLEMENTATION_SKILL = (ROOT / "implementation-lead/SKILL.md").read_text(encoding="utf-8")
 VERIFICATION_SKILL = (ROOT / "verification-lead/SKILL.md").read_text(encoding="utf-8")
-VERIFICATION_EXECUTION_CONTRACT = (ROOT / "PHASE-5-VERIFICATION-EXECUTION-CONTRACT.md").read_text(encoding="utf-8")
 
 
 class ActiveSkillContractTests(unittest.TestCase):
@@ -85,126 +84,50 @@ class ActiveSkillContractTests(unittest.TestCase):
 
     def test_verification_skill_names_direct_verification_and_remediation_contract(self) -> None:
         verification_skill = " ".join(VERIFICATION_SKILL.split())
-        self.assertIn("same exact ready local Markdown Ticket", VERIFICATION_SKILL)
-        self.assertIn("current project", VERIFICATION_SKILL)
-        self.assertIn("allowed verification surface", VERIFICATION_SKILL)
-        self.assertIn("user-facing lead session", verification_skill)
-        self.assertIn("delegated subagent", verification_skill)
-        self.assertIn("user-facing commentary channel", verification_skill)
-        self.assertIn("stop as `unsupported` before any direct evidence acquisition", verification_skill)
-        self.assertIn("Verification Lead itself designs one or", VERIFICATION_SKILL)
-        self.assertIn("performs a read-only lead-first planning inspection", verification_skill)
-        self.assertIn("must not be preserved or reused as direct AC evidence", verification_skill)
-        self.assertIn("identify the required product entrypoint", verification_skill)
-        for prerequisite in (
-            "agent, model, thinking, tool, executable",
-            "fixture, sentinel, failure-hook, provider-target",
-            "authority, credential, network, cleanup, readback",
-            "universal, and negative-proof requirements",
+        for required in (
+            "same exact ready local Markdown Ticket",
+            "allowed verification surface",
+            "exactly three operational product-verification roles",
+            "`Runtime Runner`",
+            "`Verification Lead`",
+            "`Remediation Agent`",
+            "`Coverage Challenger`",
+            "Pre-Approval Coverage Gate",
+            "coverage_gate.py",
+            "COVERAGE_GATE_UNSUPPORTED",
+            "PRE_APPROVAL_COVERAGE_GATE_FAILURE",
+            "pre-approval runtime-readiness investigator",
+            "direct review of Runtime Runner results",
+            "No Runner assertion itself establishes a fact",
+            "Runtime Runner must not interpret or decompose AC obligations",
+            "acquire direct AC evidence or reach the first AC-deciding observation",
+            "Verification Lead itself designs one or more verification scenarios",
+            "Ask the user to explicitly approve the disclosed scenario plan",
+            "Before that approval, do not prepare the environment or acquire direct evidence",
+            "After approval, prepare only the approved verification environment",
+            "Execute only `READY` scenarios",
+            "exactly one result row for every Markdown AC",
+            "`SATISFIED` and `UNDETERMINED` ACs are never remediation targets",
+            "minimum product change directly required",
+            "at most three cycles",
         ):
-            self.assertIn(prerequisite, verification_skill)
-        self.assertIn("Invoke one or more `Readiness Research Agent`s", verification_skill)
-        self.assertIn("through the host's `Host Subagent Invocation Mechanism`", verification_skill)
-        self.assertIn(
-            "It must not perform broad product discovery, take ownership of an AC range, design or select scenarios, "
-            "assign readiness, acquire direct AC evidence, mutate the product or environment, or decide AC verdicts",
-            verification_skill,
-        )
-        self.assertIn("Its report is advisory; Verification Lead directly verifies every readiness fact used below", verification_skill)
-        self.assertIn("new evidence observation", verification_skill)
-        self.assertIn("`Verification Scenarios`", verification_skill)
-        self.assertIn("stable scenario ID, AC", verification_skill)
-        self.assertIn("procedure and verification surface", verification_skill)
-        self.assertIn("Readiness is a pre-execution fact, not an AC verdict, and is exactly one of", verification_skill)
-        self.assertIn("`PREPARABLE` when a material prerequisite is currently absent", verification_skill)
-        self.assertIn("is a pre-execution fact, not an AC verdict", verification_skill)
-        self.assertIn("required preparation or dependency, and authority or approval needed", verification_skill)
-        self.assertIn("After directly checking every identified prerequisite", verification_skill)
-        self.assertIn("explicitly approve the disclosed scenario plan and preparation scope", verification_skill)
-        self.assertIn("Before that approval, do not prepare the environment or acquire direct evidence", verification_skill)
-        self.assertIn(
-            "If the user rejects or changes the plan, revise the choices, scenario paragraphs, readiness facts, and bottom "
-            "summary table, then request new approval",
-            verification_skill,
-        )
-        self.assertIn("Approval is a workflow gate only", verification_skill)
-        self.assertIn("it is not direct evidence or authority", verification_skill)
-        self.assertIn("After approval, prepare only the approved verification environment", verification_skill)
-        self.assertIn("do not mutate shared or external state or credentials", verification_skill)
-        self.assertIn("chat approval does not supply them", verification_skill)
-        self.assertIn("After preparation and before any direct evidence acquisition, directly recheck every prerequisite", verification_skill)
-        self.assertIn("Execute only `READY` scenarios", verification_skill)
-        self.assertIn(
-            "Report every remaining `PREPARABLE`, `NOT_READY`, `UNSUPPORTED`, or `UNSAFE` scenario and its affected AC "
-            "before execution; do not attempt it",
-            verification_skill,
-        )
-        self.assertIn("`replaces <old scenario ID>` relationship", verification_skill)
-        self.assertIn(
-            "show the revised complete scenario paragraphs and bottom summary table, obtain explicit approval, prepare and "
-            "recheck readiness, and only then acquire replacement evidence",
-            verification_skill,
-        )
-        self.assertIn("Do not relabel evidence acquired for the old scenario as evidence for its replacement", verification_skill)
-        for scenario_field in (
-            "observation target",
-            "procedure",
-            "expected result",
-            "direct evidence to collect",
-            "decision criteria",
-        ):
-            self.assertIn(scenario_field, VERIFICATION_SKILL)
-        self.assertIn("Host Subagent Invocation Mechanism", VERIFICATION_SKILL)
-        self.assertIn("Remediation Agent", VERIFICATION_SKILL)
-        self.assertIn("read-only", VERIFICATION_SKILL)
-        self.assertIn("product files unmodified", VERIFICATION_SKILL)
-        self.assertIn("exactly one result row for every Markdown AC", VERIFICATION_SKILL)
-        self.assertIn("all applicable stable scenario IDs, their final readiness and execution facts", verification_skill)
-        self.assertIn("each executed scenario's admissible direct evidence", verification_skill)
-        self.assertIn("An unshared scenario execution cannot support `SATISFIED`", verification_skill)
-        for status in ("SATISFIED", "NOT_SATISFIED", "UNDETERMINED"):
-            self.assertIn(status, VERIFICATION_SKILL)
-        self.assertIn("`SATISFIED` and `UNDETERMINED` ACs are never remediation targets", VERIFICATION_SKILL)
-        self.assertIn("direct evidence", VERIFICATION_SKILL)
-        self.assertIn("expected/actual difference", VERIFICATION_SKILL)
-        self.assertIn("same cause and the same minimal change", VERIFICATION_SKILL)
-        self.assertIn("minimum product change directly required", VERIFICATION_SKILL)
-        self.assertIn("changed files and scope", VERIFICATION_SKILL)
-        self.assertIn("Agent narration or metadata does not determine", VERIFICATION_SKILL)
-        self.assertIn("directly re-verifies", VERIFICATION_SKILL)
-        self.assertIn("at most three cycles", verification_skill)
-        self.assertIn("cannot start chained remediation", verification_skill)
+            self.assertIn(required, verification_skill)
 
         ordered_contract = (
-            "After directly checking every identified prerequisite",
-            "explicitly approve the disclosed scenario plan and preparation scope",
+            "Verification Lead itself performs a read-only lead-first planning inspection",
+            "Verification Lead invokes one or more instances of the official `Runtime Runner`",
+            "Verification Lead itself designs one or more verification scenarios",
+            "Ask the user to explicitly approve the disclosed scenario plan",
             "After approval, prepare only the approved verification environment",
-            "After preparation and before any direct evidence acquisition, directly recheck every prerequisite",
             "Execute only `READY` scenarios",
-            "If a scenario changes before or during execution",
         )
         positions = [verification_skill.index(text) for text in ordered_contract]
         self.assertEqual(positions, sorted(positions))
 
-        verification_execution_contract = " ".join(VERIFICATION_EXECUTION_CONTRACT.split())
-        for contract_text in (
-            "If the user designates a Readiness Research Agent, Verification Lead invokes it through the Host Subagent Invocation Mechanism",
-            "A rejection or change requires a revised complete table and new approval",
-            "chat approval is not that authority",
-            "Every remaining `NOT_READY`, `UNSUPPORTED` or `UNSAFE` scenario and affected AC is reported before execution and is not attempted",
-            "explicit approval, preparation and readiness recheck before any replacement evidence",
-        ):
-            self.assertIn(contract_text, verification_execution_contract)
-        for criterion in (
-            "모든 AC가 SATISFIED -> VERIFIED",
-            "하나 이상의 AC가 NOT_SATISFIED -> NOT_SATISFIED",
-            "그 외 하나 이상의 AC가 UNDETERMINED -> UNDETERMINED",
-        ):
-            self.assertIn(criterion, verification_execution_contract)
         self.assertNotIn("LEAD_FAILURE", VERIFICATION_SKILL)
-        self.assertNotIn("LEAD_FAILURE", VERIFICATION_EXECUTION_CONTRACT)
 
     def test_verification_skill_removes_retired_verification_role_names(self) -> None:
+        self.assertNotIn("Readiness Research Agent", VERIFICATION_SKILL)
         self.assertNotIn("Fresh Verification Lead", VERIFICATION_SKILL)
         self.assertNotIn("Fresh Verification Subagent", VERIFICATION_SKILL)
 
