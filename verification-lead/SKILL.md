@@ -375,8 +375,13 @@ must have at least one Unit. A `partial` object is legal only when at least one
 Unit is blocked and its decision/contradiction IDs name planned Units whose
 execution still has bounded Ticket value.
 
-After `build` succeeds, invoke one Coverage Challenger. Instruct it to inspect
-every validator-extracted Ticket AC and Verification root against its raw text,
+After `build` succeeds, invoke one Coverage Challenger unless the rebuilt
+envelope's `challenge_fp` is unchanged and an existing receipt with
+`effective_result: PASS` for that exact fingerprint is submitted to and passes
+the current local `coverage_gate.py approve` path's validation of current
+canonical sources and the complete receipt chain; any failure remains
+fail-closed. When invoked, instruct the Challenger to inspect every
+validator-extracted Ticket AC and Verification root against its raw text,
 preserve every materially distinct observable predicate and explicit
 trigger/result branch unless the same execution genuinely observes each
 distinction, and check Units, qualifier bindings, and Coverage Edges against the
@@ -622,9 +627,8 @@ classification, explain the decision value of running now, and state which
 `SATISFIED` results are unavailable. In both modes, disclose the gate's short
 approval ID and promise that any later required unit found in the same canonical
 text is a pre-approval coverage-gate failure that immediately invalidates this
-approval, not normal final discovery. Ask the user to approve that exact plan.
-Ask the user to explicitly approve the disclosed scenario plan. Before that
-approval, do not prepare the environment or acquire direct evidence.
+approval, not normal final discovery. Ask the user to explicitly approve that exact plan.
+Before that approval, do not prepare the environment or acquire direct evidence.
 
 Approval binds the exact disclosed Scenario revisions and preparation scope plus
 the exact `plan_fp` through the displayed approval ID. A material change to its

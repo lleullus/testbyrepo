@@ -135,6 +135,16 @@ def _normalize_markdown(value: str) -> str:
     return "\n".join(chunks).strip()
 
 
+def _normalize_source_material(value: str) -> str:
+    text = unicodedata.normalize("NFC", value).replace("\r\n", "\n").replace("\r", "\n")
+    lines = text.split("\n")
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines)
+
+
 def _expect_dict(value: Any, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise GateError(f"{label} must be an object")
@@ -369,7 +379,7 @@ def _selected_source(
     kind: str, path: Path, project_root: Path, content: str
 ) -> dict[str, str]:
     relative = path.relative_to(project_root).as_posix()
-    normalized = _normalize_markdown(content)
+    normalized = _normalize_source_material(content)
     return {
         "id": _source_id(kind, relative, normalized),
         "kind": kind,
@@ -703,7 +713,7 @@ def _normalize_model(
         source_text = _normalize_markdown(
             _expect_string(item["source_text"], f"{binding_id}.source_text")
         )
-        if source_text not in source["content"]:
+        if source_text not in _normalize_markdown(source["content"]):
             raise GateError(
                 f"qualifier binding {binding_id} source_text is not present in its selected source"
             )

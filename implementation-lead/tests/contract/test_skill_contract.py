@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -171,7 +173,7 @@ class ActiveSkillContractTests(unittest.TestCase):
             "Runtime Runner must not interpret or decompose AC obligations",
             "acquire direct AC evidence or reach the first AC-deciding observation",
             "Verification Lead itself designs one or more verification scenarios",
-            "Ask the user to explicitly approve the disclosed scenario plan",
+            "Ask the user to explicitly approve that exact plan",
             "Before that approval, do not prepare the environment or acquire direct evidence",
             "After approval, prepare only the approved verification environment",
             "Execute only `READY` scenarios",
@@ -192,6 +194,22 @@ class ActiveSkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, verification_skill)
 
+        self.assertIn(
+            "After `build` succeeds, invoke one Coverage Challenger unless the rebuilt envelope's "
+            "`challenge_fp` is unchanged and an existing receipt with `effective_result: PASS` for that "
+            "exact fingerprint is submitted to and passes the current local `coverage_gate.py approve` "
+            "path's validation of current canonical sources and the complete receipt chain; any failure "
+            "remains fail-closed",
+            verification_skill,
+        )
+        approval_request = "Ask the user to explicitly approve that exact plan."
+        self.assertEqual(VERIFICATION_SKILL.count(approval_request), 1)
+        self.assertNotIn("Ask the user to approve that exact plan.", VERIFICATION_SKILL)
+        self.assertNotIn(
+            "Ask the user to explicitly approve the disclosed scenario plan.",
+            VERIFICATION_SKILL,
+        )
+
         ordered_contract = (
             "Verification Lead itself performs a read-only lead-first planning inspection",
             "After independently decomposing the Ticket into coverage units",
@@ -199,7 +217,7 @@ class ActiveSkillContractTests(unittest.TestCase):
             "For each unit, identify the required product entrypoint",
             "Verification Lead invokes one or more instances of the official `Runtime Runner`",
             "Verification Lead itself designs one or more verification scenarios",
-            "Ask the user to explicitly approve the disclosed scenario plan",
+            "Ask the user to explicitly approve that exact plan",
             "After approval, prepare only the approved verification environment",
             "Execute only `READY` scenarios",
         )
@@ -207,6 +225,157 @@ class ActiveSkillContractTests(unittest.TestCase):
         self.assertEqual(positions, sorted(positions))
 
         self.assertNotIn("LEAD_FAILURE", VERIFICATION_SKILL)
+
+    def test_behavior_hierarchy_change_invalidates_prior_coverage_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_root:
+            project_root = Path(raw_root).resolve()
+            planning = project_root / "docs/planning"
+            behavior_dir = planning / "behavior/contexts"
+            ticket_dir = planning / "tickets"
+            behavior_dir.mkdir(parents=True)
+            ticket_dir.mkdir()
+
+            behavior_path = behavior_dir / "checkout.md"
+            spec_path = planning / "SPEC.md"
+            ticket_path = ticket_dir / "TICKET-001.md"
+            model_path = project_root / "coverage-model.json"
+            behavior_relative = "docs/planning/behavior/contexts/checkout.md"
+
+            behavior_path.write_text(
+                "# Checkout Behavior\n"
+                "Status: approved\n\n"
+                "## Rules\n\n"
+                "- Trigger A\n"
+                "  - Result X\n"
+                "- Trigger B\n"
+                "  - Result Y\n",
+                encoding="utf-8",
+            )
+            spec_path.write_text(
+                "# Checkout Spec\n"
+                "Status: approved\n\n"
+                "## Desired Outcome\n\nCheckout is observable.\n\n"
+                "## Requirements\n\nPreserve behavior.\n\n"
+                "## Non-Goals\n\nNone.\n\n"
+                "## Implementation Constraints\n\nNone.\n\n"
+                "## Verification Expectations\n\nObserve the checkout boundary.\n\n"
+                "## Behavior Authorities\n\n"
+                f"- {behavior_relative} | Scope: checkout\n\n"
+                "## UI / UX\n\nNot applicable\n\n"
+                "## Open Questions\n\nNone\n",
+                encoding="utf-8",
+            )
+            ticket_path.write_text(
+                "# TICKET-001\n"
+                "Status: ready\n"
+                "Parent-Spec: docs/planning/SPEC.md\n"
+                f"Project-Root: {project_root}\n"
+                "UI: no\n\n"
+                "## Acceptance Criteria\n\n"
+                "- Checkout produces the adopted result.\n\n"
+                "## Verification\n\n"
+                "- Trigger checkout and observe the result.\n\n"
+                "## Behavior Authorities\n\n"
+                f"- {behavior_relative} | Scope: checkout\n",
+                encoding="utf-8",
+            )
+            model_path.write_text(
+                json.dumps(
+                    {
+                        "units": [
+                            {
+                                "id": "U1",
+                                "root_ids": ["AC:01", "V:01"],
+                                "predicate": "Checkout produces the adopted result.",
+                                "qualifier_binding_ids": ["Q1"],
+                                "disposition": "PLANNED",
+                            }
+                        ],
+                        "qualifier_bindings": [
+                            {
+                                "id": "Q1",
+                                "source": behavior_relative,
+                                "source_text": "- Trigger A - Result X",
+                                "unit_ids": ["U1"],
+                                "meaning": "Trigger A requires Result X.",
+                            }
+                        ],
+                        "coverage_edges": [
+                            {
+                                "id": "E1",
+                                "unit_id": "U1",
+                                "scenario_id": "VS1",
+                                "scenario_revision": "r1",
+                                "trigger": "Trigger A",
+                                "product_boundary": "Checkout boundary",
+                                "expected_result": "Result X",
+                                "forbidden_result": "Any other result",
+                                "observation_readback": "Checkout result readback",
+                                "identity_correlation": "Single checkout identity",
+                                "decision_predicate": "Observed result is Result X",
+                            }
+                        ],
+                        "scenarios": [
+                            {
+                                "id": "VS1",
+                                "revision": "r1",
+                                "procedure": ["Trigger A and read the checkout result."],
+                                "readiness": "READY",
+                                "readiness_record_ids": ["F1"],
+                                "preparation_scope": "None",
+                            }
+                        ],
+                        "partial": None,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            envelope = coverage_gate.build(ticket_path, model_path)
+            root_checks = [
+                {
+                    "root_id": root["id"],
+                    "checks": [
+                        {
+                            "predicate": "Checkout result is independently accounted.",
+                            "unit_ids": ["U1"],
+                            "edge_ids": ["E1"],
+                        }
+                    ],
+                }
+                for root in envelope["canonical"]["roots"]
+            ]
+            receipt = coverage_gate.check_attestation(
+                envelope,
+                {
+                    "schema": "coverage-challenge/v1",
+                    "result": "PASS",
+                    "challenge_fp": envelope["fingerprints"]["challenge_fp"],
+                    "roots": root_checks,
+                    "qualifier_binding_ids_checked": ["Q1"],
+                },
+                None,
+            )
+            self.assertEqual(coverage_gate.approve(envelope, receipt)["mode"], "TOTAL")
+
+            behavior_path.write_text(
+                "# Checkout Behavior\n"
+                "Status: approved\n\n"
+                "## Rules\n\n"
+                "- Trigger A\n"
+                "  - Result X\n"
+                "  - Trigger B\n"
+                "    - Result Y\n",
+                encoding="utf-8",
+            )
+            rebuilt = coverage_gate.build(ticket_path, model_path)
+
+            self.assertNotEqual(
+                rebuilt["fingerprints"]["challenge_fp"],
+                envelope["fingerprints"]["challenge_fp"],
+            )
+            with self.assertRaises(coverage_gate.GateError):
+                coverage_gate.approve(rebuilt, receipt)
 
     def test_verification_skill_removes_retired_verification_role_names(self) -> None:
         self.assertNotIn("Readiness Research Agent", VERIFICATION_SKILL)
