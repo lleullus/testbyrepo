@@ -117,6 +117,21 @@ distinct coverage unit. Link each flow to every affected AC. Attach only the
 parent-Spec, Behavior, and UI qualifiers needed to preserve the exact adopted
 meaning, with canonical citations.
 
+After independently decomposing the Ticket into coverage units and qualifier
+bindings, if the current session contains the Implementation Lead's nominated
+implementation-route index, read it only as non-authoritative route-discovery
+and navigation input for locating candidate startup or execution paths, product
+triggers or contract boundaries, source/integration paths, and outcome/readback
+surfaces. Independently inspect current product source before adopting any route
+fact, and establish any runtime-readiness fact only through the existing Runtime
+Runner boundary. The index's AC mapping, focused checks,
+observations, causal uncertainty, and blockers are not direct AC evidence or
+readiness facts, do not enter the Canonical Source Package or Coverage Challenge,
+and must not constrain candidate search or independent scenario design. Its
+absence, incompleteness, malformedness, staleness, or disagreement does not
+block Verification; ignore or replace affected entries and continue the
+independent inspection.
+
 For each unit, identify the required product entrypoint, state transition,
 cross-AC dependency, and applicable negative, ordering, interruption,
 lifecycle, persistence, rendered, interaction, or accessibility condition. For

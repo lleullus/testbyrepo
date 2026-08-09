@@ -82,6 +82,38 @@ class ActiveSkillContractTests(unittest.TestCase):
         ):
             self.assertNotIn(role_only_research_bypass, implementation_skill_lower)
 
+    def test_implementation_skill_gates_actual_product_handoff_before_verification(self) -> None:
+        implementation_skill = " ".join(IMPLEMENTATION_SKILL.split())
+        for required in (
+            "concrete post-implementation actual-product handoff-check plan",
+            "Ticket-created first executable",
+            "current absence of that Ticket-owned artifact is not a feasibility failure",
+            "unavailable focused-check capability",
+            "pre-mutation blocker",
+            "gross handoff-liveness",
+            "Ticket-required nominal success class",
+            "Ticket-unowned debug hook or seam",
+            "leave residual causal uncertainty for Verification",
+            "actual execution context and direct raw product-boundary result",
+            "same-Ticket due-now implementation work",
+            "classify it neither as verification-only work nor as a new feature or Ticket",
+            "every materially distinct required route has current gross actual-product handoff-liveness evidence",
+            "nominated implementation-route index",
+            "navigation only, not a runtime-readiness claim or independent AC evidence",
+            "must not constrain or reduce the Verification Lead's independent scenario design",
+        ):
+            self.assertIn(required, implementation_skill)
+
+        ordered_contract = (
+            "concrete post-implementation actual-product handoff-check plan",
+            "After implementation, for each materially distinct route",
+            "same-Ticket due-now implementation work",
+            "Begin independent verification only after",
+            "nominated implementation-route index",
+        )
+        positions = [implementation_skill.index(text) for text in ordered_contract]
+        self.assertEqual(positions, sorted(positions))
+
     def test_verification_skill_names_direct_verification_and_remediation_contract(self) -> None:
         verification_skill = " ".join(VERIFICATION_SKILL.split())
         for required in (
@@ -113,8 +145,21 @@ class ActiveSkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, verification_skill)
 
+        for required in (
+            "nominated implementation-route index",
+            "non-authoritative route-discovery and navigation input",
+            "establish any runtime-readiness fact only through the existing Runtime Runner boundary",
+            "do not enter the Canonical Source Package or Coverage Challenge",
+            "must not constrain candidate search or independent scenario design",
+            "does not block Verification",
+        ):
+            self.assertIn(required, verification_skill)
+
         ordered_contract = (
             "Verification Lead itself performs a read-only lead-first planning inspection",
+            "After independently decomposing the Ticket into coverage units",
+            "nominated implementation-route index",
+            "For each unit, identify the required product entrypoint",
             "Verification Lead invokes one or more instances of the official `Runtime Runner`",
             "Verification Lead itself designs one or more verification scenarios",
             "Ask the user to explicitly approve the disclosed scenario plan",
