@@ -60,7 +60,7 @@ describe("resolveBrowserConfig", () => {
       maximumReasoning: "high",
     });
     expect(resolveManagedBrowserSlotCapability({ ORACLE_BROWSER_SLOT_ID: "5" })).toMatchObject({
-      expectedControl: "dropdown",
+      expectedControl: "slider",
       maximumReasoning: "high",
     });
   });

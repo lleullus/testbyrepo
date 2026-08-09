@@ -201,7 +201,7 @@ export function resolveManagedBrowserSlotCapability(
   if (raw === "5") {
     return {
       slotId: 5,
-      expectedControl: "dropdown",
+      expectedControl: "slider",
       maximumReasoning: "high",
     };
   }
