@@ -12,7 +12,7 @@ from typing import Any, Mapping
 from urllib.parse import urlsplit
 
 
-SLOT_IDS = (1, 2, 3, 4, 5)
+SLOT_IDS = (1, 2, 3, 4, 5, 10)
 DEFAULT_CHATGPT_URL = "https://chatgpt.com/"
 ALLOWED_CHATGPT_HOSTS = ("chatgpt.com", "chat.openai.com")
 CHATGPT_URLS_ENV = "ORACLE_BROWSER_SLOTS_CHATGPT_URLS"

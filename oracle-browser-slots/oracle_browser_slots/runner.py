@@ -185,17 +185,17 @@ class JobRunner:
         if normalized_model not in ("gpt-5.6", "gpt-5.6-sol"):
             return ()
         if not reasoning_values:
-            return (1, 2, 3, 4, 5)
+            return (1, 2, 3, 4, 5, 10)
         reasoning = reasoning_values[0]
         normalized_reasoning = reasoning.strip().lower().replace("_", "-").replace(" ", "-")
         if normalized_reasoning in ("heavy", "extra-high", "extrahigh", "xhigh", "pro"):
-            return (1, 2)
+            return (1, 2, 10)
         if normalized_reasoning in ("extended", "high"):
-            return (3, 4, 5, 1, 2)
+            return (3, 4, 5, 1, 2, 10)
         if normalized_reasoning in ("light", "instant", "low"):
-            return (1, 2)
+            return (1, 2, 10)
         if normalized_reasoning in ("standard", "medium"):
-            return (1, 2, 3, 4, 5)
+            return (1, 2, 3, 4, 5, 10)
         return ()
 
     def assert_slot_compatible(self, slot_id: int, argv: Sequence[str]) -> None:

@@ -1,8 +1,10 @@
 # Oracle Browser Slots
 
-This repository provides five explicitly selected WSL Linux Chrome slots for
-Oracle Browser. It does not identify the ChatGPT account in a profile or compare
-accounts between slots.
+This repository provides the explicitly managed WSL Linux Chrome slots 1, 2, 3,
+4, 5, and 10 for Oracle Browser. Slots 6 through 9 and every other ID are not
+managed. The wrapper does not identify the ChatGPT account in a profile, compare
+accounts between slots, or verify account subscription, model entitlement, or
+workspace access.
 
 ## Commands
 
@@ -65,7 +67,7 @@ The child receives these environment variables:
 The stock Oracle example above consumes the deterministic slot 1 endpoint.
 For slot 2 use `--slot 2` and `--remote-chrome 127.0.0.1:19223`; for slot 3 use
 `127.0.0.1:19224`; for slot 4 use `127.0.0.1:19225`; for slot 5 use
-`127.0.0.1:19226`. Missing `--engine browser`,
+`127.0.0.1:19226`; for slot 10 use `127.0.0.1:19231`. Missing `--engine browser`,
 `--browser-model-strategy current`, or `--remote-chrome` values are injected
 for the selected slot. Conflicting or duplicate values and alternate transport
 options are rejected before claim. A second request for an occupied slot is
@@ -76,9 +78,11 @@ explicit `prepare` recovers it.
 
 `submit` accepts a request ID and the same canonical stock Oracle argv without a
 slot. It claims the first available slot in the model/reasoning-compatible
-preference order implemented by `JobRunner.compatible_slots`, injects that slot's
-fixed `--remote-chrome`, and emits lifecycle JSONL on stderr. The implementation
-and its routing regression tests are authoritative. When all usable
+preference order: default/standard/medium use `(1, 2, 3, 4, 5, 10)`;
+light/instant/low and heavy/extra-high/pro use `(1, 2, 10)`; extended/high use
+`(3, 4, 5, 1, 2, 10)`. It injects the selected slot's fixed `--remote-chrome`
+and emits lifecycle JSONL on stderr. Existing slots retain their relative order.
+When all usable
 slots are occupied it emits a FIFO queue record and waits without automatic
 expiry. `submit` accepts no caller-supplied `--remote-chrome`; the selected
 slot endpoint is always authoritative. Ctrl-C or SIGTERM cancels a waiting
@@ -190,8 +194,10 @@ preparation evidence, not upload or prompt-submission evidence.
 Defaults match the WSL Oracle Browser runtime:
 
 - Chrome: `/usr/bin/google-chrome` (or `CHROME_PATH`)
-- Ports: `127.0.0.1:19222` through `127.0.0.1:19226`
-- Profiles: `~/.oracle/browser-profiles/slot-1` through `slot-5`
+- Ports: slots 1 through 5 use `127.0.0.1:19222` through `127.0.0.1:19226`;
+  slot 10 uses `127.0.0.1:19231`
+- Profiles: `~/.oracle/browser-profiles/slot-1` through `slot-5`, plus
+  `~/.oracle/browser-profiles/slot-10`
 - State: `~/.oracle/browser-slots`
 
 Tests and non-production runs can isolate the runtime with:
@@ -213,7 +219,8 @@ alternate production Oracle distribution.
 ## Slot-wise ChatGPT workspace URLs
 
 Set `ORACLE_BROWSER_SLOTS_CHATGPT_URLS` to a JSON object whose keys are slot IDs
-(`"1"` through `"5"`) and whose values are ChatGPT workspace URLs:
+(`"1"`, `"2"`, `"3"`, `"4"`, `"5"`, or `"10"`) and whose values are ChatGPT
+workspace URLs:
 
 ```bash
 export ORACLE_BROWSER_SLOTS_CHATGPT_URLS='{"3":"https://chatgpt.com/g/g-p-xxxx/project"}'

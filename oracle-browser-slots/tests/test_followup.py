@@ -944,6 +944,124 @@ class FollowupExecutionTests(unittest.TestCase):
             self.assertTrue(readback["verification"]["ok"])
             self.assertEqual(service.status(5)["status"], AVAILABLE)
 
+    def test_slot_ten_origin_waits_for_slot_ten_then_runs_without_fallback(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root, ready_slots=(1, 10))
+            oracle_home = root / "oracle-home"
+            write_stock_session(
+                oracle_home, service.settings, "parent-slot-ten", slot_id=10
+            )
+            held = service.claim_job(10, "held-slot-ten")
+            self.assertTrue(held["accepted"])
+            factory = FakeOracleFactory(oracle_home)
+            events: list[dict[str, object]] = []
+            result_holder: dict[str, object] = {}
+            followup = FollowupRunner(
+                service,
+                runner=JobRunner(
+                    service,
+                    popen_factory=factory,
+                    oracle_cli_path=TEST_ORACLE_CLI,
+                ),
+                repository=OracleSessionRepository(
+                    service.settings, oracle_home=oracle_home
+                ),
+                poll_interval=0.01,
+            )
+
+            thread = threading.Thread(
+                target=lambda: result_holder.update(
+                    result=followup.run(
+                        "slot-ten-followup",
+                        "ctx-main",
+                        [TEST_ORACLE_CLI, "-p", "continue on slot ten"],
+                        emit=events.append,
+                    )
+                )
+            )
+            thread.start()
+            deadline = time.monotonic() + 5
+            while (
+                not any(event["event"] == "waiting" for event in events)
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.01)
+            self.assertTrue(any(event["event"] == "waiting" for event in events))
+            self.assertEqual(factory.calls, [])
+            self.assertEqual(service.status(1)["status"], AVAILABLE)
+
+            self.assertTrue(
+                service.finish_job(
+                    10,
+                    "held-slot-ten",
+                    held["record"]["started_at"],
+                    "success",
+                    0,
+                    "release",
+                    "없음",
+                )["released"]
+            )
+            thread.join(timeout=5)
+            self.assertFalse(thread.is_alive())
+
+            result = result_holder["result"]
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(len(factory.calls), 1)
+            command = factory.calls[0]["argv"]
+            self.assertEqual(option_value(command, "--followup"), "parent-slot-ten")
+            self.assertEqual(
+                option_value(command, "--remote-chrome"), "127.0.0.1:29231"
+            )
+            self.assertEqual(factory.calls[0]["env"]["ORACLE_BROWSER_SLOT_ID"], "10")
+            self.assertTrue(
+                all(
+                    event.get("assigned_slot") in (None, 10)
+                    for event in events
+                )
+            )
+            self.assertEqual(
+                result["record"]["authoritative_readback"]["original_slot"]["slot_id"],
+                10,
+            )
+            self.assertEqual(service.status(1)["status"], AVAILABLE)
+            self.assertEqual(service.status(10)["status"], AVAILABLE)
+
+    def test_unavailable_slot_ten_origin_fails_without_fallback(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root, ready_slots=(1,))
+            oracle_home = root / "oracle-home"
+            write_stock_session(
+                oracle_home, service.settings, "parent-unready-ten", slot_id=10
+            )
+            factory = FakeOracleFactory(oracle_home)
+            result = FollowupRunner(
+                service,
+                runner=JobRunner(
+                    service,
+                    popen_factory=factory,
+                    oracle_cli_path=TEST_ORACLE_CLI,
+                ),
+                repository=OracleSessionRepository(
+                    service.settings, oracle_home=oracle_home
+                ),
+                poll_interval=0.01,
+            ).run(
+                "unavailable-slot-ten-origin",
+                "ctx-main",
+                [TEST_ORACLE_CLI, "-p", "must not run"],
+            )
+
+            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["record"]["attempted_slots"], [10])
+            self.assertIn(
+                "다른 슬롯으로 전환하지 않았습니다",
+                result["record"]["operator_action"],
+            )
+            self.assertEqual(factory.calls, [])
+            self.assertEqual(service.status(1)["status"], AVAILABLE)
+
     def test_unavailable_slot_four_origin_fails_without_fallback(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

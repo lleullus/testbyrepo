@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -90,10 +89,19 @@ class SettingsMappingTests(unittest.TestCase):
         self.assertEqual(settings.effective_launcher_url(3), DEFAULT_CHATGPT_URL)
 
     def test_partial_mapping_parses(self):
-        env = {"HOME": "/home/test", CHATGPT_URLS_ENV: json.dumps({"3": SLOT3_URL})}
+        env = {
+            "HOME": "/home/test",
+            CHATGPT_URLS_ENV: json.dumps({"3": SLOT3_URL, "10": "https://chatgpt.com/g/ten"}),
+        }
         settings = Settings.from_env(env)
-        self.assertEqual(settings.slot_chatgpt_urls, {3: SLOT3_URL})
+        self.assertEqual(
+            settings.slot_chatgpt_urls,
+            {3: SLOT3_URL, 10: "https://chatgpt.com/g/ten"},
+        )
         self.assertEqual(settings.slot_chatgpt_url_override(3), SLOT3_URL)
+        self.assertEqual(
+            settings.slot_chatgpt_url_override(10), "https://chatgpt.com/g/ten"
+        )
         self.assertIsNone(settings.slot_chatgpt_url_override(4))
 
     def test_full_mapping_and_override_validation(self):
@@ -120,7 +128,7 @@ class SettingsMappingTests(unittest.TestCase):
                 Settings.from_env(env)
 
     def test_invalid_key_raises(self):
-        for key in ("6", "0", "x", "3.0"):
+        for key in ("6", "7", "8", "9", "11", "0", "x", "3.0"):
             env = {"HOME": "/home/test", CHATGPT_URLS_ENV: json.dumps({key: SLOT3_URL})}
             with self.assertRaises(ValueError):
                 Settings.from_env(env)

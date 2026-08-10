@@ -1127,7 +1127,7 @@ class SlotServiceTests(unittest.TestCase):
             slots = [settings.slot(slot_id) for slot_id in SLOT_IDS]
             self.assertEqual(
                 [slot.port for slot in slots],
-                [19222, 19223, 19224, 19225, 19226],
+                [19222, 19223, 19224, 19225, 19226, 19231],
             )
             self.assertEqual(
                 [str(slot.profile_dir) for slot in slots],
@@ -1137,8 +1137,14 @@ class SlotServiceTests(unittest.TestCase):
                     f"{directory}/profiles/slot-3",
                     f"{directory}/profiles/slot-4",
                     f"{directory}/profiles/slot-5",
+                    f"{directory}/profiles/slot-10",
                 ],
             )
+
+            for unmanaged_slot in (6, 7, 8, 9, 11):
+                with self.subTest(unmanaged_slot=unmanaged_slot):
+                    with self.assertRaises(ValueError):
+                        settings.slot(unmanaged_slot)
 
     def test_one_slot_failure_does_not_hide_other_statuses(self):
         with TemporaryDirectory() as directory:
@@ -1150,6 +1156,7 @@ class SlotServiceTests(unittest.TestCase):
                     3: LoginResult(False, "login required", "sign in"),
                     4: LoginResult(True, "slot 4 ready", "없음"),
                     5: LoginResult(True, "slot 5 ready", "없음"),
+                    10: LoginResult(True, "slot 10 ready", "없음"),
                 }
             )
             service = SlotService(
@@ -1164,6 +1171,7 @@ class SlotServiceTests(unittest.TestCase):
             self.assertEqual(prepared[2]["status"], UNAVAILABLE)
             self.assertEqual(prepared[3]["status"], AVAILABLE)
             self.assertEqual(prepared[4]["status"], AVAILABLE)
+            self.assertEqual(prepared[5]["status"], AVAILABLE)
 
             statuses = service.status_all()
             self.assertEqual(
@@ -1174,10 +1182,53 @@ class SlotServiceTests(unittest.TestCase):
             self.assertEqual(statuses[2]["status"], UNAVAILABLE)
             self.assertEqual(statuses[3]["status"], AVAILABLE)
             self.assertEqual(statuses[4]["status"], AVAILABLE)
+            self.assertEqual(statuses[5]["status"], AVAILABLE)
             self.assertIn(2, cdp.calls)
             self.assertIn(3, cdp.calls)
             self.assertIn(4, cdp.calls)
             self.assertIn(5, cdp.calls)
+            self.assertIn(10, cdp.calls)
+
+    def test_slot_ten_has_independent_state_single_occupancy_and_duplicate_boundary(self):
+        with TemporaryDirectory() as directory:
+            settings = settings_for(Path(directory))
+            service = SlotService(
+                settings,
+                cdp=FakeCDP(
+                    {
+                        1: LoginResult(True, "slot 1 ready", "없음"),
+                        10: LoginResult(True, "slot 10 ready", "없음"),
+                    }
+                ),
+                launcher=FakeLauncher(),
+            )
+            self.assertEqual(service.prepare(1)["status"], AVAILABLE)
+            self.assertEqual(service.prepare(10)["status"], AVAILABLE)
+
+            first = service.claim_job(10, "slot-ten-job")
+            self.assertTrue(first["accepted"])
+            duplicate = service.claim_job(10, "slot-ten-job")
+            competing = service.claim_job(10, "other-slot-ten-job")
+
+            self.assertFalse(duplicate["accepted"])
+            self.assertFalse(competing["accepted"])
+            self.assertEqual(duplicate["record"]["current_job_id"], "slot-ten-job")
+            self.assertEqual(competing["record"]["status"], OCCUPIED)
+            self.assertEqual(service.status(1)["status"], AVAILABLE)
+            self.assertEqual(service.status(10)["status"], OCCUPIED)
+            self.assertTrue(
+                service.finish_job(
+                    10,
+                    "slot-ten-job",
+                    first["record"]["started_at"],
+                    "success",
+                    0,
+                    "complete",
+                    "없음",
+                )["released"]
+            )
+            self.assertEqual(service.status(10)["status"], AVAILABLE)
+            self.assertEqual(service.status(1)["status"], AVAILABLE)
 
     def test_occupancy_is_readable_and_abandoned_work_requires_reprepare(self):
         with TemporaryDirectory() as directory:
@@ -1213,24 +1264,24 @@ class SlotServiceTests(unittest.TestCase):
 
 
 class SettingsTests(unittest.TestCase):
-    def test_port_base_maximum_is_accepted_and_derives_slot_five_port(self):
+    def test_port_base_maximum_is_accepted_and_derives_slot_ten_port(self):
         settings = Settings.from_env(
             {
                 "HOME": "/home/test",
-                "ORACLE_BROWSER_SLOTS_PORT_BASE": "65531",
+                "ORACLE_BROWSER_SLOTS_PORT_BASE": "65526",
             }
         )
-        self.assertEqual(settings.port_base, 65531)
-        self.assertEqual(settings.slot(5).port, 65535)
+        self.assertEqual(settings.port_base, 65526)
+        self.assertEqual(settings.slot(10).port, 65535)
         self.assertEqual(
-            settings.slot(5).profile_dir,
-            Path("/home/test/.oracle/browser-profiles/slot-5"),
+            settings.slot(10).profile_dir,
+            Path("/home/test/.oracle/browser-profiles/slot-10"),
         )
 
-    def test_port_base_at_or_above_65532_is_rejected(self):
-        for port_base in (65532, 65533, 65534, 65535, 65536):
+    def test_port_base_at_or_above_65527_is_rejected(self):
+        for port_base in (65527, 65528, 65531, 65535, 65536):
             with self.subTest(port_base=port_base):
-                with self.assertRaisesRegex(ValueError, "between 1 and 65531"):
+                with self.assertRaisesRegex(ValueError, "between 1 and 65526"):
                     Settings.from_env(
                         {
                             "HOME": "/home/test",
@@ -1294,55 +1345,41 @@ class JobRunnerTests(unittest.TestCase):
             service = SlotService(settings_for(Path(directory)))
             runner = JobRunner(service, oracle_cli_path=TEST_ORACLE_CLI)
 
+            capabilities = {
+                None: (1, 2, 3, 4, 5, 10),
+                "standard": (1, 2, 3, 4, 5, 10),
+                "medium": (1, 2, 3, 4, 5, 10),
+                "light": (1, 2, 10),
+                "instant": (1, 2, 10),
+                "low": (1, 2, 10),
+                "heavy": (1, 2, 10),
+                "extra-high": (1, 2, 10),
+                "extrahigh": (1, 2, 10),
+                "xhigh": (1, 2, 10),
+                "pro": (1, 2, 10),
+                "extended": (3, 4, 5, 1, 2, 10),
+                "high": (3, 4, 5, 1, 2, 10),
+            }
+            for reasoning, expected in capabilities.items():
+                with self.subTest(reasoning=reasoning):
+                    command = [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol"]
+                    if reasoning is not None:
+                        command.extend(("--browser-thinking-time", reasoning))
+                    self.assertEqual(runner.compatible_slots(command), expected)
+
             self.assertEqual(
                 runner.compatible_slots(
-                    [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol", "--browser-thinking-time", "heavy"]
+                    [
+                        TEST_ORACLE_CLI,
+                        "--model=gpt-5.6",
+                        "--browser-thinking-time=extended",
+                    ]
                 ),
-                (1, 2),
-            )
-            self.assertEqual(
-                runner.compatible_slots(
-                    [TEST_ORACLE_CLI, "--model=gpt-5.6", "--browser-thinking-time=extended"]
-                ),
-                (3, 4, 5, 1, 2),
-            )
-            self.assertEqual(
-                runner.compatible_slots(
-                    [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol", "--browser-thinking-time", "standard"]
-                ),
-                (1, 2, 3, 4, 5),
-            )
-            self.assertEqual(
-                runner.compatible_slots(
-                    [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol", "--browser-thinking-time", "instant"]
-                ),
-                (1, 2),
-            )
-            self.assertEqual(
-                runner.compatible_slots(
-                    [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol", "--browser-thinking-time", "low"]
-                ),
-                (1, 2),
-            )
-            self.assertEqual(
-                runner.compatible_slots(
-                    [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol", "--browser-thinking-time", "medium"]
-                ),
-                (1, 2, 3, 4, 5),
-            )
-            self.assertEqual(
-                runner.compatible_slots(
-                    [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol", "--browser-thinking-time", "high"]
-                ),
-                (3, 4, 5, 1, 2),
+                (3, 4, 5, 1, 2, 10),
             )
             self.assertEqual(
                 runner.compatible_slots([TEST_ORACLE_CLI, "--model", "gpt-5.5-pro"]),
                 (),
-            )
-            self.assertEqual(
-                runner.compatible_slots([TEST_ORACLE_CLI, "--model", "gpt-5.6-sol"]),
-                (1, 2, 3, 4, 5),
             )
 
     def test_missing_oracle_flags_are_injected_for_selected_slot(self):
@@ -1751,7 +1788,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual({slot["status"] for slot in payload["slots"]}, {"미준비"})
             self.assertEqual(
                 [slot["port"] for slot in payload["slots"]],
-                [19222, 19223, 19224, 19225, 19226],
+                [19222, 19223, 19224, 19225, 19226, 19231],
             )
             self.assertEqual(
                 [slot["profile_dir"] for slot in payload["slots"]],
@@ -1761,34 +1798,39 @@ class CliTests(unittest.TestCase):
                     f"{directory}/profiles/slot-3",
                     f"{directory}/profiles/slot-4",
                     f"{directory}/profiles/slot-5",
+                    f"{directory}/profiles/slot-10",
                 ],
             )
 
-    def test_parser_accepts_slot_four_and_five_for_slot_selecting_commands(self):
+    def test_parser_accepts_slot_ten_and_rejects_unmanaged_slots(self):
         from oracle_browser_slots.cli import build_parser
 
         parser = build_parser()
-        self.assertEqual(parser.parse_args(["prepare", "--slot", "5"]).slot, 5)
+        self.assertEqual(parser.parse_args(["prepare", "--slot", "10"]).slot, 10)
         self.assertEqual(parser.parse_args(["status", "--slot", "4"]).slot, 4)
         self.assertEqual(
             parser.parse_args(
                 [
                     "run",
                     "--slot",
-                    "5",
+                    "10",
                     "--job-id",
-                    "job-five",
+                    "job-ten",
                     "--",
                     CANONICAL_ORACLE_CLI,
                     "-p",
                     "task",
                 ]
             ).slot,
-            5,
+            10,
         )
-        with self.assertRaises(SystemExit) as invalid:
-            parser.parse_args(["prepare", "--slot", "6"])
-        self.assertEqual(invalid.exception.code, 2)
+        for unmanaged_slot in (6, 7, 8, 9, 11):
+            with self.subTest(unmanaged_slot=unmanaged_slot):
+                with self.assertRaises(SystemExit) as invalid:
+                    parser.parse_args(
+                        ["prepare", "--slot", str(unmanaged_slot)]
+                    )
+                self.assertEqual(invalid.exception.code, 2)
 
     def test_public_run_rejects_unprepared_slot_without_starting_command(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -2091,6 +2133,39 @@ class AutoAllocatorTests(unittest.TestCase):
             )
             self.assertEqual(service.status(5)["status"], AVAILABLE)
 
+    def test_submit_uses_slot_ten_endpoint_when_only_available(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root, ready_slots=(10,))
+            commands: list[list[str]] = []
+
+            def popen(argv, *, env, close_fds):
+                commands.append(argv)
+                return ReturnCodeChild(0)
+
+            events: list[dict[str, object]] = []
+            result = AutoAllocator(
+                service,
+                runner=self._runner(service, popen),
+                poll_interval=0.01,
+            ).submit(
+                "auto-slot-ten",
+                [TEST_ORACLE_CLI, "-p", "task"],
+                emit=events.append,
+            )
+
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(result["record"]["assigned_slot"], 10)
+            self.assertEqual(result["record"]["attempted_slots"], [10])
+            self.assertEqual(
+                commands[0][commands[0].index("--remote-chrome") + 1],
+                "127.0.0.1:19231",
+            )
+            self.assertEqual(
+                [event["event"] for event in events], ["started", "finished"]
+            )
+            self.assertEqual(service.status(10)["status"], AVAILABLE)
+
     def test_duplicate_request_running_rejects_before_second_claim_or_popen(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -2171,6 +2246,44 @@ class AutoAllocatorTests(unittest.TestCase):
                     1,
                     "manual-same-request",
                     manual_claim["record"]["started_at"],
+                    "success",
+                    0,
+                    "release",
+                    "없음",
+                )["released"]
+            )
+
+    def test_submit_rejects_request_id_held_by_slot_ten(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root, ready_slots=(1, 10))
+            slot_ten_claim = service.claim_job(10, "slot-ten-same-request")
+            self.assertTrue(slot_ten_claim["accepted"])
+            commands: list[list[str]] = []
+
+            result = AutoAllocator(
+                service,
+                runner=self._runner(
+                    service,
+                    lambda argv, **_kwargs: commands.append(argv),
+                ),
+                poll_interval=0.01,
+            ).submit(
+                "slot-ten-same-request",
+                [TEST_ORACLE_CLI, "-p", "must not start"],
+            )
+
+            self.assertEqual(result["exit_code"], 2)
+            self.assertTrue(result["record"]["duplicate_request"])
+            self.assertEqual(result["record"]["existing_assigned_slot"], 10)
+            self.assertEqual(commands, [])
+            self.assertEqual(service.status(1)["status"], AVAILABLE)
+            self.assertEqual(service.status(10)["status"], OCCUPIED)
+            self.assertTrue(
+                service.finish_job(
+                    10,
+                    "slot-ten-same-request",
+                    slot_ten_claim["record"]["started_at"],
                     "success",
                     0,
                     "release",
