@@ -1262,7 +1262,12 @@ class FollowupRunner:
                     }
                 )
                 self._emit(emit, record)
-                return {"accepted": True, "exit_code": 1, "record": record}
+                return {
+                    "accepted": True,
+                    "exit_code": 1,
+                    "record": record,
+                    "child_started": False,
+                }
 
             if self._parent_is_archived(parent):
                 try:
@@ -1303,7 +1308,12 @@ class FollowupRunner:
                         }
                     )
                     self._emit(emit, record)
-                    return {"accepted": True, "exit_code": 1, "record": record}
+                    return {
+                        "accepted": True,
+                        "exit_code": 1,
+                        "record": record,
+                        "child_started": False,
+                    }
 
             if cancellation["requested"]:
                 return self._cancel_claimed(
@@ -1371,6 +1381,7 @@ class FollowupRunner:
                     execution_started and session_backed
                 ),
                 accepted=execution_started,
+                child_started=False,
             )
         finally:
             if prepared is not None:
@@ -1380,7 +1391,7 @@ class FollowupRunner:
 
         if (
             not session_backed
-            or child_result.get("record", {}).get("outcome") == "spawn_error"
+            or child_result.get("child_started") is not True
         ):
             result = dict(child_result)
             result["record"] = self._annotate_runner_record(
@@ -1424,6 +1435,7 @@ class FollowupRunner:
                 emit=emit,
                 prompt_submission_may_have_occurred=True,
                 accepted=True,
+                child_started=True,
             )
 
         verification_ok = readback["verification"]["ok"] is True
@@ -1451,7 +1463,12 @@ class FollowupRunner:
         persisted["authoritative_readback"] = readback
         persisted["child_exit_code"] = child_exit_code
         self._emit(emit, persisted)
-        return {"accepted": True, "exit_code": final_exit_code, "record": persisted}
+        return {
+            "accepted": True,
+            "exit_code": final_exit_code,
+            "record": persisted,
+            "child_started": True,
+        }
 
     def _cancel_before_claim(
         self,
@@ -1514,6 +1531,7 @@ class FollowupRunner:
             "accepted": True,
             "exit_code": 130 if finished["released"] else 1,
             "record": record,
+            "child_started": False,
         }
 
     def _terminal(
@@ -1531,6 +1549,7 @@ class FollowupRunner:
         child_session_id: str | None = None,
         prompt_submission_may_have_occurred: bool = False,
         accepted: bool = False,
+        child_started: bool = False,
     ) -> dict[str, Any]:
         record = self._record(
             request_id,
@@ -1546,7 +1565,10 @@ class FollowupRunner:
         if prompt_submission_may_have_occurred:
             record["prompt_submission_may_have_occurred"] = True
         self._emit(emit, record)
-        return {"accepted": accepted, "exit_code": exit_code, "record": record}
+        result = {"accepted": accepted, "exit_code": exit_code, "record": record}
+        if accepted:
+            result["child_started"] = child_started
+        return result
 
     @staticmethod
     def _record(

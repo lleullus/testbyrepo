@@ -44,6 +44,52 @@ SESSIONLESS_FLAGS = {
     "--session",
     "--status",
 }
+REQUIRED_VALUE_OPTIONS = {
+    "-p",
+    "--prompt",
+    "--message",
+    "--followup",
+    "--followup-model",
+    "--slug",
+    "-s",
+    "--model",
+    "-m",
+    "--models",
+    "--base-url",
+    "--azure-endpoint",
+    "--azure-deployment",
+    "--azure-api-version",
+    "--browser-chrome-profile",
+    "--browser-cookie-path",
+    "--chatgpt-url",
+    "--browser-url",
+    "--browser-timeout",
+    "--browser-input-timeout",
+    "--browser-attachment-timeout",
+    "--browser-recheck-delay",
+    "--browser-recheck-timeout",
+    "--browser-reuse-wait",
+    "--browser-profile-lock-timeout",
+    "--browser-auto-reattach-delay",
+    "--browser-auto-reattach-interval",
+    "--browser-auto-reattach-timeout",
+    "--browser-cookie-wait",
+    "--browser-cookie-names",
+    "--browser-inline-cookies",
+    "--browser-inline-cookies-file",
+    "--browser-manual-login-profile-dir",
+    "--copy-profile",
+    "--browser-follow-up",
+    "--browser-archive",
+    "--browser-tab",
+    "--remote-token",
+    "--youtube",
+    "--generate-image",
+    "--edit-image",
+    "--output",
+    "--aspect",
+    "--write-output",
+}
 MANIFEST_FILENAME = "oracle-browser-slots-attachments.json"
 MANIFEST_RELATIVE_PATH = f"artifacts/{MANIFEST_FILENAME}"
 
@@ -692,11 +738,18 @@ def _normalize_file_command(
 
 
 def command_requires_session(argv: Sequence[str]) -> bool:
-    for token in argv[1:]:
+    index = 1
+    while index < len(argv):
+        token = argv[index]
         if token == "--":
             break
-        if token.split("=", 1)[0] in SESSIONLESS_FLAGS:
+        option = token.split("=", 1)[0]
+        if "=" not in token and option in REQUIRED_VALUE_OPTIONS:
+            index += 2
+            continue
+        if option in SESSIONLESS_FLAGS:
             return False
+        index += 1
     return True
 
 

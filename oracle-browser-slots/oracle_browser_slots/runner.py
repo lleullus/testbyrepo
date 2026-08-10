@@ -527,11 +527,17 @@ class JobRunner:
             final_record["child_exit_code"] = child_exit_code
         self._emit(emit, final_record)
         if not finished["released"]:
-            return {"accepted": True, "exit_code": 1, "record": final_record}
+            return {
+                "accepted": True,
+                "exit_code": 1,
+                "record": final_record,
+                "child_started": child is not None,
+            }
         return {
             "accepted": True,
             "exit_code": self._shell_exit_code(exit_code),
             "record": final_record,
+            "child_started": child is not None,
         }
 
     def _validated_oracle_command(

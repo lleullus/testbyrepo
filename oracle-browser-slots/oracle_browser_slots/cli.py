@@ -141,7 +141,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         and session_backed
         and result.get("accepted") is True
         and isinstance(slot_id, int)
-        and result.get("record", {}).get("outcome") != "spawn_error"
+        and result.get("child_started") is True
     ):
         try:
             readback = repository.record_origin(

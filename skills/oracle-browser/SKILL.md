@@ -59,6 +59,18 @@ route in a task:
 5. Submit the live request through the bound wrapper route with
    `--engine browser` and `--browser-model-strategy current`. Never invoke a
    live stock Oracle request directly.
+
+Never invoke stock Oracle's live or browser paths outside this wrapper,
+including for verification, probing, or tests. Verify stock parser semantics
+only through pinned-source inspection, existing tests, or an explicitly
+`--dry-run`/`--preview` command that deterministically cannot submit. When
+validating an option-looking required value, do not run a stock command that can
+fall back to live execution; if its classification is ambiguous, inspect source
+or tests instead. Direct stock `--dry-run` is allowed only to inspect a control
+plan when it is an explicit actual dry run with no possible live fallback;
+verify managed route behavior through a wrapper dry-run. Every delegation prompt
+for an Oracle review must state and follow the same prohibition.
+
 6. By default, every browser initial, followup, dry-run, and legacy exact-tab
    managed invocation must pass `--browser-timeout 2h`. Status and session
    inspection commands are not response-capture requests and do not need it.

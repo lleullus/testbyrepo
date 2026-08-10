@@ -781,6 +781,7 @@ class AutoAllocator:
                 "accepted": True,
                 "exit_code": 130 if finished["released"] else 1,
                 "record": record,
+                "child_started": False,
             }
 
         if state["entry"] is not None:
@@ -1122,7 +1123,12 @@ class AutoAllocator:
                 "release_after_status": source.get("state_after"),
             }
         )
-        return {"accepted": True, "exit_code": 1, "record": record}
+        return {
+            "accepted": True,
+            "exit_code": 1,
+            "record": record,
+            "child_started": False,
+        }
 
     def _no_slot_result(
         self,
