@@ -2,11 +2,12 @@
 
 ## Decision
 
-B tier authorizes no current implementation, parser, test, schema, storage,
-artifact, wording, or workflow change.
+B2 remains rejected. The former B1 no-change decision is superseded by the
+bounded route-navigation cutover described below.
 
-- B1, persistence of the Implementation Lead's nominated implementation-route
-  index, is **CURRENT NO CHANGE / EVIDENCE-GATED REOPENING**.
+- B1 is **SUPERSEDED: BOUNDED ROUTE PROVENANCE AUTHORIZED** because cross-context
+  producer provenance loss was observed and navigation-only session state could
+  not preserve whether required implementation-stage checks were recorded.
 - B2, relaxation or addition of legacy prose tolerance, is **REJECTED** as a
   runtime parser change. A bounded, one-shot, owner-confirmed migration may be
   proposed only for a named live compatibility population that satisfies the
@@ -26,168 +27,36 @@ decision.
 - B2 must prove a live compatibility population and an authority-preserving
   finite migration boundary.
 
-## B1: Current-Session Route Index
+## B1: Superseded By Bounded Route Provenance
 
 ### Current Contract
 
-The nominated implementation-route index is explicitly a current-session
-result:
+The prior current-session-only contract is no longer active. Its concrete
+failure was loss of route provenance across context boundaries, not merely
+navigation inefficiency. The replacement is exactly one atomically replaced
+`~/.iis/route-navigation/<ticket-key>.json` sidecar with strict filtered views:
 
-- `implementation-lead/SKILL.md` requires the index in the current-session
-  implementation result.
-- The same contract says to keep the result in the current session and forbids
-  a separate handoff file, serialized state, or approval workflow.
-- `verification-lead/SKILL.md` reads the index only if the current session
-  contains it.
-- Verification independently decomposes the Ticket before reading the index.
-- Verification independently confirms route facts from current product source.
-- Runtime Runner remains the only runtime-readiness boundary.
-- Index absence, incompleteness, malformedness, staleness, or disagreement does
-  not block Verification.
-- The Verification working model is separately in-memory and session-temporary.
+- Primary receives only safe navigation fields after independent mapping and
+  independently confirms source anchor digests.
+- Verification Lead receives only quarantined redacted producer provenance and
+  may answer only the past-tense provenance question.
+- No AC mapping, readiness, direct evidence, verdict, or causal conclusion may
+  cross either filtered view.
+- Absence, malformedness, cleanup, staleness, or supersession remains ambiguous
+  and never blocks Verification or proves omission.
+- Seven-day terminal grace and thirty-day orphan ceiling are cleanup-only; TTL,
+  file age, and mtime are never semantic freshness.
 
-No writer, reader, storage location, serialization schema, expiry operation, or
-persisted-index fixture exists.
+The sole writer and filtered readers are the artifact-specific APIs in
+`iis_ephemeral_transport.py`. No raw, generic, list, inspect, history, replay,
+recovery, latest, or current-head interface is authorized.
 
 ### Correct Characterization
 
-Cross-session absence is expected current behavior. It is not a current contract
-defect, failed handoff, or discarded guaranteed artifact.
-
-Persistence would be a new efficiency feature. It must prove that repeated
-attributable navigation savings exceed storage, lifecycle, privacy, stale-state,
-compatibility, accidental-authority, and removal costs.
-
-No route-index persistence mechanism or pilot is authorized now.
-
-### Manual Observation Gate
-
-Observe the next 12 consecutive real Implementation Lead to Verification Lead
-transitions, or 90 calendar days, whichever ends first.
-
-Do not extend the window or omit unfavorable cases. Include:
-
-- same-session transitions;
-- cross-session transitions;
-- source-changed transitions;
-- incomplete, malformed, or stale indexes;
-- blocked Verification starts; and
-- cases whose index contains information unsafe to retain.
-
-A reopening decision requires at least five completed cross-session
-Verification starts. Fewer than five leaves the evidence gate closed.
-
-### Recording Boundary
-
-For each transition, record manually only:
-
-- same-session or cross-session;
-- number of materially distinct implementation routes;
-- whether potentially useful route anchors remained current;
-- count of repository-navigation actions;
-- lower-bound active navigation time, excluding idle time;
-- whether useful information was limited to projection-safe navigation fields;
-  and
-- whether discovery produced an additional route, alternative, conflict, or
-  scenario fact.
-
-Do not copy route content, source text, commands, raw outputs, credentials,
-environment values, private endpoints, focused-check observations, or the full
-route index into the observation record.
-
-A reviewer may compare closed Implementation and Verification transcripts only
-after each case completes. The index must not be exposed operationally to
-Verification during measurement.
-
-### Attribution Rule
-
-The measurement window begins after Verification independently decomposes the
-Ticket and establishes qualifier bindings. It ends when relevant candidate route
-anchors have been located and independently source-confirmed.
-
-Count only surplus discovery work. Exclude every action required for:
-
-- current-source confirmation;
-- Runtime Runner investigation;
-- alternative search;
-- scenario design;
-- evidence acquisition;
-- conflict resolution; or
-- verdict work.
-
-An action or interval is attributable to index absence only when all conditions
-hold:
-
-1. It locates a startup/execution path, trigger or contract boundary,
-   source/integration path, or outcome/readback surface.
-2. The exact or sufficiently narrow anchor was already present in the
-   Implementation index.
-3. The anchor remained current when Verification began.
-4. The action was not required to confirm the anchor against current source.
-5. The action discovered no other plausible route, required alternative, source
-   conflict, scenario condition, readiness fact, or causal fact.
-6. Supplying only the navigation anchor would have eliminated the action without
-   narrowing independent investigation.
-
-Resolve ambiguous time or actions against attribution. Stale, malformed,
-conflicting, or sensitive entries contribute no benefit and remain in the
-observation set.
-
-### Reopening Predicate
-
-B1 may be reopened for design review only when all conditions hold:
-
-1. At least five completed cross-session cases were observed.
-2. At least three cases, and at least half of all completed cross-session cases,
-   each contain at least four attributable navigation actions and at least five
-   lower-bound active minutes of attributable rediscovery.
-3. Aggregate attributable rediscovery is at least 45 lower-bound active minutes.
-4. Every qualifying benefit derives only from startup/execution, trigger or
-   contract-boundary, source/integration, and outcome/readback anchors.
-5. A zero-code cost model using the observed lower-bound frequency projects
-   six-month saved effort at no less than twice the total estimated one-time and
-   six-month recurring cost of implementation, tests, privacy review, capture,
-   Ticket binding, retrieval, stale handling, expiry, deletion, and removal.
-
-Meeting this predicate authorizes only reconsideration and a separately reviewed
-pilot proposal. It does not authorize implementation or a pilot.
-
-### Future Option, Not Approved
-
-The only future design eligible for evaluation is a host-owned,
-outside-Project-Root, short-lived, single-consumer navigation projection with
-only these anchor classes:
-
-- startup/execution;
-- trigger or contract boundary;
-- source/integration; and
-- outcome/readback.
-
-It must be bound to one exact Ticket, ignored on mismatch or apparent staleness,
-deleted after transfer or bounded expiry, and excluded from readiness, evidence,
-Coverage Challenge, Scenario approval, and verdict derivation.
-
-This is not an approved minimum design. Ticket-digest binding alone may be
-insufficient because product source can change without a Ticket change.
-
-### Tradeoffs
-
-The observation protocol can undercount resumption value:
-
-- known route anchors can reduce cognitive reconstruction even when the same
-  files still require independent reading;
-- the index may reduce omission risk rather than only search commands;
-- rare multi-entrypoint projects can have large value; and
-- manual attribution can cost enough to discourage measurement.
-
-These costs do not establish a defect or justify hidden cross-session state.
-Omission reduction cannot count as benefit if the index narrows independent
-candidate search.
-
-Even a minimal projection creates cross-session identity, expiry, deletion,
-privacy, stale-state, versioning, hidden-state, and accidental-authority costs.
-After stripping observations, blockers, results, and AC conclusions, little
-utility may remain.
+The sidecar preserves bounded local transport and implementation-stage
+provenance only. It is not verification authority, readiness, evidence, workflow
+state, durable history, or a guaranteed producer record. Supersession replaces
+the single slot and no prior producer run is retained.
 
 ## B2: Legacy Prose
 
@@ -290,12 +159,13 @@ accepts the result.
 
 - S-tier receipt-reuse and single-approval decisions remain unchanged.
 - The A-tier hierarchy-freshness correction remains unchanged.
-- The route index remains current-session-only, navigation-only, and
-  non-authoritative.
-- No handoff file, serialized state, workflow database, or approval workflow is
-  introduced.
+- The route sidecar is one atomically replaced cross-context bounded local
+  transport/provenance slot whose navigation semantics remain non-authoritative.
+- The sidecar is not the Verification working model, a workflow database,
+  planning or approval authority, or history.
 - Verification independently decomposes the Ticket and confirms current source.
-- Runtime Runner retains readiness ownership.
+- Runtime Runner owns only raw readiness material; Primary Verifier owns its
+  interpretation, adoption, and readiness semantics.
 - Index absence, malformedness, staleness, or disagreement remains nonblocking.
 - The index does not enter coverage, readiness, evidence, approval, or verdict.
 - Ticket denominator roots remain validator-extracted top-level bullets.

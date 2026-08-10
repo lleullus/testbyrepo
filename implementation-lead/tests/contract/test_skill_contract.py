@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 IMPLEMENTATION_SKILL = (ROOT / "implementation-lead/SKILL.md").read_text(encoding="utf-8")
 VERIFICATION_SKILL = (ROOT / "verification-lead/SKILL.md").read_text(encoding="utf-8")
+PRIMARY_SKILL = (ROOT / "primary-verifier/SKILL.md").read_text(encoding="utf-8")
 TO_TICKETS_SKILL = (ROOT / "matt/skills/to-tickets/SKILL.md").read_text(encoding="utf-8")
 EXAMPLES = ROOT / "matt/examples"
 COVERAGE_GATE_PATH = ROOT / "verification-lead/coverage_gate.py"
@@ -62,7 +63,7 @@ class ActiveSkillContractTests(unittest.TestCase):
         self.assertIn("same user-designated Implementation Subagent", implementation_skill)
         self.assertIn("no known correctable in-scope due-now implementation work remains", implementation_skill)
         self.assertIn("requires direct runtime evidence", implementation_skill)
-        self.assertIn("must not report", IMPLEMENTATION_SKILL)
+        self.assertIn("must not report", implementation_skill)
 
         self.assertIn(
             "If the user explicitly designates one or more implementation research models, invoke "
@@ -137,9 +138,11 @@ class ActiveSkillContractTests(unittest.TestCase):
             "same-Ticket due-now implementation work",
             "classify it neither as verification-only work nor as a new feature or Ticket",
             "every materially distinct required route has current gross actual-product handoff-liveness evidence",
-            "nominated implementation-route index",
-            "navigation only, not a runtime-readiness claim or independent AC evidence",
-            "must not constrain or reduce the Verification Lead's independent scenario design",
+            "~/.iis/route-navigation/<ticket-key>.json",
+            "publish_route_navigation",
+            "read_primary_navigation_view",
+            "read_lead_producer_provenance_view",
+            "neither evidence of producer omission nor a verification blocker",
         ):
             self.assertIn(required, implementation_skill)
 
@@ -148,60 +151,53 @@ class ActiveSkillContractTests(unittest.TestCase):
             "After implementation, for each materially distinct route",
             "same-Ticket due-now implementation work",
             "Begin independent verification only after",
-            "nominated implementation-route index",
+            "sole serialized handoff exception",
         )
         positions = [implementation_skill.index(text) for text in ordered_contract]
         self.assertEqual(positions, sorted(positions))
 
-    def test_verification_skill_names_direct_verification_and_remediation_contract(self) -> None:
+    def test_verification_roles_split_workflow_and_semantic_ownership(self) -> None:
         verification_skill = " ".join(VERIFICATION_SKILL.split())
         for required in (
             "same exact ready local Markdown Ticket",
-            "allowed verification surface",
-            "exactly three operational product-verification roles",
-            "`Runtime Runner`",
-            "`Verification Lead`",
-            "`Remediation Agent`",
-            "`Coverage Challenger`",
-            "Pre-Approval Coverage Gate",
+            "user-facing workflow authority",
+            "Primary Verifier is the sole product-verification semantic owner",
+            "no fallback or direct product-verification path",
+            "exactly one internal `Primary Verifier`",
+            "Host Subagent Invocation Mechanism",
+            "read_primary_navigation_view",
+            "read_lead_producer_provenance_view",
+            "publish_plan_envelope",
+            "publish_user_approval",
+            "read_final_outcome",
             "coverage_gate.py",
             "COVERAGE_GATE_UNSUPPORTED",
             "PRE_APPROVAL_COVERAGE_GATE_FAILURE",
-            "pre-approval runtime-readiness investigator",
-            "direct review of Runtime Runner results",
-            "No Runner assertion itself establishes a fact",
-            "Runtime Runner must not interpret or decompose AC obligations",
-            "acquire direct AC evidence or reach the first AC-deciding observation",
-            "Verification Lead itself designs one or more verification scenarios",
             "Ask the user to explicitly approve that exact plan",
-            "Before that approval, do not prepare the environment or acquire direct evidence",
-            "After approval, prepare only the approved verification environment",
-            "Execute only `READY` scenarios",
-            "exactly one result row for every Markdown AC",
-            "`SATISFIED` and `UNDETERMINED` ACs are never remediation targets",
-            "minimum product change directly required",
-            "at most three cycles",
+            "maximum-three-cycle lineage",
+            "must not rewrite evidence, AC mappings, verdicts",
         ):
             self.assertIn(required, verification_skill)
 
         for required in (
-            "nominated implementation-route index",
-            "non-authoritative route-discovery and navigation input",
-            "establish any runtime-readiness fact only through the existing Runtime Runner boundary",
-            "do not enter the Canonical Source Package or Coverage Challenge",
-            "must not constrain candidate search or independent scenario design",
-            "does not block Verification",
+            "sole product-verification semantic owner",
+            "exactly four parts",
+            "Independently decompose every Markdown AC",
+            "Primary alone interprets and adopts Runner",
+            "Primary alone designs Scenario Records",
+            "Execute only current approved `READY` Scenario revisions",
+            "Derive exactly one ordered result row per Markdown AC",
+            "Remediation Agent owns read-only causal proposal",
+            "publish_final_outcome",
+            "Lead may accept or reject the package only",
         ):
-            self.assertIn(required, verification_skill)
+            self.assertIn(required, PRIMARY_SKILL)
 
         self.assertIn(
-            "After `build` succeeds, invoke one Coverage Challenger unless the rebuilt envelope's "
-            "`challenge_fp` is unchanged and an existing receipt with `effective_result: PASS` for that "
-            "exact fingerprint is submitted to and passes the current local `coverage_gate.py approve` "
-            "path's validation of current canonical sources and the complete receipt chain; any failure "
-            "remains fail-closed",
+            "After structural validation, invoke one Coverage Challenger in a fresh isolated context",
             verification_skill,
         )
+        self.assertIn("Lead must not self-sign or edit the model", verification_skill)
         approval_request = "Ask the user to explicitly approve that exact plan."
         self.assertEqual(VERIFICATION_SKILL.count(approval_request), 1)
         self.assertNotIn("Ask the user to approve that exact plan.", VERIFICATION_SKILL)
@@ -209,20 +205,6 @@ class ActiveSkillContractTests(unittest.TestCase):
             "Ask the user to explicitly approve the disclosed scenario plan.",
             VERIFICATION_SKILL,
         )
-
-        ordered_contract = (
-            "Verification Lead itself performs a read-only lead-first planning inspection",
-            "After independently decomposing the Ticket into coverage units",
-            "nominated implementation-route index",
-            "For each unit, identify the required product entrypoint",
-            "Verification Lead invokes one or more instances of the official `Runtime Runner`",
-            "Verification Lead itself designs one or more verification scenarios",
-            "Ask the user to explicitly approve that exact plan",
-            "After approval, prepare only the approved verification environment",
-            "Execute only `READY` scenarios",
-        )
-        positions = [verification_skill.index(text) for text in ordered_contract]
-        self.assertEqual(positions, sorted(positions))
 
         self.assertNotIn("LEAD_FAILURE", VERIFICATION_SKILL)
 
@@ -378,12 +360,15 @@ class ActiveSkillContractTests(unittest.TestCase):
                 coverage_gate.approve(rebuilt, receipt)
 
     def test_verification_skill_removes_retired_verification_role_names(self) -> None:
-        self.assertNotIn("Readiness Research Agent", VERIFICATION_SKILL)
-        self.assertNotIn("Fresh Verification Lead", VERIFICATION_SKILL)
-        self.assertNotIn("Fresh Verification Subagent", VERIFICATION_SKILL)
+        combined = VERIFICATION_SKILL + PRIMARY_SKILL
+        self.assertNotIn("Readiness Research Agent", combined)
+        self.assertNotIn("Fresh Verification Lead", combined)
+        self.assertNotIn("Fresh Verification Subagent", combined)
 
     def test_active_skills_exclude_retired_mechanism_terms(self) -> None:
-        combined = (IMPLEMENTATION_SKILL + "\n" + VERIFICATION_SKILL).lower()
+        combined = (
+            IMPLEMENTATION_SKILL + "\n" + VERIFICATION_SKILL + "\n" + PRIMARY_SKILL
+        ).lower()
         for term in (
             "implementation verification module",
             "module.implement",
@@ -400,6 +385,33 @@ class ActiveSkillContractTests(unittest.TestCase):
             "baseline capsule",
         ):
             self.assertNotIn(term, combined)
+
+    def test_bounded_transport_excludes_rejected_architecture(self) -> None:
+        transport = (ROOT / "iis_ephemeral_transport.py").read_text(encoding="utf-8")
+        public_match = re.search(r"(?ms)^__all__ = \((.*?)^\)", transport)
+        self.assertIsNotNone(public_match)
+        public = public_match.group(1).lower()
+        for forbidden in (
+            "active",
+            "latest",
+            "predecessor",
+            "history",
+            "inspect",
+            "list",
+            "takeover",
+            "retry",
+            "replay",
+            "verification-result",
+            "workflow-store",
+        ):
+            self.assertNotIn(forbidden, public)
+        for forbidden_path in ("active.json", "outcome-", "evidence/"):
+            self.assertNotIn(forbidden_path, transport)
+        for retired_path in (
+            ROOT / "verification-lead" / "tools" / "verification-run",
+            ROOT / "implementation-lead" / "tools" / "workflow-store",
+        ):
+            self.assertFalse(retired_path.exists())
 
 
 if __name__ == "__main__":

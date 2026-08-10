@@ -13,10 +13,14 @@ planning, implementation, and independent verification.
   `f96d17367b6eecc425ede0c5a96f2e837aac80a9`
 - `implementation-lead/`: implementation of one exact ready local Markdown
   Ticket by a user-designated Implementation Subagent, followed by Lead review
-  of the real project diff, implementation checks, and Markdown AC coverage.
-- `verification-lead/`: direct Verification Lead scenario design and read-only
-  verification of the same exact Ticket, with one direct-evidence result for
-  each Markdown AC and limited remediation of directly evidenced failures.
+  of the real project diff, implementation checks, and a bounded filtered route
+  sidecar for independent verification navigation.
+- `verification-lead/`: user-facing verification workflow authority for gate,
+  approval, structural validation, bounded remediation authorization, and final
+  publication without product-verification semantic fallback.
+- `primary-verifier/`: internal sole product-verification semantic owner for AC
+  mapping, readiness, Scenarios, direct evidence, verdicts, and affected-AC
+  re-verification.
 - `repo-snapshot/`: independent Git working-tree snapshot skill; its credential
   remains outside this repository at `/home/user01/.config/repo-snapshot/token`
 

@@ -175,28 +175,53 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
    direct behavioral runtime evidence remain Verification responsibility after
    this gate; source-review uncertainty that requires direct runtime evidence
    may still be reported to independent verification.
-10. Report the implementation result and remaining verification-only ambiguous
-    AC coverage as input to independent verification. In the current-session
-    implementation result, include a nominated implementation-route index for
-    each materially distinct required route: applicable ACs; the actual or
-    Ticket-created startup/execution path; the actual product trigger or
-    contract boundary; the Ticket-owned outcome/readback surface; the reviewed
-    source/integration path; the focused actual-product check and observed
-    gross nominal boundary facts; residual causal uncertainty; or an unresolved
-    paragraph 9 blocker and next owner. This index is navigation only, not a
-    runtime-readiness claim or independent AC evidence, and it must not
-    constrain or reduce the Verification Lead's independent scenario design,
-    runtime availability investigation, evidence acquisition, causal or
-    behavioral correctness assessment, or verdict.
-    The Implementation Lead must not report final `VERIFIED` status.
+10. Report the implementation result and remaining verification-only ambiguity,
+    but do not assign verification readiness, direct AC evidence, AC mapping, a
+    causal conclusion, or a verdict. For each materially distinct required
+    route, publish the sole serialized handoff exception at
+    `~/.iis/route-navigation/<ticket-key>.json`. The host imports the repository
+    root `iis_ephemeral_transport.py` module and calls only
+    `publish_route_navigation(project_root, ticket_path, navigation_routes,
+    producer_provenance_routes)`, passing bounded in-memory objects directly.
+    Do not stage generic shell JSON, access the file raw, or create a generic
+    storage command.
+
+    The navigation projection contains only the startup or execution path,
+    product trigger or contract boundary, Ticket-owned outcome/readback surface,
+    and current per-route project source/integration anchors with SHA-256
+    digests. Primary Verifier alone may consume it through
+    `read_primary_navigation_view(project_root, ticket_path)`, after independent
+    mapping, and independently confirms source currentness. The quarantined
+    producer-only projection contains a local producer run nonce, past-tense
+    `GROSS_NOMINAL_BOUNDARY_REACHED` or bounded `BLOCKED_WHEN_RECORDED` facts,
+    redacted route identifiers, and no commands, raw output, credentials,
+    environment values, private endpoints, secret-bearing paths, AC mappings,
+    readiness, evidence, verdict, or causal language. Verification Lead may read
+    only that filtered projection through
+    `read_lead_producer_provenance_view(project_root, ticket_path)` and may use it
+    only to answer whether a matching local producer record reports that the
+    implementation-stage checks were observed at the recorded time. It must not
+    promote that statement into readiness, evidence, AC meaning, or a verdict.
+
+    Exact canonical Project Root/Ticket binding and current Ticket digest are
+    mandatory. Route anchor digest disagreement rejects that route view.
+    Absence, malformedness, cleanup, staleness, or supersession is ambiguous: it
+    is neither evidence of producer omission nor a verification blocker.
+    Superseding Implementation atomically replaces the one sidecar. Terminal
+    Verification calls `mark_route_navigation_terminal` to retain at least a
+    seven-day grace; orphan cleanup has a thirty-day ceiling and uses only
+    `cleanup_expired_route_navigation`. `cleanup_after`, file age, and mtime are
+    cleanup metadata, never semantic freshness. The Implementation Lead must not
+    report final `VERIFIED` status.
 
 The feasibility phase, including any research report, must not reapprove or
 rewrite the Ticket or parent Spec, strengthen or add ACs, split the Ticket,
 preselect or bind an exact future file list, internal design, implementation
 sequence, or technical steps, design independent verification scenarios, assess
 verification-only environment readiness, or assign an AC or whole-Ticket verdict.
-Keep its result in the current session; do not create a separate handoff file,
-serialized state, or approval workflow.
+Keep its result in the current session; do not create serialized state or an
+approval workflow other than the exact bounded route-navigation sidecar in
+paragraph 10.
 
 Within the user's role and parallel-execution choices, the host controls the
 invocation, communication, resumption, retry, and scheduling details for each

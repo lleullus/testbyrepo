@@ -203,17 +203,19 @@ product-flow grouping and meaning; do not merge materially distinct flows or
 split one flow into implementation seams.
 
 Implementation Lead selects focused source, check, and provisional smoke facts
-needed for implementation and integration closure and reports current-session
-AC coverage without assigning a final verdict. The independent Verification
-Lead directly maps every exact AC to approved scenarios, owns execution,
-readback, cleanup, and the AC verdicts. It does not delegate AC decomposition,
-scenario design or selection, readiness decisions, direct AC evidence, or
-verdicts to a separate assessor or runner, and does not require a separate
-handoff artifact or result schema. The active `Runtime Runner` may provide only
-pre-approval, candidate-bound runtime-readiness raw material under Verification
-Lead's contract; it does not own scenarios, readiness, direct AC evidence, or
-verdicts. Do not prescribe an internal verification seam that could substitute
-for the approved observable product behavior.
+needed for implementation and integration closure without assigning a final
+verdict. It publishes only the bounded filtered route-navigation sidecar. The
+independent Verification Lead owns workflow admission, gate and approval,
+structural validation, bounded remediation authorization, and final user
+publication. Exactly one internal Primary Verifier is the sole semantic owner:
+it maps every exact AC and Verification flow, interprets Runtime Runner raw
+material, owns readiness, Scenario design and selection, preparation and direct
+execution, evidence admissibility, AC verdicts, failure origin, and affected-AC
+re-verification. Verification Lead must not calculate, repair, or rewrite those
+semantics. Runtime Runner provides only complete pre-approval candidate-bound
+raw readiness material; it owns no interpretation, Scenario, readiness, direct
+evidence, verdict, or durable file. Do not prescribe an internal verification
+seam that could substitute for the approved observable product behavior.
 
 ## Blocker rules
 
