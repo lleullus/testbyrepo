@@ -101,6 +101,10 @@ class Phase8RemovalCensusTests(unittest.TestCase):
         (self.repo / "verification-lead" / "SKILL.md").write_text(
             "Implementation Verification Module contract", encoding="utf-8"
         )
+        (self.repo / "primary-verifier").mkdir()
+        (self.repo / "primary-verifier" / "SKILL.md").write_text(
+            "Primary Verifier contract", encoding="utf-8"
+        )
 
         self.state = self.root / "state"
         self.results = self.state / "implementation-results"
@@ -120,6 +124,7 @@ class Phase8RemovalCensusTests(unittest.TestCase):
         self.installed.mkdir()
         os.symlink(self.repo / "implementation-lead", self.installed / "implementation-lead", target_is_directory=True)
         os.symlink(self.repo / "verification-lead", self.installed / "verification-lead", target_is_directory=True)
+        os.symlink(self.repo / "primary-verifier", self.installed / "primary-verifier", target_is_directory=True)
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -164,6 +169,9 @@ class Phase8RemovalCensusTests(unittest.TestCase):
         self.assertEqual(manifest["installedCallers"]["errors"], [])
         self.assertTrue(skills["implementation-lead"]["exists"])
         self.assertTrue(skills["verification-lead"]["exists"])
+        self.assertTrue(skills["primary-verifier"]["exists"])
+        self.assertTrue(skills["primary-verifier"]["targetMatchesExpected"])
+        self.assertTrue(skills["primary-verifier"]["contentMatchesExpected"])
         self.assertTrue(skills["implementation-lead"]["targetMatchesExpected"])
         self.assertTrue(skills["implementation-lead"]["contentMatchesExpected"])
         self.assertEqual(skills["implementation-lead"]["legacyTermsFound"], [])

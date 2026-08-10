@@ -47,7 +47,11 @@ LEGACY_PYC_PATTERN = re.compile(
     + "|".join(LEGACY_EXECUTABLE_STEMS)
     + r")(?:\.cpython-\d+(?:\.\d+)*(?:\.opt-\d+)?)?\.pyc$"
 )
-INSTALLED_SKILL_NAMES = ("implementation-lead", "verification-lead")
+INSTALLED_SKILL_NAMES = (
+    "implementation-lead",
+    "primary-verifier",
+    "verification-lead",
+)
 LEGACY_SKILL_TERMS = (
     "baseline-capsule",
     "implementation-result",
