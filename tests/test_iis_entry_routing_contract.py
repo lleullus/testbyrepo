@@ -27,25 +27,26 @@ class IISEntryRoutingContractTests(unittest.TestCase):
             shaper,
         )
 
-    def test_independent_verification_is_explicitly_unsupported(self) -> None:
+    def test_independent_verification_route_is_explicit_and_fail_closed(self) -> None:
         router = INSTALLED_ROUTER.read_text(encoding="utf-8")
         normalized = " ".join(router.split())
-        self.assertIn(
-            "IIS does not provide independent Ticket verification. Only an "
-            "Implementation Lead result is supported; it is not an independent "
-            "verification result or AC verdict.",
-            normalized,
-        )
         for required in (
-            "Do not dispatch a child",
-            "select another agent",
-            "route to Implementation Lead",
-            "provide a compatibility command",
-            "approximate the removed action with implementation checks",
+            "/home/user01/project/iis-skills/verification-lead/SKILL.md",
+            "one exact ready local Markdown Ticket",
+            "exact `Project-Root`",
+            "Candidate Execution Recipe is optional",
+            "Do not require an Implementation Lead result",
+            "independent authority, direct evidence, or an AC verdict",
+            "`Operator-assisted`",
+            "`Not independently verifiable`",
+            "has no independent IIS verification route",
+            "Do not bypass that boundary through Implementation Lead",
+            "another agent",
+            "compatibility command",
+            "instead of selecting a fallback",
         ):
             self.assertIn(required, normalized)
         for forbidden in (
-            "verification-lead/SKILL.md",
             "verification-runtime/iis-verify",
             "`iis-verify`",
             "Primary Verifier",

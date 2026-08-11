@@ -338,9 +338,56 @@ Next action: <return to Scope Shaper or select one exact ready Work Package>
 5. When new or changed Behavior authorities are approval-ready, use the joint
    approval flow above and require the phase to complete against the resolved
    frame.
-6. Use `to-spec` when the desired outcome, preserved observable behavior and
-   invariants, explicit boundaries, non-goals, and observable completion
-   evidence are clear, Behavior Design is complete, every applicable
+6. Before using `to-spec`, close the verification-feasibility decisions for
+   every independently acceptable observable outcome. This is part of the same
+   user-owned product decision frontier, not implementation-path research. For
+   each outcome confirm:
+
+   - the observable claim;
+   - its acceptance boundary, such as UI, CLI, API, generated artifact,
+     canonical source, persisted state, or document;
+   - the product trigger/input or canonical inspection target;
+   - the expected observable result and authoritative readback;
+   - whether its disposition is `Independent`, `Operator-assisted`, or `Not
+     independently verifiable`;
+   - whether independent verification is required by the product contract;
+   - whether direct inspection establishes that the required acceptance surface
+     exists, this delivery Scope must create it, a confirmed delivery contract
+     guarantees a disposable target and its availability condition, an operator
+     owns it, or no independent surface exists for a confirmed reason; and
+   - any external condition that limits execution or observation.
+
+   Confirm only the applicable claim-specific boundary: an absence terminal
+   condition; ordering event source and range; persistence storage identity and
+   lifecycle boundary; interruption checkpoint; external-effect sandbox,
+   authority, cleanup, and readback; or UI rendered-state and interaction
+   readback. Do not ask for irrelevant dimensions.
+
+   `Independent` means the current outcome and delivery Scope let a fresh
+   verifier execute or inspect the authored product flow and use its
+   authoritative readback. If independent verification is required, an
+   acceptance boundary and readback must already exist, be created as ordinary
+   Ticket-Scope-owned product behavior, or rely on required disposable-target
+   availability that the delivery contract guarantees. Otherwise the shared
+   understanding is not complete. Use a delivery guarantee only when the
+   confirmed delivery contract actually guarantees the disposable target and
+   its availability condition; do not infer a sandbox or turn user approval
+   into evidence that a current surface exists. `Operator-assisted` means a declared
+   credential, shared/production target, or separately authorized external
+   effect requires the stated operator path. `Not independently verifiable`
+   means the confirmed contract has no independent execution or observation
+   boundary and this delivery Scope will not create one. Do not present either
+   non-independent disposition as independent success.
+
+   A runtime outcome cannot be complete without its product acceptance boundary
+   and authoritative readback. A source, artifact, document, or structure claim
+   may instead use current canonical-target inspection and must not be forced
+   through a runtime command. Internal tests, mocks, private helpers, proposed
+   test seams, and implementation narration are never the normative product
+   boundary or authoritative readback.
+7. Use `to-spec` when the desired outcome, preserved observable behavior and
+   invariants, explicit boundaries, non-goals, and the confirmed outcome-local
+   verification contracts above are clear, Behavior Design is complete, every applicable
    Behavior authority is approved, and the user has confirmed one integrated
    contract-only shared understanding. That understanding is normative for
    outcome and scope; the approved Behavior authorities it adopts are normative
@@ -362,7 +409,7 @@ Next action: <return to Scope Shaper or select one exact ready Work Package>
    remaining material bootstrap choices are fixed or explicitly delegated to
    Implementation Lead/Worker. Do not ask the user to invent a private package
    identity, future file list, dependency, or mutation envelope.
-7. Use `to-tickets` only from an approved Spec. It creates the smallest set of
+8. Use `to-tickets` only from an approved Spec. It creates the smallest set of
    independently observable desired-state Tickets, not an anticipated internal
    implementation sequence.
 

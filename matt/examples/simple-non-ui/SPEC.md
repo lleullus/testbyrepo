@@ -17,6 +17,8 @@ Owner: 예시 planning owner
 
 - 한 가지 non-UI 동작만 바꾼다.
 - 기존에 명시되지 않은 제품 결정을 추가하지 않는다.
+- 이 delivery는 정의된 대상 입력과 명시된 비대상 입력을 실행하고 각각의
+  product result를 직접 읽을 ordinary product boundary와 readback을 만든다.
 
 ## Non-Goals
 
@@ -30,7 +32,24 @@ Owner: 예시 planning owner
 
 ## Verification Expectations
 
-대상 동작과 명시된 비대상 경로를 기존 프로젝트의 검증 방법으로 확인한다.
+- Outcome: 정의된 입력에서 조정된 non-UI 동작을 관찰할 수 있다.
+  Acceptance boundary: 정의된 입력을 받는 normal non-UI product boundary
+  Trigger or inspection target: 정의된 입력을 normal product entry에 제공한다.
+  Expected observable result: 조정된 동작의 product result가 반환된다.
+  Authoritative readback: 같은 product entry가 반환한 product result
+  Disposition: Independent
+  Independent verification required: yes
+  Acceptance surface: Ticket Scope creates | 정의된 입력을 받는 ordinary product entry와 반환 결과
+  External condition: None
+- Outcome: 명시된 비대상 경로의 동작은 보존된다.
+  Acceptance boundary: 비대상 입력을 받는 normal non-UI product boundary
+  Trigger or inspection target: 명시된 비대상 입력을 normal product entry에 제공한다.
+  Expected observable result: 비대상 경로의 기존 observable result가 유지된다.
+  Authoritative readback: 같은 product entry가 반환한 product result
+  Disposition: Independent
+  Independent verification required: yes
+  Acceptance surface: Ticket Scope creates | 비대상 입력을 받는 ordinary product entry와 반환 결과
+  External condition: None
 
 ## Behavior Authorities
 

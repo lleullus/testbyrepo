@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import subprocess
 import tempfile
@@ -229,6 +230,12 @@ Start.
 
 
 class ValidatorTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.original_umask = os.umask(0o022)
+
+    def tearDown(self) -> None:
+        os.umask(self.original_umask)
+
     def make_tree(self) -> tuple[tempfile.TemporaryDirectory, Path]:
         td = tempfile.TemporaryDirectory()
         base = Path(td.name)

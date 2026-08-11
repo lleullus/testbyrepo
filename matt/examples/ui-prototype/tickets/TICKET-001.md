@@ -19,7 +19,8 @@ UI: yes
 
 ## Scope
 
-승인된 UI/UX 제시 순서와 그에 직접 연결된 기존 UI 검증으로 한정한다.
+승인된 UI/UX 제시 순서와 다음 Scope-owned acceptance surface를 만드는 변경으로
+한정한다: 승인된 순서를 표현하는 대상 화면의 rendered state.
 
 ## Non-Goals
 
@@ -33,7 +34,18 @@ None
 
 ## Verification
 
-- 실제 사용 시 좁은 화면과 넓은 화면에서 렌더링을 확인하고, `../UI-UX.md`의 승인된 결정과 대조한다.
+- AC ordinals: 1, 2
+  Initial state: 승인된 순서를 표현하는 대상 화면이 구현되어 있다.
+  Trigger or inspection target: 지원되는 넓은 viewport와 좁은 viewport에서 대상 화면을 연다.
+  Acceptance boundary: 대상 화면의 rendered UI
+  Expected observable result: 두 viewport 모두에서 필요한 정보가 하나의 주요 행동보다 먼저 보인다.
+  Authoritative readback: 각 viewport의 현재 rendered state와 보이는 정보·행동 순서
+  Decision boundary: 두 viewport 모두 승인된 순서를 보이면 충족하고 하나라도 순서가 다르면 모순이다.
+  Disposition: Independent
+  Independent verification required: yes
+  Acceptance surface: Ticket Scope creates | 승인된 순서를 표현하는 대상 화면의 rendered state
+  External condition: None
+  UI rendered state and interaction readback: 넓은 viewport와 좁은 viewport에서 필요한 정보 및 하나의 주요 행동이 실제로 보이는 순서를 직접 관찰한다.
 
 ## Behavior Authorities
 

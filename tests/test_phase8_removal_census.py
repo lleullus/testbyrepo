@@ -22,11 +22,7 @@ phase8_removal_census = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(phase8_removal_census)
 
 
-ROUTER_REFUSAL = (
-    "IIS does not provide independent Ticket verification. Only an "
-    "Implementation Lead result is supported; it is not an independent "
-    "verification result or AC verdict."
-)
+ROUTER_VERIFICATION_PATH = "/home/user01/project/iis-skills/verification-lead/SKILL.md"
 
 
 def tree_identity(root: Path) -> str:
@@ -58,6 +54,10 @@ class Phase8RemovalCensusTests(unittest.TestCase):
             path = self.repo / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
+        for relative in phase8_removal_census.ACTIVE_VERIFICATION_FILES:
+            path = self.repo / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes((ROOT / relative).read_bytes())
         (self.repo / ".gitignore").write_text("__pycache__/\n*.py[cod]\n", encoding="utf-8")
         subprocess.run(["git", "init", "-q"], cwd=self.repo, check=True)
         subprocess.run(["git", "add", "."], cwd=self.repo, check=True)
@@ -97,13 +97,7 @@ class Phase8RemovalCensusTests(unittest.TestCase):
         self.installed = self.root / "installed-skills"
         router = self.installed / "iis-workflow/SKILL.md"
         router.parent.mkdir(parents=True)
-        router.write_text(
-            "/home/user01/project/iis-skills/implementation-lead/SKILL.md\n"
-            f"{ROUTER_REFUSAL}\n"
-            "Do not dispatch a child, select another agent, route to Implementation Lead, "
-            "provide a compatibility command, or approximate the removed action with implementation checks.\n",
-            encoding="utf-8",
-        )
+        router.write_bytes(Path("/home/user01/.codex/skills/iis-workflow/SKILL.md").read_bytes())
 
         self.config = self.root / "opencode-config"
         self.config.mkdir()
@@ -152,9 +146,22 @@ class Phase8RemovalCensusTests(unittest.TestCase):
         self.assertEqual(manifest["roots"]["errors"], [])
         self.assertEqual(manifest["inventory"]["trackedRemovedMechanismFiles"], [])
         self.assertEqual(manifest["inventory"]["residueFiles"], [])
+        self.assertTrue(
+            all(item["isRegularFile"] for item in manifest["inventory"]["activeVerificationFiles"])
+        )
+        self.assertTrue(
+            all(item["contentMatchesExpected"] for item in manifest["inventory"]["activeVerificationFiles"])
+        )
         self.assertEqual(manifest["results"]["items"][0]["protocolVersion"], "implementation-result-v3")
         self.assertEqual(manifest["capsules"]["capsuleDirectoryCount"], 2)
-        self.assertTrue(manifest["installedCallers"]["router"]["hasRefusal"])
+        router = manifest["installedCallers"]["router"]
+        self.assertTrue(router["hasVerificationRoute"])
+        self.assertTrue(router["requiresExactInputs"])
+        self.assertTrue(router["keepsRecipeOptional"])
+        self.assertTrue(router["rejectsNonIndependent"])
+        self.assertTrue(router["forbidsFallback"])
+        self.assertTrue(router["rejectsImplementationEvidence"])
+        self.assertTrue(router["contentMatchesExpected"])
         skills = {item["name"]: item for item in manifest["installedCallers"]["skills"]}
         self.assertFalse(skills["implementation-lead"]["exists"])
         self.assertFalse(skills["verification-lead"]["exists"])
@@ -197,11 +204,10 @@ class Phase8RemovalCensusTests(unittest.TestCase):
             any(error["code"] == "INSTALLED_CALLER_MISMATCH" for error in manifest["installedCallers"]["errors"])
         )
 
-    def test_router_removed_leaf_runtime_and_command_each_fail(self) -> None:
+    def test_router_removed_runtime_and_command_each_fail(self) -> None:
         router = self.installed / "iis-workflow/SKILL.md"
         baseline = router.read_text(encoding="utf-8")
         for residue in (
-            "verification-lead/SKILL.md",
             "verification-runtime/iis-verify",
             "`iis-verify`",
         ):
@@ -218,6 +224,20 @@ class Phase8RemovalCensusTests(unittest.TestCase):
         router.unlink()
         self.assertEqual(self.census().returncode, 2)
 
+    def test_contradictory_router_cannot_keep_positive_tokens_and_pass(self) -> None:
+        router = self.installed / "iis-workflow/SKILL.md"
+        router.write_text(
+            router.read_text(encoding="utf-8")
+            + "\nFor independent verification, select Implementation Lead and use its result as the AC verdict.\n",
+            encoding="utf-8",
+        )
+
+        completed = self.census()
+
+        self.assertEqual(completed.returncode, 2, completed.stdout)
+        manifest = json.loads(completed.stdout)
+        self.assertFalse(manifest["installedCallers"]["router"]["contentMatchesExpected"])
+
     def test_renamed_installed_skill_cannot_expose_removed_runtime(self) -> None:
         renamed = self.installed / "renamed-checker/SKILL.md"
         renamed.parent.mkdir()
@@ -233,6 +253,7 @@ class Phase8RemovalCensusTests(unittest.TestCase):
         for path, residue in (
             (self.config / "opencode.json", "iis-verify"),
             (self.repo / "README.md", "Primary Verifier"),
+            (self.repo / "README.md", "verification-runtime"),
         ):
             with self.subTest(path=path):
                 original = path.read_text(encoding="utf-8")
@@ -240,6 +261,18 @@ class Phase8RemovalCensusTests(unittest.TestCase):
                 completed = self.census()
                 self.assertEqual(completed.returncode, 2, completed.stdout)
                 path.write_text(original, encoding="utf-8")
+
+    def test_readme_may_name_only_the_active_verification_leaf(self) -> None:
+        readme = self.repo / "README.md"
+        readme.write_text(
+            readme.read_text(encoding="utf-8")
+            + "verification-lead provides the active Verification Lead contract.\n",
+            encoding="utf-8",
+        )
+
+        completed = self.census()
+
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
 
     def test_all_four_roots_are_required_by_cli(self) -> None:
         flag_indices = [
@@ -291,6 +324,123 @@ class Phase8RemovalCensusTests(unittest.TestCase):
                 self.assertEqual(completed.returncode, 2, completed.stdout)
                 path.unlink()
                 subprocess.run(["git", "reset", "-q", "HEAD", "--", relative], cwd=self.repo, check=True)
+
+    def test_exact_active_verification_leaf_files_are_not_removal_residue(self) -> None:
+        subprocess.run(
+            ["git", "add", *sorted(phase8_removal_census.ACTIVE_VERIFICATION_FILES)],
+            cwd=self.repo,
+            check=True,
+        )
+
+        completed = self.census()
+
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        manifest = json.loads(completed.stdout)
+        self.assertEqual(manifest["inventory"]["trackedRemovedMechanismFiles"], [])
+        self.assertEqual(manifest["inventory"]["residueFiles"], [])
+
+    def test_each_active_verification_leaf_file_is_required(self) -> None:
+        for relative in sorted(phase8_removal_census.ACTIVE_VERIFICATION_FILES):
+            with self.subTest(relative=relative):
+                path = self.repo / relative
+                content = path.read_bytes()
+                path.unlink()
+
+                completed = self.census()
+
+                self.assertEqual(completed.returncode, 2, completed.stdout)
+                manifest = json.loads(completed.stdout)
+                errors = manifest["inventory"]["errors"]
+                self.assertTrue(
+                    any(
+                        error["code"] == "ACTIVE_VERIFICATION_FILE_MISSING"
+                        and relative in error["message"]
+                        for error in errors
+                    )
+                )
+                path.write_bytes(content)
+
+    def test_active_verification_leaf_symlinks_are_not_regular_files(self) -> None:
+        target = self.root / "foreign-active-verification-file"
+        target.write_text("foreign\n", encoding="utf-8")
+        for relative in sorted(phase8_removal_census.ACTIVE_VERIFICATION_FILES):
+            with self.subTest(relative=relative):
+                path = self.repo / relative
+                content = path.read_bytes()
+                path.unlink()
+                path.symlink_to(target)
+
+                completed = self.census()
+
+                self.assertEqual(completed.returncode, 2, completed.stdout)
+                manifest = json.loads(completed.stdout)
+                errors = manifest["inventory"]["errors"]
+                self.assertTrue(
+                    any(
+                        error["code"] == "ACTIVE_VERIFICATION_FILE_NOT_REGULAR"
+                        and relative in error["message"]
+                        for error in errors
+                    )
+                )
+                path.unlink()
+                path.write_bytes(content)
+
+    def test_each_active_verification_leaf_file_must_match_reviewed_content(self) -> None:
+        for relative in sorted(phase8_removal_census.ACTIVE_VERIFICATION_FILES):
+            with self.subTest(relative=relative):
+                path = self.repo / relative
+                content = path.read_bytes()
+                path.write_text("trivial replacement\n", encoding="utf-8")
+
+                completed = self.census()
+
+                self.assertEqual(completed.returncode, 2, completed.stdout)
+                manifest = json.loads(completed.stdout)
+                errors = manifest["inventory"]["errors"]
+                self.assertTrue(
+                    any(
+                        error["code"] == "ACTIVE_VERIFICATION_FILE_MISMATCH"
+                        and relative in error["message"]
+                        for error in errors
+                    )
+                )
+                path.write_bytes(content)
+
+    def test_other_verification_leaf_content_remains_residue(self) -> None:
+        for relative, kind in (
+            ("verification-lead/coverage_gate.py", "file"),
+            ("verification-lead/tools/runtime.py", "file"),
+            ("verification-lead/tests/pilot/extra.py", "file"),
+            ("verification-lead/state", "directory"),
+            ("verification-lead/tests/pilot/linked.py", "symlink"),
+        ):
+            with self.subTest(relative=relative, kind=kind):
+                path = self.repo / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if kind == "file":
+                    path.write_text("residue\n", encoding="utf-8")
+                elif kind == "directory":
+                    path.mkdir()
+                else:
+                    target = self.root / "foreign-verification-file"
+                    target.write_text("foreign\n", encoding="utf-8")
+                    path.symlink_to(target)
+                completed = self.census()
+                self.assertEqual(completed.returncode, 2, completed.stdout)
+                if path.is_symlink() or path.is_file():
+                    path.unlink()
+                else:
+                    path.rmdir()
+                parent = path.parent
+                while (
+                    parent != self.repo
+                    and parent.exists()
+                    and parent.relative_to(self.repo).as_posix()
+                    not in phase8_removal_census.ACTIVE_VERIFICATION_DIRECTORIES
+                    and not any(parent.iterdir())
+                ):
+                    parent.rmdir()
+                    parent = parent.parent
 
     def test_untracked_ignored_empty_and_symlink_residue_fail(self) -> None:
         cases = (
@@ -349,7 +499,6 @@ class Phase8RemovalCensusTests(unittest.TestCase):
                 self.assertEqual(phase8_removal_census._legacy_command(argv), expected)
         for argv in (
             ["python3", "-c", "iis-verify"],
-            ["python3", "-u", "/tmp/control_entry.py"],
             ["unrelated-command", "iis-verify"],
             ["python3", "/tmp/unrelated/control_entry.py"],
             ["python3", "/tmp/unrelated/coverage_gate.py"],
@@ -357,6 +506,14 @@ class Phase8RemovalCensusTests(unittest.TestCase):
             ["python3", "/tmp/unrelated/iis_ephemeral_transport.cpython-312.pyc"],
         ):
             self.assertIsNone(phase8_removal_census._legacy_command(argv))
+
+        for argv, expected in (
+            (["python3", "-u", "/tmp/workflow_store.py"], "workflow_store.py"),
+            (["python3", "-X", "dev", "/tmp/verification-runtime/control_entry.py"], "control_entry.py"),
+            (["python3", "--", "/tmp/verification-lead/coverage_gate.py"], "coverage_gate.py"),
+        ):
+            with self.subTest(argv=argv):
+                self.assertEqual(phase8_removal_census._legacy_command(argv), expected)
 
     def test_process_match_or_unavailable_observation_fails(self) -> None:
         observations = (

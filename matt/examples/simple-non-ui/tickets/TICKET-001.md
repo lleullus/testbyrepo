@@ -19,7 +19,9 @@ Parent Spec에 정의된 가상의 non-UI 동작 한 가지를 변경한다.
 
 ## Scope
 
-대상 동작을 처리하는 영역과 그에 직접 연결된 기존 검증만 변경할 수 있다.
+대상 동작을 처리하는 영역과 다음 Scope-owned acceptance surface를 만드는
+변경으로 한정한다: 정의된 입력을 받는 ordinary product entry와 반환 결과;
+비대상 입력을 받는 ordinary product entry와 반환 결과.
 
 ## Non-Goals
 
@@ -33,7 +35,28 @@ None
 
 ## Verification
 
-- 실제 사용 시 대상 프로젝트의 기존 검증 방법으로 두 Acceptance Criteria를 확인한다.
+- AC ordinals: 1
+  Initial state: 정의된 대상 입력을 받을 ordinary product boundary가 구현되어 있다.
+  Trigger or inspection target: 정의된 대상 입력을 ordinary product entry에 제공한다.
+  Acceptance boundary: 정의된 대상 입력을 받는 ordinary non-UI product boundary
+  Expected observable result: 조정된 동작의 product result가 반환된다.
+  Authoritative readback: 같은 product entry가 반환한 product result
+  Decision boundary: 반환 결과가 조정된 동작이면 충족하고 다른 동작이면 모순이다.
+  Disposition: Independent
+  Independent verification required: yes
+  Acceptance surface: Ticket Scope creates | 정의된 입력을 받는 ordinary product entry와 반환 결과
+  External condition: None
+- AC ordinals: 2
+  Initial state: 명시된 비대상 입력을 받을 ordinary product boundary가 구현되어 있다.
+  Trigger or inspection target: 명시된 비대상 입력을 ordinary product entry에 제공한다.
+  Acceptance boundary: 비대상 입력을 받는 ordinary non-UI product boundary
+  Expected observable result: 비대상 경로의 기존 observable result가 유지된다.
+  Authoritative readback: 같은 product entry가 반환한 product result
+  Decision boundary: 반환 결과가 기존 observable result와 같으면 충족하고 다르면 모순이다.
+  Disposition: Independent
+  Independent verification required: yes
+  Acceptance surface: Ticket Scope creates | 비대상 입력을 받는 ordinary product entry와 반환 결과
+  External condition: None
 
 ## Behavior Authorities
 

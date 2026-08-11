@@ -1,7 +1,7 @@
 # Integrated Implementation Skills
 
 This repository snapshots the local workflow from initiative shaping through
-planning and implementation result.
+planning, implementation result, and optional independent verification.
 
 ## Components
 
@@ -16,6 +16,10 @@ planning and implementation result.
   of the real project diff, implementation checks, and exact unresolved
   limitations. The result is not an independent AC verdict or final `VERIFIED`
   status.
+- `verification-lead/`: optional independent verification of one exact ready
+  `Independent` Ticket from fresh direct product or canonical-target evidence.
+  It does not modify the product or restore a verification runtime, transport,
+  store, ledger, or persistent result state.
 - `repo-snapshot/`: independent Git working-tree snapshot skill; its credential
   remains outside this repository at `/home/user01/.config/repo-snapshot/token`
 

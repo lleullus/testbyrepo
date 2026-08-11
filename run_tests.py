@@ -9,7 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SUITES = (
     ([sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-v"], ROOT),
-    ([sys.executable, "implementation-lead/run_tests.py"], ROOT),
+    ([sys.executable, "-B", "implementation-lead/run_tests.py"], ROOT),
+    ([sys.executable, "-B", "verification-lead/run_tests.py"], ROOT),
 )
 
 

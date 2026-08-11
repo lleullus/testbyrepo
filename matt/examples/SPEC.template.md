@@ -31,9 +31,33 @@ endpoint, abstraction, 구현 순서와 test seam은 그 자체가 승인된
 
 ## Verification Expectations
 
-완료 시 안정적인 제품·시스템 경계에서 무엇이 관찰되어야 하는지
-적는다. 내부 테스트 파일, mock, collaborator 또는 test seam은
-미리 고정하지 않는다.
+- Outcome: <observable claim>
+  Acceptance boundary: <product or canonical inspection boundary>
+  Trigger or inspection target: <product input/trigger or canonical target>
+  Expected observable result: <expected result>
+  Authoritative readback: <product or canonical readback>
+  Disposition: Independent
+  Independent verification required: yes
+  Acceptance surface: Existing | <directly established surface>
+  External condition: None
+
+각 independently acceptable outcome을 top-level item 하나로 적고 위 core
+label을 정확히 한 번 사용한다. Scope가 ordinary product acceptance surface를
+만들 책임이 있으면 `Acceptance surface: Ticket Scope creates | <surface>`로
+적는다. Confirmed delivery contract가 disposable target과 availability
+condition을 실제로 보장할 때만 `Acceptance surface: Delivery contract
+guarantees | <disposable target and availability condition>`를 쓴다. 이 값으로
+존재하지 않는 sandbox를 추정하거나 사용자 승인을 current-surface evidence로
+바꾸지 않는다. Operator-owned path 또는 독립 경계가 없는 확정 outcome은 각각
+`Operator-assisted`, `Not independently verifiable`로 적고 실제 external
+condition 또는 부재 이유를 보존한다. 독립 검증이 필수이면 두 non-independent
+disposition을 사용할 수 없다. Absence, ordering, persistence/lifecycle,
+interruption, external effect, UI rendered/interaction 경계는 적용되는
+outcome에만 To Spec 계약의 exact conditional label로 추가한다. 미결정 값은
+placeholder로 숨기지 않고 Spec을 draft로 유지한다. 내부 테스트 파일, mock,
+collaborator, private helper 또는 test seam은 normative boundary/readback으로
+고정하지 않는다. Source·artifact·document·structure claim에는 current canonical
+target direct inspection을 쓰며 runtime command를 강제하지 않는다.
 
 ## Behavior Authorities
 

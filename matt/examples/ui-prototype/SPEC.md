@@ -30,7 +30,16 @@ Owner: 예시 planning owner
 
 ## Verification Expectations
 
-넓은 화면과 좁은 화면에서 승인된 제시 순서를 관찰해 확인한다.
+- Outcome: 넓은 화면과 좁은 화면에서 승인된 정보와 주요 행동의 제시 순서가 보인다.
+  Acceptance boundary: 대상 화면의 rendered UI
+  Trigger or inspection target: 지원되는 넓은 viewport와 좁은 viewport에서 대상 화면을 연다.
+  Expected observable result: 두 viewport 모두에서 필요한 정보가 하나의 주요 행동보다 먼저 보인다.
+  Authoritative readback: 각 viewport의 현재 rendered state와 보이는 정보·행동 순서
+  Disposition: Independent
+  Independent verification required: yes
+  Acceptance surface: Ticket Scope creates | 승인된 순서를 표현하는 대상 화면의 rendered state
+  External condition: None
+  UI rendered state and interaction readback: 넓은 viewport와 좁은 viewport에서 필요한 정보 및 하나의 주요 행동이 실제로 보이는 순서를 직접 관찰한다.
 
 ## Behavior Authorities
 

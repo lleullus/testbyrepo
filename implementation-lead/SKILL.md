@@ -12,6 +12,16 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
    the Ticket remains `ready`, the current project is its exact `Project-Root`,
    the Ticket is under that project's canonical `docs/planning` root, and its
    `Parent-Spec` resolves to an exact readable `Status: approved` Spec. Resolve
+   and run the Ticket producer's adjacent structural validator at
+   `../matt/skills/to-tickets/validate_ticket.py`, resolved from this skill's
+   canonical physical directory, against that exact Ticket. A
+   nonzero result blocks assignment before mutation. The validator supplies only
+   path/status, item/label, ordinal-closure, blocker-status, and structural
+   disposition/surface checks; it does not establish product meaning,
+   AC-to-flow correctness, implementation feasibility, runtime availability,
+   evidence, or a verdict. Implementation Lead still performs every semantic,
+   authority, Scope, preservation, and current-project check in this contract.
+   Resolve
    every path-and-scope item in the Ticket's `## Behavior Authorities`; require
    each target to be a readable Markdown `Status: approved` authority whose
    canonical parent is exactly one of the project's
@@ -181,12 +191,59 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
    Broader runtime availability or behavioral evidence outside these safe,
    authorized implementation-stage checks is outside the supported IIS
    lifecycle; do not claim it was established.
+   A Verification flow whose `Acceptance surface` is `Ticket Scope creates`
+   makes that ordinary product surface and authoritative readback same-Ticket
+   due-now implementation work. Before completion, confirm in the resulting
+   project that both exist and are connected to the authored product flow. A
+   missing Scope-owned surface or readback is handled under paragraphs 8 and 9
+   as a bounded same-Ticket correction when possible; otherwise report the
+   exact existing blocked or incomplete implementation boundary. Do not report
+   implementation completion while it is missing.
+
+   Do not expand implementation responsibility for `Operator-owned` surfaces,
+   credentials, production readbacks, or separately authorized effects. Do not
+   create a surface identified as `Delivery contract guarantees`; the named
+   delivery owner remains responsible for its target and availability
+   condition. Implementation Lead confirms only the Ticket-owned product
+   integration needed to use those declared external surfaces when that
+   integration belongs to Scope.
 10. Report the implementation result, checks actually performed, direct
     implementation-stage observations, and exact unresolved limitations. Do not
     assign independent verification readiness, claim independent or direct AC
     evidence, issue an AC verdict, or report final `VERIFIED` or any equivalent
     whole-Ticket success status. Do not create a serialized handoff, sidecar,
     replacement verification artifact, or approval workflow.
+
+    The current conversation result may optionally include this exact
+    non-authoritative block when actual observations make it useful:
+
+    ```text
+    Candidate Execution Recipe (optional, non-authoritative, current implementation result only)
+    - Verification flow ordinal: <current authored Verification item ordinal>
+      Observed current-source binding: <past-tense current source facts observed now>
+      Entrypoint or inspection target: <actual target>
+      Working directory and general environment: <actual cwd and non-secret general environment>
+      Input: <actual executable, nominal, reproducible input>
+      Authoritative readback: <actual product-contract location or method>
+      Cleanup or disposal: None | <actual condition>
+      Checks actually performed: <past-tense check or smoke facts only>
+    ```
+
+    The Recipe is optional current-result narration, not a handoff, readiness
+    claim, independent evidence, or durable artifact. It links only one current
+    authored Verification flow ordinal and does not add, replace, merge, split,
+    or reinterpret a flow. Do not include an AC mapping, expected result, `PASS`,
+    `FAIL`, `VERIFIED`, an AC or whole-Ticket verdict, or a claim of independent
+    evidence. `Observed current-source binding` records only the non-authoritative
+    source facts observed now so a later verifier can detect staleness and bound
+    location checking; it is not durable candidate/source identity and cannot
+    prove currentness in a later session.
+
+    A future fresh verification session does not require a Recipe. Its absence
+    is not a readiness or admission defect. Do not create a serialized handoff,
+    sidecar, Recipe file, database, store, capsule, retained source, digest, run
+    ID, workflow identity, or other state for a future session. A later verifier
+    establishes current source and obtains fresh product evidence directly.
 
 The feasibility phase, including any research report, must not reapprove or
 rewrite the Ticket or parent Spec, strengthen or add ACs, split the Ticket,

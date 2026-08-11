@@ -30,7 +30,6 @@ CURRENT_VERIFICATION_PATHS = (
     "verification-runtime",
 )
 COUPLED_TEST_PATHS = (
-    "verification-lead/tests",
     "implementation-lead/tests/implementation-result",
     "implementation-lead/tests/implementation-transaction",
     "implementation-lead/tests/pilot",
@@ -40,6 +39,30 @@ COUPLED_TEST_PATHS = (
     "baseline-capsule/tests",
     "tests/test_iis_ephemeral_transport.py",
 )
+ACTIVE_VERIFICATION_FILES = frozenset(
+    {
+        "verification-lead/SKILL.md",
+        "verification-lead/run_tests.py",
+        "verification-lead/verdict_contract.py",
+        "verification-lead/tests/test_contract.py",
+        "verification-lead/tests/pilot/test_representative_pilots.py",
+    }
+)
+ACTIVE_VERIFICATION_DIRECTORIES = frozenset(
+    {
+        "verification-lead",
+        "verification-lead/tests",
+        "verification-lead/tests/pilot",
+    }
+)
+ACTIVE_VERIFICATION_SHA256 = {
+    # Updated only with a reviewed canonical leaf change.
+    "verification-lead/SKILL.md": "d48778f04ee1a24491aa90dc8a30487dc308f28a9944019cfc852afb6f85da73",
+    "verification-lead/run_tests.py": "8f0c1c288930dda0468d077bb61b6a046aad69b6531dc6cdb7f9d457cf8ea185",
+    "verification-lead/verdict_contract.py": "0ec52acc6f27ca9167adbabeddfede4dfcc719e0fe480e124c43e3ff95dba9d7",
+    "verification-lead/tests/test_contract.py": "50f888b5e1da9703aa3f4515d5ed9bbc2003fb2ae57c2c494e04c6ca0dad0fd5",
+    "verification-lead/tests/pilot/test_representative_pilots.py": "d2bff914eee069414589d37583277e447b82f837d3f487babf49655ba7749795",
+}
 LEGACY_EXECUTABLE_STEMS = (
     "verification_run",
     "implementation_result",
@@ -77,6 +100,9 @@ ACTIVE_REPO_FILES = (
     "matt/skills/to-tickets/SKILL.md",
     "implementation-lead/SKILL.md",
 )
+ACTIVE_REPO_TERM_ALLOWLIST = {
+    "README.md": frozenset({"verification lead", "verification-lead"}),
+}
 REMOVED_ACTIVE_TERMS = (
     "verification lead",
     "primary verifier",
@@ -92,11 +118,8 @@ REMOVED_ACTIVE_TERMS = (
 )
 ROUTER_RELATIVE_PATH = Path("iis-workflow/SKILL.md")
 ROUTER_IMPLEMENTATION_PATH = "/home/user01/project/iis-skills/implementation-lead/SKILL.md"
-ROUTER_REFUSAL = (
-    "IIS does not provide independent Ticket verification. Only an "
-    "Implementation Lead result is supported; it is not an independent "
-    "verification result or AC verdict."
-)
+ROUTER_VERIFICATION_PATH = "/home/user01/project/iis-skills/verification-lead/SKILL.md"
+ROUTER_SHA256 = "df092f90f1820aa291971a04e5e580d5c2f826f4365f2e198004e892dd83fa5f"
 CONFIG_SUFFIXES = frozenset({".json", ".jsonc", ".md", ".ts", ".js"})
 CONFIG_EXCLUDED_DIRECTORIES = frozenset({"node_modules", ".audit", ".git"})
 ACTIVE_CONFIG_ROOT_FILES = frozenset(
@@ -335,12 +358,73 @@ def _tracked_inventory(repo_root: Path) -> dict[str, Any]:
     test_raw, test_error = _git_output(repo_root, ["ls-files", "-z", "--", *COUPLED_TEST_PATHS])
     errors = [error for error in (revision_error, source_error, test_error) if error is not None]
 
+    active_verification_files: list[dict[str, Any]] = []
+    for relative in sorted(ACTIVE_VERIFICATION_FILES):
+        path = repo_root / relative
+        entry: dict[str, Any] = {"path": relative}
+        try:
+            mode = path.lstat().st_mode
+        except FileNotFoundError:
+            entry.update({"exists": False, "isRegularFile": False})
+            error = _error(
+                "ACTIVE_VERIFICATION_FILE_MISSING",
+                f"active verification file is missing: {relative}",
+            )
+            entry["error"] = error
+            errors.append(error)
+        except OSError as exc:
+            entry.update({"exists": None, "isRegularFile": False})
+            error = _error(
+                "ACTIVE_VERIFICATION_FILE_UNREADABLE",
+                f"cannot inspect active verification file {relative}: {exc}",
+            )
+            entry["error"] = error
+            errors.append(error)
+        else:
+            is_regular = stat.S_ISREG(mode)
+            entry.update({"exists": True, "isRegularFile": is_regular})
+            if not is_regular:
+                error = _error(
+                    "ACTIVE_VERIFICATION_FILE_NOT_REGULAR",
+                    f"active verification path is not a regular file: {relative}",
+                )
+                entry["error"] = error
+                errors.append(error)
+            else:
+                try:
+                    observed_sha256 = _sha256(path.read_bytes())
+                except OSError as exc:
+                    error = _error(
+                        "ACTIVE_VERIFICATION_FILE_UNREADABLE",
+                        f"cannot read active verification file {relative}: {exc}",
+                    )
+                    entry["error"] = error
+                    errors.append(error)
+                else:
+                    expected_sha256 = ACTIVE_VERIFICATION_SHA256[relative]
+                    entry.update(
+                        {
+                            "sha256": observed_sha256,
+                            "expectedSha256": expected_sha256,
+                            "contentMatchesExpected": observed_sha256 == expected_sha256,
+                        }
+                    )
+                    if observed_sha256 != expected_sha256:
+                        error = _error(
+                            "ACTIVE_VERIFICATION_FILE_MISMATCH",
+                            f"active verification file does not match reviewed content: {relative}",
+                        )
+                        entry["error"] = error
+                        errors.append(error)
+        active_verification_files.append(entry)
+
     revision = revision_raw.decode("ascii", errors="replace").strip() if revision_raw is not None else None
     source_files = (
         sorted(
             path
             for path in source_raw.decode("utf-8", errors="surrogateescape").split("\0")
             if path
+            and path not in ACTIVE_VERIFICATION_FILES
             and (repo_root / path).exists()
             and stat.S_ISREG((repo_root / path).lstat().st_mode)
         )
@@ -352,6 +436,7 @@ def _tracked_inventory(repo_root: Path) -> dict[str, Any]:
             path
             for path in test_raw.decode("utf-8", errors="surrogateescape").split("\0")
             if path
+            and path not in ACTIVE_VERIFICATION_FILES
             and (repo_root / path).exists()
             and stat.S_ISREG((repo_root / path).lstat().st_mode)
         )
@@ -402,6 +487,7 @@ def _tracked_inventory(repo_root: Path) -> dict[str, Any]:
         "mechanismCoupledTestFiles": test_files,
         "trackedRemovedMechanismFiles": tracked_removed,
         "currentVerificationTrackedFiles": current_tracked,
+        "activeVerificationFiles": active_verification_files,
         "filesystemLegacyFiles": filesystem["legacyFiles"],
         "filesystemLegacyDirectories": filesystem["legacyDirectories"],
         "residueFiles": residue,
@@ -442,7 +528,8 @@ def _filesystem_observation(repo_root: Path) -> tuple[dict[str, Any], list[dict[
         for directory, subdirectories, filenames in os.walk(path, followlinks=False, onerror=record_walk_error):
             directory_path = Path(directory)
             relative_directory = directory_path.relative_to(repo_root).as_posix()
-            legacy_directories.add(relative_directory)
+            if relative_directory not in ACTIVE_VERIFICATION_DIRECTORIES:
+                legacy_directories.add(relative_directory)
             for subdirectory in subdirectories[:]:
                 child = directory_path / subdirectory
                 relative_child = child.relative_to(repo_root).as_posix()
@@ -461,7 +548,6 @@ def _filesystem_observation(repo_root: Path) -> tuple[dict[str, Any], list[dict[
             for filename in filenames:
                 child = directory_path / filename
                 relative_child = child.relative_to(repo_root).as_posix()
-                legacy_files.add(relative_child)
                 try:
                     child_mode = child.lstat().st_mode
                 except FileNotFoundError:
@@ -470,7 +556,10 @@ def _filesystem_observation(repo_root: Path) -> tuple[dict[str, Any], list[dict[
                     errors.append(_error("LEGACY_PATH_UNREADABLE", f"cannot inspect legacy path {relative_child}: {exc}"))
                     continue
                 if stat.S_ISLNK(child_mode):
+                    legacy_files.add(relative_child)
                     errors.append(_error("LEGACY_FILESYSTEM_RESIDUE", f"legacy path is a symlink: {relative_child}"))
+                elif relative_child not in ACTIVE_VERIFICATION_FILES:
+                    legacy_files.add(relative_child)
 
     root_cache = repo_root / "__pycache__"
     try:
@@ -509,14 +598,35 @@ def _legacy_command(argv: list[str]) -> str | None:
     current = _current_verification_executable(argv[0])
     if current is not None:
         return current
-    # The bounded process census supports only an option-free Python script or
-    # bytecode invocation. Interpreter options make the script position
-    # ambiguous and are deliberately not matched.
     if PYTHON_INTERPRETER_PATTERN.fullmatch(executable) and len(argv) >= 2:
-        script = Path(argv[1]).name
+        script_argument = _python_script_argument(argv)
+        if script_argument is None:
+            return None
+        script = Path(script_argument).name
         if script in LEGACY_EXECUTABLES or LEGACY_PYC_PATTERN.fullmatch(script):
             return script
-        return _current_verification_executable(argv[1])
+        return _current_verification_executable(script_argument)
+    return None
+
+
+def _python_script_argument(argv: list[str]) -> str | None:
+    index = 1
+    while index < len(argv):
+        argument = argv[index]
+        if argument == "--":
+            return argv[index + 1] if index + 1 < len(argv) else None
+        if argument in {"-c", "-m"} or argument.startswith(("-c", "-m")):
+            return None
+        if argument in {"-W", "-X", "--check-hash-based-pycs"}:
+            index += 2
+            continue
+        if argument.startswith(("-W", "-X", "--check-hash-based-pycs=")):
+            index += 1
+            continue
+        if argument.startswith("-"):
+            index += 1
+            continue
+        return argument
     return None
 
 
@@ -666,11 +776,18 @@ def _installed_callers(installed_skill_root: Path, repo_root: Path) -> dict[str,
         payload = router_path.read_bytes()
         text = payload.decode("utf-8")
         normalized = " ".join(text.split())
-        router.update({"exists": True, "sha256": _sha256(payload)})
+        router_sha256 = _sha256(payload)
+        router.update(
+            {
+                "exists": True,
+                "sha256": router_sha256,
+                "expectedSha256": ROUTER_SHA256,
+                "contentMatchesExpected": router_sha256 == ROUTER_SHA256,
+            }
+        )
         forbidden = sorted(
             term
             for term in (
-                "verification-lead/SKILL.md",
                 "verification-runtime/iis-verify",
                 "`iis-verify`",
                 "Primary Verifier",
@@ -679,18 +796,59 @@ def _installed_callers(installed_skill_root: Path, repo_root: Path) -> dict[str,
         )
         router["forbiddenTermsFound"] = forbidden
         router["hasImplementationRoute"] = ROUTER_IMPLEMENTATION_PATH in text
-        router["hasRefusal"] = ROUTER_REFUSAL in normalized
+        router["hasVerificationRoute"] = ROUTER_VERIFICATION_PATH in text
+        router["requiresExactInputs"] = all(
+            term in normalized
+            for term in (
+                "one exact ready local Markdown Ticket",
+                "exact `Project-Root`",
+            )
+        )
+        router["keepsRecipeOptional"] = all(
+            term in normalized
+            for term in (
+                "Candidate Execution Recipe is optional",
+                "non-authoritative",
+            )
+        )
+        router["rejectsNonIndependent"] = all(
+            term in normalized
+            for term in (
+                "`Operator-assisted`",
+                "`Not independently verifiable`",
+                "has no independent IIS verification route",
+            )
+        )
         router["forbidsFallback"] = all(
             term in normalized
             for term in (
-                "Do not dispatch a child",
-                "select another agent",
-                "route to Implementation Lead",
-                "provide a compatibility command",
-                "approximate the removed action with implementation checks",
+                "Do not bypass that boundary through Implementation Lead",
+                "another agent",
+                "compatibility command",
+                "implementation checks",
+                "instead of selecting a fallback",
             )
         )
-        if forbidden or not router["hasImplementationRoute"] or not router["hasRefusal"] or not router["forbidsFallback"]:
+        router["rejectsImplementationEvidence"] = all(
+            term in normalized
+            for term in (
+                "Do not require an Implementation Lead result",
+                "independent authority",
+                "direct evidence",
+                "AC verdict",
+            )
+        )
+        if (
+            forbidden
+            or not router["contentMatchesExpected"]
+            or not router["hasImplementationRoute"]
+            or not router["hasVerificationRoute"]
+            or not router["requiresExactInputs"]
+            or not router["keepsRecipeOptional"]
+            or not router["rejectsNonIndependent"]
+            or not router["forbidsFallback"]
+            or not router["rejectsImplementationEvidence"]
+        ):
             errors.append(_error("INSTALLED_ROUTER_MISMATCH", "installed IIS router does not enforce cutover contract"))
     except (OSError, UnicodeDecodeError) as exc:
         router.update({"exists": False, "error": _error("INSTALLED_ROUTER_UNREADABLE", str(exc))})
@@ -782,7 +940,10 @@ def _active_repo_contracts(repo_root: Path) -> dict[str, Any]:
             errors.append(entry["error"])
             files.append(entry)
             continue
-        matches = sorted(term for term in REMOVED_ACTIVE_TERMS if term in text.lower())
+        allowed_terms = ACTIVE_REPO_TERM_ALLOWLIST.get(relative, frozenset())
+        matches = sorted(
+            term for term in REMOVED_ACTIVE_TERMS if term not in allowed_terms and term in text.lower()
+        )
         entry.update({"sha256": _sha256(payload), "removedTermsFound": matches})
         if matches:
             errors.append(

@@ -34,9 +34,17 @@ None
 
 ## Verification
 
-- Acceptance Criteria를 관찰할 안정적인 제품 흐름, 기대 효과, 결과 또는
-  readback 경계를 적는다. 실제 focused test seam은 Implementation Lead가
-  현재 저장소를 보고 선택한다.
+- AC ordinals: 1
+  Initial state: <initial product state>
+  Trigger or inspection target: <product trigger/input or canonical target>
+  Acceptance boundary: <observable product or canonical boundary>
+  Expected observable result: <effect or result>
+  Authoritative readback: <product or canonical readback>
+  Decision boundary: <observation that satisfies or contradicts this flow>
+  Disposition: Independent
+  Independent verification required: yes
+  Acceptance surface: Ticket Scope creates | <Scope-owned ordinary product surface>
+  External condition: None
 
 ## Behavior Authorities
 

@@ -17,6 +17,8 @@ Owner: 예시 planning owner
 
 - 탐색으로 좁힌 한 동작만 구현 범위로 확정한다.
 - 확정한 범위는 selected Work Package 밖의 sibling outcome을 포함하지 않는다.
+- 이 delivery는 확정한 입력을 실행하고 complete product result를 직접 읽을
+  ordinary product boundary와 readback을 만든다.
 
 ## Non-Goals
 
@@ -30,7 +32,25 @@ Owner: 예시 planning owner
 
 ## Verification Expectations
 
-선택한 동작의 결과와 큰 변경의 비대상 영역이 바뀌지 않았음을 기존 프로젝트 검증으로 확인한다.
+- Outcome: 확정한 입력에서 selected Work Package의 작은 non-UI 동작 결과를 관찰할 수 있다.
+  Acceptance boundary: 선택한 동작의 normal non-UI product boundary
+  Trigger or inspection target: 확정한 입력을 선택한 동작의 normal product entry에 제공한다.
+  Expected observable result: selected Work Package가 요구한 작은 동작의 product result가 반환된다.
+  Authoritative readback: 같은 product entry가 반환한 product result
+  Disposition: Independent
+  Independent verification required: yes
+  Acceptance surface: Ticket Scope creates | 선택한 동작의 ordinary product entry와 complete 반환 결과
+  External condition: None
+- Outcome: complete product result는 selected Work Package 밖 sibling outcome을 포함하지 않는다.
+  Acceptance boundary: 선택한 동작의 complete product result
+  Trigger or inspection target: 확정한 입력을 선택한 동작의 ordinary product entry에 제공한다.
+  Expected observable result: complete product result에는 selected Work Package의 작은 동작 결과만 있고 sibling outcome이 없다.
+  Authoritative readback: 같은 product entry가 반환한 complete product result
+  Disposition: Independent
+  Independent verification required: yes
+  Acceptance surface: Ticket Scope creates | 선택한 동작의 ordinary product entry와 complete 반환 결과
+  External condition: None
+  Absence terminal condition: complete product result가 반환되면 이번 호출 결과에 추가 sibling outcome이 나타날 수 없다.
 
 ## Behavior Authorities
 

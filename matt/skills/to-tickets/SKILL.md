@@ -202,6 +202,55 @@ nested-only, prose-only, empty, or mixed-marker bodies. Preserve the authored
 product-flow grouping and meaning; do not merge materially distinct flows or
 split one flow into implementation seams.
 
+Each exact authored Verification item uses these exact two-space-indented core
+labels once, in this order:
+
+```text
+- AC ordinals: <comma-separated positive ordinals in authored AC order>
+  Initial state: <initial product state>
+  Trigger or inspection target: <product trigger/input or canonical target>
+  Acceptance boundary: <observable product or canonical boundary>
+  Expected observable result: <effect or result>
+  Authoritative readback: <product or canonical readback>
+  Decision boundary: <observation that satisfies or contradicts this flow>
+  Disposition: Independent | Operator-assisted | Not independently verifiable
+  Independent verification required: yes | no
+  Acceptance surface: Existing | <directly established surface>; Ticket Scope creates | <surface>; Delivery contract guarantees | <disposable target and availability condition>; Operator-owned | <surface>; None | <confirmed reason>
+  External condition: None | <declared condition>
+```
+
+Add only a claim-specific line that the projected parent-Spec outcome contains,
+using the exact applicable label from `to-spec`: `Absence terminal condition`,
+`Ordering event source and range`, `Persistence storage identity and lifecycle
+boundary`, `Interruption checkpoint`, `External effect sandbox, authority,
+cleanup, and readback`, or `UI rendered state and interaction readback`.
+
+`AC ordinals` are one-based locators into the current exact top-level
+`## Acceptance Criteria` items in authored order. They are not an AC name,
+persistent ID, digest, schema identity, or cross-document identity. Every AC
+ordinal must occur in at least one Verification item, and every Verification
+item must contain at least one valid AC ordinal. Do not repeat an ordinal within
+one item. If an AC is inserted, removed, reordered, or semantically edited,
+return the Ticket to `draft`, remap every ordinal against the current authored
+order, and obtain Ticket review again. Never preserve an ordinal as historical
+identity.
+
+Project the exact parent-Spec outcome contract for this increment without
+making it stronger, more solution-specific, or more executable-specific.
+`Initial state` and `Decision boundary` clarify how the authored outcome is
+decided but must not introduce a new product precondition, internal mechanism,
+or stricter result. The acceptance boundary, trigger/inspection target,
+expected observable result, authoritative readback, disposition, independent
+requirement, acceptance surface, external condition, and applicable conditional
+boundaries preserve the parent meaning. If that needs a material meaning change,
+return to planning approval rather than normalizing the Ticket silently.
+
+An internal test command, test file, mock, fake, stub, private helper, debug
+hook, or implementation-only state is not a product flow or authoritative
+readback. A source, artifact, document, or structure outcome uses current
+canonical-target inspection and does not acquire a runtime command merely to fit
+the form.
+
 Every exact authored Verification item remains product-flow authority for
 implementation-stage planning and check selection. Preserve its count, order,
 product trigger, expected effect, readback, grouping, and meaning; do not merge
@@ -220,11 +269,35 @@ Record a blocker only for:
 - an unresolved product, scope, boundary, or approved-contract decision;
 - a specific evidence-backed contract contradiction; or
 - a concrete external dependency, authority, access, availability, or approval
-  condition that currently prevents independent execution or acceptance.
+  condition that currently prevents the declared verification or acceptance
+  path.
 
 A blocker must identify the evidence and the condition for resolution.
 Implementation difficulty, a presumed cause, uncertainty about the preferred
 approach, or lack of a known implementation path is not a blocker.
+
+Apply disposition-specific blocker semantics:
+
+- For `Independent`, the acceptance surface and environment conditions needed
+  for independent execution/inspection and authoritative readback are ready
+  gates. `Existing` is valid only when directly established from current facts.
+  `Ticket Scope creates` is valid only when Scope owns creation of that ordinary
+  product surface/readback. `Delivery contract guarantees` is valid only when
+  the approved parent contract names the disposable target and guarantees its
+  availability condition. An inaccessible assumed-existing surface outside
+  Scope blocks independent readiness.
+- For `Operator-assisted`, the declared operator path is the acceptance path.
+  The normal fact that a verifier alone lacks its credential, production access,
+  or separate authorization is not a blocker. A concrete condition that prevents
+  the declared operator path itself is a blocker.
+- `Not independently verifiable` is not itself a blocker. It records that the
+  approved contract has no independent boundary and Scope will not create one.
+- If the parent Spec requires independent verification, only `Independent` is
+  allowed. An `Operator-assisted` or `Not independently verifiable` projection
+  cannot become `ready`; return the conflict to planning.
+
+All prior unresolved product, scope, boundary, authority, dependency, access,
+availability, and approval blocker meanings remain in force.
 
 Serialize `## Blockers` in exactly one of these forms:
 
@@ -304,6 +377,12 @@ Draft the breakdown and obtain the user's confirmation before changing any Ticke
 - `Blockers` uses the exact `None` or path-only form, and every referenced
   blocker is `resolved` or `done`.
 - Acceptance Criteria are observable.
+- Every current authored Acceptance Criterion is linked by ordinal to at least
+  one exact authored Verification flow, and every flow links at least one
+  current AC without a persistent AC ID or digest.
+- Every Verification flow has all core product-contract fields exactly once and
+  has a disposition consistent with its independent-verification requirement,
+  acceptance surface, external condition, Scope ownership, and parent Spec.
 - The project root is uniquely determined.
 - Every applicable Behavior authority is approved, project-local, adopted by
   the parent Spec, and represented by an exact contained path-and-scope item.
@@ -327,6 +406,25 @@ Draft the breakdown and obtain the user's confirmation before changing any Ticke
 - No applicable external/public/persisted identity or operational constraint is
   unresolved, and any remaining material private bootstrap choice is either
   fixed by the Spec or explicitly delegated there.
+
+Before changing a Ticket to `ready`, run the adjacent structural validator:
+
+```text
+python3 matt/skills/to-tickets/validate_ticket.py <absolute-ticket-path>
+```
+
+The validator checks only the local path/status chain, exact list/label shape,
+label cardinality, ordinal range and bidirectional closure, blocker status, and
+structural disposition/requirement/surface combinations against the approved
+parent Spec. It does not judge product semantics, AC-to-flow correctness,
+material flow merge/split, solution specificity, blocker truth, runtime
+availability, evidence, or verdicts. To Tickets retains those authored review
+responsibilities.
+
+A legacy Ticket that lacks this outcome-local Verification form is not silently
+treated as `Independent`. Before using the independent route, normalize it
+against the still-approved parent meaning and review it as a current Ticket. If
+normalization changes meaning, return to planning approval.
 
 Use only `draft`, `ready`, `blocked`, or `done` as the Ticket status value. `Worker:` must remain empty.
 Matt must not ask for, select, suggest, or record a Worker.

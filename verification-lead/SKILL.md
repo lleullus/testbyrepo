@@ -1,0 +1,220 @@
+---
+name: verification-lead
+description: Independently verify one exact ready Independent IIS Ticket against its current Project Root using fresh direct product or canonical-target evidence.
+---
+
+# Verification Lead
+
+## Purpose And Authority
+
+Independently decide every exact authored Acceptance Criterion once from the
+current product/source that the Ticket names. Use the exact ready local Markdown
+Ticket, its exact `Project-Root`, and the verification contract reached through
+its exact approved parent Spec. A Candidate Execution Recipe is optional.
+
+The Ticket's exact top-level `## Acceptance Criteria` items in authored order are
+the verdict denominator. Its exact top-level `## Verification` items are the
+normative product flows and no-ID ordinal closure. The parent Spec owns outcome,
+scope, Non-Goals, and outcome-local verification meaning. Adopted Behavior and
+UI authorities qualify only their exact scopes. Do not design product meaning,
+add a flow, reinterpret an expected result, or use implementation behavior to
+fill a planning omission.
+
+## Required Input And Preflight
+
+Require one exact absolute canonical ready Ticket path and its exact current
+`Project-Root`. A fresh session with only those inputs is the normal valid
+starting point. Resolve the parent Spec and adopted authorities from the Ticket;
+do not require an implementation result, Recipe, retained source, source
+capsule, prior verdict, or verification state.
+
+Before any product execution or inspection:
+
+1. Run `../matt/skills/to-tickets/validate_ticket.py`, resolved from this skill's
+   canonical physical directory, against the exact Ticket. Treat it only as
+   structural support. It does not establish semantic mapping, current product
+   availability, evidence, or verdicts.
+2. Directly require the Ticket still to be `ready`, its parent Spec to be the
+   exact sibling `Status: approved` Spec, the Ticket and project binding to be
+   canonical, every blocker resolved, and every adopted Behavior/UI authority
+   current, approved, applicable, complete, and nonconflicting.
+3. Enumerate every exact authored AC once and every authored Verification flow
+   in order. Confirm ordinal closure and the applicable parent-Spec meaning. Do
+   not create a persistent AC/flow ID, digest, schema identity, or copied
+   acceptance map.
+4. Require every flow to have disposition `Independent`; a concrete acceptance
+   boundary, trigger/input or inspection target, authoritative readback, and
+   decision boundary; and a structurally valid `Existing`, `Ticket Scope
+   creates`, or `Delivery contract guarantees` acceptance surface. An
+   `Operator-assisted` or `Not independently verifiable` flow cannot enter this
+   route and must not be bypassed through another agent.
+5. Directly establish the current verification target source before execution.
+   Identify the current Project Root and the bounded source/configuration,
+   executable target, generated artifact, canonical document, storage target,
+   or rendered product whose authored flow will be observed. This is a current
+   target fact, not a durable source identity.
+6. Bind the authored entrypoint or inspection target and authoritative readback
+   to their defined current locations/methods, then apply the safety and
+   authority boundary below. This preflight binding does not assume that the
+   implemented surface is present or working. Its absence or observation failure
+   is established only by the following fresh attempt and yields
+   `INCONCLUSIVE`, not an admission defect or product contradiction.
+
+Planning-contract absence is not runtime uncertainty. If the acceptance
+boundary or authoritative readback is undefined, AC-to-flow closure is missing,
+the independent disposition is invalid, required authority/status/path is
+invalid, or the verification target source cannot be identified before product
+execution, do not execute or inspect the product and return exactly:
+
+```text
+VERIFICATION NOT STARTED
+Ticket: <exact path>
+Reason: <exact planning/admission defect>
+AC verdicts: Not issued
+```
+
+## Optional Candidate Execution Recipe
+
+If the current caller provides a Candidate Execution Recipe, treat it only as
+non-authoritative location and reproduction input from a past implementation
+result. Compare its current flow ordinal and observed source facts with the
+current Ticket and source. Reject stale entrypoint/readback locations or a
+material Ticket-flow drift as Recipe input; do not reject the Ticket merely
+because the Recipe is absent or stale.
+
+Use a current Recipe only to shorten bounded binding of the actual entrypoint or
+inspection target, cwd/general environment, reproducible input, readback, and
+cleanup. Never adopt its checks as direct evidence, its source facts as current
+source authority, or any expected result, AC verdict, independent-evidence
+claim, flow replacement, or durable identity. Resolve current source directly
+in all cases.
+
+## Bounded Resolution
+
+The authored flow already decides what must be exercised or inspected. Resolve
+only a canonical executable path, current package command, actual generated
+artifact/canonical document location, or existing documented launch command
+needed to bind that flow to the current product. Inspect directly relevant
+callers/configuration only far enough to confirm that exact current target and
+readback.
+
+Do not search every runtime alternative, perform broad repository discovery,
+invent a scenario, design a fixture/hook/provider, decide that a different
+entrypoint is equivalent, add missing observability, or coordinate runtime
+acquisition. If bounded resolution cannot identify the source target before any
+product attempt, use `VERIFICATION NOT STARTED`. If the target was identified
+and the valid defined flow is freshly attempted but its implemented
+entrypoint/surface/readback is missing or unavailable, issue `INCONCLUSIVE` for
+the affected ACs rather than turning missing verification means into product
+failure.
+
+## Fresh Direct Evidence
+
+Execute or inspect each materially distinct authored flow only as required by
+the Ticket. One execution may cover several linked ACs; do not duplicate it
+unless the Ticket requires repetition or distinct inputs, states, branches, or
+boundaries. Do not run every AC separately merely to produce one row per AC.
+
+Only evidence obtained now from the current target is admissible:
+
+- product result and its authoritative readback after the authored trigger;
+- current canonical source inspection for a source/structure claim;
+- current generated artifact or document inspection at the authored canonical
+  target;
+- direct rendered state and interaction readback for UI obligations; and
+- direct observation of required negative, ordering, interruption, lifecycle,
+  persistence, or external-effect boundaries.
+
+An authored product trigger may create or change its expected product state or
+artifact only on a safe disposable acceptance target, or within the exact
+existing authority required below. That product effect is part of observing the
+flow; it is not verifier remediation. The verifier must not directly edit
+source, configuration, product state, artifacts, or readback to manufacture the
+expected result.
+
+Implementation narration, Worker reports, diffs, implementation tests, helper
+or mock output, checks named in a Recipe, prior verdicts, and tool labels do not
+replace fresh product/canonical-target evidence. An internal test may locate or
+support implementation work but cannot by itself produce `PASS`.
+
+Apply claim-specific boundaries without adding new requirements:
+
+- A rejection/enforcement claim exercises the violating input at the authored
+  product boundary and uses the authoritative rejection and, when required,
+  unchanged-state readback.
+- An absence claim reaches its authored terminal condition. Elapsed time or a
+  partial log is insufficient unless the contract makes it terminal.
+- Ordering uses the authored authoritative event source, identity, and range.
+- Lifecycle/persistence crosses the authored actual boundary, preserves the
+  same storage identity, and performs the required post-boundary rerun/readback.
+- Interruption uses the authored checkpoint and distinguishes required allowed
+  and forbidden partial states.
+- Source, artifact, or document absence can be direct contradictory evidence
+  only when canonical-target presence/absence is itself the authored claim and
+  that target is directly inspected. Missing implementation entrypoint or
+  verification readback alone is not an AC contradiction.
+
+After each materially distinct observation, and no later than before assigning
+its affected AC verdicts, freshly recheck only the bounded source,
+configuration, target, and readback-location facts bound during preflight. Do
+not create a digest, snapshot, retained source, or durable identity for this
+check. If a bound fact changed or cannot be rechecked, the affected ACs are
+`INCONCLUSIVE`. A direct contradiction completed before the drift remains
+usable only under the attribution rule below. This currentness recheck does not
+replace product evidence.
+
+## Verdicts And Result
+
+Assign exactly one verdict to every exact authored AC in authored order:
+
+- `FAIL` only when admissible fresh direct evidence from the defined
+  product/contract boundary clearly contradicts a required obligation.
+- Otherwise `PASS` only when every flow and applicable claim-specific obligation
+  linked to that AC shows the expected observable result in current direct
+  evidence.
+- Otherwise `INCONCLUSIVE` when the valid defined flow was attempted but fresh
+  evidence could not be obtained or attributed because of runtime/target
+  availability, a missing implemented surface/readback, observation failure,
+  authority loss, lifecycle/ordering/persistence incompleteness, execution-time
+  source drift, or result-attribution failure.
+
+Do not issue AC verdicts after a `VERIFICATION NOT STARTED` admission result. A
+runtime or readback error is not `FAIL`. Source drift after execution begins is
+`INCONCLUSIVE` for every affected AC unless admissible contradictory evidence
+was already obtained at the exact current boundary before that drift and remains
+unambiguously attributable.
+
+Derive only this whole-Ticket result from the exact-once AC rows:
+
+```text
+all ACs PASS             -> VERIFIED
+one or more ACs FAIL     -> FAILED
+otherwise                -> INCONCLUSIVE
+```
+
+Report the exact Ticket path and current product/source target; each exact AC in
+authored order with its one verdict, linked flow ordinals, direct observation or
+exact evidence limit; and the aggregate. Results describe only the current
+observed source and do not change Ticket status or planning authority.
+
+## Safety And Non-Goals
+
+Safe local execution and read-only canonical inspection need no scenario
+approval or additional user ceremony. Do not execute credential-bearing,
+shared/production, payment, message, deployment, destructive, irreversible, or
+duplicate-sensitive effects without existing concrete authority for the exact
+action, target, readback, cleanup, and non-duplication boundary. Lack or loss of
+such runtime authority after valid admission yields `INCONCLUSIVE`; never route
+it to another agent or present it as independent success.
+
+Do not directly modify product source, generated product artifacts, product
+state, configuration, Ticket, Spec, Behavior/UI authority, or other planning
+source. This does not prohibit an authorized authored product trigger from
+producing its expected effect under the boundary above. Do not remediate,
+rewrite planning, create or propose a follow-up Ticket, or start an
+implementation loop. Do not invoke a runtime acquisition agent, Primary
+Verifier, second verifier, Coverage Challenger, or remediation role. Do not
+require a double run, scenario plan approval, or safe-local approval. Do not
+create transport, generic workflow runtime, serialized handoff, sidecar,
+database, store, ledger, claim, capability, run ID, retained source, evidence
+archive, or persistent result state.

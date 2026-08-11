@@ -49,6 +49,80 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
             self.assertIn("lifecycles/", contract)
             self.assertIn("invariants/", contract)
 
+    def test_matt_closes_verification_feasibility_before_to_spec(self) -> None:
+        matt = (ROOT / "matt" / "skills" / "ask-matt" / "SKILL.md").read_text(encoding="utf-8")
+        normalized = " ".join(matt.split())
+        for required in (
+            "verification-feasibility decisions",
+            "acceptance boundary",
+            "authoritative readback",
+            "Independent",
+            "Operator-assisted",
+            "Not independently verifiable",
+            "Ticket-Scope-owned product behavior",
+            "confirmed delivery contract",
+            "source, artifact, document, or structure claim",
+        ):
+            self.assertIn(required, normalized)
+        self.assertLess(
+            normalized.index("close the verification-feasibility decisions"),
+            normalized.index("Use `to-spec` when"),
+        )
+        self.assertIn("must not be forced through a runtime command", normalized)
+        self.assertIn("never the normative product boundary or authoritative readback", normalized)
+        self.assertIn("do not infer a sandbox", normalized)
+        self.assertIn("turn user approval into evidence", normalized)
+
+    def test_to_spec_serializes_confirmed_verification_without_invention(self) -> None:
+        to_spec = (ROOT / "matt" / "skills" / "to-spec" / "SKILL.md").read_text(encoding="utf-8")
+        normalized = " ".join(to_spec.split())
+        for label in (
+            "Outcome:",
+            "Acceptance boundary:",
+            "Trigger or inspection target:",
+            "Expected observable result:",
+            "Authoritative readback:",
+            "Disposition:",
+            "Independent verification required:",
+            "Acceptance surface:",
+            "External condition:",
+        ):
+            self.assertIn(label, to_spec)
+        self.assertIn("Do not invent a value omitted by the confirmed shared understanding", normalized)
+        self.assertIn("keeps the Spec draft", normalized)
+        self.assertIn("`Not available` is not a placeholder", normalized)
+        self.assertIn("cannot be combined with `Operator-assisted`", normalized)
+        self.assertIn("Delivery contract guarantees", normalized)
+        self.assertIn("actually guarantees the named disposable target", normalized)
+        self.assertIn("not permission to infer a sandbox", normalized)
+        self.assertIn("do not add a runtime command", normalized)
+        for forbidden_authority in ("Internal tests", "mocks", "private helpers"):
+            self.assertIn(forbidden_authority, to_spec)
+
+    def test_to_tickets_projects_without_strengthening_or_semantic_validation(self) -> None:
+        to_tickets = (ROOT / "matt" / "skills" / "to-tickets" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        normalized = " ".join(to_tickets.split())
+        for required in (
+            "one-based locators",
+            "not an AC name, persistent ID, digest, schema identity",
+            "return the Ticket to `draft`",
+            "without making it stronger, more solution-specific",
+            "must not introduce a new product precondition",
+            "does not judge product semantics",
+            "material flow merge/split",
+            "runtime availability, evidence, or verdicts",
+            "not silently treated as `Independent`",
+        ):
+            self.assertIn(required, normalized)
+        for forbidden_surface in (
+            "internal test command",
+            "mock",
+            "private helper",
+        ):
+            self.assertIn(forbidden_surface, normalized)
+
     def test_ui_authority_reaches_implementation_and_is_revalidated(self) -> None:
         to_spec = (ROOT / "matt" / "skills" / "to-spec" / "SKILL.md").read_text(encoding="utf-8")
         to_tickets = (ROOT / "matt" / "skills" / "to-tickets" / "SKILL.md").read_text(encoding="utf-8")

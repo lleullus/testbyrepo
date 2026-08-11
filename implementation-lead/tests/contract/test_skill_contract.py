@@ -106,7 +106,6 @@ class ActiveSkillContractTests(unittest.TestCase):
 
     def test_no_verification_handoff_or_replacement_artifact_remains(self) -> None:
         for forbidden in (
-            "Verification Lead",
             "Primary Verifier",
             "Runtime Runner",
             "route-navigation",
@@ -121,10 +120,66 @@ class ActiveSkillContractTests(unittest.TestCase):
             " ".join(IMPLEMENTATION_SKILL.split()),
         )
 
+    def test_structural_validator_is_admission_support_not_semantic_authority(self) -> None:
+        normalized = " ".join(IMPLEMENTATION_SKILL.split())
+        self.assertIn("../matt/skills/to-tickets/validate_ticket.py", normalized)
+        self.assertIn("resolved from this skill's canonical physical directory", normalized)
+        self.assertIn("nonzero result blocks assignment before mutation", normalized)
+        for excluded in (
+            "does not establish product meaning",
+            "AC-to-flow correctness",
+            "implementation feasibility",
+            "runtime availability",
+            "evidence, or a verdict",
+        ):
+            self.assertIn(excluded, normalized)
+        self.assertIn("Implementation Lead still performs every semantic", normalized)
+
+    def test_scope_owned_acceptance_surface_is_due_now_but_external_surface_is_not(self) -> None:
+        normalized = " ".join(IMPLEMENTATION_SKILL.split())
+        for required in (
+            "`Acceptance surface` is `Ticket Scope creates`",
+            "ordinary product surface and authoritative readback same-Ticket due-now implementation work",
+            "Do not report implementation completion while it is missing",
+            "Do not expand implementation responsibility for `Operator-owned` surfaces",
+            "Do not create a surface identified as `Delivery contract guarantees`",
+        ):
+            self.assertIn(required, normalized)
+        self.assertIn("paragraphs 8 and 9", normalized)
+
+    def test_candidate_recipe_is_optional_current_result_only(self) -> None:
+        normalized = " ".join(IMPLEMENTATION_SKILL.split())
+        for field in (
+            "Candidate Execution Recipe (optional, non-authoritative, current implementation result only)",
+            "Verification flow ordinal:",
+            "Observed current-source binding:",
+            "Entrypoint or inspection target:",
+            "Working directory and general environment:",
+            "Input:",
+            "Authoritative readback:",
+            "Cleanup or disposal:",
+            "Checks actually performed:",
+        ):
+            self.assertIn(field, IMPLEMENTATION_SKILL)
+        self.assertIn("A future fresh verification session does not require a Recipe", normalized)
+        self.assertIn("Its absence is not a readiness or admission defect", normalized)
+        self.assertIn("detect staleness and bound location checking", normalized)
+        self.assertIn("cannot prove currentness in a later session", normalized)
+
+    def test_candidate_recipe_cannot_carry_verdict_flow_replacement_or_durable_identity(self) -> None:
+        normalized = " ".join(IMPLEMENTATION_SKILL.split())
+        for forbidden_claim in (
+            "does not add, replace, merge, split, or reinterpret a flow",
+            "Do not include an AC mapping, expected result, `PASS`, `FAIL`, `VERIFIED`",
+            "claim of independent evidence",
+            "not durable candidate/source identity",
+            "sidecar, Recipe file, database, store, capsule, retained source, digest, run ID",
+        ):
+            self.assertIn(forbidden_claim, normalized)
+
     def test_active_contracts_exclude_removed_roles_and_runtime(self) -> None:
         combined = IMPLEMENTATION_SKILL + "\n" + TO_TICKETS_SKILL
         for forbidden in (
-            "Verification Lead",
             "Primary Verifier",
             "Runtime Runner",
             "coverage_gate.py",

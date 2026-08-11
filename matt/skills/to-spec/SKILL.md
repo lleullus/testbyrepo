@@ -226,9 +226,80 @@ that this approved Spec is its scoped UI authority. Capture only prototype
 decisions the user explicitly adopted; a prototype result alone is not
 authority.
 
+Serialize each confirmed outcome-local verification contract as one exact
+top-level `- ` item in `## Verification Expectations`, in the outcome order of
+the confirmed shared understanding. Use the following exact two-space-indented
+labels once per item:
+
+```text
+- Outcome: <observable claim>
+  Acceptance boundary: <product or canonical inspection boundary>
+  Trigger or inspection target: <product input/trigger or canonical target>
+  Expected observable result: <expected result>
+  Authoritative readback: <product or canonical readback>
+  Disposition: Independent | Operator-assisted | Not independently verifiable
+  Independent verification required: yes | no
+  Acceptance surface: Existing | <surface>; Ticket Scope creates | <surface>; Delivery contract guarantees | <disposable target and availability condition>; Operator-owned | <surface>; None | <confirmed reason>
+  External condition: None | <declared operator, authority, environment, or target condition>
+```
+
+Add only an applicable outcome-local line, using its exact label:
+
+```text
+  Absence terminal condition: <condition>
+  Ordering event source and range: <source and range>
+  Persistence storage identity and lifecycle boundary: <identity and boundary>
+  Interruption checkpoint: <checkpoint>
+  External effect sandbox, authority, cleanup, and readback: <contract>
+  UI rendered state and interaction readback: <contract>
+```
+
+These labels serialize confirmed product meaning; they do not create a new
+schema identity, metadata block, persistent outcome ID, executable recipe, or
+implementation plan. Do not add a conditional line merely to fill a template.
+Do not invent a value omitted by the confirmed shared understanding. An
+undecided boundary, readback, disposition, requirement, surface responsibility,
+or external condition keeps the Spec draft.
+
+`Not available` is not a placeholder for an unresolved value. Use it only in a
+non-independent outcome whose confirmed contract explicitly says that the
+particular boundary or readback does not exist and gives the reason, and only
+when the disposition and acceptance-surface lines consistently preserve that
+decision. `Independent` always requires a concrete acceptance boundary,
+trigger/inspection target, authoritative readback, and an existing,
+Ticket-Scope-created, or contract-guaranteed disposable acceptance surface.
+Use `Delivery contract guarantees` only when the confirmed shared understanding
+actually guarantees the named disposable target and its availability condition.
+It is not permission to infer a sandbox or convert an unverified current-surface
+claim into authority.
+`Independent verification required: yes` cannot be combined with
+`Operator-assisted` or `Not independently verifiable`.
+
+For an `Operator-assisted` outcome, record the actual operator-owned path and
+external condition without representing it as independently executable. For a
+`Not independently verifiable` outcome, record the confirmed absence and reason
+without creating a verifier path. Source, artifact, document, and structure
+claims use direct current canonical-target inspection where that is their
+authoritative boundary; do not add a runtime command. Runtime outcomes require
+the confirmed product boundary and authoritative readback. Internal tests,
+mocks, private helpers, proposed test seams, implementation narration, and
+anticipated implementation commands cannot become the normative boundary or
+readback.
+
 ## Approval Rules
 
 Start with `Status: draft`. Change the exact status value to `approved` only after the user or explicitly named planning owner confirms it and no product, scope, boundary, or evidence-backed contract-contradiction decision remains unresolved. Never infer approval, and never use `approved` while any unresolved decision remains in `## Open Questions`.
+
+Approval also requires one complete outcome-local `## Verification
+Expectations` item for every independently acceptable observable outcome. Keep
+the Spec draft when a runtime outcome lacks its acceptance boundary or
+authoritative readback; an `Independent` outcome lacks a directly established
+existing, Ticket-Scope-created, or confirmed delivery-contract-guaranteed
+disposable acceptance surface; an
+operator-owned or separately authorized path is labeled `Independent`; or the
+parent contract requires independent verification but the disposition is
+non-independent. Verification-contract completeness is a product-contract
+decision, not proof of the eventual internal implementation path.
 
 For a Spec that adopts an external UI authority, any later change to that
 authority's scoped decisions invalidates the prior adoption. Keep or return the
@@ -261,8 +332,8 @@ source absence into a permanent requirement. If any applicable fact remains
 unresolved, keep the Spec draft.
 
 Do not require Matt to identify, validate, or prove an implementation path
-before approval. Do not block approval because feasibility has not yet been
-demonstrated. Block approval only when a specific unresolved contradiction
+before approval. Do not block approval because implementation feasibility has
+not yet been demonstrated. Block approval only when a specific unresolved contradiction
 between the Desired Outcome and the confirmed constraints, Non-Goals, or an
 unavoidable external authority boundary is supported by verified evidence or
 clear logic.
@@ -319,8 +390,8 @@ Apply these section rules:
   invariants, and technical mechanisms whose use is itself an approved
   requirement.
 - `Verification Expectations` describe observable evidence of the Desired
-  Outcome and applicable authority scopes without restating their semantic or
-  rendered rules.
+  Outcome and applicable authority scopes through the outcome-local contract
+  above, without restating their semantic or rendered rules.
 - `Open Questions` contain unresolved product, scope, boundary, or material
   evidence-backed contract-contradiction decisions. Choosing between otherwise
   valid internal implementations is not an Open Question.

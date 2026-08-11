@@ -19,7 +19,8 @@ Parent Spec에서 확정한 작은 non-UI 동작 하나를 완료한다.
 
 ## Scope
 
-승인된 Spec의 작은 동작과 그에 직접 연결된 기존 검증으로 한정한다.
+승인된 Spec의 작은 동작과 다음 Scope-owned acceptance surface를 만드는
+변경으로 한정한다: 선택한 동작의 ordinary product entry와 complete 반환 결과.
 
 ## Non-Goals
 
@@ -33,7 +34,18 @@ None
 
 ## Verification
 
-- 실제 사용 시 대상 프로젝트의 기존 검증으로 Acceptance Criteria와 비대상 영역을 확인한다.
+- AC ordinals: 1, 2
+  Initial state: 선택한 동작의 ordinary product boundary와 complete result readback이 구현되어 있다.
+  Trigger or inspection target: 확정한 입력을 선택한 동작의 ordinary product entry에 제공한다.
+  Acceptance boundary: 선택한 동작의 complete product result
+  Expected observable result: 작은 동작 결과가 반환되고 selected Work Package 밖 sibling outcome은 포함되지 않는다.
+  Authoritative readback: 같은 product entry가 반환한 complete product result
+  Decision boundary: complete result가 작은 동작 결과만 포함하면 충족하고 결과가 다르거나 sibling outcome을 포함하면 모순이다.
+  Disposition: Independent
+  Independent verification required: yes
+  Acceptance surface: Ticket Scope creates | 선택한 동작의 ordinary product entry와 complete 반환 결과
+  External condition: None
+  Absence terminal condition: complete product result가 반환되면 이번 호출 결과에 추가 sibling outcome이 나타날 수 없다.
 
 ## Behavior Authorities
 
