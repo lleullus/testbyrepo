@@ -155,8 +155,8 @@ Serialize each Criterion as one exact top-level `- ` list item in authored
 order. Use two-space-indented continuation lines only when one Criterion needs
 multiple lines. Do not use ordered, task-list, nested-only, prose-only, empty,
 or mixed-marker bodies. Each exact authored Markdown item remains the
-acceptance source consumed by Implementation Lead and Verification Lead; do not
-generate a digest, schema identity, or separate user-facing AC ID.
+acceptance source consumed by Implementation Lead; do not generate a digest,
+schema identity, or separate user-facing AC ID.
 
 Apply this solution-independence check to every normative Ticket statement, not
 only to Acceptance Criteria:
@@ -202,20 +202,16 @@ nested-only, prose-only, empty, or mixed-marker bodies. Preserve the authored
 product-flow grouping and meaning; do not merge materially distinct flows or
 split one flow into implementation seams.
 
-Implementation Lead selects focused source, check, and provisional smoke facts
-needed for implementation and integration closure without assigning a final
-verdict. It publishes only the bounded filtered route-navigation sidecar. The
-independent Verification Lead owns workflow admission, gate and approval,
-structural validation, bounded remediation authorization, and final user
-publication. Exactly one internal Primary Verifier is the sole semantic owner:
-it maps every exact AC and Verification flow, interprets Runtime Runner raw
-material, owns readiness, Scenario design and selection, preparation and direct
-execution, evidence admissibility, AC verdicts, failure origin, and affected-AC
-re-verification. Verification Lead must not calculate, repair, or rewrite those
-semantics. Runtime Runner provides only complete pre-approval candidate-bound
-raw readiness material; it owns no interpretation, Scenario, readiness, direct
-evidence, verdict, or durable file. Do not prescribe an internal verification
-seam that could substitute for the approved observable product behavior.
+Every exact authored Verification item remains product-flow authority for
+implementation-stage planning and check selection. Preserve its count, order,
+product trigger, expected effect, readback, grouping, and meaning; do not merge
+materially distinct flows, split one flow into implementation seams, weaken it
+into optional guidance, or discard it because there is no later verification
+role. Implementation Lead selects focused source and product-boundary checks
+needed for implementation and integration closure and reports what it actually
+observed without assigning independent evidence, an AC verdict, or final
+`VERIFIED` status. Do not prescribe an internal test seam that could substitute
+for the approved observable product behavior.
 
 ## Blocker rules
 

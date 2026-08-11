@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
+INSTALLED_ROUTER = Path("/home/user01/.codex/skills/iis-workflow/SKILL.md")
 
 
 class IISEntryRoutingContractTests(unittest.TestCase):
@@ -25,6 +26,31 @@ class IISEntryRoutingContractTests(unittest.TestCase):
             "Explicit Scope Shaper requests and initiative-scale IIS requests take precedence over Ask Matt",
             shaper,
         )
+
+    def test_independent_verification_is_explicitly_unsupported(self) -> None:
+        router = INSTALLED_ROUTER.read_text(encoding="utf-8")
+        normalized = " ".join(router.split())
+        self.assertIn(
+            "IIS does not provide independent Ticket verification. Only an "
+            "Implementation Lead result is supported; it is not an independent "
+            "verification result or AC verdict.",
+            normalized,
+        )
+        for required in (
+            "Do not dispatch a child",
+            "select another agent",
+            "route to Implementation Lead",
+            "provide a compatibility command",
+            "approximate the removed action with implementation checks",
+        ):
+            self.assertIn(required, normalized)
+        for forbidden in (
+            "verification-lead/SKILL.md",
+            "verification-runtime/iis-verify",
+            "`iis-verify`",
+            "Primary Verifier",
+        ):
+            self.assertNotIn(forbidden, router)
 
 
 if __name__ == "__main__":

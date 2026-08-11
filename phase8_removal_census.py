@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emit a read-only Phase 8 legacy-removal preparation census as JSON."""
+"""Emit a read-only IIS removed-mechanism census as JSON."""
 
 from __future__ import annotations
 
@@ -23,6 +23,12 @@ LEGACY_SOURCE_PATHS = (
     "implementation-lead/tools/task-ownership-snapshot",
     "baseline-capsule",
 )
+CURRENT_VERIFICATION_PATHS = (
+    "verification-lead",
+    "primary-verifier",
+    "iis_ephemeral_transport.py",
+    "verification-runtime",
+)
 COUPLED_TEST_PATHS = (
     "verification-lead/tests",
     "implementation-lead/tests/implementation-result",
@@ -32,6 +38,7 @@ COUPLED_TEST_PATHS = (
     "implementation-lead/tests/task-ownership",
     "implementation-lead/tests/workflow-store",
     "baseline-capsule/tests",
+    "tests/test_iis_ephemeral_transport.py",
 )
 LEGACY_EXECUTABLE_STEMS = (
     "verification_run",
@@ -47,11 +54,60 @@ LEGACY_PYC_PATTERN = re.compile(
     + "|".join(LEGACY_EXECUTABLE_STEMS)
     + r")(?:\.cpython-\d+(?:\.\d+)*(?:\.opt-\d+)?)?\.pyc$"
 )
-INSTALLED_SKILL_NAMES = (
-    "implementation-lead",
-    "primary-verifier",
-    "verification-lead",
+CURRENT_UNIQUE_EXECUTABLES = frozenset({"iis-verify"})
+CURRENT_UNIQUE_PYC_PATTERN = re.compile(
+    r"^iis-verify(?:\.cpython-\d+(?:\.\d+)*(?:\.opt-\d+)?)?\.pyc$"
 )
+CURRENT_RUNTIME_EXECUTABLES = frozenset(
+    {"control_entry.py", "model_relay.py", "outer_bootstrap.py", "verification_tools.py"}
+)
+CURRENT_RUNTIME_PYC_PATTERN = re.compile(
+    r"^(?:control_entry|model_relay|outer_bootstrap|verification_tools)"
+    r"(?:\.cpython-\d+(?:\.\d+)*(?:\.opt-\d+)?)?\.pyc$"
+)
+COVERAGE_GATE_PYC_PATTERN = re.compile(
+    r"^coverage_gate(?:\.cpython-\d+(?:\.\d+)*(?:\.opt-\d+)?)?\.pyc$"
+)
+TRANSPORT_PYC_PATTERN = re.compile(
+    r"^iis_ephemeral_transport(?:\.cpython-\d+(?:\.\d+)*(?:\.opt-\d+)?)?\.pyc$"
+)
+ACTIVE_REPO_FILES = (
+    "README.md",
+    "scope-shaper/SKILL.md",
+    "matt/skills/to-tickets/SKILL.md",
+    "implementation-lead/SKILL.md",
+)
+REMOVED_ACTIVE_TERMS = (
+    "verification lead",
+    "primary verifier",
+    "runtime runner",
+    "verification-lead",
+    "primary-verifier",
+    "iis-verify",
+    "verification-runtime",
+    "iis_ephemeral_transport",
+    "route-navigation",
+    "coverage_gate",
+    "publish_route_navigation",
+)
+ROUTER_RELATIVE_PATH = Path("iis-workflow/SKILL.md")
+ROUTER_IMPLEMENTATION_PATH = "/home/user01/project/iis-skills/implementation-lead/SKILL.md"
+ROUTER_REFUSAL = (
+    "IIS does not provide independent Ticket verification. Only an "
+    "Implementation Lead result is supported; it is not an independent "
+    "verification result or AC verdict."
+)
+CONFIG_SUFFIXES = frozenset({".json", ".jsonc", ".md", ".ts", ".js"})
+CONFIG_EXCLUDED_DIRECTORIES = frozenset({"node_modules", ".audit", ".git"})
+ACTIVE_CONFIG_ROOT_FILES = frozenset(
+    {"opencode.json", "opencode.jsonc", "AGENTS.md", "package.json"}
+)
+ACTIVE_CONFIG_DIRECTORIES = frozenset(
+    {"agent", "agents", "command", "commands", "plugin", "plugins", "tools", "instructions", "skill", "skills"}
+)
+INERT_CONFIG_SUFFIXES = (".disabled",)
+TRANSPORT_SOURCE_PATH = Path("/home/user01/project/iis-skills/iis_ephemeral_transport.py")
+TRANSPORT_CACHE_ROOT = TRANSPORT_SOURCE_PATH.parent / "__pycache__"
 LEGACY_SKILL_TERMS = (
     "baseline-capsule",
     "implementation-result",
@@ -272,7 +328,10 @@ def _git_output(repo_root: Path, arguments: list[str]) -> tuple[bytes | None, di
 
 def _tracked_inventory(repo_root: Path) -> dict[str, Any]:
     revision_raw, revision_error = _git_output(repo_root, ["rev-parse", "HEAD"])
-    source_raw, source_error = _git_output(repo_root, ["ls-files", "-z", "--", *LEGACY_SOURCE_PATHS])
+    source_raw, source_error = _git_output(
+        repo_root,
+        ["ls-files", "-z", "--", *LEGACY_SOURCE_PATHS, *CURRENT_VERIFICATION_PATHS],
+    )
     test_raw, test_error = _git_output(repo_root, ["ls-files", "-z", "--", *COUPLED_TEST_PATHS])
     errors = [error for error in (revision_error, source_error, test_error) if error is not None]
 
@@ -322,11 +381,27 @@ def _tracked_inventory(repo_root: Path) -> dict[str, Any]:
                 f"empty legacy directories remain on the filesystem: {', '.join(empty_directories)}",
             )
         )
+    tracked_removed = sorted(set(source_files + test_files))
+    current_tracked = sorted(
+        path
+        for path in tracked_removed
+        if any(path == root or path.startswith(root + "/") for root in CURRENT_VERIFICATION_PATHS)
+        or path == "tests/test_iis_ephemeral_transport.py"
+    )
+    if tracked_removed:
+        errors.append(
+            _error(
+                "TRACKED_REMOVED_MECHANISM_RESIDUE",
+                f"tracked removed-mechanism files remain: {', '.join(tracked_removed)}",
+            )
+        )
     return {
         "repoRoot": str(repo_root),
         "revision": revision,
         "legacySourceFiles": source_files,
         "mechanismCoupledTestFiles": test_files,
+        "trackedRemovedMechanismFiles": tracked_removed,
+        "currentVerificationTrackedFiles": current_tracked,
         "filesystemLegacyFiles": filesystem["legacyFiles"],
         "filesystemLegacyDirectories": filesystem["legacyDirectories"],
         "residueFiles": residue,
@@ -342,7 +417,9 @@ def _filesystem_observation(repo_root: Path) -> tuple[dict[str, Any], list[dict[
     errors: list[dict[str, str]] = []
     legacy_files: set[str] = set()
     legacy_directories: set[str] = set()
-    bounded_roots = list(dict.fromkeys((*LEGACY_SOURCE_PATHS, *COUPLED_TEST_PATHS)))
+    bounded_roots = list(
+        dict.fromkeys((*LEGACY_SOURCE_PATHS, *CURRENT_VERIFICATION_PATHS, *COUPLED_TEST_PATHS))
+    )
 
     def record_walk_error(exc: OSError) -> None:
         errors.append(_error("LEGACY_PATH_UNREADABLE", f"cannot enumerate legacy path: {exc}"))
@@ -395,6 +472,25 @@ def _filesystem_observation(repo_root: Path) -> tuple[dict[str, Any], list[dict[
                 if stat.S_ISLNK(child_mode):
                     errors.append(_error("LEGACY_FILESYSTEM_RESIDUE", f"legacy path is a symlink: {relative_child}"))
 
+    root_cache = repo_root / "__pycache__"
+    try:
+        with os.scandir(root_cache) as entries:
+            for entry in entries:
+                if TRANSPORT_PYC_PATTERN.fullmatch(entry.name):
+                    relative = (Path("__pycache__") / entry.name).as_posix()
+                    legacy_files.add(relative)
+                    try:
+                        if stat.S_ISLNK(entry.stat(follow_symlinks=False).st_mode):
+                            errors.append(
+                                _error("LEGACY_FILESYSTEM_RESIDUE", f"verification bytecode is a symlink: {relative}")
+                            )
+                    except OSError as exc:
+                        errors.append(_error("LEGACY_PATH_UNREADABLE", f"cannot inspect {relative}: {exc}"))
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        errors.append(_error("LEGACY_PATH_UNREADABLE", f"cannot enumerate root bytecode cache: {exc}"))
+
     files = sorted(legacy_files)
     directories = sorted(legacy_directories)
     return {
@@ -410,6 +506,9 @@ def _legacy_command(argv: list[str]) -> str | None:
     executable = Path(argv[0]).name
     if executable in LEGACY_EXECUTABLES or LEGACY_PYC_PATTERN.fullmatch(executable):
         return executable
+    current = _current_verification_executable(argv[0])
+    if current is not None:
+        return current
     # The bounded process census supports only an option-free Python script or
     # bytecode invocation. Interpreter options make the script position
     # ambiguous and are deliberately not matched.
@@ -417,125 +516,423 @@ def _legacy_command(argv: list[str]) -> str | None:
         script = Path(argv[1]).name
         if script in LEGACY_EXECUTABLES or LEGACY_PYC_PATTERN.fullmatch(script):
             return script
+        return _current_verification_executable(argv[1])
+    return None
+
+
+def _current_verification_executable(raw_path: str) -> str | None:
+    path = Path(raw_path)
+    name = path.name
+    if name in CURRENT_UNIQUE_EXECUTABLES or CURRENT_UNIQUE_PYC_PATTERN.fullmatch(name):
+        return name
+    if "verification-runtime" in path.parts and (
+        name in CURRENT_RUNTIME_EXECUTABLES or CURRENT_RUNTIME_PYC_PATTERN.fullmatch(name)
+    ):
+        return name
+    if "verification-lead" in path.parts and (
+        name == "coverage_gate.py" or COVERAGE_GATE_PYC_PATTERN.fullmatch(name)
+    ):
+        return name
+    if name == "iis_ephemeral_transport.py" and path == TRANSPORT_SOURCE_PATH:
+        return name
+    if TRANSPORT_PYC_PATTERN.fullmatch(name) and path.parent == TRANSPORT_CACHE_ROOT:
+        return name
     return None
 
 
 def _process_observation() -> dict[str, Any]:
     proc_root = Path("/proc")
     if not proc_root.is_dir():
-        return {"available": False, "matches": []}
+        return {"available": False, "matches": [], "observationErrors": []}
 
     excluded_pids = {os.getpid(), os.getppid()}
     matches: list[dict[str, Any]] = []
+    observation_errors: list[dict[str, Any]] = []
     try:
         entries = list(proc_root.iterdir())
-    except OSError:
-        return {"available": False, "matches": []}
+    except OSError as exc:
+        return {
+            "available": False,
+            "matches": [],
+            "observationErrors": [{"pid": None, "error": type(exc).__name__}],
+        }
     for entry in entries:
         if not entry.name.isdigit() or int(entry.name) in excluded_pids:
             continue
         try:
             raw_argv = (entry / "cmdline").read_bytes()
-        except OSError:
+        except (FileNotFoundError, ProcessLookupError):
+            # A process that exited after enumeration cannot remain a hidden
+            # removed-runtime invocation.
+            continue
+        except OSError as exc:
+            observation_errors.append({"pid": int(entry.name), "error": type(exc).__name__})
             continue
         argv = [part.decode("utf-8", errors="surrogateescape") for part in raw_argv.split(b"\0") if part]
         executable = _legacy_command(argv)
         if executable is not None:
             matches.append({"pid": int(entry.name), "executable": executable, "argv": argv})
-    return {"available": True, "matches": sorted(matches, key=lambda item: item["pid"])}
+    return {
+        "available": True,
+        "matches": sorted(matches, key=lambda item: item["pid"]),
+        "observationErrors": sorted(observation_errors, key=lambda item: item["pid"]),
+    }
 
 
-def _installed_callers(installed_skill_root: Path | None, repo_root: Path) -> dict[str, Any] | None:
-    if installed_skill_root is None:
-        return None
+def _required_directory(root: Path, label: str) -> list[dict[str, str]]:
+    try:
+        mode = root.lstat().st_mode
+    except FileNotFoundError:
+        return [_error("REQUIRED_ROOT_MISSING", f"{label} does not exist: {root}")]
+    except OSError as exc:
+        return [_error("REQUIRED_ROOT_UNREADABLE", f"cannot inspect {label}: {exc}")]
+    if not stat.S_ISDIR(mode):
+        return [_error("REQUIRED_ROOT_NOT_DIRECTORY", f"{label} is not a directory: {root}")]
+    try:
+        with os.scandir(root) as entries:
+            next(entries, None)
+    except OSError as exc:
+        return [_error("REQUIRED_ROOT_UNREADABLE", f"cannot enumerate {label}: {exc}")]
+    return []
+
+
+def _skill_entry(installed_skill_root: Path, name: str, repo_root: Path) -> dict[str, Any]:
+    installed_dir = installed_skill_root / name
+    skill_file = installed_dir / "SKILL.md"
+    entry: dict[str, Any] = {"name": name}
+    try:
+        mode = installed_dir.lstat().st_mode
+    except FileNotFoundError:
+        entry.update({"exists": False, "isSymlink": False, "linkTarget": None})
+        return entry
+    except OSError as exc:
+        entry.update({"exists": None, "error": _error("INSTALLED_CALLER_UNREADABLE", str(exc))})
+        return entry
+    entry["exists"] = True
+    entry["isSymlink"] = stat.S_ISLNK(mode)
+    try:
+        entry["linkTarget"] = os.readlink(installed_dir) if entry["isSymlink"] else None
+        entry["canonicalTarget"] = str(installed_dir.resolve(strict=True))
+    except OSError as exc:
+        entry["error"] = _error("INSTALLED_CALLER_UNREADABLE", str(exc))
+        return entry
+    expected_dir = repo_root / name
+    entry["expectedTarget"] = str(expected_dir.resolve(strict=False))
+    entry["targetMatchesExpected"] = entry["canonicalTarget"] == entry["expectedTarget"]
+    try:
+        payload = skill_file.read_bytes()
+        expected_payload = (expected_dir / "SKILL.md").read_bytes()
+    except OSError as exc:
+        entry["error"] = _error("INSTALLED_CALLER_UNREADABLE", str(exc))
+        return entry
+    entry["skillMdSha256"] = _sha256(payload)
+    entry["expectedSkillMdSha256"] = _sha256(expected_payload)
+    entry["contentMatchesExpected"] = payload == expected_payload
+    legacy_terms = sorted(term for term in LEGACY_SKILL_TERMS if term in payload.decode("utf-8", errors="replace"))
+    entry["legacyTermsFound"] = legacy_terms
+    return entry
+
+
+def _installed_callers(installed_skill_root: Path, repo_root: Path) -> dict[str, Any]:
     skills: list[dict[str, Any]] = []
-    errors: list[dict[str, str]] = []
-    for name in INSTALLED_SKILL_NAMES:
-        installed_dir = installed_skill_root / name
-        skill_file = installed_dir / "SKILL.md"
-        entry: dict[str, Any] = {"name": name}
-        try:
-            exists = skill_file.is_file()
-            entry["exists"] = exists
-            entry["isSymlink"] = installed_dir.is_symlink()
-            entry["linkTarget"] = str(installed_dir.readlink()) if installed_dir.is_symlink() else None
-            entry["canonicalTarget"] = str(installed_dir.resolve())
-        except OSError as exc:
-            errors.append(_error("INSTALLED_CALLER_MISMATCH", f"cannot resolve installed {name}: {exc}"))
-            skills.append(entry)
-            continue
-        expected_target = str((repo_root / name).resolve(strict=False))
-        entry["expectedTarget"] = expected_target
-        entry["targetMatchesExpected"] = entry["canonicalTarget"] == expected_target
-        try:
-            payload = skill_file.read_bytes() if exists else b""
-        except OSError as exc:
-            errors.append(_error("INSTALLED_CALLER_MISMATCH", f"cannot read installed {name}/SKILL.md: {exc}"))
-            payload = b""
-        entry["skillMdSha256"] = _sha256(payload) if exists else None
-        expected_skill = repo_root / name / "SKILL.md"
-        try:
-            expected_payload = expected_skill.read_bytes() if expected_skill.is_file() else b""
-        except OSError as exc:
-            errors.append(_error("INSTALLED_CALLER_MISMATCH", f"cannot read repository {name}/SKILL.md: {exc}"))
-            expected_payload = b""
-        entry["expectedSkillMdSha256"] = _sha256(expected_payload) if expected_payload else None
-        entry["contentMatchesExpected"] = entry["skillMdSha256"] == entry["expectedSkillMdSha256"]
-        legacy_terms = sorted(term for term in LEGACY_SKILL_TERMS if term in payload.decode("utf-8", errors="replace"))
-        entry["legacyTermsFound"] = legacy_terms
-        if not exists:
-            errors.append(
-                _error("INSTALLED_CALLER_MISMATCH", f"installed {name} SKILL.md is absent; cutover is incomplete")
-            )
-        elif not entry["targetMatchesExpected"]:
-            errors.append(
-                _error(
-                    "INSTALLED_CALLER_MISMATCH",
-                    f"installed {name} resolves to {entry['canonicalTarget']} instead of {expected_target}",
-                )
-            )
-        elif not entry["contentMatchesExpected"]:
-            errors.append(
-                _error("INSTALLED_CALLER_MISMATCH", f"installed {name} SKILL.md content differs from the repository")
-            )
-        elif legacy_terms:
-            errors.append(
-                _error(
-                    "INSTALLED_CALLER_MISMATCH",
-                    f"installed {name} SKILL.md still references retired mechanism terms: {', '.join(legacy_terms)}",
-                )
-            )
+    active_skill_files: list[dict[str, Any]] = []
+    errors = _required_directory(installed_skill_root, "installed Codex skill root")
+    for name in ("implementation-lead", "verification-lead", "primary-verifier"):
+        entry = _skill_entry(installed_skill_root, name, repo_root)
         skills.append(entry)
+        if "error" in entry:
+            errors.append(entry["error"])
+        if name in {"verification-lead", "primary-verifier"} and entry.get("exists"):
+            errors.append(_error("REMOVED_INSTALLED_SKILL", f"removed installed skill remains: {name}"))
+        if name == "implementation-lead" and entry.get("exists"):
+            if not entry.get("targetMatchesExpected") or not entry.get("contentMatchesExpected"):
+                errors.append(
+                    _error("INSTALLED_CALLER_MISMATCH", "installed implementation-lead does not match repository")
+                )
+            elif entry.get("legacyTermsFound"):
+                errors.append(
+                    _error(
+                        "INSTALLED_CALLER_MISMATCH",
+                        "installed implementation-lead still references retired mechanism terms",
+                    )
+                )
+
+    router_path = installed_skill_root / ROUTER_RELATIVE_PATH
+    router: dict[str, Any] = {"path": str(router_path)}
+    try:
+        mode = router_path.lstat().st_mode
+        if not stat.S_ISREG(mode):
+            raise OSError("installed router is not a regular file")
+        payload = router_path.read_bytes()
+        text = payload.decode("utf-8")
+        normalized = " ".join(text.split())
+        router.update({"exists": True, "sha256": _sha256(payload)})
+        forbidden = sorted(
+            term
+            for term in (
+                "verification-lead/SKILL.md",
+                "verification-runtime/iis-verify",
+                "`iis-verify`",
+                "Primary Verifier",
+            )
+            if term in text
+        )
+        router["forbiddenTermsFound"] = forbidden
+        router["hasImplementationRoute"] = ROUTER_IMPLEMENTATION_PATH in text
+        router["hasRefusal"] = ROUTER_REFUSAL in normalized
+        router["forbidsFallback"] = all(
+            term in normalized
+            for term in (
+                "Do not dispatch a child",
+                "select another agent",
+                "route to Implementation Lead",
+                "provide a compatibility command",
+                "approximate the removed action with implementation checks",
+            )
+        )
+        if forbidden or not router["hasImplementationRoute"] or not router["hasRefusal"] or not router["forbidsFallback"]:
+            errors.append(_error("INSTALLED_ROUTER_MISMATCH", "installed IIS router does not enforce cutover contract"))
+    except (OSError, UnicodeDecodeError) as exc:
+        router.update({"exists": False, "error": _error("INSTALLED_ROUTER_UNREADABLE", str(exc))})
+        errors.append(router["error"])
+
+    def walk_error(exc: OSError) -> None:
+        errors.append(_error("INSTALLED_SKILL_UNREADABLE", f"cannot enumerate installed skills: {exc}"))
+
+    for directory, subdirectories, filenames in os.walk(
+        installed_skill_root,
+        followlinks=False,
+        onerror=walk_error,
+    ):
+        directory_path = Path(directory)
+        for subdirectory in subdirectories[:]:
+            child = directory_path / subdirectory
+            try:
+                child_mode = child.lstat().st_mode
+            except OSError as exc:
+                errors.append(_error("INSTALLED_SKILL_UNREADABLE", f"cannot inspect {child}: {exc}"))
+                subdirectories.remove(subdirectory)
+                continue
+            if stat.S_ISLNK(child_mode):
+                relative = child.relative_to(installed_skill_root).as_posix()
+                try:
+                    target = os.readlink(child)
+                except OSError as exc:
+                    errors.append(_error("INSTALLED_SKILL_UNREADABLE", f"cannot read link {relative}: {exc}"))
+                    subdirectories.remove(subdirectory)
+                    continue
+                target_matches = sorted(term for term in REMOVED_ACTIVE_TERMS if term in target.lower())
+                if target_matches:
+                    errors.append(
+                        _error(
+                            "REMOVED_INSTALLED_SKILL",
+                            f"installed skill link {relative} targets removed feature terms: {', '.join(target_matches)}",
+                        )
+                    )
+                subdirectories.remove(subdirectory)
+        if "SKILL.md" not in filenames:
+            continue
+        skill_path = directory_path / "SKILL.md"
+        relative = skill_path.relative_to(installed_skill_root).as_posix()
+        entry: dict[str, Any] = {"path": relative}
+        try:
+            mode = skill_path.lstat().st_mode
+            if not stat.S_ISREG(mode):
+                raise OSError("installed SKILL.md is not a regular file")
+            payload = skill_path.read_bytes()
+            text = payload.decode("utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            entry["error"] = _error("INSTALLED_SKILL_UNREADABLE", f"cannot read {relative}: {exc}")
+            errors.append(entry["error"])
+            active_skill_files.append(entry)
+            continue
+        matches = sorted(term for term in REMOVED_ACTIVE_TERMS if term in text.lower())
+        entry.update({"sha256": _sha256(payload), "removedTermsFound": matches})
+        if matches and relative != ROUTER_RELATIVE_PATH.as_posix():
+            errors.append(
+                _error(
+                    "REMOVED_INSTALLED_SKILL",
+                    f"installed skill {relative} references removed feature terms: {', '.join(matches)}",
+                )
+            )
+        active_skill_files.append(entry)
     return {
         "root": str(installed_skill_root),
         "skills": skills,
+        "router": router,
+        "activeSkillFiles": active_skill_files,
         "errors": errors,
     }
 
 
+def _active_repo_contracts(repo_root: Path) -> dict[str, Any]:
+    files: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    for relative in ACTIVE_REPO_FILES:
+        path = repo_root / relative
+        entry: dict[str, Any] = {"path": relative}
+        try:
+            mode = path.lstat().st_mode
+            if not stat.S_ISREG(mode):
+                raise OSError("active contract is not a regular file")
+            payload = path.read_bytes()
+            text = payload.decode("utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            entry["error"] = _error("ACTIVE_CONTRACT_UNREADABLE", f"cannot read {relative}: {exc}")
+            errors.append(entry["error"])
+            files.append(entry)
+            continue
+        matches = sorted(term for term in REMOVED_ACTIVE_TERMS if term in text.lower())
+        entry.update({"sha256": _sha256(payload), "removedTermsFound": matches})
+        if matches:
+            errors.append(
+                _error("ACTIVE_CONTRACT_RESIDUE", f"{relative} references removed active terms: {', '.join(matches)}")
+            )
+        files.append(entry)
+    return {"files": files, "errors": errors}
+
+
+def _active_config_observation(config_root: Path) -> dict[str, Any]:
+    errors = _required_directory(config_root, "active OpenCode configuration root")
+    files: list[dict[str, Any]] = []
+    if errors:
+        return {"root": str(config_root), "files": files, "errors": errors}
+
+    def walk_error(exc: OSError) -> None:
+        errors.append(_error("CONFIG_ROOT_UNREADABLE", f"cannot enumerate active config: {exc}"))
+
+    bounded_paths: list[Path] = [config_root / name for name in sorted(ACTIVE_CONFIG_ROOT_FILES)]
+    bounded_paths.extend(config_root / name for name in sorted(ACTIVE_CONFIG_DIRECTORIES))
+    for bounded in bounded_paths:
+        try:
+            mode = bounded.lstat().st_mode
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            errors.append(_error("CONFIG_ENTRY_UNREADABLE", f"cannot inspect {bounded}: {exc}"))
+            continue
+        if stat.S_ISLNK(mode):
+            relative = bounded.relative_to(config_root).as_posix()
+            errors.append(_error("CONFIG_ENTRY_UNCLASSIFIED", f"active config path is a symlink: {relative}"))
+            files.append({"path": relative, "type": "symlink"})
+            continue
+        if stat.S_ISREG(mode):
+            candidates = [bounded]
+        elif stat.S_ISDIR(mode):
+            candidates = []
+            for directory, subdirectories, filenames in os.walk(
+                bounded,
+                followlinks=False,
+                onerror=walk_error,
+            ):
+                directory_path = Path(directory)
+                for subdirectory in subdirectories[:]:
+                    child = directory_path / subdirectory
+                    try:
+                        child_mode = child.lstat().st_mode
+                    except OSError as exc:
+                        errors.append(_error("CONFIG_ENTRY_UNREADABLE", f"cannot inspect {child}: {exc}"))
+                        subdirectories.remove(subdirectory)
+                        continue
+                    if stat.S_ISLNK(child_mode):
+                        relative = child.relative_to(config_root).as_posix()
+                        errors.append(
+                            _error("CONFIG_ENTRY_UNCLASSIFIED", f"active config directory is a symlink: {relative}")
+                        )
+                        files.append({"path": relative, "type": "symlink"})
+                        subdirectories.remove(subdirectory)
+                candidates.extend(directory_path / name for name in sorted(filenames))
+        else:
+            relative = bounded.relative_to(config_root).as_posix()
+            errors.append(_error("CONFIG_ENTRY_UNCLASSIFIED", f"unsupported active config type: {relative}"))
+            files.append({"path": relative, "type": "other"})
+            continue
+
+        for path in candidates:
+            relative = path.relative_to(config_root).as_posix()
+            entry: dict[str, Any] = {"path": relative}
+            try:
+                mode = path.lstat().st_mode
+                if stat.S_ISLNK(mode):
+                    raise OSError("active config file is a symlink")
+                if not stat.S_ISREG(mode):
+                    raise OSError("active config entry is not a regular file")
+                if path.name.endswith(INERT_CONFIG_SUFFIXES):
+                    entry.update({"type": "inert-disabled", "size": path.lstat().st_size})
+                    files.append(entry)
+                    continue
+                if path.suffix.lower() not in CONFIG_SUFFIXES:
+                    raise ValueError("unsupported active config extension")
+                payload = path.read_bytes()
+                text = payload.decode("utf-8")
+            except (OSError, UnicodeDecodeError, ValueError) as exc:
+                entry["error"] = _error("CONFIG_ENTRY_UNCLASSIFIED", f"cannot classify {relative}: {exc}")
+                errors.append(entry["error"])
+                files.append(entry)
+                continue
+            matches = sorted(term for term in REMOVED_ACTIVE_TERMS if term in text.lower())
+            entry.update({"type": "active-text", "sha256": _sha256(payload), "removedTermsFound": matches})
+            if matches:
+                errors.append(
+                    _error("ACTIVE_CONFIG_RESIDUE", f"{relative} references removed active terms: {', '.join(matches)}")
+                )
+            files.append(entry)
+    if not files:
+        errors.append(_error("ACTIVE_CONFIG_UNOBSERVED", "no bounded active configuration files were observed"))
+    return {"root": str(config_root), "files": files, "errors": errors}
+
+
 def _has_errors(manifest: dict[str, Any]) -> bool:
-    if manifest["inventory"]["errors"] or manifest["results"]["errors"] or manifest["capsules"]["errors"]:
+    if (
+        manifest["roots"]["errors"]
+        or manifest["inventory"]["errors"]
+        or manifest["results"]["errors"]
+        or manifest["capsules"]["errors"]
+        or manifest["activeContracts"]["errors"]
+        or manifest["activeConfig"]["errors"]
+    ):
         return True
     installed = manifest["installedCallers"]
-    if installed is not None and installed["errors"]:
+    if installed["errors"]:
         return True
     if any("error" in item for item in manifest["results"]["items"]):
         return True
     if any("error" in item for item in manifest["capsules"]["referenced"]):
         return True
     processes = manifest.get("legacyProcesses")
-    return not isinstance(processes, dict) or processes.get("available") is not True or bool(processes.get("matches"))
+    return (
+        not isinstance(processes, dict)
+        or processes.get("available") is not True
+        or bool(processes.get("matches"))
+        or bool(processes.get("observationErrors"))
+    )
 
 
 def build_manifest(
     repo_root: Path,
     state_root: Path,
-    installed_skill_root: Path | None,
+    installed_skill_root: Path,
+    config_root: Path,
 ) -> dict[str, Any]:
     result_root = state_root / "implementation-results"
     result_items, result_errors = _read_result_items(result_root)
+    root_errors: list[dict[str, str]] = []
+    for root, label in (
+        (repo_root, "repository root"),
+        (state_root, "state root"),
+        (installed_skill_root, "installed Codex skill root"),
+        (config_root, "active OpenCode configuration root"),
+    ):
+        root_errors.extend(_required_directory(root, label))
     return {
-        "schemaVersion": "phase8-removal-census-v1",
+        "schemaVersion": "iis-removal-census-v2",
+        "roots": {
+            "repoRoot": str(repo_root),
+            "stateRoot": str(state_root),
+            "installedSkillRoot": str(installed_skill_root),
+            "configRoot": str(config_root),
+            "errors": root_errors,
+        },
         "inventory": _tracked_inventory(repo_root),
         "results": {
             "root": str(result_root),
@@ -544,6 +941,8 @@ def build_manifest(
             "errors": result_errors,
         },
         "capsules": _capsule_observation(state_root, result_items),
+        "activeContracts": _active_repo_contracts(repo_root),
+        "activeConfig": _active_config_observation(config_root),
         "installedCallers": _installed_callers(installed_skill_root, repo_root),
         "legacyProcesses": _process_observation(),
     }
@@ -553,13 +952,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", required=True)
     parser.add_argument("--state-root", required=True)
-    parser.add_argument("--installed-skill-root")
+    parser.add_argument("--installed-skill-root", required=True)
+    parser.add_argument("--config-root", required=True)
     args = parser.parse_args(argv)
 
     manifest = build_manifest(
         _canonical_path(args.repo_root),
         _canonical_path(args.state_root),
-        _canonical_path(args.installed_skill_root) if args.installed_skill_root else None,
+        _canonical_path(args.installed_skill_root),
+        _canonical_path(args.config_root),
     )
     print(json.dumps(manifest, ensure_ascii=True, separators=(",", ":"), sort_keys=True))
     return 2 if _has_errors(manifest) else 0

@@ -118,7 +118,7 @@ material.
 | Semantic states, transitions, recovery, ordering, concurrency | Behavior Design within Matt |
 | Rendered interaction and presentation | Matt's Central UI / UX Routing |
 | Internal design, mutation surface, mechanism, and implementation sequence | Implementation Lead and Worker |
-| Spec, Tickets, implementation, independent verification | Existing IIS owners |
+| Spec, Tickets, implementation result | Existing IIS owners |
 
 Delivery Context is evidence for later owners. It is not planning authority by
 itself.

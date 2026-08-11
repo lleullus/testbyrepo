@@ -1,7 +1,7 @@
 # Integrated Implementation Skills
 
 This repository snapshots the local workflow from initiative shaping through
-planning, implementation, and independent verification.
+planning and implementation result.
 
 ## Components
 
@@ -13,14 +13,9 @@ planning, implementation, and independent verification.
   `f96d17367b6eecc425ede0c5a96f2e837aac80a9`
 - `implementation-lead/`: implementation of one exact ready local Markdown
   Ticket by a user-designated Implementation Subagent, followed by Lead review
-  of the real project diff, implementation checks, and a bounded filtered route
-  sidecar for independent verification navigation.
-- `verification-lead/`: user-facing verification workflow authority for gate,
-  approval, structural validation, bounded remediation authorization, and final
-  publication without product-verification semantic fallback.
-- `primary-verifier/`: internal sole product-verification semantic owner for AC
-  mapping, readiness, Scenarios, direct evidence, verdicts, and affected-AC
-  re-verification.
+  of the real project diff, implementation checks, and exact unresolved
+  limitations. The result is not an independent AC verdict or final `VERIFIED`
+  status.
 - `repo-snapshot/`: independent Git working-tree snapshot skill; its credential
   remains outside this repository at `/home/user01/.config/repo-snapshot/token`
 

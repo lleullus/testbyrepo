@@ -75,16 +75,17 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
    or focused-check path, an unauthorized shared, credential-bearing, destructive,
    or external effect without a safe in-scope alternative, or an unresolved
    product, scope, contract, authority, or externally observable behavior decision.
-   For every materially distinct product route required by an executable AC and
-   authorized Scope that must reach a Ticket-owned externally observable
-   outcome/readback from an actual product trigger or contract boundary, make a
-   concrete post-implementation actual-product handoff-check plan before
+   For every materially distinct product route required by an executable AC,
+   exact authored `## Verification` product flow, and authorized Scope that must
+   reach a Ticket-owned externally observable outcome/readback from an actual
+   product trigger or contract boundary, make a concrete post-implementation
+   actual-product check plan before
    mutation. Directly confirm before mutation each non-Ticket runtime,
    executable or external dependency, credential/environment, authorization, and
    safe external-effect prerequisite that the plan requires to exist
    independently of the Ticket implementation. This confirms only
-   implementation handoff-check capability, not verification-only environment or
-   scenario readiness. A Ticket-created first executable, startup mode, product
+   implementation-stage check capability, not independent AC evidence or a
+   verdict. A Ticket-created first executable, startup mode, product
    entry/host, registration/configuration/integration, or outcome wiring may be
    greenfield; current absence of that Ticket-owned artifact is not a feasibility
    failure when an authorized implementation and check closure path is plausible.
@@ -95,8 +96,9 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
    BLOCKED`. Do not implement first when only a real payment, email, destructive,
    or production-only effect can exercise the route without explicit Ticket/user
    authorization or an existing safe supported mode. Do not create
-   verification-only targets, seams, fixtures, temporary entrypoints, debug IDs,
-   or internal-state/readback surfaces.
+   check-only targets, seams, fixtures, temporary entrypoints, debug IDs, or
+   internal-state/readback surfaces that the Ticket does not authorize as
+   ordinary product behavior.
 5. If those conditions hold, report `Implementation Assignment: FEASIBLE` and
    only then invoke the user-designated `Implementation Subagent` through the
    host's `Host Subagent Invocation Mechanism`, authorizing that role to modify the
@@ -116,19 +118,22 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
    authority's applicable scope and whether applicable responsive conditions;
    loading, empty, error, success, or permission states; and accessibility
    semantics, focus, or keyboard behavior have an evident implementation path.
-   Do not defer an obvious source-visible omission to Verification Lead, but do
-   not issue the final UI or verification verdict. After implementation, for
+   Correct every obvious source-visible in-scope omission, but do not issue an
+   AC, final UI, or whole-Ticket verdict. Preserve the exact authored
+   `## Verification` product-flow count, order, trigger, expected effect,
+   readback, and grouping while using those flows to select implementation-stage
+   checks. After implementation, for
    each materially distinct route, trace in the resulting project and actual
    diff from the actual trigger or contract boundary through the applicable real
    caller, registration/export, product configuration,
    executable/dependency/startup wiring, and integration link to the
    Ticket-owned outcome/readback surface. From the minimum set of safe,
    authorized actual-product focused checks for those routes, obtain current
-   direct raw product-boundary evidence; an existing supported product-level
+   direct raw product-boundary observations; an existing supported product-level
    check may be reused, and a Ticket-created executable, startup, or entry may
-   be used as ordinary product implementation. Do not create a new verification
+   be used as ordinary product implementation. Do not create a new check-only
    test or surface. One check may traverse several ACs or routes; do not require
-   one check per AC. Actual-product gross handoff-liveness requires that the
+   one check per AC. Gross actual-product liveness requires that the
    actual startup or entry can be exercised without route or startup failure and
    that the Ticket-owned outcome/readback surface is reachable. When a normal
    product boundary already exposes a success/failure class or invocation
@@ -137,20 +142,21 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
    not pass. Do not require stronger causal attribution than normal Ticket-owned
    semantics provide. If noisy asynchronous behavior would require a
    Ticket-unowned debug hook or seam for deterministic attribution, do not add
-   that seam or make completion fail; leave residual causal uncertainty for
-   Verification while still performing the safe actual-product gross checks.
+   that seam or make completion fail; report the residual causal uncertainty as
+   an implementation-result limitation while still performing the safe
+   actual-product gross checks.
    A Subagent or Lead may execute an existing or ordinary product-level check,
    but the Lead must review its actual execution context and direct raw
    product-boundary result; narration, a Worker description, a helper/mock, or a
    test assertion alone is insufficient. If route-affecting source or
-   configuration changes occur after a check and before handoff, recheck only
+   configuration changes occur after a check and before the result, recheck only
    the affected routes. This is implementation-completion evidence, not
    independent AC evidence or a verdict; overlapping observation with a simple
    AC does not elevate its status.
-8. Distinguish verification-only uncertainty from known remaining
+8. Distinguish unresolved runtime or causal uncertainty from known remaining
    implementation work. When review establishes a concrete Ticket-authorized
    source or integration omission, whether a bounded defect in the Subagent's
-   work or missed due-now Ticket work, do not defer it to Verification Lead.
+   work or missed due-now Ticket work, do not defer it to another role.
    Resume or reinvoke the same user-designated Implementation Subagent with only
    that bounded finding and the authorized Ticket boundary, then re-review the
    actual diff, checks, and affected AC coverage. Continue only while a concrete
@@ -158,70 +164,37 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
 9. A confirmed missing Ticket-owned route, registration/export, product
    configuration, executable/startup wiring, caller/integration link, or required
    outcome/readback connection is concrete same-Ticket due-now implementation
-   work under paragraph 8; classify it neither as verification-only work nor as
-   a new feature or Ticket. Do not dispatch mutation when the finding requires a
+   work under paragraph 8; classify it neither as mere runtime uncertainty nor
+   as a new feature or Ticket. Do not dispatch mutation when the finding requires a
    new product, scope, Spec, or Behavior-authority decision; is pre-existing and
    out of scope; or is blocked by environment, ownership, dependency, or
    authorization. If paragraph 4's safe authorized actual-product focused check
    cannot be performed because a non-Ticket prerequisite or execution capability
-   is missing, stop at that boundary and do not begin independent verification.
-   Stop or report that exact boundary and next owner. Begin independent
-   verification only after no known correctable in-scope due-now implementation
-   work remains and every materially distinct required route has current gross
-   actual-product handoff-liveness evidence from paragraph 7. Failure to obtain
+   is missing, stop and report that exact boundary and the responsible
+   environment, dependency, authority, or decision owner. Implementation can be
+   complete only after no known correctable in-scope due-now implementation work
+   remains and every materially distinct required route has the applicable
+   current gross actual-product observations from paragraph 7. Failure to obtain
    stronger causal attribution because normal product semantics do not provide
-   it and a Ticket-unowned seam would be needed does not fail this gate; carry
-   residual causal uncertainty to Verification. Broader runtime availability and
-   direct behavioral runtime evidence remain Verification responsibility after
-   this gate; source-review uncertainty that requires direct runtime evidence
-   may still be reported to independent verification.
-10. Report the implementation result and remaining verification-only ambiguity,
-    but do not assign verification readiness, direct AC evidence, AC mapping, a
-    causal conclusion, or a verdict. For each materially distinct required
-    route, publish the sole serialized handoff exception at
-    `~/.iis/route-navigation/<ticket-key>.json`. The host imports the repository
-    root `iis_ephemeral_transport.py` module and calls only
-    `publish_route_navigation(project_root, ticket_path, navigation_routes,
-    producer_provenance_routes)`, passing bounded in-memory objects directly.
-    Do not stage generic shell JSON, access the file raw, or create a generic
-    storage command.
-
-    The navigation projection contains only the startup or execution path,
-    product trigger or contract boundary, Ticket-owned outcome/readback surface,
-    and current per-route project source/integration anchors with SHA-256
-    digests. Primary Verifier alone may consume it through
-    `read_primary_navigation_view(project_root, ticket_path)`, after independent
-    mapping, and independently confirms source currentness. The quarantined
-    producer-only projection contains a local producer run nonce, past-tense
-    `GROSS_NOMINAL_BOUNDARY_REACHED` or bounded `BLOCKED_WHEN_RECORDED` facts,
-    redacted route identifiers, and no commands, raw output, credentials,
-    environment values, private endpoints, secret-bearing paths, AC mappings,
-    readiness, evidence, verdict, or causal language. Verification Lead may read
-    only that filtered projection through
-    `read_lead_producer_provenance_view(project_root, ticket_path)` and may use it
-    only to answer whether a matching local producer record reports that the
-    implementation-stage checks were observed at the recorded time. It must not
-    promote that statement into readiness, evidence, AC meaning, or a verdict.
-
-    Exact canonical Project Root/Ticket binding and current Ticket digest are
-    mandatory. Route anchor digest disagreement rejects that route view.
-    Absence, malformedness, cleanup, staleness, or supersession is ambiguous: it
-    is neither evidence of producer omission nor a verification blocker.
-    Superseding Implementation atomically replaces the one sidecar. Terminal
-    Verification calls `mark_route_navigation_terminal` to retain at least a
-    seven-day grace; orphan cleanup has a thirty-day ceiling and uses only
-    `cleanup_expired_route_navigation`. `cleanup_after`, file age, and mtime are
-    cleanup metadata, never semantic freshness. The Implementation Lead must not
-    report final `VERIFIED` status.
+   it and a Ticket-unowned seam would be needed does not fail this gate; report
+   the exact residual causal uncertainty as an implementation-result limitation.
+   Broader runtime availability or behavioral evidence outside these safe,
+   authorized implementation-stage checks is outside the supported IIS
+   lifecycle; do not claim it was established.
+10. Report the implementation result, checks actually performed, direct
+    implementation-stage observations, and exact unresolved limitations. Do not
+    assign independent verification readiness, claim independent or direct AC
+    evidence, issue an AC verdict, or report final `VERIFIED` or any equivalent
+    whole-Ticket success status. Do not create a serialized handoff, sidecar,
+    replacement verification artifact, or approval workflow.
 
 The feasibility phase, including any research report, must not reapprove or
 rewrite the Ticket or parent Spec, strengthen or add ACs, split the Ticket,
 preselect or bind an exact future file list, internal design, implementation
-sequence, or technical steps, design independent verification scenarios, assess
-verification-only environment readiness, or assign an AC or whole-Ticket verdict.
-Keep its result in the current session; do not create serialized state or an
-approval workflow other than the exact bounded route-navigation sidecar in
-paragraph 10.
+sequence, or technical steps, design an independent verification phase, assess
+environment readiness outside the implementation-stage checks, or assign an AC
+or whole-Ticket verdict. Keep its result in the current session; do not create
+serialized state or an approval workflow.
 
 Within the user's role and parallel-execution choices, the host controls the
 invocation, communication, resumption, retry, and scheduling details for each
@@ -246,5 +219,6 @@ diff, or project checks.
 
 The active range covers read-only implementation-assignment feasibility,
 authorized implementation in the current project, and Lead review of its real
-diff and checks. Independent verification remains the separate responsibility
-of Verification Lead.
+diff and checks, ending in an implementation result with exact limitations. IIS
+does not provide an independent Ticket-verification action, AC verdict, or final
+`VERIFIED` result after this point.

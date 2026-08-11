@@ -33,33 +33,30 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
             self.assertNotIn("subagent invocation mechanism", contract)
             self.assertNotIn("separate lead context", contract)
 
-    def test_spec_ticket_and_leads_consume_behavior_authority(self) -> None:
+    def test_spec_ticket_and_implementation_consume_behavior_authority(self) -> None:
         to_spec = (ROOT / "matt" / "skills" / "to-spec" / "SKILL.md").read_text(encoding="utf-8")
         to_tickets = (ROOT / "matt" / "skills" / "to-tickets" / "SKILL.md").read_text(encoding="utf-8")
         implementation = (ROOT / "implementation-lead" / "SKILL.md").read_text(encoding="utf-8")
-        verification = (ROOT / "verification-lead" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("## Behavior Authority Gate", to_spec)
         self.assertIn("## Behavior Authorities", to_spec)
         self.assertIn("## Behavior authority rules", to_tickets)
         self.assertNotIn("criterionRawSha256", to_tickets)
         self.assertNotIn("Verification Assessor", to_tickets)
         self.assertIn("compound direct implementation contract", implementation)
-        self.assertIn("Ticket-declared Behavior", verification)
-        for contract in (to_spec, to_tickets, implementation, verification):
+        for contract in (to_spec, to_tickets, implementation):
             self.assertIn("canonical parent", contract)
             self.assertIn("behavior/contexts/", contract)
             self.assertIn("lifecycles/", contract)
             self.assertIn("invariants/", contract)
 
-    def test_ui_authority_reaches_both_leads_and_is_revalidated(self) -> None:
+    def test_ui_authority_reaches_implementation_and_is_revalidated(self) -> None:
         to_spec = (ROOT / "matt" / "skills" / "to-spec" / "SKILL.md").read_text(encoding="utf-8")
         to_tickets = (ROOT / "matt" / "skills" / "to-tickets" / "SKILL.md").read_text(encoding="utf-8")
         implementation = (ROOT / "implementation-lead" / "SKILL.md").read_text(encoding="utf-8")
-        verification = (ROOT / "verification-lead" / "SKILL.md").read_text(encoding="utf-8")
         for producer in (to_spec, to_tickets):
             self.assertIn("complete", producer)
             self.assertIn("approved", producer)
-        for lead in (implementation, verification):
+        for lead in (implementation,):
             normalized = " ".join(lead.split())
             for required in (
                 "UI: yes",
@@ -76,8 +73,7 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
     def test_ui_authority_blocks_unresolved_or_incomplete_approved_content(self) -> None:
         to_tickets = (ROOT / "matt" / "skills" / "to-tickets" / "SKILL.md").read_text(encoding="utf-8")
         implementation = (ROOT / "implementation-lead" / "SKILL.md").read_text(encoding="utf-8")
-        verification = (ROOT / "verification-lead" / "SKILL.md").read_text(encoding="utf-8")
-        for lead in (to_tickets, implementation, verification):
+        for lead in (to_tickets, implementation):
             normalized = " ".join(lead.split())
             self.assertIn("complete", normalized)
             self.assertIn("no unresolved", normalized)

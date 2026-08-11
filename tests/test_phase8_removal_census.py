@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -22,36 +22,10 @@ phase8_removal_census = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(phase8_removal_census)
 
 
-LEGACY_SOURCE_FILES = (
-    "verification-lead/tools/verification-run/executable_identity.py",
-    "verification-lead/tools/verification-run/verification_run.py",
-    "implementation-lead/tools/implementation-result/implementation_result.py",
-    "implementation-lead/tools/implementation-transaction/implementation_transaction.py",
-    "implementation-lead/tools/task-ownership-snapshot/ownership_snapshot.py",
-    "implementation-lead/tools/workflow-store/workflow_store.py",
-    "implementation-lead/tools/workflow-store/workflow_store_preopen.py",
-    "baseline-capsule/.gitignore",
-    "baseline-capsule/PROTOCOL.md",
-    "baseline-capsule/README.md",
-    "baseline-capsule/baseline_capsule.py",
-    "baseline-capsule/run_tests.py",
-    "baseline-capsule/tests/test_baseline_capsule.py",
-)
-COUPLED_TEST_FILES = (
-    "baseline-capsule/tests/test_baseline_capsule.py",
-    "implementation-lead/tests/implementation-result/test_implementation_result.py",
-    "implementation-lead/tests/implementation-transaction/test_implementation_transaction.py",
-    "implementation-lead/tests/pilot/test_concurrent_scratch_flow.py",
-    "implementation-lead/tests/pilot/test_greenfield_admission_flow.py",
-    "implementation-lead/tests/pilot/test_representative_runtime_exercise.py",
-    "implementation-lead/tests/planning-workspace/test_planning_workspace.py",
-    "implementation-lead/tests/task-ownership/test_ownership_snapshot.py",
-    "implementation-lead/tests/workflow-store/fixtures/workflow-schema-v7.sql",
-    "implementation-lead/tests/workflow-store/test_workflow_store.py",
-    "implementation-lead/tests/workflow-store/test_workflow_store_preopen.py",
-    "verification-lead/tests/pilot/test_process_verification_pilots.py",
-    "verification-lead/tests/verification-run/test_executable_identity.py",
-    "verification-lead/tests/verification-run/test_verification_run.py",
+ROUTER_REFUSAL = (
+    "IIS does not provide independent Ticket verification. Only an "
+    "Implementation Lead result is supported; it is not an independent "
+    "verification result or AC verdict."
 )
 
 
@@ -74,10 +48,16 @@ class Phase8RemovalCensusTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.repo = self.root / "repo"
         self.repo.mkdir()
-        for relative in (*LEGACY_SOURCE_FILES, *COUPLED_TEST_FILES):
+        active_contracts = {
+            "README.md": "IIS planning and implementation result.\n",
+            "scope-shaper/SKILL.md": "Scope Shaper routes planning.\n",
+            "matt/skills/to-tickets/SKILL.md": "Tickets preserve observable product flows.\n",
+            "implementation-lead/SKILL.md": "Implementation Lead reports exact limitations.\n",
+        }
+        for relative, content in active_contracts.items():
             path = self.repo / relative
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(relative, encoding="utf-8")
+            path.write_text(content, encoding="utf-8")
         (self.repo / ".gitignore").write_text("__pycache__/\n*.py[cod]\n", encoding="utf-8")
         subprocess.run(["git", "init", "-q"], cwd=self.repo, check=True)
         subprocess.run(["git", "add", "."], cwd=self.repo, check=True)
@@ -85,25 +65,15 @@ class Phase8RemovalCensusTests(unittest.TestCase):
             [
                 "git",
                 "-c",
-                "user.name=Phase 8 test",
+                "user.name=Removal census test",
                 "-c",
-                "user.email=phase8@example.test",
+                "user.email=removal@example.test",
                 "commit",
                 "-qm",
                 "fixture",
             ],
             cwd=self.repo,
             check=True,
-        )
-        (self.repo / "implementation-lead" / "SKILL.md").write_text(
-            "Implementation Verification Module contract", encoding="utf-8"
-        )
-        (self.repo / "verification-lead" / "SKILL.md").write_text(
-            "Implementation Verification Module contract", encoding="utf-8"
-        )
-        (self.repo / "primary-verifier").mkdir()
-        (self.repo / "primary-verifier" / "SKILL.md").write_text(
-            "Primary Verifier contract", encoding="utf-8"
         )
 
         self.state = self.root / "state"
@@ -112,35 +82,55 @@ class Phase8RemovalCensusTests(unittest.TestCase):
         self.capsules = self.state / "baseline-capsules" / "capsules"
         self.capsule_id = "a" * 32
         (self.capsules / self.capsule_id / "root").mkdir(parents=True)
-        (self.capsules / self.capsule_id / "root" / "source.txt").write_text("retained", encoding="utf-8")
+        (self.capsules / self.capsule_id / "root" / "source.txt").write_text(
+            "retained", encoding="utf-8"
+        )
         (self.capsules / ("b" * 32)).mkdir()
         self.result_payload = {
             "protocolVersion": "implementation-result-v3",
             "capsuleRef": f"capsule:v1:{self.capsule_id}",
         }
-        (self.results / "complete.json").write_text(json.dumps(self.result_payload), encoding="utf-8")
+        (self.results / "complete.json").write_text(
+            json.dumps(self.result_payload), encoding="utf-8"
+        )
 
         self.installed = self.root / "installed-skills"
-        self.installed.mkdir()
-        os.symlink(self.repo / "implementation-lead", self.installed / "implementation-lead", target_is_directory=True)
-        os.symlink(self.repo / "verification-lead", self.installed / "verification-lead", target_is_directory=True)
-        os.symlink(self.repo / "primary-verifier", self.installed / "primary-verifier", target_is_directory=True)
+        router = self.installed / "iis-workflow/SKILL.md"
+        router.parent.mkdir(parents=True)
+        router.write_text(
+            "/home/user01/project/iis-skills/implementation-lead/SKILL.md\n"
+            f"{ROUTER_REFUSAL}\n"
+            "Do not dispatch a child, select another agent, route to Implementation Lead, "
+            "provide a compatibility command, or approximate the removed action with implementation checks.\n",
+            encoding="utf-8",
+        )
+
+        self.config = self.root / "opencode-config"
+        self.config.mkdir()
+        (self.config / "opencode.json").write_text(
+            json.dumps({"$schema": "https://opencode.ai/config.json"}), encoding="utf-8"
+        )
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def census(self) -> subprocess.CompletedProcess[str]:
+    def argv(self) -> list[str]:
+        return [
+            sys.executable,
+            str(CENSUS),
+            "--repo-root",
+            str(self.repo),
+            "--state-root",
+            str(self.state),
+            "--installed-skill-root",
+            str(self.installed),
+            "--config-root",
+            str(self.config),
+        ]
+
+    def census(self, argv: list[str] | None = None) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [
-                sys.executable,
-                str(CENSUS),
-                "--repo-root",
-                str(self.repo),
-                "--state-root",
-                str(self.state),
-                "--installed-skill-root",
-                str(self.installed),
-            ],
+            argv or self.argv(),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -149,287 +139,290 @@ class Phase8RemovalCensusTests(unittest.TestCase):
         )
 
     def test_emits_complete_read_only_manifest(self) -> None:
-        before = tuple(tree_identity(root) for root in (self.repo, self.state, self.installed))
+        observed = (self.repo, self.state, self.installed, self.config)
+        before = tuple(tree_identity(root) for root in observed)
 
         completed = self.census()
 
-        after = tuple(tree_identity(root) for root in (self.repo, self.state, self.installed))
-        self.assertEqual(completed.returncode, 0, completed.stderr)
+        after = tuple(tree_identity(root) for root in observed)
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertEqual(before, after)
         manifest = json.loads(completed.stdout)
-        self.assertEqual(manifest["schemaVersion"], "phase8-removal-census-v1")
-        self.assertEqual(len(manifest["inventory"]["legacySourceFiles"]), 13)
-        self.assertEqual(len(manifest["inventory"]["mechanismCoupledTestFiles"]), 14)
-        self.assertEqual(manifest["results"]["items"][0]["relativePath"], "complete.json")
+        self.assertEqual(manifest["schemaVersion"], "iis-removal-census-v2")
+        self.assertEqual(manifest["roots"]["errors"], [])
+        self.assertEqual(manifest["inventory"]["trackedRemovedMechanismFiles"], [])
+        self.assertEqual(manifest["inventory"]["residueFiles"], [])
         self.assertEqual(manifest["results"]["items"][0]["protocolVersion"], "implementation-result-v3")
-        self.assertEqual(manifest["results"]["items"][0]["capsuleRef"], self.result_payload["capsuleRef"])
         self.assertEqual(manifest["capsules"]["capsuleDirectoryCount"], 2)
-        self.assertEqual(manifest["capsules"]["referenced"], [{"capsuleRef": self.result_payload["capsuleRef"], "exists": True}])
-        skills = {skill["name"]: skill for skill in manifest["installedCallers"]["skills"]}
-        self.assertEqual(manifest["installedCallers"]["errors"], [])
-        self.assertTrue(skills["implementation-lead"]["exists"])
-        self.assertTrue(skills["verification-lead"]["exists"])
-        self.assertTrue(skills["primary-verifier"]["exists"])
-        self.assertTrue(skills["primary-verifier"]["targetMatchesExpected"])
-        self.assertTrue(skills["primary-verifier"]["contentMatchesExpected"])
-        self.assertTrue(skills["implementation-lead"]["targetMatchesExpected"])
-        self.assertTrue(skills["implementation-lead"]["contentMatchesExpected"])
-        self.assertEqual(skills["implementation-lead"]["legacyTermsFound"], [])
-        self.assertEqual(manifest["inventory"]["residueFiles"], [])
-        self.assertEqual(manifest["inventory"]["emptyLegacyDirectories"], [])
+        self.assertTrue(manifest["installedCallers"]["router"]["hasRefusal"])
+        skills = {item["name"]: item for item in manifest["installedCallers"]["skills"]}
+        self.assertFalse(skills["implementation-lead"]["exists"])
+        self.assertFalse(skills["verification-lead"]["exists"])
+        self.assertFalse(skills["primary-verifier"]["exists"])
         self.assertEqual(manifest["legacyProcesses"]["matches"], [])
+        self.assertEqual(manifest["legacyProcesses"]["observationErrors"], [])
 
-    def test_reports_malformed_result_without_writing_any_surface(self) -> None:
-        (self.results / "malformed.json").write_bytes(b"{not json")
-        before = tuple(tree_identity(root) for root in (self.repo, self.state, self.installed))
-
+    def test_optional_matching_implementation_installation_is_accepted(self) -> None:
+        os.symlink(
+            self.repo / "implementation-lead",
+            self.installed / "implementation-lead",
+            target_is_directory=True,
+        )
         completed = self.census()
-
-        after = tuple(tree_identity(root) for root in (self.repo, self.state, self.installed))
-        self.assertEqual(completed.returncode, 2, completed.stderr)
-        self.assertEqual(before, after)
-        manifest = json.loads(completed.stdout)
-        malformed = next(item for item in manifest["results"]["items"] if item["relativePath"] == "malformed.json")
-        self.assertEqual(malformed["error"]["code"], "RESULT_JSON_UNREADABLE")
-
-    def test_deleted_tracked_legacy_files_are_absent_from_effective_inventory(self) -> None:
-        (self.repo / LEGACY_SOURCE_FILES[0]).unlink()
-        (self.repo / COUPLED_TEST_FILES[0]).unlink()
-        (self.repo / "baseline-capsule" / "tests").rmdir()
-
-        completed = self.census()
-
         self.assertEqual(completed.returncode, 0, completed.stdout)
-        manifest = json.loads(completed.stdout)
-        self.assertNotIn(LEGACY_SOURCE_FILES[0], manifest["inventory"]["legacySourceFiles"])
-        self.assertNotIn(COUPLED_TEST_FILES[0], manifest["inventory"]["mechanismCoupledTestFiles"])
-        self.assertEqual(manifest["inventory"]["residueFiles"], [])
-        self.assertEqual(manifest["inventory"]["emptyLegacyDirectories"], [])
 
-    def test_process_matching_accepts_only_exact_direct_or_option_free_python_script(self) -> None:
-        self.assertEqual(
-            phase8_removal_census._legacy_command(["/tmp/verification_run.py", "--help"]),
-            "verification_run.py",
-        )
-        self.assertEqual(
-            phase8_removal_census._legacy_command(["python3", "/tmp/workflow_store.py", "--help"]),
-            "workflow_store.py",
-        )
-        self.assertIsNone(phase8_removal_census._legacy_command(["python3", "-c", "workflow_store.py"]))
-        self.assertIsNone(
-            phase8_removal_census._legacy_command(["python3", "-u", "/tmp/workflow_store.py"])
-        )
-        self.assertIsNone(
-            phase8_removal_census._legacy_command(["unrelated-command", "workflow_store.py"])
-        )
-
-    def test_process_matching_detects_retired_pyc_invocations(self) -> None:
-        self.assertEqual(
-            phase8_removal_census._legacy_command(["/tmp/verification_run.pyc", "--help"]),
-            "verification_run.pyc",
-        )
-        self.assertEqual(
-            phase8_removal_census._legacy_command(["python3", "/tmp/baseline_capsule.cpython-312.pyc", "--help"]),
-            "baseline_capsule.cpython-312.pyc",
-        )
-        self.assertEqual(
-            phase8_removal_census._legacy_command(["python3", "/tmp/workflow_store.cpython-313.pyc"]),
-            "workflow_store.cpython-313.pyc",
-        )
-        self.assertEqual(
-            phase8_removal_census._legacy_command(["python3", "/tmp/workflow_store.cpython-312.opt-1.pyc"]),
-            "workflow_store.cpython-312.opt-1.pyc",
-        )
-        self.assertEqual(
-            phase8_removal_census._legacy_command(["/tmp/baseline_capsule.cpython-312.opt-2.pyc"]),
-            "baseline_capsule.cpython-312.opt-2.pyc",
-        )
-        self.assertIsNone(
-            phase8_removal_census._legacy_command(["python3", "-c", "baseline_capsule.cpython-312.pyc"])
-        )
-        self.assertIsNone(
-            phase8_removal_census._legacy_command(["python3", "-u", "/tmp/verification_run.pyc"])
-        )
-
-    def test_untracked_legacy_source_is_filesystem_residue(self) -> None:
-        (self.repo / "verification-lead" / "tools" / "verification-run" / "leftover.py").write_text(
-            "leftover", encoding="utf-8"
-        )
+    def test_removed_installed_skills_are_forbidden(self) -> None:
+        removed = self.installed / "verification-lead"
+        removed.mkdir()
+        (removed / "SKILL.md").write_text("removed", encoding="utf-8")
 
         completed = self.census()
 
         self.assertEqual(completed.returncode, 2, completed.stdout)
         manifest = json.loads(completed.stdout)
-        self.assertIn(
-            "verification-lead/tools/verification-run/leftover.py", manifest["inventory"]["residueFiles"]
-        )
         self.assertTrue(
-            any(error["code"] == "LEGACY_FILESYSTEM_RESIDUE" for error in manifest["inventory"]["errors"])
+            any(error["code"] == "REMOVED_INSTALLED_SKILL" for error in manifest["installedCallers"]["errors"])
         )
 
-    def test_ignored_legacy_pyc_is_filesystem_residue(self) -> None:
-        pyc = self.repo / "baseline-capsule" / "tests" / "__pycache__" / "test_baseline_capsule.cpython-312.pyc"
-        pyc.parent.mkdir(parents=True)
-        pyc.write_bytes(b"ignored bytecode")
+    def test_wrong_optional_implementation_installation_is_fail_closed(self) -> None:
+        installed = self.installed / "implementation-lead"
+        installed.mkdir()
+        (installed / "SKILL.md").write_text("stale copy", encoding="utf-8")
 
         completed = self.census()
 
         self.assertEqual(completed.returncode, 2, completed.stdout)
         manifest = json.loads(completed.stdout)
-        self.assertIn(
-            "baseline-capsule/tests/__pycache__/test_baseline_capsule.cpython-312.pyc",
-            manifest["inventory"]["residueFiles"],
-        )
         self.assertTrue(
-            any(error["code"] == "LEGACY_FILESYSTEM_RESIDUE" for error in manifest["inventory"]["errors"])
+            any(error["code"] == "INSTALLED_CALLER_MISMATCH" for error in manifest["installedCallers"]["errors"])
         )
 
-    def test_empty_legacy_directory_is_filesystem_residue(self) -> None:
-        (self.repo / "baseline-capsule" / "tests" / "test_baseline_capsule.py").unlink()
-
-        completed = self.census()
-
-        self.assertEqual(completed.returncode, 2, completed.stdout)
-        manifest = json.loads(completed.stdout)
-        self.assertIn("baseline-capsule/tests", manifest["inventory"]["emptyLegacyDirectories"])
-        self.assertTrue(
-            any(error["code"] == "LEGACY_FILESYSTEM_RESIDUE" for error in manifest["inventory"]["errors"])
-        )
-
-    def test_wrong_installed_target_or_content_is_fail_closed(self) -> None:
-        (self.installed / "implementation-lead").unlink()
-        (self.installed / "implementation-lead").mkdir()
-        (self.installed / "implementation-lead" / "SKILL.md").write_text("stale copy", encoding="utf-8")
-
-        completed = self.census()
-
-        self.assertEqual(completed.returncode, 2, completed.stdout)
-        manifest = json.loads(completed.stdout)
-        entry = next(
-            skill for skill in manifest["installedCallers"]["skills"] if skill["name"] == "implementation-lead"
-        )
-        self.assertFalse(entry["targetMatchesExpected"])
-        self.assertTrue(
-            any(
-                error["code"] == "INSTALLED_CALLER_MISMATCH"
-                for error in manifest["installedCallers"]["errors"]
-            )
-        )
-
-    def test_stale_installed_skill_with_legacy_terms_is_fail_closed(self) -> None:
-        (self.installed / "implementation-lead").unlink()
-        (self.installed / "implementation-lead").mkdir()
-        (self.installed / "implementation-lead" / "SKILL.md").write_text(
-            "still requires baseline-capsule and workflow-store", encoding="utf-8"
-        )
-
-        completed = self.census()
-
-        self.assertEqual(completed.returncode, 2, completed.stdout)
-        manifest = json.loads(completed.stdout)
-        entry = next(
-            skill for skill in manifest["installedCallers"]["skills"] if skill["name"] == "implementation-lead"
-        )
-        self.assertEqual(entry["legacyTermsFound"], ["baseline-capsule", "workflow-store"])
-        self.assertTrue(
-            any(
-                error["code"] == "INSTALLED_CALLER_MISMATCH"
-                for error in manifest["installedCallers"]["errors"]
-            )
-        )
-
-    def test_missing_installed_lead_is_fail_closed(self) -> None:
-        (self.installed / "verification-lead").unlink()
-
-        completed = self.census()
-
-        self.assertEqual(completed.returncode, 2, completed.stdout)
-        manifest = json.loads(completed.stdout)
-        entry = next(
-            skill for skill in manifest["installedCallers"]["skills"] if skill["name"] == "verification-lead"
-        )
-        self.assertFalse(entry["exists"])
-        self.assertTrue(
-            any(
-                error["code"] == "INSTALLED_CALLER_MISMATCH"
-                for error in manifest["installedCallers"]["errors"]
-            )
-        )
-
-    def test_git_execution_failure_is_manifest_observation_error(self) -> None:
-        with patch.object(phase8_removal_census.subprocess, "run", side_effect=OSError("git missing")):
-            output, error = phase8_removal_census._git_output(self.repo, ["rev-parse", "HEAD"])
-
-        self.assertIsNone(output)
-        self.assertEqual(error["code"], "GIT_EXECUTABLE_UNAVAILABLE")
-
-    def test_census_fails_for_process_match_and_unavailable_observation(self) -> None:
-        for process_observation in (
-            {"available": True, "matches": [{"pid": 123, "executable": "workflow_store.py", "argv": []}]},
-            {"available": False, "matches": []},
+    def test_router_removed_leaf_runtime_and_command_each_fail(self) -> None:
+        router = self.installed / "iis-workflow/SKILL.md"
+        baseline = router.read_text(encoding="utf-8")
+        for residue in (
+            "verification-lead/SKILL.md",
+            "verification-runtime/iis-verify",
+            "`iis-verify`",
         ):
-            with self.subTest(process_observation=process_observation), patch.object(
-                phase8_removal_census, "_process_observation", return_value=process_observation
+            with self.subTest(residue=residue):
+                router.write_text(baseline + residue, encoding="utf-8")
+                completed = self.census()
+                self.assertEqual(completed.returncode, 2, completed.stdout)
+                router.write_text(baseline, encoding="utf-8")
+
+    def test_foreign_or_missing_router_is_fail_closed(self) -> None:
+        router = self.installed / "iis-workflow/SKILL.md"
+        router.write_text("stale foreign router", encoding="utf-8")
+        self.assertEqual(self.census().returncode, 2)
+        router.unlink()
+        self.assertEqual(self.census().returncode, 2)
+
+    def test_renamed_installed_skill_cannot_expose_removed_runtime(self) -> None:
+        renamed = self.installed / "renamed-checker/SKILL.md"
+        renamed.parent.mkdir()
+        renamed.write_text("Run verification-runtime/iis-verify", encoding="utf-8")
+        completed = self.census()
+        self.assertEqual(completed.returncode, 2, completed.stdout)
+        manifest = json.loads(completed.stdout)
+        self.assertTrue(
+            any(error["code"] == "REMOVED_INSTALLED_SKILL" for error in manifest["installedCallers"]["errors"])
+        )
+
+    def test_active_config_and_contract_residue_are_fail_closed(self) -> None:
+        for path, residue in (
+            (self.config / "opencode.json", "iis-verify"),
+            (self.repo / "README.md", "Primary Verifier"),
+        ):
+            with self.subTest(path=path):
+                original = path.read_text(encoding="utf-8")
+                path.write_text(original + residue, encoding="utf-8")
+                completed = self.census()
+                self.assertEqual(completed.returncode, 2, completed.stdout)
+                path.write_text(original, encoding="utf-8")
+
+    def test_all_four_roots_are_required_by_cli(self) -> None:
+        flag_indices = [
+            self.argv().index(flag)
+            for flag in ("--repo-root", "--state-root", "--installed-skill-root", "--config-root")
+        ]
+        for index in flag_indices:
+            argv = self.argv()
+            del argv[index : index + 2]
+            with self.subTest(argv=argv):
+                completed = self.census(argv)
+                self.assertEqual(completed.returncode, 2)
+
+    def test_missing_required_roots_fail_in_manifest(self) -> None:
+        for flag in ("--repo-root", "--state-root", "--installed-skill-root", "--config-root"):
+            argv = self.argv()
+            argv[argv.index(flag) + 1] = str(self.root / f"missing-{flag[2:]}")
+            with self.subTest(flag=flag):
+                completed = self.census(argv)
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                manifest = json.loads(completed.stdout)
+                self.assertTrue(manifest["roots"]["errors"])
+
+    def test_unreadable_required_root_is_fail_closed(self) -> None:
+        with patch.object(
+            phase8_removal_census,
+            "_required_directory",
+            return_value=[{"code": "REQUIRED_ROOT_UNREADABLE", "message": "denied"}],
+        ):
+            manifest = phase8_removal_census.build_manifest(
+                self.repo,
+                self.state,
+                self.installed,
+                self.config,
+            )
+        self.assertTrue(phase8_removal_census._has_errors(manifest))
+
+    def test_tracked_current_or_legacy_file_is_residue(self) -> None:
+        for relative in (
+            "iis_ephemeral_transport.py",
+            "implementation-lead/tools/workflow-store/workflow_store.py",
+        ):
+            with self.subTest(relative=relative):
+                path = self.repo / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("removed", encoding="utf-8")
+                subprocess.run(["git", "add", relative], cwd=self.repo, check=True)
+                completed = self.census()
+                self.assertEqual(completed.returncode, 2, completed.stdout)
+                path.unlink()
+                subprocess.run(["git", "reset", "-q", "HEAD", "--", relative], cwd=self.repo, check=True)
+
+    def test_untracked_ignored_empty_and_symlink_residue_fail(self) -> None:
+        cases = (
+            ("verification-runtime/profile/package.json", "file"),
+            ("verification-lead/__pycache__/coverage_gate.cpython-312.pyc", "file"),
+            ("primary-verifier", "directory"),
+            ("verification-runtime", "symlink"),
+        )
+        for relative, kind in cases:
+            with self.subTest(relative=relative, kind=kind):
+                path = self.repo / relative
+                if kind == "file":
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("residue", encoding="utf-8")
+                elif kind == "directory":
+                    path.mkdir(parents=True)
+                else:
+                    target = self.root / "outside-runtime"
+                    target.mkdir(exist_ok=True)
+                    path.symlink_to(target, target_is_directory=True)
+                completed = self.census()
+                self.assertEqual(completed.returncode, 2, completed.stdout)
+                if path.is_symlink() or path.is_file():
+                    path.unlink()
+                else:
+                    path.rmdir()
+                parent = path.parent
+                while parent != self.repo and parent.exists() and not any(parent.iterdir()):
+                    parent.rmdir()
+                    parent = parent.parent
+
+    def test_root_transport_bytecode_is_residue(self) -> None:
+        cache = self.repo / "__pycache__"
+        cache.mkdir()
+        pyc = cache / "iis_ephemeral_transport.cpython-312.pyc"
+        pyc.write_bytes(b"removed")
+        completed = self.census()
+        self.assertEqual(completed.returncode, 2, completed.stdout)
+
+    def test_process_matching_covers_legacy_and_current_exact_names(self) -> None:
+        for argv, expected in (
+            (["python3", "/tmp/workflow_store.py"], "workflow_store.py"),
+            (["/tmp/iis-verify", "--help"], "iis-verify"),
+            (["python3", "/tmp/verification-runtime/control_entry.py"], "control_entry.py"),
+            (["python3", "/tmp/verification-lead/coverage_gate.py"], "coverage_gate.py"),
+            (
+                ["python3", "/home/user01/project/iis-skills/iis_ephemeral_transport.py"],
+                "iis_ephemeral_transport.py",
+            ),
+            (
+                ["python3", "/home/user01/project/iis-skills/__pycache__/iis_ephemeral_transport.cpython-312.pyc"],
+                "iis_ephemeral_transport.cpython-312.pyc",
+            ),
+        ):
+            with self.subTest(argv=argv):
+                self.assertEqual(phase8_removal_census._legacy_command(argv), expected)
+        for argv in (
+            ["python3", "-c", "iis-verify"],
+            ["python3", "-u", "/tmp/control_entry.py"],
+            ["unrelated-command", "iis-verify"],
+            ["python3", "/tmp/unrelated/control_entry.py"],
+            ["python3", "/tmp/unrelated/coverage_gate.py"],
+            ["python3", "/tmp/unrelated/iis_ephemeral_transport.py"],
+            ["python3", "/tmp/unrelated/iis_ephemeral_transport.cpython-312.pyc"],
+        ):
+            self.assertIsNone(phase8_removal_census._legacy_command(argv))
+
+    def test_process_match_or_unavailable_observation_fails(self) -> None:
+        observations = (
+            {
+                "available": True,
+                "matches": [{"pid": 1, "executable": "iis-verify", "argv": []}],
+                "observationErrors": [],
+            },
+            {"available": False, "matches": [], "observationErrors": []},
+            {
+                "available": True,
+                "matches": [],
+                "observationErrors": [{"pid": 123, "error": "PermissionError"}],
+            },
+        )
+        for observation in observations:
+            with self.subTest(observation=observation), patch.object(
+                phase8_removal_census,
+                "_process_observation",
+                return_value=observation,
             ):
                 output = io.StringIO()
                 with redirect_stdout(output):
-                    code = phase8_removal_census.main(
-                        [
-                            "--repo-root",
-                            str(self.repo),
-                            "--state-root",
-                            str(self.state),
-                            "--installed-skill-root",
-                            str(self.installed),
-                        ]
-                    )
+                    code = phase8_removal_census.main(self.argv()[2:])
                 self.assertEqual(code, 2)
 
-    def test_nested_symlink_file_and_directory_are_residue_without_traversal(self) -> None:
-        target = self.root / "outside"
+    def test_unreadable_live_process_cmdline_is_observation_error(self) -> None:
+        proc_root = Path("/proc")
+        original_read_bytes = Path.read_bytes
+
+        def read_bytes(path: Path) -> bytes:
+            if path.parent.name.isdigit() and path.name == "cmdline":
+                raise PermissionError("denied")
+            return original_read_bytes(path)
+
+        with patch.object(Path, "read_bytes", read_bytes):
+            observation = phase8_removal_census._process_observation()
+
+        self.assertTrue(observation["available"])
+        self.assertTrue(observation["observationErrors"])
+        self.assertTrue(
+            all(item["error"] == "PermissionError" for item in observation["observationErrors"])
+        )
+
+    def test_unclassified_or_symlinked_active_config_entry_fails(self) -> None:
+        tools = self.config / "tools"
+        tools.mkdir()
+        unsupported = tools / "verification.yaml"
+        unsupported.write_text("iis-verify", encoding="utf-8")
+        self.assertEqual(self.census().returncode, 2)
+        unsupported.unlink()
+
+        target = self.root / "foreign-tools"
         target.mkdir()
-        (target / "secret.py").write_text("outside", encoding="utf-8")
-        symlink_file = self.repo / "baseline-capsule" / "linked.py"
-        symlink_dir = self.repo / "baseline-capsule" / "linked-dir"
-        symlink_file.symlink_to(target / "secret.py")
-        symlink_dir.symlink_to(target, target_is_directory=True)
+        (tools / "linked").symlink_to(target, target_is_directory=True)
+        self.assertEqual(self.census().returncode, 2)
 
+    def test_malformed_state_result_still_fails_without_writing(self) -> None:
+        malformed = self.results / "malformed.json"
+        malformed.write_bytes(b"{not json")
+        observed = (self.repo, self.state, self.installed, self.config)
+        before = tuple(tree_identity(root) for root in observed)
         completed = self.census()
-
+        after = tuple(tree_identity(root) for root in observed)
         self.assertEqual(completed.returncode, 2, completed.stdout)
-        manifest = json.loads(completed.stdout)
-        self.assertIn("baseline-capsule/linked.py", manifest["inventory"]["residueFiles"])
-        self.assertIn("baseline-capsule/linked-dir", manifest["inventory"]["residueFiles"])
-        self.assertNotIn("baseline-capsule/linked-dir/secret.py", manifest["inventory"]["filesystemLegacyFiles"])
-
-    def test_tracked_symlink_is_not_accepted_as_legacy_file(self) -> None:
-        tracked = self.repo / LEGACY_SOURCE_FILES[0]
-        tracked.unlink()
-        tracked.symlink_to(self.root / "outside-target")
-        (self.root / "outside-target").write_text("outside", encoding="utf-8")
-
-        completed = self.census()
-
-        self.assertEqual(completed.returncode, 2, completed.stdout)
-        manifest = json.loads(completed.stdout)
-        self.assertTrue(any(error["code"] == "LEGACY_FILESYSTEM_RESIDUE" for error in manifest["inventory"]["errors"]))
-
-    def test_lstat_permission_error_is_fail_closed(self) -> None:
-        bounded = self.repo / "baseline-capsule"
-        original_lstat = Path.lstat
-
-        for failure in (PermissionError("denied"), OSError("I/O failure")):
-            with self.subTest(failure=type(failure).__name__):
-                def lstat_with_error(path: Path):
-                    if path == bounded:
-                        raise failure
-                    return original_lstat(path)
-
-                with patch.object(Path, "lstat", lstat_with_error):
-                    observation, errors = phase8_removal_census._filesystem_observation(self.repo)
-
-                self.assertTrue(observation["legacyFiles"])
-                self.assertTrue(any(error["code"] == "LEGACY_PATH_UNREADABLE" for error in errors))
+        self.assertEqual(before, after)
 
 
 if __name__ == "__main__":
