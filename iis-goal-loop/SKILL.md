@@ -121,6 +121,14 @@ or persisted status. Tests, mocks, implementation narration, prior Ticket
 verdicts, previous implementation results, and stale observations may help
 locate work but do not replace a fresh current product/canonical observation.
 
+When one current authored product execution or authoritative readback naturally
+decides several AC observations, acquire that shared boundary once and classify
+each linked AC separately from the same fresh result. Do not rerun an identical
+safe effect merely to manufacture one execution per AC. This is acquisition
+sharing only: it creates no combined AC verdict, observation cache, retained
+evidence, or reusable currentness. Any product/source mutation after the
+acquisition invalidates it for the next working observation.
+
 Prefer reading an already-current authoritative product state or readback over
 re-triggering a product effect. Execute a trigger for working observation only
 when it is safe local/disposable/repeatable, or when existing exact authority
@@ -149,18 +157,37 @@ The selected implementation packet consists only of:
 
 - the exact ready Ticket;
 - its exact current parent-outcome/AC/Behavior trace;
-- the current direct observation that is not yet satisfied; and
+- the selected primary unmet AC and its current direct observation;
+- a compact current navigation summary for every AC of that same active Ticket,
+  including any newly observed regression or preservation concern; and
 - the existing Ticket Scope, Non-Goals, and adopted authorities.
 
-The current observation is navigation context, not new Ticket authority.
+The current observations are navigation context, not new Ticket authority. Do
+not serialize that summary, turn it into a gap registry, or carry it across a
+later invocation as current state.
 
 ### 3. Implement The Existing Ticket
 
 Invoke `../implementation-lead/SKILL.md` through the host with the exact ready
-Ticket and a host-provided invocation-local `Implementation Subagent` role. This
-internal role exception exists only for this Ralph loop. It is never written to
-`Worker:`, Ticket metadata, a sidecar, registry, capability, or durable state.
-An explicit user request for Implementation Lead outside this loop continues to
+Ticket and one host-provided invocation-local `Implementation Subagent` role for
+the currently active Ticket. While that exact Ticket remains active in this
+Ralph invocation, the host should resume the same role context for a later
+materially different correction when it supports reliable resumption. The
+retained context may shorten technical rediscovery only; every Implementation
+Lead entry must freshly revalidate the current Ticket/Spec/Behavior/UI authority,
+Project Root, semantic compatibility, user/concurrent changes, feasibility, and
+current source before mutation. Prior feasibility, source facts, implementation
+narration, or observations never remain current merely because the role context
+was resumed.
+
+If reliable resumption is unavailable, reinvoke a fresh role without changing
+the Ralph semantics. Never resume an implementation role across a Ticket change,
+entry into whole-Spec Goal Verification, a user/operator/planning gate,
+`GOAL OPEN — NO PROGRESS`, the end of the current Ralph invocation, or a later
+Goal-verification return to a Ticket that Ralph had already left. This internal
+role exception exists only for this Ralph loop. It is never written to `Worker:`,
+Ticket metadata, a sidecar, session registry, capability, or durable state. An
+explicit user request for Implementation Lead outside this loop continues to
 require the ordinary user-designated role.
 
 Implementation Lead owns technical diagnosis and implementation choices inside
@@ -170,7 +197,10 @@ file, algorithm, Worker, or internal correction to use.
 A newly discovered technical cause does not create a new Ticket when correcting
 it is already within the same Ticket Scope and required to make the same ACs
 true. Reinvoke the same Ticket as many times as materially different in-Scope
-corrections are justified by fresh current evidence.
+corrections are justified by fresh current evidence. A resumed role must revise
+or abandon an earlier diagnosis when fresh current evidence contradicts it; role
+continuity never authorizes repetition of the same correction against unchanged
+inputs.
 
 ### 4. Freshly Reobserve The Active Ticket
 
@@ -178,6 +208,11 @@ After every implementation result, freshly reobserve every AC of the active
 Ticket at its authored product/canonical boundaries, not only the AC that
 motivated the change. A regression in a previously satisfied AC becomes current
 unfinished work immediately.
+
+The shared-acquisition rule from step 1 applies to this reobservation: one fresh
+post-mutation execution/readback may decide several linked AC observations, but
+every AC remains separately classified and no pre-mutation observation may be
+reused as post-mutation current evidence.
 
 When the active Ticket is provisionally satisfied and Ralph is about to leave it
 for a different Ticket, use the separate `../verification-lead/SKILL.md` as the

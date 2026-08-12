@@ -65,6 +65,64 @@ class RalphSemanticsFixtureTests(unittest.TestCase):
             self.assertFalse(current["preserved"])
             self.assertFalse(all(current.values()), "a preserved-Behavior regression keeps the Goal open")
 
+    def test_one_fresh_acquisition_can_classify_multiple_acs_after_each_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            product = Path(temporary) / "product-state.json"
+            product.write_text(
+                json.dumps({"ac_1": False, "ac_2": False, "preserved": True}, sort_keys=True),
+                encoding="utf-8",
+            )
+            acquisitions = 0
+
+            def acquire_current_boundary() -> dict[str, bool]:
+                nonlocal acquisitions
+                acquisitions += 1
+                return json.loads(product.read_text(encoding="utf-8"))
+
+            before = acquire_current_boundary()
+            self.assertEqual(acquisitions, 1)
+            self.assertEqual(
+                {key: before[key] for key in ("ac_1", "ac_2", "preserved")},
+                {"ac_1": False, "ac_2": False, "preserved": True},
+            )
+
+            changed = dict(before)
+            changed["ac_1"] = True
+            changed["preserved"] = False
+            product.write_text(json.dumps(changed, sort_keys=True), encoding="utf-8")
+
+            # The pre-mutation acquisition is stale. One new acquisition after the
+            # mutation separately exposes both the repaired AC and sibling regression.
+            after = acquire_current_boundary()
+            self.assertEqual(acquisitions, 2)
+            self.assertTrue(after["ac_1"])
+            self.assertFalse(after["ac_2"])
+            self.assertFalse(after["preserved"])
+            self.assertFalse(all(after.values()))
+
+    def test_implementation_context_is_reused_only_while_the_same_ticket_is_active(self) -> None:
+        next_context = 0
+        active_ticket: str | None = None
+        active_context: int | None = None
+
+        def implementation_context_for(ticket: str) -> int:
+            nonlocal next_context, active_ticket, active_context
+            if ticket != active_ticket:
+                next_context += 1
+                active_ticket = ticket
+                active_context = next_context
+            assert active_context is not None
+            return active_context
+
+        first_a = implementation_context_for("TICKET-A")
+        second_a = implementation_context_for("TICKET-A")
+        first_b = implementation_context_for("TICKET-B")
+        later_a = implementation_context_for("TICKET-A")
+
+        self.assertEqual(first_a, second_a, "same active Ticket keeps its working context")
+        self.assertNotEqual(first_a, first_b, "Ticket transition must discard the prior context")
+        self.assertNotEqual(first_a, later_a, "returning later to a left Ticket starts fresh context")
+
 
 if __name__ == "__main__":
     unittest.main()

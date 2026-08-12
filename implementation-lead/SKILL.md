@@ -14,11 +14,20 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    the approved Goal: that loop may supply a host-provided invocation-local
    `Implementation Subagent` role together with the exact ready Ticket and its
    current parent-outcome/AC/Behavior trace. The exception grants no new Ticket
-   authority. Never write the internal role to `Worker:`, Ticket metadata, a
-   sidecar, registry, capability, or durable loop state; `Worker:` remains empty.
-   Before any project mutation, revalidate that the Ticket remains `ready`, the
-   current project is its exact `Project-Root`, the Ticket is under that project's
-   canonical `docs/planning` root, and its `Parent-Spec` resolves to an exact
+   authority. While the same Ticket remains active inside that exact Ralph
+   invocation, the host may resume the same invocation-local role for a later
+   materially different correction. Resumption preserves only technical working
+   context: it does not preserve feasibility, current-source facts, prior
+   observations, authority currentness, or any implementation/verification result.
+   Do not resume that role across a Ticket change, whole-Spec Goal Verification,
+   a user/operator/planning gate, `GOAL OPEN — NO PROGRESS`, or a later Ralph
+   invocation. Never write the internal role to `Worker:`, Ticket metadata, a
+   sidecar, session registry, capability, or durable loop state; `Worker:` remains
+   empty.
+   On every Ralph entry, and before any project mutation, revalidate that the
+   Ticket remains `ready`, the current project is its exact `Project-Root`, the
+   Ticket is under that project's canonical `docs/planning` root, and its
+   `Parent-Spec` resolves to an exact
    readable `Status: approved` Spec. Resolve and run the Ticket producer's
    adjacent structural validator at `../matt/skills/to-tickets/validate_ticket.py`,
    resolved from this skill's canonical physical directory, against that exact

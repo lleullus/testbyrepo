@@ -173,6 +173,47 @@ class IISGoalLoopContractTests(unittest.TestCase):
         ):
             self.assertIn(required, body)
 
+    def test_same_ticket_role_context_is_bounded_and_never_carries_authority(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "one host-provided invocation-local `Implementation Subagent` role for the currently active Ticket",
+            "resume the same role context for a later materially different correction",
+            "retained context may shorten technical rediscovery only",
+            "every Implementation Lead entry must freshly revalidate",
+            "Prior feasibility, source facts, implementation narration, or observations never remain current",
+            "If reliable resumption is unavailable, reinvoke a fresh role",
+            "Never resume an implementation role across a Ticket change",
+            "entry into whole-Spec Goal Verification",
+            "`GOAL OPEN — NO PROGRESS`",
+            "later Goal-verification return to a Ticket that Ralph had already left",
+        ):
+            self.assertIn(required, body)
+
+    def test_active_ticket_packet_exposes_siblings_without_creating_new_authority(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "selected primary unmet AC and its current direct observation",
+            "compact current navigation summary for every AC of that same active Ticket",
+            "newly observed regression or preservation concern",
+            "navigation context, not new Ticket authority",
+            "Do not serialize that summary",
+            "gap registry",
+        ):
+            self.assertIn(required, body)
+
+    def test_shared_acquisition_never_weakens_full_post_mutation_reobservation(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "acquire that shared boundary once and classify each linked AC separately",
+            "no combined AC verdict",
+            "Any product/source mutation after the acquisition invalidates it",
+            "After every implementation result, freshly reobserve every AC of the active Ticket",
+            "one fresh post-mutation execution/readback may decide several linked AC observations",
+            "every AC remains separately classified",
+            "no pre-mutation observation may be reused as post-mutation current evidence",
+        ):
+            self.assertIn(required, body)
+
     def test_loop_has_no_controller_runtime_or_durable_orchestration_state(self) -> None:
         body = normalized(LOOP + "\n" + ROUTER).lower()
         for prohibited in (

@@ -88,6 +88,21 @@ class ActiveSkillContractTests(unittest.TestCase):
             self.assertIn(required, normalized)
         self.assertIn("current parent-outcome/AC/Behavior trace", normalized)
 
+    def test_ralph_resumption_reuses_only_same_ticket_working_context(self) -> None:
+        normalized = " ".join(IMPLEMENTATION_SKILL.split())
+        for required in (
+            "same Ticket remains active inside that exact Ralph invocation",
+            "host may resume the same invocation-local role",
+            "Resumption preserves only technical working context",
+            "does not preserve feasibility, current-source facts, prior observations, authority currentness",
+            "Do not resume that role across a Ticket change",
+            "whole-Spec Goal Verification",
+            "`GOAL OPEN — NO PROGRESS`",
+            "before any project mutation, revalidate",
+            "session registry",
+        ):
+            self.assertIn(required, normalized)
+
     def test_behavior_trace_is_semantic_guardrail_not_implementation_mechanism(self) -> None:
         normalized = " ".join(IMPLEMENTATION_SKILL.split())
         for required in (
