@@ -162,6 +162,17 @@ class IISGoalLoopContractTests(unittest.TestCase):
         ):
             self.assertIn(required, body)
 
+    def test_ralph_rejects_semantically_stale_ready_ticket_before_mutation(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "revalidate the current Spec-to-Ticket semantic projection before mutation",
+            "rather than a previously approved meaning at the same work path",
+            "reject any remaining semantic stale projection",
+            "Return that Ticket to ordinary To Tickets review",
+            "unchanged `Status: ready` keeps it current",
+        ):
+            self.assertIn(required, body)
+
     def test_loop_has_no_controller_runtime_or_durable_orchestration_state(self) -> None:
         body = normalized(LOOP + "\n" + ROUTER).lower()
         for prohibited in (

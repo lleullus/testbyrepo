@@ -58,6 +58,16 @@ and at the required terminal render disposition. A current authority-chain drift
 is a planning/admission defect, not product failure; return to the owning planning
 leaf before mutation instead of silently adopting the changed meaning.
 
+Also revalidate the current Spec-to-Ticket semantic projection before mutation.
+Every ready Ticket's Acceptance Criteria, Scope, Non-Goals, Verification flows,
+and applicable Behavior/UI authorities must still be compatible with the current
+approved Spec rather than a previously approved meaning at the same work path.
+The structural validator closes exact outcome-flow projection fields, but the
+Ralph admission must also reject any remaining semantic stale projection that
+would require the Ticket to implement, preserve, exclude, or verify a different
+product contract. Return that Ticket to ordinary To Tickets review; do not mutate
+from stale authority or infer that an unchanged `Status: ready` keeps it current.
+
 ## Fixed Goal Contract
 
 The approved Spec remains the product Goal authority. Its Requirements,
