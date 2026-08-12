@@ -38,16 +38,16 @@ shared understanding. Do not write a draft Spec on that failure. Return:
 ```text
 BLOCKED: UI / UX authority required before SPEC.md
 Reason: <missing, incomplete, unapproved, inapplicable, or not-explicitly-adopted authority>
-Next action: return to Matt's UI authority flow; use active ima2-uiux only for unresolved design judgment, then complete or adopt the authority in shared understanding
+Next action: return to Matt's UI authority flow and complete or adopt the missing rendered-design authority in shared understanding
 ```
 
 For a new/material rendered UI, a qualifying authority has a non-empty owner,
 an explicit scope, the applicable complete rendered-design decisions, no
 unresolved decision in that scope, explicit user or planning-owner approval,
 and the exact local path adopted by the latest shared understanding. A
-`Status: approved` line or a filename alone is insufficient. A Design Read,
-style choice, default, prototype, or generated concept alone is insufficient
-for new/material UI. An existing finished applicable approved authority,
+`Status: approved` line or a filename alone is insufficient. A visual reference,
+style choice, default, prototype, or generated concept alone is insufficient for
+new/material UI. An existing finished applicable approved authority,
 including one supplied by the user, may be reused only when the shared
 understanding explicitly adopts it.
 
@@ -60,7 +60,7 @@ require its `DESIGN.md` to contain a terminal disposition. For an existing
 complete approved authority adopted without change, require the latest shared
 understanding to contain the unchanged-adoption disposition. Do not require a
 render disposition for `NON_UI`, exact-preservation `ENGINEERING_ONLY`, or a
-`BOUNDED_RENDERED_CONTRACT` that does not require a separate C2 `DESIGN.md`.
+`BOUNDED_RENDERED_CONTRACT` that does not require a separate full `DESIGN.md`.
 
 The only passing terminal values are:
 

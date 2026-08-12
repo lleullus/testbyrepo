@@ -356,8 +356,8 @@ regular file with exactly one top-metadata `Status: approved` entry, exactly one
 non-empty `Owner:`, and exactly one explicit `Scope:` containing this Ticket's
 rendered obligation. Its content must establish complete approved UI/UX
 authority for that scope with no unresolved rendered-design or interaction
-decision; an incomplete, status-only, or Design Read/style-only document is insufficient for
-new/material UI. A Matt-created `DESIGN.md` must retain exact
+decision; an incomplete, status-only, visual-reference-only, or style-only
+document is insufficient for new/material UI. A Matt-created `DESIGN.md` must retain exact
 `Open Questions: None`. When `MATERIAL_RENDERED_UI` requires terminal render
 disposition, the current authority must retain one valid terminal disposition.
 For a bounded parent-Spec authority, the approved Spec must still contain every

@@ -27,11 +27,10 @@ present a decision response until this integrated graph is ready.
 
 Also apply `ask-matt`'s complete Central UI / UX Routing before the first
 response, including direct review or stress-test routes. When material UI lacks
-an applicable approved authority, complete the required `ima2-uiux` design
-judgment far enough to identify every currently determinable user-owned rendered
-decision and merge those decisions into this same graph. Do not defer this audit
-or specialist judgment to `to-spec`, and do not use late UI analysis to create
-another round.
+an applicable approved authority, complete Matt's direct UI judgment far enough
+to identify every currently determinable user-owned rendered decision and merge
+those decisions into this same graph. Do not defer this audit or UI judgment to
+`to-spec`, and do not use late UI analysis to create another round.
 
 The current unblocked material user-owned decision frontier is the same in every
 interaction mode. Present all of it in the same response. In explicit

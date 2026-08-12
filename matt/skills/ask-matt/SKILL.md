@@ -31,7 +31,7 @@ motion. Classify the scope as one of the following:
 - `BOUNDED_RENDERED_CONTRACT`: it has an exact, limited rendered change, or a
   due-now direct exercise of an exactly preserved rendered result, whose
   applicable behavior and design decisions are already fixed. It may use a
-  proportionate scoped UI authority; do not require a full C2 design exercise.
+  proportionate scoped UI authority; do not require a separate full `DESIGN.md`.
 - `MATERIAL_RENDERED_UI`: it introduces a new rendered UI, materially redesigns
   one, or leaves a material user-visible rendered behavior/design decision
   unresolved.
@@ -39,25 +39,23 @@ motion. Classify the scope as one of the following:
 For `MATERIAL_RENDERED_UI`, first determine whether an existing finished,
 applicable, complete, approved local UI/UX authority is explicitly adopted by
 the current or resulting shared understanding. A user-supplied authority may
-satisfy this condition. References, defaults, prototypes, generated concepts,
-a Design Read, or a status line do not become authority without that explicit
-adoption. When no such authority exists, invoke active `ima2-uiux` only as a
-design-judgment specialist inside the Matt flow before contract-only shared
-understanding can be finalized. Matt owns the planning boundary and output
-contract; `ima2-uiux` itself remains unchanged. Pass the bounded planning
-context before the specialist acts. Do not follow its implementation handoff,
-load `ima2-front`, write product code, mutate product files outside
-`docs/planning/**`, or create a product source artifact in this Matt flow.
+satisfy this condition. References, defaults, prototypes, visual concepts, or a
+status line do not become authority without that explicit adoption. When no such
+authority exists, Matt directly performs enough rendered-design judgment from
+the confirmed Scope, adopted Behavior authorities, current product/repository
+evidence, and user intent to identify every currently determinable material
+user-owned rendered decision before contract-only shared understanding can be
+finalized. This analysis does not require an external UI specialist, image
+generator, prototype, or generated concept. Matt planning never invokes frontend
+implementation or mutates product files outside `docs/planning/**`.
 
-When this specialist judgment is required, complete enough of it before the
-first user-facing decision response to identify every currently determinable
-material user-owned rendered decision. Merge those decisions into the same
-initial dependency graph as Grill and Behavior. Do not postpone specialist
-judgment until after the first frontier or use late UI analysis to justify an
-extra round. Final authority writing, render disposition, and approval still
-follow their gates below. After an answer, revisit UI judgment only where that
-answer materially changes it, and apply the same newly-identifiable dependency
-rule as Behavior Design.
+Complete this UI judgment before the first user-facing decision response. Merge
+its currently determinable decisions into the same initial dependency graph as
+Grill and Behavior. Do not postpone UI analysis until after the first frontier or
+use late UI analysis to justify an extra round. Final authority writing and
+approval still follow their gates below. After an answer, revisit UI judgment
+only where that answer materially changes it, and apply the same newly-identifiable
+dependency rule as Behavior Design.
 
 Before Matt writes a planning authority, prepare or revalidate the one
 project-local planning root and work artifact directory that later Design,
@@ -67,14 +65,12 @@ physical directory with the existing canonical project root and work slug.
 Durable planning is blocked until that project root exists. Do not accept or
 prepare an external workspace.
 
-Matt, not the specialist, creates and governs
-`<artifact-workspace>/DESIGN.md` for new/material UI:
+Matt creates and governs `<artifact-workspace>/DESIGN.md` for new/material UI:
 
 - Use a non-empty H1 followed before the first H2 by exact plain Markdown
   metadata lines `Status: draft`, non-empty `Owner:`, and explicit `Scope:`.
-  This is not the specialist's optional project-root YAML mini DESIGN format.
-- Cover every applicable new/material C2 dashboard decision: Design Read and
-  inherited tokens or deltas; information architecture and view hierarchy;
+- Cover every applicable new/material rendered decision: inherited visual
+  system/tokens or deliberate deltas; information architecture and view hierarchy;
   responsive behavior for supported viewports; loading, empty, error, success,
   permission, navigation, and other scoped states; product-locale copy;
   accessibility semantics, focus, and keyboard behavior; assets and motion
@@ -82,20 +78,15 @@ Matt, not the specialist, creates and governs
 - Conditional dimensions may be `Not applicable` only with a reason. Do not
   invent list/detail views, Korean copy, live updates, mobile support, assets,
   or motion when the confirmed product scope does not include them.
-- A utility CRUD/dashboard exemption identified during `ima2-uiux` design
-  judgment waives only automatic visual concept/image generation during design
-  exploration. A dashboard label alone must not start automatic image
-  exploration, image-tool bootstrap, or generation. This exemption never
-  waives the Matt-owned decision set above, and it does not prevent a later
-  final-approval render when the user explicitly requests one under the Final
-  Approval Render Disposition Gate.
-- When visual concept exploration genuinely applies, keep its non-authority
-  candidates under `<artifact-workspace>/design-concepts/`, never a product
-  devlog or product asset directory. Only adopted decisions in `DESIGN.md` can
-  become authority.
-- The compact intent-discovery fork chooses direction only. A Design Read,
-  style choice, default, prototype, generated concept, filename, or status line
-  alone does not complete the authority.
+- A utility CRUD/dashboard classification never waives the Matt-owned decision
+  set above. If optional visual exploration is used, a dashboard label alone
+  neither requires nor forbids it, and the exploration does not become authority.
+- When optional visual concept exploration genuinely applies, keep its
+  non-authority candidates under `<artifact-workspace>/design-concepts/`, never a
+  product devlog or product asset directory. Only adopted decisions in
+  `DESIGN.md` can become authority.
+- A visual reference, style choice, default, prototype, generated concept,
+  filename, or status line alone does not complete the authority.
 - Actual browser or renderer evidence remains implementation-time work. This
   artifact defines which supported viewports, states, and interactions must be
   exercised later.
@@ -114,7 +105,7 @@ presented clearly.
 Apply this gate when Matt creates a new `MATERIAL_RENDERED_UI` authority or
 materially changes one. Do not apply it to `NON_UI`, exact-preservation
 `ENGINEERING_ONLY`, or a `BOUNDED_RENDERED_CONTRACT` that does not require a
-separate C2 `DESIGN.md`. When the latest shared understanding adopts an
+separate full `DESIGN.md`. When the latest shared understanding adopts an
 existing complete approved UI/UX authority without changing it, the render
 choice is not applicable; record the unchanged adoption as described below
 instead of asking for a new render.
@@ -201,7 +192,7 @@ planning. A bounded rendered contract needs only its fixed rendered decisions
 or preservation conditions in the confirmed shared understanding. It may reuse
 a proportionate approved UI authority, or let the later approved Spec become
 the scoped authority through its `## UI / UX` section; it does not require a
-separate C2 `DESIGN.md`. Reclassify when later clarification changes the
+separate full `DESIGN.md`. Reclassify when later clarification changes the
 rendered obligation.
 
 ## Central Behavior Design
@@ -317,8 +308,8 @@ Next action: <return to Scope Shaper or select one exact ready Work Package>
 2. Before the first decision response, perform the selected Grill analysis and
    complete Existing Authority First, Lead-First Investigation, Behavioral
    Design, and Counterexample Stress Test. When material UI lacks an applicable
-   approved authority, also complete the required `ima2-uiux` design judgment
-   far enough to identify its currently determinable user-owned decisions.
+   approved authority, also complete Matt's direct UI judgment far enough to
+   identify its currently determinable user-owned rendered decisions.
    Merge all Grill, Behavior, UI, and applicable Scope Shaper package-frame decisions
    into one dependency graph. Resolve inspectable facts directly and exclude
    implementation-owned choices.
@@ -334,7 +325,7 @@ Next action: <return to Scope Shaper or select one exact ready Work Package>
    above. Continue until the frontier is empty. When material UI applies,
    complete the Matt-owned authority, render-disposition, and approval flow
    before finalizing shared understanding; do not rediscover user-owned design
-   decisions that the initial specialist judgment could have identified.
+   decisions that the initial UI analysis could have identified.
 5. When new or changed Behavior authorities are approval-ready, use the joint
    approval flow above and require the phase to complete against the resolved
    frame.

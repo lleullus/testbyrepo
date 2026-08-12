@@ -221,14 +221,15 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
             / "templates"
             / "WORK-PACKAGE.template.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("before the\nfirst user-facing decision response", matt)
+        self.assertIn("before the first user-facing decision response", " ".join(matt.split()))
         self.assertIn("Grill, Behavior, UI, and applicable Scope Shaper package-frame decisions", matt)
         self.assertIn("later explicit user action naming the", shaper)
         self.assertIn("first integrated frontier", " ".join(brief.split()))
         for contract in (grill_me, grill_docs, grilling):
             normalized = " ".join(contract.split())
             self.assertIn("Central UI / UX Routing", normalized)
-            self.assertIn("ima2-uiux", contract)
+            self.assertIn("direct UI judgment", normalized)
+            self.assertIn("currently determinable user-owned", normalized)
 
 
 if __name__ == "__main__":
