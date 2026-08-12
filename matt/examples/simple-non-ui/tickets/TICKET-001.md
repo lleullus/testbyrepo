@@ -35,7 +35,9 @@ None
 
 ## Verification
 
-- AC ordinals: 1
+- Parent outcome ordinal: 1
+  AC ordinals: 1
+  Behavior authority ordinals: 1
   Initial state: 정의된 대상 입력을 받을 ordinary product boundary가 구현되어 있다.
   Trigger or inspection target: 정의된 대상 입력을 ordinary product entry에 제공한다.
   Acceptance boundary: 정의된 대상 입력을 받는 ordinary non-UI product boundary
@@ -46,7 +48,9 @@ None
   Independent verification required: yes
   Acceptance surface: Ticket Scope creates | 정의된 입력을 받는 ordinary product entry와 반환 결과
   External condition: None
-- AC ordinals: 2
+- Parent outcome ordinal: 2
+  AC ordinals: 2
+  Behavior authority ordinals: 1
   Initial state: 명시된 비대상 입력을 받을 ordinary product boundary가 구현되어 있다.
   Trigger or inspection target: 명시된 비대상 입력을 ordinary product entry에 제공한다.
   Acceptance boundary: 비대상 입력을 받는 ordinary non-UI product boundary

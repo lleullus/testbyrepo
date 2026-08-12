@@ -36,14 +36,18 @@ def spec_item(
 
 def flow_item(
     *,
+    parent_outcome: str = "1",
     ordinals: str = "1",
+    behavior_ordinals: str = "1",
     disposition: str = "Independent",
     required: str = "yes",
     surface: str = "Existing | local CLI output",
     external: str = "None",
     optional: str = "",
 ) -> str:
-    return f"""- AC ordinals: {ordinals}
+    return f"""- Parent outcome ordinal: {parent_outcome}
+  AC ordinals: {ordinals}
+  Behavior authority ordinals: {behavior_ordinals}
   Initial state: clean local input
   Trigger or inspection target: run the product CLI with nominal input
   Acceptance boundary: local CLI output
@@ -89,6 +93,10 @@ Owner: test
 
 {spec_verification or spec_item()}
 
+## Behavior Authorities
+
+- ../../behavior/contexts/example.md | Scope: example behavior
+
 ## Open Questions
 
 None
@@ -119,6 +127,10 @@ UI: no
 ## Verification
 
 {ticket_verification or flow_item()}
+
+## Behavior Authorities
+
+- ../../../behavior/contexts/example.md | Scope: example behavior
 """,
             encoding="utf-8",
         )
@@ -225,6 +237,39 @@ class TicketValidatorTests(unittest.TestCase):
                 self.fixture.write(ticket_verification=item)
                 self.assert_invalid("label|core")
 
+    def test_rejects_invalid_or_unknown_parent_outcome_ordinal(self) -> None:
+        for parent_outcome, fragment in (
+            ("Outcome-1", "invalid Parent outcome ordinal"),
+            ("2", "unknown Parent outcome ordinal"),
+        ):
+            with self.subTest(parent_outcome=parent_outcome):
+                self.fixture.write(ticket_verification=flow_item(parent_outcome=parent_outcome))
+                self.assert_invalid(fragment)
+
+    def test_rejects_missing_invalid_or_unknown_behavior_authority_mapping(self) -> None:
+        for behavior_ordinals, fragment in (
+            ("None", "Behavior Authorities and Verification flows do not close"),
+            ("B-1", "invalid Behavior authority ordinals"),
+            ("2", "unknown Behavior authority ordinal"),
+        ):
+            with self.subTest(behavior_ordinals=behavior_ordinals):
+                self.fixture.write(
+                    ticket_verification=flow_item(behavior_ordinals=behavior_ordinals)
+                )
+                self.assert_invalid(fragment)
+
+    def test_rejects_ticket_behavior_authority_absent_from_parent_spec(self) -> None:
+        self.fixture.write()
+        text = self.fixture.ticket_path.read_text(encoding="utf-8")
+        self.fixture.ticket_path.write_text(
+            text.replace(
+                "../../../behavior/contexts/example.md | Scope: example behavior",
+                "../../../behavior/contexts/other.md | Scope: other behavior",
+            ),
+            encoding="utf-8",
+        )
+        self.assert_invalid("Behavior Authority is absent from Parent Spec")
+
     def test_rejects_parent_independent_required_non_independent(self) -> None:
         kwargs = {
             "disposition": "Operator-assisted",
@@ -277,7 +322,20 @@ class TicketValidatorTests(unittest.TestCase):
                 surface="Delivery contract guarantees | disposable workspace always available"
             )
         )
-        self.assert_invalid("absent from Parent Spec")
+        self.assert_invalid("differs from mapped Parent Spec outcome")
+
+    def test_parent_outcome_mapping_is_exact_not_any_compatible_parent_combination(self) -> None:
+        operator = spec_item(
+            disposition="Operator-assisted",
+            required="no",
+            surface="Operator-owned | production readback",
+            external="named operator uses production access",
+        ).replace("Outcome: observable result", "Outcome: second observable result")
+        self.fixture.write(
+            spec_verification=f"{spec_item()}\n{operator}",
+            ticket_verification=flow_item(parent_outcome="2"),
+        )
+        self.assert_invalid("differs from mapped Parent Spec outcome")
 
     def test_rejects_unresolved_blocker_for_ready_but_not_normal_operator_condition(self) -> None:
         blocker = self.fixture.work / "BLOCKER.md"

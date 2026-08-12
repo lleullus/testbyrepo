@@ -1,26 +1,36 @@
 ---
 name: implementation-lead
-description: Use for one exact ready local Markdown Ticket with a user-designated Implementation Subagent.
+description: Use for one exact ready local Markdown Ticket with an admitted Implementation Subagent; explicit requests require user designation.
 ---
 
 # Implementation Lead
 
 ## Active Contract
 
-1. Accept one exact ready local Markdown Ticket and one user-designated
-   `Implementation Subagent` role. Before any project mutation, revalidate that
-   the Ticket remains `ready`, the current project is its exact `Project-Root`,
-   the Ticket is under that project's canonical `docs/planning` root, and its
-   `Parent-Spec` resolves to an exact readable `Status: approved` Spec. Resolve
-   and run the Ticket producer's adjacent structural validator at
-   `../matt/skills/to-tickets/validate_ticket.py`, resolved from this skill's
-   canonical physical directory, against that exact Ticket. A
-   nonzero result blocks assignment before mutation. The validator supplies only
-   path/status, item/label, ordinal-closure, blocker-status, and structural
-   disposition/surface checks; it does not establish product meaning,
-   AC-to-flow correctness, implementation feasibility, runtime availability,
-   evidence, or a verdict. Implementation Lead still performs every semantic,
-   authority, Scope, preservation, and current-project check in this contract.
+1. Accept one exact ready local Markdown Ticket and one admitted
+   `Implementation Subagent` role. In an explicit Implementation Lead request,
+   that role remains user-designated. The only exception is an invocation from
+   the canonical `../iis-goal-loop/SKILL.md` under current user intent to complete
+   the approved Goal: that loop may supply a host-provided invocation-local
+   `Implementation Subagent` role together with the exact ready Ticket and its
+   current parent-outcome/AC/Behavior trace. The exception grants no new Ticket
+   authority. Never write the internal role to `Worker:`, Ticket metadata, a
+   sidecar, registry, capability, or durable loop state; `Worker:` remains empty.
+   Before any project mutation, revalidate that the Ticket remains `ready`, the
+   current project is its exact `Project-Root`, the Ticket is under that project's
+   canonical `docs/planning` root, and its `Parent-Spec` resolves to an exact
+   readable `Status: approved` Spec. Resolve and run the Ticket producer's
+   adjacent structural validator at `../matt/skills/to-tickets/validate_ticket.py`,
+   resolved from this skill's canonical physical directory, against that exact
+   Ticket. A nonzero result blocks assignment before mutation. The validator
+   supplies only path/status, item/label, current parent-outcome/AC/Behavior
+   ordinal closure, blocker-status, and structural disposition/surface checks; it
+   does not establish product meaning, AC-to-flow or Behavior-to-flow semantic
+   correctness, implementation feasibility, runtime availability, evidence, or a
+   verdict. Implementation Lead still performs every semantic, authority, Scope,
+   preservation, and current-project check in this contract. A Ralph-provided
+   current observation is navigation context only and cannot add or strengthen a
+   Ticket obligation.
    Resolve
    every path-and-scope item in the Ticket's `## Behavior Authorities`; require
    each target to be a readable Markdown `Status: approved` authority whose
@@ -110,9 +120,12 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
    internal-state/readback surfaces that the Ticket does not authorize as
    ordinary product behavior.
 5. If those conditions hold, report `Implementation Assignment: FEASIBLE` and
-   only then invoke the user-designated `Implementation Subagent` through the
-   host's `Host Subagent Invocation Mechanism`, authorizing that role to modify the
-   current project directly. If they do not hold, do not invoke it for mutation;
+   only then invoke the admitted `Implementation Subagent` through the host's
+   `Host Subagent Invocation Mechanism`, authorizing that role to modify the
+   current project directly. The admitted role is the user-designated role for an
+   explicit leaf request or only the invocation-local host-provided role admitted
+   by paragraph 1 for the Ralph loop. If the conditions do not hold, do not invoke
+   it for mutation;
    report `Implementation Assignment: BLOCKED` with each concrete affected AC or
    boundary, the directly confirmed current-project fact, and the exact missing
    decision, means, authority, dependency, or clarification. This result does not
@@ -124,7 +137,12 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
 7. Review the actual project diff against the Ticket scope, confirm the
    implementation steps and their checks from the resulting project, and map
    every Markdown acceptance criterion (AC) to implementation and check
-   coverage. For `UI: yes`, also review whether the rendered result matches the
+   coverage. Preserve the Ticket's current `Parent outcome ordinal`, `AC
+   ordinals`, and `Behavior authority ordinals` trace as authored authority: the
+   mapped Behavior items supply semantic guardrails for those ACs, while the
+   current technical diagnosis remains implementation-owned and non-normative.
+   Do not change or bypass the trace merely because a different implementation
+   mechanism is selected. For `UI: yes`, also review whether the rendered result matches the
    authority's applicable scope and whether applicable responsive conditions;
    loading, empty, error, success, or permission states; and accessibility
    semantics, focus, or keyboard behavior have an evident implementation path.
@@ -167,10 +185,12 @@ description: Use for one exact ready local Markdown Ticket with a user-designate
    implementation work. When review establishes a concrete Ticket-authorized
    source or integration omission, whether a bounded defect in the Subagent's
    work or missed due-now Ticket work, do not defer it to another role.
-   Resume or reinvoke the same user-designated Implementation Subagent with only
-   that bounded finding and the authorized Ticket boundary, then re-review the
-   actual diff, checks, and affected AC coverage. Continue only while a concrete
-   bounded in-scope correction remains.
+   Resume or reinvoke the same admitted Implementation Subagent with only that
+   bounded finding and the authorized Ticket boundary, then re-review the actual
+   diff, checks, and affected AC coverage. Preserve the same admission source:
+   user-designated for an explicit leaf request or invocation-local host-provided
+   for the Ralph loop. Continue only while a concrete bounded in-scope correction
+   remains.
 9. A confirmed missing Ticket-owned route, registration/export, product
    configuration, executable/startup wiring, caller/integration link, or required
    outcome/readback connection is concrete same-Ticket due-now implementation
@@ -276,6 +296,7 @@ diff, or project checks.
 
 The active range covers read-only implementation-assignment feasibility,
 authorized implementation in the current project, and Lead review of its real
-diff and checks, ending in an implementation result with exact limitations. IIS
-does not provide an independent Ticket-verification action, AC verdict, or final
-`VERIFIED` result after this point.
+diff and checks, ending in an implementation result with exact limitations.
+Implementation Lead itself does not provide independent Ticket verification, AC
+verdicts, or `VERIFIED`; the separate Verification Lead route owns independent
+Ticket verification.

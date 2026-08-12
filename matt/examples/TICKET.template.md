@@ -34,7 +34,9 @@ None
 
 ## Verification
 
-- AC ordinals: 1
+- Parent outcome ordinal: 1
+  AC ordinals: 1
+  Behavior authority ordinals: 1
   Initial state: <initial product state>
   Trigger or inspection target: <product trigger/input or canonical target>
   Acceptance boundary: <observable product or canonical boundary>

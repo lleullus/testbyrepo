@@ -10,7 +10,9 @@ from pathlib import Path
 
 
 CORE_LABELS = (
+    "Parent outcome ordinal",
     "AC ordinals",
+    "Behavior authority ordinals",
     "Initial state",
     "Trigger or inspection target",
     "Acceptance boundary",
@@ -95,6 +97,19 @@ def _top_level_items(body: str, label: str) -> list[str]:
     if not items:
         raise TicketValidationError(f"{label} must contain at least one item")
     return ["\n".join(lines) for lines in items]
+
+
+def _behavior_authority_identity(item: str, base: Path) -> tuple[Path, str]:
+    marker = " | Scope: "
+    if item.count(marker) != 1:
+        raise TicketValidationError("Behavior Authority item must contain exactly one ' | Scope: '")
+    raw_path, scope = item.split(marker, 1)
+    raw_path = raw_path.strip()
+    scope = scope.strip()
+    if not raw_path or not scope:
+        raise TicketValidationError("Behavior Authority path and Scope must be non-empty")
+    target = (base / raw_path).resolve(strict=False)
+    return target, scope
 
 
 def _labeled_item(item: str, labels: tuple[str, ...], item_label: str) -> dict[str, str]:
@@ -255,8 +270,14 @@ def validate(ticket_path: str | Path) -> None:
 
     ac_items = _top_level_items(_section(text, "Acceptance Criteria"), "Acceptance Criteria")
     flow_items = _top_level_items(_section(text, "Verification"), "Verification")
+    ticket_behavior_items = _top_level_items(
+        _section(text, "Behavior Authorities"), "Behavior Authorities"
+    )
     spec_items = _top_level_items(
         _section(parent_text, "Verification Expectations"), "Verification Expectations"
+    )
+    parent_behavior_items = _top_level_items(
+        _section(parent_text, "Behavior Authorities"), "Behavior Authorities"
     )
     spec_values = [
         _labeled_item(item, SPEC_CORE_LABELS, f"Spec outcome {index}")
@@ -264,27 +285,28 @@ def validate(ticket_path: str | Path) -> None:
     ]
     for index, values in enumerate(spec_values, 1):
         _validate_combination(values, f"Spec outcome {index}")
+    parent_behavior_identities = {
+        _behavior_authority_identity(item, parent.parent) for item in parent_behavior_items
+    }
+    for item in ticket_behavior_items:
+        if _behavior_authority_identity(item, ticket.parent) not in parent_behavior_identities:
+            raise TicketValidationError("Ticket Behavior Authority is absent from Parent Spec")
 
     scope = _section(text, "Scope")
-    covered: set[int] = set()
-    parent_combinations = {
-        (
-            values["Disposition"],
-            values["Independent verification required"],
-            values["Acceptance surface"],
-            values["External condition"],
-        )
-        for values in spec_values
-    }
-    parent_optional = {
-        (label, values[label])
-        for values in spec_values
-        for label in OPTIONAL_LABELS
-        if label in values
-    }
+    covered_ac: set[int] = set()
+    covered_behavior: set[int] = set()
     for index, item in enumerate(flow_items, 1):
         values = _labeled_item(item, CORE_LABELS, f"Verification flow {index}")
         _validate_combination(values, f"Verification flow {index}")
+
+        parent_raw = values["Parent outcome ordinal"]
+        if not parent_raw.isdigit() or int(parent_raw) < 1:
+            raise TicketValidationError(f"Verification flow {index} has invalid Parent outcome ordinal")
+        parent_ordinal = int(parent_raw)
+        if parent_ordinal > len(spec_values):
+            raise TicketValidationError(f"Verification flow {index} references an unknown Parent outcome ordinal")
+        parent_values = spec_values[parent_ordinal - 1]
+
         ordinal_parts = [part.strip() for part in values["AC ordinals"].split(",")]
         if any(not part.isdigit() or int(part) < 1 for part in ordinal_parts):
             raise TicketValidationError(f"Verification flow {index} has invalid AC ordinals")
@@ -293,7 +315,30 @@ def validate(ticket_path: str | Path) -> None:
             raise TicketValidationError(f"Verification flow {index} AC ordinals must be unique and ordered")
         if any(ordinal > len(ac_items) for ordinal in ordinals):
             raise TicketValidationError(f"Verification flow {index} references an unknown AC ordinal")
-        covered.update(ordinals)
+        covered_ac.update(ordinals)
+
+        behavior_raw = values["Behavior authority ordinals"]
+        if behavior_raw == "None":
+            behavior_ordinals: list[int] = []
+        else:
+            behavior_parts = [part.strip() for part in behavior_raw.split(",")]
+            if any(not part.isdigit() or int(part) < 1 for part in behavior_parts):
+                raise TicketValidationError(
+                    f"Verification flow {index} has invalid Behavior authority ordinals"
+                )
+            behavior_ordinals = [int(part) for part in behavior_parts]
+            if (
+                len(behavior_ordinals) != len(set(behavior_ordinals))
+                or behavior_ordinals != sorted(behavior_ordinals)
+            ):
+                raise TicketValidationError(
+                    f"Verification flow {index} Behavior authority ordinals must be unique and ordered"
+                )
+            if any(ordinal > len(ticket_behavior_items) for ordinal in behavior_ordinals):
+                raise TicketValidationError(
+                    f"Verification flow {index} references an unknown Behavior authority ordinal"
+                )
+        covered_behavior.update(behavior_ordinals)
 
         combination = (
             values["Disposition"],
@@ -301,19 +346,36 @@ def validate(ticket_path: str | Path) -> None:
             values["Acceptance surface"],
             values["External condition"],
         )
-        if combination not in parent_combinations:
-            raise TicketValidationError(f"Verification flow {index} combination is absent from Parent Spec")
+        parent_combination = (
+            parent_values["Disposition"],
+            parent_values["Independent verification required"],
+            parent_values["Acceptance surface"],
+            parent_values["External condition"],
+        )
+        if combination != parent_combination:
+            raise TicketValidationError(
+                f"Verification flow {index} combination differs from mapped Parent Spec outcome"
+            )
         surface_kind, surface_detail = _surface(values["Acceptance surface"])
         if surface_kind == "Ticket Scope creates" and surface_detail not in scope:
             raise TicketValidationError(f"Verification flow {index} Scope does not own its acceptance surface")
-        for label in OPTIONAL_LABELS:
-            if label in values and (label, values[label]) not in parent_optional:
-                raise TicketValidationError(
-                    f"Verification flow {index} conditional boundary is absent from Parent Spec"
-                )
+        flow_optional = {
+            (label, values[label]) for label in OPTIONAL_LABELS if label in values
+        }
+        parent_optional = {
+            (label, parent_values[label]) for label in OPTIONAL_LABELS if label in parent_values
+        }
+        if flow_optional != parent_optional:
+            raise TicketValidationError(
+                f"Verification flow {index} conditional boundary differs from mapped Parent Spec outcome"
+            )
 
-    if covered != set(range(1, len(ac_items) + 1)):
+    if covered_ac != set(range(1, len(ac_items) + 1)):
         raise TicketValidationError("Acceptance Criteria and Verification flows do not close bidirectionally")
+    if covered_behavior != set(range(1, len(ticket_behavior_items) + 1)):
+        raise TicketValidationError(
+            "Behavior Authorities and Verification flows do not close bidirectionally"
+        )
     _validate_blockers(ticket, _section(text, "Blockers"), status == "ready")
 
 

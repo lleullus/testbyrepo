@@ -14,11 +14,14 @@ its exact approved parent Spec. A Candidate Execution Recipe is optional.
 
 The Ticket's exact top-level `## Acceptance Criteria` items in authored order are
 the verdict denominator. Its exact top-level `## Verification` items are the
-normative product flows and no-ID ordinal closure. The parent Spec owns outcome,
-scope, Non-Goals, and outcome-local verification meaning. Adopted Behavior and
-UI authorities qualify only their exact scopes. Do not design product meaning,
-add a flow, reinterpret an expected result, or use implementation behavior to
-fill a planning omission.
+normative product flows and current positional trace: each flow maps one current
+`Parent outcome ordinal`, one or more current `AC ordinals`, and the applicable
+current `Behavior authority ordinals`. The parent Spec owns outcome, scope,
+Non-Goals, and outcome-local verification meaning. Mapped adopted Behavior and UI
+authorities qualify only their exact scopes. The ordinals are navigation
+locators, not persistent identity. Do not design product meaning, add a flow,
+reinterpret an expected result, remap authority, or use implementation behavior
+to fill a planning omission.
 
 ## Required Input And Preflight
 
@@ -39,9 +42,9 @@ Before any product execution or inspection:
    canonical, every blocker resolved, and every adopted Behavior/UI authority
    current, approved, applicable, complete, and nonconflicting.
 3. Enumerate every exact authored AC once and every authored Verification flow
-   in order. Confirm ordinal closure and the applicable parent-Spec meaning. Do
-   not create a persistent AC/flow ID, digest, schema identity, or copied
-   acceptance map.
+   in order. Confirm current parent-outcome/AC/Behavior ordinal closure and the
+   exact mapped parent-Spec/Behavior meaning. Do not create a persistent
+   outcome/AC/Behavior/flow ID, digest, schema identity, or copied acceptance map.
 4. Require every flow to have disposition `Independent`; a concrete acceptance
    boundary, trigger/input or inspection target, authoritative readback, and
    decision boundary; and a structurally valid `Existing`, `Ticket Scope
@@ -193,9 +196,10 @@ otherwise                -> INCONCLUSIVE
 ```
 
 Report the exact Ticket path and current product/source target; each exact AC in
-authored order with its one verdict, linked flow ordinals, direct observation or
-exact evidence limit; and the aggregate. Results describe only the current
-observed source and do not change Ticket status or planning authority.
+authored order with its one verdict, linked flow ordinals, current mapped parent
+outcome and Behavior authority ordinals, direct observation or exact evidence
+limit; and the aggregate. Results describe only the current observed source and
+do not change Ticket status or planning authority.
 
 ## Safety And Non-Goals
 

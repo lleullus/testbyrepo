@@ -34,7 +34,9 @@ None
 
 ## Verification
 
-- AC ordinals: 1, 2
+- Parent outcome ordinal: 1
+  AC ordinals: 1, 2
+  Behavior authority ordinals: 1
   Initial state: 승인된 순서를 표현하는 대상 화면이 구현되어 있다.
   Trigger or inspection target: 지원되는 넓은 viewport와 좁은 viewport에서 대상 화면을 연다.
   Acceptance boundary: 대상 화면의 rendered UI

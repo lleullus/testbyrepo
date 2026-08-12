@@ -156,6 +156,9 @@ class Phase8RemovalCensusTests(unittest.TestCase):
         self.assertEqual(manifest["capsules"]["capsuleDirectoryCount"], 2)
         router = manifest["installedCallers"]["router"]
         self.assertTrue(router["hasVerificationRoute"])
+        self.assertTrue(router["hasGoalLoopRoute"])
+        self.assertTrue(router["hasGoalVerificationRoute"])
+        self.assertTrue(router["routesByCompletionUnit"])
         self.assertTrue(router["requiresExactInputs"])
         self.assertTrue(router["keepsRecipeOptional"])
         self.assertTrue(router["rejectsNonIndependent"])

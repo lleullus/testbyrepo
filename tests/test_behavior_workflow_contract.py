@@ -99,6 +99,21 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
         for forbidden_authority in ("Internal tests", "mocks", "private helpers"):
             self.assertIn(forbidden_authority, to_spec)
 
+    def test_to_spec_rejects_historical_only_goal_clauses(self) -> None:
+        to_spec = (ROOT / "matt" / "skills" / "to-spec" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        normalized = " ".join(to_spec.split())
+        for required in (
+            "Every normative Goal-level clause must also be decidable during fresh final Goal Verification",
+            "current authoritative product, canonical artifact, source, approved operator-owned readback",
+            "historical implementation steps, Worker or Lead reports, diffs, or prior execution records",
+            "must not be approved as a Goal-level Requirement, Non-Goal, or Implementation Constraint",
+            "Move a bounded mutation restriction to the applicable Ticket Scope or Non-Goals",
+            "Do not weaken fresh Goal Verification or introduce a durable history mechanism",
+        ):
+            self.assertIn(required, normalized)
+
     def test_to_tickets_projects_without_strengthening_or_semantic_validation(self) -> None:
         to_tickets = (ROOT / "matt" / "skills" / "to-tickets" / "SKILL.md").read_text(
             encoding="utf-8"
@@ -106,13 +121,18 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
         normalized = " ".join(to_tickets.split())
         for required in (
             "one-based locators",
-            "not an AC name, persistent ID, digest, schema identity",
+            "current positional locators, not outcome names, AC names, rule IDs, persistent IDs",
+            "`Parent outcome ordinal`",
+            "`Behavior authority ordinals`",
             "return the Ticket to `draft`",
             "without making it stronger, more solution-specific",
             "must not introduce a new product precondition",
             "does not judge product semantics",
+            "Behavior-to-flow semantic correctness",
             "material flow merge/split",
             "runtime availability, evidence, or verdicts",
+            "validate_ticket_set.py",
+            "collectively cover every current parent-Spec Verification Expectation",
             "not silently treated as `Independent`",
         ):
             self.assertIn(required, normalized)

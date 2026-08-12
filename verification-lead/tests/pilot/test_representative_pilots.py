@@ -55,7 +55,9 @@ def ticket_flow(
     external: str = "None",
     conditional: str = "",
 ) -> str:
-    return f"""- AC ordinals: 1
+    return f"""- Parent outcome ordinal: 1
+  AC ordinals: 1
+  Behavior authority ordinals: 1
   Initial state: disposable fixture initial state
   Trigger or inspection target: {trigger}
   Acceptance boundary: {boundary}
@@ -84,6 +86,12 @@ class PilotFixture:
         self.temporary.cleanup()
 
     def write_contract(self, spec_verification: str, ticket_verification: str) -> None:
+        expected_line = next(
+            line for line in ticket_verification.splitlines() if line.startswith("  Expected observable result: ")
+        )
+        expected = expected_line.split(": ", 1)[1]
+        spec_behavior_item = "../../behavior/contexts/pilot.md | Scope: pilot observable behavior"
+        ticket_behavior_item = "../../../behavior/contexts/pilot.md | Scope: pilot observable behavior"
         self.spec.write_text(
             f"""# Pilot Spec
 
@@ -93,6 +101,10 @@ Owner: pilot
 ## Verification Expectations
 
 {spec_verification}
+
+## Behavior Authorities
+
+- {spec_behavior_item}
 
 ## Open Questions
 
@@ -111,11 +123,15 @@ UI: no
 
 ## Acceptance Criteria
 
-- {ticket_verification.splitlines()[4].split(': ', 1)[1]}
+- {expected}
 
 ## Scope
 
 Disposable local product and its declared readback.
+
+## Non-Goals
+
+- unrelated product behavior
 
 ## Blockers
 
@@ -124,6 +140,10 @@ None
 ## Verification
 
 {ticket_verification}
+
+## Behavior Authorities
+
+- {ticket_behavior_item}
 """,
             encoding="utf-8",
         )

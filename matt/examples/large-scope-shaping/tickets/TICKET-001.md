@@ -34,13 +34,28 @@ None
 
 ## Verification
 
-- AC ordinals: 1, 2
+- Parent outcome ordinal: 1
+  AC ordinals: 1
+  Behavior authority ordinals: 1
+  Initial state: 선택한 동작의 ordinary product boundary와 result readback이 구현되어 있다.
+  Trigger or inspection target: 확정한 입력을 선택한 동작의 ordinary product entry에 제공한다.
+  Acceptance boundary: 선택한 동작의 normal non-UI product boundary
+  Expected observable result: selected Work Package가 요구한 작은 동작의 product result가 반환된다.
+  Authoritative readback: 같은 product entry가 반환한 product result
+  Decision boundary: 반환 결과가 selected Work Package의 작은 동작 결과이면 충족하고 결과가 다르면 모순이다.
+  Disposition: Independent
+  Independent verification required: yes
+  Acceptance surface: Ticket Scope creates | 선택한 동작의 ordinary product entry와 complete 반환 결과
+  External condition: None
+- Parent outcome ordinal: 2
+  AC ordinals: 2
+  Behavior authority ordinals: 1
   Initial state: 선택한 동작의 ordinary product boundary와 complete result readback이 구현되어 있다.
   Trigger or inspection target: 확정한 입력을 선택한 동작의 ordinary product entry에 제공한다.
   Acceptance boundary: 선택한 동작의 complete product result
-  Expected observable result: 작은 동작 결과가 반환되고 selected Work Package 밖 sibling outcome은 포함되지 않는다.
+  Expected observable result: complete product result에는 selected Work Package의 작은 동작 결과만 있고 sibling outcome이 없다.
   Authoritative readback: 같은 product entry가 반환한 complete product result
-  Decision boundary: complete result가 작은 동작 결과만 포함하면 충족하고 결과가 다르거나 sibling outcome을 포함하면 모순이다.
+  Decision boundary: complete result에 sibling outcome이 없으면 충족하고 하나라도 포함하면 모순이다.
   Disposition: Independent
   Independent verification required: yes
   Acceptance surface: Ticket Scope creates | 선택한 동작의 ordinary product entry와 complete 반환 결과

@@ -367,6 +367,17 @@ all of the following:
    satisfies the confirmed contract.
 4. Specificity: it is no more solution-specific than its normative source.
 
+Every normative Goal-level clause must also be decidable during fresh final
+Goal Verification from a current authoritative product, canonical artifact,
+source, approved operator-owned readback, or other approved current boundary. A
+clause that can be established only from historical implementation steps,
+Worker or Lead reports, diffs, or prior execution records must not be approved
+as a Goal-level Requirement, Non-Goal, or Implementation Constraint. Move a
+bounded mutation restriction to the applicable Ticket Scope or Non-Goals, or
+restate it as a current observable product invariant when that is the actual
+approved requirement. Do not weaken fresh Goal Verification or introduce a
+durable history mechanism to admit a historical-only clause.
+
 If a clause fails any check, remove it or rewrite it at the observable-contract
 level. If it represents a genuinely new decision, return to the user for an
 explicit delta confirmation. Perform this audit internally; do not include the

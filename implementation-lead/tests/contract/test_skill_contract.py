@@ -63,13 +63,40 @@ class ActiveSkillContractTests(unittest.TestCase):
             "current project directly",
             "actual project diff",
             "every Markdown acceptance criterion (AC)",
-            "same user-designated Implementation Subagent",
+            "same admitted Implementation Subagent",
             "no known correctable in-scope due-now implementation work remains",
             "Gross actual-product liveness",
             "actual execution context and direct raw product-boundary result",
             "same-Ticket due-now implementation work",
             "checks actually performed",
             "exact unresolved limitations",
+        ):
+            self.assertIn(required, normalized)
+
+    def test_ralph_worker_exception_is_narrow_invocation_local_and_explicit_leaf_stays_user_designated(self) -> None:
+        normalized = " ".join(IMPLEMENTATION_SKILL.split())
+        for required in (
+            "In an explicit Implementation Lead request, that role remains user-designated",
+            "only exception is an invocation from the canonical `../iis-goal-loop/SKILL.md`",
+            "host-provided invocation-local `Implementation Subagent` role",
+            "exception grants no new Ticket authority",
+            "Never write the internal role to `Worker:`",
+            "`Worker:` remains empty",
+            "Ralph-provided current observation is navigation context only",
+            "cannot add or strengthen a Ticket obligation",
+        ):
+            self.assertIn(required, normalized)
+        self.assertIn("current parent-outcome/AC/Behavior trace", normalized)
+
+    def test_behavior_trace_is_semantic_guardrail_not_implementation_mechanism(self) -> None:
+        normalized = " ".join(IMPLEMENTATION_SKILL.split())
+        for required in (
+            "`Parent outcome ordinal`",
+            "`AC ordinals`",
+            "`Behavior authority ordinals`",
+            "mapped Behavior items supply semantic guardrails",
+            "current technical diagnosis remains implementation-owned and non-normative",
+            "Do not change or bypass the trace merely because a different implementation mechanism is selected",
         ):
             self.assertIn(required, normalized)
 
@@ -127,7 +154,7 @@ class ActiveSkillContractTests(unittest.TestCase):
         self.assertIn("nonzero result blocks assignment before mutation", normalized)
         for excluded in (
             "does not establish product meaning",
-            "AC-to-flow correctness",
+            "AC-to-flow or Behavior-to-flow semantic correctness",
             "implementation feasibility",
             "runtime availability",
             "evidence, or a verdict",

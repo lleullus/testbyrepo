@@ -439,10 +439,16 @@ with declarative Tickets and does not choose or recommend the final internal
 implementation path. Implementation Lead inspects the current repository and
 selects, validates, and revises that path later.
 
-After ready Tickets exist, stop the Matt flow. Report every ready Ticket by its canonical absolute
-path. Then state, in the user's conversation language, only that these Tickets can be used to start
-Implementation Lead later.
+After ready Tickets exist, stop the Matt flow and report every ready Ticket by
+its canonical absolute path. Ask Matt itself never invokes Implementation Lead,
+the Ralph loop, a Worker, `/implement`, `/tdd`, `/code-review`, or another
+execution chain.
 
-Do not ask for or suggest a Worker, show an Implementation Lead invocation command, load or invoke
-Implementation Lead, or continue into implementation. Starting Implementation Lead is a separate user
-action after Matt has ended.
+For an explicit or planning-only Matt request, state only that these Tickets can
+be used to start implementation later; starting implementation is a separate
+user action. When Ask Matt was invoked by the canonical IIS entry router under an
+already explicit end-to-end product-completion request, return the ready Ticket
+result to that router. The router may reuse that still-current user completion
+intent to enter the Ralph Goal Fulfillment Loop after Matt has stopped. This does
+not let Ask Matt continue into implementation, ask for or suggest a Worker, or
+create a second planning mode.

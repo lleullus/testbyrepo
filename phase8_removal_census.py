@@ -57,11 +57,11 @@ ACTIVE_VERIFICATION_DIRECTORIES = frozenset(
 )
 ACTIVE_VERIFICATION_SHA256 = {
     # Updated only with a reviewed canonical leaf change.
-    "verification-lead/SKILL.md": "d48778f04ee1a24491aa90dc8a30487dc308f28a9944019cfc852afb6f85da73",
+    "verification-lead/SKILL.md": "9ded06082faae2b46b935878df0af495492473f6e1fff9a462abe12dab7dd3fc",
     "verification-lead/run_tests.py": "8f0c1c288930dda0468d077bb61b6a046aad69b6531dc6cdb7f9d457cf8ea185",
     "verification-lead/verdict_contract.py": "0ec52acc6f27ca9167adbabeddfede4dfcc719e0fe480e124c43e3ff95dba9d7",
     "verification-lead/tests/test_contract.py": "50f888b5e1da9703aa3f4515d5ed9bbc2003fb2ae57c2c494e04c6ca0dad0fd5",
-    "verification-lead/tests/pilot/test_representative_pilots.py": "d2bff914eee069414589d37583277e447b82f837d3f487babf49655ba7749795",
+    "verification-lead/tests/pilot/test_representative_pilots.py": "d4c0b5ca308e8570036e781dd1fb3f56724424c4370a471df3c22e82b18e5033",
 }
 LEGACY_EXECUTABLE_STEMS = (
     "verification_run",
@@ -102,6 +102,7 @@ ACTIVE_REPO_FILES = (
 )
 ACTIVE_REPO_TERM_ALLOWLIST = {
     "README.md": frozenset({"verification lead", "verification-lead"}),
+    "implementation-lead/SKILL.md": frozenset({"verification lead"}),
 }
 REMOVED_ACTIVE_TERMS = (
     "verification lead",
@@ -119,7 +120,9 @@ REMOVED_ACTIVE_TERMS = (
 ROUTER_RELATIVE_PATH = Path("iis-workflow/SKILL.md")
 ROUTER_IMPLEMENTATION_PATH = "/home/user01/project/iis-skills/implementation-lead/SKILL.md"
 ROUTER_VERIFICATION_PATH = "/home/user01/project/iis-skills/verification-lead/SKILL.md"
-ROUTER_SHA256 = "df092f90f1820aa291971a04e5e580d5c2f826f4365f2e198004e892dd83fa5f"
+ROUTER_GOAL_LOOP_PATH = "/home/user01/project/iis-skills/iis-goal-loop/SKILL.md"
+ROUTER_GOAL_VERIFICATION_PATH = "/home/user01/project/iis-skills/goal-verification-lead/SKILL.md"
+ROUTER_SHA256 = "a22261f0bb35f307a77eb54233299352dd589dcd8e656eebc5e32a02b033338a"
 CONFIG_SUFFIXES = frozenset({".json", ".jsonc", ".md", ".ts", ".js"})
 CONFIG_EXCLUDED_DIRECTORIES = frozenset({"node_modules", ".audit", ".git"})
 ACTIVE_CONFIG_ROOT_FILES = frozenset(
@@ -797,6 +800,17 @@ def _installed_callers(installed_skill_root: Path, repo_root: Path) -> dict[str,
         router["forbiddenTermsFound"] = forbidden
         router["hasImplementationRoute"] = ROUTER_IMPLEMENTATION_PATH in text
         router["hasVerificationRoute"] = ROUTER_VERIFICATION_PATH in text
+        router["hasGoalLoopRoute"] = ROUTER_GOAL_LOOP_PATH in text
+        router["hasGoalVerificationRoute"] = ROUTER_GOAL_VERIFICATION_PATH in text
+        router["routesByCompletionUnit"] = all(
+            term in normalized
+            for term in (
+                "Route By Requested Completion Unit",
+                "Apply explicit leaf requests before broad IIS inference",
+                "If the user requested planning only, do not enter Ralph",
+                "Only fresh whole-Spec `GOAL VERIFIED`",
+            )
+        )
         router["requiresExactInputs"] = all(
             term in normalized
             for term in (
@@ -843,6 +857,9 @@ def _installed_callers(installed_skill_root: Path, repo_root: Path) -> dict[str,
             or not router["contentMatchesExpected"]
             or not router["hasImplementationRoute"]
             or not router["hasVerificationRoute"]
+            or not router["hasGoalLoopRoute"]
+            or not router["hasGoalVerificationRoute"]
+            or not router["routesByCompletionUnit"]
             or not router["requiresExactInputs"]
             or not router["keepsRecipeOptional"]
             or not router["rejectsNonIndependent"]

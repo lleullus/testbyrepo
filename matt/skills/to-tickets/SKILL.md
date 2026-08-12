@@ -206,7 +206,9 @@ Each exact authored Verification item uses these exact two-space-indented core
 labels once, in this order:
 
 ```text
-- AC ordinals: <comma-separated positive ordinals in authored AC order>
+- Parent outcome ordinal: <one positive ordinal into the parent Spec Verification Expectations>
+  AC ordinals: <comma-separated positive ordinals in authored AC order>
+  Behavior authority ordinals: None | <comma-separated positive ordinals into this Ticket's Behavior Authorities>
   Initial state: <initial product state>
   Trigger or inspection target: <product trigger/input or canonical target>
   Acceptance boundary: <observable product or canonical boundary>
@@ -225,25 +227,38 @@ using the exact applicable label from `to-spec`: `Absence terminal condition`,
 boundary`, `Interruption checkpoint`, `External effect sandbox, authority,
 cleanup, and readback`, or `UI rendered state and interaction readback`.
 
-`AC ordinals` are one-based locators into the current exact top-level
-`## Acceptance Criteria` items in authored order. They are not an AC name,
-persistent ID, digest, schema identity, or cross-document identity. Every AC
-ordinal must occur in at least one Verification item, and every Verification
-item must contain at least one valid AC ordinal. Do not repeat an ordinal within
-one item. If an AC is inserted, removed, reordered, or semantically edited,
-return the Ticket to `draft`, remap every ordinal against the current authored
+`Parent outcome ordinal` is a one-based locator into the current exact top-level
+parent Spec `## Verification Expectations` items. `AC ordinals` are one-based
+locators into the current exact top-level Ticket `## Acceptance Criteria` items.
+`Behavior authority ordinals` are one-based locators into the current exact
+Ticket `## Behavior Authorities` items; use exact `None` only when no adopted
+Behavior authority supplies semantic meaning to that flow. These are current
+positional locators, not outcome names, AC names, rule IDs, persistent IDs,
+digests, schema identities, or cross-document identities.
+
+Every Verification flow maps to exactly one parent outcome and at least one AC.
+Every AC ordinal must occur in at least one Verification flow, and every Ticket
+Behavior Authority item must occur in at least one flow's `Behavior authority
+ordinals`. A flow may map several ACs and several Behavior authorities when the
+same product observation jointly decides them. Do not repeat an ordinal within
+one item. If the parent outcome order, Ticket AC order, or Ticket Behavior
+Authority order changes, or a mapped item is semantically edited, return the
+Ticket to `draft`, remap every affected ordinal against the current authored
 order, and obtain Ticket review again. Never preserve an ordinal as historical
 identity.
 
-Project the exact parent-Spec outcome contract for this increment without
-making it stronger, more solution-specific, or more executable-specific.
-`Initial state` and `Decision boundary` clarify how the authored outcome is
-decided but must not introduce a new product precondition, internal mechanism,
-or stricter result. The acceptance boundary, trigger/inspection target,
-expected observable result, authoritative readback, disposition, independent
-requirement, acceptance surface, external condition, and applicable conditional
-boundaries preserve the parent meaning. If that needs a material meaning change,
-return to planning approval rather than normalizing the Ticket silently.
+Project the exact mapped parent-Spec outcome contract for this increment without
+making it stronger, more solution-specific, or more executable-specific. The
+flow's disposition, independent-verification requirement, acceptance surface,
+external condition, and applicable conditional boundaries must remain the exact
+combination of its `Parent outcome ordinal`; do not borrow a compatible-looking
+combination from a different parent outcome. `Initial state` and `Decision
+boundary` clarify how the authored outcome is decided but must not introduce a
+new product precondition, internal mechanism, or stricter result. The acceptance
+boundary, trigger/inspection target, expected observable result, authoritative
+readback, and mapped Behavior authorities preserve the parent meaning. If that
+needs a material meaning change, return to planning approval rather than
+normalizing the Ticket silently.
 
 An internal test command, test file, mock, fake, stub, private helper, debug
 hook, or implementation-only state is not a product flow or authoritative
@@ -363,10 +378,16 @@ it must not leave a cross-Ticket lifecycle or invariant without an owning
 Ticket.
 
 Before readying any Ticket, review the complete Ticket set against the parent
-Spec's adopted Behavior scopes. Fix the decomposition or reopen the Spec when an
-applicable scope has no acceptance owner, cannot be independently accepted, or
-conflicts with another Ticket. Do not add rule IDs, projection indexes, trace
-artifacts, or copied Behavior prose.
+Spec's adopted Behavior scopes. Every Ticket `## Behavior Authorities` item must resolve from the Ticket to the
+same canonical authority target and exact Scope already adopted by the parent
+Spec, even though the relative path text may differ because the Spec and Ticket
+live in different directories. It must be linked by current `Behavior authority
+ordinals` from at least one of that Ticket's Verification flows. Across the complete Ticket set, every parent-Spec-adopted Behavior item
+must have at least one acceptance owner. Fix the decomposition or reopen the Spec
+when an applicable scope has no acceptance owner, cannot be accepted through its
+confirmed completion path, or conflicts with another Ticket. Do not add rule
+IDs, persistent projection indexes, trace artifacts, or copied Behavior prose;
+the ordinals are only current positional locators inside the authored Ticket.
 
 ## Readiness Rules
 
@@ -380,12 +401,18 @@ Draft the breakdown and obtain the user's confirmation before changing any Ticke
 - Every current authored Acceptance Criterion is linked by ordinal to at least
   one exact authored Verification flow, and every flow links at least one
   current AC without a persistent AC ID or digest.
+- Every Verification flow maps to exactly one current parent-Spec Verification
+  Expectation by `Parent outcome ordinal`, and its disposition/surface/external
+  and conditional-boundary combination matches that exact parent outcome.
+- Every applicable Ticket Behavior authority is approved, project-local,
+  adopted by the parent Spec, represented by an exact contained path-and-scope
+  item, and linked by `Behavior authority ordinals` from at least one current
+  Verification flow.
 - Every Verification flow has all core product-contract fields exactly once and
   has a disposition consistent with its independent-verification requirement,
-  acceptance surface, external condition, Scope ownership, and parent Spec.
+  acceptance surface, external condition, Scope ownership, and mapped parent
+  outcome.
 - The project root is uniquely determined.
-- Every applicable Behavior authority is approved, project-local, adopted by
-  the parent Spec, and represented by an exact contained path-and-scope item.
 - A UI Ticket has a path-only reference resolving to the parent-Spec-adopted,
   applicable, complete approved local UI/UX authority target.
 - The Ticket is not merely an anticipated internal preparatory step.
@@ -414,12 +441,26 @@ python3 matt/skills/to-tickets/validate_ticket.py <absolute-ticket-path>
 ```
 
 The validator checks only the local path/status chain, exact list/label shape,
-label cardinality, ordinal range and bidirectional closure, blocker status, and
-structural disposition/requirement/surface combinations against the approved
-parent Spec. It does not judge product semantics, AC-to-flow correctness,
-material flow merge/split, solution specificity, blocker truth, runtime
-availability, evidence, or verdicts. To Tickets retains those authored review
-responsibilities.
+label cardinality, current parent-outcome/AC/Behavior ordinal ranges and closure,
+blocker status, exact Ticket Behavior-item adoption, and structural
+Disposition/requirement/surface/conditional-boundary combinations against the
+mapped approved parent outcome. It does not judge product semantics, AC-to-flow
+or Behavior-to-flow semantic correctness, material flow merge/split, solution
+specificity, blocker truth, runtime availability, evidence, or verdicts. To
+Tickets retains those authored review responsibilities.
+
+After every reviewed Ticket has reached `ready`, run the adjacent set validator
+against the exact approved parent Spec:
+
+```text
+python3 matt/skills/to-tickets/validate_ticket_set.py <absolute-approved-Spec-path>
+```
+
+The set validator requires the canonical sibling Ticket set to be structurally
+ready and collectively cover every current parent-Spec Verification Expectation
+and every adopted parent-Spec Behavior Authority. It is a planning-closure check,
+not a runtime state file, execution plan, evidence store, or semantic verifier.
+Do not report planning complete until it passes.
 
 A legacy Ticket that lacks this outcome-local Verification form is not silently
 treated as `Independent`. Before using the independent route, normalize it
@@ -444,9 +485,16 @@ Ready Tickets:
 - <absolute-ticket-path>
 ```
 
-Then state, in the user's conversation language, only that these Tickets can be used to start
-Implementation Lead later.
+Then state, in the user's conversation language, only that these Tickets can be
+used to start implementation later. To Tickets itself never asks for or suggests
+a Worker, shows an Implementation Lead invocation command, loads or invokes
+Implementation Lead, the Ralph loop, a Worker, `/implement`, `/tdd`,
+`/code-review`, or another execution chain.
 
-Do not ask for or suggest a Worker, show an Implementation Lead invocation command, load or invoke
-Implementation Lead, a Worker, `/implement`, `/tdd`, `/code-review`, or another execution chain.
-Starting Implementation Lead is a separate user action after Matt has ended.
+For an explicit or planning-only path, starting implementation is a separate user
+action after Matt has ended. When To Tickets is executing inside Ask Matt that was
+itself invoked by the canonical IIS entry router under an already explicit
+end-to-end product-completion request, return the validated complete ready Ticket
+set to Ask Matt and stop. The router may reuse the existing user completion intent
+after the planning leaves have stopped; To Tickets does not gain orchestration or
+implementation authority.
