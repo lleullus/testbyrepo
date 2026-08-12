@@ -33,15 +33,30 @@ Require all of the following before mutation:
 
 Resolve and run the To Tickets set validator at
 `../matt/skills/to-tickets/validate_ticket_set.py`, resolved from this skill's
-canonical physical directory, against the exact Spec. A nonzero result means the
-Ralph loop is not admitted. Return to the ordinary planning leaves to repair the
-approved decomposition; do not invent a Ticket, silently widen an existing
-Ticket, or create alternate planning state.
+canonical physical directory, against the exact Spec with
+`--require-completable`. A nonzero result means the Ralph loop is not admitted.
+For an ordinary decomposition/readiness defect, return to the ordinary planning
+leaves to repair it; do not invent a Ticket, silently widen an existing Ticket,
+or create alternate planning state. When admission fails because a parent Spec
+outcome is `Not independently verifiable`, stop before mutation and request only
+the completion-contract decision: establish an Independent acceptance path,
+approve an Operator-assisted action/readback, or keep the work as an explicit
+leaf delivery that does not claim automatic Goal completion.
 
 The Ticket set is discovered only from the approved Spec's canonical sibling
 `tickets/` directory and the structural set validator. Do not create a Goal
 manifest, run file, controller state, attempt ledger, database, registry, or
 persistent queue.
+
+Before any mutation, freshly revalidate the current authority chain. The exact
+Spec must still be `Status: approved`. Every Spec-adopted Behavior authority must
+resolve from the exact Project Root to the same canonical project-local authority
+path, remain readable and `Status: approved`, retain the adopted Scope, and not
+conflict with the Spec. Any applicable UI authority must still resolve to the
+same canonical target and remain approved, complete, in-scope, nonconflicting,
+and at the required terminal render disposition. A current authority-chain drift
+is a planning/admission defect, not product failure; return to the owning planning
+leaf before mutation instead of silently adopting the changed meaning.
 
 ## Fixed Goal Contract
 
@@ -96,12 +111,22 @@ or persisted status. Tests, mocks, implementation narration, prior Ticket
 verdicts, previous implementation results, and stale observations may help
 locate work but do not replace a fresh current product/canonical observation.
 
+Prefer reading an already-current authoritative product state or readback over
+re-triggering a product effect. Execute a trigger for working observation only
+when it is safe local/disposable/repeatable, or when existing exact authority
+covers the action, target, readback, cleanup, and non-duplication boundary. Do not
+re-run payment, message, deployment, destructive, irreversible, shared-production,
+credential-bearing, one-shot, or duplicate-sensitive effects merely to refresh
+Ralph navigation. If fresh observation requires such an effect, keep the item
+`UNRESOLVED` or request the exact approved operator action. Do not consume a
+one-shot Operator-assisted action during provisional observation when the final
+Goal Verification can safely use that action/readback once.
+
 If a flow is `Operator-assisted`, request operator involvement only when its
 exact approved action and readback are actually needed to continue or complete
 verification. The operator supplies the action/readback only; IIS interprets the
-contract. A `Not independently verifiable` parent outcome has no completion
-evidence path and therefore cannot yield `GOAL ACHIEVED`; return to planning for
-an explicit completion-contract decision rather than pretending it passed.
+contract. A `Not independently verifiable` parent outcome is rejected by Ralph
+admission before mutation and never reaches the reconciliation cycle.
 
 ### 2. Select One Unmet AC
 
@@ -144,12 +169,23 @@ Ticket at its authored product/canonical boundaries, not only the AC that
 motivated the change. A regression in a previously satisfied AC becomes current
 unfinished work immediately.
 
-When every flow on the active Ticket is `Independent`, the separate
-`../verification-lead/SKILL.md` may be invoked as a fresh independent checkpoint
-using the exact Ticket and Project Root. Its `VERIFIED`, `FAILED`, or
-`INCONCLUSIVE` result is useful current Ticket evidence but never completes the
-parent Goal. Do not bypass that leaf for Operator-assisted or Not-independently-
-verifiable flows.
+When the active Ticket is provisionally satisfied and Ralph is about to leave it
+for a different Ticket, use the separate `../verification-lead/SKILL.md` as the
+default transition checkpoint when every flow on the active Ticket is
+`Independent` and the authored verification can be performed safely without
+replaying an expensive, one-shot, destructive, credential-bearing, production,
+or duplicate-sensitive effect. `VERIFIED` permits moving to another Ticket;
+`FAILED` returns to the same Ticket; `INCONCLUSIVE` remains current unfinished
+work and is handled by correction, exact operator action, or the authority gate.
+
+Do not run this checkpoint merely for ceremony when the active Ticket is the last
+remaining Ticket and fresh whole-Spec Goal Verification will run immediately, or
+when the checkpoint would materially duplicate an unsafe/non-repeatable effect.
+In those cases keep the provisional observation as navigation, record the
+invocation-local reason for skipping the checkpoint, and rely on final Goal
+Verification for completion evidence. A Ticket-level checkpoint never completes
+the parent Goal. Do not bypass the thin verifier for mixed/non-independent flows;
+those flows stay under Ralph provisional observation and final Goal Verification.
 
 ### 5. Reconsider The Complete Ticket Set
 
@@ -172,11 +208,15 @@ observations, and the Ralph working assessment are navigation hints only. The
 Goal Verification Lead obtains fresh completion evidence independently.
 
 - `GOAL VERIFIED` permits `GOAL ACHIEVED`.
-- `GOAL FAILED` returns the failed parent outcome(s) to their mapped existing
-  Ticket/AC ownership and the loop continues when an in-Scope correction exists.
-- `GOAL INCONCLUSIVE` returns to the mapped Ticket when an in-Scope correction can
-  restore the defined observation path; otherwise use the exact operator or user
-  gate below.
+- `GOAL FAILED` must identify the exact failed obligation and current candidate
+  Ticket/Verification-flow/AC ownership, or exact `None` when no ready Ticket owns
+  the required mutation. Continue the mapped existing Ticket when an in-Scope
+  correction exists; `None` returns to ordinary Ticket planning instead of
+  widening authority.
+- `GOAL INCONCLUSIVE` must identify the exact evidence-limited obligation and the
+  same current ownership information. Return to the mapped Ticket only when an
+  in-Scope correction can restore the defined observation path; otherwise use the
+  exact operator, planning, or user gate below.
 
 No other result completes the Goal.
 
@@ -259,6 +299,17 @@ Or the exact `USER DECISION REQUIRED` / `OPERATOR ACTION REQUIRED` gate with the
 single decision/action needed. Never report Ticket readiness, implementation
 completion, passing tests, a Ticket checkpoint, partial improvement, or absence
 of pending implementation narration as Goal completion.
+
+## Supported Range
+
+This Ralph loop completes exactly one bounded approved Spec and its canonical
+sibling Ticket set. `GOAL ACHIEVED` means only that exact Spec Goal is currently
+verified. It must never be promoted to completion of a parent Scope Shaper
+initiative, sibling Work Package set, release program, or multi-Spec initiative.
+For initiative-scale work, complete only the explicitly selected bounded Work
+Package/Spec under this loop and report any remaining initiative scope separately;
+do not invent fan-in orchestration or silently reduce the user's initiative-level
+completion unit to the first finished package.
 
 ## Non-Goals
 

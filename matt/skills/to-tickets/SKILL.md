@@ -142,8 +142,14 @@ Create a separate Ticket only when at least one of these is true:
 - the approved parent Spec intentionally requires that result as a separate
   contract increment.
 
-Keep the number of Tickets minimal. Implementation Lead performs the internal
-task decomposition one current task at a time.
+Keep the number of Tickets minimal. When Independent and Operator-assisted
+outcomes are independently acceptable and their mutation/acceptance ownership can
+be separated without changing product meaning, prefer separate Tickets so an
+Independent delivery unit can use the thin verification checkpoint without
+pulling an operator-owned effect into it. Do not split an atomic product outcome
+or invent a boundary merely to optimize verification choreography.
+Implementation Lead performs the internal task decomposition one current task at
+a time.
 
 ## Acceptance Criteria rules
 
@@ -373,21 +379,24 @@ adopted by the parent Spec, and its canonical parent must be exactly one of the
 project's `docs/planning/behavior/contexts/`, `lifecycles/`, or `invariants/`
 directories. `behavior/INDEX.md` and files elsewhere in the tree are not
 authorities. The Ticket scope must be contained by the Spec's adopted scope.
-The Ticket may apply only the scopes needed for its acceptance ownership, but
-it must not leave a cross-Ticket lifecycle or invariant without an owning
-Ticket.
 
-Before readying any Ticket, review the complete Ticket set against the parent
-Spec's adopted Behavior scopes. Every Ticket `## Behavior Authorities` item must resolve from the Ticket to the
-same canonical authority target and exact Scope already adopted by the parent
-Spec, even though the relative path text may differ because the Spec and Ticket
-live in different directories. It must be linked by current `Behavior authority
-ordinals` from at least one of that Ticket's Verification flows. Across the complete Ticket set, every parent-Spec-adopted Behavior item
-must have at least one acceptance owner. Fix the decomposition or reopen the Spec
-when an applicable scope has no acceptance owner, cannot be accepted through its
-confirmed completion path, or conflicts with another Ticket. Do not add rule
-IDs, persistent projection indexes, trace artifacts, or copied Behavior prose;
-the ordinals are only current positional locators inside the authored Ticket.
+Before readying any Ticket, review that Ticket against the parent Spec's adopted
+Behavior scopes. Include every parent-adopted Behavior authority whose scope is
+directly owned or can be materially affected by this Ticket's Acceptance
+Criteria and mutation Scope. Every Ticket `## Behavior Authorities` item is
+project-relative, resolves from the exact `Project-Root` to the same canonical
+authority target and exact Scope already adopted by the parent Spec, and is
+linked by current `Behavior authority ordinals` from at least one of that
+Ticket's Verification flows.
+
+Do not add an unrelated global or preserved Behavior authority merely to make
+the Ticket set appear to cover every Behavior item. Parent-Spec Behavior
+obligations that are not acceptance-owned by one Ticket remain whole-Goal
+obligations and are checked by final Goal Verification. Fix the decomposition or
+reopen the Spec when a Ticket omits an applicable Behavior guardrail or conflicts
+with another Ticket. Do not add rule IDs, persistent projection indexes, trace
+artifacts, or copied Behavior prose; the ordinals are only current positional
+locators inside the authored Ticket.
 
 ## Readiness Rules
 
@@ -457,9 +466,13 @@ python3 matt/skills/to-tickets/validate_ticket_set.py <absolute-approved-Spec-pa
 ```
 
 The set validator requires the canonical sibling Ticket set to be structurally
-ready and collectively cover every current parent-Spec Verification Expectation
-and every adopted parent-Spec Behavior Authority. It is a planning-closure check,
-not a runtime state file, execution plan, evidence store, or semantic verifier.
+ready and collectively cover every current parent-Spec Verification Expectation.
+Per-Ticket validation still requires every Behavior authority declared by a
+Ticket to match a parent-adopted authority and close to at least one authored
+Verification flow. The set validator does not require unrelated global or
+preserved Behavior authorities to be copied into a Ticket. It is a
+planning-closure check, not a runtime state file, execution plan, evidence store,
+or semantic verifier.
 Do not report planning complete until it passes.
 
 A legacy Ticket that lacks this outcome-local Verification form is not silently

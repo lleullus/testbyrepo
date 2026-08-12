@@ -53,7 +53,7 @@ Owner: 예시 planning owner
 
 ## Behavior Authorities
 
-- ./docs/planning/behavior/contexts/non-ui-operation.md | Scope: 정의된 입력에서 조정되는 non-UI 동작과 명시된 비대상 경로의 보존
+- docs/planning/behavior/contexts/non-ui-operation.md | Scope: 정의된 입력에서 조정되는 non-UI 동작과 명시된 비대상 경로의 보존
 
 ## UI / UX
 

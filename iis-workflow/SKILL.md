@@ -117,6 +117,14 @@ ready. If the approved Spec or Ticket breakdown needs a new product/scope decisi
 or normal Ticket review, obtain that planning decision through the ordinary leaf;
 end-to-end intent does not bypass planning approval.
 
+Ralph's supported completion unit is exactly one bounded approved Spec. For an
+initiative-scale request, Scope Shaper still owns decomposition and selection of a
+bounded Work Package. Ralph may complete that selected package's Spec, but the
+router must not promote that package's `GOAL ACHIEVED` to completion of the parent
+initiative, sibling Work Packages, or a multi-Spec release. Report remaining
+initiative scope separately. Do not invent fan-in orchestration or silently reduce
+an initiative-level completion request to the first bounded package.
+
 ## Ralph Completion Boundary
 
 The Ralph loop owns iterative orchestration only. The approved Spec remains Goal

@@ -58,6 +58,10 @@ class Phase8RemovalCensusTests(unittest.TestCase):
             path = self.repo / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes((ROOT / relative).read_bytes())
+        for relative in phase8_removal_census.ACTIVE_RALPH_SHA256:
+            path = self.repo / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes((ROOT / relative).read_bytes())
         (self.repo / ".gitignore").write_text("__pycache__/\n*.py[cod]\n", encoding="utf-8")
         subprocess.run(["git", "init", "-q"], cwd=self.repo, check=True)
         subprocess.run(["git", "add", "."], cwd=self.repo, check=True)
@@ -151,6 +155,10 @@ class Phase8RemovalCensusTests(unittest.TestCase):
         )
         self.assertTrue(
             all(item["contentMatchesExpected"] for item in manifest["inventory"]["activeVerificationFiles"])
+        )
+        self.assertTrue(all(item["isRegularFile"] for item in manifest["inventory"]["activeRalphFiles"]))
+        self.assertTrue(
+            all(item["contentMatchesExpected"] for item in manifest["inventory"]["activeRalphFiles"])
         )
         self.assertEqual(manifest["results"]["items"][0]["protocolVersion"], "implementation-result-v3")
         self.assertEqual(manifest["capsules"]["capsuleDirectoryCount"], 2)
@@ -405,6 +413,40 @@ class Phase8RemovalCensusTests(unittest.TestCase):
                         error["code"] == "ACTIVE_VERIFICATION_FILE_MISMATCH"
                         and relative in error["message"]
                         for error in errors
+                    )
+                )
+                path.write_bytes(content)
+
+    def test_each_active_ralph_file_is_required_and_must_match_reviewed_content(self) -> None:
+        for relative in sorted(phase8_removal_census.ACTIVE_RALPH_SHA256):
+            with self.subTest(relative=relative, defect="missing"):
+                path = self.repo / relative
+                content = path.read_bytes()
+                path.unlink()
+                completed = self.census()
+                self.assertEqual(completed.returncode, 2, completed.stdout)
+                manifest = json.loads(completed.stdout)
+                self.assertTrue(
+                    any(
+                        error["code"] == "ACTIVE_RALPH_FILE_MISSING"
+                        and relative in error["message"]
+                        for error in manifest["inventory"]["errors"]
+                    )
+                )
+                path.write_bytes(content)
+
+            with self.subTest(relative=relative, defect="mismatch"):
+                path = self.repo / relative
+                content = path.read_bytes()
+                path.write_text("trivial replacement\n", encoding="utf-8")
+                completed = self.census()
+                self.assertEqual(completed.returncode, 2, completed.stdout)
+                manifest = json.loads(completed.stdout)
+                self.assertTrue(
+                    any(
+                        error["code"] == "ACTIVE_RALPH_FILE_MISMATCH"
+                        and relative in error["message"]
+                        for error in manifest["inventory"]["errors"]
                     )
                 )
                 path.write_bytes(content)

@@ -95,7 +95,7 @@ Owner: test
 
 ## Behavior Authorities
 
-- ../../behavior/contexts/example.md | Scope: example behavior
+- docs/planning/behavior/contexts/example.md | Scope: example behavior
 
 ## Open Questions
 
@@ -130,7 +130,7 @@ UI: no
 
 ## Behavior Authorities
 
-- ../../../behavior/contexts/example.md | Scope: example behavior
+- docs/planning/behavior/contexts/example.md | Scope: example behavior
 """,
             encoding="utf-8",
         )
@@ -258,13 +258,25 @@ class TicketValidatorTests(unittest.TestCase):
                 )
                 self.assert_invalid(fragment)
 
+    def test_behavior_authority_paths_resolve_from_project_root_not_document_directory(self) -> None:
+        self.fixture.write()
+        text = self.fixture.ticket_path.read_text(encoding="utf-8")
+        self.fixture.ticket_path.write_text(
+            text.replace(
+                "docs/planning/behavior/contexts/example.md | Scope: example behavior",
+                "../../../behavior/contexts/example.md | Scope: example behavior",
+            ),
+            encoding="utf-8",
+        )
+        self.assert_invalid("canonical behavior authority directory")
+
     def test_rejects_ticket_behavior_authority_absent_from_parent_spec(self) -> None:
         self.fixture.write()
         text = self.fixture.ticket_path.read_text(encoding="utf-8")
         self.fixture.ticket_path.write_text(
             text.replace(
-                "../../../behavior/contexts/example.md | Scope: example behavior",
-                "../../../behavior/contexts/other.md | Scope: other behavior",
+                "docs/planning/behavior/contexts/example.md | Scope: example behavior",
+                "docs/planning/behavior/contexts/other.md | Scope: other behavior",
             ),
             encoding="utf-8",
         )

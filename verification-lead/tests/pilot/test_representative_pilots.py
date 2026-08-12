@@ -90,8 +90,7 @@ class PilotFixture:
             line for line in ticket_verification.splitlines() if line.startswith("  Expected observable result: ")
         )
         expected = expected_line.split(": ", 1)[1]
-        spec_behavior_item = "../../behavior/contexts/pilot.md | Scope: pilot observable behavior"
-        ticket_behavior_item = "../../../behavior/contexts/pilot.md | Scope: pilot observable behavior"
+        behavior_item = "docs/planning/behavior/contexts/pilot.md | Scope: pilot observable behavior"
         self.spec.write_text(
             f"""# Pilot Spec
 
@@ -104,7 +103,7 @@ Owner: pilot
 
 ## Behavior Authorities
 
-- {spec_behavior_item}
+- {behavior_item}
 
 ## Open Questions
 
@@ -143,7 +142,7 @@ None
 
 ## Behavior Authorities
 
-- {ticket_behavior_item}
+- {behavior_item}
 """,
             encoding="utf-8",
         )

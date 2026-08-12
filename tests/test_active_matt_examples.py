@@ -110,11 +110,12 @@ class ActiveMattExampleTests(unittest.TestCase):
                 spec_ref, spec_scope = authority_item(section(spec, "Behavior Authorities"))
                 ticket_ref, ticket_scope = authority_item(section(ticket, "Behavior Authorities"))
                 self.assertEqual(spec_scope, ticket_scope)
+                self.assertEqual(spec_ref, ticket_ref)
                 self.assertEqual(
-                    (spec_path.parent / spec_ref).resolve(),
-                    (ticket_path.parent / ticket_ref).resolve(),
+                    (example / spec_ref).resolve(),
+                    (example / ticket_ref).resolve(),
                 )
-                authority = (spec_path.parent / spec_ref).resolve().read_text(encoding="utf-8")
+                authority = (example / spec_ref).resolve().read_text(encoding="utf-8")
                 self.assertEqual(authority.count("Status: approved"), 1)
                 self.assertRegex(authority, r"(?m)^Owner: .+$")
                 self.assertRegex(authority, r"(?m)^Scope: .+$")

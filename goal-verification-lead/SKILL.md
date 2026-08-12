@@ -32,9 +32,20 @@ failure. Return `GOAL VERIFICATION NOT STARTED` with the exact defect and no Goa
 verdict.
 
 Re-read the approved Spec, every adopted Behavior authority, applicable UI
-authority, and the current product/source directly. Do not require an
-Implementation Lead result, independent Ticket verdict, retained source, prior
-Goal result, evidence archive, or persistent verification state.
+authority, and the current product/source directly. Before product observation,
+freshly revalidate the authority chain: the exact Spec still has `Status:
+approved`; every project-relative Behavior authority resolves from the exact
+Project Root to the same canonical project-local authority target, remains
+readable and `Status: approved`, retains the adopted Scope, and is nonconflicting;
+and every applicable UI authority still resolves to the same canonical target and
+remains approved, complete, in-scope, nonconflicting, and at any required terminal
+render disposition. Authority-chain drift is a planning/admission defect. Return
+`GOAL VERIFICATION NOT STARTED` with that exact defect rather than adopting the
+changed authority or treating it as product `FAIL`/`INCONCLUSIVE`.
+
+Do not require an Implementation Lead result, independent Ticket verdict,
+retained source, prior Goal result, evidence archive, or persistent verification
+state.
 
 ## Final Denominator
 
@@ -75,6 +86,13 @@ the approved contract. Admissible evidence includes:
 Implementation narration, Ticket status, Ticket verifier rows, tests, mocks,
 helpers, diffs, prior executions, and agent claims are navigation only and cannot
 supply a final `PASS`.
+
+Fresh verification means a fresh current read of the approved authoritative
+boundary; it does not require replaying a product effect when the contract permits
+the current authoritative state/readback itself to establish the outcome. Prefer
+that current readback over duplicating an effect. Re-trigger only when the
+approved verification contract actually requires it and the safety/authority
+boundary below permits it.
 
 A safe local approved trigger may create its ordinary expected product effect.
 Do not directly modify source, configuration, product state, Ticket, Spec,
@@ -158,23 +176,36 @@ Project Root: <exact Project-Root>
 
 Outcome 1: PASS | FAIL | INCONCLUSIVE
 Direct evidence: <fresh observation or exact evidence limit>
+Exact obligation: None | <Verification Expectation ordinal 1 plus applicable Behavior/UI scope>
+Candidate ownership: None | <Ticket path; Verification flow ordinal; AC ordinals>
 
 Outcome 2: PASS | FAIL | INCONCLUSIVE
 Direct evidence: <fresh observation or exact evidence limit>
+Exact obligation: None | <Verification Expectation ordinal 2 plus applicable Behavior/UI scope>
+Candidate ownership: None | <Ticket path; Verification flow ordinal; AC ordinals>
 
 ...
 
 Global Contract: PASS | FAIL | INCONCLUSIVE
 Direct evidence: <fresh current global observation or exact evidence limit>
+Exact obligation: None | <exact Spec section/item or Behavior/UI authority path and Scope>
+Candidate ownership: None | <Ticket path; Verification flow ordinal; AC ordinals>
 
 Aggregate: GOAL VERIFIED | GOAL FAILED | GOAL INCONCLUSIVE
 Operator action needed: None | <exact approved action, target, and readback>
 ```
 
-Include every current Spec outcome exactly once in authored order. The result may
-name current mapped Ticket/AC ownership as navigation for a failed or
-inconclusive outcome, but that ownership is not evidence and does not alter the
-verdict.
+Include every current Spec outcome exactly once in authored order. For `PASS`,
+`Exact obligation` and `Candidate ownership` may both be `None`. For every
+`FAIL` or `INCONCLUSIVE` outcome, `Exact obligation` must identify the current
+parent-Spec Verification Expectation ordinal and any applicable Behavior/UI scope,
+and `Candidate ownership` must be derived fresh from the validated Ticket set's
+current `Parent outcome ordinal` / flow / AC trace. For a non-PASS Global
+Contract, `Exact obligation` must identify each materially responsible authored
+Spec clause or Behavior/UI authority path-and-Scope, and `Candidate ownership`
+must name the current Ticket/flow/AC candidates or exact `None` when no ready
+Ticket owns the needed mutation. Ownership is navigation only, not evidence, and
+must never authorize Ralph to widen a Ticket.
 
 ## Non-Goals
 

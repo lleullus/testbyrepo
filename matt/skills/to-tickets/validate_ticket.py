@@ -99,7 +99,7 @@ def _top_level_items(body: str, label: str) -> list[str]:
     return ["\n".join(lines) for lines in items]
 
 
-def _behavior_authority_identity(item: str, base: Path) -> tuple[Path, str]:
+def _behavior_authority_identity(item: str, project: Path) -> tuple[Path, str]:
     marker = " | Scope: "
     if item.count(marker) != 1:
         raise TicketValidationError("Behavior Authority item must contain exactly one ' | Scope: '")
@@ -108,7 +108,19 @@ def _behavior_authority_identity(item: str, base: Path) -> tuple[Path, str]:
     scope = scope.strip()
     if not raw_path or not scope:
         raise TicketValidationError("Behavior Authority path and Scope must be non-empty")
-    target = (base / raw_path).resolve(strict=False)
+    relative = Path(raw_path)
+    if relative.is_absolute():
+        raise TicketValidationError("Behavior Authority path must be project-relative")
+    target = (project / relative).resolve(strict=False)
+    allowed_parents = {
+        (project / "docs/planning/behavior/contexts").resolve(strict=False),
+        (project / "docs/planning/behavior/lifecycles").resolve(strict=False),
+        (project / "docs/planning/behavior/invariants").resolve(strict=False),
+    }
+    if target.parent not in allowed_parents:
+        raise TicketValidationError(
+            "Behavior Authority must resolve from Project-Root to a canonical behavior authority directory"
+        )
     return target, scope
 
 
@@ -286,10 +298,10 @@ def validate(ticket_path: str | Path) -> None:
     for index, values in enumerate(spec_values, 1):
         _validate_combination(values, f"Spec outcome {index}")
     parent_behavior_identities = {
-        _behavior_authority_identity(item, parent.parent) for item in parent_behavior_items
+        _behavior_authority_identity(item, project) for item in parent_behavior_items
     }
     for item in ticket_behavior_items:
-        if _behavior_authority_identity(item, ticket.parent) not in parent_behavior_identities:
+        if _behavior_authority_identity(item, project) not in parent_behavior_identities:
             raise TicketValidationError("Ticket Behavior Authority is absent from Parent Spec")
 
     scope = _section(text, "Scope")

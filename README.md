@@ -13,8 +13,11 @@ Goal fulfillment.
 - `matt/`: product/Behavior/UI planning, approved Spec creation, and complete
   ready Ticket decomposition. Ticket Verification flows use current positional
   `Parent outcome ordinal`, `AC ordinals`, and `Behavior authority ordinals` so
-  observable AC work remains traceable to its parent outcome and semantic
-  Behavior guardrails without persistent IDs or a trace database.
+  observable AC work remains traceable to its parent outcome and applicable
+  semantic Behavior guardrails without persistent IDs or a trace database.
+  Project-relative Behavior paths resolve from the exact `Project-Root`. Global
+  or preserved Spec Behavior may remain whole-Goal obligations instead of being
+  copied into an unrelated Ticket merely for set coverage.
 - `implementation-lead/`: implementation of one exact ready local Markdown
   Ticket followed by Lead review of the real project diff, implementation checks,
   and exact unresolved limitations. Explicit leaf requests use a user-designated
@@ -25,11 +28,14 @@ Goal fulfillment.
   `Independent` Ticket from fresh direct product or canonical-target evidence.
   It does not modify the product or restore a verification runtime, transport,
   store, ledger, or persistent result state.
-- `iis-goal-loop/`: Ralph-style orchestration for an already approved product
-  Goal. It repeatedly selects current unmet Ticket ACs, reuses the same Ticket
-  across materially different in-Scope corrections, reobserves current behavior,
-  and keeps the Goal open until fresh whole-Spec verification succeeds. It is not
-  a Controller runtime or durable workflow engine.
+- `iis-goal-loop/`: Ralph-style orchestration for exactly one bounded approved
+  Spec. It rejects an outcome with no approved completion evidence path before
+  mutation, repeatedly selects current unmet Ticket ACs, reuses the same Ticket
+  across materially different in-Scope corrections, uses current readbacks
+  without duplicating unsafe effects, and keeps the Spec Goal open until fresh
+  whole-Spec verification succeeds. It never promotes one Work Package to parent
+  initiative completion and is not a Controller runtime or durable workflow
+  engine.
 - `goal-verification-lead/`: fresh whole-Spec verification of every approved
   outcome plus remaining global Requirements, Non-Goals, constraints,
   Behavior/UI obligations, and preserved invariants. Only an all-PASS result may

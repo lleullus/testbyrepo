@@ -9,9 +9,9 @@ from pathlib import Path
 
 from validate_ticket import (
     CORE_LABELS,
+    SPEC_CORE_LABELS,
     STATUS_RE,
     TicketValidationError,
-    _behavior_authority_identity,
     _labeled_item,
     _section,
     _single_match,
@@ -24,7 +24,7 @@ class TicketSetValidationError(RuntimeError):
     pass
 
 
-def validate_set(spec_path: str | Path) -> list[Path]:
+def validate_set(spec_path: str | Path, *, require_completable: bool = False) -> list[Path]:
     raw_spec = Path(spec_path).expanduser()
     if not raw_spec.is_absolute():
         raise TicketSetValidationError("Spec path must be absolute and canonical")
@@ -52,19 +52,19 @@ def validate_set(spec_path: str | Path) -> list[Path]:
     spec_outcomes = _top_level_items(
         _section(spec_text, "Verification Expectations"), "Verification Expectations"
     )
-    spec_behaviors = _top_level_items(
-        _section(spec_text, "Behavior Authorities"), "Behavior Authorities"
-    )
-    spec_behavior_identities = [
-        _behavior_authority_identity(item, spec.parent) for item in spec_behaviors
-    ]
+    if require_completable:
+        for index, item in enumerate(spec_outcomes, 1):
+            values = _labeled_item(item, SPEC_CORE_LABELS, f"Spec outcome {index}")
+            if values["Disposition"] == "Not independently verifiable":
+                raise TicketSetValidationError(
+                    f"Ralph completion is not admitted: Spec outcome {index} has no approved completion evidence path"
+                )
 
     tickets = sorted(tickets_dir.glob("TICKET-[0-9][0-9][0-9].md"))
     if not tickets:
         raise TicketSetValidationError("Spec has no implementation Tickets")
 
     covered_outcomes: set[int] = set()
-    covered_behaviors: set[int] = set()
     for ticket in tickets:
         try:
             validate(ticket)
@@ -79,18 +79,6 @@ def validate_set(spec_path: str | Path) -> list[Path]:
             values = _labeled_item(item, CORE_LABELS, f"Verification flow {index}")
             covered_outcomes.add(int(values["Parent outcome ordinal"]))
 
-        ticket_behaviors = _top_level_items(
-            _section(text, "Behavior Authorities"), "Behavior Authorities"
-        )
-        for item in ticket_behaviors:
-            identity = _behavior_authority_identity(item, ticket.parent)
-            try:
-                covered_behaviors.add(spec_behavior_identities.index(identity) + 1)
-            except ValueError as exc:
-                raise TicketSetValidationError(
-                    f"Ticket {ticket.name} contains Behavior Authority absent from Spec"
-                ) from exc
-
     expected_outcomes = set(range(1, len(spec_outcomes) + 1))
     if covered_outcomes != expected_outcomes:
         missing = sorted(expected_outcomes - covered_outcomes)
@@ -99,22 +87,16 @@ def validate_set(spec_path: str | Path) -> list[Path]:
             f"Ticket set does not cover every Parent Spec outcome; missing={missing}, extra={extra}"
         )
 
-    expected_behaviors = set(range(1, len(spec_behaviors) + 1))
-    if covered_behaviors != expected_behaviors:
-        missing = sorted(expected_behaviors - covered_behaviors)
-        raise TicketSetValidationError(
-            f"Ticket set does not cover every Parent Spec Behavior Authority; missing={missing}"
-        )
-
     return tickets
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--require-completable", action="store_true")
     parser.add_argument("spec")
     args = parser.parse_args(argv)
     try:
-        tickets = validate_set(args.spec)
+        tickets = validate_set(args.spec, require_completable=args.require_completable)
     except (TicketSetValidationError, TicketValidationError) as exc:
         print(f"INVALID SET: {exc}", file=sys.stderr)
         return 2

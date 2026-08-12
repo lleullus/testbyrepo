@@ -58,7 +58,7 @@ class TicketSetFixture:
     def write_spec(self, outcomes: int = 2, behaviors: int = 2) -> None:
         outcome_text = "\n".join(spec_outcome(f"outcome {index}") for index in range(1, outcomes + 1))
         behavior_text = "\n".join(
-            f"- ../../behavior/contexts/b{index}.md | Scope: behavior {index}"
+            f"- docs/planning/behavior/contexts/b{index}.md | Scope: behavior {index}"
             for index in range(1, behaviors + 1)
         )
         self.spec.write_text(
@@ -122,7 +122,7 @@ None
 
 ## Behavior Authorities
 
-- ../../../behavior/contexts/b{behavior}.md | Scope: behavior {behavior}
+- docs/planning/behavior/contexts/b{behavior}.md | Scope: behavior {behavior}
 
 ## References
 
@@ -140,7 +140,7 @@ class TicketSetValidatorTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.fixture.close()
 
-    def test_accepts_complete_ready_parent_outcome_and_behavior_coverage(self) -> None:
+    def test_accepts_complete_ready_parent_outcome_coverage(self) -> None:
         self.fixture.write_spec(outcomes=2, behaviors=2)
         self.fixture.write_ticket(1, parent_outcome=1, behavior=1)
         self.fixture.write_ticket(2, parent_outcome=2, behavior=2)
@@ -156,14 +156,30 @@ class TicketSetValidatorTests(unittest.TestCase):
         ):
             validate_ticket_set.validate_set(self.fixture.spec)
 
-    def test_rejects_missing_parent_behavior_coverage(self) -> None:
+    def test_accepts_global_parent_behavior_without_ticket_acceptance_ownership(self) -> None:
         self.fixture.write_spec(outcomes=1, behaviors=2)
         self.fixture.write_ticket(1, parent_outcome=1, behavior=1)
+        tickets = validate_ticket_set.validate_set(self.fixture.spec)
+        self.assertEqual([path.name for path in tickets], ["TICKET-001.md"])
+
+    def test_ralph_completable_rejects_nonverifiable_parent_outcome_before_ticket_use(self) -> None:
+        self.fixture.write_spec(outcomes=1, behaviors=1)
+        self.fixture.write_ticket(1, parent_outcome=1, behavior=1)
+        text = self.fixture.spec.read_text(encoding="utf-8")
+        self.fixture.spec.write_text(
+            text.replace("Disposition: Independent", "Disposition: Not independently verifiable")
+            .replace("Independent verification required: yes", "Independent verification required: no")
+            .replace(
+                "Acceptance surface: Existing | local CLI output",
+                "Acceptance surface: None | approved contract exposes no completion evidence path",
+            ),
+            encoding="utf-8",
+        )
         with self.assertRaisesRegex(
             validate_ticket_set.TicketSetValidationError,
-            "does not cover every Parent Spec Behavior Authority",
+            "Ralph completion is not admitted: Spec outcome 1 has no approved completion evidence path",
         ):
-            validate_ticket_set.validate_set(self.fixture.spec)
+            validate_ticket_set.validate_set(self.fixture.spec, require_completable=True)
 
     def test_rejects_non_ready_member(self) -> None:
         self.fixture.write_spec(outcomes=1, behaviors=1)

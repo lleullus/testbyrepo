@@ -61,7 +61,13 @@ ACTIVE_VERIFICATION_SHA256 = {
     "verification-lead/run_tests.py": "8f0c1c288930dda0468d077bb61b6a046aad69b6531dc6cdb7f9d457cf8ea185",
     "verification-lead/verdict_contract.py": "0ec52acc6f27ca9167adbabeddfede4dfcc719e0fe480e124c43e3ff95dba9d7",
     "verification-lead/tests/test_contract.py": "50f888b5e1da9703aa3f4515d5ed9bbc2003fb2ae57c2c494e04c6ca0dad0fd5",
-    "verification-lead/tests/pilot/test_representative_pilots.py": "d4c0b5ca308e8570036e781dd1fb3f56724424c4370a471df3c22e82b18e5033",
+    "verification-lead/tests/pilot/test_representative_pilots.py": "02a122d5efbf0051d67f50b3d370f9dfa2c4f210516dd086d0e9be19a4d1c530",
+}
+ACTIVE_RALPH_SHA256 = {
+    # Reviewed active Goal-fulfillment route and its exact structural admission support.
+    "iis-goal-loop/SKILL.md": "8aedc49ade0af3790f39ebe89c8cf1be32900ffda3d72b9feaabbbbf4d868bf8",
+    "goal-verification-lead/SKILL.md": "728ff02459bcbfe639a20f0b18d81beeffe2ee8bc39e4319b08dd16465dd6da0",
+    "matt/skills/to-tickets/validate_ticket_set.py": "2a5eda27390c079bfb21200c71f96eec66f878c2bb9db1bc9696d8e37b8895ea",
 }
 LEGACY_EXECUTABLE_STEMS = (
     "verification_run",
@@ -122,7 +128,7 @@ ROUTER_IMPLEMENTATION_PATH = "/home/user01/project/iis-skills/implementation-lea
 ROUTER_VERIFICATION_PATH = "/home/user01/project/iis-skills/verification-lead/SKILL.md"
 ROUTER_GOAL_LOOP_PATH = "/home/user01/project/iis-skills/iis-goal-loop/SKILL.md"
 ROUTER_GOAL_VERIFICATION_PATH = "/home/user01/project/iis-skills/goal-verification-lead/SKILL.md"
-ROUTER_SHA256 = "a22261f0bb35f307a77eb54233299352dd589dcd8e656eebc5e32a02b033338a"
+ROUTER_SHA256 = "85f3d7aed5399bf869595adc0bd08d2d58a82a71fc0c9da2ff384cff7a1088b9"
 CONFIG_SUFFIXES = frozenset({".json", ".jsonc", ".md", ".ts", ".js"})
 CONFIG_EXCLUDED_DIRECTORIES = frozenset({"node_modules", ".audit", ".git"})
 ACTIVE_CONFIG_ROOT_FILES = frozenset(
@@ -421,6 +427,53 @@ def _tracked_inventory(repo_root: Path) -> dict[str, Any]:
                         errors.append(error)
         active_verification_files.append(entry)
 
+    active_ralph_files: list[dict[str, Any]] = []
+    for relative, expected_sha256 in sorted(ACTIVE_RALPH_SHA256.items()):
+        path = repo_root / relative
+        entry = {"path": relative}
+        try:
+            mode = path.lstat().st_mode
+        except FileNotFoundError:
+            entry.update({"exists": False, "isRegularFile": False})
+            error = _error("ACTIVE_RALPH_FILE_MISSING", f"active Ralph file is missing: {relative}")
+            entry["error"] = error
+            errors.append(error)
+        except OSError as exc:
+            entry.update({"exists": None, "isRegularFile": False})
+            error = _error("ACTIVE_RALPH_FILE_UNREADABLE", f"cannot inspect active Ralph file {relative}: {exc}")
+            entry["error"] = error
+            errors.append(error)
+        else:
+            is_regular = stat.S_ISREG(mode)
+            entry.update({"exists": True, "isRegularFile": is_regular})
+            if not is_regular:
+                error = _error("ACTIVE_RALPH_FILE_NOT_REGULAR", f"active Ralph path is not a regular file: {relative}")
+                entry["error"] = error
+                errors.append(error)
+            else:
+                try:
+                    observed_sha256 = _sha256(path.read_bytes())
+                except OSError as exc:
+                    error = _error("ACTIVE_RALPH_FILE_UNREADABLE", f"cannot read active Ralph file {relative}: {exc}")
+                    entry["error"] = error
+                    errors.append(error)
+                else:
+                    entry.update(
+                        {
+                            "sha256": observed_sha256,
+                            "expectedSha256": expected_sha256,
+                            "contentMatchesExpected": observed_sha256 == expected_sha256,
+                        }
+                    )
+                    if observed_sha256 != expected_sha256:
+                        error = _error(
+                            "ACTIVE_RALPH_FILE_MISMATCH",
+                            f"active Ralph file does not match reviewed content: {relative}",
+                        )
+                        entry["error"] = error
+                        errors.append(error)
+        active_ralph_files.append(entry)
+
     revision = revision_raw.decode("ascii", errors="replace").strip() if revision_raw is not None else None
     source_files = (
         sorted(
@@ -491,6 +544,7 @@ def _tracked_inventory(repo_root: Path) -> dict[str, Any]:
         "trackedRemovedMechanismFiles": tracked_removed,
         "currentVerificationTrackedFiles": current_tracked,
         "activeVerificationFiles": active_verification_files,
+        "activeRalphFiles": active_ralph_files,
         "filesystemLegacyFiles": filesystem["legacyFiles"],
         "filesystemLegacyDirectories": filesystem["legacyDirectories"],
         "residueFiles": residue,

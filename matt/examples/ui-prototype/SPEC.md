@@ -43,7 +43,7 @@ Owner: 예시 planning owner
 
 ## Behavior Authorities
 
-- ./docs/planning/behavior/contexts/ui-information-action-order.md | Scope: 대상 화면에서 정보가 단일 주요 행동보다 먼저 제공되는 의미적 순서
+- docs/planning/behavior/contexts/ui-information-action-order.md | Scope: 대상 화면에서 정보가 단일 주요 행동보다 먼저 제공되는 의미적 순서
 
 ## UI / UX
 

@@ -61,7 +61,7 @@ class IISGoalLoopContractTests(unittest.TestCase):
     def test_ticket_verified_and_tests_cannot_complete_goal(self) -> None:
         body = normalized(LOOP + "\n" + ROUTER)
         for required in (
-            "Ticket evidence but never completes the parent Goal",
+            "Ticket-level checkpoint never completes the parent Goal",
             "`GOAL VERIFIED` permits `GOAL ACHIEVED`",
             "Ticket readiness",
             "passing tests",
@@ -108,6 +108,59 @@ class IISGoalLoopContractTests(unittest.TestCase):
         self.assertIn("Do not silently convert an explicit one-Ticket implementation request into Ralph Goal fulfillment", body)
         self.assertIn("This is verification only", body)
         self.assertIn("Explicit leaf semantics stay valid and take precedence", body)
+
+    def test_ralph_admission_requires_a_completable_spec_before_mutation(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "`--require-completable`",
+            "`Not independently verifiable`",
+            "stop before mutation",
+            "establish an Independent acceptance path",
+            "approve an Operator-assisted action/readback",
+        ):
+            self.assertIn(required, body)
+
+    def test_working_observation_is_readback_first_and_does_not_duplicate_effects(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "Prefer reading an already-current authoritative product state or readback",
+            "Do not re-run payment, message, deployment, destructive, irreversible",
+            "one-shot, or duplicate-sensitive effects",
+            "keep the item `UNRESOLVED` or request the exact approved operator action",
+        ):
+            self.assertIn(required, body)
+
+    def test_independent_ticket_transition_checkpoint_is_default_but_not_ceremony(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "default transition checkpoint",
+            "`VERIFIED` permits moving to another Ticket",
+            "`FAILED` returns to the same Ticket",
+            "last remaining Ticket and fresh whole-Spec Goal Verification will run immediately",
+            "materially duplicate an unsafe/non-repeatable effect",
+        ):
+            self.assertIn(required, body)
+
+    def test_final_non_pass_requires_exact_obligation_and_current_ownership(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "exact failed obligation",
+            "Ticket/Verification-flow/AC ownership",
+            "exact `None` when no ready Ticket owns",
+            "`None` returns to ordinary Ticket planning",
+            "exact evidence-limited obligation",
+        ):
+            self.assertIn(required, body)
+
+    def test_ralph_completion_is_bounded_to_one_spec_not_parent_initiative(self) -> None:
+        body = normalized(LOOP + "\n" + ROUTER)
+        for required in (
+            "exactly one bounded approved Spec",
+            "must never be promoted to completion of a parent Scope Shaper initiative",
+            "must not promote that package's `GOAL ACHIEVED` to completion of the parent initiative",
+            "Do not invent fan-in orchestration",
+        ):
+            self.assertIn(required, body)
 
     def test_loop_has_no_controller_runtime_or_durable_orchestration_state(self) -> None:
         body = normalized(LOOP + "\n" + ROUTER).lower()

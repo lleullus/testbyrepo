@@ -85,6 +85,41 @@ class GoalVerificationLeadContractTests(unittest.TestCase):
         self.assertIn("otherwise                        -> GOAL INCONCLUSIVE", body)
         self.assertIn("No other result is allowed to mean completion", normalized(body))
 
+    def test_current_authority_chain_is_revalidated_before_product_observation(self) -> None:
+        body = normalized(SKILL)
+        for required in (
+            "freshly revalidate the authority chain",
+            "same canonical project-local authority target",
+            "remains readable and `Status: approved`",
+            "required terminal render disposition",
+            "Authority-chain drift is a planning/admission defect",
+            "`GOAL VERIFICATION NOT STARTED`",
+        ):
+            self.assertIn(required, body)
+
+    def test_fresh_verification_prefers_current_readback_over_replaying_effects(self) -> None:
+        body = normalized(SKILL)
+        for required in (
+            "fresh current read of the approved authoritative boundary",
+            "does not require replaying a product effect",
+            "Prefer that current readback over duplicating an effect",
+            "Re-trigger only when the approved verification contract actually requires it",
+        ):
+            self.assertIn(required, body)
+
+    def test_non_pass_rows_identify_exact_obligation_and_current_candidate_ownership(self) -> None:
+        body = normalized(SKILL)
+        for required in (
+            "Exact obligation:",
+            "Candidate ownership:",
+            "For every `FAIL` or `INCONCLUSIVE` outcome",
+            "current `Parent outcome ordinal` / flow / AC trace",
+            "non-PASS Global Contract",
+            "exact `None` when no ready Ticket owns the needed mutation",
+            "must never authorize Ralph to widen a Ticket",
+        ):
+            self.assertIn(required, body)
+
     def test_verifier_never_remediates_or_runs_ralph(self) -> None:
         body = normalized(SKILL)
         for required in (
