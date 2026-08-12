@@ -158,7 +158,6 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
                 "Status: approved",
                 "applicable rendered",
                 "Open Questions: None",
-                "MATERIAL_RENDERED_UI",
                 "bounded parent-Spec",
             ):
                 self.assertIn(required, normalized)
@@ -175,7 +174,6 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
             self.assertIn("Owner:", normalized)
             self.assertIn("Scope:", normalized)
             self.assertIn("Open Questions: None", normalized)
-            self.assertIn("terminal disposition", normalized)
 
     def test_behavior_approval_state_precedes_completion_without_unlocking_spec(self) -> None:
         lead = (ROOT / "behavior-design-lead" / "SKILL.md").read_text(encoding="utf-8")

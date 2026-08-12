@@ -29,7 +29,6 @@ docs/planning/
 │   └── invariants/
 ├── work/<work-slug>/
 │   ├── DESIGN.md
-│   ├── design-concepts/
 │   ├── SPEC.md
 │   └── tickets/
 └── initiatives/<initiative-slug>/

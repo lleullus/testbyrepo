@@ -67,9 +67,7 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
     one non-empty `Owner:`, and one explicit `Scope:`. It must still contain the
     complete rendered-design and interaction decisions applicable to the Ticket's
     rendered scope, with no unresolved decision in that scope. A Matt-created
-    `DESIGN.md` must have exact `Open Questions: None`; when
-    `MATERIAL_RENDERED_UI` requires terminal render disposition, the current
-    authority must contain one valid terminal disposition. A bounded parent-Spec
+    `DESIGN.md` must have exact `Open Questions: None`. A bounded parent-Spec
     authority must contain every applicable rendered decision or direct
     preservation condition and declare its scoped authority role. Require the
     applicable rendered scope to contain the Ticket's rendered obligation and
@@ -79,7 +77,7 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
     `Implementation Assignment: BLOCKED` before mutation with the affected AC or
     rendered boundary, the parent-Spec-adopted target, the Ticket-referenced
     target, the exact missing, draft, incomplete, unresolved, target-mismatch,
-    scope-mismatch, stale-disposition, or conflict fact, and the Spec/UI authority
+    scope-mismatch, or conflict fact, and the Spec/UI authority
     owner as next owner.
 2. If the user explicitly designates one or more implementation research models,
    invoke `Implementation Research Agent` roles using only those designated models

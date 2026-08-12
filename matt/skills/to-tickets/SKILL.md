@@ -357,17 +357,16 @@ non-empty `Owner:`, and exactly one explicit `Scope:` containing this Ticket's
 rendered obligation. Its content must establish complete approved UI/UX
 authority for that scope with no unresolved rendered-design or interaction
 decision; an incomplete, status-only, visual-reference-only, or style-only
-document is insufficient for new/material UI. A Matt-created `DESIGN.md` must retain exact
-`Open Questions: None`. When `MATERIAL_RENDERED_UI` requires terminal render
-disposition, the current authority must retain one valid terminal disposition.
+document is insufficient for new/material UI. A Matt-created `DESIGN.md` must
+retain exact `Open Questions: None`.
 For a bounded parent-Spec authority, the approved Spec must still contain every
 applicable rendered decision or direct preservation condition and declare its
 scoped authority role. Other References remain context only and cannot supply
 product or UI authority. Put any explanation outside the authority list item.
 
-If the adopted authority's metadata, completeness, unresolved-decision state,
-terminal disposition, or scoped decisions changed after Spec approval, or the
-relationship to the approved Spec cannot be established, do not create or ready
+If the adopted authority's metadata, completeness, unresolved-decision state, or
+scoped decisions changed after Spec approval, or the relationship to the approved
+Spec cannot be established, do not create or ready
 the Ticket. Return the changed UI delta to the Spec/UI authority owner for
 explicit approval instead of adopting the current file silently.
 
