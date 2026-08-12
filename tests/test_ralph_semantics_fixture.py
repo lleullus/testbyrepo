@@ -100,6 +100,23 @@ class RalphSemanticsFixtureTests(unittest.TestCase):
             self.assertFalse(after["preserved"])
             self.assertFalse(all(after.values()))
 
+    def test_distinct_inputs_and_states_remain_distinct_acquisitions(self) -> None:
+        acquisitions: list[tuple[str, str]] = []
+        product = {
+            ("nominal", "ready"): {"ac_1": True},
+            ("invalid", "ready"): {"ac_2": True},
+        }
+
+        def acquire(input_name: str, state_name: str) -> dict[str, bool]:
+            acquisitions.append((input_name, state_name))
+            return product[(input_name, state_name)]
+
+        nominal = acquire("nominal", "ready")
+        invalid = acquire("invalid", "ready")
+        self.assertTrue(nominal["ac_1"])
+        self.assertTrue(invalid["ac_2"])
+        self.assertEqual(acquisitions, [("nominal", "ready"), ("invalid", "ready")])
+
     def test_implementation_context_is_reused_only_while_the_same_ticket_is_active(self) -> None:
         next_context = 0
         active_ticket: str | None = None

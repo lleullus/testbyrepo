@@ -19,6 +19,11 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    materially different correction. Resumption preserves only technical working
    context: it does not preserve feasibility, current-source facts, prior
    observations, authority currentness, or any implementation/verification result.
+   Resumption also does not make a retained shell, working directory, dev server,
+   browser/profile, process, cache, database connection, or other tool/runtime state
+   current. Reuse such state only after directly confirming that it still reflects
+   the current project, current authorized target, and required execution boundary;
+   otherwise recreate or rebind it before relying on its result.
    Do not resume that role across a Ticket change, whole-Spec Goal Verification,
    a user/operator/planning gate, `GOAL OPEN — NO PROGRESS`, or a later Ralph
    invocation. Never write the internal role to `Worker:`, Ticket metadata, a

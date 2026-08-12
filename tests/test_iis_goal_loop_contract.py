@@ -205,6 +205,9 @@ class IISGoalLoopContractTests(unittest.TestCase):
         body = normalized(LOOP)
         for required in (
             "acquire that shared boundary once and classify each linked AC separately",
+            "authored flows actually use that same trigger/input, relevant state",
+            "Distinct inputs, states, branches, lifecycle boundaries, or readbacks remain distinct acquisitions",
+            "do not infer equivalence merely because the ACs concern nearby product behavior",
             "no combined AC verdict",
             "Any product/source mutation after the acquisition invalidates it",
             "After every implementation result, freshly reobserve every AC of the active Ticket",

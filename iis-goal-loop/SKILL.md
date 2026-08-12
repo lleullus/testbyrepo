@@ -123,11 +123,16 @@ locate work but do not replace a fresh current product/canonical observation.
 
 When one current authored product execution or authoritative readback naturally
 decides several AC observations, acquire that shared boundary once and classify
-each linked AC separately from the same fresh result. Do not rerun an identical
-safe effect merely to manufacture one execution per AC. This is acquisition
-sharing only: it creates no combined AC verdict, observation cache, retained
-evidence, or reusable currentness. Any product/source mutation after the
-acquisition invalidates it for the next working observation.
+each linked AC separately from the same fresh result. Share an acquisition only
+when the authored flows actually use that same trigger/input, relevant state, and
+authoritative readback, or when one execution directly produces every required
+linked observation. Distinct inputs, states, branches, lifecycle boundaries, or
+readbacks remain distinct acquisitions; do not infer equivalence merely because
+the ACs concern nearby product behavior. Do not rerun an identical safe effect
+merely to manufacture one execution per AC. This is acquisition sharing only: it
+creates no combined AC verdict, observation cache, retained evidence, or reusable
+currentness. Any product/source mutation after the acquisition invalidates it for
+the next working observation.
 
 Prefer reading an already-current authoritative product state or readback over
 re-triggering a product effect. Execute a trigger for working observation only
