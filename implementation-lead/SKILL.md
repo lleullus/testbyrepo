@@ -113,6 +113,15 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    Agent unless the user separately designated that same configured model/agent
    for implementation research. Role binding comes from the explicit designation,
    not model identity.
+   When the approved Scope/Spec/Ticket explicitly preserves, replaces, rebuilds,
+   or migrates an existing product capability, directly inspect the bounded
+   predecessor implementation and the current product boundaries it actually uses
+   before concluding that an external dependency is unavailable or that no
+   in-Scope implementation path remains. Use that predecessor only as navigation
+   and preservation context: do not inherit its internal design, policy, schema,
+   fallback behavior, or historical semantics as authority unless the approved
+   contract already adopts them, and do not broaden this into legacy-repository
+   archaeology.
 3. An Implementation Research Agent may investigate only the directly relevant
    implementation and integration surfaces; relevant pre-existing or concurrent
    changes; required files, executables, dependencies, and focused-check

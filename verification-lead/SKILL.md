@@ -89,7 +89,13 @@ If none were supplied, host-provided invocation-local Runner roles are allowed.
 Within those user constraints, Lead chooses grouping, count, timing, concurrency,
 valid shared acquisition, and serial fallback. Do not define AC/flow/defect/file-
 per-Runner fixed decomposition or invoke unused Runner slots merely to consume a
-roster. Runner output is raw current evidence/currentness information only.
+roster. Runner output is raw current evidence/currentness information only. Never
+derive an AC verdict or aggregate by vote, majority, consensus, model agreement, or
+counting Runner labels. Ignore Runner verdict-like claims and adjudicate the exact
+authored denominator from admitted raw current evidence. If Runner observations
+appear to conflict, resolve the bounded target/currentness/attribution difference
+directly; unresolved conflict is `INCONCLUSIVE`, not a reason to wait for a tie-breaking
+Runner or choose the most common claim.
 
 ## Optional Candidate Execution Recipe
 
@@ -135,7 +141,7 @@ genuinely shared; do not duplicate it unless the Ticket requires repetition or
 distinct inputs, states, branches, or boundaries. Do not run every AC or every
 Runner slot separately merely to manufacture a row or consume a roster. The Lead
 admits only raw current evidence and currentness facts returned by a fresh Runner;
-Runner narration or verdict-like labels are not authority.
+Runner narration or verdict-like labels are not authority. A `PASS` requires an attributable raw authoritative readback from the current Runner observation; if a disposable target is gone and only Runner narration remains, the affected AC is `INCONCLUSIVE`.
 
 Only evidence obtained now from the current target is admissible:
 

@@ -16,13 +16,29 @@ class VerificationRunnerContractTests(unittest.TestCase):
         ):
             self.assertIn(phrase, NORMALIZED)
 
-    def test_no_fixed_decomposition_and_early_navigation(self) -> None:
+    def test_no_fixed_decomposition_early_navigation_and_boundary_scoped_unavailability(self) -> None:
         for phrase in ("AC-per-Runner", "flow-per-Runner", "outcome-per-Runner", "defect-per-Runner", "file-per-Runner"):
             self.assertIn(phrase, NORMALIZED)
         for phrase in (
+            "Failure of the assigned endpoint, representation, transport, tool, or readback establishes only that exact failed boundary",
+            "never label the dependency or service as wholly unavailable from that observation alone",
+            "another materially relevant contract-admitted representation/readback",
+            "otherwise report the exact failed boundary so the Lead can decide whether another bounded Runner observation is warranted",
             "report that observation to the calling Lead immediately",
             "Do not wait for unrelated Runner assignments or the Lead's final aggregate merely to batch findings",
             "navigation only",
+        ):
+            self.assertIn(phrase, NORMALIZED)
+
+    def test_disposable_target_report_is_raw_and_attributable(self) -> None:
+        for phrase in (
+            "Before disposing or cleaning up a disposable target",
+            "authoritative raw readback needed to attribute the assigned observation",
+            "exact target or representation",
+            "materially relevant non-secret identifiers or terminal fields",
+            "cleanup state",
+            "not an evidence cache, archive, or durable record",
+            "narration about what the target previously showed cannot substitute for the missing raw observation",
         ):
             self.assertIn(phrase, NORMALIZED)
 

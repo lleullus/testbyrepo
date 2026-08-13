@@ -35,6 +35,18 @@ class GoalVerificationLeadContractTests(unittest.TestCase):
         ):
             self.assertIn(required, body)
 
+    def test_runner_reports_are_not_votes_and_missing_raw_readback_cannot_final_pass(self) -> None:
+        body = normalized(SKILL)
+        for required in (
+            "Never derive a row verdict or Goal aggregate by vote, majority, consensus, model agreement, or counting Runner labels",
+            "unresolved conflict is `INCONCLUSIVE`",
+            "not a reason to wait for a tie-breaking Runner or select the most common claim",
+            "final `PASS` requires attributable raw authoritative readback from the fresh Runner observation",
+            "disposable target is gone and only Runner narration remains",
+            "affected row is `INCONCLUSIVE`",
+        ):
+            self.assertIn(required, body)
+
     def test_same_user_roster_is_reused_only_through_fresh_invocations(self) -> None:
         body = normalized(SKILL)
         for required in (

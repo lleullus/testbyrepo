@@ -149,6 +149,18 @@ class ActiveSkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, normalized)
 
+    def test_explicitly_preserved_predecessor_is_bounded_navigation_not_inherited_authority(self) -> None:
+        normalized = " ".join(IMPLEMENTATION_SKILL.split())
+        for required in (
+            "approved Scope/Spec/Ticket explicitly preserves, replaces, rebuilds, or migrates an existing product capability",
+            "directly inspect the bounded predecessor implementation and the current product boundaries it actually uses",
+            "before concluding that an external dependency is unavailable or that no in-Scope implementation path remains",
+            "Use that predecessor only as navigation and preservation context",
+            "do not inherit its internal design, policy, schema, fallback behavior, or historical semantics as authority",
+            "do not broaden this into legacy-repository archaeology",
+        ):
+            self.assertIn(required, normalized)
+
     def test_behavior_trace_is_semantic_guardrail_not_implementation_mechanism(self) -> None:
         normalized = " ".join(IMPLEMENTATION_SKILL.split())
         for required in (

@@ -65,7 +65,11 @@ count, timing, concurrency, valid shared acquisition, and serial fallback. Do no
 define AC/flow/outcome/defect/file-per-Runner fixed decomposition and do not invoke
 unused Runner slots merely to consume a roster. Runner output is raw current
 evidence/currentness information only; Runner verdict-like labels or progression
-claims have no authority.
+claims have no authority. Never derive a row verdict or Goal aggregate by vote,
+majority, consensus, model agreement, or counting Runner labels. If fresh Runner
+observations appear to conflict, adjudicate the bounded authoritative boundary,
+currentness, and attribution directly; unresolved conflict is `INCONCLUSIVE`, not
+a reason to wait for a tie-breaking Runner or select the most common claim.
 
 Goal Verification is a quiescent final barrier, not another streaming remediation
 stage. All current Ralph product/source mutation and any prior verification effects
@@ -102,7 +106,10 @@ Obtain evidence now through fresh Verification Runner observation of the current
 authoritative boundary named or admitted by the approved contract. Goal
 Verification Lead admits only the Runner's raw current evidence and bounded
 currentness facts; Runner narration, verdict-like labels, or progression claims
-are not final authority. Admissible evidence includes:
+are not final authority. A final `PASS` requires attributable raw authoritative
+readback from the fresh Runner observation; if a disposable target is gone and
+only Runner narration remains, the affected row is `INCONCLUSIVE`. Admissible
+evidence includes:
 
 - current product result and authoritative readback after an approved trigger;
 - direct current canonical source/artifact/document inspection for a

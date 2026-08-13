@@ -99,12 +99,18 @@ class IISGoalLoopContractTests(unittest.TestCase):
         ):
             self.assertIn(required, body)
 
-    def test_no_progress_is_invocation_circuit_breaker_not_goal_impossibility(self) -> None:
+    def test_no_progress_requires_bounded_evidence_and_correction_closure(self) -> None:
         body = normalized(LOOP)
         for required in (
             "same Ticket + materially unchanged current observations + the same attempted implementation with unchanged inputs",
             "Starting or resuming another Worker does not turn that repetition into progress",
-            "serial or overlapping",
+            "invocation-local bounded evidence/correction closure audit",
+            "no materially different in-Scope correction",
+            "no safe direct observation or authoritative readback still available",
+            "no exact operator/environment/authority action that could restore evidence",
+            "path is not exhausted merely because its first endpoint, representation, transport, tool, or readback failed",
+            "Do not turn this audit into broad repository discovery, arbitrary endpoint hunting, a durable path registry, or a scheduler",
+            "Only when the current invocation has an open Goal and that bounded audit closes every such path",
             "`GOAL OPEN — NO PROGRESS`",
             "circuit breaker for the current attempt, not a claim that the Goal is impossible",
             "later invocation starts from the same approved Spec, validated Ticket set, and fresh current product state",
@@ -118,6 +124,32 @@ class IISGoalLoopContractTests(unittest.TestCase):
             "Do not ask the user which endpoint, parser, fallback, retry policy",
             "Do not ask the user for implementation mechanics",
             "ask the user only for a real product, Scope, completion-contract, or dangerous-authority decision",
+        ):
+            self.assertIn(required, body)
+
+    def test_required_inflight_work_blocks_terminal_result_and_user_action_none_keeps_ralph_running(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "host-known required Implementation Lead, Implementation Subagent, Verification Lead, Goal Verification Lead, Verification Runner invocation, or Runner-started product effect",
+            "still active, waiting for a required current reply, or still capable of producing authorized current evidence/correction is an unexhausted path",
+            "nonterminal progress update while such work continues",
+            "must not close the current invocation with a Goal result or `GOAL OPEN — NO PROGRESS`",
+            "invocation-local host awareness only; do not persist a task registry, queue, or scheduler",
+            "`GOAL OPEN — PROGRESSED` is a nonterminal progress report",
+            "It is not a handoff of due-now work to the user",
+            "When a report says `User Action: None`, Ralph continues executing every remaining authorized evidence/correction path",
+            "do not instruct the user to resume later, retry when a dependency recovers, wait for a background task, or perform an unspecified next step",
+        ):
+            self.assertIn(required, body)
+
+    def test_progress_reporting_keeps_tests_separate_from_direct_completion_evidence(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "Keep implementation checks and completion evidence visibly separate",
+            "Test/build/lint counts may be reported as implementation checks",
+            "never fill `Current direct evidence:` or final `Evidence:`",
+            "do not outrank current CLI/product/persistence/rendered/canonical authoritative readback",
+            "report the exact evidence limit instead of substituting a passing test count or Worker narration",
         ):
             self.assertIn(required, body)
 
@@ -150,10 +182,27 @@ class IISGoalLoopContractTests(unittest.TestCase):
         ):
             self.assertIn(required, body)
 
-    def test_working_observation_is_readback_first_and_does_not_duplicate_effects(self) -> None:
+    def test_explicitly_preserved_predecessor_is_bounded_navigation_not_authority(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "approved Scope/Spec/Ticket explicitly says the current work preserves, replaces, rebuilds, or migrates an existing product capability",
+            "bounded predecessor implementation and its currently used product boundaries are relevant navigation",
+            "before Ralph concludes that an external dependency is unavailable or that no in-Scope correction remains",
+            "implementation details, policy, schema, fallback strategy, or historical behavior do not become new product authority",
+            "not a license for broad legacy archaeology",
+        ):
+            self.assertIn(required, body)
+
+    def test_working_observation_is_readback_first_boundary_scoped_and_does_not_duplicate_effects(self) -> None:
         body = normalized(LOOP)
         for required in (
             "Prefer reading an already-current authoritative product state or readback",
+            "Failure of one endpoint, representation, transport, tool, or readback establishes only that exact failed boundary",
+            "Do not promote it to dependency-wide unavailability",
+            "approved contract, current product/config/source, or other current direct evidence",
+            "do not invent arbitrary fallbacks or perform broad endpoint discovery",
+            "known usable representation exists but the current product does not support or reach it",
+            "candidate current in-Scope product/integration work rather than an external-dependency conclusion",
             "Do not re-run payment, message, deployment, destructive, irreversible",
             "one-shot, or duplicate-sensitive effects",
             "keep the item `UNRESOLVED` or request the exact approved operator action",
@@ -200,6 +249,11 @@ class IISGoalLoopContractTests(unittest.TestCase):
             "exact `None` when no ready Ticket owns",
             "`None` returns to ordinary Ticket planning",
             "exact evidence-limited obligation",
+            "terminates only that Goal Verification invocation",
+            "not Goal completion, product impossibility, dependency-wide unavailability",
+            "Ralph immediately re-enters current bounded resolution",
+            "another currently known contract-admitted authoritative readback/direct observation",
+            "Only the exact owning gate may stop further automatic work",
         ):
             self.assertIn(required, body)
 

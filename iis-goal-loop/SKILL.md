@@ -122,6 +122,17 @@ or persisted status. Tests, mocks, implementation narration, prior Ticket
 verdicts, previous implementation results, and stale observations may help
 locate work but do not replace a fresh current product/canonical observation.
 
+When the approved Scope/Spec/Ticket explicitly says the current work preserves,
+replaces, rebuilds, or migrates an existing product capability, the bounded
+predecessor implementation and its currently used product boundaries are relevant
+navigation before Ralph concludes that an external dependency is unavailable or
+that no in-Scope correction remains. Inspect only the predecessor surfaces needed
+to understand the explicitly preserved capability; its implementation details,
+policy, schema, fallback strategy, or historical behavior do not become new
+product authority unless the approved contract already adopts them. This is not a
+license for broad legacy archaeology or for treating any nearby old repository as
+a compatibility requirement.
+
 When one current authored product execution or authoritative readback naturally
 decides several AC observations, acquire that shared boundary once and classify
 each linked AC separately from the same fresh result. Share an acquisition only
@@ -136,10 +147,21 @@ currentness. Any product/source mutation after the acquisition invalidates it fo
 the next working observation.
 
 Prefer reading an already-current authoritative product state or readback over
-re-triggering a product effect. Execute a trigger for working observation only
-when it is safe local/disposable/repeatable, or when existing exact authority
-covers the action, target, readback, cleanup, and non-duplication boundary. Do not
-re-run payment, message, deployment, destructive, irreversible, shared-production,
+re-triggering a product effect. Failure of one endpoint, representation, transport,
+tool, or readback establishes only that exact failed boundary. Do not promote it
+to dependency-wide unavailability while another materially relevant representation
+or authoritative readback is already identified by the approved contract, current
+product/config/source, or other current direct evidence. Inspect only those bounded
+known alternatives needed for the obligation; do not invent arbitrary fallbacks or
+perform broad endpoint discovery. If a known usable representation exists but the
+current product does not support or reach it where the Ticket requires the outcome,
+treat that as candidate current in-Scope product/integration work rather than an
+external-dependency conclusion.
+
+Execute a trigger for working observation only when it is safe
+local/disposable/repeatable, or when existing exact authority covers the action,
+target, readback, cleanup, and non-duplication boundary. Do not re-run payment,
+message, deployment, destructive, irreversible, shared-production,
 credential-bearing, one-shot, or duplicate-sensitive effects merely to refresh
 Ralph navigation. If fresh observation requires such an effect, keep the item
 `UNRESOLVED` or request the exact approved operator action. Do not consume a
@@ -364,9 +386,15 @@ quiescent final barrier, not another streaming remediation stage.
   correction exists; `None` returns to ordinary Ticket planning instead of
   widening authority.
 - `GOAL INCONCLUSIVE` must identify the exact evidence-limited obligation and the
-  same current ownership information. Return to the mapped Ticket only when an
-  in-Scope correction can restore the defined observation path; otherwise use the
-  exact operator, planning, or user gate below.
+  same current ownership information. It terminates only that Goal Verification
+  invocation; it is not Goal completion, product impossibility, dependency-wide
+  unavailability, or by itself permission to end Ralph. For each non-PASS
+  obligation, Ralph immediately re-enters current bounded resolution: continue the
+  mapped existing Ticket when an in-Scope correction can restore the observation
+  path; otherwise determine whether another currently known contract-admitted
+  authoritative readback/direct observation, exact operator/environment/authority
+  action, or required planning/user decision remains. Only the exact owning gate
+  may stop further automatic work.
 
 No other result completes the Goal.
 
@@ -385,12 +413,21 @@ Progress within the current invocation means at least one of:
 - a materially different in-Scope correction became justified; or
 - a bounded Ticket obligation was actually closed without regressing another.
 
-If the current invocation has an open Goal but no materially different in-Scope
-correction, new direct evidence path, exact operator action, or product/scope
-decision to request, stop this invocation as `GOAL OPEN — NO PROGRESS`. This is a
-circuit breaker for the current attempt, not a claim that the Goal is impossible.
-A later invocation starts from the same approved Spec, validated Ticket set, and
-fresh current product state.
+Before `GOAL OPEN — NO PROGRESS`, perform an invocation-local bounded
+ evidence/correction closure audit over every currently known materially relevant
+ path admitted by the approved contract or current product boundary. Confirm that
+ there is no materially different in-Scope correction, no safe direct observation
+ or authoritative readback still available, no exact operator/environment/authority
+ action that could restore evidence, and no required product/scope decision. A
+ path is not exhausted merely because its first endpoint, representation,
+ transport, tool, or readback failed. Do not turn this audit into broad repository
+ discovery, arbitrary endpoint hunting, a durable path registry, or a scheduler.
+
+Only when the current invocation has an open Goal and that bounded audit closes
+ every such path may Ralph stop this invocation as `GOAL OPEN — NO PROGRESS`. This
+ is a circuit breaker for the current attempt, not a claim that the Goal is
+ impossible. A later invocation starts from the same approved Spec, validated
+ Ticket set, and fresh current product state.
 
 ## Planning And Authority Gates
 
@@ -419,6 +456,33 @@ operator must supply. The operator never supplies the AC or Goal verdict.
 
 The Goal has only two durable meanings in conversation: open or achieved. Do not
 create a persisted Goal status.
+
+A host-known required Implementation Lead, Implementation Subagent, Verification
+Lead, Goal Verification Lead, Verification Runner invocation, or Runner-started
+product effect that is still active, waiting for a required current reply, or still
+capable of producing authorized current evidence/correction is an unexhausted path.
+Ralph may send a concise nonterminal progress update while such work continues, but
+must not close the current invocation with a Goal result or `GOAL OPEN — NO
+PROGRESS` merely because another required role/effect has not returned yet. This is
+invocation-local host awareness only; do not persist a task registry, queue, or
+scheduler.
+
+`GOAL OPEN — PROGRESSED` is a nonterminal progress report when authorized automatic
+work remains in the current invocation. It is not a handoff of due-now work to the
+user. When a report says `User Action: None`, Ralph continues executing every
+remaining authorized evidence/correction path in the current invocation; do not
+instruct the user to resume later, retry when a dependency recovers, wait for a
+background task, or perform an unspecified next step. If automatic progress truly
+cannot continue, use only the already-defined exact `GOAL OPEN — NO PROGRESS`,
+`USER DECISION REQUIRED`, `OPERATOR ACTION REQUIRED`, planning, environment, or
+authority boundary that actually owns the stop.
+
+Keep implementation checks and completion evidence visibly separate in every
+progress or public result. Test/build/lint counts may be reported as implementation
+checks, but they never fill `Current direct evidence:` or final `Evidence:` and do
+not outrank current CLI/product/persistence/rendered/canonical authoritative
+readback. If current direct evidence cannot be obtained, report the exact evidence
+limit instead of substituting a passing test count or Worker narration.
 
 Report one of:
 

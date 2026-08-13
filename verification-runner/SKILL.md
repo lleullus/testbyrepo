@@ -57,15 +57,32 @@ For every invocation:
    establish currentness.
 2. Obtain direct current evidence from the assigned product/canonical boundary.
    Prefer a fresh read of already-current authoritative state/readback when the
-   contract permits it instead of replaying an effect.
+   contract permits it instead of replaying an effect. Failure of the assigned
+   endpoint, representation, transport, tool, or readback establishes only that
+   exact failed boundary; never label the dependency or service as wholly
+   unavailable from that observation alone. If the assignment or current Lead
+   context already identifies another materially relevant contract-admitted
+   representation/readback, observe it only when it remains inside this bounded
+   assignment; otherwise report the exact failed boundary so the Lead can decide
+   whether another bounded Runner observation is warranted.
 3. When one safe current acquisition genuinely covers multiple linked assignments,
    the Lead may share that raw acquisition; classify no verdict here and do not
    create an evidence cache or retained observation object.
 4. Recheck the bounded currentness facts needed for attribution before reporting.
    If the source, target, state, or readback binding changed so the observation can
    no longer be attributed, report that exact evidence limit instead of guessing.
-5. Return the raw observation, the current target/readback facts necessary to
-   understand it, and any exact evidence limitation to the calling Lead.
+5. Before disposing or cleaning up a disposable target, capture the authoritative
+   raw readback needed to attribute the assigned observation. Return an
+   invocation-local report containing: the bounded assignment; exact target or
+   representation; trigger/input or inspection target; authoritative readback;
+   raw current observation; materially relevant non-secret identifiers or terminal
+   fields; bounded currentness check; exact evidence limit, if any; and cleanup
+   state. Omit credentials, secrets, and arbitrary provider payloads. This report
+   exists only in the current conversation/invocation and is not an evidence cache,
+   archive, or durable record. If cleanup makes the target unavailable before an
+   attributable raw readback was obtained, report that evidence limit; narration
+   about what the target previously showed cannot substitute for the missing raw
+   observation.
 
 When fresh direct evidence establishes a concrete current contradiction or a
 concrete Ticket-owned implementation, integration, acceptance-surface, or readback
