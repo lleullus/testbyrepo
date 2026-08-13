@@ -166,6 +166,18 @@ check. If a bound fact changed or cannot be rechecked, the affected ACs are
 usable only under the attribution rule below. This currentness recheck does not
 replace product evidence.
 
+A Ticket-verification invocation can authorize a caller to leave the Ticket only
+when the product/source it verified remained stable for that transition decision.
+If the caller or any concurrent actor mutates the product/source after this
+verification invocation begins, the caller must not use this invocation's
+aggregate to authorize a Ticket transition, even when observations completed
+before the mutation were admissible at the time. Let any still-safe observation
+finish only as current navigation; after the mutation settles, the caller must
+obtain a new fresh Verification Lead invocation against the resulting current
+product before leaving the Ticket. This rule creates no retained verification
+state or generation identity; the caller knows only whether mutation overlapped
+the current invocation.
+
 ## Verdicts And Result
 
 Assign exactly one verdict to every exact authored AC in authored order:

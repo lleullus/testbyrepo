@@ -72,6 +72,17 @@ class VerificationLeadContractTests(unittest.TestCase):
         self.assertIn("This currentness recheck does not replace product evidence", NORMALIZED)
         self.assertIn("Do not create a digest, snapshot, retained source, or durable identity", NORMALIZED)
 
+    def test_mutation_overlap_invalidates_ticket_transition_use(self) -> None:
+        for required in (
+            "authorize a caller to leave the Ticket only when the product/source it verified remained stable",
+            "mutates the product/source after this verification invocation begins",
+            "must not use this invocation's aggregate to authorize a Ticket transition",
+            "still-safe observation finish only as current navigation",
+            "new fresh Verification Lead invocation against the resulting current product",
+            "creates no retained verification state or generation identity",
+        ):
+            self.assertIn(required, NORMALIZED)
+
     def test_only_direct_contradiction_is_fail(self) -> None:
         self.assertEqual(
             classify_boundary(admission_complete=True, attempted=True, contradiction=True),

@@ -141,6 +141,20 @@ class IISGoalLoopContractTests(unittest.TestCase):
         ):
             self.assertIn(required, body)
 
+    def test_mutation_overlap_requires_settle_reobserve_and_new_fresh_verification(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "no product/source mutation from the current Ralph invocation overlapped that Verification Lead invocation",
+            "immediately loses authority to move Ralph out of the active Ticket",
+            "still-safe observations may remain navigation",
+            "let the current Ticket's mutation settle",
+            "freshly reobserve every AC of the active Ticket against the resulting current product",
+            "new fresh Verification Lead invocation before leaving the Ticket",
+            "Do not carry forward earlier PASS rows or an earlier aggregate across that mutation boundary",
+            "implementation mutation must still be finished before whole-Spec Goal Verification begins",
+        ):
+            self.assertIn(required, body)
+
     def test_final_non_pass_requires_exact_obligation_and_current_ownership(self) -> None:
         body = normalized(LOOP)
         for required in (

@@ -228,18 +228,31 @@ for a different Ticket, use the separate `../verification-lead/SKILL.md` as the
 default transition checkpoint when every flow on the active Ticket is
 `Independent` and the authored verification can be performed safely without
 replaying an expensive, one-shot, destructive, credential-bearing, production,
-or duplicate-sensitive effect. `VERIFIED` permits moving to another Ticket;
-`FAILED` returns to the same Ticket; `INCONCLUSIVE` remains current unfinished
-work and is handled by correction, exact operator action, or the authority gate.
+or duplicate-sensitive effect. `VERIFIED` permits moving to another Ticket only
+when no product/source mutation from the current Ralph invocation overlapped that
+Verification Lead invocation. `FAILED` returns to the same Ticket;
+`INCONCLUSIVE` remains current unfinished work and is handled by correction,
+exact operator action, or the authority gate.
+
+If any current-Ralph product/source mutation begins after a transition
+Verification Lead invocation starts, that invocation immediately loses authority
+to move Ralph out of the active Ticket. Its still-safe observations may remain
+navigation, but Ralph must first let the current Ticket's mutation settle, freshly
+reobserve every AC of the active Ticket against the resulting current product,
+and then obtain a new fresh Verification Lead invocation before leaving the
+Ticket. Do not carry forward earlier PASS rows or an earlier aggregate across
+that mutation boundary.
 
 Do not run this checkpoint merely for ceremony when the active Ticket is the last
 remaining Ticket and fresh whole-Spec Goal Verification will run immediately, or
 when the checkpoint would materially duplicate an unsafe/non-repeatable effect.
 In those cases keep the provisional observation as navigation, record the
 invocation-local reason for skipping the checkpoint, and rely on final Goal
-Verification for completion evidence. A Ticket-level checkpoint never completes
-the parent Goal. Do not bypass the thin verifier for mixed/non-independent flows;
-those flows stay under Ralph provisional observation and final Goal Verification.
+Verification for completion evidence. Any current-Ralph implementation mutation
+must still be finished before whole-Spec Goal Verification begins. A Ticket-level
+checkpoint never completes the parent Goal. Do not bypass the thin verifier for
+mixed/non-independent flows; those flows stay under Ralph provisional observation
+and final Goal Verification.
 
 ### 5. Reconsider The Complete Ticket Set
 
