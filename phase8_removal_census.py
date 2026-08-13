@@ -25,6 +25,7 @@ LEGACY_SOURCE_PATHS = (
 )
 CURRENT_VERIFICATION_PATHS = (
     "verification-lead",
+    "verification-runner",
     "primary-verifier",
     "iis_ephemeral_transport.py",
     "verification-runtime",
@@ -46,6 +47,9 @@ ACTIVE_VERIFICATION_FILES = frozenset(
         "verification-lead/verdict_contract.py",
         "verification-lead/tests/test_contract.py",
         "verification-lead/tests/pilot/test_representative_pilots.py",
+        "verification-runner/SKILL.md",
+        "verification-runner/run_tests.py",
+        "verification-runner/tests/test_contract.py",
     }
 )
 ACTIVE_VERIFICATION_DIRECTORIES = frozenset(
@@ -53,21 +57,26 @@ ACTIVE_VERIFICATION_DIRECTORIES = frozenset(
         "verification-lead",
         "verification-lead/tests",
         "verification-lead/tests/pilot",
+        "verification-runner",
+        "verification-runner/tests",
     }
 )
 ACTIVE_VERIFICATION_SHA256 = {
     # Updated only with a reviewed canonical leaf change.
-    "verification-lead/SKILL.md": "2583192da5c9931a83df08661eda49bd91c770d6303051cf6e65106fbcfcfe44",
+    "verification-lead/SKILL.md": "fdb04a8bda7b3c1def007024ca97e7811b4e20972f61a5dc2140ecdb01acf5e5",
     "verification-lead/run_tests.py": "8f0c1c288930dda0468d077bb61b6a046aad69b6531dc6cdb7f9d457cf8ea185",
     "verification-lead/verdict_contract.py": "0ec52acc6f27ca9167adbabeddfede4dfcc719e0fe480e124c43e3ff95dba9d7",
-    "verification-lead/tests/test_contract.py": "57bb22f45cbde5bdb9e18c872aaedaf7c4ba9154c11b57c32cd4e7505c24cb4e",
+    "verification-lead/tests/test_contract.py": "12c1b0f4f175f957ec659f7fe89a250c176290d1682198303cebed147741954a",
     "verification-lead/tests/pilot/test_representative_pilots.py": "02a122d5efbf0051d67f50b3d370f9dfa2c4f210516dd086d0e9be19a4d1c530",
+    "verification-runner/SKILL.md": "3707ca2b874ff04013b42287f0d24e20112950d4cef1dccb8755a4e6f6376e31",
+    "verification-runner/run_tests.py": "25a1fae8b7834d3c06c3e0fbcc762dfda577a32bf23ef51ffdc278da86f8bf25",
+    "verification-runner/tests/test_contract.py": "e0de23819c76696de1daf34d48ac673775493a9c1c39f4702c818152c11ffc71",
 }
 ACTIVE_RALPH_SHA256 = {
     # Reviewed active Goal-fulfillment route, closure contract, and exact structural admission support.
-    "ARCHITECTURE-CLOSURE.md": "2c0a0c25cbecc6ddf2083d09c4196f8ce91e1ae5f0b614ebbe1f93d59f2cfa5f",
-    "iis-goal-loop/SKILL.md": "722df4ff3d197627201ff66bcc42660c60d93eb3a725374d990d825df2b9ed82",
-    "goal-verification-lead/SKILL.md": "02bba8db29057cefc65443ef50ffe1206fc0e0d27ac84d9cbad1ad3b10ddeaa6",
+    "ARCHITECTURE-CLOSURE.md": "b3d19b0dd30da6ec506ae11305c4d9a638cfe25e747727e04bd6831b89c93330",
+    "iis-goal-loop/SKILL.md": "9b956256ce5615fd6db7233ddff2353eba0eae5f1f7126a2d70e5cd98dc02ad5",
+    "goal-verification-lead/SKILL.md": "5ac1c79421b8546976f6ea2f79373a342d2416488bc7b3f13a3a875c1ff96a40",
     "matt/skills/to-tickets/validate_ticket_set.py": "2a5eda27390c079bfb21200c71f96eec66f878c2bb9db1bc9696d8e37b8895ea",
 }
 LEGACY_EXECUTABLE_STEMS = (
@@ -129,7 +138,7 @@ ROUTER_IMPLEMENTATION_PATH = "/home/user01/project/iis-skills/implementation-lea
 ROUTER_VERIFICATION_PATH = "/home/user01/project/iis-skills/verification-lead/SKILL.md"
 ROUTER_GOAL_LOOP_PATH = "/home/user01/project/iis-skills/iis-goal-loop/SKILL.md"
 ROUTER_GOAL_VERIFICATION_PATH = "/home/user01/project/iis-skills/goal-verification-lead/SKILL.md"
-ROUTER_SHA256 = "85f3d7aed5399bf869595adc0bd08d2d58a82a71fc0c9da2ff384cff7a1088b9"
+ROUTER_SHA256 = "e0e58eae1008a7793dd62e7d8e258edf6e19e2132a4f3b9f9826e29834386838"
 CONFIG_SUFFIXES = frozenset({".json", ".jsonc", ".md", ".ts", ".js"})
 CONFIG_EXCLUDED_DIRECTORIES = frozenset({"node_modules", ".audit", ".git"})
 ACTIVE_CONFIG_ROOT_FILES = frozenset(

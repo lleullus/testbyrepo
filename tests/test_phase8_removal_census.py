@@ -101,7 +101,7 @@ class Phase8RemovalCensusTests(unittest.TestCase):
         self.installed = self.root / "installed-skills"
         router = self.installed / "iis-workflow/SKILL.md"
         router.parent.mkdir(parents=True)
-        router.write_bytes(Path("/home/user01/.codex/skills/iis-workflow/SKILL.md").read_bytes())
+        router.write_bytes((ROOT / "iis-workflow/SKILL.md").read_bytes())
 
         self.config = self.root / "opencode-config"
         self.config.mkdir()

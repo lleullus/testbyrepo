@@ -79,12 +79,21 @@ class IISEntryRoutingContractTests(unittest.TestCase):
         ):
             self.assertIn(required, router)
 
-    def test_installed_router_is_byte_identical_to_canonical_repository_router(self) -> None:
+    def test_live_installed_router_matches_current_canonical_main_installation(self) -> None:
         self.assertTrue(INSTALLED_ROUTER.is_file())
         self.assertTrue(CANONICAL_ROUTER.is_file())
         self.assertEqual(INSTALLED_ROUTER.read_bytes(), CANONICAL_ROUTER.read_bytes())
-        if ROOT.resolve() == CANONICAL_ROUTER.parents[1].resolve():
-            self.assertEqual(INSTALLED_ROUTER.read_bytes(), REPO_ROUTER.read_bytes())
+
+    def test_branch_router_is_validated_as_the_current_repository_contract(self) -> None:
+        router = " ".join(REPO_ROUTER.read_text(encoding="utf-8").split())
+        for required in (
+            "Preserve those bindings and conditions as authored",
+            "Model identity alone is not a role",
+            "pass those exact current-conversation bindings to Verification Lead",
+            "Pass any user-designated `Verification Runner` bindings and conditions unchanged to Goal Verification Lead",
+            "carrying any current-conversation Implementation/Verification role bindings and their explicit consumption conditions unchanged",
+        ):
+            self.assertIn(required, router)
 
 
 if __name__ == "__main__":

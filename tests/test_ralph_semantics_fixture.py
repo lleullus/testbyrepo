@@ -364,6 +364,75 @@ class RalphSemanticsFixtureTests(unittest.TestCase):
         self.assertLess(events.index("quiescent"), events.index("fresh-ticket-verification"))
         self.assertLess(events.index("fresh-ticket-verification"), events.index("fresh-goal-verification"))
 
+    def test_inconclusive_with_known_bounded_path_cannot_become_no_progress(self) -> None:
+        paths = {
+            "authored-boundary": {"known": True, "safe": True, "exhausted": True},
+            "bounded-alternate-readback": {"known": True, "safe": True, "exhausted": False},
+        }
+        materially_distinct_correction = False
+
+        def closure_complete() -> bool:
+            return materially_distinct_correction is False and all(
+                not path["known"] or not path["safe"] or path["exhausted"]
+                for path in paths.values()
+            )
+
+        self.assertFalse(
+            closure_complete(),
+            "GOAL INCONCLUSIVE cannot become NO PROGRESS while a known safe bounded evidence path remains",
+        )
+
+        paths["bounded-alternate-readback"]["exhausted"] = True
+        materially_distinct_correction = True
+        self.assertFalse(
+            closure_complete(),
+            "a newly established in-Scope correction keeps Ralph open even after the evidence path is exhausted",
+        )
+
+        materially_distinct_correction = False
+        self.assertTrue(closure_complete())
+
+    def test_alternate_representation_diagnoses_reachability_without_replacing_exact_authored_boundary(self) -> None:
+        observations = {
+            "authored-representation": "unavailable",
+            "alternate-representation": "reachable",
+        }
+        exact_authored_representation_required = True
+
+        dependency_wholly_unavailable = all(value == "unavailable" for value in observations.values())
+        authored_outcome_satisfied = (
+            observations["authored-representation"] == "reachable"
+            if exact_authored_representation_required
+            else any(value == "reachable" for value in observations.values())
+        )
+
+        self.assertFalse(dependency_wholly_unavailable)
+        self.assertFalse(
+            authored_outcome_satisfied,
+            "an alternate representation may diagnose reachability but cannot silently replace an exact authored representation",
+        )
+
+    def test_inflight_work_resolution_does_not_bypass_remaining_closure(self) -> None:
+        invocation = {"active": True, "can_still_report": True, "host_stopped": False}
+        known_safe_path_remaining = True
+
+        def in_flight() -> bool:
+            return invocation["active"] and invocation["can_still_report"] and not invocation["host_stopped"]
+
+        def terminal_no_progress_allowed() -> bool:
+            return not in_flight() and not known_safe_path_remaining
+
+        self.assertFalse(terminal_no_progress_allowed())
+
+        invocation.update({"active": False, "can_still_report": False, "host_stopped": True})
+        self.assertFalse(
+            terminal_no_progress_allowed(),
+            "ending an in-flight invocation only removes that liveness blocker; it does not exhaust other evidence paths",
+        )
+
+        known_safe_path_remaining = False
+        self.assertTrue(terminal_no_progress_allowed())
+
 
 if __name__ == "__main__":
     unittest.main()

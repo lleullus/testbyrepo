@@ -29,28 +29,36 @@ Goal fulfillment.
   defect/AC/file ownership. Implementation result is not an independent AC verdict
   or final `VERIFIED` status.
 - `verification-runner/`: fresh bounded product/canonical observation subordinate
-  to Verification Lead or Goal Verification Lead. It reports raw current evidence
-  or an exact evidence limit and never owns verdicts, remediation, progression, or
-  another role merely because the same model is available. User-designated Runner
-  bindings and consumption conditions are preserved; IIS defines no fixed
-  AC/flow/outcome/defect/file-per-Runner split.
+  to Verification Lead or Goal Verification Lead. It reports attributable raw
+  current readback or an exact evidence limit before disposable cleanup and never
+  owns verdicts, remediation, progression, or another role merely because the same
+  model is available. User-designated Runner bindings and consumption conditions
+  are preserved; IIS defines no fixed AC/flow/outcome/defect/file-per-Runner split.
 - `verification-lead/`: independent Ticket-verdict authority for one exact ready
   `Independent` Ticket. Fresh Verification Runner invocations perform actual
-  observation; the Lead owns evidence admission, AC verdicts, and aggregate. An
-  early concrete Runner finding may be forwarded to Ralph before remaining
-  observation finishes, but Lead and Runner never remediate product code.
+  observation; the Lead owns evidence admission, AC verdicts, and aggregate. Runner
+  labels are never votes or consensus. An early concrete Runner finding may be
+  forwarded to Ralph before remaining observation finishes, but Lead and Runner
+  never remediate product code.
 - `iis-goal-loop/`: Ralph-style orchestration for exactly one bounded approved
-  Spec. It rejects an outcome with no approved completion evidence path before
-  mutation, acts on current in-Scope evidence inside the active Ticket, may overlap
-  same-Ticket implementation when useful and safe, uses current readbacks without
-  duplicating unsafe effects, and requires settled fresh Ticket/whole-Spec
-  verification before completion. It never promotes one Work Package to parent
-  initiative completion and is not a Controller runtime or durable workflow
-  engine.
+  Spec. It acts on current in-Scope evidence inside the active Ticket, may overlap
+  same-Ticket implementation when useful and safe within user-supplied execution
+  constraints, and still requires settled fresh Ticket/whole-Spec verification
+  before completion. Every provisionally satisfied all-Independent Ticket,
+  including the last/only Ticket, runs Ticket Verification as the streaming
+  correction stage. Ralph may start same-Ticket correction from an early Runner finding; mutation
+  invalidates that verification cycle for progression until quiescence, full fresh
+  Ticket reobservation, and a new Runner cycle. `GOAL INCONCLUSIVE` ends only its
+  verifier invocation, and `NO PROGRESS` requires bounded closure of all currently
+  known contract-admitted evidence/correction paths. One failed endpoint or
+  representation is not dependency-wide unavailability. The loop never promotes
+  one Work Package to parent initiative completion and is not a Controller runtime
+  or durable workflow engine.
 - `goal-verification-lead/`: fresh whole-Spec verification of every approved
   outcome plus remaining global Requirements, Non-Goals, constraints,
-  Behavior/UI obligations, and preserved invariants. Only an all-PASS result may
-  return `GOAL VERIFIED`.
+  Behavior/UI obligations, and preserved invariants. It uses new fresh Runner
+  invocations after quiescence as a final non-streaming barrier; only an all-PASS
+  result may return `GOAL VERIFIED`.
 - `iis-workflow/`: canonical entry router. Explicit planning, implementation,
   Ticket-verification, and whole-Spec-verification requests stay on their exact
   leaf boundaries; only an end-to-end product-completion request enters the Ralph

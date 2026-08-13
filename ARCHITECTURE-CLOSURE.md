@@ -103,12 +103,15 @@ post-mutation observation or final verification.
 Closure:
 
 - A newly discovered technical cause inside the existing Ticket Scope remains the same Ticket.
-- A transition Verification Lead may report a qualifying current observation before finishing its remaining flows: either direct contradictory evidence or a concrete current Ticket-owned implementation/integration/surface/readback absence that blocks the defined authored flow. Ralph decides whether the observation justifies current authorized same-Ticket implementation or belongs at an operator/environment/authority gate; the verifier itself remains read-only and never dispatches remediation.
-- Ralph may have more than one same-Ticket Implementation Lead invocation in flight when current evidence justifies it and concurrent mutation can preserve current user/concurrent changes plus all safety/authority boundaries. Ralph accounts for useful work already known to be in flight and does not knowingly duplicate materially the same work against materially the same evidence merely to increase concurrency. Concurrency is not itself progress; if expected coordination, duplication, or edit-contention cost outweighs useful critical path overlap, Ralph stays serial. The exact implementation scheduling is not planning authority.
-- Every Implementation Lead invocation independently rechecks current authority, source, feasibility, and relevant concurrent changes immediately before mutation; stale work already satisfied or superseded by another actor is not blindly applied, and full Ticket preservation awareness does not require duplicating concrete work already known to be active in a sibling invocation.
-- Once any mutation overlaps a Ticket-verification invocation, that verifier cannot authorize leaving the Ticket. After all current same-Ticket mutation settles, every overlapped verifier must also have returned or be host-confirmed stopped, and any product effect it already started must have reached the authored terminal/cleanup boundary or be established unable to mutate the target further, before settled fresh observation begins. Ralph reviews the resulting current project as one combined product for Ticket Scope, preservation, and unresolved integration conflict, freshly reobserves every AC, and only a new fresh transition Verification may authorize the Ticket transition.
-- The complete Ticket set is reconsidered after settled Ticket reobservation and before whole-Spec verification. Goal Verification begins only after all current implementation mutation has ended, every Ticket verifier overlapped by that mutation has returned or been host-confirmed stopped, and any product effect started by such a verifier is terminal/cleaned up or established unable to mutate the target further.
-- Same Ticket + materially unchanged current observations + the same attempted implementation with unchanged inputs is not progress; the current invocation may end `GOAL OPEN — NO PROGRESS` without declaring the Goal impossible.
+- Current-conversation user role binding, reservation, ordering, and consumption timing constrain Ralph scheduling. A role reserved for later remediation is not consumed for initial fan-out merely to increase concurrency; properties the user did not fix remain implementation-owned.
+- Fresh Verification Runner observation may surface a qualifying current contradiction or Ticket-owned implementation/integration/surface/readback absence before the remaining Runner work finishes. Verification Lead forwards the finding; Ralph alone decides whether to start same-Ticket remediation, while Runner and Lead remain non-remediating.
+- When a fresh finding materially refines work already active in a same-Ticket implementation invocation, Ralph feeds the finding to that existing invocation first rather than duplicating the work or consuming another reserved role. This is invocation-local useful-work continuity, not persistent defect/AC/file ownership.
+- Additional same-Ticket Implementation Lead invocation is allowed only when current evidence justifies materially distinct useful work and concurrent mutation can preserve current user/concurrent changes plus safety/authority boundaries. Concurrency is not progress; serial fallback remains valid when coordination, duplication, or edit-contention cost dominates.
+- Every Implementation Lead entry freshly rechecks current authority, source, feasibility, and concurrent changes before mutation. If the approved work explicitly preserves/rebuilds an existing capability, its bounded predecessor implementation is navigation for the currently used product boundary, not inherited product authority.
+- Every provisionally satisfied all-Independent Ticket runs Ticket Verification, including the last/only Ticket. Goal Verification does not replace this streaming correction stage.
+- Mutation overlapping a Ticket Verification Lead/Runner cycle invalidates the whole cycle for progression. After all current mutation settles, every overlapped Runner/effect must quiesce; Ralph reviews the combined current project, freshly reobserves every AC, and only a new Verification Lead cycle with fresh Runner invocation(s) may verify the Ticket.
+- One endpoint/representation/transport/readback failure establishes only that boundary. A dependency-wide conclusion requires closure of currently known materially relevant contract-admitted alternatives; an alternate may diagnose reachability or candidate integration work but cannot silently satisfy an exact authored representation unless the approved contract permits equivalence. A known usable representation that the current product fails to support is candidate same-Ticket product/integration work.
+- `GOAL INCONCLUSIVE` ends only its Goal Verification invocation. Before `GOAL OPEN — NO PROGRESS`, Ralph closes every currently known bounded evidence/correction path; the first failed endpoint/tool/readback does not exhaust a path.
 - A later invocation starts from the approved Spec, validated Ticket set, and fresh current product state.
 
 Primary contracts/tests:
@@ -124,11 +127,13 @@ Invariant: only fresh whole-Spec verification can close a supported Goal.
 Closure:
 
 - Implementation Lead cannot issue an AC verdict or `VERIFIED`.
-- Thin Verification Lead owns one Ticket verdict only; qualifying observations reported before its final aggregate are navigation, not early verdicts.
-- A Ticket-verification invocation overlapped by current-Ralph mutation cannot authorize a Ticket transition, regardless of any earlier PASS observation or aggregate it later returns.
-- Ralph provisional `SATISFIED` and observations gathered while mutation or an overlapped navigation verifier remains active are navigation only.
-- Transition checkpoints never complete the parent Goal.
-- Goal Verification starts only after current implementation mutation has ended, every Ticket verifier overlapped by that mutation has returned or been host-confirmed stopped, and any product effect it started is terminal/cleaned up or established unable to mutate the target further; it then uses fresh admissible current evidence and has the only `GOAL VERIFIED` authority.
+- Verification Runner performs fresh bounded observation only. Verification Lead owns Ticket AC verdicts/aggregate; Goal Verification Lead owns whole-Spec row verdicts/aggregate and is the only leaf that may return `GOAL VERIFIED`.
+- Runner reports are never votes. Neither Lead may derive a verdict by majority, consensus, model agreement, or counting Runner labels; conflicting raw observations are resolved against the bounded authoritative boundary or remain `INCONCLUSIVE`.
+- Disposable verification targets must yield attributable raw authoritative readback before cleanup. If only Runner narration remains after the target is gone, that narration cannot supply `PASS`.
+- A Ticket Verification Lead/Runner cycle overlapped by current-Ralph mutation cannot authorize progression, regardless of an earlier PASS observation or aggregate; after quiescence a fresh full-Ticket reobservation and new Runner cycle are required.
+- Ralph provisional `SATISFIED`, implementation checks, test counts, Worker narration, and mutation-overlapped observations are navigation only and never fill final completion evidence.
+- Every provisionally satisfied all-Independent Ticket, including the last/only Ticket, must receive Ticket Verification. Its `VERIFIED` result is navigation/progression only and never completes the parent Goal.
+- Goal Verification starts only after required Ticket Verification cycles and all mutation-capable effects are quiescent. It uses new fresh Runner invocations, is not another streaming remediation stage, and has the only `GOAL VERIFIED` authority.
 
 Primary contracts/tests:
 
@@ -160,13 +165,14 @@ Primary contracts/tests:
 
 ### 6. User Authority Boundary — PROVED
 
-Invariant: the user chooses product meaning, Scope, completion meaning, and dangerous authority; IIS owns implementation mechanics and iteration.
+Invariant: the user chooses product meaning, Scope, completion meaning, dangerous authority, and any explicit execution-role binding/consumption constraints they choose to supply; IIS owns only the implementation/orchestration mechanics the user left unspecified.
 
 Closure:
 
 - Ralph does not ask whether to continue between ACs or corrections.
-- Endpoint, parser, fallback, retry/backoff, file, algorithm, Worker, internal Ticket mechanics, and ordinary in-Scope correction choice are implementation-owned.
-- The user is asked only for a real product decision, Scope/completion-contract change, or dangerous/external authority.
+- Endpoint, parser, fallback, retry/backoff, file, algorithm, internal Ticket mechanics, and ordinary in-Scope correction choice remain implementation-owned unless the approved product contract already makes one normative.
+- Explicit current-conversation Implementation Subagent / Implementation Research Agent / Verification Runner role designations, ordering, reservation, consumption timing, and concurrency constraints remain binding. Model identity alone is not a role, and the same configured model/agent serves another IIS role only under a separate user designation for that role.
+- The user is asked only for a real product decision, Scope/completion-contract change, dangerous/external authority, or another decision that the approved contract actually assigns to the user; already supplied execution-role intent is not reopened for ceremony.
 - Operator-assisted paths delegate action/readback only; the operator does not interpret ACs or supply verdicts.
 
 Primary contracts/tests:
@@ -184,8 +190,10 @@ Closure:
 
 - Ralph prefers an already-current authoritative state/readback over re-triggering a product effect.
 - Working observation does not replay payment, message, deployment, destructive, irreversible, credential-bearing, shared-production, one-shot, or duplicate-sensitive effects merely for navigation.
+- Required Independent Ticket Verification is not skipped because replaying an effect would be unsafe or duplicative. Use current authoritative readback when valid, one attributable shared acquisition when authored boundaries genuinely match, serialized Runner observation where needed, or exact `INCONCLUSIVE`/operator-environment-authority gating.
 - Same-Ticket implementation overlap is permitted only while concurrent mutation can preserve current user/concurrent changes and every existing safety/authority boundary; unsafe or duplicate-sensitive work remains serial or gated.
-- A Verification Lead that continues observation while implementation is active remains read-only and may continue only still-safe authored observations; it never turns the overlap into authorization for another effect.
+- A Verification Lead/Runner cycle that continues safe navigation after mutation starts cannot authorize progression and cannot manufacture additional effect authority.
+- One endpoint/representation failure does not prove dependency-wide unavailability; only bounded contract-admitted/current-product alternatives are considered, with no arbitrary fallback hunting.
 - Goal Verification treats a fresh current read as fresh evidence when the contract permits it and re-triggers only when the approved contract and exact safety authority require it.
 - Operator-assisted effects preserve exact action, target, readback, cleanup, and non-duplication boundaries.
 
@@ -232,7 +240,9 @@ Accepted limitations:
 - No durable attempt history means a later invocation may rediscover or retry a technical correction.
 - `NO PROGRESS` is invocation-local and does not prove Goal impossibility.
 - Same-Ticket concurrent implementation can create stale planned work, edit contention, or wasted Worker effort; every invocation therefore rechecks current source before mutation, Ralph avoids knowingly duplicating materially the same in-flight work, stale work becomes no-op/revised work, and Ralph may serialize whenever overlap is not useful or safe.
-- A Verification Lead overlapped by implementation may continue to surface useful current observations, but its aggregate cannot authorize a Ticket transition; Ralph must also wait for or host-confirmedly stop that verifier and wait for any verifier-started product effect to reach its authored terminal/cleanup boundary or become unable to mutate the target before settled reobservation/new authoritative verification. The possible residual wait plus a new fresh verifier are deliberate costs paid for a non-overlapping final evidence boundary.
+- A Verification Lead/Runner cycle overlapped by implementation may continue to surface useful current observations, but its aggregate cannot authorize Ticket progression; Ralph must wait for or host-confirmedly stop every overlapped Runner and wait for any Runner-started product effect to reach its authored terminal/cleanup boundary or become unable to mutate the target before settled reobservation/new authoritative verification. The residual wait plus a fresh cycle are deliberate costs paid for a non-overlapping evidence boundary.
+- The last/only all-Independent Ticket now pays a Ticket Verification cycle before whole-Spec Goal Verification. That duplicate-observation cost is intentional because Ticket Verification is the streaming correction engine; effect cost is mitigated with current readback, valid shared acquisition, serialization, or `INCONCLUSIVE`, not by deleting the feedback stage.
+- Bounded evidence/correction closure before `NO PROGRESS` may spend additional investigation time on already-known contract-admitted paths. The search remains bounded to current authority/product/predecessor evidence rather than becoming arbitrary endpoint discovery or a persistent path registry.
 - Positional ordinals require re-review when their authored items reorder or change semantically.
 - Complete ready Ticket-set planning is required before Ralph starts; partial dynamic Ticket admission is intentionally unsupported.
 - Ralph does not persist a Goal-achieved marker or mutate Tickets to become workflow state. A later semantic delta must go through current planning/Ticket review; a new bounded work slug is the clean default for post-completion product deltas when preserving the old work as history matters.
@@ -249,28 +259,30 @@ model from a strictly serial implementation/reobservation/verification cadence t
 bounded same-Ticket streaming remediation. This is an intentional architecture
 generation change, not a faithful-contract counterexample and not a change
 admitted through either contract-preserving optimization lane below. It changes
-when implementation may run: a transition verifier may surface a qualifying
-current observation before finishing, including direct contradiction or a concrete
-current Ticket-owned implementation/integration/surface/readback absence that
-blocks the authored flow; Ralph may start current authorized same-Ticket
+when implementation may run: fresh verification observation may surface a
+qualifying direct contradiction or concrete current Ticket-owned
+implementation/integration/surface/readback absence before the remaining
+observation work finishes; Ralph may start current authorized same-Ticket
 implementation immediately, and additional same-Ticket implementation may overlap
-when Ralph judges that current evidence, useful work already in flight, host
-capability, preservation, safety, and authority boundaries permit it.
+when current evidence, useful work already in flight, user role-consumption
+constraints, host capability, preservation, safety, and authority boundaries permit
+it.
 
 The user-directed evolution does **not** change product authority, Ticket Scope,
-AC/Verification denominators, verifier read-only ownership, `GOAL VERIFIED`
-authority, or the requirement for fresh current evidence. It also does not add a
-persistent scheduler, finding queue, assignment ledger, Worker identity system,
-or controller. Any mutation overlapping a Ticket verifier invalidates that
-invocation for transition authority; all current implementation must settle, every
-overlapped Ticket verifier must return or be host-confirmed stopped, any product
-effect it already started must be terminal/cleaned up or established unable to
-mutate the target further, Ralph must review the combined current project and
-freshly reobserve the full active Ticket, and a new fresh transition Verification
-must run before leaving the Ticket. Whole-Spec Goal Verification begins only after
-implementation mutation has ended, every Ticket verifier overlapped by that
-mutation has returned or been host-confirmed stopped, and any verifier-started
-product effect is likewise terminal/cleaned up or unable to mutate the target.
+AC/Verification denominators, verdict authority, `GOAL VERIFIED` authority, or the
+requirement for fresh current evidence. Verification observation uses fresh Runner
+leaves while Verification Lead / Goal Verification Lead alone adjudicate verdicts.
+Runner reports are not votes, and user-designated role binding/consumption timing is
+preserved rather than inferred from model identity. The architecture adds no
+persistent scheduler, finding queue, assignment ledger, Runner/Worker identity
+system, evidence cache, or controller. Any mutation overlapping a Ticket
+Verification Lead/Runner cycle invalidates the whole cycle for progression; all
+current implementation must settle, every overlapped Runner/effect must quiesce,
+Ralph must review the combined current project and freshly reobserve the full active
+Ticket, and a new Verification Lead cycle with fresh Runner invocation(s) must run
+before the Ticket is treated as verified. Whole-Spec Goal Verification begins only
+after all required Ticket cycles and mutation-capable effects are quiescent, and it
+uses new fresh Runner invocation(s) as a final non-streaming barrier.
 
 A 2026-08-14 follow-up closes the last/only-Ticket feedback gap exposed by that
 streaming generation. The older optimization that skipped Ticket Verification
@@ -281,6 +293,23 @@ last or only Ticket. The extra cycle before Goal Verification is an accepted cos
 duplicate-effect cost is reduced with current authoritative readback, valid shared
 acquisition, serialized Runner observation, or an exact `INCONCLUSIVE` evidence
 limit rather than by skipping the feedback stage.
+
+The same follow-up preserves explicit user role binding and consumption timing
+through Ralph, so a verification-designated role cannot be consumed as
+implementation research and a role reserved for later remediation is not silently
+spent on initial fan-out. Model identity alone never changes that binding.
+
+It also tightens evidence convergence: `GOAL INCONCLUSIVE` ends only the current
+final-verification invocation; Ralph must close currently known bounded
+contract-admitted evidence/correction paths before `NO PROGRESS`, one failed
+endpoint/representation does not establish dependency-wide unavailability, and an
+explicitly preserved predecessor is bounded navigation rather than inherited
+product authority. Runner reports carry attributable raw readback rather than
+vote-like verdict authority, host-known required work still in flight is an
+unexhausted path, and `User Action: None` cannot hand executable due-now work back
+to the user. A returned or host-confirmed stopped/unproductive invocation clears
+only that liveness blocker; Ralph still closes any remaining bounded evidence or
+correction path before a terminal result.
 
 The five-condition Core Freeze Admission below governs issue-driven hardening of
 a frozen architecture generation. An explicit user instruction to deliberately

@@ -63,8 +63,11 @@ For every invocation:
    unavailable from that observation alone. If the assignment or current Lead
    context already identifies another materially relevant contract-admitted
    representation/readback, observe it only when it remains inside this bounded
-   assignment; otherwise report the exact failed boundary so the Lead can decide
-   whether another bounded Runner observation is warranted.
+   assignment. An alternate may diagnose dependency reachability or candidate
+   integration work, but it does not satisfy an exact authored endpoint,
+   representation, or readback obligation unless the approved contract permits
+   that equivalence. Otherwise report the exact failed boundary so the Lead can
+   decide whether another bounded Runner observation is warranted.
 3. When one safe current acquisition genuinely covers multiple linked assignments,
    the Lead may share that raw acquisition; classify no verdict here and do not
    create an evidence cache or retained observation object.

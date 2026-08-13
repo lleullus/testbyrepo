@@ -153,10 +153,13 @@ to dependency-wide unavailability while another materially relevant representati
 or authoritative readback is already identified by the approved contract, current
 product/config/source, or other current direct evidence. Inspect only those bounded
 known alternatives needed for the obligation; do not invent arbitrary fallbacks or
-perform broad endpoint discovery. If a known usable representation exists but the
-current product does not support or reach it where the Ticket requires the outcome,
-treat that as candidate current in-Scope product/integration work rather than an
-external-dependency conclusion.
+perform broad endpoint discovery. An alternate representation may establish that
+the dependency is reachable or expose candidate integration work, but it never
+substitutes for an exact authored endpoint, representation, or readback unless the
+approved contract permits that equivalence. If a known usable representation
+exists but the current product does not support or reach it where the Ticket
+requires the outcome, treat that as candidate current in-Scope product/integration
+work rather than an external-dependency conclusion.
 
 Execute a trigger for working observation only when it is safe
 local/disposable/repeatable, or when existing exact authority covers the action,
@@ -414,20 +417,20 @@ Progress within the current invocation means at least one of:
 - a bounded Ticket obligation was actually closed without regressing another.
 
 Before `GOAL OPEN — NO PROGRESS`, perform an invocation-local bounded
- evidence/correction closure audit over every currently known materially relevant
- path admitted by the approved contract or current product boundary. Confirm that
- there is no materially different in-Scope correction, no safe direct observation
- or authoritative readback still available, no exact operator/environment/authority
- action that could restore evidence, and no required product/scope decision. A
- path is not exhausted merely because its first endpoint, representation,
- transport, tool, or readback failed. Do not turn this audit into broad repository
- discovery, arbitrary endpoint hunting, a durable path registry, or a scheduler.
+evidence/correction closure audit over every currently known materially relevant
+path admitted by the approved contract or current product boundary. Confirm that
+there is no materially different in-Scope correction, no safe direct observation
+or authoritative readback still available, no exact operator/environment/authority
+action that could restore evidence, and no required product/scope decision. A
+path is not exhausted merely because its first endpoint, representation,
+transport, tool, or readback failed. Do not turn this audit into broad repository
+discovery, arbitrary endpoint hunting, a durable path registry, or a scheduler.
 
 Only when the current invocation has an open Goal and that bounded audit closes
- every such path may Ralph stop this invocation as `GOAL OPEN — NO PROGRESS`. This
- is a circuit breaker for the current attempt, not a claim that the Goal is
- impossible. A later invocation starts from the same approved Spec, validated
- Ticket set, and fresh current product state.
+every such path may Ralph stop this invocation as `GOAL OPEN — NO PROGRESS`. This
+is a circuit breaker for the current attempt, not a claim that the Goal is
+impossible. A later invocation starts from the same approved Spec, validated
+Ticket set, and fresh current product state.
 
 ## Planning And Authority Gates
 
@@ -463,7 +466,12 @@ product effect that is still active, waiting for a required current reply, or st
 capable of producing authorized current evidence/correction is an unexhausted path.
 Ralph may send a concise nonterminal progress update while such work continues, but
 must not close the current invocation with a Goal result or `GOAL OPEN — NO
-PROGRESS` merely because another required role/effect has not returned yet. This is
+PROGRESS` merely because another required role/effect has not returned yet. A role
+or effect ceases to count as in-flight when it returns, is host-confirmed stopped,
+or the host establishes that it can no longer produce a current result. Clearing
+that liveness blocker does not itself authorize a terminal Ralph result: apply the
+same bounded evidence/correction closure rules, including a fresh replacement
+invocation or another contract-admitted path when one remains justified. This is
 invocation-local host awareness only; do not persist a task registry, queue, or
 scheduler.
 
