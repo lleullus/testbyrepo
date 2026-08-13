@@ -16,10 +16,14 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    current parent-outcome/AC/Behavior trace. The exception grants no new Ticket
    authority. While the same Ticket remains active inside that exact Ralph
    invocation, the host may resume the same invocation-local role for a later
-   materially different correction. Resumption preserves only technical working
-   context: it does not preserve feasibility, current-source facts, prior
-   observations, authority currentness, or any implementation/verification result.
-   Resumption also does not make a retained shell, working directory, dev server,
+   materially different correction only while retained technical context remains
+   bounded, relevant, and likely to reduce rediscovery. If that context becomes
+   noisy, oversized, materially contradicted, no longer relevant, or likely to cost
+   more than fresh technical rehydration, reinvoke a fresh role with the same
+   admission source instead. Resumption preserves only technical working context:
+   it does not preserve feasibility, current-source facts, prior observations,
+   authority currentness, or any implementation/verification result. Resumption
+   also does not make a retained shell, working directory, dev server,
    browser/profile, process, cache, database connection, or other tool/runtime state
    current. Reuse such state only after directly confirming that it still reflects
    the current project, current authorized target, and required execution boundary;

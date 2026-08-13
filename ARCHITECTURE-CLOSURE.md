@@ -216,11 +216,46 @@ Why accepted:
 
 Adding attempt ledgers, Goal state, generations, persistent Ticket-set manifests, semantic hashes, replay state, or controller databases would materially increase stale-state, lifecycle, migration, and user-ceremony costs while not improving the supported bounded Goal's final correctness enough to justify the control-plane complexity.
 
+## Contract-Preserving Execution Optimization Boundary
+
+The freeze protects IIS authority, evidence, completion, state, and orchestration semantics; it does not require deliberately repeating the same admissible invocation-local work. A proposed optimization is **not** an architecture reopen only when it fits exactly one lane below and satisfies every condition in that lane. If any condition fails, treat the proposal as an architecture change and apply the ordinary Core Freeze Admission rules below.
+
+**Lane A — Monotonic Deduplication Refinement**
+
+This lane permits removing duplicate acquisition of an already-authorized current boundary while preserving every authored obligation. All of the following are required:
+
+- one execution or authoritative readback already directly supplies the current observation needed by every linked obligation;
+- every AC or verification obligation remains separately classified or verdict-bearing; no denominator row disappears, merges, or inherits another row's verdict;
+- distinct inputs, relevant states, branches, lifecycle boundaries, or authoritative readbacks remain distinct acquisitions;
+- any product/source mutation invalidates the prior acquisition for the next current observation;
+- the governed expensive acquisition count is weakly reduced or unchanged; the refinement never adds a compensating replay merely to support the optimization;
+- no persistent cache, retained evidence, identity system, ledger, runtime, controller, or durable state is introduced; and
+- when the sharing conditions do not hold, execution falls back to the ordinary separate fresh acquisition with unchanged semantics.
+
+Shared fresh observation acquisition in the Ralph loop is the canonical admitted example: it shares only one genuinely identical fresh boundary and never shares an AC verdict or post-mutation currentness.
+
+**Lane B — Conditional Invocation-Local Locality Optimization**
+
+This lane permits retaining bounded technical working context only to reduce cold rediscovery. It is not claimed to be a monotonic wall-clock improvement. All of the following are required:
+
+- Goal, Spec, Ticket, Behavior/UI authority, observation, verification, and completion semantics remain unchanged;
+- retained context is current-invocation technical working memory only and never authority, evidence, feasibility, current-source truth, or completion state;
+- every mutation entry still freshly revalidates the complete current authority/source/feasibility boundary required by the owning contract;
+- reuse is limited to the same active Ticket and is discarded across Ticket change, whole-Spec verification, user/operator/planning gates, `GOAL OPEN — NO PROGRESS`, or invocation end;
+- if retained context is noisy, oversized, materially contradicted, no longer relevant, or likely to cost more than fresh technical rehydration, the host uses a fresh role instead without changing semantics;
+- if reliable resumption is unavailable, the baseline fresh invocation remains fully supported;
+- no persistent session registry, cache, identity system, ledger, runtime, controller, or durable workflow state is introduced; and
+- regression coverage proves the freshness/disposal boundaries while the performance claim remains limited to the structurally removed cold rediscovery unless separate telemetry establishes more.
+
+Bounded Same-Ticket Implementation Subagent continuation is the canonical admitted example. Its benefit is fewer cold technical rediscoveries when reuse is actually cheaper; its escape hatch preserves the original fresh-invocation baseline when reuse is not beneficial.
+
+This boundary is deliberately narrow. It does **not** admit impacted-only AC reobservation, verifier-context reuse, evidence caching, semantic hashes, persistent attempt history, workflow/session managers, controller state, or any optimization that changes who owns a decision, what must be freshly observed, or what can complete a Goal.
+
 ## Core Freeze Admission
 
 After the stale Spec-to-Ticket semantic-freshness gate and this closure audit pass the repository verification gates, the IIS core is frozen.
 
-A future issue may reopen core architecture only when **all** of the following are true:
+A contract-preserving execution optimization admitted by the boundary above does not reopen architecture semantics. Any other future issue may reopen core architecture only when **all** of the following are true:
 
 1. **Faithful-contract counterexample** — the problem is reproducible even when the current authored contracts are followed, not merely when an agent overlooks evidence or reasons poorly.
 2. **Architecture-general** — it is not a project-, site-, parser-, endpoint-, library-, model-, or environment-specific problem.
@@ -234,15 +269,15 @@ A future issue may reopen core architecture only when **all** of the following a
 4. **Invariant repair** — the fix strengthens one of the finite failure classes above rather than encoding a project-specific diagnosis recipe.
 5. **Complexity test** — the fix does not introduce a new status taxonomy, persistent state, identity system, ledger, runtime, generic workflow DSL, or controller mechanism unless the user explicitly chooses to reopen the architecture and accepts that trade-off.
 
-If any condition is false, the issue is classified as agent competence/evaluation, project-specific implementation, environment/operator condition, an accepted trade-off, or out-of-range capability. It does not justify another IIS core patch.
+If any condition is false and the proposal also fails the Contract-Preserving Execution Optimization Boundary, the issue is classified as agent competence/evaluation, project-specific implementation, environment/operator condition, an accepted trade-off, or out-of-range capability. It does not justify another IIS core patch.
 
 ## Explicit Non-Reasons To Break The Freeze
 
-Do not modify IIS core merely because:
+Do not modify IIS architecture semantics merely because:
 
 - an agent missed a useful field, endpoint, helper, source location, or root cause;
 - a different technical correction would have been better;
-- an iteration was inefficient or repeated work after a fresh invocation;
+- an iteration was inefficient or repeated work after a fresh invocation; inefficiency alone never permits an architecture change, and only an optimization that independently passes the strict boundary above may reduce that duplication;
 - a project needs a parser, retry, fallback, storage, or deployment-specific rule;
 - a Ticket could have been decomposed more elegantly while the approved outcome remains completable;
 - an unsupported initiative fan-in capability would be convenient;

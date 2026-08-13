@@ -65,8 +65,8 @@ ACTIVE_VERIFICATION_SHA256 = {
 }
 ACTIVE_RALPH_SHA256 = {
     # Reviewed active Goal-fulfillment route, closure contract, and exact structural admission support.
-    "ARCHITECTURE-CLOSURE.md": "86135fe01f5f7b9cbb50320df918b755c4afe6b83c3005e130748838612d1688",
-    "iis-goal-loop/SKILL.md": "34b5f3ed7effee0e6f7daf1b47662eb7797cb4aa41ca92337012c3eecf7e87d2",
+    "ARCHITECTURE-CLOSURE.md": "ceea6e91b187aac71f5c82ddc323ab19ef129be40eb83a6f6973c3ecafa7f80d",
+    "iis-goal-loop/SKILL.md": "2b865202285a74f8fa42791787dc7ce2ab974bc4d1172b007966cc6f8910397b",
     "goal-verification-lead/SKILL.md": "02bba8db29057cefc65443ef50ffe1206fc0e0d27ac84d9cbad1ad3b10ddeaa6",
     "matt/skills/to-tickets/validate_ticket_set.py": "2a5eda27390c079bfb21200c71f96eec66f878c2bb9db1bc9696d8e37b8895ea",
 }

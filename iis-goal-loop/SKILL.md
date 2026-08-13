@@ -176,18 +176,22 @@ later invocation as current state.
 Invoke `../implementation-lead/SKILL.md` through the host with the exact ready
 Ticket and one host-provided invocation-local `Implementation Subagent` role for
 the currently active Ticket. While that exact Ticket remains active in this
-Ralph invocation, the host should resume the same role context for a later
-materially different correction when it supports reliable resumption. The
-retained context may shorten technical rediscovery only; every Implementation
-Lead entry must freshly revalidate the current Ticket/Spec/Behavior/UI authority,
-Project Root, semantic compatibility, user/concurrent changes, feasibility, and
-current source before mutation. Prior feasibility, source facts, implementation
+Ralph invocation, the host may resume the same role context for a later
+materially different correction only when the retained context remains bounded,
+relevant, and likely to reduce technical rediscovery. If retained context is
+noisy, oversized, materially contradicted, no longer relevant, or likely to cost
+more than fresh technical rehydration, reinvoke a fresh role instead. Retained
+context may shorten technical rediscovery only; every Implementation Lead entry
+must freshly revalidate the current Ticket/Spec/Behavior/UI authority, Project
+Root, semantic compatibility, user/concurrent changes, feasibility, and current
+source before mutation. Prior feasibility, source facts, implementation
 narration, or observations never remain current merely because the role context
 was resumed.
 
-If reliable resumption is unavailable, reinvoke a fresh role without changing
-the Ralph semantics. Never resume an implementation role across a Ticket change,
-entry into whole-Spec Goal Verification, a user/operator/planning gate,
+If reliable resumption is unavailable or fresh rehydration is preferable under
+the bounded-context rule above, reinvoke a fresh role without changing the Ralph
+semantics. Never resume an implementation role across a Ticket change, entry into
+whole-Spec Goal Verification, a user/operator/planning gate,
 `GOAL OPEN — NO PROGRESS`, the end of the current Ralph invocation, or a later
 Goal-verification return to a Ticket that Ralph had already left. This internal
 role exception exists only for this Ralph loop. It is never written to `Worker:`,

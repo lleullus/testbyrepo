@@ -32,6 +32,26 @@ class ArchitectureClosureTests(unittest.TestCase):
         for text in required:
             self.assertIn(text, CLOSURE)
 
+    def test_contract_preserving_optimization_boundary_is_narrow_and_fallback_safe(self) -> None:
+        section = CLOSURE.split("## Contract-Preserving Execution Optimization Boundary", 1)[1].split(
+            "## Core Freeze Admission", 1
+        )[0]
+        for required in (
+            "fits exactly one lane below and satisfies every condition in that lane",
+            "Lane A — Monotonic Deduplication Refinement",
+            "no denominator row disappears, merges, or inherits another row's verdict",
+            "distinct inputs, relevant states, branches, lifecycle boundaries, or authoritative readbacks remain distinct acquisitions",
+            "governed expensive acquisition count is weakly reduced or unchanged",
+            "ordinary separate fresh acquisition with unchanged semantics",
+            "Lane B — Conditional Invocation-Local Locality Optimization",
+            "not claimed to be a monotonic wall-clock improvement",
+            "noisy, oversized, materially contradicted, no longer relevant",
+            "baseline fresh invocation remains fully supported",
+            "performance claim remains limited to the structurally removed cold rediscovery",
+            "does **not** admit impacted-only AC reobservation, verifier-context reuse, evidence caching",
+        ):
+            self.assertIn(required, section)
+
     def test_freeze_reopening_requires_all_five_admission_conditions(self) -> None:
         section = CLOSURE.split("## Core Freeze Admission", 1)[1].split("## Explicit Non-Reasons", 1)[0]
         for label in (
@@ -42,7 +62,8 @@ class ArchitectureClosureTests(unittest.TestCase):
             "Complexity test",
         ):
             self.assertIn(label, section)
-        self.assertIn("when **all** of the following are true", section)
+        self.assertIn("Any other future issue may reopen core architecture only when **all** of the following are true", section)
+        self.assertIn("fails the Contract-Preserving Execution Optimization Boundary", section)
 
     def test_freeze_rejects_agent_quality_and_project_specific_patch_pressure(self) -> None:
         for text in (

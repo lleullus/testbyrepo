@@ -93,6 +93,9 @@ class ActiveSkillContractTests(unittest.TestCase):
         for required in (
             "same Ticket remains active inside that exact Ralph invocation",
             "host may resume the same invocation-local role",
+            "only while retained technical context remains bounded, relevant, and likely to reduce rediscovery",
+            "noisy, oversized, materially contradicted, no longer relevant, or likely to cost more than fresh technical rehydration",
+            "reinvoke a fresh role with the same admission source instead",
             "Resumption preserves only technical working context",
             "does not preserve feasibility, current-source facts, prior observations, authority currentness",
             "does not make a retained shell, working directory, dev server",
