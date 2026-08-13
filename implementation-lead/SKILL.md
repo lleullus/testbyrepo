@@ -33,6 +33,15 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    invocation. Never write the internal role to `Worker:`, Ticket metadata, a
    sidecar, session registry, capability, or durable loop state; `Worker:` remains
    empty.
+   Ralph may have another Implementation Lead invocation for the same active
+   Ticket in flight at the same time. That concurrency grants no shared
+   feasibility, source fact, diagnosis, or mutation ownership. Each invocation
+   independently rechecks the current project immediately before mutation and
+   preserves every user and concurrent change already present. If current source
+   shows that the work which justified this invocation has already been satisfied,
+   superseded, or materially changed by another actor, do not apply a stale
+   planned change; report the current fact or revise the in-Scope implementation
+   from current evidence instead.
    On every Ralph entry, and before any project mutation, revalidate that the
    Ticket remains `ready`, the current project is its exact `Project-Root`, the
    Ticket is under that project's canonical `docs/planning` root, and its

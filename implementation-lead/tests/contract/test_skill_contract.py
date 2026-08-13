@@ -110,6 +110,19 @@ class ActiveSkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, normalized)
 
+    def test_same_ticket_concurrency_rechecks_current_source_and_never_applies_stale_work(self) -> None:
+        normalized = " ".join(IMPLEMENTATION_SKILL.split())
+        for required in (
+            "another Implementation Lead invocation for the same active Ticket in flight at the same time",
+            "grants no shared feasibility, source fact, diagnosis, or mutation ownership",
+            "independently rechecks the current project immediately before mutation",
+            "preserves every user and concurrent change already present",
+            "already been satisfied, superseded, or materially changed by another actor",
+            "do not apply a stale planned change",
+            "revise the in-Scope implementation from current evidence instead",
+        ):
+            self.assertIn(required, normalized)
+
     def test_behavior_trace_is_semantic_guardrail_not_implementation_mechanism(self) -> None:
         normalized = " ".join(IMPLEMENTATION_SKILL.split())
         for required in (

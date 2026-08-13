@@ -140,6 +140,72 @@ class RalphSemanticsFixtureTests(unittest.TestCase):
         self.assertNotEqual(first_a, first_b, "Ticket transition must discard the prior context")
         self.assertNotEqual(first_a, later_a, "returning later to a left Ticket starts fresh context")
 
+    def test_verification_can_surface_more_work_while_same_ticket_implementation_is_in_flight(self) -> None:
+        product = {"a": False, "b": False}
+        events: list[str] = []
+        active_workers: set[str] = set()
+        transition_verification_authoritative = True
+
+        def observe(name: str) -> bool:
+            events.append(f"verify:{name}")
+            return product[name]
+
+        def dispatch(name: str) -> None:
+            nonlocal transition_verification_authoritative
+            transition_verification_authoritative = False
+            active_workers.add(name)
+            events.append(f"dispatch:{name}")
+
+        self.assertFalse(observe("a"))
+        dispatch("a")
+        self.assertFalse(observe("b"), "verification continues while the first worker is active")
+        dispatch("b")
+        events.append("verification-finished")
+
+        self.assertLess(events.index("dispatch:a"), events.index("verify:b"))
+        self.assertLess(events.index("dispatch:b"), events.index("verification-finished"))
+        self.assertFalse(
+            transition_verification_authoritative,
+            "a verifier overlapped by mutation cannot authorize leaving the Ticket",
+        )
+
+        for name in tuple(active_workers):
+            product[name] = True
+            active_workers.remove(name)
+            events.append(f"worker-finished:{name}")
+
+        self.assertFalse(active_workers)
+        final_fresh = {name: product[name] for name in ("a", "b")}
+        events.append("fresh-final-verification")
+        self.assertTrue(all(final_fresh.values()))
+        self.assertGreater(
+            events.index("fresh-final-verification"),
+            max(events.index("worker-finished:a"), events.index("worker-finished:b")),
+        )
+
+    def test_late_worker_rechecks_current_product_and_noops_when_sibling_already_satisfied_the_work(self) -> None:
+        product = {"primary": False, "secondary": False}
+        mutations: list[str] = []
+
+        def first_worker() -> None:
+            current = dict(product)
+            current["primary"] = True
+            current["secondary"] = True
+            product.update(current)
+            mutations.append("first")
+
+        def later_worker() -> None:
+            if product["secondary"]:
+                return
+            product["secondary"] = True
+            mutations.append("later")
+
+        first_worker()
+        later_worker()
+
+        self.assertEqual(product, {"primary": True, "secondary": True})
+        self.assertEqual(mutations, ["first"], "stale work must not be applied after a sibling already fixed it")
+
 
 if __name__ == "__main__":
     unittest.main()

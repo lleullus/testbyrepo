@@ -151,77 +151,92 @@ verification. The operator supplies the action/readback only; IIS interprets the
 contract. A `Not independently verifiable` parent outcome is rejected by Ralph
 admission before mutation and never reaches the reconciliation cycle.
 
-### 2. Select One Unmet AC
+### 2. Act On Current In-Scope Evidence
 
-Select one current `UNSATISFIED` or actionable `UNRESOLVED` AC whose correction
-is already authorized by its exact ready Ticket. Prefer the earliest authored
-parent outcome and Ticket/AC order when several choices are otherwise equally
-useful. Do not create a root-cause queue or dynamic gap taxonomy.
+When fresh current evidence shows that implementation is still required inside
+the exact active ready Ticket, Ralph may invoke Implementation Lead without
+inventing a new Ticket, queue, root-cause registry, or other planning state. The
+current observations that justify implementation are navigation only; they do not
+add, strengthen, split, or reorder Ticket authority.
 
-The selected implementation packet consists only of:
+An implementation invocation receives only what is currently needed to work
+inside that existing Ticket boundary:
 
 - the exact ready Ticket;
 - its exact current parent-outcome/AC/Behavior trace;
-- the selected primary unmet AC and its current direct observation;
-- a compact current navigation summary for every AC of that same active Ticket,
-  including any newly observed regression or preservation concern; and
+- the current direct observations relevant to the in-Scope work being attempted;
+- current preservation or regression observations when materially relevant; and
 - the existing Ticket Scope, Non-Goals, and adopted authorities.
 
-The current observations are navigation context, not new Ticket authority. Do
-not serialize that summary, turn it into a gap registry, or carry it across a
-later invocation as current state.
+Do not serialize the working observations, turn them into a gap registry, or carry
+them across a later invocation as current state.
 
 ### 3. Implement The Existing Ticket
 
 Invoke `../implementation-lead/SKILL.md` through the host with the exact ready
-Ticket and one host-provided invocation-local `Implementation Subagent` role for
-the currently active Ticket. While that exact Ticket remains active in this
-Ralph invocation, the host may resume the same role context for a later
-materially different correction only when the retained context remains bounded,
-relevant, and likely to reduce technical rediscovery. If retained context is
-noisy, oversized, materially contradicted, no longer relevant, or likely to cost
-more than fresh technical rehydration, reinvoke a fresh role instead. Retained
-context may shorten technical rediscovery only; every Implementation Lead entry
-must freshly revalidate the current Ticket/Spec/Behavior/UI authority, Project
-Root, semantic compatibility, user/concurrent changes, feasibility, and current
-source before mutation. Prior feasibility, source facts, implementation
-narration, or observations never remain current merely because the role context
-was resumed.
+Ticket and host-provided invocation-local `Implementation Subagent` roles for the
+currently active Ticket. Ralph may have more than one same-Ticket Implementation
+Lead invocation active when current evidence justifies additional in-Scope work,
+the host supports it, and concurrent mutation can preserve current user/concurrent
+changes and all safety/authority boundaries. Serial execution remains a fully
+valid fallback. The exact number, timing, and technical allocation of those
+invocations are implementation-owned and are not planning or verification
+semantics.
+
+Within that exact active Ticket and current Ralph invocation, a role may be
+resumed for later materially different work only when its retained context
+remains bounded, relevant, and likely to reduce technical rediscovery. If
+retained context is noisy, oversized, materially contradicted, no longer relevant,
+or likely to cost more than fresh technical rehydration, reinvoke a fresh role
+instead. Retained context may shorten technical rediscovery only; every
+Implementation Lead entry must freshly revalidate the current
+Ticket/Spec/Behavior/UI authority, Project Root, semantic compatibility,
+user/concurrent changes, feasibility, and current source before mutation. Prior
+feasibility, source facts, implementation narration, or observations never remain
+current merely because a role context was resumed or another same-Ticket role is
+already active.
 
 If reliable resumption is unavailable or fresh rehydration is preferable under
-the bounded-context rule above, reinvoke a fresh role without changing the Ralph
+the bounded-context rule above, reinvoke a fresh role without changing Ralph
 semantics. Never resume an implementation role across a Ticket change, entry into
 whole-Spec Goal Verification, a user/operator/planning gate,
 `GOAL OPEN — NO PROGRESS`, the end of the current Ralph invocation, or a later
 Goal-verification return to a Ticket that Ralph had already left. This internal
 role exception exists only for this Ralph loop. It is never written to `Worker:`,
-Ticket metadata, a sidecar, session registry, capability, or durable state. An
-explicit user request for Implementation Lead outside this loop continues to
-require the ordinary user-designated role.
+Ticket metadata, a sidecar, session registry, capability, assignment ledger, or
+durable state. An explicit user request for Implementation Lead outside this loop
+continues to require the ordinary user-designated role.
 
 Implementation Lead owns technical diagnosis and implementation choices inside
 the Ticket. Do not ask the user which endpoint, parser, fallback, retry policy,
-file, algorithm, Worker, or internal correction to use.
+file, algorithm, Worker, technical allocation, or internal correction to use.
 
 A newly discovered technical cause does not create a new Ticket when correcting
-it is already within the same Ticket Scope and required to make the same ACs
-true. Reinvoke the same Ticket as many times as materially different in-Scope
-corrections are justified by fresh current evidence. A resumed role must revise
-or abandon an earlier diagnosis when fresh current evidence contradicts it; role
-continuity never authorizes repetition of the same correction against unchanged
-inputs.
+it is already within the same Ticket Scope and required to make the same authored
+obligations true. Reinvoke the same Ticket as many times as materially different
+in-Scope changes are justified by fresh current evidence. A resumed role must
+revise or abandon an earlier diagnosis when fresh current evidence contradicts
+it; role continuity never authorizes repetition of the same change against
+unchanged inputs.
 
-### 4. Freshly Reobserve The Active Ticket
+### 4. Converge And Freshly Reobserve The Active Ticket
 
-After every implementation result, freshly reobserve every AC of the active
-Ticket at its authored product/canonical boundaries, not only the AC that
-motivated the change. A regression in a previously satisfied AC becomes current
-unfinished work immediately.
+Individual Implementation Lead results are current implementation information,
+not independent evidence. While another authorized same-Ticket product/source
+mutation remains in flight, Ralph does not need to stop the useful work merely to
+perform a full Ticket reobservation after each individual result. Before Ralph
+can treat the Ticket as provisionally satisfied, start a transition-verification
+invocation that may authorize leaving it, or enter whole-Spec Goal Verification,
+all current-Ralph implementation mutation for the active Ticket must finish.
+Ralph then freshly reobserves every AC of the active Ticket at its authored
+product/canonical boundaries. A regression in a previously satisfied AC becomes
+current unfinished work immediately.
 
-The shared-acquisition rule from step 1 applies to this reobservation: one fresh
-post-mutation execution/readback may decide several linked AC observations, but
-every AC remains separately classified and no pre-mutation observation may be
-reused as post-mutation current evidence.
+The shared-acquisition rule from step 1 applies to this settled post-mutation
+reobservation: one fresh execution/readback may decide several linked AC
+observations, but every AC remains separately classified and no observation from
+before or during the mutation interval may be reused as current post-mutation
+evidence.
 
 When the active Ticket is provisionally satisfied and Ralph is about to leave it
 for a different Ticket, use the separate `../verification-lead/SKILL.md` as the
@@ -233,6 +248,16 @@ when no product/source mutation from the current Ralph invocation overlapped tha
 Verification Lead invocation. `FAILED` returns to the same Ticket;
 `INCONCLUSIVE` remains current unfinished work and is handled by correction,
 exact operator action, or the authority gate.
+
+When that Verification Lead reports an admissible direct contradiction before
+its invocation finishes, Ralph may immediately act on the current observation
+under steps 2 and 3 instead of waiting for the verifier to finish every remaining
+flow. The Verification Lead may continue other still-safe observations and may
+report additional current contradictions; only Ralph decides whether and when to
+invoke more same-Ticket implementation. The verifier never dispatches mutation or
+remediates product code itself. Any implementation started during the verifier
+invocation triggers the mutation-overlap rule below, so that in-flight verifier
+can help locate unfinished work but cannot authorize a Ticket transition.
 
 If any current-Ralph product/source mutation begins after a transition
 Verification Lead invocation starts, that invocation immediately loses authority
@@ -289,8 +314,10 @@ No other result completes the Goal.
 
 ## Same-Ticket Repetition And No Progress
 
-Do not repeat the same Ticket + same unmet AC set + same direct observation + same
-correction with unchanged inputs. That is not Ralph progress.
+Do not repeat the same Ticket + materially unchanged current observations + the
+same attempted implementation with unchanged inputs. Starting or resuming another
+Worker does not turn that repetition into progress. This applies whether the
+current Ticket work is serial or overlapping.
 
 Progress within the current invocation means at least one of:
 
@@ -381,9 +408,11 @@ completion unit to the first finished package.
 ## Non-Goals
 
 Do not create a controller runtime, background daemon, workflow database,
-checkpoint store, persistent gap ID, attempt ledger, event log, replay engine,
-claim/capability registry, generic DSL, or retained evidence capsule for this
-loop. Do not encode project-specific diagnosis recipes into this skill merely
+checkpoint store, persistent gap ID, dispatch queue, Worker/assignment ledger,
+attempt ledger, event log, replay engine, claim/capability registry, generic DSL,
+or retained evidence capsule for this loop. Concurrent same-Ticket execution is
+host invocation behavior, not a stored scheduler. Do not encode project-specific
+diagnosis recipes into this skill merely
 because an agent once missed a technical clue. Agent investigation quality is an
 evaluation/tooling concern unless the IIS contract itself permits false
 completion, authority violation, unsafe mutation, or an invalid loop boundary.

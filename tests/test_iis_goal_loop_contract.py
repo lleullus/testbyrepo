@@ -37,18 +37,22 @@ class IISGoalLoopContractTests(unittest.TestCase):
             "newly discovered technical cause does not create a new Ticket",
             "same Ticket Scope",
             "Reinvoke the same Ticket",
-            "materially different in-Scope corrections",
+            "materially different in-Scope changes",
             "Do not dynamically author a new Ticket inside the loop",
             "Do not widen Ticket authority",
         ):
             self.assertIn(required, body)
-        self.assertIn("Do not create a root-cause queue or dynamic gap taxonomy", body)
+        self.assertIn("without inventing a new Ticket, queue, root-cause registry, or other planning state", body)
 
-    def test_every_implementation_reobserves_active_ticket_and_final_goal_is_fresh(self) -> None:
+    def test_settled_active_ticket_is_fully_reobserved_and_final_goal_is_fresh(self) -> None:
         body = normalized(LOOP)
         for required in (
-            "After every implementation result, freshly reobserve every AC of the active Ticket",
+            "While another authorized same-Ticket product/source mutation remains in flight",
+            "does not need to stop the useful work merely to perform a full Ticket reobservation after each individual result",
+            "all current-Ralph implementation mutation for the active Ticket must finish",
+            "freshly reobserves every AC of the active Ticket",
             "A regression in a previously satisfied AC becomes current unfinished work immediately",
+            "no observation from before or during the mutation interval may be reused",
             "complete ready Ticket set",
             "Only when the complete Ticket set is provisionally satisfied",
             "goal-verification-lead/SKILL.md",
@@ -73,8 +77,9 @@ class IISGoalLoopContractTests(unittest.TestCase):
     def test_no_progress_is_invocation_circuit_breaker_not_goal_impossibility(self) -> None:
         body = normalized(LOOP)
         for required in (
-            "same Ticket + same unmet AC set + same direct observation + same correction",
-            "That is not Ralph progress",
+            "same Ticket + materially unchanged current observations + the same attempted implementation with unchanged inputs",
+            "Starting or resuming another Worker does not turn that repetition into progress",
+            "serial or overlapping",
             "`GOAL OPEN — NO PROGRESS`",
             "circuit breaker for the current attempt, not a claim that the Goal is impossible",
             "later invocation starts from the same approved Spec, validated Ticket set, and fresh current product state",
@@ -187,39 +192,37 @@ class IISGoalLoopContractTests(unittest.TestCase):
         ):
             self.assertIn(required, body)
 
-    def test_same_ticket_role_context_is_bounded_and_never_carries_authority(self) -> None:
+    def test_same_ticket_roles_are_bounded_and_never_carry_authority(self) -> None:
         body = normalized(LOOP)
         for required in (
-            "one host-provided invocation-local `Implementation Subagent` role for the currently active Ticket",
-            "resume the same role context for a later materially different correction",
-            "only when the retained context remains bounded, relevant, and likely to reduce technical rediscovery",
-            "noisy, oversized, materially contradicted, no longer relevant, or likely to cost more than fresh technical rehydration",
-            "reinvoke a fresh role instead",
-            "Retained context may shorten technical rediscovery only",
+            "host-provided invocation-local `Implementation Subagent` roles for the currently active Ticket",
+            "more than one same-Ticket Implementation Lead invocation active",
+            "Serial execution remains a fully valid fallback",
+            "exact number, timing, and technical allocation of those invocations are implementation-owned",
+            "a role may be resumed for later materially different work",
+            "retained context remains bounded, relevant, and likely to reduce technical rediscovery",
             "every Implementation Lead entry must freshly revalidate",
-            "Prior feasibility, source facts, implementation narration, or observations never remain current",
-            "fresh rehydration is preferable under the bounded-context rule above",
-            "reinvoke a fresh role without changing the Ralph semantics",
+            "never remain current merely because a role context was resumed or another same-Ticket role is already active",
+            "assignment ledger",
             "Never resume an implementation role across a Ticket change",
             "entry into whole-Spec Goal Verification",
             "`GOAL OPEN — NO PROGRESS`",
-            "later Goal-verification return to a Ticket that Ralph had already left",
         ):
             self.assertIn(required, body)
 
-    def test_active_ticket_packet_exposes_siblings_without_creating_new_authority(self) -> None:
+    def test_implementation_input_is_current_navigation_not_new_authority(self) -> None:
         body = normalized(LOOP)
         for required in (
-            "selected primary unmet AC and its current direct observation",
-            "compact current navigation summary for every AC of that same active Ticket",
-            "newly observed regression or preservation concern",
-            "navigation context, not new Ticket authority",
-            "Do not serialize that summary",
+            "current direct observations relevant to the in-Scope work being attempted",
+            "current preservation or regression observations when materially relevant",
+            "current observations that justify implementation are navigation only",
+            "do not add, strengthen, split, or reorder Ticket authority",
+            "Do not serialize the working observations",
             "gap registry",
         ):
             self.assertIn(required, body)
 
-    def test_shared_acquisition_never_weakens_full_post_mutation_reobservation(self) -> None:
+    def test_shared_acquisition_never_weakens_settled_post_mutation_reobservation(self) -> None:
         body = normalized(LOOP)
         for required in (
             "acquire that shared boundary once and classify each linked AC separately",
@@ -228,10 +231,24 @@ class IISGoalLoopContractTests(unittest.TestCase):
             "do not infer equivalence merely because the ACs concern nearby product behavior",
             "no combined AC verdict",
             "Any product/source mutation after the acquisition invalidates it",
-            "After every implementation result, freshly reobserve every AC of the active Ticket",
-            "one fresh post-mutation execution/readback may decide several linked AC observations",
+            "settled post-mutation reobservation",
+            "one fresh execution/readback may decide several linked AC observations",
             "every AC remains separately classified",
-            "no pre-mutation observation may be reused as post-mutation current evidence",
+            "no observation from before or during the mutation interval may be reused",
+        ):
+            self.assertIn(required, body)
+
+    def test_transition_verifier_can_surface_work_before_finishing_without_remediating(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "reports an admissible direct contradiction before its invocation finishes",
+            "immediately act on the current observation under steps 2 and 3",
+            "instead of waiting for the verifier to finish every remaining flow",
+            "may continue other still-safe observations",
+            "may report additional current contradictions",
+            "only Ralph decides whether and when to invoke more same-Ticket implementation",
+            "verifier never dispatches mutation or remediates product code itself",
+            "cannot authorize a Ticket transition",
         ):
             self.assertIn(required, body)
 
@@ -240,10 +257,13 @@ class IISGoalLoopContractTests(unittest.TestCase):
         for prohibited in (
             "controller runtime",
             "workflow database",
+            "dispatch queue",
+            "worker/assignment ledger",
             "attempt ledger",
             "replay engine",
             "claim/capability registry",
             "persistent queue",
+            "stored scheduler",
             "generic dsl",
         ):
             self.assertIn(prohibited, body)
