@@ -11,10 +11,15 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    `Implementation Subagent` role. In an explicit Implementation Lead request,
    that role remains user-designated. The only exception is an invocation from
    the canonical `../iis-goal-loop/SKILL.md` under current user intent to complete
-   the approved Goal: that loop may supply a host-provided invocation-local
-   `Implementation Subagent` role together with the exact ready Ticket and its
-   current parent-outcome/AC/Behavior trace. The exception grants no new Ticket
-   authority. While the same Ticket remains active inside that exact Ralph
+   the approved Goal: that loop may supply the exact current-conversation
+   user-designated `Implementation Subagent` role when one applies to the current
+   consumption point, or otherwise a host-provided invocation-local role,
+   together with the exact ready Ticket and its current
+   parent-outcome/AC/Behavior trace. A user-designated role, ordering, reservation,
+   consumption timing, or concurrency condition remains binding; neither the Lead
+   nor host may reinterpret the same configured model/agent as another role or
+   consume a reserved implementation role at another phase. The exception grants
+   no new Ticket authority. While the same Ticket remains active inside that exact Ralph
    invocation, the host may resume the same invocation-local role for a later
    materially different correction only while retained technical context remains
    bounded, relevant, and likely to reduce rediscovery. If that context becomes
@@ -102,6 +107,12 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    explicitly chooses parallel execution. The cost and duplication of
    user-designated research are accepted tradeoffs; without such a model
    designation, do not create additional delegation cost.
+   A `Verification Runner` designation and an `Implementation Subagent`
+   designation are not implementation-research designations. Do not consume a
+   model/agent designated for either of those roles as an Implementation Research
+   Agent unless the user separately designated that same configured model/agent
+   for implementation research. Role binding comes from the explicit designation,
+   not model identity.
 3. An Implementation Research Agent may investigate only the directly relevant
    implementation and integration surfaces; relevant pre-existing or concurrent
    changes; required files, executables, dependencies, and focused-check
@@ -148,8 +159,9 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    only then invoke the admitted `Implementation Subagent` through the host's
    `Host Subagent Invocation Mechanism`, authorizing that role to modify the
    current project directly. The admitted role is the user-designated role for an
-   explicit leaf request or only the invocation-local host-provided role admitted
-   by paragraph 1 for the Ralph loop. If the conditions do not hold, do not invoke
+   explicit leaf request, the applicable current-conversation user-designated role
+   carried by Ralph, or the invocation-local host-provided role admitted by
+   paragraph 1 when no user designation applies. If the conditions do not hold, do not invoke
    it for mutation;
    report `Implementation Assignment: BLOCKED` with each concrete affected AC or
    boundary, the directly confirmed current-project fact, and the exact missing
@@ -216,11 +228,17 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    coverage. Within Ralph same-Ticket overlap only, this rule does not require a
    second invocation to duplicate concrete work that the current caller has
    already identified as actively in flight in another same-Ticket invocation.
+   When a fresh Ralph/verification observation materially refines that already
+   active work and host communication is available, feed it to the existing
+   admitted role first rather than consuming another user-reserved role. The
+   existing role must recheck current source and revise or abandon stale technical
+   assumptions; this creates no permanent defect, AC, or file ownership.
    Full Ticket Scope, AC, Behavior/UI preservation, and integration awareness still
    apply; if that work remains current after the sibling activity settles, it is
    ordinary due-now work again. Preserve the same admission source: user-designated
-   for an explicit leaf request or invocation-local host-provided for the Ralph
-   loop. Continue only while a concrete bounded in-scope correction remains.
+   for an explicit leaf request, current-conversation user-designated through
+   Ralph when applicable, or invocation-local host-provided when no such
+   designation applies. Continue only while a concrete bounded in-scope correction remains.
 9. A confirmed missing Ticket-owned route, registration/export, product
    configuration, executable/startup wiring, caller/integration link, or required
    outcome/readback connection is concrete same-Ticket due-now implementation
@@ -303,9 +321,10 @@ environment readiness outside the implementation-stage checks, or assign an AC
 or whole-Ticket verdict. Keep its result in the current session; do not create
 serialized state or an approval workflow.
 
-Within the user's role and parallel-execution choices, the host controls the
-invocation, communication, resumption, retry, and scheduling details for each
-designated role. Research invocation does not authorize mutation. The
+Within the user's explicit role binding, reservation, ordering, consumption
+timing, concurrency, and parallel-execution choices, the host controls only the
+remaining invocation, communication, resumption, retry, and scheduling details
+for each designated role. Research invocation does not authorize mutation. The
 Implementation Subagent is invoked for project mutation only after the Lead
 reports `Implementation Assignment: FEASIBLE`.
 

@@ -14,8 +14,18 @@ independent leaves. End-to-end product completion uses the Ralph Goal Fulfillmen
 Loop only after ordinary planning has produced one exact approved Spec and a
 validated complete ready Ticket set.
 
-The router carries only current-conversation intent. It does not create workflow
-state, persist a mode, invent Tickets, or reinterpret product authority.
+The router carries only current-conversation intent. This includes any explicit
+user designation of an `Implementation Subagent`, `Implementation Research
+Agent`, or `Verification Runner` role and any explicit ordering, reservation,
+consumption timing, or maximum-concurrency condition attached to that role.
+Preserve those bindings and conditions as authored instead of reinterpreting a
+configured model as a different role or consuming a role at a different phase.
+Model identity alone is not a role: using the same configured model/agent for a
+different IIS role requires a separate user designation for that role. An owning
+Lead may decide only role grouping, count, timing, concurrency, or serial fallback
+that the user did not already fix. These are current-conversation routing
+constraints only; the router does not create workflow state, persist a mode or
+roster, invent Tickets, or reinterpret product authority.
 
 ## Route By Requested Completion Unit
 
@@ -82,6 +92,12 @@ another agent, a compatibility command, or implementation checks instead of
 selecting a fallback. Return the exact disposition boundary to the user or
 calling workflow.
 
+If the user supplied one or more `Verification Runner` roles or conditions for
+this verification request, pass those exact current-conversation bindings to
+Verification Lead. If the user supplied none, the verification leaf may use its
+ordinary host-provided invocation-local Runner mechanism. Do not repurpose a
+Verification Runner designation as implementation research or mutation.
+
 ### Explicit Whole-Spec Verification
 
 An explicit request to verify whether one exact approved Spec is currently
@@ -91,6 +107,9 @@ complete as a whole routes to:
 
 This is verification only. It does not remediate, start Implementation Lead, or
 enter the Ralph loop unless the user separately requested end-to-end completion.
+Pass any user-designated `Verification Runner` bindings and conditions unchanged
+to Goal Verification Lead; absence of a user Runner designation does not create
+new user ceremony.
 
 ### End-To-End Goal Fulfillment
 
@@ -101,16 +120,21 @@ complete an already approved Spec — routes to the Ralph loop:
 `/home/user01/project/iis-skills/iis-goal-loop/SKILL.md`
 
 If one exact approved Spec and its validated complete ready Ticket set already
-exist, invoke the Ralph loop directly with that Spec and exact Project Root.
+exist, invoke the Ralph loop directly with that Spec and exact Project Root,
+carrying any current-conversation Implementation/Verification role bindings and
+their explicit consumption conditions unchanged.
 
 If planning is still required, first run the same ordinary Scope Shaper / Ask
 Matt / To Spec / To Tickets leaves above. Each planning leaf still stops at its
 own normal boundary. When the top-level user request already clearly authorizes
-end-to-end product completion, retain only that current-conversation completion
-intent while planning executes. After the planning leaves return one exact
-approved Spec and a complete ready Ticket set that passes the set validator, the
-router may enter the Ralph loop without asking the user to say "continue",
-select a Worker, or approve an implementation mechanism again.
+end-to-end product completion, retain that current-conversation completion intent
+and any explicit Implementation/Verification role bindings and consumption
+conditions while planning executes, but do not invoke those delivery or
+verification roles during planning merely because they were designated. After
+the planning leaves return one exact approved Spec and a complete ready Ticket set
+that passes the set validator, the router may enter the Ralph loop without asking
+the user to say "continue", select a Worker, restate an already supplied role
+binding, or approve an implementation mechanism again.
 
 If the user requested planning only, do not enter Ralph after Tickets become
 ready. If the approved Spec or Ticket breakdown needs a new product/scope decision

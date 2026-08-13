@@ -8,9 +8,12 @@ description: Freshly verify one exact approved IIS Spec as a whole from current 
 ## Purpose And Authority
 
 Independently decide whether the current product satisfies one exact approved
-IIS Spec as a whole. This leaf is the only IIS completion leaf that may return
-`GOAL VERIFIED`; the Ralph loop alone converts that result into user-facing
-`GOAL ACHIEVED`.
+IIS Spec as a whole. The current agent is Goal Verification Lead: it owns the
+final denominator, fresh Runner assignments, evidence admission, row verdicts,
+aggregate, and caller-facing result. Actual product/canonical observation is
+performed by new fresh `../verification-runner/SKILL.md` invocations. This leaf
+is the only IIS completion leaf that may return `GOAL VERIFIED`; the Ralph loop
+alone converts that result into user-facing `GOAL ACHIEVED`.
 
 The approved Spec is the completion authority. The ready Ticket set supplies only
 current decomposition and parent-outcome/AC/Behavior ownership for navigation.
@@ -47,6 +50,29 @@ Do not require an Implementation Lead result, independent Ticket verdict,
 retained source, prior Goal result, evidence archive, or persistent verification
 state.
 
+## Verification Runner Observation
+
+Use new fresh `../verification-runner/SKILL.md` invocations for final observation.
+Preserve any user-designated `Verification Runner` role bindings and their
+ordering, reservation, consumption timing, or concurrency conditions exactly; if
+none were supplied, host-provided invocation-local Runner roles are allowed
+without new user ceremony. The same user-designated roster/model may be used again
+after Ticket Verification, but always through new invocations: prior Runner
+context/evidence remains navigation only and cannot supply final Goal evidence.
+
+Within those user constraints, Goal Verification Lead chooses only grouping,
+count, timing, concurrency, valid shared acquisition, and serial fallback. Do not
+define AC/flow/outcome/defect/file-per-Runner fixed decomposition and do not invoke
+unused Runner slots merely to consume a roster. Runner output is raw current
+evidence/currentness information only; Runner verdict-like labels or progression
+claims have no authority.
+
+Goal Verification is a quiescent final barrier, not another streaming remediation
+stage. All current Ralph product/source mutation and any prior verification effects
+that can still mutate the target must be finished before this cycle starts. This
+Lead and its Runners do not forward findings into concurrent implementation or
+invoke remediation while the final cycle is active.
+
 ## Final Denominator
 
 The final denominator contains:
@@ -72,8 +98,11 @@ use history as substitute evidence, or invent a durable history mechanism.
 
 ## Fresh Evidence
 
-Obtain evidence now from the current authoritative boundary named or admitted by
-the approved contract. Admissible evidence includes:
+Obtain evidence now through fresh Verification Runner observation of the current
+authoritative boundary named or admitted by the approved contract. Goal
+Verification Lead admits only the Runner's raw current evidence and bounded
+currentness facts; Runner narration, verdict-like labels, or progression claims
+are not final authority. Admissible evidence includes:
 
 - current product result and authoritative readback after an approved trigger;
 - direct current canonical source/artifact/document inspection for a
@@ -101,12 +130,21 @@ credential-bearing, shared/production, payment, message, deployment,
 destructive, irreversible, or duplicate-sensitive effects without exact existing
 authority for the action, target, readback, cleanup, and non-duplication boundary.
 
+If product/source mutation begins after this final cycle starts, the cycle cannot
+return `GOAL VERIFIED`. Any still-safe Runner work is navigation only. Every
+overlapped Runner must return or be host-confirmed stopped, and every Runner-started
+product effect must reach its authored terminal/cleanup boundary or be established
+unable to mutate the target. Affected rows are `INCONCLUSIVE` because final
+attribution is unstable. A later Ralph attempt may start a wholly new Goal
+Verification Lead cycle with new fresh Runner invocations only after quiescence;
+this Lead does not dispatch remediation or rerun itself.
+
 ## Dispositions
 
-For `Independent`, directly perform or inspect the approved current observation
-path. A missing implemented surface, runtime unavailability, observation failure,
-or inability to attribute the result is `INCONCLUSIVE`, not automatically
-`FAIL`.
+For `Independent`, assign fresh Runner observation of the approved current path
+and adjudicate only the admitted raw current evidence. A missing implemented
+surface, runtime unavailability, observation failure, or inability to attribute
+the result is `INCONCLUSIVE`, not automatically `FAIL`.
 
 For `Operator-assisted`, the operator performs only the exact approved action and
 supplies the approved operator-owned readback. The operator never interprets an

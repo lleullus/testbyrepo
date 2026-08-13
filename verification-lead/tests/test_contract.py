@@ -72,14 +72,17 @@ class VerificationLeadContractTests(unittest.TestCase):
         self.assertIn("This currentness recheck does not replace product evidence", NORMALIZED)
         self.assertIn("Do not create a digest, snapshot, retained source, or durable identity", NORMALIZED)
 
-    def test_mutation_overlap_invalidates_ticket_transition_use(self) -> None:
+    def test_mutation_overlap_invalidates_whole_runner_cycle_for_progression(self) -> None:
         for required in (
-            "authorize a caller to leave the Ticket only when the product/source it verified remained stable",
-            "mutates the product/source after this verification invocation begins",
-            "must not use this invocation's aggregate to authorize a Ticket transition",
-            "still-safe observation finish only as current navigation",
-            "new fresh Verification Lead invocation against the resulting current product",
-            "creates no retained verification state or generation identity",
+            "Ticket Verification Lead cycle can authorize the caller to leave the Ticket only when the product/source observed by that cycle remained stable",
+            "whole Lead/Runner cycle loses Ticket-progression authority",
+            "must not use any row or aggregate from that cycle to leave the Ticket",
+            "every Runner from the overlapped cycle must return or be host-confirmed stopped",
+            "every Runner-started product effect must reach its authored terminal/cleanup boundary",
+            "freshly reobserves the full active Ticket",
+            "new Verification Lead cycle with fresh Runner invocations",
+            "Do not carry forward an earlier PASS row or aggregate",
+            "creates no retained verification state, cycle ID, Runner registry, or generation identity",
         ):
             self.assertIn(required, NORMALIZED)
 
@@ -92,16 +95,17 @@ class VerificationLeadContractTests(unittest.TestCase):
         self.assertIn("Missing implementation entrypoint or verification readback alone is not an AC contradiction", NORMALIZED)
         self.assertIn("canonical-target presence/absence is itself the authored claim", NORMALIZED)
 
-    def test_qualifying_current_observation_can_be_reported_before_final_aggregate(self) -> None:
+    def test_runner_finding_can_be_forwarded_before_final_aggregate(self) -> None:
         for required in (
-            "either a concrete direct contradiction or a concrete current Ticket-owned implementation, integration, surface, or readback absence",
-            "prevents the defined authored flow from being completed",
-            "report that exact current observation to the caller immediately instead of waiting for all remaining authored flows",
-            "navigation only: it is not an early AC verdict, aggregate, remediation instruction, or new authority",
-            "does not presume that an environment, operator, or authority limitation is implementation-owned",
-            "does not stop this verifier from continuing other still-safe authored observations",
+            "fresh Runner reports admissible current evidence",
+            "concrete current Ticket-owned implementation, integration, surface, or readback absence",
+            "Verification Lead forwards that exact current observation to the caller immediately",
+            "instead of waiting for the remaining Runner assignments or final aggregate",
+            "neither Runner nor Lead turns it into an early AC verdict, remediation instruction, or new authority",
+            "Other still-safe Runner observations may continue",
             "caller alone decides whether current in-Scope implementation should begin or whether the observation belongs at an operator, environment, or authority gate",
-            "Additional qualifying current observations may likewise be reported",
+            "mutation-overlap rule below applies to the whole cycle",
+            "Additional qualifying Runner findings may likewise be forwarded",
             "host cannot carry intermediate communication",
             "without inventing another transport or state mechanism",
         ):
@@ -162,24 +166,34 @@ class VerificationLeadContractTests(unittest.TestCase):
         ):
             self.assertIn(forbidden, NORMALIZED)
 
-    def test_safety_needs_no_safe_local_approval_and_no_unsafe_execution(self) -> None:
+    def test_unsafe_effect_does_not_authorize_skipping_ticket_verification(self) -> None:
         self.assertIn("Safe local execution and read-only canonical inspection need no scenario approval", NORMALIZED)
         self.assertIn("without existing concrete authority", NORMALIZED)
-        self.assertIn("never route it to another agent or present it as independent success", NORMALIZED)
+        for required in (
+            "Do not skip an otherwise-required Independent Ticket Verification cycle",
+            "Prefer a fresh current authoritative readback",
+            "one valid shared acquisition",
+            "serialize relevant Runner observations",
+            "issue `INCONCLUSIVE` with the exact environment/operator/authority evidence limit",
+            "rather than leaping to Goal Verification",
+        ):
+            self.assertIn(required, NORMALIZED)
 
-    def test_no_mutation_remediation_or_choreography(self) -> None:
-        for forbidden_action in (
+    def test_no_mutation_or_second_verdict_authority(self) -> None:
+        for required in (
             "Do not directly modify product source",
             "Do not remediate",
             "create or propose a follow-up Ticket",
-            "runtime acquisition agent",
-            "second verifier",
+            "`verification-runner` is the only subordinate verification execution role",
+            "second verdict authority",
+            "Primary Verifier",
             "Coverage Challenger",
+            "remediation role",
             "double run",
             "scenario plan approval",
             "safe-local approval",
         ):
-            self.assertIn(forbidden_action, SKILL)
+            self.assertIn(required, NORMALIZED)
 
     def test_authored_product_effect_is_not_verifier_mutation(self) -> None:
         self.assertIn("An authored product trigger may create or change its expected product state", NORMALIZED)

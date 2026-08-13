@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 REPO_ROUTER = ROOT / "iis-workflow/SKILL.md"
+CANONICAL_ROUTER = Path("/home/user01/project/iis-skills/iis-workflow/SKILL.md")
 INSTALLED_ROUTER = Path("/home/user01/.codex/skills/iis-workflow/SKILL.md")
 
 
@@ -65,9 +66,25 @@ class IISEntryRoutingContractTests(unittest.TestCase):
         ):
             self.assertIn(required, router)
 
-    def test_installed_router_is_byte_identical_to_repository_router(self) -> None:
+    def test_user_role_binding_and_consumption_timing_are_preserved_as_routing_intent(self) -> None:
+        router = " ".join(REPO_ROUTER.read_text(encoding="utf-8").split())
+        for required in (
+            "explicit user designation of an `Implementation Subagent`, `Implementation Research Agent`, or `Verification Runner` role",
+            "ordering, reservation, consumption timing, or maximum-concurrency condition",
+            "Model identity alone is not a role",
+            "requires a separate user designation for that role",
+            "An owning Lead may decide only role grouping, count, timing, concurrency, or serial fallback that the user did not already fix",
+            "carrying any current-conversation Implementation/Verification role bindings and their explicit consumption conditions unchanged",
+            "do not invoke those delivery or verification roles during planning merely because they were designated",
+        ):
+            self.assertIn(required, router)
+
+    def test_installed_router_is_byte_identical_to_canonical_repository_router(self) -> None:
         self.assertTrue(INSTALLED_ROUTER.is_file())
-        self.assertEqual(INSTALLED_ROUTER.read_bytes(), REPO_ROUTER.read_bytes())
+        self.assertTrue(CANONICAL_ROUTER.is_file())
+        self.assertEqual(INSTALLED_ROUTER.read_bytes(), CANONICAL_ROUTER.read_bytes())
+        if ROOT.resolve() == CANONICAL_ROUTER.parents[1].resolve():
+            self.assertEqual(INSTALLED_ROUTER.read_bytes(), REPO_ROUTER.read_bytes())
 
 
 if __name__ == "__main__":

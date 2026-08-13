@@ -78,7 +78,8 @@ class ActiveSkillContractTests(unittest.TestCase):
         for required in (
             "In an explicit Implementation Lead request, that role remains user-designated",
             "only exception is an invocation from the canonical `../iis-goal-loop/SKILL.md`",
-            "host-provided invocation-local `Implementation Subagent` role",
+            "user-designated `Implementation Subagent` role when one applies to the current consumption point",
+            "otherwise a host-provided invocation-local role",
             "exception grants no new Ticket authority",
             "Never write the internal role to `Worker:`",
             "`Worker:` remains empty",
@@ -129,8 +130,22 @@ class ActiveSkillContractTests(unittest.TestCase):
             "do not defer it merely to make this invocation appear complete",
             "does not require a second invocation to duplicate concrete work",
             "current caller has already identified as actively in flight in another same-Ticket invocation",
+            "feed it to the existing admitted role first rather than consuming another user-reserved role",
+            "recheck current source and revise or abandon stale technical assumptions",
+            "creates no permanent defect, AC, or file ownership",
             "Full Ticket Scope, AC, Behavior/UI preservation, and integration awareness still apply",
             "if that work remains current after the sibling activity settles, it is ordinary due-now work again",
+        ):
+            self.assertIn(required, normalized)
+
+    def test_role_designations_do_not_cross_consume_without_separate_user_authority(self) -> None:
+        normalized = " ".join(IMPLEMENTATION_SKILL.split())
+        for required in (
+            "A `Verification Runner` designation and an `Implementation Subagent` designation are not implementation-research designations",
+            "unless the user separately designated that same configured model/agent for implementation research",
+            "Role binding comes from the explicit designation, not model identity",
+            "user's explicit role binding, reservation, ordering, consumption timing, concurrency, and parallel-execution choices",
+            "host controls only the remaining invocation, communication, resumption, retry, and scheduling details",
         ):
             self.assertIn(required, normalized)
 

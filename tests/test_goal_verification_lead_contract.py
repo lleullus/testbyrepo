@@ -24,6 +24,43 @@ class GoalVerificationLeadContractTests(unittest.TestCase):
         ):
             self.assertIn(required, body)
 
+    def test_goal_lead_owns_final_authority_and_fresh_runners_observe(self) -> None:
+        body = normalized(SKILL)
+        for required in (
+            "current agent is Goal Verification Lead",
+            "owns the final denominator, fresh Runner assignments, evidence admission, row verdicts, aggregate, and caller-facing result",
+            "Actual product/canonical observation is performed by new fresh `../verification-runner/SKILL.md` invocations",
+            "Runner output is raw current evidence/currentness information only",
+            "Runner verdict-like labels or progression claims have no authority",
+        ):
+            self.assertIn(required, body)
+
+    def test_same_user_roster_is_reused_only_through_fresh_invocations(self) -> None:
+        body = normalized(SKILL)
+        for required in (
+            "user-designated `Verification Runner` role bindings",
+            "ordering, reservation, consumption timing, or concurrency conditions exactly",
+            "same user-designated roster/model may be used again after Ticket Verification",
+            "always through new invocations",
+            "prior Runner context/evidence remains navigation only and cannot supply final Goal evidence",
+        ):
+            self.assertIn(required, body)
+
+    def test_goal_verification_is_quiescent_final_barrier_not_streaming_remediation(self) -> None:
+        body = normalized(SKILL)
+        for required in (
+            "Goal Verification is a quiescent final barrier, not another streaming remediation stage",
+            "All current Ralph product/source mutation and any prior verification effects that can still mutate the target must be finished before this cycle starts",
+            "do not forward findings into concurrent implementation or invoke remediation while the final cycle is active",
+            "cycle cannot return `GOAL VERIFIED`",
+            "Every overlapped Runner must return or be host-confirmed stopped",
+            "every Runner-started product effect must reach its authored terminal/cleanup boundary",
+            "Affected rows are `INCONCLUSIVE` because final attribution is unstable",
+            "wholly new Goal Verification Lead cycle with new fresh Runner invocations only after quiescence",
+            "does not dispatch remediation or rerun itself",
+        ):
+            self.assertIn(required, body)
+
     def test_denominator_covers_each_spec_outcome_and_global_contract(self) -> None:
         body = normalized(SKILL)
         for required in (
@@ -52,7 +89,8 @@ class GoalVerificationLeadContractTests(unittest.TestCase):
     def test_final_evidence_is_fresh_and_direct(self) -> None:
         body = normalized(SKILL)
         for required in (
-            "Obtain evidence now from the current authoritative boundary",
+            "Obtain evidence now through fresh Verification Runner observation of the current authoritative boundary",
+            "Goal Verification Lead admits only the Runner's raw current evidence and bounded currentness facts",
             "current product result and authoritative readback",
             "direct current canonical source/artifact/document inspection",
             "current rendered UI state and interaction readback",
@@ -79,11 +117,10 @@ class GoalVerificationLeadContractTests(unittest.TestCase):
         self.assertIn("it can never contribute to `GOAL VERIFIED`", body)
 
     def test_aggregate_is_closed_and_only_all_pass_verifies(self) -> None:
-        body = SKILL
-        self.assertIn("all rows PASS                    -> GOAL VERIFIED", body)
-        self.assertIn("one or more rows FAIL            -> GOAL FAILED", body)
-        self.assertIn("otherwise                        -> GOAL INCONCLUSIVE", body)
-        self.assertIn("No other result is allowed to mean completion", normalized(body))
+        self.assertIn("all rows PASS                    -> GOAL VERIFIED", SKILL)
+        self.assertIn("one or more rows FAIL            -> GOAL FAILED", SKILL)
+        self.assertIn("otherwise                        -> GOAL INCONCLUSIVE", SKILL)
+        self.assertIn("No other result is allowed to mean completion", normalized(SKILL))
 
     def test_current_authority_chain_is_revalidated_before_product_observation(self) -> None:
         body = normalized(SKILL)

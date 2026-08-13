@@ -7,10 +7,13 @@ description: Independently verify one exact ready Independent IIS Ticket against
 
 ## Purpose And Authority
 
-Independently decide every exact authored Acceptance Criterion once from the
-current product/source that the Ticket names. Use the exact ready local Markdown
-Ticket, its exact `Project-Root`, and the verification contract reached through
-its exact approved parent Spec. A Candidate Execution Recipe is optional.
+Independently decide every exact authored Acceptance Criterion once from fresh
+current product/canonical evidence. The current agent is Verification Lead: it
+owns the authored AC denominator, Runner assignment, evidence admission, AC
+verdicts, aggregate, and caller-facing result. Actual product/canonical
+observation is performed by fresh `../verification-runner/SKILL.md` invocations.
+Use the exact ready local Markdown Ticket, its exact `Project-Root`, and the
+verification contract reached through its exact approved parent Spec. A Candidate Execution Recipe is optional.
 
 The Ticket's exact top-level `## Acceptance Criteria` items in authored order are
 the verdict denominator. Its exact top-level `## Verification` items are the
@@ -76,6 +79,18 @@ Reason: <exact planning/admission defect>
 AC verdicts: Not issued
 ```
 
+## Verification Runner Observation
+
+Use fresh `../verification-runner/SKILL.md` invocations for actual
+product/canonical observation. Preserve user-designated Runner role bindings and
+their ordering, reservation, consumption timing, or concurrency conditions exactly.
+If none were supplied, host-provided invocation-local Runner roles are allowed.
+
+Within those user constraints, Lead chooses grouping, count, timing, concurrency,
+valid shared acquisition, and serial fallback. Do not define AC/flow/defect/file-
+per-Runner fixed decomposition or invoke unused Runner slots merely to consume a
+roster. Runner output is raw current evidence/currentness information only.
+
 ## Optional Candidate Execution Recipe
 
 If the current caller provides a Candidate Execution Recipe, treat it only as
@@ -113,10 +128,14 @@ failure.
 
 ## Fresh Direct Evidence
 
-Execute or inspect each materially distinct authored flow only as required by
-the Ticket. One execution may cover several linked ACs; do not duplicate it
-unless the Ticket requires repetition or distinct inputs, states, branches, or
-boundaries. Do not run every AC separately merely to produce one row per AC.
+Assign fresh Verification Runner observations only as required by the Ticket's
+materially distinct authored flows. One safe acquisition may cover several linked
+ACs when the authored trigger/input, relevant state, and authoritative readback are
+genuinely shared; do not duplicate it unless the Ticket requires repetition or
+distinct inputs, states, branches, or boundaries. Do not run every AC or every
+Runner slot separately merely to manufacture a row or consume a roster. The Lead
+admits only raw current evidence and currentness facts returned by a fresh Runner;
+Runner narration or verdict-like labels are not authority.
 
 Only evidence obtained now from the current target is admissible:
 
@@ -128,24 +147,23 @@ Only evidence obtained now from the current target is admissible:
 - direct observation of required negative, ordering, interruption, lifecycle,
   persistence, or external-effect boundaries.
 
-When admissible fresh current observation establishes either a concrete direct
-contradiction or a concrete current Ticket-owned implementation, integration,
-surface, or readback absence that prevents the defined authored flow from being
-completed, and the host supports communication before this invocation finishes,
-report that exact current observation to the caller immediately instead of waiting
-for all remaining authored flows. The report is navigation only: it is not an
-early AC verdict, aggregate, remediation instruction, or new authority, and it
-does not presume that an environment, operator, or authority limitation is
-implementation-owned. It does not stop this verifier from continuing other
-still-safe authored observations. The caller alone decides whether current
-in-Scope implementation should begin or whether the observation belongs at an
-operator, environment, or authority gate. If implementation begins while this
-invocation remains active, the mutation-overlap rule below applies and this
-invocation cannot authorize leaving the Ticket. Additional qualifying current
-observations may likewise be reported while continued observation remains safe and
-attributable. When the host cannot carry intermediate communication, complete the
-ordinary fresh verification result without inventing another transport or state
-mechanism.
+When a fresh Runner reports admissible current evidence establishing either a
+concrete direct contradiction or a concrete current Ticket-owned implementation,
+integration, surface, or readback absence that prevents the defined authored flow
+from being completed, and host communication supports streaming, Verification
+Lead forwards that exact current observation to the caller immediately instead of
+waiting for the remaining Runner assignments or final aggregate. The forwarded
+finding is navigation only: neither Runner nor Lead turns it into an early AC
+verdict, remediation instruction, or new authority, and neither presumes that an
+environment, operator, or authority limitation is implementation-owned. Other
+still-safe Runner observations may continue. The caller alone decides whether
+current in-Scope implementation should begin or whether the observation belongs
+at an operator, environment, or authority gate. If implementation begins during
+this verification cycle, the mutation-overlap rule below applies to the whole
+cycle. Additional qualifying Runner findings may likewise be forwarded while
+continued observation remains safe and attributable. When the host cannot carry
+intermediate communication, complete the ordinary fresh verification result
+without inventing another transport or state mechanism.
 
 An authored product trigger may create or change its expected product state or
 artifact only on a safe disposable acceptance target, or within the exact
@@ -185,17 +203,21 @@ check. If a bound fact changed or cannot be rechecked, the affected ACs are
 usable only under the attribution rule below. This currentness recheck does not
 replace product evidence.
 
-A Ticket-verification invocation can authorize a caller to leave the Ticket only
-when the product/source it verified remained stable for that transition decision.
-If the caller or any concurrent actor mutates the product/source after this
-verification invocation begins, the caller must not use this invocation's
-aggregate to authorize a Ticket transition, even when observations completed
-before the mutation were admissible at the time. Let any still-safe observation
-finish only as current navigation; after the mutation settles, the caller must
-obtain a new fresh Verification Lead invocation against the resulting current
-product before leaving the Ticket. This rule creates no retained verification
-state or generation identity; the caller knows only whether mutation overlapped
-the current invocation.
+A Ticket Verification Lead cycle can authorize the caller to leave the Ticket
+only when the product/source observed by that cycle remained stable for the
+transition decision. If the caller or any concurrent actor mutates product/source
+after the cycle begins, the whole Lead/Runner cycle loses Ticket-progression
+authority; the caller must not use any row or aggregate from that cycle to leave
+the Ticket, even when an earlier observation was admissible at the time. Let
+still-safe Runner work finish only as current navigation. Before another
+authoritative cycle, every Runner from the overlapped cycle must return or be
+host-confirmed stopped, and every Runner-started product effect must reach its
+authored terminal/cleanup boundary or be established unable to mutate the target.
+After mutation and those effects are quiescent, the caller freshly reobserves the
+full active Ticket and obtains a new Verification Lead cycle with fresh Runner
+invocations against the resulting current product. Do not carry forward an earlier
+PASS row or aggregate. This rule creates no retained verification state, cycle ID,
+Runner registry, or generation identity.
 
 ## Verdicts And Result
 
@@ -238,18 +260,25 @@ Safe local execution and read-only canonical inspection need no scenario
 approval or additional user ceremony. Do not execute credential-bearing,
 shared/production, payment, message, deployment, destructive, irreversible, or
 duplicate-sensitive effects without existing concrete authority for the exact
-action, target, readback, cleanup, and non-duplication boundary. Lack or loss of
-such runtime authority after valid admission yields `INCONCLUSIVE`; never route
-it to another agent or present it as independent success.
+action, target, readback, cleanup, and non-duplication boundary. Do not skip an
+otherwise-required Independent Ticket Verification cycle merely because replaying
+such an effect would be unsafe or duplicative. Prefer a fresh current authoritative
+readback when the contract permits it; otherwise use one valid shared acquisition
+or serialize relevant Runner observations when safe attribution permits. If the
+required Independent evidence still cannot be obtained safely under current
+authority, issue `INCONCLUSIVE` with the exact environment/operator/authority
+evidence limit rather than leaping to Goal Verification or presenting success.
 
 Do not directly modify product source, generated product artifacts, product
 state, configuration, Ticket, Spec, Behavior/UI authority, or other planning
 source. This does not prohibit an authorized authored product trigger from
 producing its expected effect under the boundary above. Do not remediate,
 rewrite planning, create or propose a follow-up Ticket, or start an
-implementation loop. Do not invoke a runtime acquisition agent, Primary
-Verifier, second verifier, Coverage Challenger, or remediation role. Do not
-require a double run, scenario plan approval, or safe-local approval. Do not
-create transport, generic workflow runtime, serialized handoff, sidecar,
-database, store, ledger, claim, capability, run ID, retained source, evidence
-archive, or persistent result state.
+implementation loop. `verification-runner` is the only subordinate verification
+execution role admitted by this Lead; do not create a second verdict authority,
+Primary Verifier, Coverage Challenger, runtime-acquisition role, or remediation
+role. Do not require a double run, scenario plan approval, or safe-local approval.
+Do not create transport, generic workflow runtime, serialized handoff, sidecar,
+database, store, ledger, Runner registry, assignment map, scheduler, queue,
+claim, capability, run ID, retained source, evidence archive, or persistent
+result state.

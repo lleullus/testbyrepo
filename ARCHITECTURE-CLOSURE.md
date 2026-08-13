@@ -16,22 +16,30 @@ Scope Shaper
 -> Ralph Goal Fulfillment Loop
    -> current observation
    -> same-Ticket Implementation Lead work as current evidence justifies
-   -> transition Verification may surface qualifying current observations before it finishes
-   -> Ralph may continue authorized same-Ticket implementation without waiting for that verifier to finish
-   -> when mutation settles and overlapped verifiers end, combined current-project review + fresh full active-Ticket reobservation
-   -> a fresh transition Verification may authorize leaving the Ticket
+   -> every provisionally satisfied all-Independent Ticket runs Ticket Verification, including last/only
+      -> Verification Lead owns AC verdicts/aggregate
+      -> fresh Verification Runner(s) perform actual observation
+      -> qualifying Runner finding may reach Ralph before remaining observation finishes
+      -> Ralph may start authorized same-Ticket remediation immediately
+   -> mutation overlap invalidates that whole Ticket-verification cycle for progression
+   -> quiescence + combined current-project review + fresh full active-Ticket reobservation
+   -> a new Verification Lead cycle with fresh Runner(s) must verify the Ticket
    -> repeat
--> after all implementation mutation has settled, fresh whole-Spec Goal Verification
+-> after all required Ticket cycles and mutation-capable effects are quiescent, fresh whole-Spec Goal Verification with new fresh Runner(s)
 -> GOAL ACHIEVED only after GOAL VERIFIED
 ```
 
 The Ralph completion unit is exactly one bounded approved Spec. Ralph may overlap
-same-Ticket implementation invocations, and may overlap those invocations with a
-Ticket-verification invocation used for discovery/navigation, but only Ralph owns
-that invocation timing. An overlapped verifier cannot authorize leaving the
-Ticket. The architecture intentionally has no controller runtime, persistent Goal
-state, attempt ledger, gap registry, dispatch queue, Worker ledger, replay engine,
-dynamic Ticket queue, persistent trace identity, or initiative fan-in engine.
+same-Ticket implementation when current evidence and user role-consumption
+constraints permit it. Verification observation is separated from verdict
+authority: fresh Verification Runner roles observe, while Verification Lead and
+Goal Verification Lead adjudicate. A mutation-overlapped Ticket-verification cycle
+cannot authorize progression. User-designated role binding and consumption timing
+constrain Lead scheduling; unspecified grouping/count/timing/concurrency remains
+Lead-owned. The architecture intentionally has no controller runtime, persistent
+Goal state, attempt ledger, Runner/Worker registry, assignment queue, evidence
+cache, replay engine, dynamic Ticket queue, persistent trace identity, or
+initiative fan-in engine.
 
 ## Classification Meanings
 
@@ -263,6 +271,16 @@ must run before leaving the Ticket. Whole-Spec Goal Verification begins only aft
 implementation mutation has ended, every Ticket verifier overlapped by that
 mutation has returned or been host-confirmed stopped, and any verifier-started
 product effect is likewise terminal/cleaned up or unable to mutate the target.
+
+A 2026-08-14 follow-up closes the last/only-Ticket feedback gap exposed by that
+streaming generation. The older optimization that skipped Ticket Verification
+when Goal Verification followed immediately is no longer valid once Ticket
+Verification is the streaming discovery/remediation engine. Every provisionally
+satisfied all-Independent Ticket therefore runs Ticket Verification, including the
+last or only Ticket. The extra cycle before Goal Verification is an accepted cost;
+duplicate-effect cost is reduced with current authoritative readback, valid shared
+acquisition, serialized Runner observation, or an exact `INCONCLUSIVE` evidence
+limit rather than by skipping the feedback stage.
 
 The five-condition Core Freeze Admission below governs issue-driven hardening of
 a frozen architecture generation. An explicit user instruction to deliberately

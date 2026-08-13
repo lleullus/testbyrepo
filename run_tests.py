@@ -11,6 +11,7 @@ SUITES = (
     ([sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-v"], ROOT),
     ([sys.executable, "-B", "implementation-lead/run_tests.py"], ROOT),
     ([sys.executable, "-B", "verification-lead/run_tests.py"], ROOT),
+    ([sys.executable, "-B", "verification-runner/run_tests.py"], ROOT),
 )
 
 

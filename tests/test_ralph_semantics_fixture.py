@@ -284,6 +284,86 @@ class RalphSemanticsFixtureTests(unittest.TestCase):
         self.assertLess(events.index("old-verifier-return"), events.index("old-effect-terminal"))
         self.assertLess(events.index("old-effect-terminal"), events.index("fresh-verifier-start"))
 
+    def test_user_role_binding_and_consumption_timing_drive_streaming_remediation(self) -> None:
+        product = {"initial": False, "related": False, "distinct": False}
+        events: list[str] = []
+        consumed_implementation_roles: list[str] = []
+        verification_roles = ["verification-runner-primary", "verification-runner-secondary", "verification-runner-later"]
+        reserved_remediation_roles = ["remediation-next", "remediation-after-next"]
+        active_corrections: dict[str, str] = {}
+        verification_cycle_authoritative = True
+
+        # The user's initial implementation designation is consumed at the initial
+        # phase; remediation roles remain reserved instead of being used for fan-out.
+        initial_role = "implementation-initial"
+        consumed_implementation_roles.append(initial_role)
+        product["initial"] = True
+        events.append(f"implemented:{initial_role}")
+        self.assertEqual(consumed_implementation_roles, [initial_role])
+        self.assertEqual(reserved_remediation_roles, ["remediation-next", "remediation-after-next"])
+
+        def start_new_correction(correction: str) -> str:
+            nonlocal verification_cycle_authoritative
+            role = reserved_remediation_roles.pop(0)
+            consumed_implementation_roles.append(role)
+            active_corrections[correction] = role
+            verification_cycle_authoritative = False
+            events.append(f"dispatch:{correction}:{role}")
+            return role
+
+        def route_finding(correction: str, detail: str) -> str:
+            # A finding about work already in flight goes to that invocation first;
+            # it does not consume another reserved role merely because another
+            # verification Runner found additional evidence.
+            if correction in active_corrections:
+                role = active_corrections[correction]
+                events.append(f"refine:{correction}:{role}:{detail}")
+                return role
+            return start_new_correction(correction)
+
+        events.append(f"observe:{verification_roles[0]}:related")
+        related_worker = route_finding("related", "first contradiction")
+        self.assertEqual(related_worker, "remediation-next")
+        self.assertEqual(reserved_remediation_roles, ["remediation-after-next"])
+
+        events.append(f"observe:{verification_roles[1]}:related-more")
+        same_worker = route_finding("related", "additional current evidence")
+        self.assertEqual(same_worker, related_worker)
+        self.assertEqual(
+            reserved_remediation_roles,
+            ["remediation-after-next"],
+            "related evidence must not consume a new reserved implementation role",
+        )
+
+        # Verification may continue as navigation after mutation overlap. A truly
+        # distinct safe correction may consume the next user-authorized role.
+        events.append(f"observe:{verification_roles[2]}:distinct")
+        distinct_worker = route_finding("distinct", "separate contradiction")
+        self.assertEqual(distinct_worker, "remediation-after-next")
+        self.assertFalse(verification_cycle_authoritative)
+        self.assertNotIn("verification-runner-primary", consumed_implementation_roles)
+        self.assertNotIn("verification-runner-secondary", consumed_implementation_roles)
+        self.assertNotIn("verification-runner-later", consumed_implementation_roles)
+
+        # All mutation settles before a fresh authoritative Ticket-verification
+        # cycle; the overlapped cycle cannot authorize progression.
+        product["related"] = True
+        product["distinct"] = True
+        active_corrections.clear()
+        events.append("quiescent")
+        fresh_ticket_verification = dict(product)
+        events.append("fresh-ticket-verification")
+        self.assertTrue(all(fresh_ticket_verification.values()))
+
+        # Goal verification is a separate fresh final read, not reuse of Runner
+        # context or the overlapped verification aggregate.
+        fresh_goal_verification = dict(product)
+        events.append("fresh-goal-verification")
+        self.assertTrue(all(fresh_goal_verification.values()))
+        self.assertLess(events.index("dispatch:related:remediation-next"), events.index("observe:verification-runner-secondary:related-more"))
+        self.assertLess(events.index("quiescent"), events.index("fresh-ticket-verification"))
+        self.assertLess(events.index("fresh-ticket-verification"), events.index("fresh-goal-verification"))
+
 
 if __name__ == "__main__":
     unittest.main()

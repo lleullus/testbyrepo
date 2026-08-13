@@ -175,21 +175,42 @@ them across a later invocation as current state.
 ### 3. Implement The Existing Ticket
 
 Invoke `../implementation-lead/SKILL.md` through the host with the exact ready
-Ticket and host-provided invocation-local `Implementation Subagent` roles for the
-currently active Ticket. Ralph may have more than one same-Ticket Implementation
-Lead invocation active when current evidence justifies additional in-Scope work,
-the host supports it, and concurrent mutation can preserve current user/concurrent
-changes and all safety/authority boundaries. Before adding another invocation,
-Ralph accounts for the useful work already known to be in flight and does not
-knowingly duplicate materially the same implementation work against materially the
-same current evidence merely to increase concurrency. This is current-invocation
-scheduling judgment, not an assignment registry or durable identity rule.
-Concurrency is not itself progress; do not add an invocation when its expected
-coordination, duplication, or edit-contention cost outweighs the useful critical
-path overlap. When safe beneficial non-duplicative overlap is unclear, serial
-execution is the fallback. The exact number, timing, and technical allocation of
+Ticket. When the user supplied current-conversation `Implementation Subagent`
+role bindings, reservations, ordering, consumption timing, or concurrency limits,
+use those exact constraints; otherwise Ralph may use host-provided invocation-local
+`Implementation Subagent` roles for the currently active Ticket. Do not
+pre-consume a role the user reserved for a later correction by using it for
+initial fan-out, and do not infer another role merely because the same configured
+model/agent is available. A separate user designation is required when the same
+configured model/agent is to serve a different IIS role. These bindings constrain
+current-invocation scheduling only and never become Ticket metadata, a role queue,
+or durable worker identity.
+
+Within those user-supplied constraints, Ralph may have more than one same-Ticket
+Implementation Lead invocation active when current evidence justifies additional
+in-Scope work, the host supports it, and concurrent mutation can preserve current
+user/concurrent changes and all safety/authority boundaries. Before adding another
+invocation, Ralph accounts for the useful work already known to be in flight and
+does not knowingly duplicate materially the same implementation work against
+materially the same current evidence merely to increase concurrency. This is
+current-invocation scheduling judgment, not an assignment registry or durable
+identity rule. Concurrency is not itself progress; do not add an invocation when
+its expected coordination, duplication, or edit-contention cost outweighs the
+useful critical path overlap. When safe beneficial non-duplicative overlap is
+unclear, serial execution is the fallback. Except for properties the user
+explicitly fixed, the exact number, timing, and technical allocation of
 invocations remain implementation-owned and are not planning or verification
 semantics.
+
+When a fresh qualifying observation materially refines, confirms, or contradicts
+work already being performed by an active same-Ticket implementation invocation,
+and the host can communicate with that invocation, give the observation to that
+existing invocation first. Do not open a duplicate invocation or consume another
+user-reserved implementation role merely because the finding arrived separately.
+The active role must recheck current source and may revise or abandon its current
+diagnosis. This is useful-work continuity inside the current invocation, not
+defect/AC/file ownership; a materially distinct safe correction may still justify
+another invocation under the rules above.
 
 Within that exact active Ticket and current Ralph invocation, a role may be
 resumed for later materially different work only when its retained context
@@ -213,7 +234,11 @@ Goal-verification return to a Ticket that Ralph had already left. This internal
 role exception exists only for this Ralph loop. It is never written to `Worker:`,
 Ticket metadata, a sidecar, session registry, capability, assignment ledger, or
 durable state. An explicit user request for Implementation Lead outside this loop
-continues to require the ordinary user-designated role.
+continues to require the ordinary user-designated role. Crossing one of those
+freshness boundaries does not erase a still-current user role designation: Ralph
+may make a new invocation with the same designated role when that remains allowed
+by the user's current-conversation conditions, but it must not treat the prior
+invocation's technical context or source facts as current.
 
 Implementation Lead owns technical diagnosis and implementation choices inside
 the Ticket. Do not ask the user which endpoint, parser, fallback, retry policy,
@@ -233,17 +258,16 @@ Individual Implementation Lead results are current implementation information,
 not independent evidence. While another authorized same-Ticket product/source
 mutation remains in flight, Ralph does not need to stop the useful work merely to
 perform a full Ticket reobservation after each individual result. Before Ralph
-can treat the Ticket as provisionally satisfied, start a transition-verification
-invocation that may authorize leaving it, or enter whole-Spec Goal Verification,
-all current-Ralph implementation mutation for the active Ticket must finish. Any
-earlier Ticket-verification invocation that overlapped that mutation must also
-have returned or be host-confirmed stopped; if the host cannot stop it, wait for
-it to return. Any product effect already started by that verifier must also have
-reached its authored terminal/cleanup boundary, or current evidence must establish
-that it can no longer mutate the target. Do not start the settled fresh
-reobservation or a new authoritative verifier while an earlier navigation-only
-verifier or one of its still-running effects can still change the target being
-evaluated. Ralph then
+can treat the Ticket as provisionally satisfied, start an authoritative Ticket
+Verification cycle, or enter whole-Spec Goal Verification after all required
+Ticket cycles, all current-Ralph implementation mutation for the active Ticket
+must finish. Any earlier Ticket Verification Lead/Runner cycle that overlapped
+that mutation must have quiesced: every Runner must have returned or been
+host-confirmed stopped, and every Runner-started product effect must have reached
+its authored terminal/cleanup boundary or be established unable to mutate the
+target. Do not start the settled fresh reobservation or a new authoritative
+verification cycle while an earlier navigation-only Runner or one of its
+still-running effects can still change the target being evaluated. Ralph then
 reviews the resulting current project as one combined product, confirms that the
 settled changes remain inside the Ticket Scope and preserve current user/concurrent
 changes without an unresolved integration conflict, and freshly reobserves every
@@ -256,52 +280,57 @@ observations, but every AC remains separately classified and no observation from
 before or during the mutation interval may be reused as current post-mutation
 evidence.
 
-When the active Ticket is provisionally satisfied and Ralph is about to leave it
-for a different Ticket, use the separate `../verification-lead/SKILL.md` as the
-default transition checkpoint when every flow on the active Ticket is
-`Independent` and the authored verification can be performed safely without
-replaying an expensive, one-shot, destructive, credential-bearing, production,
-or duplicate-sensitive effect. `VERIFIED` permits moving to another Ticket only
-when no product/source mutation from the current Ralph invocation overlapped that
-Verification Lead invocation. `FAILED` returns to the same Ticket;
-`INCONCLUSIVE` remains current unfinished work and is handled by correction,
-exact operator action, or the authority gate.
+When the active Ticket is provisionally satisfied and every authored flow on that
+Ticket is `Independent`, invoke the separate `../verification-lead/SKILL.md`
+before Ralph treats that Ticket as verified for progression. This requirement
+applies to every such Ticket, including the last or only Ticket immediately before
+whole-Spec Goal Verification. Goal Verification is not a substitute for this
+Ticket-level streaming feedback cycle. Pass through the current-conversation
+user-designated `Verification Runner` bindings and consumption conditions when
+present; otherwise Verification Lead may use its host-provided invocation-local
+Runner roles. `VERIFIED` permits Ralph to leave/close the Ticket for navigation
+only when no product/source mutation overlapped that Verification Lead/Runner
+cycle. It never completes the parent Goal. `FAILED` returns to the same Ticket;
+`INCONCLUSIVE` remains current unfinished work and is handled by correction, an
+exact operator/environment/authority action or gate, or another defined evidence
+path.
 
-When that Verification Lead reports a qualifying current observation before its
-invocation finishes, Ralph may immediately act on it under steps 2 and 3 instead
-of waiting for the verifier to finish every remaining flow. The Verification Lead
-may continue other still-safe observations and may report additional qualifying
-current observations; only Ralph decides whether the observation justifies
+When Verification Lead forwards a qualifying current finding from a fresh Runner
+before the cycle finishes, Ralph may immediately act on it under steps 2 and 3
+instead of waiting for the remaining Runner assignments or final aggregate. Other
+still-safe Runner observations may continue and Verification Lead may forward
+additional qualifying findings. Only Ralph decides whether a finding justifies
 same-Ticket implementation or belongs at an operator, environment, or authority
 gate, and only Ralph decides whether and when to invoke more same-Ticket
-implementation. The verifier never dispatches mutation or remediates product code
-itself. Any implementation started during the verifier invocation triggers the
-mutation-overlap rule below, so that in-flight verifier can help locate unfinished
-work but cannot authorize a Ticket transition.
+implementation within the user's role bindings and consumption conditions. When
+a finding materially refines work already in flight, apply step 3's existing-
+invocation-first rule instead of consuming another reserved role merely because a
+separate Runner found it. Neither Runner nor Verification Lead dispatches mutation
+or remediates product code itself.
 
-If any current-Ralph product/source mutation begins after a transition
-Verification Lead invocation starts, that invocation immediately loses authority
-to move Ralph out of the active Ticket. Its still-safe observations may remain
-navigation, but before settled reobservation Ralph must let the current Ticket's
-mutation finish and let that overlapped verifier return or be host-confirmed
-stopped. Only then freshly reobserve every AC of the active Ticket against the
-resulting current product and obtain a new fresh Verification Lead invocation
-before leaving the Ticket. Do not carry forward earlier PASS rows or an earlier
-aggregate across that mutation boundary.
+If any current-Ralph product/source mutation begins after a Ticket Verification
+Lead/Runner cycle starts, the whole cycle immediately loses Ticket-progression
+authority. Still-safe Runner observations may remain navigation, but before a new
+authoritative cycle Ralph must let all current Ticket mutation finish, let every
+Runner from the overlapped cycle return or be host-confirmed stopped, and ensure
+every Runner-started product effect has reached its authored terminal/cleanup
+boundary or is established unable to mutate the target. Ralph then reviews the
+combined current project, freshly reobserves every AC of the active Ticket, and
+obtains a new Verification Lead cycle with fresh Runner invocations. Do not carry
+forward earlier PASS rows or an earlier aggregate across that mutation boundary.
 
-Do not run this checkpoint merely for ceremony when the active Ticket is the last
-remaining Ticket and fresh whole-Spec Goal Verification will run immediately, or
-when the checkpoint would materially duplicate an unsafe/non-repeatable effect.
-In those cases keep the provisional observation as navigation, record the
-invocation-local reason for skipping the checkpoint, and rely on final Goal
-Verification for completion evidence. Any current-Ralph implementation mutation
-must still be finished, any Ticket-verification invocation overlapped by that
-mutation must have returned or be host-confirmed stopped, and any product effect
-that invocation already started must be at its authored terminal/cleanup boundary
-or established unable to mutate the target further, before whole-Spec Goal
-Verification begins. A Ticket-level checkpoint never completes the parent Goal.
-Do not bypass the thin verifier for mixed/non-independent flows; those flows stay
-under Ralph provisional observation and final Goal Verification.
+Do not skip required Independent Ticket Verification because the Ticket is the
+last/only Ticket or because replaying an expensive, one-shot, destructive,
+credential-bearing, production, or duplicate-sensitive effect would be unsafe.
+Prefer a fresh read of already-current authoritative state/readback when the
+Ticket contract permits it; otherwise coordinate one valid safe acquisition that
+can serve genuinely linked observations, serialize relevant Runner work when
+needed for attribution/effect safety, or accept `INCONCLUSIVE` with the exact
+environment/operator/authority evidence limit when required Independent evidence
+cannot be obtained safely. Do not leap directly to Goal Verification to avoid this
+cycle. Mixed/non-independent flows remain under Ralph provisional observation and
+final Goal Verification because the Independent Ticket Verification route cannot
+adjudicate them.
 
 ### 5. Reconsider The Complete Ticket Set
 
@@ -315,13 +344,18 @@ If any current Ticket AC is still unmet, return to step 2.
 
 ### 6. Fresh Whole-Spec Verification
 
-Only when the complete Ticket set is provisionally satisfied, invoke
-`../goal-verification-lead/SKILL.md` with the exact approved Spec, exact validated
-Ticket set, and exact Project Root.
+Only when the complete Ticket set is provisionally satisfied, every applicable
+all-Independent Ticket has a current non-overlapped `VERIFIED` Ticket Verification
+cycle, and all implementation/verification mutation-capable effects are quiescent,
+invoke `../goal-verification-lead/SKILL.md` with the exact approved Spec, exact
+validated Ticket set, exact Project Root, and the current-conversation
+user-designated `Verification Runner` bindings/conditions when present.
 
 Implementation reports, candidate recipes, Ticket checkpoints, tests, prior
-observations, and the Ralph working assessment are navigation hints only. The
-Goal Verification Lead obtains fresh completion evidence independently.
+Runner observations, prior Ticket-verification evidence, and the Ralph working
+assessment are navigation hints only. Goal Verification Lead uses new fresh Runner
+invocations and obtains whole-Spec completion evidence independently. It is the
+quiescent final barrier, not another streaming remediation stage.
 
 - `GOAL VERIFIED` permits `GOAL ACHIEVED`.
 - `GOAL FAILED` must identify the exact failed obligation and current candidate

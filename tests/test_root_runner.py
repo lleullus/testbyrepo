@@ -18,6 +18,7 @@ class RootRunnerTests(unittest.TestCase):
         self.assertIn('"discover", "-s", "tests"', source)
         self.assertIn('"-B", "implementation-lead/run_tests.py"', source)
         self.assertIn('"-B", "verification-lead/run_tests.py"', source)
+        self.assertIn('"-B", "verification-runner/run_tests.py"', source)
 
     def test_missing_or_failing_child_cannot_be_hidden(self) -> None:
         for verification_child in (None, "raise SystemExit(7)\n"):

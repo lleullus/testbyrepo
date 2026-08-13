@@ -21,13 +21,24 @@ Goal fulfillment.
 - `implementation-lead/`: implementation of one exact ready local Markdown
   Ticket followed by Lead review of the real project diff, implementation checks,
   and exact unresolved limitations. Explicit leaf requests use a user-designated
-  Implementation Subagent. The Ralph loop alone may provide an invocation-local
-  host role without persisting it. Implementation result is not an independent AC
-  verdict or final `VERIFIED` status.
-- `verification-lead/`: optional independent verification of one exact ready
-  `Independent` Ticket from fresh direct product or canonical-target evidence.
-  It does not modify the product or restore a verification runtime, transport,
-  store, ledger, or persistent result state.
+  Implementation Subagent. Current-conversation user role bindings, reservations,
+  ordering, and consumption timing remain authoritative in Ralph; host-provided
+  roles fill only unspecified slots. Related fresh findings feed an existing
+  active implementation invocation first when communication is available instead
+  of consuming another reserved role. This is invocation-local continuity, not
+  defect/AC/file ownership. Implementation result is not an independent AC verdict
+  or final `VERIFIED` status.
+- `verification-runner/`: fresh bounded product/canonical observation subordinate
+  to Verification Lead or Goal Verification Lead. It reports raw current evidence
+  or an exact evidence limit and never owns verdicts, remediation, progression, or
+  another role merely because the same model is available. User-designated Runner
+  bindings and consumption conditions are preserved; IIS defines no fixed
+  AC/flow/outcome/defect/file-per-Runner split.
+- `verification-lead/`: independent Ticket-verdict authority for one exact ready
+  `Independent` Ticket. Fresh Verification Runner invocations perform actual
+  observation; the Lead owns evidence admission, AC verdicts, and aggregate. An
+  early concrete Runner finding may be forwarded to Ralph before remaining
+  observation finishes, but Lead and Runner never remediate product code.
 - `iis-goal-loop/`: Ralph-style orchestration for exactly one bounded approved
   Spec. It rejects an outcome with no approved completion evidence path before
   mutation, acts on current in-Scope evidence inside the active Ticket, may overlap
