@@ -38,10 +38,10 @@ approved`; every project-relative Behavior authority resolves from the exact
 Project Root to the same canonical project-local authority target, remains
 readable and `Status: approved`, retains the adopted Scope, and is nonconflicting;
 and every applicable UI authority still resolves to the same canonical target and
-remains approved, complete, in-scope, nonconflicting, and at any required terminal
-render disposition. Authority-chain drift is a planning/admission defect. Return
-`GOAL VERIFICATION NOT STARTED` with that exact defect rather than adopting the
-changed authority or treating it as product `FAIL`/`INCONCLUSIVE`.
+remains approved, complete, in-scope, and nonconflicting. Authority-chain drift is
+a planning/admission defect. Return `GOAL VERIFICATION NOT STARTED` with that exact
+defect rather than adopting the changed authority or treating it as product
+`FAIL`/`INCONCLUSIVE`.
 
 Do not require an Implementation Lead result, independent Ticket verdict,
 retained source, prior Goal result, evidence archive, or persistent verification

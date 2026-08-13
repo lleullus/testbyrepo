@@ -66,8 +66,8 @@ ACTIVE_VERIFICATION_SHA256 = {
 ACTIVE_RALPH_SHA256 = {
     # Reviewed active Goal-fulfillment route, closure contract, and exact structural admission support.
     "ARCHITECTURE-CLOSURE.md": "86135fe01f5f7b9cbb50320df918b755c4afe6b83c3005e130748838612d1688",
-    "iis-goal-loop/SKILL.md": "97a7d6a324bc8fc0dbe3e3797de70e474ad790b0400bb62e8331d170de9350f5",
-    "goal-verification-lead/SKILL.md": "728ff02459bcbfe639a20f0b18d81beeffe2ee8bc39e4319b08dd16465dd6da0",
+    "iis-goal-loop/SKILL.md": "34b5f3ed7effee0e6f7daf1b47662eb7797cb4aa41ca92337012c3eecf7e87d2",
+    "goal-verification-lead/SKILL.md": "02bba8db29057cefc65443ef50ffe1206fc0e0d27ac84d9cbad1ad3b10ddeaa6",
     "matt/skills/to-tickets/validate_ticket_set.py": "2a5eda27390c079bfb21200c71f96eec66f878c2bb9db1bc9696d8e37b8895ea",
 }
 LEGACY_EXECUTABLE_STEMS = (

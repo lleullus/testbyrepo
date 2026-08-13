@@ -53,10 +53,10 @@ Spec must still be `Status: approved`. Every Spec-adopted Behavior authority mus
 resolve from the exact Project Root to the same canonical project-local authority
 path, remain readable and `Status: approved`, retain the adopted Scope, and not
 conflict with the Spec. Any applicable UI authority must still resolve to the
-same canonical target and remain approved, complete, in-scope, nonconflicting,
-and at the required terminal render disposition. A current authority-chain drift
-is a planning/admission defect, not product failure; return to the owning planning
-leaf before mutation instead of silently adopting the changed meaning.
+same canonical target and remain approved, complete, in-scope, and nonconflicting.
+A current authority-chain drift is a planning/admission defect, not product
+failure; return to the owning planning leaf before mutation instead of silently
+adopting the changed meaning.
 
 Also revalidate the current Spec-to-Ticket semantic projection before mutation.
 Every ready Ticket's Acceptance Criteria, Scope, Non-Goals, Verification flows,

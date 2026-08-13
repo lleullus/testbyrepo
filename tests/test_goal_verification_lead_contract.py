@@ -91,11 +91,12 @@ class GoalVerificationLeadContractTests(unittest.TestCase):
             "freshly revalidate the authority chain",
             "same canonical project-local authority target",
             "remains readable and `Status: approved`",
-            "required terminal render disposition",
+            "remains approved, complete, in-scope, and nonconflicting",
             "Authority-chain drift is a planning/admission defect",
             "`GOAL VERIFICATION NOT STARTED`",
         ):
             self.assertIn(required, body)
+        self.assertNotIn("render disposition", body.lower())
 
     def test_fresh_verification_prefers_current_readback_over_replaying_effects(self) -> None:
         body = normalized(SKILL)
