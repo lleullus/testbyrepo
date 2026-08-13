@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -205,6 +206,83 @@ class RalphSemanticsFixtureTests(unittest.TestCase):
 
         self.assertEqual(product, {"primary": True, "secondary": True})
         self.assertEqual(mutations, ["first"], "stale work must not be applied after a sibling already fixed it")
+
+    def test_disjoint_workers_can_overlap_and_preserve_combined_current_product(self) -> None:
+        product: dict[str, object] = {"route_a": False, "route_b": False, "user_change": "keep"}
+        ready = threading.Barrier(2)
+        events: list[str] = []
+
+        def worker(key: str) -> None:
+            ready.wait(timeout=1)
+            self.assertEqual(product["user_change"], "keep")
+            product[key] = True
+            events.append(f"finished:{key}")
+
+        first = threading.Thread(target=worker, args=("route_a",))
+        second = threading.Thread(target=worker, args=("route_b",))
+        first.start()
+        second.start()
+        first.join(timeout=1)
+        second.join(timeout=1)
+
+        self.assertFalse(first.is_alive())
+        self.assertFalse(second.is_alive())
+        self.assertEqual(set(events), {"finished:route_a", "finished:route_b"})
+        self.assertEqual(product, {"route_a": True, "route_b": True, "user_change": "keep"})
+
+    def test_fresh_transition_verification_waits_for_overlapped_verifier_and_its_late_effect(self) -> None:
+        product = {"late_verifier_effect": False}
+        events: list[str] = []
+        old_started = threading.Event()
+        allow_old_return = threading.Event()
+        old_finished = threading.Event()
+        allow_effect_finish = threading.Event()
+        effect_finished = threading.Event()
+        fresh_finished = threading.Event()
+        effect_threads: list[threading.Thread] = []
+
+        def late_effect() -> None:
+            self.assertTrue(allow_effect_finish.wait(timeout=1))
+            product["late_verifier_effect"] = True
+            events.append("old-effect-terminal")
+            effect_finished.set()
+
+        def old_navigation_verifier() -> None:
+            events.append("old-verifier-start")
+            old_started.set()
+            self.assertTrue(allow_old_return.wait(timeout=1))
+            effect = threading.Thread(target=late_effect)
+            effect_threads.append(effect)
+            effect.start()
+            events.append("old-verifier-return")
+            old_finished.set()
+
+        def fresh_verifier_after_quiescence() -> None:
+            self.assertTrue(old_finished.wait(timeout=1))
+            self.assertTrue(effect_finished.wait(timeout=1))
+            events.append("fresh-verifier-start")
+            self.assertTrue(product["late_verifier_effect"])
+            fresh_finished.set()
+
+        old = threading.Thread(target=old_navigation_verifier)
+        fresh = threading.Thread(target=fresh_verifier_after_quiescence)
+        old.start()
+        self.assertTrue(old_started.wait(timeout=1))
+        events.extend(("worker-start", "worker-finish"))
+        fresh.start()
+        self.assertNotIn("fresh-verifier-start", events)
+        allow_old_return.set()
+        old.join(timeout=1)
+        self.assertIn("old-verifier-return", events)
+        self.assertNotIn("fresh-verifier-start", events)
+        allow_effect_finish.set()
+        for effect in effect_threads:
+            effect.join(timeout=1)
+        fresh.join(timeout=1)
+
+        self.assertTrue(fresh_finished.is_set())
+        self.assertLess(events.index("old-verifier-return"), events.index("old-effect-terminal"))
+        self.assertLess(events.index("old-effect-terminal"), events.index("fresh-verifier-start"))
 
 
 if __name__ == "__main__":

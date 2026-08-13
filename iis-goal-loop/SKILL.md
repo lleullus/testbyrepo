@@ -9,9 +9,10 @@ description: Fulfill one exact approved IIS Spec by repeatedly reconciling its c
 
 Complete the user's approved product Goal without turning the user into an IIS
 operator. The loop is Ralph-style: keep the approved Spec and ready Ticket set as
-the fixed completion contract, observe the current product, select one unmet
-Acceptance Criterion, implement a bounded correction inside its existing Ticket,
-reobserve, and repeat until fresh whole-Spec verification passes.
+the fixed completion contract, observe the current product, act on current
+in-Scope evidence inside the active Ticket, allow bounded same-Ticket implementation
+overlap when it is useful and safe, converge to a settled current product, and
+repeat fresh Ticket/whole-Spec verification until the Goal passes.
 
 This skill is not a Controller runtime, workflow engine, state machine, planner,
 or persistent process. It owns only the current invocation's orchestration.
@@ -178,9 +179,16 @@ Ticket and host-provided invocation-local `Implementation Subagent` roles for th
 currently active Ticket. Ralph may have more than one same-Ticket Implementation
 Lead invocation active when current evidence justifies additional in-Scope work,
 the host supports it, and concurrent mutation can preserve current user/concurrent
-changes and all safety/authority boundaries. Serial execution remains a fully
-valid fallback. The exact number, timing, and technical allocation of those
-invocations are implementation-owned and are not planning or verification
+changes and all safety/authority boundaries. Before adding another invocation,
+Ralph accounts for the useful work already known to be in flight and does not
+knowingly duplicate materially the same implementation work against materially the
+same current evidence merely to increase concurrency. This is current-invocation
+scheduling judgment, not an assignment registry or durable identity rule.
+Concurrency is not itself progress; do not add an invocation when its expected
+coordination, duplication, or edit-contention cost outweighs the useful critical
+path overlap. When safe beneficial non-duplicative overlap is unclear, serial
+execution is the fallback. The exact number, timing, and technical allocation of
+invocations remain implementation-owned and are not planning or verification
 semantics.
 
 Within that exact active Ticket and current Ralph invocation, a role may be
@@ -227,10 +235,20 @@ mutation remains in flight, Ralph does not need to stop the useful work merely t
 perform a full Ticket reobservation after each individual result. Before Ralph
 can treat the Ticket as provisionally satisfied, start a transition-verification
 invocation that may authorize leaving it, or enter whole-Spec Goal Verification,
-all current-Ralph implementation mutation for the active Ticket must finish.
-Ralph then freshly reobserves every AC of the active Ticket at its authored
-product/canonical boundaries. A regression in a previously satisfied AC becomes
-current unfinished work immediately.
+all current-Ralph implementation mutation for the active Ticket must finish. Any
+earlier Ticket-verification invocation that overlapped that mutation must also
+have returned or be host-confirmed stopped; if the host cannot stop it, wait for
+it to return. Any product effect already started by that verifier must also have
+reached its authored terminal/cleanup boundary, or current evidence must establish
+that it can no longer mutate the target. Do not start the settled fresh
+reobservation or a new authoritative verifier while an earlier navigation-only
+verifier or one of its still-running effects can still change the target being
+evaluated. Ralph then
+reviews the resulting current project as one combined product, confirms that the
+settled changes remain inside the Ticket Scope and preserve current user/concurrent
+changes without an unresolved integration conflict, and freshly reobserves every
+AC of the active Ticket at its authored product/canonical boundaries. A regression
+in a previously satisfied AC becomes current unfinished work immediately.
 
 The shared-acquisition rule from step 1 applies to this settled post-mutation
 reobservation: one fresh execution/readback may decide several linked AC
@@ -249,24 +267,27 @@ Verification Lead invocation. `FAILED` returns to the same Ticket;
 `INCONCLUSIVE` remains current unfinished work and is handled by correction,
 exact operator action, or the authority gate.
 
-When that Verification Lead reports an admissible direct contradiction before
-its invocation finishes, Ralph may immediately act on the current observation
-under steps 2 and 3 instead of waiting for the verifier to finish every remaining
-flow. The Verification Lead may continue other still-safe observations and may
-report additional current contradictions; only Ralph decides whether and when to
-invoke more same-Ticket implementation. The verifier never dispatches mutation or
-remediates product code itself. Any implementation started during the verifier
-invocation triggers the mutation-overlap rule below, so that in-flight verifier
-can help locate unfinished work but cannot authorize a Ticket transition.
+When that Verification Lead reports a qualifying current observation before its
+invocation finishes, Ralph may immediately act on it under steps 2 and 3 instead
+of waiting for the verifier to finish every remaining flow. The Verification Lead
+may continue other still-safe observations and may report additional qualifying
+current observations; only Ralph decides whether the observation justifies
+same-Ticket implementation or belongs at an operator, environment, or authority
+gate, and only Ralph decides whether and when to invoke more same-Ticket
+implementation. The verifier never dispatches mutation or remediates product code
+itself. Any implementation started during the verifier invocation triggers the
+mutation-overlap rule below, so that in-flight verifier can help locate unfinished
+work but cannot authorize a Ticket transition.
 
 If any current-Ralph product/source mutation begins after a transition
 Verification Lead invocation starts, that invocation immediately loses authority
 to move Ralph out of the active Ticket. Its still-safe observations may remain
-navigation, but Ralph must first let the current Ticket's mutation settle, freshly
-reobserve every AC of the active Ticket against the resulting current product,
-and then obtain a new fresh Verification Lead invocation before leaving the
-Ticket. Do not carry forward earlier PASS rows or an earlier aggregate across
-that mutation boundary.
+navigation, but before settled reobservation Ralph must let the current Ticket's
+mutation finish and let that overlapped verifier return or be host-confirmed
+stopped. Only then freshly reobserve every AC of the active Ticket against the
+resulting current product and obtain a new fresh Verification Lead invocation
+before leaving the Ticket. Do not carry forward earlier PASS rows or an earlier
+aggregate across that mutation boundary.
 
 Do not run this checkpoint merely for ceremony when the active Ticket is the last
 remaining Ticket and fresh whole-Spec Goal Verification will run immediately, or
@@ -274,10 +295,13 @@ when the checkpoint would materially duplicate an unsafe/non-repeatable effect.
 In those cases keep the provisional observation as navigation, record the
 invocation-local reason for skipping the checkpoint, and rely on final Goal
 Verification for completion evidence. Any current-Ralph implementation mutation
-must still be finished before whole-Spec Goal Verification begins. A Ticket-level
-checkpoint never completes the parent Goal. Do not bypass the thin verifier for
-mixed/non-independent flows; those flows stay under Ralph provisional observation
-and final Goal Verification.
+must still be finished, any Ticket-verification invocation overlapped by that
+mutation must have returned or be host-confirmed stopped, and any product effect
+that invocation already started must be at its authored terminal/cleanup boundary
+or established unable to mutate the target further, before whole-Spec Goal
+Verification begins. A Ticket-level checkpoint never completes the parent Goal.
+Do not bypass the thin verifier for mixed/non-independent flows; those flows stay
+under Ralph provisional observation and final Goal Verification.
 
 ### 5. Reconsider The Complete Ticket Set
 

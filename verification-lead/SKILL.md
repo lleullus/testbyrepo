@@ -128,19 +128,24 @@ Only evidence obtained now from the current target is admissible:
 - direct observation of required negative, ordering, interruption, lifecycle,
   persistence, or external-effect boundaries.
 
-When admissible fresh direct evidence establishes a concrete contradiction and
-the host supports communication before this invocation finishes, report that
-exact current observation to the caller immediately instead of waiting for all
-remaining authored flows. The report is navigation only: it is not an early AC
-verdict, aggregate, remediation instruction, or new authority, and it does not
-stop this verifier from continuing other still-safe authored observations. The
-caller alone decides whether current in-Scope implementation should begin. If
-implementation begins while this invocation remains active, the mutation-overlap
-rule below applies and this invocation cannot authorize leaving the Ticket.
-Additional directly established contradictions may likewise be reported while
-continued observation remains safe and attributable. When the host cannot carry
-intermediate communication, complete the ordinary fresh verification result
-without inventing another transport or state mechanism.
+When admissible fresh current observation establishes either a concrete direct
+contradiction or a concrete current Ticket-owned implementation, integration,
+surface, or readback absence that prevents the defined authored flow from being
+completed, and the host supports communication before this invocation finishes,
+report that exact current observation to the caller immediately instead of waiting
+for all remaining authored flows. The report is navigation only: it is not an
+early AC verdict, aggregate, remediation instruction, or new authority, and it
+does not presume that an environment, operator, or authority limitation is
+implementation-owned. It does not stop this verifier from continuing other
+still-safe authored observations. The caller alone decides whether current
+in-Scope implementation should begin or whether the observation belongs at an
+operator, environment, or authority gate. If implementation begins while this
+invocation remains active, the mutation-overlap rule below applies and this
+invocation cannot authorize leaving the Ticket. Additional qualifying current
+observations may likewise be reported while continued observation remains safe and
+attributable. When the host cannot carry intermediate communication, complete the
+ordinary fresh verification result without inventing another transport or state
+mechanism.
 
 An authored product trigger may create or change its expected product state or
 artifact only on a safe disposable acceptance target, or within the exact

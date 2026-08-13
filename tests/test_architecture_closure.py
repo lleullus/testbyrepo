@@ -44,11 +44,15 @@ class ArchitectureClosureTests(unittest.TestCase):
             "intentional architecture generation change",
             "not a faithful-contract counterexample",
             "not a change admitted through either contract-preserving optimization lane",
-            "transition verifier may surface a direct contradiction before finishing",
+            "transition verifier may surface a qualifying current observation before finishing",
+            "concrete current Ticket-owned implementation/integration/surface/readback absence",
             "additional same-Ticket implementation may overlap",
+            "useful work already in flight",
             "does **not** change product authority, Ticket Scope",
             "does not add a persistent scheduler, finding queue, assignment ledger, Worker identity system, or controller",
-            "all current implementation must settle",
+            "every overlapped Ticket verifier must return or be host-confirmed stopped",
+            "product effect it already started must be terminal/cleaned up or established unable to mutate the target further",
+            "review the combined current project",
             "new fresh transition Verification must run before leaving the Ticket",
             "must not be cited as permission for ordinary latency complaints",
         ):
@@ -59,15 +63,21 @@ class ArchitectureClosureTests(unittest.TestCase):
             "### 4. Completion Boundary — PROVED", 1
         )[0]
         for required in (
-            "may report an admissible direct contradiction before finishing",
+            "may report a qualifying current observation before finishing",
+            "concrete current Ticket-owned implementation/integration/surface/readback absence",
             "more than one same-Ticket Implementation Lead invocation in flight",
-            "Serial execution remains a valid fallback",
+            "does not knowingly duplicate materially the same work against materially the same evidence merely to increase concurrency",
+            "Concurrency is not itself progress",
+            "coordination, duplication, or edit-contention cost outweighs useful critical path overlap, Ralph stays serial",
             "independently rechecks current authority, source, feasibility",
-            "stale work already satisfied or superseded by another actor is not blindly applied",
-            "that verifier cannot authorize leaving the Ticket",
-            "every AC of the active Ticket is freshly reobserved",
+            "full Ticket preservation awareness does not require duplicating concrete work already known to be active in a sibling invocation",
+            "every overlapped verifier must also have returned or be host-confirmed stopped",
+            "product effect it already started must have reached the authored terminal/cleanup boundary or be established unable to mutate the target further",
+            "reviews the resulting current project as one combined product for Ticket Scope, preservation, and unresolved integration conflict",
+            "freshly reobserves every AC",
             "only a new fresh transition Verification may authorize the Ticket transition",
             "Goal Verification begins only after all current implementation mutation has ended",
+            "product effect started by such a verifier is terminal/cleaned up or established unable to mutate the target further",
         ):
             self.assertIn(required, section)
 
@@ -119,8 +129,10 @@ class ArchitectureClosureTests(unittest.TestCase):
         for text in (
             "No durable attempt history",
             "Same-Ticket concurrent implementation can create stale planned work, edit contention, or wasted Worker effort",
-            "a new fresh verifier after mutation settles is deliberate duplicate verification cost paid for correctness",
+            "avoids knowingly duplicating materially the same in-flight work",
             "Ralph may serialize whenever overlap is not useful or safe",
+            "wait for or host-confirmedly stop that verifier and wait for any verifier-started product effect to reach its authored terminal/cleanup boundary",
+            "possible residual wait plus a new fresh verifier are deliberate costs paid for a non-overlapping final evidence boundary",
             "does not add a scheduler database, dispatch ledger, Worker identity system, or persistent finding queue",
             "Positional ordinals",
             "Complete ready Ticket-set planning",

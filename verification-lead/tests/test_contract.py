@@ -92,13 +92,16 @@ class VerificationLeadContractTests(unittest.TestCase):
         self.assertIn("Missing implementation entrypoint or verification readback alone is not an AC contradiction", NORMALIZED)
         self.assertIn("canonical-target presence/absence is itself the authored claim", NORMALIZED)
 
-    def test_direct_contradiction_can_be_reported_before_final_aggregate(self) -> None:
+    def test_qualifying_current_observation_can_be_reported_before_final_aggregate(self) -> None:
         for required in (
+            "either a concrete direct contradiction or a concrete current Ticket-owned implementation, integration, surface, or readback absence",
+            "prevents the defined authored flow from being completed",
             "report that exact current observation to the caller immediately instead of waiting for all remaining authored flows",
             "navigation only: it is not an early AC verdict, aggregate, remediation instruction, or new authority",
+            "does not presume that an environment, operator, or authority limitation is implementation-owned",
             "does not stop this verifier from continuing other still-safe authored observations",
-            "caller alone decides whether current in-Scope implementation should begin",
-            "Additional directly established contradictions may likewise be reported",
+            "caller alone decides whether current in-Scope implementation should begin or whether the observation belongs at an operator, environment, or authority gate",
+            "Additional qualifying current observations may likewise be reported",
             "host cannot carry intermediate communication",
             "without inventing another transport or state mechanism",
         ):

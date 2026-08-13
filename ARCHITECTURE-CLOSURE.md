@@ -16,9 +16,9 @@ Scope Shaper
 -> Ralph Goal Fulfillment Loop
    -> current observation
    -> same-Ticket Implementation Lead work as current evidence justifies
-   -> transition Verification may surface direct contradictions before it finishes
+   -> transition Verification may surface qualifying current observations before it finishes
    -> Ralph may continue authorized same-Ticket implementation without waiting for that verifier to finish
-   -> when current mutation settles, fresh full active-Ticket reobservation
+   -> when mutation settles and overlapped verifiers end, combined current-project review + fresh full active-Ticket reobservation
    -> a fresh transition Verification may authorize leaving the Ticket
    -> repeat
 -> after all implementation mutation has settled, fresh whole-Spec Goal Verification
@@ -95,11 +95,11 @@ post-mutation observation or final verification.
 Closure:
 
 - A newly discovered technical cause inside the existing Ticket Scope remains the same Ticket.
-- A transition Verification Lead may report an admissible direct contradiction before finishing its remaining flows; Ralph may begin current authorized same-Ticket implementation immediately, while the verifier itself remains read-only and never dispatches remediation.
-- Ralph may have more than one same-Ticket Implementation Lead invocation in flight when current evidence justifies it and concurrent mutation can preserve current user/concurrent changes plus all safety/authority boundaries. Serial execution remains a valid fallback and the exact implementation scheduling is not planning authority.
-- Every Implementation Lead invocation independently rechecks current authority, source, feasibility, and relevant concurrent changes immediately before mutation; stale work already satisfied or superseded by another actor is not blindly applied.
-- Once any mutation overlaps a Ticket-verification invocation, that verifier cannot authorize leaving the Ticket. After all current same-Ticket mutation settles, every AC of the active Ticket is freshly reobserved; only a new fresh transition Verification may authorize the Ticket transition.
-- The complete Ticket set is reconsidered after settled Ticket reobservation and before whole-Spec verification. Goal Verification begins only after all current implementation mutation has ended.
+- A transition Verification Lead may report a qualifying current observation before finishing its remaining flows: either direct contradictory evidence or a concrete current Ticket-owned implementation/integration/surface/readback absence that blocks the defined authored flow. Ralph decides whether the observation justifies current authorized same-Ticket implementation or belongs at an operator/environment/authority gate; the verifier itself remains read-only and never dispatches remediation.
+- Ralph may have more than one same-Ticket Implementation Lead invocation in flight when current evidence justifies it and concurrent mutation can preserve current user/concurrent changes plus all safety/authority boundaries. Ralph accounts for useful work already known to be in flight and does not knowingly duplicate materially the same work against materially the same evidence merely to increase concurrency. Concurrency is not itself progress; if expected coordination, duplication, or edit-contention cost outweighs useful critical path overlap, Ralph stays serial. The exact implementation scheduling is not planning authority.
+- Every Implementation Lead invocation independently rechecks current authority, source, feasibility, and relevant concurrent changes immediately before mutation; stale work already satisfied or superseded by another actor is not blindly applied, and full Ticket preservation awareness does not require duplicating concrete work already known to be active in a sibling invocation.
+- Once any mutation overlaps a Ticket-verification invocation, that verifier cannot authorize leaving the Ticket. After all current same-Ticket mutation settles, every overlapped verifier must also have returned or be host-confirmed stopped, and any product effect it already started must have reached the authored terminal/cleanup boundary or be established unable to mutate the target further, before settled fresh observation begins. Ralph reviews the resulting current project as one combined product for Ticket Scope, preservation, and unresolved integration conflict, freshly reobserves every AC, and only a new fresh transition Verification may authorize the Ticket transition.
+- The complete Ticket set is reconsidered after settled Ticket reobservation and before whole-Spec verification. Goal Verification begins only after all current implementation mutation has ended, every Ticket verifier overlapped by that mutation has returned or been host-confirmed stopped, and any product effect started by such a verifier is terminal/cleaned up or established unable to mutate the target further.
 - Same Ticket + materially unchanged current observations + the same attempted implementation with unchanged inputs is not progress; the current invocation may end `GOAL OPEN — NO PROGRESS` without declaring the Goal impossible.
 - A later invocation starts from the approved Spec, validated Ticket set, and fresh current product state.
 
@@ -116,11 +116,11 @@ Invariant: only fresh whole-Spec verification can close a supported Goal.
 Closure:
 
 - Implementation Lead cannot issue an AC verdict or `VERIFIED`.
-- Thin Verification Lead owns one Ticket verdict only; direct contradictions reported before its final aggregate are navigation, not early verdicts.
+- Thin Verification Lead owns one Ticket verdict only; qualifying observations reported before its final aggregate are navigation, not early verdicts.
 - A Ticket-verification invocation overlapped by current-Ralph mutation cannot authorize a Ticket transition, regardless of any earlier PASS observation or aggregate it later returns.
-- Ralph provisional `SATISFIED` and observations gathered while mutation remains in flight are navigation only.
+- Ralph provisional `SATISFIED` and observations gathered while mutation or an overlapped navigation verifier remains active are navigation only.
 - Transition checkpoints never complete the parent Goal.
-- Goal Verification starts only after current implementation mutation has ended, uses fresh admissible current evidence, and has the only `GOAL VERIFIED` authority.
+- Goal Verification starts only after current implementation mutation has ended, every Ticket verifier overlapped by that mutation has returned or been host-confirmed stopped, and any product effect it started is terminal/cleaned up or established unable to mutate the target further; it then uses fresh admissible current evidence and has the only `GOAL VERIFIED` authority.
 
 Primary contracts/tests:
 
@@ -223,8 +223,8 @@ Accepted limitations:
 
 - No durable attempt history means a later invocation may rediscover or retry a technical correction.
 - `NO PROGRESS` is invocation-local and does not prove Goal impossibility.
-- Same-Ticket concurrent implementation can create stale planned work, edit contention, or wasted Worker effort; every invocation therefore rechecks current source before mutation, stale work becomes no-op/revised work, and Ralph may serialize whenever overlap is not useful or safe.
-- A Verification Lead overlapped by implementation may continue to find useful contradictions, but its aggregate cannot authorize a Ticket transition; a new fresh verifier after mutation settles is deliberate duplicate verification cost paid for correctness.
+- Same-Ticket concurrent implementation can create stale planned work, edit contention, or wasted Worker effort; every invocation therefore rechecks current source before mutation, Ralph avoids knowingly duplicating materially the same in-flight work, stale work becomes no-op/revised work, and Ralph may serialize whenever overlap is not useful or safe.
+- A Verification Lead overlapped by implementation may continue to surface useful current observations, but its aggregate cannot authorize a Ticket transition; Ralph must also wait for or host-confirmedly stop that verifier and wait for any verifier-started product effect to reach its authored terminal/cleanup boundary or become unable to mutate the target before settled reobservation/new authoritative verification. The possible residual wait plus a new fresh verifier are deliberate costs paid for a non-overlapping final evidence boundary.
 - Positional ordinals require re-review when their authored items reorder or change semantically.
 - Complete ready Ticket-set planning is required before Ralph starts; partial dynamic Ticket admission is intentionally unsupported.
 - Ralph does not persist a Goal-achieved marker or mutate Tickets to become workflow state. A later semantic delta must go through current planning/Ticket review; a new bounded work slug is the clean default for post-completion product deltas when preserving the old work as history matters.
@@ -241,21 +241,28 @@ model from a strictly serial implementation/reobservation/verification cadence t
 bounded same-Ticket streaming remediation. This is an intentional architecture
 generation change, not a faithful-contract counterexample and not a change
 admitted through either contract-preserving optimization lane below. It changes
-when implementation may run: a transition verifier may surface a direct
-contradiction before finishing, Ralph may start current authorized same-Ticket
+when implementation may run: a transition verifier may surface a qualifying
+current observation before finishing, including direct contradiction or a concrete
+current Ticket-owned implementation/integration/surface/readback absence that
+blocks the authored flow; Ralph may start current authorized same-Ticket
 implementation immediately, and additional same-Ticket implementation may overlap
-when Ralph judges that current evidence, host capability, preservation, safety,
-and authority boundaries permit it.
+when Ralph judges that current evidence, useful work already in flight, host
+capability, preservation, safety, and authority boundaries permit it.
 
 The user-directed evolution does **not** change product authority, Ticket Scope,
 AC/Verification denominators, verifier read-only ownership, `GOAL VERIFIED`
 authority, or the requirement for fresh current evidence. It also does not add a
 persistent scheduler, finding queue, assignment ledger, Worker identity system,
 or controller. Any mutation overlapping a Ticket verifier invalidates that
-invocation for transition authority; all current implementation must settle,
-Ralph must freshly reobserve the full active Ticket, and a new fresh transition
-Verification must run before leaving the Ticket. Whole-Spec Goal Verification
-begins only after implementation mutation has ended.
+invocation for transition authority; all current implementation must settle, every
+overlapped Ticket verifier must return or be host-confirmed stopped, any product
+effect it already started must be terminal/cleaned up or established unable to
+mutate the target further, Ralph must review the combined current project and
+freshly reobserve the full active Ticket, and a new fresh transition Verification
+must run before leaving the Ticket. Whole-Spec Goal Verification begins only after
+implementation mutation has ended, every Ticket verifier overlapped by that
+mutation has returned or been host-confirmed stopped, and any verifier-started
+product effect is likewise terminal/cleaned up or unable to mutate the target.
 
 The five-condition Core Freeze Admission below governs issue-driven hardening of
 a frozen architecture generation. An explicit user instruction to deliberately

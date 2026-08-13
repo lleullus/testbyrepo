@@ -57,16 +57,16 @@ ACTIVE_VERIFICATION_DIRECTORIES = frozenset(
 )
 ACTIVE_VERIFICATION_SHA256 = {
     # Updated only with a reviewed canonical leaf change.
-    "verification-lead/SKILL.md": "84b7eaf50023eecdf0c8aebe65bc8f82694a6b8e8b2c7a08f2819b0bcff6916a",
+    "verification-lead/SKILL.md": "2583192da5c9931a83df08661eda49bd91c770d6303051cf6e65106fbcfcfe44",
     "verification-lead/run_tests.py": "8f0c1c288930dda0468d077bb61b6a046aad69b6531dc6cdb7f9d457cf8ea185",
     "verification-lead/verdict_contract.py": "0ec52acc6f27ca9167adbabeddfede4dfcc719e0fe480e124c43e3ff95dba9d7",
-    "verification-lead/tests/test_contract.py": "32511f480f2263583f33beb81a2111eb5545022d49f31a7529b0c6a267276f81",
+    "verification-lead/tests/test_contract.py": "57bb22f45cbde5bdb9e18c872aaedaf7c4ba9154c11b57c32cd4e7505c24cb4e",
     "verification-lead/tests/pilot/test_representative_pilots.py": "02a122d5efbf0051d67f50b3d370f9dfa2c4f210516dd086d0e9be19a4d1c530",
 }
 ACTIVE_RALPH_SHA256 = {
     # Reviewed active Goal-fulfillment route, closure contract, and exact structural admission support.
-    "ARCHITECTURE-CLOSURE.md": "cd084589a515594f9e78d4054e33038f64badcc38a710bda827111381209e775",
-    "iis-goal-loop/SKILL.md": "15cd75ba9a4141026d353d333f1c7194e05a86677cfa0ec669b243fc495e8a51",
+    "ARCHITECTURE-CLOSURE.md": "2c0a0c25cbecc6ddf2083d09c4196f8ce91e1ae5f0b614ebbe1f93d59f2cfa5f",
+    "iis-goal-loop/SKILL.md": "722df4ff3d197627201ff66bcc42660c60d93eb3a725374d990d825df2b9ed82",
     "goal-verification-lead/SKILL.md": "02bba8db29057cefc65443ef50ffe1206fc0e0d27ac84d9cbad1ad3b10ddeaa6",
     "matt/skills/to-tickets/validate_ticket_set.py": "2a5eda27390c079bfb21200c71f96eec66f878c2bb9db1bc9696d8e37b8895ea",
 }

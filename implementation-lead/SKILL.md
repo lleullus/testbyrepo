@@ -209,13 +209,18 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
 8. Distinguish unresolved runtime or causal uncertainty from known remaining
    implementation work. When review establishes a concrete Ticket-authorized
    source or integration omission, whether a bounded defect in the Subagent's
-   work or missed due-now Ticket work, do not defer it to another role.
-   Resume or reinvoke the same admitted Implementation Subagent with only that
-   bounded finding and the authorized Ticket boundary, then re-review the actual
-   diff, checks, and affected AC coverage. Preserve the same admission source:
-   user-designated for an explicit leaf request or invocation-local host-provided
-   for the Ralph loop. Continue only while a concrete bounded in-scope correction
-   remains.
+   work or missed due-now Ticket work, do not defer it merely to make this
+   invocation appear complete. Resume or reinvoke the same admitted
+   Implementation Subagent with only that bounded finding and the authorized
+   Ticket boundary, then re-review the actual diff, checks, and affected AC
+   coverage. Within Ralph same-Ticket overlap only, this rule does not require a
+   second invocation to duplicate concrete work that the current caller has
+   already identified as actively in flight in another same-Ticket invocation.
+   Full Ticket Scope, AC, Behavior/UI preservation, and integration awareness still
+   apply; if that work remains current after the sibling activity settles, it is
+   ordinary due-now work again. Preserve the same admission source: user-designated
+   for an explicit leaf request or invocation-local host-provided for the Ralph
+   loop. Continue only while a concrete bounded in-scope correction remains.
 9. A confirmed missing Ticket-owned route, registration/export, product
    configuration, executable/startup wiring, caller/integration link, or required
    outcome/readback connection is concrete same-Ticket due-now implementation

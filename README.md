@@ -30,10 +30,10 @@ Goal fulfillment.
   store, ledger, or persistent result state.
 - `iis-goal-loop/`: Ralph-style orchestration for exactly one bounded approved
   Spec. It rejects an outcome with no approved completion evidence path before
-  mutation, repeatedly selects current unmet Ticket ACs, reuses the same Ticket
-  across materially different in-Scope corrections, uses current readbacks
-  without duplicating unsafe effects, and keeps the Spec Goal open until fresh
-  whole-Spec verification succeeds. It never promotes one Work Package to parent
+  mutation, acts on current in-Scope evidence inside the active Ticket, may overlap
+  same-Ticket implementation when useful and safe, uses current readbacks without
+  duplicating unsafe effects, and requires settled fresh Ticket/whole-Spec
+  verification before completion. It never promotes one Work Package to parent
   initiative completion and is not a Controller runtime or durable workflow
   engine.
 - `goal-verification-lead/`: fresh whole-Spec verification of every approved

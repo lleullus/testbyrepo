@@ -123,6 +123,17 @@ class ActiveSkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, normalized)
 
+    def test_same_ticket_overlap_preserves_full_contract_awareness_without_duplicate_mutation_duty(self) -> None:
+        normalized = " ".join(IMPLEMENTATION_SKILL.split())
+        for required in (
+            "do not defer it merely to make this invocation appear complete",
+            "does not require a second invocation to duplicate concrete work",
+            "current caller has already identified as actively in flight in another same-Ticket invocation",
+            "Full Ticket Scope, AC, Behavior/UI preservation, and integration awareness still apply",
+            "if that work remains current after the sibling activity settles, it is ordinary due-now work again",
+        ):
+            self.assertIn(required, normalized)
+
     def test_behavior_trace_is_semantic_guardrail_not_implementation_mechanism(self) -> None:
         normalized = " ".join(IMPLEMENTATION_SKILL.split())
         for required in (
