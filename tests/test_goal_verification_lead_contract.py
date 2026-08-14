@@ -55,6 +55,8 @@ class GoalVerificationLeadContractTests(unittest.TestCase):
             "same user-designated roster/model may be used again after Ticket Verification",
             "always through new invocations",
             "prior Runner context/evidence remains navigation only and cannot supply final Goal evidence",
+            "Consume only `Verification Runner` bindings at this boundary",
+            "`Implementation Subagent`, `Implementation Research Agent`, or any other IIS-role binding is not eligible for final Runner assignment",
         ):
             self.assertIn(required, body)
 

@@ -74,6 +74,10 @@ class IISEntryRoutingContractTests(unittest.TestCase):
             "Model identity alone is not a role",
             "requires a separate user designation for that role",
             "An owning Lead may decide only role grouping, count, timing, concurrency, or serial fallback that the user did not already fix",
+            "first resolve the IIS role required by the current protocol step",
+            "consider only bindings for that role",
+            "Never select an assignee first and reinterpret its role",
+            "Pass each downstream Lead only the role bindings it may consume",
             "carrying any current-conversation Implementation/Verification role bindings and their explicit consumption conditions unchanged",
             "do not invoke those delivery or verification roles during planning merely because they were designated",
         ):

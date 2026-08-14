@@ -177,6 +177,23 @@ verification. The operator supplies the action/readback only; IIS interprets the
 contract. A `Not independently verifiable` parent outcome is rejected by Ralph
 admission before mutation and never reaches the reconciliation cycle.
 
+### Role-First Invocation Dispatch
+
+Before any host agent invocation in this loop, resolve the IIS role required by
+the current protocol step. Restrict current-conversation bindings to that role,
+apply the user's authored ordering, reservation, consumption timing, and
+concurrency conditions, and only then select an eligible assignee. Never choose
+an assignee first and reinterpret its role. A binding for one IIS role is
+unavailable to every other role unless the user separately designated that same
+configured model/agent for the other role.
+
+Project only the bindings a downstream Lead may consume: Implementation Lead
+receives `Implementation Subagent` and, when explicitly designated,
+`Implementation Research Agent` bindings; Verification Lead and Goal
+Verification Lead receive only `Verification Runner` bindings. This filtering is
+current-invocation routing only and creates no role registry, queue, quota,
+reservation ledger, scheduler, or durable identity.
+
 ### 2. Act On Current In-Scope Evidence
 
 When fresh current evidence shows that implementation is still required inside

@@ -10,6 +10,27 @@ from pathlib import Path
 class RalphSemanticsFixtureTests(unittest.TestCase):
     """Exercise the desired loop semantics without claiming agent/leaf execution."""
 
+    def test_role_first_dispatch_never_borrows_a_binding_from_another_role(self) -> None:
+        bindings = {
+            "Implementation Subagent": ["implementation-initial", "implementation-reserved", "dual-role"],
+            "Verification Runner": ["verification-primary", "dual-role"],
+        }
+
+        def dispatch(role: str, requested_assignee: str | None = None) -> str:
+            eligible = bindings[role]
+            if requested_assignee is not None:
+                if requested_assignee not in eligible:
+                    raise ValueError("role-binding mismatch")
+                return requested_assignee
+            return eligible[0]
+
+        self.assertEqual(dispatch("Verification Runner"), "verification-primary")
+        with self.assertRaisesRegex(ValueError, "role-binding mismatch"):
+            dispatch("Verification Runner", "implementation-reserved")
+        self.assertEqual(dispatch("Implementation Subagent", "implementation-reserved"), "implementation-reserved")
+        self.assertEqual(dispatch("Verification Runner", "dual-role"), "dual-role")
+        self.assertEqual(dispatch("Implementation Subagent", "dual-role"), "dual-role")
+
     def test_same_delivery_unit_repeats_until_all_current_acceptance_rows_pass(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             product = Path(temporary) / "product-state.json"

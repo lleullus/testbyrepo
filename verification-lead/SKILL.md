@@ -85,6 +85,10 @@ Use fresh `../verification-runner/SKILL.md` invocations for actual
 product/canonical observation. Preserve user-designated Runner role bindings and
 their ordering, reservation, consumption timing, or concurrency conditions exactly.
 If none were supplied, host-provided invocation-local Runner roles are allowed.
+Consume only `Verification Runner` bindings at this boundary. `Implementation
+Subagent`, `Implementation Research Agent`, or any other IIS-role binding is not
+eligible for Runner assignment unless the user separately designated that same
+configured model/agent as a `Verification Runner`.
 
 Within those user constraints, Lead chooses grouping, count, timing, concurrency,
 valid shared acquisition, and serial fallback. Do not define AC/flow/defect/file-

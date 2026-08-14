@@ -47,6 +47,12 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    superseded, or materially changed by another actor, do not apply a stale
    planned change; report the current fact or revise the in-Scope implementation
    from current evidence instead.
+   Consume only the `Implementation Subagent` binding admitted for implementation
+   and any separately designated `Implementation Research Agent` bindings for
+   research. A `Verification Runner` or other IIS-role binding is not eligible for
+   implementation or implementation research merely because the same configured
+   model/agent could perform that work; cross-role use requires the user's separate
+   designation for that exact role.
    On every Ralph entry, and before any project mutation, revalidate that the
    Ticket remains `ready`, the current project is its exact `Project-Root`, the
    Ticket is under that project's canonical `docs/planning` root, and its

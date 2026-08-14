@@ -22,6 +22,12 @@ designated that same configured model/agent for that other role. If the user did
 not designate a Runner, the calling Lead may use a host-provided invocation-local
 Runner without new user ceremony.
 
+If an invocation identifies this role as `Verification Runner` but asks it to
+mutate the product or serve another IIS role, treat that as a role-binding mismatch:
+report the mismatch to the calling Lead instead of performing the other role. A
+normal read-only observation may still create only the authored safe product effect
+allowed by the verification contract below; that is observation, not remediation.
+
 The Lead may choose grouping, count, timing, concurrency, shared acquisition, and
 serial fallback only within user-supplied constraints. IIS defines no AC-per-Runner,
 flow-per-Runner, outcome-per-Runner, defect-per-Runner, file-per-Runner, or other

@@ -27,6 +27,17 @@ that the user did not already fix. These are current-conversation routing
 constraints only; the router does not create workflow state, persist a mode or
 roster, invent Tickets, or reinterpret product authority.
 
+Treat those designations as request-scoped role bindings, not as a general pool
+of interchangeable agents. Before every downstream invocation, first resolve the
+IIS role required by the current protocol step, then consider only bindings for
+that role, apply only the ordering/reservation/consumption/concurrency conditions
+the user actually authored, and only then select an eligible assignee. Never
+select an assignee first and reinterpret its role. A binding for one role is
+ineligible for every other role unless the user separately designated that same
+configured model/agent for the other role. Pass each downstream Lead only the
+role bindings it may consume; this projection is invocation-local routing, not a
+registry, quota, scheduler, or durable roster.
+
 ## Route By Requested Completion Unit
 
 Apply explicit leaf requests before broad IIS inference.

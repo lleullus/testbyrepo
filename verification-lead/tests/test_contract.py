@@ -16,6 +16,14 @@ NORMALIZED = " ".join(SKILL.split())
 
 
 class VerificationLeadContractTests(unittest.TestCase):
+    def test_runner_assignment_cannot_borrow_other_iis_role_bindings(self) -> None:
+        for required in (
+            "Consume only `Verification Runner` bindings at this boundary",
+            "`Implementation Subagent`, `Implementation Research Agent`, or any other IIS-role binding is not eligible for Runner assignment",
+            "unless the user separately designated that same configured model/agent as a `Verification Runner`",
+        ):
+            self.assertIn(required, NORMALIZED)
+
     def test_no_recipe_fresh_ticket_and_project_are_default_inputs(self) -> None:
         self.assertIn("fresh session with only those inputs is the normal valid starting point", NORMALIZED)
         self.assertIn("A Candidate Execution Recipe is optional", SKILL)

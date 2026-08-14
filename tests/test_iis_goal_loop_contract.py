@@ -309,6 +309,12 @@ class IISGoalLoopContractTests(unittest.TestCase):
     def test_user_designated_implementation_roles_keep_binding_and_consumption_timing(self) -> None:
         body = normalized(LOOP)
         for required in (
+            "Role-First Invocation Dispatch",
+            "resolve the IIS role required by the current protocol step",
+            "Restrict current-conversation bindings to that role",
+            "Never choose an assignee first and reinterpret its role",
+            "Implementation Lead receives `Implementation Subagent`",
+            "Verification Lead and Goal Verification Lead receive only `Verification Runner` bindings",
             "current-conversation `Implementation Subagent` role bindings, reservations, ordering, consumption timing, or concurrency limits",
             "pre-consume a role the user reserved for a later correction",
             "A separate user designation is required when the same configured model/agent is to serve a different IIS role",

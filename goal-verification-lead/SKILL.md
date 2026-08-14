@@ -59,6 +59,10 @@ none were supplied, host-provided invocation-local Runner roles are allowed
 without new user ceremony. The same user-designated roster/model may be used again
 after Ticket Verification, but always through new invocations: prior Runner
 context/evidence remains navigation only and cannot supply final Goal evidence.
+Consume only `Verification Runner` bindings at this boundary. `Implementation
+Subagent`, `Implementation Research Agent`, or any other IIS-role binding is not
+eligible for final Runner assignment unless the user separately designated that
+same configured model/agent as a `Verification Runner`.
 
 Within those user constraints, Goal Verification Lead chooses only grouping,
 count, timing, concurrency, valid shared acquisition, and serial fallback. Do not

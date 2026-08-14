@@ -141,6 +141,9 @@ class ActiveSkillContractTests(unittest.TestCase):
     def test_role_designations_do_not_cross_consume_without_separate_user_authority(self) -> None:
         normalized = " ".join(IMPLEMENTATION_SKILL.split())
         for required in (
+            "Consume only the `Implementation Subagent` binding admitted for implementation",
+            "A `Verification Runner` or other IIS-role binding is not eligible for implementation or implementation research",
+            "cross-role use requires the user's separate designation for that exact role",
             "A `Verification Runner` designation and an `Implementation Subagent` designation are not implementation-research designations",
             "unless the user separately designated that same configured model/agent for implementation research",
             "Role binding comes from the explicit designation, not model identity",

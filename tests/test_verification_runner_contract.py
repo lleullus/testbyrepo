@@ -23,6 +23,8 @@ class VerificationRunnerTopologyContractTests(unittest.TestCase):
             "reservation",
             "consumption timing",
             "pre-consume a role the user reserved for a later correction",
+            "Never select an assignee first and reinterpret its role",
+            "role-binding mismatch",
         ):
             self.assertIn(phrase, body)
 
