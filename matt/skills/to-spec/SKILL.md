@@ -18,6 +18,25 @@ without choosing or beginning the implementation.
 - The exact existing product project root and work slug.
 - The planning owner, if one is named.
 - The completed Behavior Design result and every approved scoped Behavior authority adopted by the confirmed shared understanding.
+- The current adversarial-consensus activation or explicit withdrawal fact for this planning unit when one exists in the current conversation or caller handoff.
+
+## Adversarial Consensus Admission
+
+A direct or explicit To Spec request is not withdrawal of an active adversarial-consensus instruction and does not itself satisfy that gate. When the current planning unit has an active adversarial-consensus instruction that the user has not explicitly withdrawn, do not draft or write `SPEC.md` until the current planning context establishes all of the following:
+
+- one exact `Adversarial Planning Challenger` binding explicitly designated by the user;
+- a user-confirmed Intent Anchor for the current candidate;
+- `ADVERSARIAL CONSENSUS REACHED` for the latest complete candidate, with no material candidate delta after that review; and
+- post-consensus final integrated user approval of that exact latest shared understanding.
+
+An approval given before the current consensus is not the post-consensus final integrated user approval and must not be reused as though it were. When any required condition is missing, return without drafting or writing the Spec:
+
+```text
+TO SPEC: BLOCKED
+Reason: <missing Challenger binding | Intent Anchor confirmation | current latest-candidate consensus | post-consensus final integrated user approval>
+```
+
+If the user explicitly withdraws adversarial consensus for this planning unit, this additional admission gate no longer applies and ordinary To Spec admission continues. Do not create a receipt, flag file, sidecar, or persistent gate state; use only the current conversation/caller context.
 
 ## Terminal UI / UX Authority Gate
 

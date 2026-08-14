@@ -63,7 +63,7 @@ ACTIVE_VERIFICATION_DIRECTORIES = frozenset(
 )
 ACTIVE_VERIFICATION_SHA256 = {
     # Updated only with a reviewed canonical leaf change.
-    "verification-lead/SKILL.md": "25dc8492ac5ac4b91ffe94646c3c4dabeaadd7dc780b334068723a972b32ebd5",
+    "verification-lead/SKILL.md": "2fb87ab764efc4e9d6ed97ff967cce3051779ccd371ce1bd783a0cdbcb08e8f4",
     "verification-lead/run_tests.py": "8f0c1c288930dda0468d077bb61b6a046aad69b6531dc6cdb7f9d457cf8ea185",
     "verification-lead/verdict_contract.py": "0ec52acc6f27ca9167adbabeddfede4dfcc719e0fe480e124c43e3ff95dba9d7",
     "verification-lead/tests/test_contract.py": "0dba31cad69786b37a05bc8b32a73a550e344cbb4073454add6ee9f522bc6b0d",
@@ -74,9 +74,9 @@ ACTIVE_VERIFICATION_SHA256 = {
 }
 ACTIVE_RALPH_SHA256 = {
     # Reviewed active Goal-fulfillment route, closure contract, and exact structural admission support.
-    "ARCHITECTURE-CLOSURE.md": "b1a2a82a9abc5250ae4d69cddc0b8baa78b2b14822476196e723480388061e44",
-    "iis-goal-loop/SKILL.md": "ed9d3566ad920448c0dc7d4c7968e8f4ece4d6c1d14eb07c8a8686593da789c5",
-    "goal-verification-lead/SKILL.md": "4f3cc7ec7d671a7bdc854a494abb9cf3c360579f3c9e5eaea9651990cc24d8d7",
+    "ARCHITECTURE-CLOSURE.md": "71902cb567335760a38b292598bb596d9db121db11e1f20ee9545b787fe2ae96",
+    "iis-goal-loop/SKILL.md": "42231e688c6b4730c954ca20026d4d5068883d3a1404a7729691d0acdd6069b3",
+    "goal-verification-lead/SKILL.md": "bd83d68cc36a87dd03e3fe1a5056bcd2e518de1836fb02cccb2e7b9a0fcbfaa0",
     "matt/skills/to-tickets/validate_ticket_set.py": "2a5eda27390c079bfb21200c71f96eec66f878c2bb9db1bc9696d8e37b8895ea",
 }
 LEGACY_EXECUTABLE_STEMS = (
@@ -138,7 +138,7 @@ ROUTER_IMPLEMENTATION_PATH = "/home/user01/project/iis-skills/implementation-lea
 ROUTER_VERIFICATION_PATH = "/home/user01/project/iis-skills/verification-lead/SKILL.md"
 ROUTER_GOAL_LOOP_PATH = "/home/user01/project/iis-skills/iis-goal-loop/SKILL.md"
 ROUTER_GOAL_VERIFICATION_PATH = "/home/user01/project/iis-skills/goal-verification-lead/SKILL.md"
-ROUTER_SHA256 = "b99e3bdf370845c5565baee088e6706f792ceff800e3ceb19ea0451bac586abc"
+ROUTER_SHA256 = "9bc8e67da61f4a2b7e1ccb1eb340eebfbc6fc35d18ccc655487e2d94385fc0f8"
 CONFIG_SUFFIXES = frozenset({".json", ".jsonc", ".md", ".ts", ".js"})
 CONFIG_EXCLUDED_DIRECTORIES = frozenset({"node_modules", ".audit", ".git"})
 ACTIVE_CONFIG_ROOT_FILES = frozenset(

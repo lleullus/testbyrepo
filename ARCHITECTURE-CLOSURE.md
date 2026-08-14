@@ -11,11 +11,15 @@ The supported architecture is:
 ```text
 Scope Shaper
 -> Ask Matt / Behavior Design / UI authority as applicable
+   -> optional explicit-only Adversarial Planning Consensus when the user requests it and names the exact Challenger
+   -> current latest-candidate consensus + final user approval when that gate is active
 -> approved Spec
 -> complete ready Ticket set
 -> Ralph Goal Fulfillment Loop
    -> current observation
-   -> same-Ticket Implementation Lead work as current evidence justifies
+   -> default first implementation dispatch uses one Lead / one Subagent unless the user fixes another schedule
+   -> ordered Implementation Subagent bindings are reusable precedence, not one-use slots
+   -> same-Ticket Implementation Lead work as current evidence or exact user scheduling justifies
    -> every provisionally satisfied all-Independent Ticket runs Ticket Verification, including last/only
       -> Verification Lead owns AC verdicts/aggregate
       -> fresh Verification Runner(s) perform actual observation
@@ -30,16 +34,21 @@ Scope Shaper
 ```
 
 The Ralph completion unit is exactly one bounded approved Spec. Ralph may overlap
-same-Ticket implementation when current evidence and user role-consumption
-constraints permit it. Verification observation is separated from verdict
-authority: fresh Verification Runner roles observe, while Verification Lead and
-Goal Verification Lead adjudicate. A mutation-overlapped Ticket-verification cycle
-cannot authorize progression. User-designated role binding and consumption timing
-constrain Lead scheduling; unspecified grouping/count/timing/concurrency remains
-Lead-owned. The architecture intentionally has no controller runtime, persistent
-Goal state, attempt ledger, Runner/Worker registry, assignment queue, evidence
-cache, replay engine, dynamic Ticket queue, persistent trace identity, or
-initiative fan-in engine.
+same-Ticket implementation under exact user scheduling, or under Lead-owned
+scheduling when current evidence and the useful-work tradeoff justify it. Exact
+user-authored role binding, reusable ordering, reservation, one-shot/usage limits,
+consumption timing, and concurrency timing constrain Lead scheduling; only
+properties the user left unspecified remain Lead-owned. Live scheduling updates are
+event-driven: no role repeatedly rereads the whole conversation to prove freshness,
+and repair changes future duties rather than replaying already-completed mutation.
+Verification observation is separated from verdict authority: fresh Verification
+Runner roles observe, while Verification Lead and Goal Verification Lead
+adjudicate. Mutation or another material evidence/currentness/attribution/used-role
+authority delta invalidates the affected verification cycle; unrelated future
+scheduling changes do not. The architecture intentionally has no controller
+runtime, persistent Goal state, attempt ledger, Runner/Worker registry, assignment
+queue, evidence cache, replay engine, dynamic Ticket queue, persistent trace
+identity, or initiative fan-in engine.
 
 ## Classification Meanings
 
@@ -103,13 +112,16 @@ post-mutation observation or final verification.
 Closure:
 
 - A newly discovered technical cause inside the existing Ticket Scope remains the same Ticket.
-- Current-conversation user role binding, reservation, ordering, and consumption timing constrain Ralph scheduling. A role reserved for later remediation is not consumed for initial fan-out merely to increase concurrency; properties the user did not fix remain implementation-owned.
+- Current-conversation user role binding, reusable ordering, reservation, explicit one-shot/usage/rotation conditions, consumption timing, and concurrency timing constrain Ralph scheduling. A role reserved for later remediation is not consumed for initial fan-out merely to increase concurrency; properties the user did not fix remain implementation-owned.
+- Ordered Implementation Subagent bindings are reusable precedence, not one-use slots. Every new dispatch reapplies the authored order from the top; a returned invocation is eligible again unless the user actually ended its eligibility. Retained-context reuse is a separate optimization, so stale context causes a fresh invocation of the same higher-priority binding rather than automatic advancement to the next binding.
+- The default first implementation dispatch is one Lead / one Subagent when the user did not fix another initial schedule. A maximum-concurrency increase or another available binding is capacity, not an immediate-overlap instruction.
 - Fresh Verification Runner observation may surface a qualifying current contradiction or Ticket-owned implementation/integration/surface/readback absence before the remaining Runner work finishes. Verification Lead forwards the finding; Ralph alone decides whether to start same-Ticket remediation, while Runner and Lead remain non-remediating.
 - When a fresh finding materially refines work already active in a same-Ticket implementation invocation, Ralph feeds the finding to that existing invocation first rather than duplicating the work or consuming another reserved role. This is invocation-local useful-work continuity, not persistent defect/AC/file ownership.
-- Additional same-Ticket Implementation Lead invocation is allowed only when current evidence justifies materially distinct useful work and concurrent mutation can preserve current user/concurrent changes plus safety/authority boundaries. Concurrency is not progress; serial fallback remains valid when coordination, duplication, or edit-contention cost dominates.
+- Under Lead-owned scheduling, an additional same-Ticket Implementation Lead invocation requires materially distinct useful work and a positive overlap tradeoff. An exact user-authored immediate-overlap instruction overrides only the default wait and Lead-owned efficiency preference; it does not widen Ticket Scope or product/dangerous authority.
+- Scheduling repair is prospective: an already-completed authorized mutation remains current product state and is not rolled back, ceremonially repeated, or reassigned merely to reconstruct preferred historical role order. Ralph freshly reobserves the combined current product and dispatches only genuinely unfinished work under the current authored order.
 - Every Implementation Lead entry freshly rechecks current authority, source, feasibility, and concurrent changes before mutation. If the approved work explicitly preserves/rebuilds an existing capability, its bounded predecessor implementation is navigation for the currently used product boundary, not inherited product authority.
 - Every provisionally satisfied all-Independent Ticket runs Ticket Verification, including the last/only Ticket. Goal Verification does not replace this streaming correction stage.
-- Mutation overlapping a Ticket Verification Lead/Runner cycle invalidates the whole cycle for progression. After all current mutation settles, every overlapped Runner/effect must quiesce; Ralph reviews the combined current project, freshly reobserves every AC, and only a new Verification Lead cycle with fresh Runner invocation(s) may verify the Ticket.
+- Mutation overlapping a Ticket Verification Lead/Runner cycle invalidates the whole cycle for progression. An unrelated scheduling change does not. After a material evidence/currentness/attribution/used-role-authority invalidation, every relevant Runner/effect must quiesce; Ralph reviews the combined current project, freshly reobserves every AC, and only a new Verification Lead cycle with fresh Runner invocation(s) may verify the Ticket.
 - One endpoint/representation/transport/readback failure establishes only that boundary. A dependency-wide conclusion requires closure of currently known materially relevant contract-admitted alternatives; an alternate may diagnose reachability or candidate integration work but cannot silently satisfy an exact authored representation unless the approved contract permits equivalence. A known usable representation that the current product fails to support is candidate same-Ticket product/integration work.
 - A bounded Runner assignment decomposes observation only; it never defines or narrows authored verification coverage. Caller preference cannot remove a required boundary or make a surrogate surface equivalent.
 - A decision not to attempt a required boundary is an evidence limit, not evidence of dependency unavailability. Safety/authority limits leave that obligation unresolved or `INCONCLUSIVE` unless the approved contract itself admits a sufficient current readback or equivalent surface.
@@ -173,8 +185,10 @@ Closure:
 
 - Ralph does not ask whether to continue between ACs or corrections.
 - Endpoint, parser, fallback, retry/backoff, file, algorithm, internal Ticket mechanics, and ordinary in-Scope correction choice remain implementation-owned unless the approved product contract already makes one normative.
-- Explicit current-conversation Implementation Subagent / Implementation Research Agent / Verification Runner role designations, ordering, reservation, consumption timing, and concurrency constraints remain binding. Model identity alone is not a role, and the same configured model/agent serves another IIS role only under a separate user designation for that role.
-- The user is asked only for a real product decision, Scope/completion-contract change, dangerous/external authority, or another decision that the approved contract actually assigns to the user; already supplied execution-role intent is not reopened for ceremony.
+- Explicit current-conversation Adversarial Planning Challenger / Implementation Subagent / Implementation Research Agent / Verification Runner role designations and the user's authored ordering, reusable precedence, reservation, one-shot/usage/rotation, exact consumption timing, and concurrency timing remain binding. Model identity alone is not a role, and the same configured model/agent serves another IIS role only under a separate user designation for that role.
+- Exact user-authored implementation timing outranks Lead-owned efficiency preference. Lead tradeoff judgment applies only to scheduling properties the user left open; it is not authority to silently serialize or reorder an exact current instruction.
+- Live orchestration reconciliation is event-driven. No Lead or subordinate repeatedly rereads the full user conversation merely to prove currentness; when an actual new delta arrives, only the affected scheduling delta is applied. If the host knows a newer direction exists but cannot observe enough content, only the affected new dispatch/mutation/progression blocks.
+- The user is asked only for a real product decision, Scope/completion-contract change, dangerous/external authority, an explicitly requested Intent Anchor confirmation before adversarial review, or another decision that the approved contract actually assigns to the user; already supplied execution-role intent is not reopened for ceremony.
 - Operator-assisted paths delegate action/readback only; the operator does not interpret ACs or supply verdicts.
 
 Primary contracts/tests:
@@ -215,6 +229,8 @@ Invariant: explicit leaf intent remains leaf intent; one bounded Spec success is
 Closure:
 
 - Explicit planning, one-Ticket implementation, one-Ticket verification, and explicit whole-Spec verification routes keep their own terminal boundaries.
+- An explicit To Spec request does not withdraw or bypass an active user-requested adversarial-consensus gate. To Spec owns the direct admission: exact Challenger binding, confirmed Intent Anchor, current latest-candidate consensus, and post-consensus final integrated user approval are required while that gate remains active.
+- The adversarial planning gate is explicit-only and model-auto-invocation-disabled. It adds no ordinary-path Challenger call; after consensus, Behavior/UI authority and the integrated shared understanding may receive their final approval in one user response.
 - Broad end-to-end bounded product completion enters Ralph only after ordinary planning has produced the approved Spec and validated complete ready Ticket set.
 - Scope Shaper retains initiative-scale entry precedence.
 - Ralph completes exactly one bounded approved Spec.
@@ -241,7 +257,10 @@ Accepted limitations:
 
 - No durable attempt history means a later invocation may rediscover or retry a technical correction.
 - `NO PROGRESS` is invocation-local and does not prove Goal impossibility.
-- Same-Ticket concurrent implementation can create stale planned work, edit contention, or wasted Worker effort; every invocation therefore rechecks current source before mutation, Ralph avoids knowingly duplicating materially the same in-flight work, stale work becomes no-op/revised work, and Ralph may serialize whenever overlap is not useful or safe.
+- Same-Ticket concurrent implementation can create stale planned work, edit contention, or wasted Worker effort. Every invocation therefore rechecks current source before mutation and stale work becomes no-op/revised work. When scheduling is left to Ralph, it avoids knowingly duplicating materially the same in-flight work and may serialize when overlap is not useful. When the user fixed exact immediate overlap, that Lead-owned efficiency preference does not override the instruction; only an actual Scope/role/authority impossibility remains a blocking boundary.
+- Event-driven live reconciliation deliberately gives up repeated proof-of-currentness checks. The accepted benefit is lower context noise and less instruction drift: no role repeatedly rereads the full conversation, and only an actually observed scheduling delta is propagated to affected future work.
+- Ordered reusable bindings may cause the same configured implementation role to be invoked repeatedly across distinct corrections. That is intentional; one-use behavior exists only when the user authored it. Persistent usage counters or slot ledgers are rejected because they would convert conversational precedence into stale orchestration state.
+- Prospective scheduling repair accepts that a historically misassigned but authorized mutation may remain in the current product. The architecture pays for fresh reobservation of the resulting product, not ceremonial rollback/replay through the preferred role, because replay would add mutation, context, and verification churn without improving current product authority.
 - A Verification Lead/Runner cycle overlapped by implementation may continue to surface useful current observations, but its aggregate cannot authorize Ticket progression; Ralph must wait for or host-confirmedly stop every overlapped Runner and wait for any Runner-started product effect to reach its authored terminal/cleanup boundary or become unable to mutate the target before settled reobservation/new authoritative verification. The residual wait plus a fresh cycle are deliberate costs paid for a non-overlapping evidence boundary.
 - The last/only all-Independent Ticket now pays a Ticket Verification cycle before whole-Spec Goal Verification. That duplicate-observation cost is intentional because Ticket Verification is the streaming correction engine; effect cost is mitigated with current readback, valid shared acquisition, serialization, or `INCONCLUSIVE`, not by deleting the feedback stage.
 - Bounded evidence/correction closure before `NO PROGRESS` may spend additional investigation time on already-known contract-admitted paths. The search remains bounded to current authority/product/predecessor evidence rather than becoming arbitrary endpoint discovery or a persistent path registry.
@@ -312,6 +331,65 @@ unexhausted path, and `User Action: None` cannot hand executable due-now work ba
 to the user. A returned or host-confirmed stopped/unproductive invocation clears
 only that liveness blocker; Ralph still closes any remaining bounded evidence or
 correction path before a terminal result.
+
+A further 2026-08-14 user-directed generation change makes user-intent retention
+and low-context orchestration load explicit architecture priorities. The user
+rejected safety hardening that repeatedly re-injects the full conversation,
+reopens already supplied execution intent, or adds agent calls merely to prove
+freshness, because that extra context can itself cause instruction drift. Live
+orchestration is therefore event-driven: absent an actually observed new user or
+canonical delta, execution continues without a new orchestration checkpoint. When
+a delta arrives, only the affected scheduling change is propagated; if the host
+knows a newer direction exists but cannot observe enough of it, only the affected
+new dispatch, mutation, or progression decision blocks.
+
+The same generation fixes ordered implementation-role semantics. User-authored
+ordering is reusable precedence rather than implicit one-shot slot consumption.
+Every new same-Ticket dispatch starts from the top of the still-eligible order; a
+returned role is eligible again, and stale retained context causes fresh
+rehydration of that same binding rather than automatic promotion of the next one.
+One-shot use, usage limits, rotation, reservation, or retirement exist only when
+the user actually authored them. The default first implementation dispatch remains
+one Lead / one Subagent when timing is unspecified, while maximum concurrency is
+capacity rather than a command to fan out. Conversely, an exact user-authored
+immediate-overlap instruction outranks Ralph's Lead-owned efficiency preference;
+that preference applies only to timing/concurrency the user left open.
+
+Scheduling repair is prospective under this generation. If a lower-priority role
+already completed authorized mutation before an ordering error is noticed, IIS
+preserves the current product, freshly reobserves it, and reapplies the correct
+order only to genuinely unfinished future work. It does not roll back or replay the
+same correction through the preferred role merely to repair history. This avoids
+extra mutation, repeated context loading, and unnecessary invalidation of later
+verification.
+
+Planning receives the same intent-preserving treatment. Adversarial Planning
+Consensus remains explicit-only and requires the exact user-designated Challenger;
+model auto-invocation is disabled. An active gate cannot be bypassed by an explicit
+To Spec request: current latest-candidate consensus and the post-consensus final
+integrated user approval are required until the user explicitly withdraws the
+gate. Intent Anchor confirmation is one deliberate pre-review approval; routine
+repository-disclosure approval is not added. A second and final user response may
+jointly approve the consensus-post shared understanding and any completed new or
+changed Behavior/UI authority. No mandatory live-Challenger smoke or generic
+multi-agent council is added to ordinary IIS execution.
+
+Verification invalidation is also narrowed to evidence meaning rather than mere
+orchestration-file movement. Product/source mutation and changes that materially
+affect authored coverage, currentness, attribution, already-used Runner authority,
+or target/effect safety invalidate the affected progression boundary. Future
+implementation-role ordering/concurrency changes or other unrelated scheduling
+changes do not discard attributable evidence by themselves. The fresh quiescent
+Ticket and whole-Spec barriers remain unchanged for genuinely invalidated cycles.
+
+Rejected alternatives for this generation are: implicit one-use role slots;
+persistent role-usage counters or scheduling ledgers; repeated whole-conversation
+freshness rereads by every Lead/Subagent/Runner; extra agents used only as
+freshness/safety sentinels; mandatory live adversarial smoke without an exact user
+designation; historical rollback/replay merely to reconstruct preferred dispatch
+order; and invalidating verification solely because an unrelated scheduling rule
+changed. These alternatives increase context, state, ceremony, or rework without
+better preserving the user's current bounded Goal.
 
 The five-condition Core Freeze Admission below governs issue-driven hardening of
 a frozen architecture generation. An explicit user instruction to deliberately

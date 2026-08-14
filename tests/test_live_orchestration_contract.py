@@ -17,17 +17,16 @@ def normalized(text: str) -> str:
 
 
 class LiveOrchestrationContractTests(unittest.TestCase):
-    def test_orchestration_is_live_at_control_boundaries_not_frozen_at_invocation_start(self) -> None:
+    def test_orchestration_is_live_and_event_driven_without_repeated_context_rechecks(self) -> None:
         body = normalized(ROUTER + "\n" + LOOP)
         for required in (
             "Do not freeze IIS orchestration",
-            "latest explicit current-conversation user direction",
-            "current canonical IIS contract",
-            "new downstream role invocation",
-            "new product/source mutation authorization",
-            "verification-cycle start or progression decision",
-            "whole-Spec Goal Verification",
-            "user-facing completion result",
+            "When a new user orchestration instruction or coherent canonical IIS change is actually observed",
+            "apply only the material scheduling delta",
+            "If no new instruction or contract change is observed, continue without a new orchestration checkpoint",
+            "Do not poll or re-read the full conversation at every control boundary",
+            "If the host knows a newer direction exists but cannot observe its content",
+            "block only the affected new dispatch, mutation authorization, or progression decision",
             "Invocation start does not freeze an older scheduling contract",
         ):
             self.assertIn(required, body)
@@ -43,16 +42,17 @@ class LiveOrchestrationContractTests(unittest.TestCase):
         ):
             self.assertIn(required, body)
 
-    def test_inflight_role_reconciliation_respects_new_user_scheduling_and_quiescence(self) -> None:
+    def test_inflight_role_reconciliation_is_prospective_and_minimizes_context_disruption(self) -> None:
         body = normalized(ROUTER + "\n" + LOOP)
         for required in (
-            "withdraws an active role or reduces allowed concurrency below the current in-flight set",
-            "stop assigning affected roles new work",
-            "Honor an explicitly user-selected role to retain",
-            "earliest safe host-controllable boundary",
-            "all affected mutation and product effects must quiesce",
+            "treat the correction prospectively",
+            "Do not undo completed mutation or restart already-satisfied work merely to make history match",
+            "If continuing an in-flight invocation would itself violate an exact current user instruction",
+            "stop assigning it new duties",
+            "Otherwise let its current bounded action return",
+            "reapply the current user-authored ordering to the next dispatch",
+            "Before progression that depends on affected mutation",
             "combined current product must be freshly reobserved",
-            "has no progression authority merely because it began under an older contract",
         ):
             self.assertIn(required, body)
 
@@ -78,57 +78,79 @@ class LiveOrchestrationContractTests(unittest.TestCase):
         ):
             self.assertIn(required, body)
 
-    def test_later_parallel_implementation_requires_initial_return_quiescence_fresh_evidence_and_tradeoff(self) -> None:
+    def test_default_later_parallelism_waits_for_first_return_but_exact_user_overlap_can_release_only_that_time_barrier(self) -> None:
         body = normalized(LOOP)
         for required in (
-            "After that first Implementation Lead invocation returns and its mutation is quiescent",
+            "When the user has not fixed an earlier overlap time, wait for that first Implementation Lead invocation to return",
             "freshly reobserve the affected current product/Ticket boundaries",
-            "fresh current evidence then shows materially distinct remaining in-Scope work",
-            "more than one same-Ticket Implementation Lead invocation active",
-            "accounts for the useful work already known to be in flight",
-            "does not knowingly duplicate materially the same implementation work",
-            "coordination, duplication, or edit-contention cost outweighs the useful critical path overlap",
-            "safe beneficial non-duplicative overlap is unclear, serial execution is the fallback",
+            "An exact current user instruction to start another implementation invocation now or before the first returns overrides only this default wait",
+            "A maximum-concurrency increase, additional eligible binding, or general permission for parallelism is not by itself an immediate-overlap instruction",
+            "Do not use Lead-owned efficiency or coordination preference to silently serialize an exact user-fixed immediate overlap",
             "give the observation to that existing invocation first",
         ):
             self.assertIn(required, body)
 
-    def test_one_implementation_lead_never_fans_out_multiple_subagents(self) -> None:
+    def test_ordered_implementation_bindings_are_reusable_precedence_not_one_shot_slots(self) -> None:
+        body = normalized(LOOP + "\n" + IMPLEMENTATION)
+        for required in (
+            "Ordered Implementation Subagent bindings are reusable dispatch precedence, not one-use tokens",
+            "reapply the authored order from the top",
+            "A returned invocation makes its binding eligible again",
+            "do not advance to a lower-priority binding merely because a higher-priority binding was used earlier",
+            "Context resumption and binding eligibility are separate decisions",
+            "freshly reinvoke the same higher-priority binding",
+            "one-shot use, a usage limit, rotation",
+            "another eligibility-ending condition",
+        ):
+            self.assertIn(required, body)
+
+    def test_scheduling_repair_is_prospective_not_ceremonial_replay(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "Scheduling repair is prospective",
+            "Already-produced authorized mutation remains current product state",
+            "Do not roll it back, repeat the same correction, or reassign that completed correction merely to reconstruct the preferred historical role order",
+            "Freshly reobserve the combined current product",
+            "only genuinely unfinished current in-Scope work is eligible for a new implementation dispatch",
+        ):
+            self.assertIn(required, body)
+
+    def test_one_implementation_lead_never_fans_out_multiple_subagents_or_rechecks_full_context_without_delta(self) -> None:
         body = normalized(IMPLEMENTATION)
         for required in (
             "One Implementation Lead invocation consumes at most one admitted `Implementation Subagent`",
             "never authorize this Lead to fan out additional Subagents",
             "uses separate Implementation Lead invocations",
             "each with its own one admitted Subagent",
-            "latest explicit user orchestration direction and current canonical IIS contract",
-            "return control without consuming the stale admission",
+            "Do not independently re-read the full user conversation before every Subagent call or mutation",
+            "caller/host actually reports a newer orchestration delta",
+            "keep the admitted binding without adding a freshness ceremony",
+            "host explicitly knows a newer direction exists but cannot provide enough",
+            "return control before the affected new mutation",
         ):
             self.assertIn(required, body)
 
-    def test_ticket_verification_live_material_delta_invalidates_progression_but_wording_only_does_not(self) -> None:
+    def test_ticket_verification_invalidates_only_for_material_evidence_or_role_authority_delta(self) -> None:
         body = normalized(VERIFICATION)
         for required in (
-            "Before each new Runner assignment and again before using the cycle for Ticket progression",
-            "Invocation start does not freeze an older Runner roster",
-            "live user/canonical IIS change materially changes Runner eligibility",
-            "coverage, attribution, or effect safety",
+            "A scheduling change alone does not invalidate a Ticket Verification cycle",
+            "Invalidate the cycle only when a newly observed change affects product/source state, authored coverage, currentness, attribution, role authority already used by the cycle, or target/effect safety",
             "whole Lead/Runner cycle loses Ticket-progression authority",
-            "wording-only or other orchestration change that cannot affect coverage, currentness, attribution, safety, or the progression decision does not invalidate the cycle",
+            "A future implementation-role order or concurrency change unrelated to this cycle does not invalidate it",
             "Stop assigning new work to a withdrawn or newly ineligible Runner",
             "fresh Runner invocations under the current contract",
             "Do not carry forward an earlier PASS row or aggregate",
         ):
             self.assertIn(required, body)
 
-    def test_goal_verification_live_material_delta_invalidates_final_authority_and_requires_fresh_cycle(self) -> None:
+    def test_goal_verification_invalidates_only_for_material_final_evidence_or_role_authority_delta(self) -> None:
         body = normalized(GOAL_VERIFICATION)
         for required in (
-            "Before each new final Runner assignment and again before returning the Goal aggregate",
-            "Invocation start does not freeze an older Runner roster",
-            "live user/canonical IIS change materially changes final Runner eligibility",
+            "A scheduling change alone does not invalidate a Goal Verification cycle",
+            "Invalidate final authority only when a newly observed change affects product/source state, final coverage, currentness, attribution, role authority already used by the cycle, or target/effect safety",
             "same loss of final progression authority applies",
-            "wording-only or other orchestration change that cannot affect final coverage, currentness, attribution, safety, or aggregate does not invalidate the cycle",
-            "materially superseded Runner must return or be host-confirmed stopped",
+            "A future implementation-role order or concurrency change unrelated to final observation does not invalidate the cycle",
+            "materially superseded Runner whose effect or evidence is part of the invalidated boundary must return or be host-confirmed stopped",
             "new fresh Runner invocations only after quiescence and only under the current contract",
         ):
             self.assertIn(required, body)
@@ -137,7 +159,7 @@ class LiveOrchestrationContractTests(unittest.TestCase):
         body = normalized(ROUTER)
         for required in (
             "canonical IIS update is partially applied or internally conflicting",
-            "fail closed on new dispatch/progression",
+            "fail closed only on new dispatch/progression",
             "until a coherent current contract can be read",
             "do not choose whichever old or new rule is more convenient",
         ):

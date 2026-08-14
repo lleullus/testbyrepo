@@ -46,7 +46,8 @@ class AdversarialConsensusContractTests(unittest.TestCase):
             "Challenger invocation is not allowed before that confirmation",
             "Intent Anchor confirmation is not final product-contract approval",
             "permission to replace the user's original words with Matt's summary",
-            "bounded material or exact local sources that the Challenger may receive or inspect",
+            "Do not add a routine second approval about repository disclosure",
+            "Use only the minimum relevant material already available under the current user/host authority",
         ):
             self.assertIn(required, body)
         self.assertLess(body.index("Intent Anchor Confirmation"), body.index("Challenger Boundary"))
@@ -95,6 +96,8 @@ class AdversarialConsensusContractTests(unittest.TestCase):
             "CONCEDE",
             "MAINTAIN",
             "Prefer the same Challenger conversation or resumable context",
+            "do not restate the full Intent Anchor, authority hierarchy, closed objections, or unchanged evidence in every round",
+            "Send only the latest material candidate delta, open objection, rebuttal, or new evidence needed for the next exchange",
             "do not let Matt unilaterally declare victory",
             "ADVERSARIAL CONSENSUS: BLOCKED",
             "not a workflow database, roster, queue, ledger",

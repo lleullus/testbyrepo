@@ -18,14 +18,16 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    parent-outcome/AC/Behavior trace. A user-designated role, ordering, reservation,
    consumption timing, or concurrency condition remains binding; neither the Lead
    nor host may reinterpret the same configured model/agent as another role or
-   consume a reserved implementation role at another phase. Immediately before
-   invoking the admitted Subagent and again before authorizing product/source
-   mutation, confirm that the caller's role admission still matches the latest
-   explicit user orchestration direction and current canonical IIS contract. If
-   that admission was withdrawn, reserved elsewhere, or made ineligible by a live
-   scheduling change, return control without consuming the stale admission. A live
-   product-contract change is not implementation scheduling and blocks mutation
-   until the owning planning authority resolves it. The exception grants no new
+   consume a reserved implementation role at another phase. Do not independently
+   re-read the full user conversation before every Subagent call or mutation. When
+   the caller/host actually reports a newer orchestration delta after admission,
+   apply only that delta before the affected new duty or mutation. If no newer delta
+   is reported, keep the admitted binding without adding a freshness ceremony. If
+   the host explicitly knows a newer direction exists but cannot provide enough of
+   it to decide this admission, return control before the affected new mutation
+   rather than assuming the old admission is current. A live product-contract
+   change is not implementation scheduling and blocks mutation until the owning
+   planning authority resolves it. The exception grants no new
    Ticket authority. While the same Ticket remains active inside that exact Ralph
    invocation, the host may resume the same invocation-local role for a later
    materially different correction only while retained technical context remains
@@ -50,7 +52,14 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    ceiling never authorize this Lead to fan out additional Subagents. Ralph-level
    implementation parallelism, when later authorized by the current loop contract,
    uses separate Implementation Lead invocations, each with its own one admitted
-   Subagent.
+   Subagent. Ordered Implementation Subagent bindings are reusable dispatch precedence,
+   not one-use tokens. Returning this invocation does not retire or demote its
+   admitted binding. Context resumption and binding eligibility are separate
+   decisions: if retained technical context is stale or not worth reusing, Ralph may
+   freshly reinvoke the same higher-priority binding rather than advancing to a
+   lower-priority binding merely because this role was used earlier. Only an
+   explicitly authored one-shot use, usage limit, rotation, withdrawal, reservation,
+   or other eligibility-ending condition changes that reuse rule.
    Ralph may have another Implementation Lead invocation for the same active
    Ticket in flight at the same time. That concurrency grants no shared
    feasibility, source fact, diagnosis, or mutation ownership. Each invocation

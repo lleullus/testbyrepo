@@ -22,7 +22,10 @@ condition attached to that role. An `Adversarial Planning Challenger` binding is
 separate from the user's explicit instruction to run adversarial consensus; one
 never implies the other. Preserve those bindings and conditions as authored
 instead of reinterpreting a configured model as a different role or consuming a
-role at a different phase.
+role at a different phase. Authored ordering is reusable dispatch precedence
+unless the user explicitly makes a binding one-shot, usage-limited, rotational,
+reserved, withdrawn, or otherwise ineligible; prior invocation alone does not
+consume or demote it.
 Model identity alone is not a role: using the same configured model/agent for a
 different IIS role requires a separate user designation for that role. An owning
 Lead may decide only role grouping, count, timing, concurrency, or serial fallback
@@ -43,32 +46,39 @@ registry, quota, scheduler, or durable roster.
 
 ## Live Orchestration Authority
 
-Do not freeze IIS orchestration to the rules or user scheduling conditions that
-were current when an invocation began. At each controllable boundary before a
-new downstream role invocation, a new product/source mutation authorization, a
-verification-cycle start or progression decision, whole-Spec Goal Verification,
-or a user-facing completion result, reconcile the action with the latest explicit
-current-conversation user direction and the current canonical IIS contract.
+Do not freeze IIS orchestration to the user scheduling conditions or canonical
+rules that were current when an invocation began. Live reconciliation is
+**event-driven**, not a repeated proof-of-currentness ceremony. When a new user
+orchestration instruction or coherent canonical IIS change is actually observed,
+the current owning Router/Lead applies only the material scheduling delta from the
+next controllable boundary. If no new instruction or contract change is observed,
+continue without a new orchestration checkpoint. Do not poll or re-read the full
+conversation at every control boundary, and do not invoke another agent merely to
+prove that no newer instruction exists.
 
-This live reconciliation changes orchestration, not product meaning. A newer
-user direction may change role eligibility, ordering, reservation, exact
+This live reconciliation changes orchestration, not product meaning. A newly
+observed user direction may change role eligibility, ordering, reservation, exact
 consumption, maximum concurrency, Challenger activation, or other scheduling
-conditions from the next safe controllable boundary. It does not retroactively
-erase prior work. Already-produced source/product changes become current state to
-reobserve. If the newer direction changes Outcome, Scope, Non-Goals, Behavior/UI
-meaning, an acceptance obligation, or the verification meaning itself, return to
-the owning planning authority instead of disguising the product-contract change
-as scheduling.
+conditions. It does not retroactively erase prior work. Already-produced
+source/product changes remain current state to reobserve. If the new direction
+changes Outcome, Scope, Non-Goals, Behavior/UI meaning, an acceptance obligation,
+or verification meaning itself, return to the owning planning authority instead
+of disguising the product-contract change as scheduling.
 
-When a live scheduling change conflicts with work already in flight, stop
-assigning that work new duties, preserve current user/concurrent changes, and
-reconcile the active work at the earliest safe host-controllable boundary. A
-host-confirmed stopped role or a role whose authority was withdrawn cannot supply
-later progression authority merely because it started under an older contract.
-If a canonical IIS update is partially applied or internally conflicting, fail
-closed on new dispatch/progression that depends on the conflicting rule until a
-coherent current contract can be read; do not choose whichever old or new rule is
-more convenient.
+A scheduling delta is prospective. Apply it to future duties and dispatch rather
+than recreating preferred history. If continuing an in-flight invocation would
+itself violate an exact current user instruction, stop assigning it new duties and
+request stop at the earliest host-controllable boundary; otherwise let its current
+bounded action return and apply the delta to the next dispatch. Preserve current
+user/concurrent changes either way. Before any progression that depends on affected
+mutation, require ordinary quiescence and fresh current observation.
+
+If the host knows a newer direction exists but cannot observe its content, block
+only the affected new dispatch, mutation authorization, or progression decision;
+do not stall unrelated current work whose authority is unchanged. If a canonical
+IIS update is partially applied or internally conflicting, fail closed only on new
+dispatch/progression that depends on the conflicting rule until a coherent current
+contract can be read; do not choose whichever old or new rule is more convenient.
 
 ## Route By Requested Completion Unit
 
@@ -113,7 +123,7 @@ leaf and stops there:
 - `/home/user01/project/iis-skills/matt/skills/to-spec/SKILL.md`
 - `/home/user01/project/iis-skills/matt/skills/to-tickets/SKILL.md`
 
-Do not infer end-to-end implementation from an explicit planning-only request.
+An explicit To Spec request does not withdraw, satisfy, or bypass an active adversarial-consensus instruction. When routing, pass the current adversarial-consensus activation or withdrawal fact to To Spec together with any exact current Challenger binding already supplied in this conversation; To Spec owns the direct admission gate and must not infer missing completion. Do not infer end-to-end implementation from an explicit planning-only request.
 
 ### Explicit One-Ticket Implementation
 

@@ -90,15 +90,20 @@ Subagent`, `Implementation Research Agent`, or any other IIS-role binding is not
 eligible for Runner assignment unless the user separately designated that same
 configured model/agent as a `Verification Runner`.
 
-Before each new Runner assignment and again before using the cycle for Ticket
-progression, reconcile the assignment with the latest explicit user orchestration
-direction and the current canonical IIS verification contract. Invocation start
-does not freeze an older Runner roster, ordering, reservation, exact-consumption,
-or concurrency condition. Available Runner bindings and a maximum concurrency are
-capacity, not mandatory consumption, unless the user separately fixed exact
-consumption; any exact user-fixed consumption remains subject to the authored
-coverage, attribution, safety, and effect boundaries rather than forcing a
-spurious Runner call.
+Invocation start does not freeze an older Runner roster, ordering, reservation,
+exact-consumption, or concurrency condition, but Verification Lead does not poll or
+re-read the full user conversation before each Runner assignment. When the
+caller/host actually reports a newer orchestration delta during this cycle, apply
+only the affected Runner eligibility/order/consumption delta to future assignments.
+If no newer delta is reported, continue the current bounded verification without a
+new orchestration checkpoint. If the host explicitly knows a newer direction
+exists but cannot provide enough content to decide an affected new Runner
+assignment or progression decision, block only that affected decision.
+
+Available Runner bindings and a maximum concurrency are capacity, not mandatory
+consumption, unless the user separately fixed exact consumption; any exact
+user-fixed consumption remains subject to the authored coverage, attribution,
+safety, and effect boundaries rather than forcing a spurious Runner call.
 
 Within those user constraints, Lead chooses grouping, count, timing, concurrency,
 valid shared acquisition, and serial fallback. Do not define AC/flow/defect/file-
@@ -230,28 +235,35 @@ replace product evidence.
 
 A Ticket Verification Lead cycle can authorize the caller to leave the Ticket
 only when the product/source observed by that cycle remained stable for the
-transition decision. The material verification orchestration contract must also
-remain stable for that progression decision. If the caller
-or any concurrent actor mutates product/source after the cycle begins, or if a
-live user/canonical IIS change materially changes Runner eligibility, required
-ordering/reservation/exact consumption, coverage, attribution, or effect safety,
-the whole Lead/Runner cycle loses Ticket-progression authority; the caller must not
-use any row or aggregate from that cycle to leave the Ticket, even when an earlier
+transition decision. A scheduling change alone does not invalidate a Ticket
+Verification cycle. Invalidate the cycle only when a newly observed change affects
+product/source state, authored coverage, currentness, attribution, role authority
+already used by the cycle, or target/effect safety in a way that can change the
+admissibility or meaning of this cycle's evidence. A future implementation-role
+order or concurrency change unrelated to this cycle does not invalidate it, and a
+future Runner-assignment change may be applied to still-unassigned work without
+throwing away already attributable evidence when the delta does not affect it.
+
+If the caller or any concurrent actor mutates product/source after the cycle
+begins, or one of the material evidence conditions above changes, the whole
+Lead/Runner cycle loses Ticket-progression authority; the caller must not use any
+row or aggregate from that cycle to leave the Ticket even when an earlier
 observation was admissible at the time. A wording-only or other orchestration
 change that cannot affect coverage, currentness, attribution, safety, or the
 progression decision does not invalidate the cycle merely because a file changed.
 
-Let still-safe Runner work finish only as current navigation. Stop assigning new
-work to a withdrawn or newly ineligible Runner. Before another authoritative
-cycle, every Runner from the overlapped cycle must return or be host-confirmed
-stopped. Any materially superseded Runner that was not already in that overlapped
-set must also return or be host-confirmed stopped, and every Runner-started product
-effect must reach its authored terminal/cleanup boundary or be established unable
-to mutate the target. After mutation or live-contract reconciliation and those effects are
-quiescent, the caller freshly reobserves the full active Ticket and obtains a new
-Verification Lead cycle with fresh Runner invocations under the current contract.
-Do not carry forward an earlier PASS row or aggregate. This rule creates no
-retained verification state, cycle ID, Runner registry, or generation identity.
+Let still-safe Runner work finish only as current navigation after invalidation.
+Stop assigning new work to a withdrawn or newly ineligible Runner. Before another
+authoritative cycle, every Runner from the overlapped cycle must return or be
+host-confirmed stopped. Any materially superseded Runner whose effect or evidence
+is part of the invalidated boundary must also return or be host-confirmed stopped,
+and every Runner-started product effect must reach its authored terminal/cleanup
+boundary or be established unable to mutate the target. After mutation or the
+material live-contract reconciliation and those effects are quiescent, the caller
+freshly reobserves the full active Ticket and obtains a new Verification Lead cycle
+with fresh Runner invocations under the current contract. Do not carry forward an
+earlier PASS row or aggregate. This rule creates no retained verification state,
+cycle ID, Runner registry, or generation identity.
 
 ## Verdicts And Result
 

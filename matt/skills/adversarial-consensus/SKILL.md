@@ -1,6 +1,7 @@
 ---
 name: adversarial-consensus
 description: Optional Ask Matt planning gate used only when the user explicitly requests adversarial consensus for the current planning unit and explicitly designates the exact Adversarial Planning Challenger.
+disable-model-invocation: true
 ---
 
 # Adversarial Planning Consensus
@@ -90,16 +91,19 @@ as applicable:
 - included Scope;
 - excluded Scope and Non-Goals;
 - preserved user-observable behavior;
-- unavoidable external constraints;
+- unavoidable external constraints when materially relevant;
 - currently material tradeoffs;
-- any still-provisional interpretation that is not itself user authority;
-- the exact designated Challenger; and
-- the bounded material or exact local sources that the Challenger may receive or
-  inspect.
+- any still-provisional interpretation that is not itself user authority; and
+- the exact designated Challenger.
 
-Ask the user to confirm that this is the intended basis for adversarial review
-and that the stated disclosure scope is acceptable. Challenger invocation is not
-allowed before that confirmation.
+Ask the user only to confirm that this is the intended basis for adversarial
+review and that Matt may begin with the exact designated Challenger. Challenger
+invocation is not allowed before that confirmation. Do not add a routine second
+approval about repository disclosure. Use only the minimum relevant material
+already available under the current user/host authority. Ask for additional
+user authorization only when the Challenger actually requires sensitive/private
+material, unrelated repository scope, or another disclosure expansion not already
+covered by that authority.
 
 Intent Anchor confirmation is not final product-contract approval, Behavior
 approval, UI-authority approval, Spec approval, or permission to replace the
@@ -124,22 +128,24 @@ policy but may not:
   into product authority.
 
 For an external Oracle or other counterpart outside the local planning context,
-provide only the confirmed bounded disclosure. Do not disclose secrets,
-credentials, unrelated repository material, or adjacent files merely because a
-counterpart asks for them. A material expansion of disclosure authority requires
-user approval before access.
+provide only the minimum relevant current material needed to attack the candidate.
+Do not disclose secrets, credentials, unrelated repository material, or adjacent
+files merely because a counterpart asks for them. Existing user/host authority is
+sufficient for ordinary relevant project material already in scope; ask the user
+again only when access would materially expand into sensitive/private or unrelated
+material not already authorized.
 
 Invoke the exact designated counterpart only through the host- and user-authorized
 mechanism that actually corresponds to that counterpart. A designated host
 subagent uses the host's `Host Subagent Invocation Mechanism`; a designated Oracle
 uses the configured authorized Oracle mechanism when one is available. Do not
 reinterpret one mechanism or counterpart as the other. Give the invocation only
-the bounded current Intent Anchor, candidate, evidence classifications, and
-confirmed disclosure required for the attack. When the mechanism supports
-conversation continuation or resumption, use it for later rounds under the
-continuity rules below. If the exact designated counterpart cannot be invoked or
-resumed far enough to produce a compliant current assessment, use the `BLOCKED`
-boundary rather than inventing another transport, agent, or fallback.
+the current Intent Anchor, latest candidate, and material evidence needed for the
+attack. When the mechanism supports conversation continuation or resumption, use
+it for later rounds under the continuity rules below. If the exact designated
+counterpart cannot be invoked or resumed far enough to produce a compliant current
+assessment, use the `BLOCKED` boundary rather than inventing another transport,
+agent, or fallback.
 
 ## Challenger Attack Contract
 
@@ -208,8 +214,12 @@ better supported against the confirmed user outcome.
 
 Prefer the same Challenger conversation or resumable context for follow-ups so
 the counterpart must answer Matt's defense and counterattack rather than restart
-the review from scratch. This is current-invocation conversational continuity,
-not a workflow database, roster, queue, ledger, or persistent IIS state.
+the review from scratch. Carry forward already-established context conversationally;
+do not restate the full Intent Anchor, authority hierarchy, closed objections, or
+unchanged evidence in every round. Send only the latest material candidate delta,
+open objection, rebuttal, or new evidence needed for the next exchange. This is
+current-invocation conversational continuity, not a workflow database, roster,
+queue, ledger, or persistent IIS state.
 
 After Matt responds, require the Challenger to do one of:
 

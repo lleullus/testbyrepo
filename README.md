@@ -16,7 +16,9 @@ Goal fulfillment.
   explicitly designates the exact Adversarial Planning Challenger; Matt confirms
   the Intent Anchor first, remains the defending/counterattacking planning
   authority throughout the debate, and still requires final user approval after
-  consensus. Ordinary Matt planning does not suggest or auto-enable this gate.
+  consensus. An explicit To Spec request does not bypass an active gate. Ordinary
+  Matt planning does not suggest or auto-enable this gate, and follow-up rounds
+  carry only material deltas instead of restating closed context.
   Ticket Verification flows use current positional
   `Parent outcome ordinal`, `AC ordinals`, and `Behavior authority ordinals` so
   observable AC work remains traceable to its parent outcome and applicable
@@ -29,8 +31,9 @@ Goal fulfillment.
   and exact unresolved limitations. Explicit leaf requests use a user-designated
   Implementation Subagent. One Lead invocation consumes at most one admitted
   Subagent. Current-conversation user role bindings, reservations, ordering, and
-  consumption timing remain authoritative in Ralph; host-provided roles fill only
-  unspecified slots. Related fresh findings feed an existing
+  consumption timing remain authoritative in Ralph; ordered bindings are reusable
+  precedence unless the user explicitly makes them one-shot/usage-limited/rotational,
+  and host-provided roles fill only unspecified bindings. Related fresh findings feed an existing
   active implementation invocation first when communication is available instead
   of consuming another reserved role. This is invocation-local continuity, not
   defect/AC/file ownership. Implementation result is not an independent AC verdict
@@ -50,12 +53,14 @@ Goal fulfillment.
 - `iis-goal-loop/`: Ralph-style orchestration for exactly one bounded approved
   Spec. It acts on current in-Scope evidence inside the active Ticket. Unless a
   newer explicit user direction changes the initial schedule, each active Ticket
-  starts implementation with one Lead/one Subagent; after that first mutation is
-  quiescent and freshly reobserved, Ralph may overlap same-Ticket implementation
-  when useful and safe within user-supplied execution constraints, but only for
-  materially distinct current work whose coordination tradeoff is positive.
-  Eligible role count and maximum concurrency are capacity,
-  not mandatory consumption. It still requires settled fresh Ticket/whole-Spec
+  starts implementation with one Lead/one Subagent. When timing is left to Ralph,
+  later overlap waits for that first work to settle and uses the materially distinct
+  useful-work tradeoff. An exact user instruction to overlap now overrides that
+  Lead-owned wait/efficiency choice without changing Ticket or product authority.
+  Eligible role count and maximum concurrency are capacity, not mandatory
+  consumption. Scheduling repair is prospective: completed authorized mutation is
+  reobserved, not replayed merely to reconstruct preferred historical role order.
+  It still requires settled fresh Ticket/whole-Spec
   verification before completion. Every provisionally satisfied all-Independent Ticket,
   including the last/only Ticket, runs Ticket Verification as the streaming
   correction stage. Ralph may start same-Ticket correction from an early Runner finding; mutation
@@ -75,11 +80,11 @@ Goal fulfillment.
   Ticket-verification, and whole-Spec-verification requests stay on their exact
   leaf boundaries; only an end-to-end product-completion request enters the Ralph
   loop after ordinary planning has produced a validated complete ready Ticket
-  set. Orchestration is live rather than frozen at invocation start: before new
-  dispatch, mutation authorization, verification progression, or completion, IIS
-  reconciles the latest explicit user scheduling direction and current canonical
-  contract. Product-meaning deltas still return to planning instead of being
-  smuggled through scheduling.
+  set. Orchestration is live but event-driven rather than frozen or repeatedly
+  rechecked: when an actual new user/canonical scheduling delta appears, the owning
+  role applies only that delta to affected future work. With no new delta there is
+  no extra full-conversation reread or freshness-agent call. Product-meaning deltas
+  still return to planning instead of being smuggled through scheduling.
 - `repo-snapshot/`: independent Git working-tree snapshot skill; its credential
   remains outside this repository at `/home/user01/.config/repo-snapshot/token`.
 

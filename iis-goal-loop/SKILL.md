@@ -194,30 +194,32 @@ Verification Lead receive only `Verification Runner` bindings. This filtering is
 current-invocation routing only and creates no role registry, queue, quota,
 reservation ledger, scheduler, or durable identity.
 
-Before every new host invocation, new mutation authorization, verification-cycle
-start or progression decision, entry into whole-Spec Goal Verification, and Goal
-completion result, reconcile this loop with the latest explicit user orchestration
-direction and the current canonical IIS contract. Invocation start does not freeze
-an older scheduling contract. A newer user direction may change role ordering,
-reservation, exact consumption, or concurrency from the next safe controllable
-boundary; already-produced source/product changes remain current state to
-reobserve rather than being retroactively erased.
+Invocation start does not freeze an older scheduling contract, but Ralph does not
+poll for freshness at every step. When a new user orchestration instruction or
+coherent canonical IIS change is actually observed, apply only the material
+scheduling delta to the affected future duties and dispatch. If no new instruction
+or contract change is observed, continue without a new orchestration checkpoint;
+do not re-read the full conversation or ask a subordinate role to prove that the
+current scheduling intent is still current.
 
-If a live orchestration change withdraws an active role or reduces allowed
-concurrency below the current in-flight set, stop assigning affected roles new
-work. Honor an explicitly user-selected role to retain when one exists; otherwise
-Ralph chooses the role whose current nonduplicative useful work, safe integration,
-and stop cost best preserve the approved Goal, then requests the other affected
-role(s) stop at the earliest safe host-controllable boundary. Before progression,
-all affected mutation and product effects must quiesce and the combined current
-product must be freshly reobserved. A stopped or withdrawn role's narration may
-remain navigation, but it has no progression authority merely because it began
-under an older contract.
+When a newly observed delta withdraws a role, changes authored ordering or exact
+consumption, or reduces allowed concurrency, treat the correction prospectively.
+Do not undo completed mutation or restart already-satisfied work merely to make
+history match the new understanding. If continuing an in-flight invocation would
+itself violate an exact current user instruction, stop assigning it new duties and
+request stop at the earliest host-controllable boundary. Otherwise let its current
+bounded action return, then reapply the current user-authored ordering to the next
+dispatch. Before progression that depends on affected mutation, all relevant
+mutation/effects must quiesce and the combined current product must be freshly
+reobserved.
 
-If the apparent live change instead alters Outcome, Scope, Non-Goals, Behavior/UI
-meaning, an authored acceptance obligation, or verification meaning, stop new
-mutation and return to the owning planning authority. Do not reinterpret a
-product-contract delta as implementation scheduling.
+If the host knows a newer user direction exists but cannot observe enough of its
+content to decide the affected dispatch, mutation authorization, or progression,
+block only that affected decision until the delta is available. Do not stall
+unrelated current work. If the apparent live change instead alters Outcome, Scope,
+Non-Goals, Behavior/UI meaning, an authored acceptance obligation, or verification
+meaning, stop new mutation and return to the owning planning authority. Do not
+reinterpret a product-contract delta as implementation scheduling.
 
 ### 2. Act On Current In-Scope Evidence
 
@@ -254,6 +256,22 @@ separate user designation is required when the same configured model/agent is to
 serve a different IIS role. These bindings constrain current-invocation scheduling
 only and never become Ticket metadata, a role queue, or durable worker identity.
 
+Ordered Implementation Subagent bindings are reusable dispatch precedence, not
+one-use tokens. For every new same-Ticket implementation dispatch, reapply the
+authored order from the top and select the highest-priority currently eligible
+binding that is not already occupied by useful in-flight work, unless the user
+explicitly authored another exact selection rule. A returned invocation makes its
+binding eligible again; do not advance to a lower-priority binding merely because
+a higher-priority binding was used earlier. Context resumption and binding
+eligibility are separate decisions: when retained context is no longer worth
+reusing, freshly reinvoke the same higher-priority binding rather than silently
+advancing the authored order. A binding stops being reusable only when the user
+actually authored one-shot use, a usage limit, rotation, reservation, withdrawal,
+or another eligibility-ending condition. A lower-priority binding is considered
+for additional current work while higher-priority bindings are occupied, or when
+an exact user-authored parallel/fallback/rotation rule selects it; prior usage
+history alone never selects it.
+
 Unless a newer explicit user orchestration direction expressly changes the
 initial schedule, the first implementation dispatch for an active Ticket starts
 exactly one Implementation Lead invocation, and that Lead receives exactly one
@@ -263,26 +281,41 @@ maximum concurrency greater than one is allowed. The initial single invocation
 gets the whole current Ticket contract and owns its implementation diagnosis; it
 does not gain durable AC/file ownership.
 
-After that first Implementation Lead invocation returns and its mutation is
-quiescent, freshly reobserve the affected current product/Ticket boundaries before
-opening later same-Ticket parallel implementation. If fresh current evidence then
-shows materially distinct remaining in-Scope work, Ralph may have more than one
-same-Ticket Implementation Lead invocation active when the host supports it and
-concurrent mutation can preserve current user/concurrent changes and all
-safety/authority boundaries. Before adding another invocation, Ralph accounts for
-the useful work already known to be in flight and does not knowingly duplicate
-materially the same implementation work against materially the same current
-evidence merely to increase concurrency. This is current-invocation scheduling
-judgment, not an assignment registry or durable identity rule. Concurrency is not
-itself progress; do not add an invocation when its expected coordination,
-duplication, or edit-contention cost outweighs the useful critical path overlap.
-When safe beneficial non-duplicative overlap is unclear, serial execution is the
-fallback. Except for properties the user explicitly fixed, the exact number, timing, and
-technical allocation of invocations remain implementation-owned for later cycles
-and are not planning or verification semantics. If an exact user-fixed consumption
-instruction conflicts with safety, Scope, or nonduplication, return the exact
-conflict rather than silently consuming the role or silently weakening the user
-condition.
+When the user has not fixed an earlier overlap time, wait for that first
+Implementation Lead invocation to return and its mutation to become quiescent,
+then freshly reobserve the affected current product/Ticket boundaries before Ralph
+chooses later same-Ticket overlap. Under this default Lead-owned scheduling, later
+parallel implementation requires current materially distinct useful work, host
+support, preservation of current user/concurrent changes and all authority
+boundaries, and a useful critical-path benefit that is not outweighed by
+coordination, duplication, or edit-contention cost. Ralph may have more than one
+same-Ticket Implementation Lead invocation active under these rules. When that
+Lead-owned tradeoff is unclear, serial execution is the fallback.
+
+An exact current user instruction to start another implementation invocation now
+or before the first returns overrides only this default wait and any Lead-owned
+choice of whether to spend that explicitly fixed concurrency at that time. A
+maximum-concurrency increase, additional eligible binding, or general permission
+for parallelism is not by itself an immediate-overlap instruction. Do not use
+Lead-owned efficiency or coordination preference to silently serialize an exact
+user-fixed immediate overlap. The exact instruction still does not widen Ticket
+Scope, invent work that is already satisfied, change role bindings, authorize an
+unavailable assignee, or create product/dangerous authority the user did not grant.
+Each newly invoked Lead still rechecks the current source immediately before
+mutation and preserves current user/concurrent changes. Except for properties the
+user explicitly fixed, the exact number, timing, and technical allocation of
+invocations remain implementation-owned for later cycles and are not planning or
+verification semantics.
+
+Scheduling repair is prospective. Already-produced authorized mutation remains
+current product state even when Ralph later discovers that a different binding
+should have been selected under the user's ordering. Do not roll it back, repeat
+the same correction, or reassign that completed correction merely to reconstruct
+the preferred historical role order. Freshly reobserve the combined current
+product first; only genuinely unfinished current in-Scope work is eligible for a
+new implementation dispatch, and the authored binding order is then reapplied to
+that future dispatch. A scheduling correction is not product authority and does
+not make the historical role choice part of acceptance.
 
 When a fresh qualifying observation materially refines, confirms, or contradicts
 work already being performed by an active same-Ticket implementation invocation,

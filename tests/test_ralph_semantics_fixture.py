@@ -412,6 +412,80 @@ class RalphSemanticsFixtureTests(unittest.TestCase):
         self.assertLess(events.index("quiescent"), events.index("fresh-ticket-verification"))
         self.assertLess(events.index("fresh-ticket-verification"), events.index("fresh-goal-verification"))
 
+    def test_ordered_bindings_are_reusable_precedence_not_consumable_slots(self) -> None:
+        ordered = ["deepseek", "sol"]
+        occupied: set[str] = set()
+        one_shot: set[str] = set()
+        retired: set[str] = set()
+
+        def choose() -> str:
+            for binding in ordered:
+                if binding in occupied or binding in retired:
+                    continue
+                return binding
+            raise RuntimeError("no eligible binding")
+
+        first = choose()
+        self.assertEqual(first, "deepseek")
+        occupied.add(first)
+        occupied.remove(first)
+
+        # Returning from one invocation does not consume or demote the binding.
+        second = choose()
+        self.assertEqual(second, "deepseek")
+
+        # One-shot behavior exists only when explicitly authored.
+        one_shot.add("deepseek")
+        retired.update(one_shot)
+        self.assertEqual(choose(), "sol")
+
+    def test_stale_context_reinvokes_same_priority_binding_instead_of_advancing_order(self) -> None:
+        binding = "deepseek"
+        retained_context_current = False
+        selected = binding if retained_context_current else f"fresh:{binding}"
+        self.assertEqual(selected, "fresh:deepseek")
+        self.assertNotEqual(selected, "sol")
+
+    def test_lower_priority_binding_is_for_additional_current_work_not_prior_usage_history(self) -> None:
+        ordered = ["deepseek", "sol"]
+        active = {"deepseek": "correction-a"}
+        pending = ["correction-b"]
+        max_concurrency = 2
+
+        available = [binding for binding in ordered if binding not in active]
+        self.assertEqual(available[0], "sol")
+        self.assertEqual(pending, ["correction-b"])
+        self.assertEqual(max_concurrency, 2)
+
+    def test_scheduling_repair_is_prospective_and_never_replays_completed_correction_for_role_order(self) -> None:
+        product = {"correction-a": True}
+        historical_dispatch = "sol"
+        preferred_order = ["deepseek", "sol"]
+        replayed: list[str] = []
+
+        self.assertEqual(historical_dispatch, "sol")
+        self.assertEqual(preferred_order[0], "deepseek")
+        if not product["correction-a"]:
+            replayed.append("deepseek")
+
+        self.assertEqual(replayed, [], "a role-order repair must not ceremonially replay already-satisfied work")
+
+        # Only a genuinely unfinished later correction uses the preferred order.
+        product["correction-b"] = False
+        next_dispatch = preferred_order[0] if not product["correction-b"] else None
+        self.assertEqual(next_dispatch, "deepseek")
+
+    def test_capacity_change_does_not_mean_immediate_overlap_but_exact_time_instruction_does(self) -> None:
+        first_active = True
+        max_concurrency = 2
+        exact_immediate_overlap = False
+        should_start_second = first_active and max_concurrency > 1 and exact_immediate_overlap
+        self.assertFalse(should_start_second)
+
+        exact_immediate_overlap = True
+        should_start_second = first_active and max_concurrency > 1 and exact_immediate_overlap
+        self.assertTrue(should_start_second)
+
     def test_inconclusive_with_known_bounded_path_cannot_become_no_progress(self) -> None:
         paths = {
             "authored-boundary": {"known": True, "safe": True, "exhausted": True},

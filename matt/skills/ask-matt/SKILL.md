@@ -89,12 +89,16 @@ Matt creates and governs `<artifact-workspace>/DESIGN.md` for new/material UI:
 
 Change `DESIGN.md` to exact `Status: approved` only after all applicable
 decisions are complete, `Open Questions` is `None`, and the user or named owner
-explicitly approves it. Any later scoped decision change returns it to `draft`
-and reopens an already approved Spec for an explicit delta. Integrate the
-package authority into the same shared understanding; keep questions limited
-to decisions that block it. One explicit user response may approve both the
-completed authority and integrated shared understanding when both are
-presented clearly.
+explicitly approves it. When adversarial consensus is active, keep a new or
+changed `DESIGN.md` at `Status: draft` until the latest complete candidate reaches
+current adversarial consensus. The consensus-post final integrated approval may
+approve both the completed UI authority and shared understanding in one user
+response; do not add a third approval ceremony. Any later scoped decision change
+returns it to `draft` and reopens an already approved Spec for an explicit delta.
+Integrate the package authority into the same shared understanding; keep questions
+limited to decisions that block it. Without an active adversarial gate, one
+explicit user response may approve both the completed authority and integrated
+shared understanding when both are presented clearly.
 
 Legacy image-review process metadata may remain in older planning artifacts as
 non-normative historical evidence. New planning neither requires nor writes it,

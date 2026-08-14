@@ -43,7 +43,8 @@ class IISGoalLoopContractTests(unittest.TestCase):
             self.assertIn(required, loop)
         for required in (
             "acts on current in-Scope evidence inside the active Ticket",
-            "may overlap same-Ticket implementation when useful and safe",
+            "When timing is left to Ralph, later overlap waits for that first work to settle",
+            "An exact user instruction to overlap now overrides that Lead-owned wait/efficiency choice",
             "settled fresh Ticket/whole-Spec verification before completion",
         ):
             self.assertIn(required, readme)
@@ -290,13 +291,16 @@ class IISGoalLoopContractTests(unittest.TestCase):
         for required in (
             "host-provided invocation-local `Implementation Subagent` roles for the currently active Ticket",
             "more than one same-Ticket Implementation Lead invocation active",
-            "accounts for the useful work already known to be in flight",
-            "does not knowingly duplicate materially the same implementation work against materially the same current evidence merely to increase concurrency",
-            "current-invocation scheduling judgment, not an assignment registry or durable identity rule",
-            "Concurrency is not itself progress",
-            "coordination, duplication, or edit-contention cost outweighs the useful critical path overlap",
-            "safe beneficial non-duplicative overlap is unclear, serial execution is the fallback",
-            "exact number, timing, and technical allocation of invocations remain implementation-owned",
+            "Ordered Implementation Subagent bindings are reusable dispatch precedence, not one-use tokens",
+            "highest-priority currently eligible binding that is not already occupied by useful in-flight work",
+            "A returned invocation makes its binding eligible again",
+            "freshly reinvoke the same higher-priority binding rather than silently advancing the authored order",
+            "default Lead-owned scheduling",
+            "useful critical-path benefit that is not outweighed by coordination, duplication, or edit-contention cost",
+            "exact current user instruction to start another implementation invocation now or before the first returns",
+            "Do not use Lead-owned efficiency or coordination preference to silently serialize an exact user-fixed immediate overlap",
+            "Except for properties the user explicitly fixed, the exact number, timing, and technical allocation of invocations remain implementation-owned",
+            "Scheduling repair is prospective",
             "a role may be resumed for later materially different work",
             "retained context remains bounded, relevant, and likely to reduce technical rediscovery",
             "every Implementation Lead entry must freshly revalidate",

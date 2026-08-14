@@ -73,17 +73,24 @@ class ArchitectureClosureTests(unittest.TestCase):
         for required in (
             "Fresh Verification Runner observation may surface a qualifying current contradiction",
             "Ticket-owned implementation/integration/surface/readback absence",
-            "Current-conversation user role binding, reservation, ordering, and consumption timing constrain Ralph scheduling",
+            "Current-conversation user role binding, reusable ordering, reservation",
             "role reserved for later remediation is not consumed for initial fan-out",
+            "Ordered Implementation Subagent bindings are reusable precedence, not one-use slots",
+            "returned invocation is eligible again",
+            "default first implementation dispatch is one Lead / one Subagent",
+            "maximum-concurrency increase or another available binding is capacity, not an immediate-overlap instruction",
             "feeds the finding to that existing invocation first",
             "not persistent defect/AC/file ownership",
-            "Additional same-Ticket Implementation Lead invocation is allowed only when current evidence justifies materially distinct useful work",
-            "Concurrency is not progress; serial fallback remains valid",
+            "Under Lead-owned scheduling, an additional same-Ticket Implementation Lead invocation requires materially distinct useful work",
+            "exact user-authored immediate-overlap instruction overrides only the default wait and Lead-owned efficiency preference",
+            "Scheduling repair is prospective",
+            "not rolled back, ceremonially repeated, or reassigned merely to reconstruct preferred historical role order",
             "freshly rechecks current authority, source, feasibility, and concurrent changes before mutation",
             "bounded predecessor implementation is navigation",
             "Every provisionally satisfied all-Independent Ticket runs Ticket Verification, including the last/only Ticket",
             "invalidates the whole cycle for progression",
-            "every overlapped Runner/effect must quiesce",
+            "An unrelated scheduling change does not",
+            "every relevant Runner/effect must quiesce",
             "freshly reobserves every AC",
             "new Verification Lead cycle with fresh Runner invocation(s)",
             "One endpoint/representation/transport/readback failure establishes only that boundary",
@@ -92,6 +99,34 @@ class ArchitectureClosureTests(unittest.TestCase):
             "A decision not to attempt a required boundary is an evidence limit, not evidence of dependency unavailability",
             "`GOAL INCONCLUSIVE` ends only its Goal Verification invocation",
             "Before `GOAL OPEN — NO PROGRESS`, Ralph closes every currently known bounded evidence/correction path",
+        ):
+            self.assertIn(required, section)
+
+    def test_2026_08_14_intent_retention_generation_is_explicit_and_re_frozen(self) -> None:
+        section = " ".join(
+            CLOSURE.split("A further 2026-08-14 user-directed generation change", 1)[1]
+            .split("The five-condition Core Freeze Admission below", 1)[0]
+            .split()
+        )
+        for required in (
+            "user-intent retention and low-context orchestration load explicit architecture priorities",
+            "repeatedly re-injects the full conversation",
+            "extra context can itself cause instruction drift",
+            "Live orchestration is therefore event-driven",
+            "only the affected scheduling change is propagated",
+            "ordering is reusable precedence rather than implicit one-shot slot consumption",
+            "returned role is eligible again",
+            "maximum concurrency is capacity rather than a command to fan out",
+            "exact user-authored immediate-overlap instruction outranks Ralph's Lead-owned efficiency preference",
+            "Scheduling repair is prospective",
+            "does not roll back or replay the same correction",
+            "active gate cannot be bypassed by an explicit To Spec request",
+            "routine repository-disclosure approval is not added",
+            "No mandatory live-Challenger smoke",
+            "Future implementation-role ordering/concurrency changes or other unrelated scheduling changes do not discard attributable evidence",
+            "implicit one-use role slots",
+            "repeated whole-conversation freshness rereads by every Lead/Subagent/Runner",
+            "historical rollback/replay merely to reconstruct preferred dispatch order",
         ):
             self.assertIn(required, section)
 
@@ -143,8 +178,13 @@ class ArchitectureClosureTests(unittest.TestCase):
         for text in (
             "No durable attempt history",
             "Same-Ticket concurrent implementation can create stale planned work, edit contention, or wasted Worker effort",
-            "avoids knowingly duplicating materially the same in-flight work",
-            "Ralph may serialize whenever overlap is not useful or safe",
+            "When scheduling is left to Ralph, it avoids knowingly duplicating materially the same in-flight work",
+            "When the user fixed exact immediate overlap, that Lead-owned efficiency preference does not override the instruction",
+            "Event-driven live reconciliation deliberately gives up repeated proof-of-currentness checks",
+            "lower context noise and less instruction drift",
+            "Ordered reusable bindings may cause the same configured implementation role to be invoked repeatedly across distinct corrections",
+            "Prospective scheduling repair",
+            "not ceremonial rollback/replay",
             "wait for or host-confirmedly stop every overlapped Runner",
             "Runner-started product effect to reach its authored terminal/cleanup boundary",
             "residual wait plus a fresh cycle are deliberate costs paid for a non-overlapping evidence boundary",

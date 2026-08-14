@@ -64,14 +64,20 @@ Subagent`, `Implementation Research Agent`, or any other IIS-role binding is not
 eligible for final Runner assignment unless the user separately designated that
 same configured model/agent as a `Verification Runner`.
 
-Before each new final Runner assignment and again before returning the Goal
-aggregate, reconcile with the latest explicit user orchestration direction and the
-current canonical IIS verification contract. Invocation start does not freeze an
-older Runner roster, ordering, reservation, exact-consumption, or concurrency
-condition. Available Runner bindings and maximum concurrency are capacity, not
-mandatory consumption, unless the user separately fixed exact consumption; exact
-consumption never overrides final coverage, attribution, safety, or effect
-boundaries.
+Invocation start does not freeze an older Runner roster, ordering, reservation,
+exact-consumption, or concurrency condition, but Goal Verification Lead does not
+poll or re-read the full user conversation before each final Runner assignment.
+When the caller/host actually reports a newer orchestration delta during this
+cycle, apply only the affected final Runner eligibility/order/consumption delta to
+future assignments. If no newer delta is reported, continue the current bounded
+final verification without a new orchestration checkpoint. If the host explicitly
+knows a newer direction exists but cannot provide enough content to decide an
+affected new Runner assignment or final aggregate, block only that affected
+decision.
+
+Available Runner bindings and maximum concurrency are capacity, not mandatory
+consumption, unless the user separately fixed exact consumption; exact consumption
+never overrides final coverage, attribution, safety, or effect boundaries.
 
 Within those user constraints, Goal Verification Lead chooses only grouping,
 count, timing, concurrency, valid shared acquisition, and serial fallback. Do not
@@ -162,22 +168,29 @@ unless the approved contract admits that surface as equivalent for that exact
 obligation.
 
 If product/source mutation begins after this final cycle starts, the cycle cannot
-return `GOAL VERIFIED`. The same loss of final progression authority applies when
-a live user/canonical IIS change materially changes final Runner eligibility,
-required ordering/reservation/exact consumption, coverage, attribution, or effect
-safety after the cycle begins. A wording-only or other orchestration change that
-cannot affect final coverage, currentness, attribution, safety, or aggregate does
-not invalidate the cycle merely because a file changed.
+return `GOAL VERIFIED`. A scheduling change alone does not invalidate a Goal
+Verification cycle. Invalidate final authority only when a newly observed change
+affects product/source state, final coverage, currentness, attribution, role
+authority already used by the cycle, or target/effect safety in a way that can
+change the admissibility or meaning of final evidence. The same loss of final
+progression authority applies to those material changes. A future
+implementation-role order or concurrency change unrelated to final observation
+does not invalidate the cycle, and a future final Runner-assignment change may be
+applied to still-unassigned work without discarding already attributable evidence
+when the delta does not affect it. A wording-only or other orchestration change
+that cannot affect final coverage, currentness, attribution, safety, or aggregate
+does not invalidate the cycle merely because a file changed.
 
 Any still-safe Runner work from an invalidated cycle is navigation only. Stop
-assigning new work to a withdrawn or newly ineligible Runner. Every overlapped Runner must return or be host-confirmed stopped. Every materially
-superseded Runner must return or be host-confirmed stopped as well, and every
-Runner-started product effect must reach its authored terminal/cleanup boundary or
-be established unable to mutate the target. Affected rows are `INCONCLUSIVE`
-because final attribution is unstable. A later Ralph attempt may start a wholly
-new Goal Verification Lead cycle with new fresh Runner invocations only after
-quiescence and only under the current contract; this Lead does not dispatch
-remediation or rerun itself.
+assigning new work to a withdrawn or newly ineligible Runner. Every overlapped
+Runner must return or be host-confirmed stopped. Every materially superseded
+Runner whose effect or evidence is part of the invalidated boundary must return or
+be host-confirmed stopped as well, and every Runner-started product effect must
+reach its authored terminal/cleanup boundary or be established unable to mutate
+the target. Affected rows are `INCONCLUSIVE` because final attribution is unstable.
+A later Ralph attempt may start a wholly new Goal Verification Lead cycle with new
+fresh Runner invocations only after quiescence and only under the current contract;
+this Lead does not dispatch remediation or rerun itself.
 
 ## Dispositions
 
