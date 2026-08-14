@@ -176,6 +176,25 @@ analysis, question count, or presentation brevity never justifies another
 round. Return package-boundary changes to Scope Shaper and rendered
 presentation decisions to the UI authority flow.
 
+## Optional External Adversarial Challenge
+
+The mandatory direct Behavior Design procedure above is never delegated or
+replaced. When and only when Ask Matt has a user-enabled adversarial-consensus
+gate with one exact user-designated `Adversarial Planning Challenger`, that
+external read-only Challenger may attack the completed provisional Behavior
+candidate after Matt has performed Existing Authority First, first-hand
+investigation, Behavioral Design, Counterexample Stress Test, and the current
+decision synthesis.
+
+Challenger findings are advisory. Matt must directly confirm every load-bearing
+fact, defend the confirmed user intent, counterattack material alternatives, and
+revise or defend the Behavior model itself. The Challenger never becomes a
+Behavior execution role, Behavior authority owner, voting authority, or substitute
+for Matt's conclusion. If adversarial consensus is active, an approval-ready new
+or changed Behavior authority remains draft until the latest candidate has
+completed that gate and the user gives the final joint approval. Ordinary Ask Matt
+work without that explicit activation keeps the existing approval path unchanged.
+
 ## Authority Output
 
 Use `BEHAVIOR-AUTHORITY.template.md`. Each authority has one non-empty owner,

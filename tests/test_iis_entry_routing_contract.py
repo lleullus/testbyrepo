@@ -69,7 +69,7 @@ class IISEntryRoutingContractTests(unittest.TestCase):
     def test_user_role_binding_and_consumption_timing_are_preserved_as_routing_intent(self) -> None:
         router = " ".join(REPO_ROUTER.read_text(encoding="utf-8").split())
         for required in (
-            "explicit user designation of an `Implementation Subagent`, `Implementation Research Agent`, or `Verification Runner` role",
+            "explicit user designation of an `Adversarial Planning Challenger`, `Implementation Subagent`, `Implementation Research Agent`, or `Verification Runner` role",
             "ordering, reservation, consumption timing, or maximum-concurrency condition",
             "Model identity alone is not a role",
             "requires a separate user designation for that role",

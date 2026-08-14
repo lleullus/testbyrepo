@@ -15,11 +15,14 @@ Loop only after ordinary planning has produced one exact approved Spec and a
 validated complete ready Ticket set.
 
 The router carries only current-conversation intent. This includes any explicit
-user designation of an `Implementation Subagent`, `Implementation Research
-Agent`, or `Verification Runner` role and any explicit ordering, reservation,
-consumption timing, or maximum-concurrency condition attached to that role.
-Preserve those bindings and conditions as authored instead of reinterpreting a
-configured model as a different role or consuming a role at a different phase.
+user designation of an `Adversarial Planning Challenger`, `Implementation
+Subagent`, `Implementation Research Agent`, or `Verification Runner` role and
+any explicit ordering, reservation, consumption timing, or maximum-concurrency
+condition attached to that role. An `Adversarial Planning Challenger` binding is
+separate from the user's explicit instruction to run adversarial consensus; one
+never implies the other. Preserve those bindings and conditions as authored
+instead of reinterpreting a configured model as a different role or consuming a
+role at a different phase.
 Model identity alone is not a role: using the same configured model/agent for a
 different IIS role requires a separate user designation for that role. An owning
 Lead may decide only role grouping, count, timing, concurrency, or serial fallback
@@ -37,6 +40,35 @@ ineligible for every other role unless the user separately designated that same
 configured model/agent for the other role. Pass each downstream Lead only the
 role bindings it may consume; this projection is invocation-local routing, not a
 registry, quota, scheduler, or durable roster.
+
+## Live Orchestration Authority
+
+Do not freeze IIS orchestration to the rules or user scheduling conditions that
+were current when an invocation began. At each controllable boundary before a
+new downstream role invocation, a new product/source mutation authorization, a
+verification-cycle start or progression decision, whole-Spec Goal Verification,
+or a user-facing completion result, reconcile the action with the latest explicit
+current-conversation user direction and the current canonical IIS contract.
+
+This live reconciliation changes orchestration, not product meaning. A newer
+user direction may change role eligibility, ordering, reservation, exact
+consumption, maximum concurrency, Challenger activation, or other scheduling
+conditions from the next safe controllable boundary. It does not retroactively
+erase prior work. Already-produced source/product changes become current state to
+reobserve. If the newer direction changes Outcome, Scope, Non-Goals, Behavior/UI
+meaning, an acceptance obligation, or the verification meaning itself, return to
+the owning planning authority instead of disguising the product-contract change
+as scheduling.
+
+When a live scheduling change conflicts with work already in flight, stop
+assigning that work new duties, preserve current user/concurrent changes, and
+reconcile the active work at the earliest safe host-controllable boundary. A
+host-confirmed stopped role or a role whose authority was withdrawn cannot supply
+later progression authority merely because it started under an older contract.
+If a canonical IIS update is partially applied or internally conflicting, fail
+closed on new dispatch/progression that depends on the conflicting rule until a
+coherent current contract can be read; do not choose whichever old or new rule is
+more convenient.
 
 ## Route By Requested Completion Unit
 
@@ -63,6 +95,17 @@ Ask Matt owns product/Behavior/UI/completion-contract planning and invokes its
 ordinary To Spec / To Tickets planning leaves under their existing contracts.
 Those leaves stop at their own outputs. Planning approval does not itself mutate
 the product.
+
+Pass an explicit user instruction to run adversarial consensus for this exact
+planning unit to Ask Matt even when its Challenger binding is still missing, so
+Ask Matt can preserve the required `CHALLENGER BINDING REQUIRED` finalization
+boundary rather than silently dropping the user's requested gate. Separately pass
+an exact `Adversarial Planning Challenger` binding only when the user explicitly
+designated it. Ask Matt may consume that binding through
+`matt/skills/adversarial-consensus/SKILL.md` only when both the activation
+instruction and exact binding are current. Do not suggest the gate, infer
+activation from a Challenger designation, choose a missing Challenger, or pass the
+binding to implementation or verification roles.
 
 An explicit To Spec or To Tickets request routes only to that exact planning
 leaf and stops there:
@@ -139,9 +182,12 @@ If planning is still required, first run the same ordinary Scope Shaper / Ask
 Matt / To Spec / To Tickets leaves above. Each planning leaf still stops at its
 own normal boundary. When the top-level user request already clearly authorizes
 end-to-end product completion, retain that current-conversation completion intent
-and any explicit Implementation/Verification role bindings and consumption
-conditions while planning executes, but do not invoke those delivery or
-verification roles during planning merely because they were designated. After
+and any explicit Adversarial-Planning/Implementation/Verification role bindings,
+the separate adversarial-consensus activation instruction when present, and their
+authored consumption conditions while planning executes, but do not invoke those
+delivery or verification roles during planning merely because they were
+designated. Also do not invoke a Challenger unless its separate activation
+condition is present. After
 the planning leaves return one exact approved Spec and a complete ready Ticket set
 that passes the set validator, the router may enter the Ralph loop without asking
 the user to say "continue", select a Worker, restate an already supplied role

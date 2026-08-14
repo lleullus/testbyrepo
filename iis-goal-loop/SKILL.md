@@ -194,6 +194,31 @@ Verification Lead receive only `Verification Runner` bindings. This filtering is
 current-invocation routing only and creates no role registry, queue, quota,
 reservation ledger, scheduler, or durable identity.
 
+Before every new host invocation, new mutation authorization, verification-cycle
+start or progression decision, entry into whole-Spec Goal Verification, and Goal
+completion result, reconcile this loop with the latest explicit user orchestration
+direction and the current canonical IIS contract. Invocation start does not freeze
+an older scheduling contract. A newer user direction may change role ordering,
+reservation, exact consumption, or concurrency from the next safe controllable
+boundary; already-produced source/product changes remain current state to
+reobserve rather than being retroactively erased.
+
+If a live orchestration change withdraws an active role or reduces allowed
+concurrency below the current in-flight set, stop assigning affected roles new
+work. Honor an explicitly user-selected role to retain when one exists; otherwise
+Ralph chooses the role whose current nonduplicative useful work, safe integration,
+and stop cost best preserve the approved Goal, then requests the other affected
+role(s) stop at the earliest safe host-controllable boundary. Before progression,
+all affected mutation and product effects must quiesce and the combined current
+product must be freshly reobserved. A stopped or withdrawn role's narration may
+remain navigation, but it has no progression authority merely because it began
+under an older contract.
+
+If the apparent live change instead alters Outcome, Scope, Non-Goals, Behavior/UI
+meaning, an authored acceptance obligation, or verification meaning, stop new
+mutation and return to the owning planning authority. Do not reinterpret a
+product-contract delta as implementation scheduling.
+
 ### 2. Act On Current In-Scope Evidence
 
 When fresh current evidence shows that implementation is still required inside
@@ -220,29 +245,44 @@ Invoke `../implementation-lead/SKILL.md` through the host with the exact ready
 Ticket. When the user supplied current-conversation `Implementation Subagent`
 role bindings, reservations, ordering, consumption timing, or concurrency limits,
 use those exact constraints; otherwise Ralph may use host-provided invocation-local
-`Implementation Subagent` roles for the currently active Ticket. Do not
-pre-consume a role the user reserved for a later correction by using it for
-initial fan-out, and do not infer another role merely because the same configured
-model/agent is available. A separate user designation is required when the same
-configured model/agent is to serve a different IIS role. These bindings constrain
-current-invocation scheduling only and never become Ticket metadata, a role queue,
-or durable worker identity.
+`Implementation Subagent` roles for the currently active Ticket. A set of eligible
+roles or a maximum-concurrency value is capacity, not mandatory consumption,
+unless the user separately fixed exact consumption. Do not pre-consume a role the
+user reserved for a later correction by using it for initial fan-out, and do not
+infer another role merely because the same configured model/agent is available. A
+separate user designation is required when the same configured model/agent is to
+serve a different IIS role. These bindings constrain current-invocation scheduling
+only and never become Ticket metadata, a role queue, or durable worker identity.
 
-Within those user-supplied constraints, Ralph may have more than one same-Ticket
-Implementation Lead invocation active when current evidence justifies additional
-in-Scope work, the host supports it, and concurrent mutation can preserve current
-user/concurrent changes and all safety/authority boundaries. Before adding another
-invocation, Ralph accounts for the useful work already known to be in flight and
-does not knowingly duplicate materially the same implementation work against
-materially the same current evidence merely to increase concurrency. This is
-current-invocation scheduling judgment, not an assignment registry or durable
-identity rule. Concurrency is not itself progress; do not add an invocation when
-its expected coordination, duplication, or edit-contention cost outweighs the
-useful critical path overlap. When safe beneficial non-duplicative overlap is
-unclear, serial execution is the fallback. Except for properties the user
-explicitly fixed, the exact number, timing, and technical allocation of
-invocations remain implementation-owned and are not planning or verification
-semantics.
+Unless a newer explicit user orchestration direction expressly changes the
+initial schedule, the first implementation dispatch for an active Ticket starts
+exactly one Implementation Lead invocation, and that Lead receives exactly one
+admitted `Implementation Subagent`. Do not fan out the first implementation merely
+because multiple bindings are available, the Ticket is broad or greenfield, or a
+maximum concurrency greater than one is allowed. The initial single invocation
+gets the whole current Ticket contract and owns its implementation diagnosis; it
+does not gain durable AC/file ownership.
+
+After that first Implementation Lead invocation returns and its mutation is
+quiescent, freshly reobserve the affected current product/Ticket boundaries before
+opening later same-Ticket parallel implementation. If fresh current evidence then
+shows materially distinct remaining in-Scope work, Ralph may have more than one
+same-Ticket Implementation Lead invocation active when the host supports it and
+concurrent mutation can preserve current user/concurrent changes and all
+safety/authority boundaries. Before adding another invocation, Ralph accounts for
+the useful work already known to be in flight and does not knowingly duplicate
+materially the same implementation work against materially the same current
+evidence merely to increase concurrency. This is current-invocation scheduling
+judgment, not an assignment registry or durable identity rule. Concurrency is not
+itself progress; do not add an invocation when its expected coordination,
+duplication, or edit-contention cost outweighs the useful critical path overlap.
+When safe beneficial non-duplicative overlap is unclear, serial execution is the
+fallback. Except for properties the user explicitly fixed, the exact number, timing, and
+technical allocation of invocations remain implementation-owned for later cycles
+and are not planning or verification semantics. If an exact user-fixed consumption
+instruction conflicts with safety, Scope, or nonduplication, return the exact
+conflict rather than silently consuming the role or silently weakening the user
+condition.
 
 When a fresh qualifying observation materially refines, confirms, or contradicts
 work already being performed by an active same-Ticket implementation invocation,

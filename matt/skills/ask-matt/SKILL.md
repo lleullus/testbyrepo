@@ -145,11 +145,44 @@ late Behavior analysis, question count, or response-length preference does not
 qualify. Package-boundary changes return to Scope Shaper; rendered
 presentation decisions return to the UI authority flow.
 
-When the phase reaches `BEHAVIOR AUTHORITY APPROVAL REQUIRED`, Matt may present
-the completed draft authorities and one clearly labeled proposed integrated
-contract-only shared understanding for joint approval. After approval, continue
-the phase, mark the authorities approved, and establish `BEHAVIOR DESIGN:
-COMPLETE`. Only then does Matt record the jointly approved
+## Optional Adversarial Planning Consensus
+
+Adversarial consensus is an explicit-only Ask Matt gate. Load and run
+`../adversarial-consensus/SKILL.md` only when the user has both explicitly
+instructed adversarial consensus for this exact planning unit and explicitly
+designated one exact `Adversarial Planning Challenger`. A designation alone does
+not activate the gate. If the user explicitly instructed adversarial consensus
+but did not designate one exact Challenger, do not choose a counterpart, do not
+silently fall back to ordinary finalization, and do not approve or enter `to-spec`;
+at the finalization boundary return `ADVERSARIAL CONSENSUS: CHALLENGER BINDING
+REQUIRED`. Do not proactively suggest or default to the gate for ordinary Ask
+Matt work.
+
+When active, complete Matt's ordinary first-hand investigation, Behavior/UI
+analysis, current user-decision frontier, and verification-feasibility closure
+before invoking the Challenger. Hold new or changed Behavior/UI authority at
+draft/approval-ready state until the gate has a current result. Before the first
+Challenger invocation, present and obtain user confirmation of the Intent Anchor
+and bounded disclosure required by the gate. The Challenger remains read-only and
+advisory; Matt retains first-hand fact confirmation, Behavior/UI conclusion, and
+planning synthesis authority.
+
+`ADVERSARIAL CONSENSUS REACHED` never substitutes for final user approval. When
+the gate is active, a current consensus plus the user's final approval of the
+resulting integrated shared understanding are both required before `to-spec`.
+Material intent/Scope/Behavior/UI/verification changes after consensus invalidate
+the affected consensus and require renewed review while the user's activation
+remains current. If the user explicitly withdraws adversarial consensus, return
+to the ordinary Ask Matt completion boundary; prior Challenger findings remain
+advisory context only.
+
+When the phase reaches `BEHAVIOR AUTHORITY APPROVAL REQUIRED` and no
+adversarial-consensus gate is active, Matt may present the completed draft authorities and one
+clearly labeled proposed integrated contract-only shared understanding for joint
+approval. When that gate is active, defer this joint approval until its latest
+candidate reaches current consensus as required above. After the applicable final
+approval, continue the phase, mark the authorities approved, and establish
+`BEHAVIOR DESIGN: COMPLETE`. Only then does Matt record the jointly approved
 understanding as final or, when no joint approval occurred, present the final
 understanding for confirmation. The final understanding must identify every
 approved Behavior authority and exact applicable scope. Unchanged approved
@@ -236,13 +269,18 @@ Next action: <return to Scope Shaper or select one exact ready Work Package>
    and UI analysis, and dependency descendants. Ask another round only for
    decisions that the answer made newly identifiable under the dependency rule
    above. Continue until the frontier is empty. When material UI applies,
-   complete the Matt-owned authority and approval flow before finalizing shared
-   understanding; do not rediscover user-owned design
-   decisions that the initial UI analysis could have identified.
-5. When new or changed Behavior authorities are approval-ready, use the joint
-   approval flow above and require the phase to complete against the resolved
-   frame.
-6. Before using `to-spec`, close the verification-feasibility decisions for
+   complete the Matt-owned authority content and decision closure before finalizing
+   shared understanding, but when adversarial consensus is active hold final
+   authority approval until that gate has reviewed the complete provisional
+   contract; do not rediscover user-owned design decisions that the initial UI
+   analysis could have identified.
+5. When new or changed Behavior authorities are approval-ready, keep their
+   canonical drafts complete against the resolved frame. Without an active
+   adversarial-consensus gate, use the ordinary joint approval flow above. With
+   an active gate, do not ask for final authority approval yet; the completed
+   drafts remain reviewable candidate authority until the gate finishes.
+6. Before final integrated approval or `to-spec`, close the
+   verification-feasibility decisions for
    every independently acceptable observable outcome. This is part of the same
    user-owned product decision frontier, not implementation-path research. For
    each outcome confirm:
@@ -289,14 +327,31 @@ Next action: <return to Scope Shaper or select one exact ready Work Package>
    through a runtime command. Internal tests, mocks, private helpers, proposed
    test seams, and implementation narration are never the normative product
    boundary or authoritative readback.
-7. Use `to-spec` when the desired outcome, preserved observable behavior and
+7. When adversarial consensus is active, execute
+   `../adversarial-consensus/SKILL.md` now against the complete provisional
+   candidate. Require the user-confirmed Intent Anchor before Challenger
+   invocation. Do not proceed past an unresolved `CHALLENGER BINDING REQUIRED`,
+   `BLOCKED`, or `USER DECISION REQUIRED` result. A material change produced by
+   the debate is rechecked directly by Matt and, while activation remains current,
+   returned to the designated Challenger until the latest complete candidate
+   reaches current `ADVERSARIAL CONSENSUS REACHED`.
+8. Present one final integrated contract-only shared understanding. When new or
+   changed Behavior/UI authority exists, present its completed current content in
+   the same final approval request. Require explicit user approval. Only after
+   that approval mark the applicable authority approved and finish Behavior
+   Design. If the user materially changes the contract while approving and the
+   adversarial gate remains active, return the changed candidate to the
+   Challenger before treating approval as final.
+9. Use `to-spec` when the desired outcome, preserved observable behavior and
    invariants, explicit boundaries, non-goals, and the confirmed outcome-local
    verification contracts above are clear, Behavior Design is complete, every applicable
    Behavior authority is approved, and the user has confirmed one integrated
-   contract-only shared understanding. That understanding is normative for
-   outcome and scope; the approved Behavior authorities it adopts are normative
-   for their exact behavior scopes. Repository facts, prior planning artifacts,
-   prototypes, and anticipated implementation approaches remain context only.
+   contract-only shared understanding. When adversarial consensus is active, also
+   require current `ADVERSARIAL CONSENSUS REACHED` for that exact latest
+   understanding. That understanding is normative for outcome and scope; the
+   approved Behavior authorities it adopts are normative for their exact behavior
+   scopes. Repository facts, prior planning artifacts, prototypes, and anticipated
+   implementation approaches remain context only.
 
    A complete or known implementation mechanism is not required. Matt does not
    search for or prove one. Keep planning open only when verified evidence or
@@ -313,7 +368,7 @@ Next action: <return to Scope Shaper or select one exact ready Work Package>
    remaining material bootstrap choices are fixed or explicitly delegated to
    Implementation Lead/Worker. Do not ask the user to invent a private package
    identity, future file list, dependency, or mutation envelope.
-8. Use `to-tickets` only from an approved Spec. It creates the smallest set of
+10. Use `to-tickets` only from an approved Spec. It creates the smallest set of
    independently observable desired-state Tickets, not an anticipated internal
    implementation sequence.
 

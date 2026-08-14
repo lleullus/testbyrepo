@@ -18,8 +18,15 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    parent-outcome/AC/Behavior trace. A user-designated role, ordering, reservation,
    consumption timing, or concurrency condition remains binding; neither the Lead
    nor host may reinterpret the same configured model/agent as another role or
-   consume a reserved implementation role at another phase. The exception grants
-   no new Ticket authority. While the same Ticket remains active inside that exact Ralph
+   consume a reserved implementation role at another phase. Immediately before
+   invoking the admitted Subagent and again before authorizing product/source
+   mutation, confirm that the caller's role admission still matches the latest
+   explicit user orchestration direction and current canonical IIS contract. If
+   that admission was withdrawn, reserved elsewhere, or made ineligible by a live
+   scheduling change, return control without consuming the stale admission. A live
+   product-contract change is not implementation scheduling and blocks mutation
+   until the owning planning authority resolves it. The exception grants no new
+   Ticket authority. While the same Ticket remains active inside that exact Ralph
    invocation, the host may resume the same invocation-local role for a later
    materially different correction only while retained technical context remains
    bounded, relevant, and likely to reduce rediscovery. If that context becomes
@@ -38,6 +45,12 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    invocation. Never write the internal role to `Worker:`, Ticket metadata, a
    sidecar, session registry, capability, or durable loop state; `Worker:` remains
    empty.
+   One Implementation Lead invocation consumes at most one admitted
+   `Implementation Subagent`; multiple eligible bindings or a Ralph concurrency
+   ceiling never authorize this Lead to fan out additional Subagents. Ralph-level
+   implementation parallelism, when later authorized by the current loop contract,
+   uses separate Implementation Lead invocations, each with its own one admitted
+   Subagent.
    Ralph may have another Implementation Lead invocation for the same active
    Ticket in flight at the same time. That concurrency grants no shared
    feasibility, source fact, diagnosis, or mutation ownership. Each invocation
