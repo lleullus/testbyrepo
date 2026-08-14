@@ -47,6 +47,17 @@ class RalphSemanticsFixtureTests(unittest.TestCase):
         self.assertEqual(pursued, ["dead-owner recovery"])
         self.assertEqual(adjacent, ["unrelated static lint debt"])
 
+    def test_caller_subset_cannot_turn_partial_observation_into_verified_coverage(self) -> None:
+        authored_coverage = {"persisted-boundary", "integration-boundary"}
+        caller_preference = {"persisted-boundary"}
+        observed_satisfied = {"persisted-boundary"}
+
+        remaining = authored_coverage - observed_satisfied
+        self.assertEqual(remaining, {"integration-boundary"})
+        self.assertFalse(authored_coverage <= caller_preference)
+        self.assertFalse(authored_coverage <= observed_satisfied)
+        self.assertNotEqual(remaining, set(), "a caller-preferred subset cannot complete authored coverage")
+
     def test_same_delivery_unit_repeats_until_all_current_acceptance_rows_pass(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             product = Path(temporary) / "product-state.json"

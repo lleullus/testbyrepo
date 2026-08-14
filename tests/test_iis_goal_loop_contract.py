@@ -222,6 +222,8 @@ class IISGoalLoopContractTests(unittest.TestCase):
             "Goal Verification is not a substitute for this Ticket-level streaming feedback cycle",
             "`VERIFIED` permits Ralph to leave/close the Ticket for navigation only",
             "It never completes the parent Goal",
+            "must not prescribe a reduced verification subset, forbid an authored observation on its own authority",
+            "its own decision not to attempt a boundary as dependency unavailability",
             "Do not skip required Independent Ticket Verification because the Ticket is the last/only Ticket",
             "Prefer a fresh read of already-current authoritative state/readback",
             "serialize relevant Runner work",

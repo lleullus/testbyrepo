@@ -57,8 +57,10 @@ class GoalVerificationLeadContractTests(unittest.TestCase):
             "prior Runner context/evidence remains navigation only and cannot supply final Goal evidence",
             "Consume only `Verification Runner` bindings at this boundary",
             "`Implementation Subagent`, `Implementation Research Agent`, or any other IIS-role binding is not eligible for final Runner assignment",
-            "required verification property, the canonical observation surface, and the semantic closure condition",
-            "assignment may be deep but must not silently grow into unrelated adjacent verification questions",
+            "exact authored verification property",
+            "authored or approved-contract-admitted trigger/inspection boundary and authoritative readback",
+            "decomposes observation only",
+            "must not narrow, forbid, replace, or pre-resolve final Spec coverage",
         ):
             self.assertIn(required, body)
 
@@ -158,6 +160,10 @@ class GoalVerificationLeadContractTests(unittest.TestCase):
             "does not require replaying a product effect",
             "Prefer that current readback over duplicating an effect",
             "Re-trigger only when the approved verification contract actually requires it",
+            "decision not to attempt a required boundary does not establish dependency unavailability",
+            "does not remove that final property from the denominator",
+            "Unavailability requires fresh current observation or authoritative current readback",
+            "unless the approved contract admits that surface as equivalent for that exact obligation",
         ):
             self.assertIn(required, body)
 

@@ -13,6 +13,9 @@ class VerificationRunnerContractTests(unittest.TestCase):
             "explicit current-conversation user designation of a `Verification Runner` role",
             "Model identity alone is not a role",
             "separately designated that same configured model/agent for that other role",
+            "requested IIS role or requested observation conflicts with the supplied authored authority",
+            "excludes or replaces a boundary required to decide its assigned authored property",
+            "do not perform the other role or silently substitute another observation surface",
         ):
             self.assertIn(phrase, NORMALIZED)
 
@@ -20,11 +23,12 @@ class VerificationRunnerContractTests(unittest.TestCase):
         for phrase in ("AC-per-Runner", "flow-per-Runner", "outcome-per-Runner", "defect-per-Runner", "file-per-Runner"):
             self.assertIn(phrase, NORMALIZED)
         for phrase in (
-            "required verification property, canonical observation surface, and semantic closure condition",
+            "exact authored verification property",
+            "authored or approved-contract-admitted trigger/inspection boundary and authoritative readback",
             "Investigate as deeply as materially necessary",
             "Do not expand into a new adjacent verification question",
             "report it as an adjacent observation for Lead routing without pursuing it",
-            "no materially necessary unresolved path remains inside that assignment",
+            "no materially necessary unresolved path remains inside that authored assignment",
             "Failure of the assigned endpoint, representation, transport, tool, or readback establishes only that exact failed boundary",
             "never label the dependency or service as wholly unavailable from that observation alone",
             "another materially relevant contract-admitted representation/readback",
@@ -55,8 +59,8 @@ class VerificationRunnerContractTests(unittest.TestCase):
             "all overlapped Runner invocations must return or be host-confirmed stopped",
             "Goal Verification always uses new fresh Runner invocation(s)",
             "Do not solve effect risk by pretending verification was performed",
-            "Ordinary read-only observation does not require a blocking parent/caller approval checkpoint",
-            "do not wait for a reply before continuing other still-safe work already inside the same bounded assignment",
+            "including continued work inside the same bounded assignment after streaming a finding, require no blocking caller approval",
+            "Wait only for an exact operator, environment, authority, or unsafe-effect decision required by the authored boundary",
             "There is no generic IIS staging-to-parent-canonical promotion stage",
         ):
             self.assertIn(phrase, NORMALIZED)

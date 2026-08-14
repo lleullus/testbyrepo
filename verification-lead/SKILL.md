@@ -93,10 +93,11 @@ configured model/agent as a `Verification Runner`.
 Within those user constraints, Lead chooses grouping, count, timing, concurrency,
 valid shared acquisition, and serial fallback. Do not define AC/flow/defect/file-
 per-Runner fixed decomposition or invoke unused Runner slots merely to consume a
-roster. Give each Runner a bounded observation assignment that states the required
-verification property, the canonical observation surface, and the semantic closure
-condition for that property. The assignment may be deep but must not silently grow
-into unrelated adjacent verification questions.
+roster. Give each Runner a bounded assignment carrying the exact authored
+verification property and its authored or approved-contract-admitted
+trigger/inspection boundary and authoritative readback. The assignment decomposes
+observation only; it must not narrow, forbid, replace, or pre-resolve authored
+verification coverage.
 Runner output is raw current evidence/currentness information only. Never
 derive an AC verdict or aggregate by vote, majority, consensus, model agreement, or
 counting Runner labels. Ignore Runner verdict-like claims and adjudicate the exact
@@ -276,12 +277,17 @@ shared/production, payment, message, deployment, destructive, irreversible, or
 duplicate-sensitive effects without existing concrete authority for the exact
 action, target, readback, cleanup, and non-duplication boundary. Do not skip an
 otherwise-required Independent Ticket Verification cycle merely because replaying
-such an effect would be unsafe or duplicative. Prefer a fresh current authoritative
-readback when the contract permits it; otherwise use one valid shared acquisition
-or serialize relevant Runner observations when safe attribution permits. If the
-required Independent evidence still cannot be obtained safely under current
+such an effect would be unsafe or duplicative. A caller or Lead decision not to
+attempt a required boundary does not establish dependency unavailability and does
+not remove that property from the authored denominator. Unavailability requires
+fresh current observation or authoritative current readback. Prefer a fresh current
+authoritative readback when the contract permits it; otherwise use one valid shared
+acquisition or serialize relevant Runner observations when safe attribution permits.
+If required Independent evidence still cannot be obtained safely under current
 authority, issue `INCONCLUSIVE` with the exact environment/operator/authority
-evidence limit rather than leaping to Goal Verification or presenting success.
+evidence limit rather than leaping to Goal Verification or presenting success; do
+not substitute another surface unless the approved contract admits that surface as
+equivalent for that exact obligation.
 
 Do not directly modify product source, generated product artifacts, product
 state, configuration, Ticket, Spec, Behavior/UI authority, or other planning

@@ -63,20 +63,20 @@ ACTIVE_VERIFICATION_DIRECTORIES = frozenset(
 )
 ACTIVE_VERIFICATION_SHA256 = {
     # Updated only with a reviewed canonical leaf change.
-    "verification-lead/SKILL.md": "dbe8a3307fe60029312223ccb7d7e910a8fb558c347536812e3b64adc8c284c2",
+    "verification-lead/SKILL.md": "60f0674c5514b2923f2ebe1733573e77dddb8cd9c35d2c271cf654c94ddb8c85",
     "verification-lead/run_tests.py": "8f0c1c288930dda0468d077bb61b6a046aad69b6531dc6cdb7f9d457cf8ea185",
     "verification-lead/verdict_contract.py": "0ec52acc6f27ca9167adbabeddfede4dfcc719e0fe480e124c43e3ff95dba9d7",
-    "verification-lead/tests/test_contract.py": "70748b6e8bf518b8594963563ae4a141e9b7bbbe82c34d0f8fa525a71c2f7fd7",
+    "verification-lead/tests/test_contract.py": "0dba31cad69786b37a05bc8b32a73a550e344cbb4073454add6ee9f522bc6b0d",
     "verification-lead/tests/pilot/test_representative_pilots.py": "02a122d5efbf0051d67f50b3d370f9dfa2c4f210516dd086d0e9be19a4d1c530",
-    "verification-runner/SKILL.md": "f1da61bdfa2eacf64624ae91cad221c2a5ac84d246de7836f21c3d491bfd00c8",
+    "verification-runner/SKILL.md": "088a7191ececb0a4dd8746d60c6bda8cda947a473841de38e4b538ac7f074be4",
     "verification-runner/run_tests.py": "25a1fae8b7834d3c06c3e0fbcc762dfda577a32bf23ef51ffdc278da86f8bf25",
-    "verification-runner/tests/test_contract.py": "8df9e0aebbd4c7a5b219cc1cf5d24f39f6a02cc26a3b8fbc6bd725d816b0378b",
+    "verification-runner/tests/test_contract.py": "81ea4a6b5470b6ad843a161bab07fd5dd6adfd7265a401c800925c54f2f70487",
 }
 ACTIVE_RALPH_SHA256 = {
     # Reviewed active Goal-fulfillment route, closure contract, and exact structural admission support.
-    "ARCHITECTURE-CLOSURE.md": "b3d19b0dd30da6ec506ae11305c4d9a638cfe25e747727e04bd6831b89c93330",
-    "iis-goal-loop/SKILL.md": "b4b651a0166798699bded2dedca396945389e24d5d95afb55c4aee6e0a91e509",
-    "goal-verification-lead/SKILL.md": "520417a42d86af881345758e8e75e847d9566f2d0a5566721fc695192c7649eb",
+    "ARCHITECTURE-CLOSURE.md": "b1a2a82a9abc5250ae4d69cddc0b8baa78b2b14822476196e723480388061e44",
+    "iis-goal-loop/SKILL.md": "35e687573cf672fb936bce038e3b8d4ef36bb1eaf17f6b895df8ba984ef72137",
+    "goal-verification-lead/SKILL.md": "ecfffcda6f4ac337014236ba3b82d8e2cc9affd9140f57e1ff3bca736d2b68e3",
     "matt/skills/to-tickets/validate_ticket_set.py": "2a5eda27390c079bfb21200c71f96eec66f878c2bb9db1bc9696d8e37b8895ea",
 }
 LEGACY_EXECUTABLE_STEMS = (

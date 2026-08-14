@@ -68,10 +68,10 @@ Within those user constraints, Goal Verification Lead chooses only grouping,
 count, timing, concurrency, valid shared acquisition, and serial fallback. Do not
 define AC/flow/outcome/defect/file-per-Runner fixed decomposition and do not invoke
 unused Runner slots merely to consume a roster. Give each Runner a bounded
-observation assignment that states the required verification property, the
-canonical observation surface, and the semantic closure condition for that
-property; the assignment may be deep but must not silently grow into unrelated
-adjacent verification questions. Runner output is raw current
+assignment carrying the exact authored verification property and its authored or
+approved-contract-admitted trigger/inspection boundary and authoritative readback.
+The assignment decomposes observation only; it must not narrow, forbid, replace, or
+pre-resolve final Spec coverage. Runner output is raw current
 evidence/currentness information only; Runner verdict-like labels or progression
 claims have no authority. Never derive a row verdict or Goal aggregate by vote,
 majority, consensus, model agreement, or counting Runner labels. If fresh Runner
@@ -136,7 +136,10 @@ boundary; it does not require replaying a product effect when the contract permi
 the current authoritative state/readback itself to establish the outcome. Prefer
 that current readback over duplicating an effect. Re-trigger only when the
 approved verification contract actually requires it and the safety/authority
-boundary below permits it.
+boundary below permits it. A caller or Lead decision not to attempt a required
+boundary does not establish dependency unavailability and does not remove that
+final property from the denominator. Unavailability requires fresh current
+observation or authoritative current readback.
 
 A safe local approved trigger may create its ordinary expected product effect.
 Do not directly modify source, configuration, product state, Ticket, Spec,
@@ -144,6 +147,10 @@ Behavior/UI authority, or readback to manufacture final evidence. Do not perform
 credential-bearing, shared/production, payment, message, deployment,
 destructive, irreversible, or duplicate-sensitive effects without exact existing
 authority for the action, target, readback, cleanup, and non-duplication boundary.
+If the required final observation cannot be performed under current authority or
+safety, keep the affected row `INCONCLUSIVE`; do not substitute another surface
+unless the approved contract admits that surface as equivalent for that exact
+obligation.
 
 If product/source mutation begins after this final cycle starts, the cycle cannot
 return `GOAL VERIFIED`. Any still-safe Runner work is navigation only. Every

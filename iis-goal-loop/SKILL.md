@@ -330,9 +330,14 @@ whole-Spec Goal Verification. Goal Verification is not a substitute for this
 Ticket-level streaming feedback cycle. Pass through the current-conversation
 user-designated `Verification Runner` bindings and consumption conditions when
 present; otherwise Verification Lead may use its host-provided invocation-local
-Runner roles. `VERIFIED` permits Ralph to leave/close the Ticket for navigation
-only when no product/source mutation overlapped that Verification Lead/Runner
-cycle. It never completes the parent Goal. `FAILED` returns to the same Ticket;
+Runner roles. For any Verification Lead or Goal Verification Lead invocation,
+Ralph may pass navigation and current safety facts but must not prescribe a reduced
+verification subset, forbid an authored observation on its own authority, or treat
+its own decision not to attempt a boundary as dependency unavailability. The invoked
+Lead derives verification coverage from current authored authority. `VERIFIED`
+permits Ralph to leave/close the Ticket for navigation only when no product/source
+mutation overlapped that Verification Lead/Runner cycle. It never completes the
+parent Goal. `FAILED` returns to the same Ticket;
 `INCONCLUSIVE` remains current unfinished work and is handled by correction, an
 exact operator/environment/authority action or gate, or another defined evidence
 path.

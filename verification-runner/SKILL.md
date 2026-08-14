@@ -22,11 +22,12 @@ designated that same configured model/agent for that other role. If the user did
 not designate a Runner, the calling Lead may use a host-provided invocation-local
 Runner without new user ceremony.
 
-If an invocation identifies this role as `Verification Runner` but asks it to
-mutate the product or serve another IIS role, treat that as a role-binding mismatch:
-report the mismatch to the calling Lead instead of performing the other role. A
-normal read-only observation may still create only the authored safe product effect
-allowed by the verification contract below; that is observation, not remediation.
+Reject an assignment when its requested IIS role or requested observation conflicts
+with the supplied authored authority, including an assignment that excludes or
+replaces a boundary required to decide its assigned authored property. Report the
+exact assignment/authority mismatch to the calling Lead; do not perform the other
+role or silently substitute another observation surface. An authored safe product
+effect remains observation, not remediation.
 
 The Lead may choose grouping, count, timing, concurrency, shared acquisition, and
 serial fallback only within user-supplied constraints. IIS defines no AC-per-Runner,
@@ -43,10 +44,9 @@ Require only the bounded current information needed for the assigned observation
   Verification, or the exact approved Spec and current outcome/global obligation
   when operating for Goal Verification;
 - the current adopted Behavior/UI authority needed to interpret that assignment;
-- the required verification property, canonical observation surface, and semantic
-  closure condition for that property;
-- the exact authored trigger or inspection target, acceptance boundary, and
-  authoritative readback; and
+- the exact authored verification property, its authored or approved-contract-admitted
+  trigger/inspection boundary and authoritative readback, and the applicable
+  acceptance boundary; and
 - any current safe shared acquisition supplied by the Lead whose trigger/input,
   relevant state, and readback genuinely match the assigned observation.
 
@@ -55,14 +55,14 @@ persistent assignment, evidence identity, or new authority. Reject a request to
 invent product meaning, strengthen an obligation, choose a remediation, or decide a
 verdict.
 
-Investigate as deeply as materially necessary to decide the assigned property,
-establish currentness, or distinguish a product contradiction from a fixture,
-harness, verifier, or attribution error. Do not expand into a new adjacent
+Investigate as deeply as materially necessary to decide the assigned authored
+property, establish currentness, or distinguish a product contradiction from a
+fixture, harness, verifier, or attribution error. Do not expand into a new adjacent
 verification question merely because it is interesting or nearby. If an adjacent
 observation is not required to close the assigned property, report it as an
 adjacent observation for Lead routing without pursuing it. Return once fresh
-attributable evidence satisfies the assignment's semantic closure condition and no
-materially necessary unresolved path remains inside that assignment.
+attributable evidence closes the assigned property at its supplied authored boundary
+and no materially necessary unresolved path remains inside that authored assignment.
 
 ## Fresh Observation
 
@@ -74,10 +74,11 @@ For every invocation:
    establish currentness.
 2. Obtain direct current evidence from the assigned product/canonical boundary.
    Prefer a fresh read of already-current authoritative state/readback when the
-   contract permits it instead of replaying an effect. Failure of the assigned
-   endpoint, representation, transport, tool, or readback establishes only that
-   exact failed boundary; never label the dependency or service as wholly
-   unavailable from that observation alone. If the assignment or current Lead
+   contract permits it instead of replaying an effect. A decision not to attempt the
+   authored boundary is an evidence limit, not evidence of dependency unavailability.
+   Failure of the assigned endpoint, representation, transport, tool, or readback
+   establishes only that exact failed boundary; never label the dependency or service
+   as wholly unavailable from that observation alone. If the assignment or current Lead
    context already identifies another materially relevant contract-admitted
    representation/readback, observe it only when it remains inside this bounded
    assignment. An alternate may diagnose dependency reachability or candidate
@@ -111,11 +112,7 @@ communication supports it. Do not wait for unrelated Runner assignments or the
 Lead's final aggregate merely to batch findings. The report is navigation only:
 it is not `PASS`, `FAIL`, `INCONCLUSIVE`, `VERIFIED`, `GOAL VERIFIED`, a remediation
 instruction, or a progression decision. Continue other still-safe assigned
-observation only when attribution and safety remain valid. Ordinary read-only
-observation does not require a blocking parent/caller approval checkpoint. When a
-qualifying contradiction is streamed, do not wait for a reply before continuing
-other still-safe work already inside the same bounded assignment; wait only when an
-exact operator, environment, authority, or unsafe-effect decision is required.
+observation only when attribution and safety remain valid.
 
 ## Mutation Overlap And Freshness
 
@@ -134,15 +131,17 @@ retained context.
 
 ## Safety
 
-Safe local execution and read-only canonical inspection need no additional user
-ceremony. Do not perform credential-bearing, shared/production, payment, message,
-deployment, destructive, irreversible, one-shot, or duplicate-sensitive effects
-without exact existing authority for the action, target, readback, cleanup, and
-non-duplication boundary. Do not solve effect risk by pretending verification was
-performed. Prefer current authoritative readback, a Lead-coordinated valid shared
-acquisition, or serialized observation; otherwise report the exact evidence limit
-so the Lead can issue the contractually correct `INCONCLUSIVE` or operator,
-environment, or authority gate.
+Safe local execution and read-only canonical inspection, including continued work
+inside the same bounded assignment after streaming a finding, require no blocking
+caller approval. Wait only for an exact operator, environment, authority, or
+unsafe-effect decision required by the authored boundary. Do not perform credential-bearing,
+shared/production, payment, message, deployment, destructive, irreversible, one-shot,
+or duplicate-sensitive effects without exact existing authority for the action,
+target, readback, cleanup, and non-duplication boundary. Do not solve effect risk by
+pretending verification was performed. Prefer current authoritative readback, a
+Lead-coordinated valid shared acquisition, or serialized observation; otherwise
+report the exact evidence limit so the Lead can issue the contractually correct
+`INCONCLUSIVE` or operator, environment, or authority gate.
 
 ## Non-Authority And Non-Goals
 

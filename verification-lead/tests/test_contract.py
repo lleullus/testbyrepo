@@ -24,10 +24,12 @@ class VerificationLeadContractTests(unittest.TestCase):
         ):
             self.assertIn(required, NORMALIZED)
 
-    def test_runner_assignment_is_semantically_bounded_without_fixed_decomposition(self) -> None:
+    def test_runner_assignment_decomposes_observation_without_narrowing_authored_coverage(self) -> None:
         for required in (
-            "required verification property, the canonical observation surface, and the semantic closure condition",
-            "assignment may be deep but must not silently grow into unrelated adjacent verification questions",
+            "exact authored verification property",
+            "authored or approved-contract-admitted trigger/inspection boundary and authoritative readback",
+            "decomposes observation only",
+            "must not narrow, forbid, replace, or pre-resolve authored verification coverage",
             "Do not define AC/flow/defect/file-",
             "per-Runner fixed decomposition",
         ):
@@ -203,6 +205,10 @@ class VerificationLeadContractTests(unittest.TestCase):
             "Prefer a fresh current authoritative readback",
             "one valid shared acquisition",
             "serialize relevant Runner observations",
+            "decision not to attempt a required boundary does not establish dependency unavailability",
+            "does not remove that property from the authored denominator",
+            "Unavailability requires fresh current observation or authoritative current readback",
+            "unless the approved contract admits that surface as equivalent for that exact obligation",
             "issue `INCONCLUSIVE` with the exact environment/operator/authority evidence limit",
             "rather than leaping to Goal Verification",
         ):

@@ -88,6 +88,8 @@ class ArchitectureClosureTests(unittest.TestCase):
             "new Verification Lead cycle with fresh Runner invocation(s)",
             "One endpoint/representation/transport/readback failure establishes only that boundary",
             "cannot silently satisfy an exact authored representation unless the approved contract permits equivalence",
+            "A bounded Runner assignment decomposes observation only; it never defines or narrows authored verification coverage",
+            "A decision not to attempt a required boundary is an evidence limit, not evidence of dependency unavailability",
             "`GOAL INCONCLUSIVE` ends only its Goal Verification invocation",
             "Before `GOAL OPEN — NO PROGRESS`, Ralph closes every currently known bounded evidence/correction path",
         ):
