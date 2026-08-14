@@ -32,7 +32,7 @@ class ArchitectureClosureTests(unittest.TestCase):
         for text in required:
             self.assertIn(text, CLOSURE)
 
-    def test_recorded_user_directed_streaming_evolution_is_explicit_and_re_frozen(self) -> None:
+    def test_recorded_user_directed_streaming_evolution_is_explicit_and_later_supersession_is_bounded(self) -> None:
         section = " ".join(
             CLOSURE.split("## Recorded User-Directed Architecture Evolution", 1)[1]
             .split("## Contract-Preserving Execution Optimization Boundary", 1)[0]
@@ -43,30 +43,24 @@ class ArchitectureClosureTests(unittest.TestCase):
             "bounded same-Ticket streaming remediation",
             "intentional architecture generation change",
             "not a faithful-contract counterexample",
-            "not a change admitted through either contract-preserving optimization lane",
             "fresh verification observation may surface a qualifying direct contradiction",
             "concrete current Ticket-owned implementation/integration/surface/readback absence",
             "additional same-Ticket implementation may overlap",
-            "user role-consumption constraints",
-            "does **not** change product authority, Ticket Scope",
-            "Verification observation uses fresh Runner leaves",
-            "Runner reports are not votes",
-            "user-designated role binding/consumption timing is preserved",
-            "no persistent scheduler, finding queue, assignment ledger, Runner/Worker identity system, evidence cache, or controller",
-            "every overlapped Runner/effect must quiesce",
-            "review the combined current project and freshly reobserve the full active Ticket",
-            "new Verification Lead cycle with fresh Runner invocation(s)",
-            "Every provisionally satisfied all-Independent Ticket therefore runs Ticket Verification, including the last or only Ticket",
+            "did **not** change product authority, Ticket Scope",
+            "fresh Runner leaves while Verification Lead / Goal Verification Lead alone adjudicated verdicts",
+            "later efficiency generation below supersedes only that redundant observer sequence",
+            "mutation-invalidated progression authority and the fresh independent barrier remain unchanged",
+            "historical generation bought an extra streaming feedback cycle at the cost of a duplicate settled observation",
+            "later efficiency generation below supersedes that last/only extra cycle",
             "`GOAL INCONCLUSIVE` ends only the current final-verification invocation",
             "one failed endpoint/representation does not establish dependency-wide unavailability",
             "host-known required work still in flight is an unexhausted path",
             "returned or host-confirmed stopped/unproductive invocation clears only that liveness blocker",
             "still closes any remaining bounded evidence or correction path before a terminal result",
-            "must not be cited as permission for ordinary latency complaints",
         ):
             self.assertIn(required, section)
 
-    def test_streaming_ralph_closure_keeps_fresh_transition_and_goal_barriers(self) -> None:
+    def test_streaming_ralph_closure_keeps_fresh_transition_and_goal_barriers_without_duplicate_observers(self) -> None:
         section = CLOSURE.split("### 3. Ralph Repetition And Regression Recovery — PROVED", 1)[1].split(
             "### 4. Completion Boundary — PROVED", 1
         )[0]
@@ -74,27 +68,20 @@ class ArchitectureClosureTests(unittest.TestCase):
             "Fresh Verification Runner observation may surface a qualifying current contradiction",
             "Ticket-owned implementation/integration/surface/readback absence",
             "Current-conversation user role binding, reusable ordering, reservation",
-            "role reserved for later remediation is not consumed for initial fan-out",
             "Ordered Implementation Subagent bindings are reusable precedence, not one-use slots",
-            "returned invocation is eligible again",
             "default first implementation dispatch is one Lead / one Subagent",
-            "maximum-concurrency increase or another available binding is capacity, not an immediate-overlap instruction",
-            "feeds the finding to that existing invocation first",
-            "not persistent defect/AC/file ownership",
-            "Under Lead-owned scheduling, an additional same-Ticket Implementation Lead invocation requires materially distinct useful work",
             "exact user-authored immediate-overlap instruction overrides only the default wait and Lead-owned efficiency preference",
             "Scheduling repair is prospective",
-            "not rolled back, ceremonially repeated, or reassigned merely to reconstruct preferred historical role order",
-            "freshly rechecks current authority, source, feasibility, and concurrent changes before mutation",
-            "bounded predecessor implementation is navigation",
-            "Every provisionally satisfied all-Independent Ticket runs Ticket Verification, including the last/only Ticket",
-            "invalidates the whole cycle for progression",
-            "An unrelated scheduling change does not",
-            "every relevant Runner/effect must quiesce",
-            "freshly reobserves every AC",
-            "new Verification Lead cycle with fresh Runner invocation(s)",
+            "product-authorized mutation produced by an otherwise eligible implementation binding",
+            "observed scheduling delta is sent once, delta-only, to affected active roles",
+            "minimum focused liveness/integration checks",
+            "lightweight integration/authority preflight rather than a duplicate full-AC acquisition",
+            "Verification Lead is the first settled full-AC observer when Ralph must leave that Ticket",
+            "mixed/non-independent Tickets retain Ralph fresh AC reobservation",
+            "last/only all-`Independent` Ticket goes directly to fresh whole-Spec Goal Verification",
+            "no new Runner assignment exists merely to finish the old roster/coverage",
+            "prospective Runner withdrawal/future-assignment change does not retroactively discard attributable evidence",
             "One endpoint/representation/transport/readback failure establishes only that boundary",
-            "cannot silently satisfy an exact authored representation unless the approved contract permits equivalence",
             "A bounded Runner assignment decomposes observation only; it never defines or narrows authored verification coverage",
             "A decision not to attempt a required boundary is an evidence limit, not evidence of dependency unavailability",
             "`GOAL INCONCLUSIVE` ends only its Goal Verification invocation",
@@ -113,20 +100,48 @@ class ArchitectureClosureTests(unittest.TestCase):
             "repeatedly re-injects the full conversation",
             "extra context can itself cause instruction drift",
             "Live orchestration is therefore event-driven",
-            "only the affected scheduling change is propagated",
+            "each affected active role receives exactly one concise delta-only update",
+            "unaffected roles receive nothing",
             "ordering is reusable precedence rather than implicit one-shot slot consumption",
             "returned role is eligible again",
             "maximum concurrency is capacity rather than a command to fan out",
             "exact user-authored immediate-overlap instruction outranks Ralph's Lead-owned efficiency preference",
+            "returns that exact `ORCHESTRATION CONFLICT` rather than silently serializing",
             "Scheduling repair is prospective",
+            "product-authorized mutation at the wrong authored order or timing",
             "does not roll back or replay the same correction",
+            "Scope-exceeding, wrong-role, unauthorized-dangerous-effect, or user-rejected mutation is not protected",
             "active gate cannot be bypassed by an explicit To Spec request",
             "routine repository-disclosure approval is not added",
             "No mandatory live-Challenger smoke",
-            "Future implementation-role ordering/concurrency changes or other unrelated scheduling changes do not discard attributable evidence",
+            "prospective Runner withdrawal or future-assignment change does not retroactively discard evidence",
             "implicit one-use role slots",
             "repeated whole-conversation freshness rereads by every Lead/Subagent/Runner",
-            "historical rollback/replay merely to reconstruct preferred dispatch order",
+            "silently serializing an exact user-fixed overlap for Lead convenience",
+        ):
+            self.assertIn(required, section)
+
+    def test_2026_08_14_efficiency_generation_removes_only_duplicate_success_path_work(self) -> None:
+        section = " ".join(
+            CLOSURE.split("A subsequent 2026-08-14 efficiency generation", 1)[1]
+            .split("The five-condition Core Freeze Admission below", 1)[0]
+            .split()
+        )
+        for required in (
+            "removes duplicate observation work that contributed no additional verdict authority",
+            "no longer pays both a Ralph full-AC acquisition and a Verification Lead full-AC acquisition",
+            "lightweight integration/ authority preflight and the verifier is the first settled full observer",
+            "Mixed or non-independent Tickets retain Ralph fresh AC reobservation",
+            "Earlier Independent Tickets still obtain Ticket Verification before Ralph leaves them",
+            "last/only Ticket, fresh Goal Verification immediately supplies the first settled independent full observation",
+            "unless the user explicitly requested that separate Ticket-level verdict",
+            "Whole-Spec `GOAL VERIFIED` authority and final fresh evidence are unchanged",
+            "invalidated cycle never receives new Runner assignments merely to complete its old roster/coverage",
+            "Already-active observation continues only when it can materially surface a distinct current correction",
+            "Implementation Lead likewise stops short of rehearsing independent verification",
+            "complete browser/viewport/state/lifecycle/AC matrix remains with Verification Lead or Goal Verification Lead",
+            "Rejected efficiency alternatives are impacted-only final verification, evidence caching across mutation, verifier-context reuse as evidence",
+            "removes only duplicate success-path acquisition/cycles and low-value invalidated work",
         ):
             self.assertIn(required, section)
 
@@ -185,11 +200,14 @@ class ArchitectureClosureTests(unittest.TestCase):
             "Ordered reusable bindings may cause the same configured implementation role to be invoked repeatedly across distinct corrections",
             "Prospective scheduling repair",
             "not ceremonial rollback/replay",
-            "wait for or host-confirmedly stop every overlapped Runner",
-            "Runner-started product effect to reach its authored terminal/cleanup boundary",
-            "residual wait plus a fresh cycle are deliberate costs paid for a non-overlapping evidence boundary",
-            "last/only all-Independent Ticket now pays a Ticket Verification cycle before whole-Spec Goal Verification",
-            "duplicate-observation cost is intentional because Ticket Verification is the streaming correction engine",
+            "efficiency rule stops creating new old-cycle assignments after invalidation",
+            "already-started effects still reach their authored terminal/cleanup boundary",
+            "Settled all-Independent success paths intentionally use one full observer per transition boundary",
+            "last/only Ticket uses Goal Verification directly unless the user requested a separate Ticket verdict",
+            "removal of an entire duplicate browser/runtime/persistence acquisition without weakening verdict authority",
+            "Implementation Lead intentionally limits product checks to changed/integration-affected gross liveness",
+            "duplicate full-matrix execution adds context and runtime cost without adding independent verdict authority",
+            "prospective Runner withdrawal does not invalidate already attributable evidence",
             "Bounded evidence/correction closure before `NO PROGRESS` may spend additional investigation time",
             "rather than becoming arbitrary endpoint discovery or a persistent path registry",
             "does not add a scheduler database, dispatch ledger, Worker identity system, or persistent finding queue",

@@ -36,8 +36,10 @@ Goal fulfillment.
   and host-provided roles fill only unspecified bindings. Related fresh findings feed an existing
   active implementation invocation first when communication is available instead
   of consuming another reserved role. This is invocation-local continuity, not
-  defect/AC/file ownership. Implementation result is not an independent AC verdict
-  or final `VERIFIED` status.
+  defect/AC/file ownership. Implementation-stage product checks stay focused on
+  changed/integration-affected gross liveness; they do not pre-run the complete
+  independent browser/viewport/state/lifecycle/AC matrix. Implementation result is
+  not an independent AC verdict or final `VERIFIED` status.
 - `verification-runner/`: fresh bounded product/canonical observation subordinate
   to Verification Lead or Goal Verification Lead. It reports attributable raw
   current readback or an exact evidence limit before disposable cleanup and never
@@ -58,16 +60,21 @@ Goal fulfillment.
   useful-work tradeoff. An exact user instruction to overlap now overrides that
   Lead-owned wait/efficiency choice without changing Ticket or product authority.
   Eligible role count and maximum concurrency are capacity, not mandatory
-  consumption. Scheduling repair is prospective: completed authorized mutation is
-  reobserved, not replayed merely to reconstruct preferred historical role order.
-  It still requires settled fresh Ticket/whole-Spec
-  verification before completion. Every provisionally satisfied all-Independent Ticket,
-  including the last/only Ticket, runs Ticket Verification as the streaming
-  correction stage. Ralph may start same-Ticket correction from an early Runner finding; mutation
-  invalidates that verification cycle for progression until quiescence, full fresh
-  Ticket reobservation, and a new Runner cycle. `GOAL INCONCLUSIVE` ends only its
-  verifier invocation, and `NO PROGRESS` requires bounded closure of all currently
-  known contract-admitted evidence/correction paths. One failed endpoint or
+  consumption. Scheduling repair is prospective: product-authorized mutation from
+  an otherwise eligible but misordered/mistimed implementation binding is reobserved,
+  not replayed merely to reconstruct preferred history. An observed scheduling
+  change is sent once, delta-only, to affected active roles; exact immediate-overlap
+  conflicts are reported instead of silently serialized. After mutation quiescence,
+  an all-Independent Ticket does not pay a redundant Ralph full-AC scan before its
+  verifier: Ralph performs a lightweight integration/authority preflight. Earlier
+  Independent Tickets run Ticket Verification before Ralph leaves them; a last/only
+  Independent Ticket goes directly to fresh Goal Verification unless the user asked
+  for a separate Ticket verdict. Mutation-invalidated verification does not spawn
+  new Runner work merely to finish stale old coverage; already-active observation
+  continues only for distinct correction value or exact user-requested continuation.
+  `GOAL INCONCLUSIVE` ends only its verifier invocation, and `NO PROGRESS` requires
+  bounded closure of all currently known contract-admitted evidence/correction
+  paths. One failed endpoint or
   representation is not dependency-wide unavailability. The loop never promotes
   one Work Package to parent initiative completion and is not a Controller runtime
   or durable workflow engine.

@@ -45,7 +45,9 @@ class IISGoalLoopContractTests(unittest.TestCase):
             "acts on current in-Scope evidence inside the active Ticket",
             "When timing is left to Ralph, later overlap waits for that first work to settle",
             "An exact user instruction to overlap now overrides that Lead-owned wait/efficiency choice",
-            "settled fresh Ticket/whole-Spec verification before completion",
+            "does not pay a redundant Ralph full-AC scan before its verifier",
+            "Earlier Independent Tickets run Ticket Verification before Ralph leaves them",
+            "last/only Independent Ticket goes directly to fresh Goal Verification",
         ):
             self.assertIn(required, readme)
         self.assertNotIn("select one unmet Acceptance Criterion", loop)
@@ -64,24 +66,21 @@ class IISGoalLoopContractTests(unittest.TestCase):
             self.assertIn(required, body)
         self.assertIn("without inventing a new Ticket, queue, root-cause registry, or other planning state", body)
 
-    def test_settled_active_ticket_is_fully_reobserved_and_final_goal_is_fresh(self) -> None:
+    def test_settled_active_ticket_uses_one_authoritative_full_observer_and_final_goal_is_fresh(self) -> None:
         body = normalized(LOOP)
         for required in (
             "While another authorized same-Ticket product/source mutation remains in flight",
-            "does not need to stop the useful work merely to perform a full Ticket reobservation after each individual result",
+            "does not need to stop useful work merely to perform a full Ticket reobservation after each individual result",
             "all current-Ralph implementation mutation for the active Ticket must finish",
-            "earlier Ticket Verification Lead/Runner cycle that overlapped that mutation must have quiesced",
-            "every Runner must have returned or been host-confirmed stopped",
-            "every Runner-started product effect must have reached its authored terminal/cleanup boundary",
-            "Do not start the settled fresh reobservation or a new authoritative verification cycle while an earlier navigation-only Runner or one of its still-running effects can still change the target",
+            "every still-active Runner/product effect that can change the evaluated target",
             "reviews the resulting current project as one combined product",
-            "settled changes remain inside the Ticket Scope and preserve current user/concurrent changes without an unresolved integration conflict",
-            "freshly reobserves every AC of the active Ticket",
-            "A regression in a previously satisfied AC becomes current unfinished work immediately",
-            "no observation from before or during the mutation interval may be reused",
-            "complete ready Ticket set",
-            "Only when the complete Ticket set is provisionally satisfied",
-            "goal-verification-lead/SKILL.md",
+            "lightweight current integration and authority preflight",
+            "This preflight is navigation, not AC evidence or a verdict",
+            "For an all-`Independent` Ticket that will enter Ticket Verification, do not perform a second Ralph full-AC product acquisition",
+            "Verification Lead becomes the first settled fresh full-AC observer",
+            "Mixed or non-independent Tickets retain Ralph fresh AC reobservation",
+            "current last/only all-`Independent` Ticket may instead enter under step 4's direct-Goal optimization",
+            "Goal Verification Lead uses new fresh Runner invocations and obtains whole-Spec completion evidence independently",
             "Implementation reports, candidate recipes, Ticket checkpoints, tests, prior Runner observations, prior Ticket-verification evidence",
             "navigation hints only",
             "No other result completes the Goal",
@@ -215,37 +214,38 @@ class IISGoalLoopContractTests(unittest.TestCase):
         ):
             self.assertIn(required, body)
 
-    def test_every_independent_ticket_including_last_or_only_runs_ticket_verification(self) -> None:
+    def test_earlier_independent_tickets_verify_before_transition_and_last_only_uses_final_goal_barrier(self) -> None:
         body = normalized(LOOP)
         for required in (
-            "before Ralph treats that Ticket as verified for progression",
-            "applies to every such Ticket, including the last or only Ticket immediately before whole-Spec Goal Verification",
-            "Goal Verification is not a substitute for this Ticket-level streaming feedback cycle",
-            "`VERIFIED` permits Ralph to leave/close the Ticket for navigation only",
+            "For an all-`Independent` Ticket that Ralph must leave before the Goal-final boundary",
+            "invoke the separate `../verification-lead/SKILL.md` after the lightweight preflight",
+            "`VERIFIED` permits Ralph to leave/close that earlier Ticket for navigation only",
             "It never completes the parent Goal",
             "must not prescribe a reduced verification subset, forbid an authored observation on its own authority",
             "its own decision not to attempt a boundary as dependency unavailability",
-            "Do not skip required Independent Ticket Verification because the Ticket is the last/only Ticket",
-            "Prefer a fresh read of already-current authoritative state/readback",
-            "serialize relevant Runner work",
-            "accept `INCONCLUSIVE` with the exact environment/operator/authority evidence limit",
-            "Do not leap directly to Goal Verification to avoid this cycle",
+            "When the active Ticket is the last or only unfinished Ticket",
+            "skip a separate post-mutation Ticket Verification cycle and enter fresh whole-Spec Goal Verification directly",
+            "unless the user explicitly requested a separate Ticket-level verdict",
+            "Goal Verification is the first settled independent full observation for that last/only Ticket",
+            "This optimization never skips Ticket Verification for an earlier Ticket that Ralph must leave before the Goal-final boundary",
+            "last/only direct-Goal optimization is an evidence-deduplication rule, not a safety or authority escape",
         ):
             self.assertIn(required, body)
-        self.assertNotIn("about to leave it for a different Ticket", body)
-        self.assertNotIn("last remaining Ticket and fresh whole-Spec Goal Verification will run immediately", body)
 
-    def test_mutation_overlap_invalidates_whole_ticket_verification_cycle(self) -> None:
+    def test_mutation_overlap_invalidates_whole_ticket_verification_cycle_without_finishing_it_for_ceremony(self) -> None:
         body = normalized(LOOP)
         for required in (
             "whole cycle immediately loses Ticket-progression authority",
-            "Still-safe Runner observations may remain navigation",
-            "let every Runner from the overlapped cycle return or be host-confirmed stopped",
-            "every Runner-started product effect has reached its authored terminal/cleanup boundary",
-            "reviews the combined current project",
-            "freshly reobserves every AC of the active Ticket",
-            "new Verification Lead cycle with fresh Runner invocations",
-            "Do not carry forward earlier PASS rows or an earlier aggregate across that mutation boundary",
+            "do not create new Runner assignments merely to finish the invalidated cycle's old coverage or roster",
+            "already-active Runner observation may continue only when it can still materially surface a distinct current correction or the user explicitly required that continued observation",
+            "otherwise request stop at the next host-controllable boundary",
+            "Any already-started product effects still reach their authored terminal/cleanup boundary",
+            "Qualifying results that do arrive remain navigation only",
+            "Do not carry forward earlier PASS rows or an earlier aggregate across the mutation boundary",
+            "lightweight Ralph integration/authority preflight",
+            "fresh Ticket Verification cycle for an earlier all-`Independent` Ticket",
+            "direct Goal Verification for an eligible last/only all-`Independent` Ticket",
+            "Ralph fresh AC reobservation for mixed/non-independent flows",
         ):
             self.assertIn(required, body)
 
@@ -345,7 +345,7 @@ class IISGoalLoopContractTests(unittest.TestCase):
         ):
             self.assertIn(required, body)
 
-    def test_shared_acquisition_never_weakens_settled_post_mutation_reobservation(self) -> None:
+    def test_shared_acquisition_never_weakens_the_single_settled_observer_path(self) -> None:
         body = normalized(LOOP)
         for required in (
             "acquire that shared boundary once and classify each linked AC separately",
@@ -354,25 +354,24 @@ class IISGoalLoopContractTests(unittest.TestCase):
             "do not infer equivalence merely because the ACs concern nearby product behavior",
             "no combined AC verdict",
             "Any product/source mutation after the acquisition invalidates it",
-            "settled post-mutation reobservation",
-            "one fresh execution/readback may decide several linked AC observations",
-            "every AC remains separately classified",
-            "no observation from before or during the mutation interval may be reused",
+            "Verification Lead becomes the first settled fresh full-AC observer",
+            "Mixed or non-independent Tickets retain Ralph fresh AC reobservation",
+            "apply step 1's shared-acquisition rule",
+            "Do not insert a redundant full Ralph AC acquisition before a verifier that must independently acquire those same current boundaries",
         ):
             self.assertIn(required, body)
 
-    def test_runner_finding_can_stream_to_ralph_without_waiting_for_other_runners(self) -> None:
+    def test_runner_finding_can_stream_to_ralph_without_forcing_invalidated_cycle_completion(self) -> None:
         body = normalized(LOOP)
         for required in (
-            "Verification Lead forwards a qualifying current finding from a fresh Runner before the cycle finishes",
-            "immediately act on it under steps 2 and 3",
-            "instead of waiting for the remaining Runner assignments or final aggregate",
-            "Other still-safe Runner observations may continue",
-            "Verification Lead may forward additional qualifying findings",
+            "Verification Lead forwards a qualifying current finding from a fresh Runner",
+            "immediately act on it under steps 2 and 3 instead of waiting for the remaining Runner assignments or final aggregate",
             "Only Ralph decides whether a finding justifies same-Ticket implementation or belongs at an operator, environment, or authority gate",
             "only Ralph decides whether and when to invoke more same-Ticket implementation within the user's role bindings and consumption conditions",
-            "instead of consuming another reserved role merely because a separate Runner found it",
+            "existing-invocation-first rule instead of consuming another reserved role",
             "Neither Runner nor Verification Lead dispatches mutation or remediates product code itself",
+            "do not create new Runner assignments merely to finish the invalidated cycle's old coverage or roster",
+            "already-active Runner observation may continue only when it can still materially surface a distinct current correction or the user explicitly required that continued observation",
         ):
             self.assertIn(required, body)
 

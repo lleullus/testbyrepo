@@ -185,14 +185,15 @@ Lead forwards that exact current observation to the caller immediately instead o
 waiting for the remaining Runner assignments or final aggregate. The forwarded
 finding is navigation only: neither Runner nor Lead turns it into an early AC
 verdict, remediation instruction, or new authority, and neither presumes that an
-environment, operator, or authority limitation is implementation-owned. Other
-still-safe Runner observations may continue. The caller alone decides whether
-current in-Scope implementation should begin or whether the observation belongs
-at an operator, environment, or authority gate. If implementation begins during
-this verification cycle, the mutation-overlap rule below applies to the whole
-cycle. Additional qualifying Runner findings may likewise be forwarded while
-continued observation remains safe and attributable. When the host cannot carry
-intermediate communication, complete the ordinary fresh verification result
+environment, operator, or authority limitation is implementation-owned. Before
+mutation begins, other still-safe Runner observations may continue. The caller
+alone decides whether current in-Scope implementation should begin or whether the
+observation belongs at an operator, environment, or authority gate. If
+implementation begins during this verification cycle, the mutation-overlap rule
+below applies to the whole cycle and controls whether any already-active observation
+continues. Additional qualifying Runner findings may likewise be forwarded only
+while continued observation remains useful under that rule. When the host cannot
+carry intermediate communication, complete the ordinary fresh verification result
 without inventing another transport or state mechanism.
 
 An authored product trigger may create or change its expected product state or
@@ -244,6 +245,14 @@ order or concurrency change unrelated to this cycle does not invalidate it, and 
 future Runner-assignment change may be applied to still-unassigned work without
 throwing away already attributable evidence when the delta does not affect it.
 
+A prospective Runner withdrawal or future-assignment change does not retroactively
+invalidate evidence obtained while that Runner was validly admitted. Retain that
+evidence when product/source currentness, coverage, attribution, target/effect
+safety, and the user's instruction do not reject the already-obtained observation.
+Invalidate prior evidence only when the user explicitly rejects that prior
+observation, the Runner was never eligible for that role, or one of those
+evidence-meaning conditions changed. The withdrawn Runner receives no new work.
+
 If the caller or any concurrent actor mutates product/source after the cycle
 begins, or one of the material evidence conditions above changes, the whole
 Lead/Runner cycle loses Ticket-progression authority; the caller must not use any
@@ -252,18 +261,23 @@ observation was admissible at the time. A wording-only or other orchestration
 change that cannot affect coverage, currentness, attribution, safety, or the
 progression decision does not invalidate the cycle merely because a file changed.
 
-Let still-safe Runner work finish only as current navigation after invalidation.
-Stop assigning new work to a withdrawn or newly ineligible Runner. Before another
-authoritative cycle, every Runner from the overlapped cycle must return or be
-host-confirmed stopped. Any materially superseded Runner whose effect or evidence
-is part of the invalidated boundary must also return or be host-confirmed stopped,
-and every Runner-started product effect must reach its authored terminal/cleanup
-boundary or be established unable to mutate the target. After mutation or the
-material live-contract reconciliation and those effects are quiescent, the caller
-freshly reobserves the full active Ticket and obtains a new Verification Lead cycle
-with fresh Runner invocations under the current contract. Do not carry forward an
-earlier PASS row or aggregate. This rule creates no retained verification state,
-cycle ID, Runner registry, or generation identity.
+After mutation invalidates Ticket-progression authority, do not create new Runner
+assignments merely to finish the invalidated cycle's old coverage or roster. An
+already-active Runner observation may continue only when it can still materially
+surface a distinct current correction or the user explicitly required that
+continued observation; otherwise request stop at the next host-controllable
+boundary. Stop assigning new work to a withdrawn or newly ineligible Runner. Any
+already-started product effects still reach their authored terminal/cleanup
+boundary or are established unable to mutate the target. Before another
+authoritative cycle, every Runner that remains active in the invalidated boundary
+must return or be host-confirmed stopped. Any materially superseded Runner whose
+effect or evidence is part of that invalidated boundary must also return or be
+host-confirmed stopped. After mutation or the material live-contract reconciliation
+and those effects are quiescent, the caller follows the Ralph post-mutation path and
+obtains whatever fresh authoritative observation that path requires. Do not carry
+forward an earlier PASS row or aggregate across a mutation-invalidated cycle. This
+rule creates no retained verification state, cycle ID, Runner registry, or
+generation identity.
 
 ## Verdicts And Result
 

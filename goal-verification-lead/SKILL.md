@@ -181,6 +181,14 @@ when the delta does not affect it. A wording-only or other orchestration change
 that cannot affect final coverage, currentness, attribution, safety, or aggregate
 does not invalidate the cycle merely because a file changed.
 
+A prospective Runner withdrawal or future-assignment change does not retroactively
+invalidate evidence obtained while that Runner was validly admitted. Retain that
+evidence when product/source currentness, coverage, attribution, target/effect
+safety, and the user's instruction do not reject the already-obtained observation.
+Invalidate prior evidence only when the user explicitly rejects that prior
+observation, the Runner was never eligible for that role, or one of those
+evidence-meaning conditions changed. The withdrawn Runner receives no new work.
+
 Any still-safe Runner work from an invalidated cycle is navigation only. Stop
 assigning new work to a withdrawn or newly ineligible Runner. Every overlapped
 Runner must return or be host-confirmed stopped. Every materially superseded

@@ -91,16 +91,18 @@ class VerificationLeadContractTests(unittest.TestCase):
         self.assertIn("This currentness recheck does not replace product evidence", NORMALIZED)
         self.assertIn("Do not create a digest, snapshot, retained source, or durable identity", NORMALIZED)
 
-    def test_mutation_overlap_invalidates_whole_runner_cycle_for_progression(self) -> None:
+    def test_mutation_overlap_invalidates_whole_runner_cycle_for_progression_without_ceremonial_completion(self) -> None:
         for required in (
             "Ticket Verification Lead cycle can authorize the caller to leave the Ticket only when the product/source observed by that cycle remained stable",
             "whole Lead/Runner cycle loses Ticket-progression authority",
             "must not use any row or aggregate from that cycle to leave the Ticket",
-            "every Runner from the overlapped cycle must return or be host-confirmed stopped",
-            "every Runner-started product effect must reach its authored terminal/cleanup boundary",
-            "freshly reobserves the full active Ticket",
-            "new Verification Lead cycle with fresh Runner invocations",
-            "Do not carry forward an earlier PASS row or aggregate",
+            "do not create new Runner assignments merely to finish the invalidated cycle's old coverage or roster",
+            "already-active Runner observation may continue only when it can still materially surface a distinct current correction or the user explicitly required that continued observation",
+            "otherwise request stop at the next host-controllable boundary",
+            "already-started product effects still reach their authored terminal/cleanup boundary",
+            "caller follows the Ralph post-mutation path",
+            "whatever fresh authoritative observation that path requires",
+            "Do not carry forward an earlier PASS row or aggregate across a mutation-invalidated cycle",
             "creates no retained verification state, cycle ID, Runner registry, or generation identity",
         ):
             self.assertIn(required, NORMALIZED)
@@ -114,17 +116,17 @@ class VerificationLeadContractTests(unittest.TestCase):
         self.assertIn("Missing implementation entrypoint or verification readback alone is not an AC contradiction", NORMALIZED)
         self.assertIn("canonical-target presence/absence is itself the authored claim", NORMALIZED)
 
-    def test_runner_finding_can_be_forwarded_before_final_aggregate(self) -> None:
+    def test_runner_finding_can_be_forwarded_before_final_aggregate_without_forcing_old_coverage(self) -> None:
         for required in (
             "fresh Runner reports admissible current evidence",
             "concrete current Ticket-owned implementation, integration, surface, or readback absence",
             "Verification Lead forwards that exact current observation to the caller immediately",
             "instead of waiting for the remaining Runner assignments or final aggregate",
             "neither Runner nor Lead turns it into an early AC verdict, remediation instruction, or new authority",
-            "Other still-safe Runner observations may continue",
+            "Before mutation begins, other still-safe Runner observations may continue",
             "caller alone decides whether current in-Scope implementation should begin or whether the observation belongs at an operator, environment, or authority gate",
-            "mutation-overlap rule below applies to the whole cycle",
-            "Additional qualifying Runner findings may likewise be forwarded",
+            "mutation-overlap rule below applies to the whole cycle and controls whether any already-active observation continues",
+            "Additional qualifying Runner findings may likewise be forwarded only while continued observation remains useful under that rule",
             "host cannot carry intermediate communication",
             "without inventing another transport or state mechanism",
         ):

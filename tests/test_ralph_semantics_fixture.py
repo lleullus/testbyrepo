@@ -486,6 +486,76 @@ class RalphSemanticsFixtureTests(unittest.TestCase):
         should_start_second = first_active and max_concurrency > 1 and exact_immediate_overlap
         self.assertTrue(should_start_second)
 
+    def test_independent_ticket_uses_one_settled_full_ac_observer_after_mutation(self) -> None:
+        events: list[str] = []
+        product = {"ac_1": True, "ac_2": True}
+
+        # Ralph checks integration/current authority only; it does not run AC flows.
+        events.append("ralph-lightweight-preflight")
+        self.assertTrue(all(product.values()))
+
+        ticket_full_acquisitions = 0
+
+        def ticket_verification() -> dict[str, bool]:
+            nonlocal ticket_full_acquisitions
+            ticket_full_acquisitions += 1
+            events.append("ticket-full-observer")
+            return dict(product)
+
+        observed = ticket_verification()
+        self.assertTrue(all(observed.values()))
+        self.assertEqual(ticket_full_acquisitions, 1)
+        self.assertEqual(events, ["ralph-lightweight-preflight", "ticket-full-observer"])
+
+    def test_last_only_independent_ticket_uses_goal_verification_as_single_settled_full_observer(self) -> None:
+        product = {"ticket_ac_1": True, "ticket_ac_2": True, "global": True}
+        ticket_verification_calls = 0
+        goal_verification_calls = 0
+
+        # Lightweight Ralph preflight establishes only no known integration work.
+        no_known_implementation_work = True
+        self.assertTrue(no_known_implementation_work)
+
+        def goal_verification() -> dict[str, bool]:
+            nonlocal goal_verification_calls
+            goal_verification_calls += 1
+            return dict(product)
+
+        final = goal_verification()
+        self.assertTrue(all(final.values()))
+        self.assertEqual(ticket_verification_calls, 0)
+        self.assertEqual(goal_verification_calls, 1)
+
+    def test_invalidated_navigation_cycle_does_not_spawn_replacement_runners_before_quiescence(self) -> None:
+        new_assignments: list[str] = []
+        active = {
+            "useful": {"distinct_correction_value": True, "user_required": False},
+            "ceremonial": {"distinct_correction_value": False, "user_required": False},
+        }
+
+        for state in active.values():
+            should_continue = state["distinct_correction_value"] or state["user_required"]
+            state["stop_requested"] = not should_continue
+
+        # Mutation invalidated the cycle, so old uncovered rows do not spawn work.
+        self.assertEqual(new_assignments, [])
+        self.assertFalse(active["useful"]["stop_requested"])
+        self.assertTrue(active["ceremonial"]["stop_requested"])
+
+    def test_prospective_runner_withdrawal_keeps_prior_valid_observation(self) -> None:
+        evidence = {"readback": "current", "runner_valid_when_observed": True}
+        future_assignment_allowed = False
+        user_rejects_prior_observation = False
+        evidence_meaning_changed = False
+
+        keep = (
+            evidence["runner_valid_when_observed"]
+            and not user_rejects_prior_observation
+            and not evidence_meaning_changed
+        )
+        self.assertFalse(future_assignment_allowed)
+        self.assertTrue(keep)
+
     def test_inconclusive_with_known_bounded_path_cannot_become_no_progress(self) -> None:
         paths = {
             "authored-boundary": {"known": True, "safe": True, "exhausted": True},

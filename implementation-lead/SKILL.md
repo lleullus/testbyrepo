@@ -173,12 +173,13 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    or focused-check path, an unauthorized shared, credential-bearing, destructive,
    or external effect without a safe in-scope alternative, or an unresolved
    product, scope, contract, authority, or externally observable behavior decision.
-   For every materially distinct product route required by an executable AC,
-   exact authored `## Verification` product flow, and authorized Scope that must
-   reach a Ticket-owned externally observable outcome/readback from an actual
-   product trigger or contract boundary, make a concrete post-implementation
-   actual-product check plan before
-   mutation. Directly confirm before mutation each non-Ticket runtime,
+   For every materially distinct product route this implementation will create,
+   change, or materially affect under an executable AC, exact authored
+   `## Verification` product flow, and authorized Scope, make a concrete
+   post-implementation actual-product focused-check plan before mutation. Do not
+   pre-plan execution of unchanged viewport/state/branch combinations merely
+   because later independent verification must cover them. Directly confirm before
+   mutation each non-Ticket runtime,
    executable or external dependency, credential/environment, authorization, and
    safe external-effect prerequisite that the plan requires to exist
    independently of the Ticket implementation. This confirms only
@@ -229,18 +230,24 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    AC, final UI, or whole-Ticket verdict. Preserve the exact authored
    `## Verification` product-flow count, order, trigger, expected effect,
    readback, and grouping while using those flows to select implementation-stage
-   checks. After implementation, for
-   each materially distinct route, trace in the resulting project and actual
-   diff from the actual trigger or contract boundary through the applicable real
-   caller, registration/export, product configuration,
-   executable/dependency/startup wiring, and integration link to the
-   Ticket-owned outcome/readback surface. From the minimum set of safe,
-   authorized actual-product focused checks for those routes, obtain current
-   direct raw product-boundary observations; an existing supported product-level
-   check may be reused, and a Ticket-created executable, startup, or entry may
-   be used as ordinary product implementation. Do not create a new check-only
-   test or surface. One check may traverse several ACs or routes; do not require
-   one check per AC. Gross actual-product liveness requires that the
+   checks. Implementation-stage checks are a minimum focused liveness/integration
+   gate, not a rehearsal of independent verification. Do not execute the complete
+   authored browser, viewport, state, lifecycle, or AC matrix merely to pre-prove
+   the Ticket before Verification Lead or Goal Verification Lead runs. Exercise
+   only the changed materially distinct routes and the minimum representative
+   rendered/runtime conditions needed to catch an obvious broken integration; Full
+   authored verification coverage remains with the later verification authority.
+   After implementation, trace each changed or integration-affected materially
+   distinct route in the resulting project and actual diff from the actual trigger
+   or contract boundary through the applicable real caller, registration/export,
+   product configuration, executable/dependency/startup wiring, and integration
+   link to the Ticket-owned outcome/readback surface. From the minimum set of safe,
+   authorized actual-product focused checks for those routes, obtain current direct
+   raw product-boundary observations; an existing supported product-level check may
+   be reused, and a Ticket-created executable, startup, or entry may be used as
+   ordinary product implementation. Do not create a new check-only test or surface.
+   One check may traverse several ACs or routes; do not require one check per AC.
+   Gross actual-product liveness requires that the
    actual startup or entry can be exercised without route or startup failure and
    that the Ticket-owned outcome/readback surface is reachable. When a normal
    product boundary already exposes a success/failure class or invocation
@@ -293,8 +300,10 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    is missing, stop and report that exact boundary and the responsible
    environment, dependency, authority, or decision owner. Implementation can be
    complete only after no known correctable in-scope due-now implementation work
-   remains and every materially distinct required route has the applicable
-   current gross actual-product observations from paragraph 7. Failure to obtain
+   remains and every materially distinct changed or integration-affected required
+   route has the applicable current gross actual-product observations from paragraph
+   7. Unchanged viewport/state/branch combinations are not repeated here solely to
+   satisfy later verification coverage. Failure to obtain
    stronger causal attribution because normal product semantics do not provide
    it and a Ticket-unowned seam would be needed does not fail this gate; report
    the exact residual causal uncertainty as an implementation-result limitation.

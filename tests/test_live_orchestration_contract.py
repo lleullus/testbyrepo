@@ -108,10 +108,35 @@ class LiveOrchestrationContractTests(unittest.TestCase):
         body = normalized(LOOP)
         for required in (
             "Scheduling repair is prospective",
-            "Already-produced authorized mutation remains current product state",
+            "product-authorized mutation produced by an otherwise eligible implementation binding that was selected at the wrong authored order or timing",
+            "remains current product state",
             "Do not roll it back, repeat the same correction, or reassign that completed correction merely to reconstruct the preferred historical role order",
             "Freshly reobserve the combined current product",
             "only genuinely unfinished current in-Scope work is eligible for a new implementation dispatch",
+            "does not preserve Scope-exceeding, wrong-role, unauthorized-dangerous-effect, or user-explicitly-rejected mutation",
+        ):
+            self.assertIn(required, body)
+
+    def test_observed_scheduling_delta_is_sent_once_as_delta_only_to_affected_active_roles(self) -> None:
+        body = normalized(ROUTER + "\n" + LOOP + "\n" + IMPLEMENTATION)
+        for required in (
+            "send exactly one concise delta-only update to each affected active role",
+            "changed scheduling fact",
+            "effective boundary",
+            "Ticket, Scope, AC, Behavior/UI, and unchanged user intent remain unchanged",
+            "Do not resend the full conversation, closed scheduling history, or unaffected authority",
+            "Unrelated active roles receive no update",
+        ):
+            self.assertIn(required, body)
+
+    def test_exact_immediate_overlap_conflict_is_reported_not_silently_serialized(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "ORCHESTRATION CONFLICT",
+            "Instruction: <exact user-authored immediate-overlap instruction>",
+            "Concrete conflict: <unavailable exact binding | no in-Scope unfinished work to assign | incompatible current mutation | conflicting user instruction | missing required authority>",
+            "Preserved work: <current work that may continue without violating the instruction>",
+            "Lead-owned efficiency or coordination preference is never a conflict reason",
         ):
             self.assertIn(required, body)
 
@@ -138,8 +163,8 @@ class LiveOrchestrationContractTests(unittest.TestCase):
             "whole Lead/Runner cycle loses Ticket-progression authority",
             "A future implementation-role order or concurrency change unrelated to this cycle does not invalidate it",
             "Stop assigning new work to a withdrawn or newly ineligible Runner",
-            "fresh Runner invocations under the current contract",
-            "Do not carry forward an earlier PASS row or aggregate",
+            "obtains whatever fresh authoritative observation that path requires",
+            "Do not carry forward an earlier PASS row or aggregate across a mutation-invalidated cycle",
         ):
             self.assertIn(required, body)
 
@@ -152,6 +177,56 @@ class LiveOrchestrationContractTests(unittest.TestCase):
             "A future implementation-role order or concurrency change unrelated to final observation does not invalidate the cycle",
             "materially superseded Runner whose effect or evidence is part of the invalidated boundary must return or be host-confirmed stopped",
             "new fresh Runner invocations only after quiescence and only under the current contract",
+        ):
+            self.assertIn(required, body)
+
+    def test_prospective_runner_withdrawal_preserves_already_valid_evidence(self) -> None:
+        body = normalized(VERIFICATION + "\n" + GOAL_VERIFICATION)
+        for required in (
+            "A prospective Runner withdrawal or future-assignment change does not retroactively invalidate evidence obtained while that Runner was validly admitted",
+            "Retain that evidence when product/source currentness, coverage, attribution, target/effect safety, and the user's instruction do not reject the already-obtained observation",
+            "Invalidate prior evidence only when the user explicitly rejects that prior observation, the Runner was never eligible for that role, or one of those evidence-meaning conditions changed",
+        ):
+            self.assertIn(required, body)
+
+    def test_independent_ticket_avoids_double_full_ac_acquisition_before_ticket_verification(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "For an all-`Independent` Ticket that will enter Ticket Verification, do not perform a second Ralph full-AC product acquisition merely to pre-screen the verifier",
+            "Verification Lead becomes the first settled fresh full-AC observer after mutation quiescence",
+            "Ralph performs only a lightweight current integration and authority preflight",
+            "Mixed or non-independent Tickets retain Ralph fresh AC reobservation because no Ticket Verification Lead can adjudicate those flows",
+        ):
+            self.assertIn(required, body)
+
+    def test_last_or_only_independent_ticket_can_go_directly_to_goal_verification(self) -> None:
+        body = normalized(LOOP)
+        for required in (
+            "When the active Ticket is the last or only unfinished Ticket",
+            "skip a separate post-mutation Ticket Verification cycle and enter fresh whole-Spec Goal Verification directly",
+            "unless the user explicitly requested a separate Ticket-level verdict",
+            "Goal Verification is the first settled independent full observation for that last/only Ticket and still returns exact candidate Ticket/flow/AC ownership on non-PASS",
+            "This optimization never skips Ticket Verification for an earlier Ticket that Ralph must leave before the Goal-final boundary",
+        ):
+            self.assertIn(required, body)
+
+    def test_invalidated_streaming_verification_does_not_finish_navigation_for_ceremony(self) -> None:
+        body = normalized(LOOP + "\n" + VERIFICATION)
+        for required in (
+            "After mutation invalidates Ticket-progression authority, do not create new Runner assignments merely to finish the invalidated cycle's old coverage or roster",
+            "already-active Runner observation may continue only when it can still materially surface a distinct current correction or the user explicitly required that continued observation",
+            "otherwise request stop at the next host-controllable boundary",
+            "already-started product effects still reach their authored terminal/cleanup boundary",
+        ):
+            self.assertIn(required, body)
+
+    def test_implementation_checks_do_not_pre_run_full_independent_verification_matrix(self) -> None:
+        body = normalized(IMPLEMENTATION)
+        for required in (
+            "Implementation-stage checks are a minimum focused liveness/integration gate, not a rehearsal of independent verification",
+            "Do not execute the complete authored browser, viewport, state, lifecycle, or AC matrix merely to pre-prove the Ticket before Verification Lead or Goal Verification Lead runs",
+            "Exercise only the changed materially distinct routes and the minimum representative rendered/runtime conditions needed to catch an obvious broken integration",
+            "Full authored verification coverage remains with the later verification authority",
         ):
             self.assertIn(required, body)
 

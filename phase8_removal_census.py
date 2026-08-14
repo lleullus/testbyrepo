@@ -63,10 +63,10 @@ ACTIVE_VERIFICATION_DIRECTORIES = frozenset(
 )
 ACTIVE_VERIFICATION_SHA256 = {
     # Updated only with a reviewed canonical leaf change.
-    "verification-lead/SKILL.md": "2fb87ab764efc4e9d6ed97ff967cce3051779ccd371ce1bd783a0cdbcb08e8f4",
+    "verification-lead/SKILL.md": "12261bd0a83a4890501c2ea27fe0dfec781e5de192fa1058d69f9fa9f67b306b",
     "verification-lead/run_tests.py": "8f0c1c288930dda0468d077bb61b6a046aad69b6531dc6cdb7f9d457cf8ea185",
     "verification-lead/verdict_contract.py": "0ec52acc6f27ca9167adbabeddfede4dfcc719e0fe480e124c43e3ff95dba9d7",
-    "verification-lead/tests/test_contract.py": "0dba31cad69786b37a05bc8b32a73a550e344cbb4073454add6ee9f522bc6b0d",
+    "verification-lead/tests/test_contract.py": "b3103729e69e09abdd284aad2eaabb5782405ce093e387295838019dbc0f4f42",
     "verification-lead/tests/pilot/test_representative_pilots.py": "02a122d5efbf0051d67f50b3d370f9dfa2c4f210516dd086d0e9be19a4d1c530",
     "verification-runner/SKILL.md": "088a7191ececb0a4dd8746d60c6bda8cda947a473841de38e4b538ac7f074be4",
     "verification-runner/run_tests.py": "25a1fae8b7834d3c06c3e0fbcc762dfda577a32bf23ef51ffdc278da86f8bf25",
@@ -74,9 +74,9 @@ ACTIVE_VERIFICATION_SHA256 = {
 }
 ACTIVE_RALPH_SHA256 = {
     # Reviewed active Goal-fulfillment route, closure contract, and exact structural admission support.
-    "ARCHITECTURE-CLOSURE.md": "71902cb567335760a38b292598bb596d9db121db11e1f20ee9545b787fe2ae96",
-    "iis-goal-loop/SKILL.md": "42231e688c6b4730c954ca20026d4d5068883d3a1404a7729691d0acdd6069b3",
-    "goal-verification-lead/SKILL.md": "bd83d68cc36a87dd03e3fe1a5056bcd2e518de1836fb02cccb2e7b9a0fcbfaa0",
+    "ARCHITECTURE-CLOSURE.md": "7de5ebda7b60d8780c6abf5f552a6983ef900a643eb6fbf0bda91b76d37aa6f2",
+    "iis-goal-loop/SKILL.md": "2eab9b7681914d07a7e6260d8b0f49b104e2b5c31ff5a446b9203b98e407e37c",
+    "goal-verification-lead/SKILL.md": "f75eb030b56b3bec2618e055e8611ac15dc868856ad4e69d2eda810947e4b75e",
     "matt/skills/to-tickets/validate_ticket_set.py": "2a5eda27390c079bfb21200c71f96eec66f878c2bb9db1bc9696d8e37b8895ea",
 }
 LEGACY_EXECUTABLE_STEMS = (

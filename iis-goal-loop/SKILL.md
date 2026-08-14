@@ -202,6 +202,14 @@ or contract change is observed, continue without a new orchestration checkpoint;
 do not re-read the full conversation or ask a subordinate role to prove that the
 current scheduling intent is still current.
 
+When an observed scheduling delta affects an active role, send exactly one concise
+delta-only update to each affected active role. State only the changed scheduling
+fact, its effective boundary, and that Ticket, Scope, AC, Behavior/UI, and unchanged
+user intent remain unchanged. Do not resend the full conversation, closed
+scheduling history, or unaffected authority. Unrelated active roles receive no
+update. A later materially different user delta may produce one new delta-only
+update; do not repeat an unchanged delta for reassurance.
+
 When a newly observed delta withdraws a role, changes authored ordering or exact
 consumption, or reduces allowed concurrency, treat the correction prospectively.
 Do not undo completed mutation or restart already-satisfied work merely to make
@@ -307,15 +315,29 @@ user explicitly fixed, the exact number, timing, and technical allocation of
 invocations remain implementation-owned for later cycles and are not planning or
 verification semantics.
 
-Scheduling repair is prospective. Already-produced authorized mutation remains
-current product state even when Ralph later discovers that a different binding
-should have been selected under the user's ordering. Do not roll it back, repeat
-the same correction, or reassign that completed correction merely to reconstruct
-the preferred historical role order. Freshly reobserve the combined current
-product first; only genuinely unfinished current in-Scope work is eligible for a
-new implementation dispatch, and the authored binding order is then reapplied to
-that future dispatch. A scheduling correction is not product authority and does
-not make the historical role choice part of acceptance.
+If the exact immediate-overlap instruction cannot be executed as authored, do not
+silently serialize, substitute a different binding, or manufacture duplicate work.
+Lead-owned efficiency or coordination preference is never a conflict reason.
+Return the exact boundary:
+
+```text
+ORCHESTRATION CONFLICT
+Instruction: <exact user-authored immediate-overlap instruction>
+Concrete conflict: <unavailable exact binding | no in-Scope unfinished work to assign | incompatible current mutation | conflicting user instruction | missing required authority>
+Preserved work: <current work that may continue without violating the instruction>
+```
+
+Scheduling repair is prospective. Already-produced product-authorized mutation
+produced by an otherwise eligible implementation binding that was selected at the
+wrong authored order or timing remains current product state. Do not roll it back,
+repeat the same correction, or reassign that completed correction merely to
+reconstruct the preferred historical role order. Freshly reobserve the combined
+current product first; only genuinely unfinished current in-Scope work is eligible
+for a new implementation dispatch, and the authored binding order is then
+reapplied to that future dispatch. This preservation is narrow: it does not
+preserve Scope-exceeding, wrong-role, unauthorized-dangerous-effect, or
+user-explicitly-rejected mutation. A scheduling correction is not product authority
+and does not make the historical role choice part of acceptance.
 
 When a fresh qualifying observation materially refines, confirms, or contradicts
 work already being performed by an active same-Ticket implementation invocation,
@@ -371,105 +393,124 @@ unchanged inputs.
 
 Individual Implementation Lead results are current implementation information,
 not independent evidence. While another authorized same-Ticket product/source
-mutation remains in flight, Ralph does not need to stop the useful work merely to
-perform a full Ticket reobservation after each individual result. Before Ralph
-can treat the Ticket as provisionally satisfied, start an authoritative Ticket
-Verification cycle, or enter whole-Spec Goal Verification after all required
-Ticket cycles, all current-Ralph implementation mutation for the active Ticket
-must finish. Any earlier Ticket Verification Lead/Runner cycle that overlapped
-that mutation must have quiesced: every Runner must have returned or been
-host-confirmed stopped, and every Runner-started product effect must have reached
-its authored terminal/cleanup boundary or be established unable to mutate the
-target. Do not start the settled fresh reobservation or a new authoritative
-verification cycle while an earlier navigation-only Runner or one of its
-still-running effects can still change the target being evaluated. Ralph then
-reviews the resulting current project as one combined product, confirms that the
-settled changes remain inside the Ticket Scope and preserve current user/concurrent
-changes without an unresolved integration conflict, and freshly reobserves every
-AC of the active Ticket at its authored product/canonical boundaries. A regression
-in a previously satisfied AC becomes current unfinished work immediately.
+mutation remains in flight, Ralph does not need to stop useful work merely to
+perform a full Ticket reobservation after each individual result. Before any
+settled authoritative verification or whole-Spec Goal Verification, all current-Ralph
+implementation mutation for the active Ticket must finish and every still-active
+Runner/product effect that can change the evaluated target must return,
+be host-confirmed stopped, or reach its authored terminal/cleanup boundary.
 
-The shared-acquisition rule from step 1 applies to this settled post-mutation
-reobservation: one fresh execution/readback may decide several linked AC
-observations, but every AC remains separately classified and no observation from
-before or during the mutation interval may be reused as current post-mutation
-evidence.
+Ralph then reviews the resulting current project as one combined product. Ralph
+performs only a lightweight current integration and authority preflight: confirm
+that settled source/diff integration is coherent, changes remain inside Ticket
+Scope, current user/concurrent changes are preserved, the current Ticket/Spec/
+Behavior/UI authority chain is still applicable, and no directly known source-
+visible or integration-owned unfinished work remains. This preflight is navigation,
+not AC evidence or a verdict.
 
-When the active Ticket is provisionally satisfied and every authored flow on that
-Ticket is `Independent`, invoke the separate `../verification-lead/SKILL.md`
-before Ralph treats that Ticket as verified for progression. This requirement
-applies to every such Ticket, including the last or only Ticket immediately before
-whole-Spec Goal Verification. Goal Verification is not a substitute for this
-Ticket-level streaming feedback cycle. Pass through the current-conversation
-user-designated `Verification Runner` bindings and consumption conditions when
-present; otherwise Verification Lead may use its host-provided invocation-local
-Runner roles. For any Verification Lead or Goal Verification Lead invocation,
-Ralph may pass navigation and current safety facts but must not prescribe a reduced
-verification subset, forbid an authored observation on its own authority, or treat
-its own decision not to attempt a boundary as dependency unavailability. The invoked
-Lead derives verification coverage from current authored authority. `VERIFIED`
-permits Ralph to leave/close the Ticket for navigation only when no product/source
-mutation overlapped that Verification Lead/Runner cycle. It never completes the
-parent Goal. `FAILED` returns to the same Ticket;
-`INCONCLUSIVE` remains current unfinished work and is handled by correction, an
-exact operator/environment/authority action or gate, or another defined evidence
-path.
+For an all-`Independent` Ticket that will enter Ticket Verification, do not perform
+a second Ralph full-AC product acquisition merely to pre-screen the verifier.
+Verification Lead becomes the first settled fresh full-AC observer after mutation
+quiescence and derives complete authored coverage itself. Mixed or non-independent
+Tickets retain Ralph fresh AC reobservation because no Ticket Verification Lead can
+adjudicate those flows; for those Tickets, apply step 1's shared-acquisition rule
+and reobserve each current AC at its authored boundary before final progression.
+
+For an all-`Independent` Ticket that Ralph must leave before the Goal-final
+boundary, invoke the separate `../verification-lead/SKILL.md` after the lightweight
+preflight. Pass through the current-conversation user-designated `Verification
+Runner` bindings and consumption conditions when present; otherwise Verification
+Lead may use its host-provided invocation-local Runner roles. For any Verification
+Lead or Goal Verification Lead invocation, Ralph may pass navigation and current
+safety facts but must not prescribe a reduced verification subset, forbid an
+authored observation on its own authority, or treat its own decision not to attempt
+a boundary as dependency unavailability. The invoked Lead derives verification
+coverage from current authored authority. `VERIFIED` permits Ralph to leave/close
+that earlier Ticket for navigation only when no product/source mutation overlapped
+that authoritative Lead/Runner cycle. It never completes the parent Goal. `FAILED`
+returns to the same Ticket; `INCONCLUSIVE` remains current unfinished work and is
+handled by correction, an exact operator/environment/authority action or gate, or
+another defined evidence path.
+
+When the active Ticket is the last or only unfinished Ticket, all its authored
+flows are `Independent`, the lightweight preflight finds no known unfinished in-
+Scope implementation/integration work, and all mutation/effects are quiescent,
+skip a separate post-mutation Ticket Verification cycle and enter fresh whole-Spec
+Goal Verification directly unless the user explicitly requested a separate
+Ticket-level verdict. Goal Verification is the first settled independent full observation
+for that last/only Ticket and still returns exact candidate Ticket/flow/AC ownership
+on non-PASS. This optimization never skips Ticket Verification for an earlier
+Ticket that Ralph must leave before the Goal-final boundary and never turns Ralph's
+preflight into completion evidence.
 
 When Verification Lead forwards a qualifying current finding from a fresh Runner
-before the cycle finishes, Ralph may immediately act on it under steps 2 and 3
-instead of waiting for the remaining Runner assignments or final aggregate. Other
-still-safe Runner observations may continue and Verification Lead may forward
-additional qualifying findings. Only Ralph decides whether a finding justifies
-same-Ticket implementation or belongs at an operator, environment, or authority
-gate, and only Ralph decides whether and when to invoke more same-Ticket
-implementation within the user's role bindings and consumption conditions. When
-a finding materially refines work already in flight, apply step 3's existing-
-invocation-first rule instead of consuming another reserved role merely because a
-separate Runner found it. Neither Runner nor Verification Lead dispatches mutation
-or remediates product code itself.
+before a streaming cycle finishes, Ralph may immediately act on it under steps 2
+and 3 instead of waiting for the remaining Runner assignments or final aggregate.
+Only Ralph decides whether a finding justifies same-Ticket implementation or belongs
+at an operator, environment, or authority gate, and only Ralph decides whether and
+when to invoke more same-Ticket implementation within the user's role bindings and
+consumption conditions. When a finding materially refines work already in flight,
+apply step 3's existing-invocation-first rule instead of consuming another reserved
+role merely because a separate Runner found it. Neither Runner nor Verification
+Lead dispatches mutation or remediates product code itself.
 
 If any current-Ralph product/source mutation begins after a Ticket Verification
 Lead/Runner cycle starts, the whole cycle immediately loses Ticket-progression
-authority. Still-safe Runner observations may remain navigation, but before a new
-authoritative cycle Ralph must let all current Ticket mutation finish, let every
-Runner from the overlapped cycle return or be host-confirmed stopped, and ensure
-every Runner-started product effect has reached its authored terminal/cleanup
-boundary or is established unable to mutate the target. Ralph then reviews the
-combined current project, freshly reobserves every AC of the active Ticket, and
-obtains a new Verification Lead cycle with fresh Runner invocations. Do not carry
-forward earlier PASS rows or an earlier aggregate across that mutation boundary.
+authority. After mutation invalidates Ticket-progression authority, do not create
+new Runner assignments merely to finish the invalidated cycle's old coverage or
+roster. An already-active Runner observation may continue only when it can still
+materially surface a distinct current correction or the user explicitly required
+that continued observation; otherwise request stop at the next host-controllable
+boundary. Any already-started product effects still reach their authored
+terminal/cleanup boundary or are established unable to mutate the target. Qualifying results
+that do arrive remain navigation only. Do not carry forward earlier PASS rows or an
+earlier aggregate across the mutation boundary.
 
-Do not skip required Independent Ticket Verification because the Ticket is the
-last/only Ticket or because replaying an expensive, one-shot, destructive,
-credential-bearing, production, or duplicate-sensitive effect would be unsafe.
-Prefer a fresh read of already-current authoritative state/readback when the
-Ticket contract permits it; otherwise coordinate one valid safe acquisition that
-can serve genuinely linked observations, serialize relevant Runner work when
-needed for attribution/effect safety, or accept `INCONCLUSIVE` with the exact
-environment/operator/authority evidence limit when required Independent evidence
-cannot be obtained safely. Do not leap directly to Goal Verification to avoid this
-cycle. Mixed/non-independent flows remain under Ralph provisional observation and
-final Goal Verification because the Independent Ticket Verification route cannot
-adjudicate them.
+After current Ticket mutation and invalidated Runner/effects quiesce, use the same
+post-mutation path above: lightweight Ralph integration/authority preflight, then a
+fresh Ticket Verification cycle for an earlier all-`Independent` Ticket, direct
+Goal Verification for an eligible last/only all-`Independent` Ticket, or Ralph
+fresh AC reobservation for mixed/non-independent flows. Do not insert a redundant
+full Ralph AC acquisition before a verifier that must independently acquire those
+same current boundaries.
+
+For any required independent observation, prefer a fresh read of already-current
+authoritative state/readback when the contract permits it; otherwise coordinate one
+valid safe acquisition that can serve genuinely linked observations, serialize
+relevant Runner work when needed for attribution/effect safety, or accept
+`INCONCLUSIVE` with the exact environment/operator/authority evidence limit when
+required Independent evidence cannot be obtained under current authority. The
+last/only direct-Goal optimization is an evidence-deduplication rule, not a safety
+or authority escape.
 
 ### 5. Reconsider The Complete Ticket Set
 
-When the active Ticket has no currently observed unmet AC, reread the complete
-ready Ticket set and current affected product boundaries. Refresh any AC whose
-boundary could have changed because of the implementation. Do not blindly rerun
-costly unrelated external effects only to manufacture ceremony; final Goal
-Verification will independently reobserve the full approved completion contract.
+After an earlier all-`Independent` Ticket obtains current `VERIFIED`, or after a
+mixed/non-independent Ticket's required Ralph fresh reobservation shows no current
+unmet AC, reread the complete ready Ticket set and only the other product boundaries
+that the just-finished implementation could materially have changed. Refresh an
+earlier/sibling Ticket AC only when its authored boundary is actually affected; do
+not rerun the active Ticket's full AC set after its verifier already acquired it,
+and do not rerun costly unrelated external effects to manufacture ceremony.
 
-If any current Ticket AC is still unmet, return to step 2.
+If this bounded cross-Ticket check exposes a current unmet AC, that Ticket becomes
+current unfinished work and Ralph returns to step 2 for that Ticket. When the active
+Ticket is the last/only direct-Goal candidate and no sibling boundary exists, do not
+insert an empty reconsideration ceremony before Goal Verification.
 
 ### 6. Fresh Whole-Spec Verification
 
-Only when the complete Ticket set is provisionally satisfied, every applicable
-all-Independent Ticket has a current non-overlapped `VERIFIED` Ticket Verification
-cycle, and all implementation/verification mutation-capable effects are quiescent,
-invoke `../goal-verification-lead/SKILL.md` with the exact approved Spec, exact
-validated Ticket set, exact Project Root, and the current-conversation
-user-designated `Verification Runner` bindings/conditions when present.
+Invoke `../goal-verification-lead/SKILL.md` only after all implementation and prior
+verification mutation-capable effects are quiescent and no directly known in-Scope
+implementation/integration work remains. Every earlier all-`Independent` Ticket that
+Ralph had to leave before this final boundary must have a current non-overlapped
+`VERIFIED` Ticket Verification cycle. The current last/only all-`Independent`
+Ticket may instead enter under step 4's direct-Goal optimization without a separate
+post-mutation Ticket verdict; a mixed/non-independent final Ticket must have its
+required fresh Ralph AC reobservation. Then invoke Goal Verification with the exact
+approved Spec, exact validated Ticket set, exact Project Root, and the current-
+conversation user-designated `Verification Runner` bindings/conditions when
+present.
 
 Implementation reports, candidate recipes, Ticket checkpoints, tests, prior
 Runner observations, prior Ticket-verification evidence, and the Ralph working
