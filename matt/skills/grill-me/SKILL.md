@@ -45,7 +45,7 @@ but no inspectable root or repository context exists yet, confirm only:
 - applicable external/public/persisted identities and intentionally fixed
   runtime, toolchain, deployment, or operational constraints; and
 - whether every remaining material bootstrap choice is fixed or explicitly
-  delegated to Implementation Lead/Worker.
+  delegated to later Ticket delivery.
 
 Do not ask for private package/module identity, dependencies, future file
 layout, commands, or a mutation envelope. The exact product `Project-Root` must
@@ -61,5 +61,4 @@ implementation work.
 ## Next Action
 
 Use `to-spec` only after Behavior Design completes and the user confirms
-the integrated contract-only shared understanding. Do not start implementation or invoke Implementation Lead, a
-Worker, `/implement`, `/tdd`, `/code-review`, or another execution chain.
+the integrated contract-only shared understanding. Do not start or orchestrate delivery from this planning flow.

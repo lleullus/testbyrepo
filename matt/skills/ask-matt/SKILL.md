@@ -370,7 +370,7 @@ Next action: <return to Scope Shaper or select one exact ready Work Package>
    applicable external/public/persisted identities and deliberately fixed
    runtime, toolchain, deployment, or operational constraints; and whether all
    remaining material bootstrap choices are fixed or explicitly delegated to
-   Implementation Lead/Worker. Do not ask the user to invent a private package
+   later Ticket delivery. Do not ask the user to invent a private package
    identity, future file list, dependency, or mutation envelope.
 10. Use `to-tickets` only from an approved Spec. It creates the smallest set of
    independently observable desired-state Tickets, not an anticipated internal
@@ -383,7 +383,7 @@ approved contract; it must not introduce a more specific protocol, interface,
 format, transport, storage model, component, algorithm, or implementation
 sequence than its normative source.
 
-Planning stops at a ready Ticket. Do not invoke Implementation Lead, a Worker, `/implement`, `/tdd`, `/code-review`, or another execution chain.
+Planning stops at a ready Ticket. Do not invoke or orchestrate delivery from Ask Matt.
 
 Do not direct users to `triage`, `improve-codebase-architecture`, remote trackers, or execution skills as active paths in this local planning flow.
 
@@ -399,19 +399,11 @@ The result of starting the selected planning flow, not merely a recommended plan
 
 Matt owns contract coherence, not implementation feasibility proof. Matt ends
 with declarative Tickets and does not choose or recommend the final internal
-implementation path. Implementation Lead inspects the current repository and
-selects, validates, and revises that path later.
+implementation path. Later Ticket delivery owns those implementation decisions.
 
 After ready Tickets exist, stop the Matt flow and report every ready Ticket by
-its canonical absolute path. Ask Matt itself never invokes Implementation Lead,
-the Ralph loop, a Worker, `/implement`, `/tdd`, `/code-review`, or another
-execution chain.
+its canonical absolute path. Ask Matt never invokes or supervises delivery.
 
-For an explicit or planning-only Matt request, state only that these Tickets can
-be used to start implementation later; starting implementation is a separate
-user action. When Ask Matt was invoked by the canonical IIS entry router under an
-already explicit end-to-end product-completion request, return the ready Ticket
-result to that router. The router may reuse that still-current user completion
-intent to enter the Ralph Goal Fulfillment Loop after Matt has stopped. This does
-not let Ask Matt continue into implementation, ask for or suggest a Worker, or
-create a second planning mode.
+State that the validated Ready Ticket Set is the terminal IIS planning output.
+Any later implementation or verification is outside IIS Planning and starts as a
+separate delivery action.

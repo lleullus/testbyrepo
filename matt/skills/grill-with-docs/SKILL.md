@@ -69,7 +69,7 @@ authorization decisions that inspection cannot answer:
 - applicable external/public/persisted identities and intentionally fixed
   runtime, toolchain, deployment, or operational constraints; and
 - whether every remaining material bootstrap choice is fixed or explicitly
-  delegated to Implementation Lead/Worker.
+  delegated to later Ticket delivery.
 
 Do not ask the user to select private package/module identity, dependencies,
 source/config/test paths, internal structure, commands, or a mutation envelope
@@ -105,4 +105,4 @@ A clarified planning basis with resolved decisions, constraints, and open questi
 
 ## Next Action
 
-Use `to-spec` only after Behavior Design completes and the user confirms the integrated understanding. Do not start implementation or invoke Implementation Lead, a Worker, `/implement`, `/tdd`, `/code-review`, or another execution chain.
+Use `to-spec` only after Behavior Design completes and the user confirms the integrated understanding. Do not start or orchestrate delivery from this planning flow.

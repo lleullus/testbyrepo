@@ -33,17 +33,15 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
             self.assertNotIn("subagent invocation mechanism", contract)
             self.assertNotIn("separate lead context", contract)
 
-    def test_spec_ticket_and_implementation_consume_behavior_authority(self) -> None:
+    def test_spec_and_ticket_preserve_behavior_authority(self) -> None:
         to_spec = (ROOT / "matt" / "skills" / "to-spec" / "SKILL.md").read_text(encoding="utf-8")
         to_tickets = (ROOT / "matt" / "skills" / "to-tickets" / "SKILL.md").read_text(encoding="utf-8")
-        implementation = (ROOT / "implementation-lead" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("## Behavior Authority Gate", to_spec)
         self.assertIn("## Behavior Authorities", to_spec)
         self.assertIn("## Behavior authority rules", to_tickets)
         self.assertNotIn("criterionRawSha256", to_tickets)
         self.assertNotIn("Verification Assessor", to_tickets)
-        self.assertIn("compound direct implementation contract", implementation)
-        for contract in (to_spec, to_tickets, implementation):
+        for contract in (to_spec, to_tickets):
             self.assertIn("canonical parent", contract)
             self.assertIn("behavior/contexts/", contract)
             self.assertIn("lifecycles/", contract)
@@ -105,12 +103,12 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
         )
         normalized = " ".join(to_spec.split())
         for required in (
-            "Every normative Goal-level clause must also be decidable during fresh final Goal Verification",
+            "Every normative Goal-level clause must also be decidable during fresh completion verification",
             "current authoritative product, canonical artifact, source, approved operator-owned readback",
-            "historical implementation steps, Worker or Lead reports, diffs, or prior execution records",
+            "historical implementation steps, implementation reports, diffs, or prior execution records",
             "must not be approved as a Goal-level Requirement, Non-Goal, or Implementation Constraint",
             "Move a bounded mutation restriction to the applicable Ticket Scope or Non-Goals",
-            "Do not weaken fresh Goal Verification or introduce a durable history mechanism",
+            "Do not weaken fresh completion verification or introduce a durable history mechanism",
         ):
             self.assertIn(required, normalized)
 
@@ -143,37 +141,30 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
         ):
             self.assertIn(forbidden_surface, normalized)
 
-    def test_ui_authority_reaches_implementation_and_is_revalidated(self) -> None:
+    def test_ui_authority_reaches_ready_ticket(self) -> None:
         to_spec = (ROOT / "matt" / "skills" / "to-spec" / "SKILL.md").read_text(encoding="utf-8")
         to_tickets = (ROOT / "matt" / "skills" / "to-tickets" / "SKILL.md").read_text(encoding="utf-8")
-        implementation = (ROOT / "implementation-lead" / "SKILL.md").read_text(encoding="utf-8")
         for producer in (to_spec, to_tickets):
             self.assertIn("complete", producer)
             self.assertIn("approved", producer)
-        for lead in (implementation,):
-            normalized = " ".join(lead.split())
-            for required in (
-                "UI: yes",
-                "same canonical target",
-                "Status: approved",
-                "applicable rendered",
-                "Open Questions: None",
-                "bounded parent-Spec",
-            ):
-                self.assertIn(required, normalized)
-            self.assertIn("UI: no", normalized)
+        normalized = " ".join(to_tickets.split())
+        for required in (
+            "UI: yes",
+            "same canonical UI authority target",
+            "Open Questions: None",
+        ):
+            self.assertIn(required, normalized)
+        self.assertIn("UI: yes | no", normalized)
 
     def test_ui_authority_blocks_unresolved_or_incomplete_approved_content(self) -> None:
         to_tickets = (ROOT / "matt" / "skills" / "to-tickets" / "SKILL.md").read_text(encoding="utf-8")
-        implementation = (ROOT / "implementation-lead" / "SKILL.md").read_text(encoding="utf-8")
-        for lead in (to_tickets, implementation):
-            normalized = " ".join(lead.split())
-            self.assertIn("complete", normalized)
-            self.assertIn("no unresolved", normalized)
-            self.assertIn("incomplete", normalized)
-            self.assertIn("Owner:", normalized)
-            self.assertIn("Scope:", normalized)
-            self.assertIn("Open Questions: None", normalized)
+        normalized = " ".join(to_tickets.split())
+        self.assertIn("complete", normalized)
+        self.assertIn("no unresolved", normalized)
+        self.assertIn("incomplete", normalized)
+        self.assertIn("Owner:", normalized)
+        self.assertIn("Scope:", normalized)
+        self.assertIn("Open Questions: None", normalized)
 
     def test_behavior_approval_state_precedes_completion_without_unlocking_spec(self) -> None:
         lead = (ROOT / "behavior-design-lead" / "SKILL.md").read_text(encoding="utf-8")

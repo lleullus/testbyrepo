@@ -77,4 +77,4 @@ after the phase completes.
 
 ## Next Action
 
-Suggest `to-spec` only after Behavior Design completes and the user confirms the integrated understanding. Do not begin implementation or invoke Implementation Lead, a Worker, `/implement`, `/tdd`, `/code-review`, or another execution chain.
+Suggest `to-spec` only after Behavior Design completes and the user confirms the integrated understanding. Do not begin or orchestrate delivery from this planning flow.

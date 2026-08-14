@@ -121,9 +121,8 @@ policy but may not:
   Behavior/UI authorities, or external state;
 - own or issue final product-policy authority;
 - replace Matt's first-hand investigation or Behavior/UI conclusion;
-- act as an Implementation Subagent, Implementation Research Agent,
-  Verification Runner, Verification Lead, or Goal Verification Lead merely
-  because the same model or agent could perform those roles; or
+- act as a delivery implementer or verifier merely because the same model or
+  agent could later be used outside IIS Planning; or
 - turn implementation facts, tests, votes, model agreement, or its own assertion
   into product authority.
 

@@ -41,7 +41,7 @@ technical choice, or make the contract more solution-specific.
 `Goal` is a non-normative summary of the desired outcome already expressed by
 those execution-authority sections. It must not introduce, conflict with, or be
 the sole location of an implementation obligation. Removing the `Goal` body
-must not change what Implementation Lead must implement, preserve, exclude, or
+must not change what later Ticket delivery must implement, preserve, exclude, or
 verify.
 
 References do not import normative authority except for approved Behavior and
@@ -105,7 +105,7 @@ one independently observable contract increment or one explicit rollout or
 migration boundary.
 
 A Ticket may require several internal technical steps. Those steps remain
-inside the Ticket and are selected and revised by Implementation Lead.
+inside the Ticket and are selected and revised by later Ticket delivery.
 
 The `## Behavior Authorities` body contains every parent-Spec-adopted Behavior
 authority applicable to this increment, using the exact path-and-scope item
@@ -148,7 +148,7 @@ be separated without changing product meaning, prefer separate Tickets so an
 Independent delivery unit can use the thin verification checkpoint without
 pulling an operator-owned effect into it. Do not split an atomic product outcome
 or invent a boundary merely to optimize verification choreography.
-Implementation Lead performs the internal task decomposition one current task at
+later Ticket delivery performs the internal task decomposition one current task at
 a time.
 
 ## Acceptance Criteria rules
@@ -161,7 +161,7 @@ Serialize each Criterion as one exact top-level `- ` list item in authored
 order. Use two-space-indented continuation lines only when one Criterion needs
 multiple lines. Do not use ordered, task-list, nested-only, prose-only, empty,
 or mixed-marker bodies. Each exact authored Markdown item remains the
-acceptance source consumed by Implementation Lead; do not generate a digest,
+acceptance source consumed by later Ticket delivery; do not generate a digest,
 schema identity, or separate user-facing AC ID.
 
 Apply this solution-independence check to every normative Ticket statement, not
@@ -277,7 +277,7 @@ implementation-stage planning and check selection. Preserve its count, order,
 product trigger, expected effect, readback, grouping, and meaning; do not merge
 materially distinct flows, split one flow into implementation seams, weaken it
 into optional guidance, or discard it because there is no later verification
-role. Implementation Lead selects focused source and product-boundary checks
+role. later Ticket delivery selects focused source and product-boundary checks
 needed for implementation and integration closure and reports what it actually
 observed without assigning independent evidence, an AC verdict, or final
 `VERIFIED` status. Do not prescribe an internal test seam that could substitute
@@ -391,7 +391,7 @@ Ticket's Verification flows.
 Do not add an unrelated global or preserved Behavior authority merely to make
 the Ticket set appear to cover every Behavior item. Parent-Spec Behavior
 obligations that are not acceptance-owned by one Ticket remain whole-Goal
-obligations and are checked by final Goal Verification. Fix the decomposition or
+obligations and are checked by fresh completion verification. Fix the decomposition or
 reopen the Spec when a Ticket omits an applicable Behavior guardrail or conflicts
 with another Ticket. Do not add rule IDs, persistent projection indexes, trace
 artifacts, or copied Behavior prose; the ordinals are only current positional
@@ -497,16 +497,9 @@ Ready Tickets:
 - <absolute-ticket-path>
 ```
 
-Then state, in the user's conversation language, only that these Tickets can be
-used to start implementation later. To Tickets itself never asks for or suggests
-a Worker, shows an Implementation Lead invocation command, loads or invokes
-Implementation Lead, the Ralph loop, a Worker, `/implement`, `/tdd`,
-`/code-review`, or another execution chain.
+Then report that this validated Ready Ticket Set is the terminal IIS planning
+output. To Tickets never asks for or suggests a delivery agent and never loads,
+invokes, or supervises an implementation or verification chain.
 
-For an explicit or planning-only path, starting implementation is a separate user
-action after Matt has ended. When To Tickets is executing inside Ask Matt that was
-itself invoked by the canonical IIS entry router under an already explicit
-end-to-end product-completion request, return the validated complete ready Ticket
-set to Ask Matt and stop. The router may reuse the existing user completion intent
-after the planning leaves have stopped; To Tickets does not gain orchestration or
-implementation authority.
+Any later implementation or verification is outside IIS Planning and consumes
+the Ready Ticket Markdown contract directly.

@@ -5,20 +5,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent
-SUITES = (
-    ([sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-v"], ROOT),
-    ([sys.executable, "-B", "implementation-lead/run_tests.py"], ROOT),
-    ([sys.executable, "-B", "verification-lead/run_tests.py"], ROOT),
-    ([sys.executable, "-B", "verification-runner/run_tests.py"], ROOT),
-)
 
 
 def main() -> int:
-    for argv, cwd in SUITES:
-        print(f"+ ({cwd}) {' '.join(argv)}", flush=True)
-        subprocess.run(argv, cwd=cwd, check=True)
+    subprocess.run(
+        [sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-v"],
+        cwd=ROOT,
+        check=True,
+    )
     return 0
 
 

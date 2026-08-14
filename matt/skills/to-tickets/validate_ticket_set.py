@@ -57,7 +57,7 @@ def validate_set(spec_path: str | Path, *, require_completable: bool = False) ->
             values = _labeled_item(item, SPEC_CORE_LABELS, f"Spec outcome {index}")
             if values["Disposition"] == "Not independently verifiable":
                 raise TicketSetValidationError(
-                    f"Ralph completion is not admitted: Spec outcome {index} has no approved completion evidence path"
+                    f"Complete Ready Ticket Set is not admitted: Spec outcome {index} has no approved completion evidence path"
                 )
 
     tickets = sorted(tickets_dir.glob("TICKET-[0-9][0-9][0-9].md"))

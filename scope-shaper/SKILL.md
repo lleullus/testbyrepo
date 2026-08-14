@@ -117,8 +117,8 @@ material.
 | Detailed observable contract and product-policy choices inside one selected unit | Ask Matt |
 | Semantic states, transitions, recovery, ordering, concurrency | Behavior Design within Matt |
 | Rendered interaction and presentation | Matt's Central UI / UX Routing |
-| Internal design, mutation surface, mechanism, and implementation sequence | Implementation Lead and Worker |
-| Spec, Tickets, implementation result | Existing IIS owners |
+| Internal design, mutation surface, mechanism, and implementation sequence | Later Ticket delivery |
+| Spec and Tickets | IIS Planning |
 
 Delivery Context is evidence for later owners. It is not planning authority by
 itself.

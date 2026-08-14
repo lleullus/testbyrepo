@@ -11,7 +11,6 @@ GRILL_DOCS = (ROOT / "matt/skills/grill-with-docs/SKILL.md").read_text(encoding=
 GRILLING = (ROOT / "matt/skills/grilling/SKILL.md").read_text(encoding="utf-8")
 TO_SPEC = (ROOT / "matt/skills/to-spec/SKILL.md").read_text(encoding="utf-8")
 TO_TICKETS = (ROOT / "matt/skills/to-tickets/SKILL.md").read_text(encoding="utf-8")
-IMPLEMENTATION = (ROOT / "implementation-lead/SKILL.md").read_text(encoding="utf-8")
 SPEC_TEMPLATE = (ROOT / "matt/examples/SPEC.template.md").read_text(encoding="utf-8")
 PLANNING_WORKSPACE = (ROOT / "planning-workspace/README.md").read_text(encoding="utf-8")
 
@@ -29,7 +28,6 @@ class UIPlanningDecouplingTests(unittest.TestCase):
             GRILLING,
             TO_SPEC,
             TO_TICKETS,
-            IMPLEMENTATION,
         )
         for contract in active:
             for forbidden in (

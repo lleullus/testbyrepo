@@ -55,4 +55,4 @@ A short explanation in the user's conversation language. This skill normally wri
 
 ## Next Action
 
-Use `grill-with-docs` or `grill-me` when the idea needs clarification, or `to-spec` when the work is ready to be captured. Do not start implementation or invoke an Implementation Lead or Worker.
+Use `grill-with-docs` or `grill-me` when the idea needs clarification, or `to-spec` when the work is ready to be captured. Do not start or orchestrate delivery from this planning setup flow.

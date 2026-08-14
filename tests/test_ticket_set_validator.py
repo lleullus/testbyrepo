@@ -162,7 +162,7 @@ class TicketSetValidatorTests(unittest.TestCase):
         tickets = validate_ticket_set.validate_set(self.fixture.spec)
         self.assertEqual([path.name for path in tickets], ["TICKET-001.md"])
 
-    def test_ralph_completable_rejects_nonverifiable_parent_outcome_before_ticket_use(self) -> None:
+    def test_complete_ready_set_rejects_nonverifiable_parent_outcome_before_ticket_use(self) -> None:
         self.fixture.write_spec(outcomes=1, behaviors=1)
         self.fixture.write_ticket(1, parent_outcome=1, behavior=1)
         text = self.fixture.spec.read_text(encoding="utf-8")
@@ -177,7 +177,7 @@ class TicketSetValidatorTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(
             validate_ticket_set.TicketSetValidationError,
-            "Ralph completion is not admitted: Spec outcome 1 has no approved completion evidence path",
+            "Complete Ready Ticket Set is not admitted: Spec outcome 1 has no approved completion evidence path",
         ):
             validate_ticket_set.validate_set(self.fixture.spec, require_completable=True)
 

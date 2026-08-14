@@ -57,10 +57,10 @@ class AdversarialConsensusContractTests(unittest.TestCase):
         for required in (
             "The Challenger is read-only and advisory",
             "may not: - mutate product source",
-            "Implementation Subagent, Implementation Research Agent, Verification Runner",
+            "delivery implementer or verifier",
             "Challenger findings are advisory",
             "never becomes a Behavior execution role",
-            "pass the binding to implementation or verification roles",
+            "planning-only advisory counterpart",
             "Host Subagent Invocation Mechanism",
             "configured authorized Oracle mechanism",
             "Do not reinterpret one mechanism or counterpart as the other",
