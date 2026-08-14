@@ -57,6 +57,8 @@ class GoalVerificationLeadContractTests(unittest.TestCase):
             "prior Runner context/evidence remains navigation only and cannot supply final Goal evidence",
             "Consume only `Verification Runner` bindings at this boundary",
             "`Implementation Subagent`, `Implementation Research Agent`, or any other IIS-role binding is not eligible for final Runner assignment",
+            "required verification property, the canonical observation surface, and the semantic closure condition",
+            "assignment may be deep but must not silently grow into unrelated adjacent verification questions",
         ):
             self.assertIn(required, body)
 

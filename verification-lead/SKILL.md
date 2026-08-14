@@ -93,7 +93,11 @@ configured model/agent as a `Verification Runner`.
 Within those user constraints, Lead chooses grouping, count, timing, concurrency,
 valid shared acquisition, and serial fallback. Do not define AC/flow/defect/file-
 per-Runner fixed decomposition or invoke unused Runner slots merely to consume a
-roster. Runner output is raw current evidence/currentness information only. Never
+roster. Give each Runner a bounded observation assignment that states the required
+verification property, the canonical observation surface, and the semantic closure
+condition for that property. The assignment may be deep but must not silently grow
+into unrelated adjacent verification questions.
+Runner output is raw current evidence/currentness information only. Never
 derive an AC verdict or aggregate by vote, majority, consensus, model agreement, or
 counting Runner labels. Ignore Runner verdict-like claims and adjudicate the exact
 authored denominator from admitted raw current evidence. If Runner observations

@@ -24,6 +24,15 @@ class VerificationLeadContractTests(unittest.TestCase):
         ):
             self.assertIn(required, NORMALIZED)
 
+    def test_runner_assignment_is_semantically_bounded_without_fixed_decomposition(self) -> None:
+        for required in (
+            "required verification property, the canonical observation surface, and the semantic closure condition",
+            "assignment may be deep but must not silently grow into unrelated adjacent verification questions",
+            "Do not define AC/flow/defect/file-",
+            "per-Runner fixed decomposition",
+        ):
+            self.assertIn(required, NORMALIZED)
+
     def test_no_recipe_fresh_ticket_and_project_are_default_inputs(self) -> None:
         self.assertIn("fresh session with only those inputs is the normal valid starting point", NORMALIZED)
         self.assertIn("A Candidate Execution Recipe is optional", SKILL)

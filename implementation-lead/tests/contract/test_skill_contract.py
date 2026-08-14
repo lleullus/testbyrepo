@@ -144,6 +144,8 @@ class ActiveSkillContractTests(unittest.TestCase):
             "Consume only the `Implementation Subagent` binding admitted for implementation",
             "A `Verification Runner` or other IIS-role binding is not eligible for implementation or implementation research",
             "cross-role use requires the user's separate designation for that exact role",
+            "Do not add a generic blocking parent/caller checkpoint for ordinary bounded investigation, mutation preparation, implementation, or validation",
+            "unless an exact authority ambiguity, Scope change, overlapping user/concurrent mutation conflict, or unsafe external effect requires a caller decision",
             "A `Verification Runner` designation and an `Implementation Subagent` designation are not implementation-research designations",
             "unless the user separately designated that same configured model/agent for implementation research",
             "Role binding comes from the explicit designation, not model identity",

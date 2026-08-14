@@ -53,6 +53,11 @@ description: Use for one exact ready local Markdown Ticket with an admitted Impl
    implementation or implementation research merely because the same configured
    model/agent could perform that work; cross-role use requires the user's separate
    designation for that exact role.
+   Do not add a generic blocking parent/caller checkpoint for ordinary bounded
+   investigation, mutation preparation, implementation, or validation. Continue
+   under the existing authority unless an exact authority ambiguity, Scope change,
+   overlapping user/concurrent mutation conflict, or unsafe external effect requires
+   a caller decision.
    On every Ralph entry, and before any project mutation, revalidate that the
    Ticket remains `ready`, the current project is its exact `Project-Root`, the
    Ticket is under that project's canonical `docs/planning` root, and its

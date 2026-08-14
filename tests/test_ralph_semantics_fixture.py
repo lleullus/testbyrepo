@@ -31,6 +31,22 @@ class RalphSemanticsFixtureTests(unittest.TestCase):
         self.assertEqual(dispatch("Verification Runner", "dual-role"), "dual-role")
         self.assertEqual(dispatch("Implementation Subagent", "dual-role"), "dual-role")
 
+    def test_runner_closes_assigned_property_without_expanding_adjacent_questions(self) -> None:
+        pursued: list[str] = []
+        adjacent: list[str] = []
+
+        def investigate(question: str, *, required_for_closure: bool) -> None:
+            if not required_for_closure:
+                adjacent.append(question)
+                return
+            pursued.append(question)
+
+        investigate("dead-owner recovery", required_for_closure=True)
+        investigate("unrelated static lint debt", required_for_closure=False)
+
+        self.assertEqual(pursued, ["dead-owner recovery"])
+        self.assertEqual(adjacent, ["unrelated static lint debt"])
+
     def test_same_delivery_unit_repeats_until_all_current_acceptance_rows_pass(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             product = Path(temporary) / "product-state.json"

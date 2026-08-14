@@ -63,20 +63,20 @@ ACTIVE_VERIFICATION_DIRECTORIES = frozenset(
 )
 ACTIVE_VERIFICATION_SHA256 = {
     # Updated only with a reviewed canonical leaf change.
-    "verification-lead/SKILL.md": "7f6fe30b52f39512b37479542c51f9ded34d846d54ed97255f347f9d72779335",
+    "verification-lead/SKILL.md": "dbe8a3307fe60029312223ccb7d7e910a8fb558c347536812e3b64adc8c284c2",
     "verification-lead/run_tests.py": "8f0c1c288930dda0468d077bb61b6a046aad69b6531dc6cdb7f9d457cf8ea185",
     "verification-lead/verdict_contract.py": "0ec52acc6f27ca9167adbabeddfede4dfcc719e0fe480e124c43e3ff95dba9d7",
-    "verification-lead/tests/test_contract.py": "fa23b9d26148efd706e433c3e3129dce4adc281f8163961bbd77fbeb2eb9ce71",
+    "verification-lead/tests/test_contract.py": "70748b6e8bf518b8594963563ae4a141e9b7bbbe82c34d0f8fa525a71c2f7fd7",
     "verification-lead/tests/pilot/test_representative_pilots.py": "02a122d5efbf0051d67f50b3d370f9dfa2c4f210516dd086d0e9be19a4d1c530",
-    "verification-runner/SKILL.md": "7db3eec861ab54d9544fb662c585a4c5e33d47a8c5d39a851738c8e658d7f62a",
+    "verification-runner/SKILL.md": "f1da61bdfa2eacf64624ae91cad221c2a5ac84d246de7836f21c3d491bfd00c8",
     "verification-runner/run_tests.py": "25a1fae8b7834d3c06c3e0fbcc762dfda577a32bf23ef51ffdc278da86f8bf25",
-    "verification-runner/tests/test_contract.py": "e0de23819c76696de1daf34d48ac673775493a9c1c39f4702c818152c11ffc71",
+    "verification-runner/tests/test_contract.py": "8df9e0aebbd4c7a5b219cc1cf5d24f39f6a02cc26a3b8fbc6bd725d816b0378b",
 }
 ACTIVE_RALPH_SHA256 = {
     # Reviewed active Goal-fulfillment route, closure contract, and exact structural admission support.
     "ARCHITECTURE-CLOSURE.md": "b3d19b0dd30da6ec506ae11305c4d9a638cfe25e747727e04bd6831b89c93330",
     "iis-goal-loop/SKILL.md": "b4b651a0166798699bded2dedca396945389e24d5d95afb55c4aee6e0a91e509",
-    "goal-verification-lead/SKILL.md": "3b652c536eb9373baa15c01aea5f7deb046aef73137b1dba0b2b8e662b6da2b5",
+    "goal-verification-lead/SKILL.md": "520417a42d86af881345758e8e75e847d9566f2d0a5566721fc695192c7649eb",
     "matt/skills/to-tickets/validate_ticket_set.py": "2a5eda27390c079bfb21200c71f96eec66f878c2bb9db1bc9696d8e37b8895ea",
 }
 LEGACY_EXECUTABLE_STEMS = (

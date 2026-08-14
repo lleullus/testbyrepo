@@ -43,6 +43,8 @@ Require only the bounded current information needed for the assigned observation
   Verification, or the exact approved Spec and current outcome/global obligation
   when operating for Goal Verification;
 - the current adopted Behavior/UI authority needed to interpret that assignment;
+- the required verification property, canonical observation surface, and semantic
+  closure condition for that property;
 - the exact authored trigger or inspection target, acceptance boundary, and
   authoritative readback; and
 - any current safe shared acquisition supplied by the Lead whose trigger/input,
@@ -52,6 +54,15 @@ The assignment is invocation-local navigation, not a copied acceptance map,
 persistent assignment, evidence identity, or new authority. Reject a request to
 invent product meaning, strengthen an obligation, choose a remediation, or decide a
 verdict.
+
+Investigate as deeply as materially necessary to decide the assigned property,
+establish currentness, or distinguish a product contradiction from a fixture,
+harness, verifier, or attribution error. Do not expand into a new adjacent
+verification question merely because it is interesting or nearby. If an adjacent
+observation is not required to close the assigned property, report it as an
+adjacent observation for Lead routing without pursuing it. Return once fresh
+attributable evidence satisfies the assignment's semantic closure condition and no
+materially necessary unresolved path remains inside that assignment.
 
 ## Fresh Observation
 
@@ -100,7 +111,11 @@ communication supports it. Do not wait for unrelated Runner assignments or the
 Lead's final aggregate merely to batch findings. The report is navigation only:
 it is not `PASS`, `FAIL`, `INCONCLUSIVE`, `VERIFIED`, `GOAL VERIFIED`, a remediation
 instruction, or a progression decision. Continue other still-safe assigned
-observation only when attribution and safety remain valid.
+observation only when attribution and safety remain valid. Ordinary read-only
+observation does not require a blocking parent/caller approval checkpoint. When a
+qualifying contradiction is streamed, do not wait for a reply before continuing
+other still-safe work already inside the same bounded assignment; wait only when an
+exact operator, environment, authority, or unsafe-effect decision is required.
 
 ## Mutation Overlap And Freshness
 

@@ -67,7 +67,11 @@ same configured model/agent as a `Verification Runner`.
 Within those user constraints, Goal Verification Lead chooses only grouping,
 count, timing, concurrency, valid shared acquisition, and serial fallback. Do not
 define AC/flow/outcome/defect/file-per-Runner fixed decomposition and do not invoke
-unused Runner slots merely to consume a roster. Runner output is raw current
+unused Runner slots merely to consume a roster. Give each Runner a bounded
+observation assignment that states the required verification property, the
+canonical observation surface, and the semantic closure condition for that
+property; the assignment may be deep but must not silently grow into unrelated
+adjacent verification questions. Runner output is raw current
 evidence/currentness information only; Runner verdict-like labels or progression
 claims have no authority. Never derive a row verdict or Goal aggregate by vote,
 majority, consensus, model agreement, or counting Runner labels. If fresh Runner
