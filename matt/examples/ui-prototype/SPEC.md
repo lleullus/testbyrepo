@@ -2,6 +2,7 @@
 
 Status: approved
 Owner: 예시 planning owner
+Source-Increment: None
 
 이 문서의 `approved`는 사용자가 `UI-UX.md`의 결정을 채택하고 Open Questions를 해소한 계약 상태 예시다. `PROTOTYPE-NOTE.md`의 결과 자체는 권위가 아니며, 이 예시는 실행 fixture나 실제 제품 요구사항이 아니다.
 

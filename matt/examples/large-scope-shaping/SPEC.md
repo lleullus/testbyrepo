@@ -2,8 +2,9 @@
 
 Status: approved
 Owner: 예시 planning owner
+Source-Increment: docs/planning/scope-shaping/example-initiative/increments/INC-001.md
 
-이 문서의 `approved`는 confirmed Scope result와 selected ready Work Package에서 시작한 Ask Matt 결과를 사용자가 확인하고 Open Questions를 해소한 계약 상태 예시다. Scope result와 Work Package는 lineage와 planning context이며, 이 Spec과 adopted authorities가 실행 권위를 가진다. 이 예시는 실행 fixture나 실제 제품 요구사항이 아니다.
+이 문서의 `approved`는 confirmed Scope revision과 selected ready Increment에서 시작한 Ask Matt 결과를 사용자가 확인하고 Open Questions를 해소한 계약 상태 예시다. Source Increment와 그 immutable Scope revision은 lineage와 planning context이며, 이 Spec과 adopted authorities가 실행 권위를 가진다. 이 예시는 실행 fixture나 실제 제품 요구사항이 아니다.
 
 ## Problem
 

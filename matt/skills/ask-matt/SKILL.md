@@ -1,6 +1,6 @@
 ---
 name: ask-matt
-description: Use for an ordinary bounded planning request, or for a later explicit continuation from one exact confirmed bounded Scope result or one exact ready-for-matt Work Package. Do not intercept an initiative-scale request that has not completed Scope Shaper or an explicit implementation request.
+description: Use for one next-increment-ready ordinary planning request, or for a later explicit continuation from one exact Scope-selected ready-for-matt Increment. Before Grill or Behavior/UI planning, return requests that still require construction-stage, foundation, product-capability-ordering, or split/merge decisions to Scope Shaper.
 ---
 
 # Ask Matt
@@ -201,48 +201,70 @@ Spec, and affected unfinished Tickets to `draft`.
 ## Entry Routing And Scope Handoff Preflight
 
 Before Grill, Behavior Design, UI routing, workspace creation, or Spec writing,
-classify and validate the entry:
+classify and validate the entry. An explicit request to use Ask Matt chooses this
+leaf, but it does not waive this admission contract.
 
-1. An ordinary bounded request enters the normal flow only when it does not name
-   a Scope result or Work Package, does not explicitly request Scope Shaper, and
-   does not contain several potentially independent product outcomes. Technical
-   depth, file count, or implementation layers alone do not make an initiative.
-2. A direct brief returns to Scope Shaper when outcomes may be independently
-   accepted, deferred, or rejected; when an MVP/Next/Deferred cut among outcomes
-   is material; when product dependencies among outcomes remain undecided; or
-   when split versus merge is itself unresolved.
-3. A bounded Scope continuation must name one exact absolute local Markdown path
-   at
-   `<Project-Root>/docs/planning/scope-shaping/<Work-Slug>/SCOPE-SHAPING-RESULT.md`.
-   Run the canonical `scope-shaper/tools/validate_scope_result.py` validator and
-   require `Status: confirmed`, `Planning-Shape: bounded`, exact
-   `Project-Root`, matching lowercase kebab-case `Work-Slug`, and exact
-   `Unresolved Material Questions: None`. Inherit its Planning Boundary and
-   Planning Constraints, carry Decisions Reserved For Matt into the first
-   integrated frontier, and use Delivery Context only as non-normative evidence.
-4. An initiative continuation must name one exact raw, non-symlink local path at
-   `<Project-Root>/docs/planning/scope-shaping/<scope-slug>/work-packages/WP-NNN.md`.
-   Apply the validator's selected-Work-Package raw-path gate before validating
-   its source. Require `Status: ready-for-matt`, matching `Project-Root`, a
-   matching `Work-Package` filename, lowercase kebab-case
-   `Suggested-Work-Slug`, the same canonical confirmed initiative source, and
-   exact source/package Outcome, Includes, Excludes, Dependencies, and Decisions
-   Reserved For Matt. The package must be one of the source's non-deferred Next
-   Planning Units. Plan only that package and apply source Planning Constraints
-   whose scope contains it.
-5. A named initiative Scope result without one exact selected ready Work Package
-   never enters Ask Matt. Draft, invalid, unresolved, wrong-project,
-   noncanonical, symlinked, deferred, or drifted sources or packages also stop
-   here.
+1. A direct ordinary request with no Scope artifact enters the normal flow only
+   when it is already `next-increment-ready`: the current product baseline is
+   identifiable; one actor or operator can perform one trigger or canonical
+   inspection and obtain one durable observable state change with authoritative
+   readback; the request does not bundle foundation, intermediate, and mature
+   forms of the capability; no material product-capability ordering or foundation
+   choice remains; and no independently acceptable sibling outcome still needs
+   split/merge judgment. Technical depth, file count, framework count, or
+   implementation layers alone do not fail this gate.
+2. A direct brief returns to Scope Shaper before any Grill, Behavior, or UI work
+   when it describes a new product or whole system, spans multiple product
+   maturity stages, leaves the next durable foundation undecided, requires a
+   product-capability ordering decision, contains independently acceptable
+   outcome areas, or otherwise does not establish one current-to-next product
+   state transition. Do not solve this defect by silently shrinking or widening
+   the user's request inside Matt.
+3. A Scope-shaped continuation must name one exact raw, non-symlink local path at
+   `<Project-Root>/docs/planning/scope-shaping/<scope-slug>/increments/INC-NNN.md`.
+   Run the canonical `scope-shaper/tools/validate_increment.py` validator. Require
+   `Status: ready-for-matt`, matching `Project-Root`, matching `Increment`
+   filename, lowercase kebab-case `Suggested-Work-Slug`, one exact immutable
+   `Source-Scope-Revision` under the same Scope directory, and exact
+   revision/Increment contract content. `Source-Scope-Result` is current
+   navigation only; it must still select this Increment at admission but it is
+   not allowed to replace the Increment's immutable revision as historical
+   planning authority.
+4. Plan only the selected Increment's Current Product State, Target Product
+   State, Observable Outcome, Includes, Excludes, Required Product Dependencies,
+   Preserved Foundations, Decisions Reserved For Matt, Verification Boundary,
+   and Planning Constraints applicable from its immutable Scope revision.
+   `Deferred Until Re-entry`, the revision's Intent Horizon, Work Package
+   siblings, and Provisional Construction Horizon are not current Spec authority.
+   Use applicable revision Delivery Context and Increment Delivery Context only
+   as non-normative evidence.
+5. A named Scope result or `work-packages/WP-NNN.md` file is not an Ask Matt
+   handoff. Current Work Packages are horizontal Scope records with
+   `Status: scoped`; only the source-selected `increments/INC-NNN.md` may admit
+   Scope-shaped work. An older Work Package with `Status: ready-for-matt` is a
+   legacy IIS artifact, not an exception: return it to Scope Shaper's `Legacy
+   Scope Artifact Compatibility` flow for current-state reinspection and semantic
+   migration instead of admitting it directly. Draft, invalid, unresolved,
+   wrong-project, noncanonical, symlinked, stale, non-selected, or drifted
+   Increment sources also stop here.
 
-On failure, do not begin the normal flow. Report:
+For a direct request that fails next-increment admission, report:
+
+```text
+ASK MATT: SCOPE SHAPING REQUIRED
+Reason: <missing current baseline, multiple maturity stages, foundation/order choice,
+         independent sibling outcomes, or other exact construction-boundary defect>
+Next action: run Scope Shaper to select one durable next Increment
+```
+
+For an invalid Scope-shaped handoff, report:
 
 ```text
 ASK MATT: BLOCKED
-Input: <exact source or Work Package path>
-Reason: <invalid status, wrong project, unresolved questions, path or slug drift,
-         invalid or deferred package, boundary drift, or exact defect>
-Next action: <return to Scope Shaper or select one exact ready Work Package>
+Input: <exact Increment or rejected Scope/Work Package path>
+Reason: <invalid status, wrong project, path or slug drift, non-selected Increment,
+         source/Increment drift, or exact defect>
+Next action: return to Scope Shaper or select the exact current ready Increment
 ```
 
 ## Main Flow
@@ -251,7 +273,7 @@ Next action: <return to Scope Shaper or select one exact ready Work Package>
    `grill-me` for the current evidence context, but do not present a user-facing
    decision yet. A target with an existing canonical project root and
    inspectable repository context remains codebase-backed even when the current
-   package/application scope has no implementation source yet; route it to
+   Increment/application scope has no implementation source yet; route it to
    `grill-with-docs`. Route to `grill-me` when the product root or repository
    context itself is not yet available. Do not classify from words such as
    greenfield, initialize, or bootstrap.
@@ -260,7 +282,7 @@ Next action: <return to Scope Shaper or select one exact ready Work Package>
    Design, and Counterexample Stress Test. When material UI lacks an applicable
    approved authority, also complete Matt's direct UI judgment far enough to
    identify its currently determinable user-owned rendered decisions.
-   Merge all Grill, Behavior, UI, and applicable Scope Shaper package-frame decisions
+   Merge all Grill, Behavior, UI, and applicable Scope Shaper Increment-frame decisions
    into one dependency graph. Resolve inspectable facts directly and exclude
    implementation-owned choices.
 3. Present the complete current unblocked frontier through `grilling`. Batch

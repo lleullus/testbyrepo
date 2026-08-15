@@ -4,229 +4,28 @@ import importlib.util
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
-import sys
 from pathlib import Path
 
 
-MODULE_PATH = Path(__file__).parents[1] / "scope-shaper" / "tools" / "validate_scope_result.py"
+ROOT = Path(__file__).parents[1]
+MODULE_PATH = ROOT / "scope-shaper" / "tools" / "validate_scope_result.py"
+INCREMENT_MODULE_PATH = ROOT / "scope-shaper" / "tools" / "validate_increment.py"
 spec = importlib.util.spec_from_file_location("validator", MODULE_PATH)
 validator = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = validator
 assert spec.loader is not None
 spec.loader.exec_module(validator)
 
-WORKSPACE_MODULE_PATH = Path(__file__).parents[1] / "planning-workspace" / "planning_workspace.py"
+WORKSPACE_MODULE_PATH = ROOT / "planning-workspace" / "planning_workspace.py"
 workspace_spec = importlib.util.spec_from_file_location("planning_workspace_for_transition", WORKSPACE_MODULE_PATH)
 planning_workspace = importlib.util.module_from_spec(workspace_spec)
 assert workspace_spec.loader is not None
 workspace_spec.loader.exec_module(planning_workspace)
 
-
-SOURCE = """# Example — Scope Shaping Result
-
-Status: confirmed
-Owner: user
-Project-Root: {project_root}
-Work-Slug: example
-Planning-Shape: initiative
-
-## Original Request
-
-Example
-
-## Investigation Assignments
-
-- complete
-
-## Verified Material Claims
-
-### Claim 1
-
-Classification: FACT
-Primary Evidence: source
-Counterexample Tested: alternate
-Lead Finding: supported
-Planning Relevance: DECOMPOSITION
-
-Claim.
-
-## Planning Boundary
-
-### Outcome
-
-Outcome.
-
-### Includes
-
-- Included
-
-### Excludes
-
-- Excluded
-
-## Planning Constraints
-
-- External contract
-
-## Candidate Outcome Areas
-
-- A
-- B
-
-## Decisions Reserved For Matt
-
-- Product policy
-
-## Delivery Context
-
-- None
-
-## Outside The Assessed Landscape
-
-- None
-
-## Unresolved Material Questions
-
-None
-
-## Work Package Proposal
-
-### Split / Merge Decisions
-
-#### A / B
-
-Decision: SPLIT
-Independent Acceptance Test: independent
-Counterexample Tested: merge
-Lead Finding: split
-Supporting Material Claims: Claim 1
-
-### Proposed Work Packages
-
-#### WP-001: First
-
-##### Outcome
-
-First outcome.
-
-##### Includes
-
-- First include
-
-##### Excludes
-
-- Second scope
-
-##### Depends On
-
-None
-
-##### Why This Is One Package
-
-One acceptance.
-
-##### Why It Is Separate
-
-Independent.
-
-##### Decisions Reserved For Matt
-
-- None
-
-#### WP-002: Second
-
-##### Outcome
-
-Second outcome.
-
-##### Includes
-
-- Second include
-
-##### Excludes
-
-- First scope
-
-##### Depends On
-
-- WP-001
-
-##### Why This Is One Package
-
-One acceptance.
-
-##### Why It Is Separate
-
-Independent.
-
-##### Decisions Reserved For Matt
-
-- None
-
-### Release Cut
-
-#### MVP
-
-- WP-001
-- WP-002
-
-#### Next
-
-None
-
-#### Deferred
-
-None
-
-### Next Planning Units
-
-- ./work-packages/WP-001.md
-- ./work-packages/WP-002.md
-
-## Confirmation
-
-Confirmed By: user
-Confirmed Scope: all
-"""
-
-WP = """# {package_id}: {title}
-
-Status: ready-for-matt
-Project-Root: {project_root}
-Source-Scope-Result: ../SCOPE-SHAPING-RESULT.md
-Work-Package: {package_id}
-Suggested-Work-Slug: {work_slug}
-
-## Authority Notice
-
-Thin handoff.
-
-## Package Outcome
-
-{outcome}
-
-## Included Product Scope
-
-- {include}
-
-## Excluded Sibling Scope
-
-- {exclude}
-
-## Dependencies
-
-{dependencies}
-
-## Decisions Reserved For Matt
-
-- None
-
-## Matt Start
-
-Start.
-"""
+TEMPLATES = ROOT / "scope-shaper" / "templates"
 
 
 class ValidatorTests(unittest.TestCase):
@@ -236,469 +35,604 @@ class ValidatorTests(unittest.TestCase):
     def tearDown(self) -> None:
         os.umask(self.original_umask)
 
-    def make_tree(self) -> tuple[tempfile.TemporaryDirectory, Path]:
+    def _render(self, name: str, replacements: dict[str, str]) -> str:
+        text = (TEMPLATES / name).read_text(encoding="utf-8")
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        text = text.replace("Lead Disposition: SELECT | REJECT", "Lead Disposition: SELECT")
+        return re.sub(r"<[^>]+>", "Example", text)
+
+    def _write_current_scope(self, source: Path, text: str) -> Path:
+        source.write_text(text, encoding="utf-8")
+        revision = validator._metadata(text, "Scope-Revision")
+        revision_root = source.parent / "revisions"
+        revision_root.mkdir(exist_ok=True)
+        revision_path = revision_root / f"{revision}.md"
+        revision_path.write_text(text, encoding="utf-8")
+        return revision_path
+
+    def make_bounded(self) -> tuple[tempfile.TemporaryDirectory, Path, Path]:
         td = tempfile.TemporaryDirectory()
-        base = Path(td.name)
-        work = base / "docs" / "planning" / "scope-shaping" / "example"
-        (work / "work-packages").mkdir(parents=True)
-        source = work / "SCOPE-SHAPING-RESULT.md"
-        source.write_text(SOURCE.format(project_root=base), encoding="utf-8")
-        (work / "work-packages" / "WP-001.md").write_text(
-            WP.format(package_id="WP-001", title="First", project_root=base,
-                      work_slug="first-outcome",
-                      outcome="First outcome.", include="First include", exclude="Second scope",
-                      dependencies="None"), encoding="utf-8")
-        (work / "work-packages" / "WP-002.md").write_text(
-            WP.format(package_id="WP-002", title="Second", project_root=base,
-                      work_slug="second-outcome",
-                      outcome="Second outcome.", include="Second include", exclude="First scope",
-                      dependencies="- WP-001"), encoding="utf-8")
-        return td, source
-
-    def test_valid(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        validator.validate(source)
-
-    def test_validated_package_slug_can_prepare_workspace(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        validator.validate(source)
-        wp = source.parent / "work-packages" / "WP-001.md"
-        work_slug = validator._metadata(wp.read_text(encoding="utf-8"), "Suggested-Work-Slug")
-        result = planning_workspace.prepare(str(Path(td.name)), work_slug)
-        self.assertEqual(result["workSlug"], work_slug)
-
-    def test_canonical_bounded_template_instance_passes(self) -> None:
-        td = tempfile.TemporaryDirectory()
-        self.addCleanup(td.cleanup)
         base = Path(td.name).resolve()
-        source = base / "docs" / "planning" / "scope-shaping" / "bounded" / "SCOPE-SHAPING-RESULT.md"
-        source.parent.mkdir(parents=True)
-        template = (
-            Path(__file__).parents[1]
-            / "scope-shaper"
-            / "templates"
-            / "SCOPE-SHAPING-RESULT.bounded.template.md"
-        ).read_text(encoding="utf-8")
-        rendered = template.replace("<absolute project root>", str(base)).replace(
-            "<lowercase-kebab-slug>", "bounded"
+        work = base / "docs" / "planning" / "scope-shaping" / "bounded"
+        increments = work / "increments"
+        increments.mkdir(parents=True)
+        source = work / "SCOPE-SHAPING-RESULT.md"
+        source_text = self._render(
+            "SCOPE-SHAPING-RESULT.bounded.template.md",
+            {
+                "<absolute project root>": str(base),
+                "<lowercase-kebab-slug>": "bounded",
+                "<increment-work-slug>": "bounded-first",
+            },
         )
-        rendered = re.sub(r"<[^>]+>", "Example", rendered)
-        source.write_text(rendered, encoding="utf-8")
-        validator.validate(source)
+        self._write_current_scope(source, source_text)
+        increment = increments / "INC-001.md"
+        increment.write_text(
+            self._render(
+                "INCREMENT.template.md",
+                {
+                    "<absolute project root>": str(base),
+                    "<increment-work-slug>": "bounded-first",
+                },
+            ),
+            encoding="utf-8",
+        )
+        return td, source, increment
 
-    def test_canonical_initiative_template_and_wp_instance_pass(self) -> None:
+    def make_initiative(self) -> tuple[tempfile.TemporaryDirectory, Path, Path, Path]:
         td = tempfile.TemporaryDirectory()
-        self.addCleanup(td.cleanup)
         base = Path(td.name).resolve()
         work = base / "docs" / "planning" / "scope-shaping" / "initiative"
-        package_root = work / "work-packages"
-        package_root.mkdir(parents=True)
-        templates = Path(__file__).parents[1] / "scope-shaper" / "templates"
-        source_template = (templates / "SCOPE-SHAPING-RESULT.initiative.template.md").read_text(
-            encoding="utf-8"
-        )
-        package_template = (templates / "WORK-PACKAGE.template.md").read_text(encoding="utf-8")
-        source_text = source_template.replace("<absolute project root>", str(base)).replace(
-            "<slug>", "initiative"
-        )
-        source_text = re.sub(r"<[^>]+>", "Example", source_text)
-        package_text = package_template.replace("<absolute project root>", str(base)).replace(
-            "<slug>", "example-outcome"
-        )
-        package_text = re.sub(r"<[^>]+>", "Example", package_text)
+        packages = work / "work-packages"
+        increments = work / "increments"
+        packages.mkdir(parents=True)
+        increments.mkdir(parents=True)
+
         source = work / "SCOPE-SHAPING-RESULT.md"
-        source.write_text(source_text, encoding="utf-8")
-        (package_root / "WP-001.md").write_text(package_text, encoding="utf-8")
+        source_text = self._render(
+            "SCOPE-SHAPING-RESULT.initiative.template.md",
+            {
+                "<absolute project root>": str(base),
+                "<slug>": "initiative",
+                "<increment-work-slug>": "initiative-first",
+            },
+        )
+        self._write_current_scope(source, source_text)
+
+        package = packages / "WP-001.md"
+        package.write_text(
+            self._render("WORK-PACKAGE.template.md", {"<absolute project root>": str(base)}),
+            encoding="utf-8",
+        )
+
+        increment = increments / "INC-001.md"
+        increment_text = self._render(
+            "INCREMENT.template.md",
+            {
+                "<absolute project root>": str(base),
+                "<increment-work-slug>": "initiative-first",
+            },
+        ).replace("Work-Package: None", "Work-Package: WP-001")
+        increment.write_text(increment_text, encoding="utf-8")
+        return td, source, package, increment
+
+    def test_bounded_template_and_selected_increment_are_valid(self) -> None:
+        td, source, increment = self.make_bounded()
+        self.addCleanup(td.cleanup)
         validator.validate(source)
+        self.assertEqual(validator.validate_selected_increment(increment), source)
 
-    def test_list_section_rejects_mixed_prose(self) -> None:
-        td, source = self.make_tree()
+    def test_initiative_template_work_package_and_increment_are_valid(self) -> None:
+        td, source, package, increment = self.make_initiative()
         self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").replace(
-            "## Planning Constraints\n\n- External contract",
-            "## Planning Constraints\n\nprose\n- External contract",
+        validator.validate(source)
+        self.assertEqual(validator.validate_selected_increment(increment), source)
+        self.assertIn("Status: scoped", package.read_text(encoding="utf-8"))
+
+    def test_current_scope_must_match_immutable_revision_snapshot(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        source.write_text(
+            source.read_text(encoding="utf-8").replace(
+                "## Intent Horizon\n\nExample",
+                "## Intent Horizon\n\nChanged after confirmation",
+            ),
+            encoding="utf-8",
         )
-        source.write_text(text, encoding="utf-8")
+        with self.assertRaisesRegex(validator.ValidationError, "byte-for-byte"):
+            validator.validate(source)
+
+    def test_increment_slug_can_prepare_workspace(self) -> None:
+        td, source, increment = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        validator.validate(source)
+        work_slug = validator._metadata(increment.read_text(encoding="utf-8"), "Suggested-Work-Slug")
+        result = planning_workspace.prepare(str(Path(td.name).resolve()), work_slug)
+        self.assertEqual(result["workSlug"], work_slug)
+
+    def test_work_package_cannot_be_ready_for_matt(self) -> None:
+        td, source, package, _ = self.make_initiative()
+        self.addCleanup(td.cleanup)
+        package.write_text(package.read_text(encoding="utf-8").replace("Status: scoped", "Status: ready-for-matt"), encoding="utf-8")
         with self.assertRaises(validator.ValidationError):
             validator.validate(source)
 
-    def test_missing_dependency_fails(self) -> None:
-        td, source = self.make_tree()
+    def test_work_package_is_never_a_selected_handoff(self) -> None:
+        td, _, package, _ = self.make_initiative()
         self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").replace("- WP-001\n\n##### Why This Is One Package", "- WP-999\n\n##### Why This Is One Package")
-        source.write_text(text, encoding="utf-8")
-        with self.assertRaises(validator.ValidationError):
-            validator.validate(source)
+        with self.assertRaisesRegex(validator.ValidationError, "not current Ask Matt handoffs"):
+            validator.validate_selected_work_package(package)
 
-    def test_cycle_fails(self) -> None:
-        td, source = self.make_tree()
+    def test_increment_contract_drift_fails(self) -> None:
+        td, source, increment = self.make_bounded()
         self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").replace("##### Depends On\n\nNone\n\n##### Why This Is One Package", "##### Depends On\n\n- WP-002\n\n##### Why This Is One Package", 1)
-        source.write_text(text, encoding="utf-8")
-        with self.assertRaises(validator.ValidationError):
-            validator.validate(source)
-
-    def test_mvp_closure_fails(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").replace("#### MVP\n\n- WP-001\n- WP-002\n\n#### Next\n\nNone", "#### MVP\n\n- WP-002\n\n#### Next\n\n- WP-001")
-        source.write_text(text, encoding="utf-8")
-        with self.assertRaises(validator.ValidationError):
-            validator.validate(source)
-
-    def test_boundary_drift_fails(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        wp = source.parent / "work-packages" / "WP-001.md"
-        wp.write_text(wp.read_text(encoding="utf-8").replace("First include", "Changed include"), encoding="utf-8")
-        with self.assertRaises(validator.ValidationError):
-            validator.validate(source)
-
-    def test_missing_package_file_fails(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        (source.parent / "work-packages" / "WP-002.md").unlink()
-        with self.assertRaises(validator.ValidationError):
-            validator.validate(source)
-
-    def test_missing_confirmation_fails(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").split("\n## Confirmation", 1)[0]
-        source.write_text(text, encoding="utf-8")
-        with self.assertRaises(validator.ValidationError):
-            validator.validate(source)
-
-    def test_duplicate_required_heading_fails(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").replace(
-            "## Candidate Outcome Areas\n\n- A\n- B",
-            "## Candidate Outcome Areas\n\n- A\n- B\n\n## Candidate Outcome Areas\n\n- C",
-        )
-        source.write_text(text, encoding="utf-8")
-        with self.assertRaises(validator.ValidationError):
-            validator.validate(source)
-
-    def test_missing_planning_constraints_fails(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").replace(
-            "## Planning Constraints\n\n- External contract\n\n", ""
-        )
-        source.write_text(text, encoding="utf-8")
-        with self.assertRaises(validator.ValidationError):
-            validator.validate(source)
-
-    def test_missing_reserved_decisions_fails(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").replace(
-            "## Decisions Reserved For Matt\n\n- Product policy\n\n", "", 1
-        )
-        source.write_text(text, encoding="utf-8")
-        with self.assertRaises(validator.ValidationError):
-            validator.validate(source)
-
-    def test_source_outside_project_planning_fails(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        outside = Path(td.name) / "outside" / "SCOPE-SHAPING-RESULT.md"
-        outside.parent.mkdir()
-        outside.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
-        with self.assertRaises(validator.ValidationError):
-            validator.validate(outside)
-
-    def test_empty_mvp_fails(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").replace(
-            "#### MVP\n\n- WP-001\n- WP-002\n\n#### Next\n\nNone",
-            "#### MVP\n\nNone\n\n#### Next\n\n- WP-001\n- WP-002",
-        )
-        source.write_text(text, encoding="utf-8")
-        with self.assertRaises(validator.ValidationError):
-            validator.validate(source)
-
-    def test_duplicate_release_cut_entry_fails(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").replace(
-            "#### MVP\n\n- WP-001\n- WP-002",
-            "#### MVP\n\n- WP-001\n- WP-001\n- WP-002",
-        )
-        source.write_text(text, encoding="utf-8")
-        with self.assertRaises(validator.ValidationError):
-            validator.validate(source)
-
-    def test_duplicate_next_planning_unit_fails(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").replace(
-            "- ./work-packages/WP-001.md\n- ./work-packages/WP-002.md",
-            "- ./work-packages/WP-001.md\n- ./work-packages/WP-001.md\n- ./work-packages/WP-002.md",
-        )
-        source.write_text(text, encoding="utf-8")
-        with self.assertRaises(validator.ValidationError):
-            validator.validate(source)
-
-    def test_reserved_decision_drift_fails(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        wp = source.parent / "work-packages" / "WP-001.md"
-        wp.write_text(
-            wp.read_text(encoding="utf-8").replace(
-                "## Decisions Reserved For Matt\n\n- None",
-                "## Decisions Reserved For Matt\n\n- Different decision",
+        increment.write_text(
+            increment.read_text(encoding="utf-8").replace(
+                "## Target Product State\n\nExample",
+                "## Target Product State\n\nDifferent target",
             ),
             encoding="utf-8",
         )
         with self.assertRaises(validator.ValidationError):
             validator.validate(source)
 
-    def test_duplicate_work_slug_fails(self) -> None:
-        td, source = self.make_tree()
+    def test_increment_work_package_drift_fails(self) -> None:
+        td, source, _, increment = self.make_initiative()
         self.addCleanup(td.cleanup)
-        wp2 = source.parent / "work-packages" / "WP-002.md"
-        wp2.write_text(
-            wp2.read_text(encoding="utf-8").replace(
-                "Suggested-Work-Slug: second-outcome", "Suggested-Work-Slug: first-outcome"
-            ),
-            encoding="utf-8",
-        )
+        increment.write_text(increment.read_text(encoding="utf-8").replace("Work-Package: WP-001", "Work-Package: None"), encoding="utf-8")
         with self.assertRaises(validator.ValidationError):
             validator.validate(source)
 
-    def test_bounded_result_is_valid_without_packages(self) -> None:
-        td = tempfile.TemporaryDirectory()
+    def test_selected_increment_cannot_reference_deferred_package(self) -> None:
+        td, source, _, _ = self.make_initiative()
         self.addCleanup(td.cleanup)
-        base = Path(td.name)
-        source = base / "docs" / "planning" / "scope-shaping" / "bounded" / "SCOPE-SHAPING-RESULT.md"
-        source.parent.mkdir(parents=True)
-        source.write_text("""# Bounded
+        text = source.read_text(encoding="utf-8").replace(
+            "#### Foundation\n\n- WP-001\n\n#### Expansion\n\nNone\n\n#### Deferred\n\nNone",
+            "#### Foundation\n\nNone\n\n#### Expansion\n\nNone\n\n#### Deferred\n\n- WP-001",
+        )
+        self._write_current_scope(source, text)
+        with self.assertRaisesRegex(validator.ValidationError, "Deferred Work Package"):
+            validator.validate(source)
 
-Status: confirmed
-Owner: user
-Project-Root: {root}
-Work-Slug: bounded
-Planning-Shape: bounded
-
-## Verified Material Claims
-
-### Claim 1
-
-Confirmed fact.
-
-## Planning Boundary
-
-### Outcome
-
-Bounded outcome.
-
-### Includes
-
-- Included scope
-
-### Excludes
-
-None
-
-## Planning Constraints
-
-None
-
-## Candidate Outcome Areas
-
-None
-
-## Decisions Reserved For Matt
-
-None
-
-## Delivery Context
-
-None
-
-## Unresolved Material Questions
-
-None
-
-## Confirmation
-
-Confirmed By: user
-Confirmed Scope: bounded scope
-""".format(root=base), encoding="utf-8")
-        validator.validate(source)
-
-    def test_bounded_requires_planning_boundary(self) -> None:
-        td, source = self.make_tree()
+    def test_selected_increment_section_must_contain_exactly_one_increment(self) -> None:
+        td, source, _ = self.make_bounded()
         self.addCleanup(td.cleanup)
         text = source.read_text(encoding="utf-8")
-        start = text.index("## Planning Boundary")
-        end = text.index("## Planning Constraints")
-        source.write_text(text[:start] + text[end:], encoding="utf-8")
+        selected = validator._section(text, "Selected Next Increment")
+        duplicate = selected.replace("### INC-001: Example", "### INC-002: Other", 1)
+        self._write_current_scope(source, text.replace(selected, selected + "\n\n" + duplicate))
+        with self.assertRaisesRegex(validator.ValidationError, "exactly one INC-NNN"):
+            validator.validate(source)
+
+    def test_construction_candidates_require_exactly_one_select(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8")
+        candidates = validator._section(text, "Construction Candidates")
+        duplicate = candidates.replace("### Candidate A", "### Candidate B", 1)
+        self._write_current_scope(source, text.replace(candidates, candidates + "\n\n" + duplicate))
+        with self.assertRaisesRegex(validator.ValidationError, "exactly one SELECT"):
+            validator.validate(source)
+
+    def test_construction_candidate_required_field_missing_fails(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8")
+        candidates = validator._section(text, "Construction Candidates")
+        changed = candidates.replace("Authoritative Readback: Example\n", "", 1)
+        self._write_current_scope(source, text.replace(candidates, changed))
+        with self.assertRaisesRegex(validator.ValidationError, "Authoritative Readback"):
+            validator.validate(source)
+
+    def test_selected_candidate_reference_must_match_select(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8").replace(
+            "#### Selected Candidate\n\nCandidate A",
+            "#### Selected Candidate\n\nCandidate B",
+        )
+        self._write_current_scope(source, text)
+        with self.assertRaisesRegex(validator.ValidationError, "exactly one SELECT construction candidate"):
+            validator.validate(source)
+
+    def test_selected_candidate_observable_contract_drift_fails(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8").replace(
+            "#### Observable Outcome\n\nActor Or Operator: Example\nTrigger Or Inspection Target: Example\nObservable Result: Example",
+            "#### Observable Outcome\n\nActor Or Operator: Example\nTrigger Or Inspection Target: Example\nObservable Result: Different",
+        )
+        self._write_current_scope(source, text)
+        with self.assertRaisesRegex(validator.ValidationError, "Observable Result drift"):
+            validator.validate(source)
+
+    def test_initiative_candidate_must_reference_proposed_work_package(self) -> None:
+        td, source, _, _ = self.make_initiative()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8").replace("Outcome Area: WP-001", "Outcome Area: WP-999", 1)
+        self._write_current_scope(source, text)
+        with self.assertRaisesRegex(validator.ValidationError, "must reference one proposed Work Package"):
+            validator.validate(source)
+
+    def test_candidate_validator_is_structural_not_a_scoring_engine(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8")
+        candidates = validator._section(text, "Construction Candidates")
+        changed = candidates.replace("Durable Foundation: Example", "Durable Foundation: debatable product judgment").replace(
+            "Reason: Example", "Reason: Lead chose this after qualitative tradeoff judgment"
+        )
+        self._write_current_scope(source, text.replace(candidates, changed))
+        validator.validate(source)
+
+    def test_provisional_horizon_is_required_but_not_a_ready_artifact(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8").replace(
+            "## Provisional Construction Horizon\n\n- Example\n\n", ""
+        )
+        self._write_current_scope(source, text)
         with self.assertRaises(validator.ValidationError):
             validator.validate(source)
 
-    def test_requires_candidate_outcome_areas(self) -> None:
-        td, source = self.make_tree()
+    def test_unresolved_material_question_fails(self) -> None:
+        td, source, _ = self.make_bounded()
         self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").replace(
-            "## Candidate Outcome Areas\n\n- A\n- B\n\n", ""
+        source.write_text(
+            source.read_text(encoding="utf-8").replace(
+                "## Unresolved Material Questions\n\nNone",
+                "## Unresolved Material Questions\n\nNeed evidence",
+            ),
+            encoding="utf-8",
         )
-        source.write_text(text, encoding="utf-8")
-        with self.assertRaises(validator.ValidationError):
-            validator.validate(source)
-
-    def test_requires_delivery_context(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").replace(
-            "## Delivery Context\n\n- None\n\n", ""
-        )
-        source.write_text(text, encoding="utf-8")
         with self.assertRaises(validator.ValidationError):
             validator.validate(source)
 
     def test_source_work_slug_must_be_lowercase_kebab(self) -> None:
-        td, source = self.make_tree()
+        td, source, _ = self.make_bounded()
         self.addCleanup(td.cleanup)
-        source.write_text(
-            source.read_text(encoding="utf-8").replace("Work-Slug: example", "Work-Slug: WP-001"),
-            encoding="utf-8",
-        )
+        source.write_text(source.read_text(encoding="utf-8").replace("Work-Slug: bounded", "Work-Slug: BAD"), encoding="utf-8")
         with self.assertRaises(validator.ValidationError):
             validator.validate(source)
 
-    def test_suggested_work_slug_must_be_lowercase_kebab(self) -> None:
-        td, source = self.make_tree()
+    def test_increment_suggested_work_slug_must_be_lowercase_kebab(self) -> None:
+        td, source, increment = self.make_bounded()
         self.addCleanup(td.cleanup)
-        wp = source.parent / "work-packages" / "WP-001.md"
-        wp.write_text(
-            wp.read_text(encoding="utf-8").replace("first-outcome", "WP-001"),
+        increment.write_text(increment.read_text(encoding="utf-8").replace("Suggested-Work-Slug: bounded-first", "Suggested-Work-Slug: BAD"), encoding="utf-8")
+        with self.assertRaises(validator.ValidationError):
+            validator.validate(source)
+
+    def test_increment_suggested_work_slug_must_match_confirmed_scope(self) -> None:
+        td, source, increment = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        increment.write_text(
+            increment.read_text(encoding="utf-8").replace(
+                "Suggested-Work-Slug: bounded-first",
+                "Suggested-Work-Slug: different-valid-slug",
+            ),
             encoding="utf-8",
         )
-        with self.assertRaises(validator.ValidationError):
+        with self.assertRaisesRegex(validator.ValidationError, "Suggested-Work-Slug drift"):
+            validator.validate(source)
+
+    def test_increment_work_slug_is_unique_across_scope_increments(self) -> None:
+        td, _, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        base = Path(td.name).resolve()
+        work = base / "docs" / "planning" / "scope-shaping" / "other"
+        (work / "increments").mkdir(parents=True)
+        source = work / "SCOPE-SHAPING-RESULT.md"
+        source_text = self._render(
+            "SCOPE-SHAPING-RESULT.bounded.template.md",
+            {
+                "<absolute project root>": str(base),
+                "<lowercase-kebab-slug>": "other",
+                "<increment-work-slug>": "bounded-first",
+            },
+        )
+        self._write_current_scope(source, source_text)
+        increment = work / "increments" / "INC-001.md"
+        increment.write_text(
+            self._render(
+                "INCREMENT.template.md",
+                {
+                    "<absolute project root>": str(base),
+                    "<increment-work-slug>": "bounded-first",
+                },
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(validator.ValidationError, "already belongs to another Scope Increment"):
             validator.validate(source)
 
     def test_source_path_must_match_work_slug(self) -> None:
-        td, source = self.make_tree()
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        source.write_text(source.read_text(encoding="utf-8").replace("Work-Slug: bounded", "Work-Slug: other"), encoding="utf-8")
+        with self.assertRaises(validator.ValidationError):
+            validator.validate(source)
+
+    def test_selected_increment_path_must_be_exact(self) -> None:
+        td, _, increment = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        renamed = increment.with_name("selected.md")
+        increment.rename(renamed)
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_selected_increment(renamed)
+
+    def test_future_nonselected_increment_makes_source_invalid(self) -> None:
+        td, source, increment = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        other = increment.with_name("INC-002.md")
+        other.write_text(increment.read_text(encoding="utf-8").replace("Increment: INC-001", "Increment: INC-002"), encoding="utf-8")
+        with self.assertRaisesRegex(validator.ValidationError, "highest current INC-NNN ordinal"):
+            validator.validate(source)
+
+    def test_reentry_requires_prior_increment_to_be_superseded(self) -> None:
+        td, source, increment = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        original_increment = increment.read_text(encoding="utf-8")
+        next_source = (
+            source.read_text(encoding="utf-8")
+            .replace("Scope-Revision: SHAPE-001", "Scope-Revision: SHAPE-002")
+            .replace("### INC-001: Example", "### INC-002: Example")
+            .replace("#### Suggested Work Slug\n\nbounded-first", "#### Suggested Work Slug\n\nbounded-second")
+            .replace("./increments/INC-001.md", "./increments/INC-002.md")
+        )
+        self._write_current_scope(source, next_source)
+        current = increment.with_name("INC-002.md")
+        current.write_text(
+            original_increment
+            .replace("Source-Scope-Revision: ../revisions/SHAPE-001.md", "Source-Scope-Revision: ../revisions/SHAPE-002.md")
+            .replace("Increment: INC-001", "Increment: INC-002")
+            .replace("Suggested-Work-Slug: bounded-first", "Suggested-Work-Slug: bounded-second"),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(validator.ValidationError, "prior Increment Status must be superseded"):
+            validator.validate(source)
+        increment.write_text(original_increment.replace("Status: ready-for-matt", "Status: superseded"), encoding="utf-8")
+        validator.validate(source)
+        self.assertEqual(validator.validate_selected_increment(current), source)
+
+        historical_revision = source.parent / "revisions" / "SHAPE-001.md"
+        historical_revision.write_text(
+            historical_revision.read_text(encoding="utf-8").replace(
+                "#### Target Product State\n\nExample",
+                "#### Target Product State\n\nChanged historical target",
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(validator.ValidationError, "Target Product State drift"):
+            validator.validate(source)
+
+    def test_missing_confirmation_fails(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8").split("\n## Confirmation", 1)[0]
+        self._write_current_scope(source, text)
+        with self.assertRaises(validator.ValidationError):
+            validator.validate(source)
+
+    def test_duplicate_required_heading_fails(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8").replace(
+            "## Candidate Outcome Areas\n\n- Example",
+            "## Candidate Outcome Areas\n\n- Example\n\n## Candidate Outcome Areas\n\n- Duplicate",
+        )
+        self._write_current_scope(source, text)
+        with self.assertRaises(validator.ValidationError):
+            validator.validate(source)
+
+    def test_missing_planning_constraints_fails(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8").replace(
+            "## Planning Constraints\n\n- Example\n\n", ""
+        )
+        self._write_current_scope(source, text)
+        with self.assertRaises(validator.ValidationError):
+            validator.validate(source)
+
+    def test_missing_reserved_decisions_fails(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8").replace(
+            "## Decisions Reserved For Matt\n\n- Example\n\n", ""
+        )
+        self._write_current_scope(source, text)
+        with self.assertRaises(validator.ValidationError):
+            validator.validate(source)
+
+    def test_list_section_rejects_mixed_prose(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8").replace(
+            "## Planning Constraints\n\n- Example",
+            "## Planning Constraints\n\nprose\n- Example",
+        )
+        self._write_current_scope(source, text)
+        with self.assertRaisesRegex(validator.ValidationError, "Markdown list items"):
+            validator.validate(source)
+
+    def test_missing_work_package_dependency_fails(self) -> None:
+        td, source, _, _ = self.make_initiative()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8").replace(
+            "##### Depends On\n\nNone",
+            "##### Depends On\n\n- WP-999",
+            1,
+        )
+        self._write_current_scope(source, text)
+        with self.assertRaisesRegex(validator.ValidationError, "missing dependencies"):
+            validator.validate(source)
+
+    def test_two_package_dependency_cycle_fails(self) -> None:
+        td, source, package, _ = self.make_initiative()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8").replace(
+            "##### Depends On\n\nNone",
+            "##### Depends On\n\n- WP-002",
+            1,
+        )
+        second = """#### WP-002: Second
+
+##### Outcome
+
+Example
+
+##### Includes
+
+- Example
+
+##### Excludes
+
+- Example
+
+##### Depends On
+
+- WP-001
+
+##### Why This Is One Package
+
+Example
+
+##### Why It Is Separate
+
+Example
+
+##### Decisions Reserved For Matt
+
+- Example
+
+"""
+        text = text.replace("### Outcome Horizon", second + "### Outcome Horizon")
+        text = text.replace("#### Foundation\n\n- WP-001", "#### Foundation\n\n- WP-001\n- WP-002")
+        self._write_current_scope(source, text)
+
+        package.write_text(
+            package.read_text(encoding="utf-8").replace("## Dependencies\n\nNone", "## Dependencies\n\n- WP-002"),
+            encoding="utf-8",
+        )
+        package2 = package.with_name("WP-002.md")
+        package2.write_text(
+            self._render("WORK-PACKAGE.template.md", {"<absolute project root>": str(Path(td.name).resolve())})
+            .replace("WP-001", "WP-002")
+            .replace("## Dependencies\n\nNone", "## Dependencies\n\n- WP-001"),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(validator.ValidationError, "dependency cycle"):
+            validator.validate(source)
+
+    def test_work_package_boundary_drift_fails(self) -> None:
+        td, source, package, _ = self.make_initiative()
+        self.addCleanup(td.cleanup)
+        package.write_text(
+            package.read_text(encoding="utf-8").replace(
+                "## Included Product Scope\n\n- Example",
+                "## Included Product Scope\n\n- Different scope",
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(validator.ValidationError, "Includes drift"):
+            validator.validate(source)
+
+    def test_missing_work_package_file_fails(self) -> None:
+        td, source, package, _ = self.make_initiative()
+        self.addCleanup(td.cleanup)
+        package.unlink()
+        with self.assertRaises(validator.ValidationError):
+            validator.validate(source)
+
+    def test_source_outside_project_planning_tree_fails(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        outside = Path(td.name).resolve() / "outside" / "SCOPE-SHAPING-RESULT.md"
+        outside.parent.mkdir()
+        outside.write_bytes(source.read_bytes())
+        with self.assertRaisesRegex(validator.ValidationError, "Scope result must be exactly"):
+            validator.validate(outside)
+
+    def test_source_filename_must_be_exact(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        renamed = source.with_name("RENAMED-RESULT.md")
+        source.rename(renamed)
+        with self.assertRaisesRegex(validator.ValidationError, "Scope result must be exactly"):
+            validator.validate(renamed)
+
+    def test_project_root_tilde_or_relative_form_fails(self) -> None:
+        td, source, _ = self.make_bounded()
         self.addCleanup(td.cleanup)
         source.write_text(
-            source.read_text(encoding="utf-8").replace("Work-Slug: example", "Work-Slug: other"),
+            source.read_text(encoding="utf-8").replace(
+                f"Project-Root: {Path(td.name).resolve()}",
+                "Project-Root: ~/project",
+            ),
             encoding="utf-8",
         )
         with self.assertRaises(validator.ValidationError):
             validator.validate(source)
 
-    def test_source_filename_must_be_exact(self) -> None:
-        td, source = self.make_tree()
+    def test_missing_scope_revision_file_fails(self) -> None:
+        td, source, _ = self.make_bounded()
         self.addCleanup(td.cleanup)
-        renamed = source.with_name("RENAMED-RESULT.md")
-        source.rename(renamed)
+        (source.parent / "revisions" / "SHAPE-001.md").unlink()
         with self.assertRaises(validator.ValidationError):
-            validator.validate(renamed)
+            validator.validate(source)
 
-    def test_symlinked_docs_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            base = Path(raw).resolve()
-            elsewhere = base / "elsewhere"
-            work = elsewhere / "planning" / "scope-shaping" / "example"
-            work.mkdir(parents=True)
-            (base / "docs").symlink_to(elsewhere, target_is_directory=True)
-            source = work / "SCOPE-SHAPING-RESULT.md"
-            source.write_text(SOURCE.format(project_root=base), encoding="utf-8")
-            with self.assertRaises(validator.ValidationError):
-                validator.validate(source)
-
-    def test_symlinked_planning_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            base = Path(raw).resolve()
-            docs = base / "docs"
-            elsewhere = base / "elsewhere"
-            work = elsewhere / "scope-shaping" / "example"
-            docs.mkdir()
-            work.mkdir(parents=True)
-            (docs / "planning").symlink_to(elsewhere, target_is_directory=True)
-            source = work / "SCOPE-SHAPING-RESULT.md"
-            source.write_text(SOURCE.format(project_root=base), encoding="utf-8")
-            with self.assertRaises(validator.ValidationError):
-                validator.validate(source)
+    def test_invalid_scope_revision_ordinal_fails(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        source.write_text(
+            source.read_text(encoding="utf-8").replace("Scope-Revision: SHAPE-001", "Scope-Revision: SHAPE-000"),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(validator.ValidationError, "ordinal of at least 001"):
+            validator.validate(source)
 
     def test_symlinked_work_packages_directory_fails(self) -> None:
-        td, source = self.make_tree()
+        td, source, package, _ = self.make_initiative()
         self.addCleanup(td.cleanup)
-        package_root = source.parent / "work-packages"
-        elsewhere = Path(td.name) / "packages"
+        package_root = package.parent
+        elsewhere = Path(td.name).resolve() / "packages-elsewhere"
         package_root.rename(elsewhere)
         package_root.symlink_to(elsewhere, target_is_directory=True)
         with self.assertRaises(validator.ValidationError):
             validator.validate(source)
 
     def test_symlinked_work_package_file_fails(self) -> None:
-        td, source = self.make_tree()
+        td, source, package, _ = self.make_initiative()
         self.addCleanup(td.cleanup)
-        wp = source.parent / "work-packages" / "WP-001.md"
-        target = Path(td.name) / "WP-001.md"
-        wp.rename(target)
-        wp.symlink_to(target)
+        target = package.with_name("WP-target.md")
+        package.rename(target)
+        package.symlink_to(target)
         with self.assertRaises(validator.ValidationError):
             validator.validate(source)
 
-    def test_selected_wp_path_must_be_exact(self) -> None:
-        td, source = self.make_tree()
+    def test_symlinked_revisions_directory_fails(self) -> None:
+        td, source, _ = self.make_bounded()
         self.addCleanup(td.cleanup)
-        wp = source.parent / "work-packages" / "WP-001.md"
-        validator.validate_selected_work_package(wp)
-        renamed = wp.with_name("selected.md")
-        wp.rename(renamed)
-        with self.assertRaises(validator.ValidationError):
-            validator.validate_selected_work_package(renamed)
-
-    def test_selected_deferred_work_package_fails(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").replace(
-            "#### MVP\n\n- WP-001\n- WP-002\n\n#### Next\n\nNone\n\n#### Deferred\n\nNone",
-            "#### MVP\n\n- WP-001\n\n#### Next\n\nNone\n\n#### Deferred\n\n- WP-002",
-        ).replace("- ./work-packages/WP-002.md\n", "")
-        source.write_text(text, encoding="utf-8")
-        validator.validate(source)
-        deferred = source.parent / "work-packages" / "WP-002.md"
-        with self.assertRaises(validator.ValidationError):
-            validator.validate_selected_work_package(deferred)
-
-    def test_noncanonical_project_root_fails(self) -> None:
-        td, source = self.make_tree()
-        self.addCleanup(td.cleanup)
-        root = Path(td.name)
-        noncanonical = root / "docs" / ".."
-        source.write_text(
-            source.read_text(encoding="utf-8").replace(
-                f"Project-Root: {root}", f"Project-Root: {noncanonical}"
-            ),
-            encoding="utf-8",
-        )
+        revision_root = source.parent / "revisions"
+        elsewhere = Path(td.name).resolve() / "revisions-elsewhere"
+        revision_root.rename(elsewhere)
+        revision_root.symlink_to(elsewhere, target_is_directory=True)
         with self.assertRaises(validator.ValidationError):
             validator.validate(source)
 
-    def test_project_root_input_must_be_absolute_without_tilde_expansion(self) -> None:
-        td, source = self.make_tree()
+    def test_symlinked_revision_file_fails(self) -> None:
+        td, source, _ = self.make_bounded()
         self.addCleanup(td.cleanup)
-        root = Path(td.name)
-        source.write_text(
-            source.read_text(encoding="utf-8").replace(
-                f"Project-Root: {root}", "Project-Root: ~/project"
-            ),
-            encoding="utf-8",
-        )
+        revision = source.parent / "revisions" / "SHAPE-001.md"
+        target = revision.with_name("SHAPE-target.md")
+        revision.rename(target)
+        revision.symlink_to(target)
         with self.assertRaises(validator.ValidationError):
             validator.validate(source)
 
     def test_symlinked_source_file_fails(self) -> None:
-        td, source = self.make_tree()
+        td, source, _ = self.make_bounded()
         self.addCleanup(td.cleanup)
         target = source.with_name("source-target.md")
         source.rename(target)
@@ -706,12 +640,58 @@ Confirmed Scope: bounded scope
         with self.assertRaises(validator.ValidationError):
             validator.validate(source)
 
+    def test_symlinked_increment_file_fails(self) -> None:
+        td, source, increment = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        target = increment.with_name("target.md")
+        increment.rename(target)
+        increment.symlink_to(target)
+        with self.assertRaises(validator.ValidationError):
+            validator.validate(source)
+
+    def test_symlinked_increments_directory_fails(self) -> None:
+        td, source, increment = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        increment_root = increment.parent
+        elsewhere = Path(td.name).resolve() / "increments-elsewhere"
+        increment_root.rename(elsewhere)
+        increment_root.symlink_to(elsewhere, target_is_directory=True)
+        with self.assertRaises(validator.ValidationError):
+            validator.validate(source)
+
+    def test_noncanonical_project_root_fails(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        root = Path(td.name).resolve()
+        source.write_text(
+            source.read_text(encoding="utf-8").replace(
+                f"Project-Root: {root}", f"Project-Root: {root / 'docs' / '..'}"
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaises(validator.ValidationError):
+            validator.validate(source)
+
     def test_scope_validator_cli_works_from_arbitrary_cwd(self) -> None:
-        td, source = self.make_tree()
+        td, source, _ = self.make_bounded()
         self.addCleanup(td.cleanup)
         with tempfile.TemporaryDirectory() as cwd:
             result = subprocess.run(
                 [sys.executable, str(MODULE_PATH), str(source)],
+                cwd=cwd,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "VALID")
+
+    def test_increment_validator_cli_works_from_arbitrary_cwd(self) -> None:
+        td, _, increment = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        with tempfile.TemporaryDirectory() as cwd:
+            result = subprocess.run(
+                [sys.executable, str(INCREMENT_MODULE_PATH), str(increment)],
                 cwd=cwd,
                 check=False,
                 capture_output=True,

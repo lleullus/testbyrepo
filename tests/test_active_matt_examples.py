@@ -100,6 +100,34 @@ class ActiveMattExampleTests(unittest.TestCase):
         self.assertNotIn("changed-path", verification)
         self.assertNotIn("actual delivery diff", verification)
 
+    def test_active_specs_have_exact_source_increment_trace(self) -> None:
+        for example in ACTIVE:
+            with self.subTest(example=example.name):
+                spec = (example / "SPEC.md").read_text(encoding="utf-8")
+                matches = re.findall(r"(?m)^Source-Increment:\s*(.+?)\s*$", spec)
+                self.assertEqual(len(matches), 1)
+                value = matches[0]
+                if example.name in {"simple-non-ui", "ui-prototype"}:
+                    self.assertEqual(value, "None")
+                    continue
+                self.assertNotEqual(value, "None")
+                increment = example / value
+                self.assertTrue(increment.is_file(), increment)
+                increment_text = increment.read_text(encoding="utf-8")
+                self.assertIn("Status: ready-for-matt", increment_text)
+                source_ref = re.search(r"(?m)^Source-Scope-Result:\s*(.+?)\s*$", increment_text)
+                revision_ref = re.search(r"(?m)^Source-Scope-Revision:\s*(.+?)\s*$", increment_text)
+                self.assertIsNotNone(source_ref)
+                self.assertIsNotNone(revision_ref)
+                source = (increment.parent / source_ref.group(1)).resolve()
+                revision = (increment.parent / revision_ref.group(1)).resolve()
+                self.assertTrue(source.is_file(), source)
+                self.assertTrue(revision.is_file(), revision)
+                self.assertEqual(source.read_bytes(), revision.read_bytes())
+                increment_id = re.search(r"(?m)^Increment:\s*(INC-\d{3})\s*$", increment_text)
+                self.assertIsNotNone(increment_id)
+                self.assertIn(f"### {increment_id.group(1)}:", source.read_text(encoding="utf-8"))
+
     def test_active_specs_and_tickets_share_behavior_authorities(self) -> None:
         for example in ACTIVE:
             with self.subTest(example=example.name):

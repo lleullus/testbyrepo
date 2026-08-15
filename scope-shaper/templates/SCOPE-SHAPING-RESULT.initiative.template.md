@@ -4,15 +4,24 @@ Status: confirmed
 Owner: <owner>
 Project-Root: <absolute project root>
 Work-Slug: <slug>
+Scope-Revision: SHAPE-001
 Planning-Shape: initiative
 
 ## Original Request
 
 <request>
 
+## Intent Horizon
+
+<long-term product direction preserved without making all of it current scope>
+
+## Current Product State
+
+- <directly verified current observable capability or absence>
+
 ## Investigation Assignments
 
-- <assignment ledger entry>
+None
 
 ## Verified Material Claims
 
@@ -22,7 +31,7 @@ Classification: FACT | INFERENCE
 Primary Evidence: <anchor>
 Counterexample Tested: <text>
 Lead Finding: <text at the correct Scope, Matt, or Delivery authority level>
-Planning Relevance: BOUNDARY | PLANNING_CONSTRAINT | RESERVED_FOR_MATT | OUTCOME_CANDIDATE | DELIVERY_CONTEXT | DECOMPOSITION
+Planning Relevance: BOUNDARY | PLANNING_CONSTRAINT | RESERVED_FOR_MATT | OUTCOME_CANDIDATE | CONSTRUCTION | DELIVERY_CONTEXT | DECOMPOSITION
 
 <claim>
 
@@ -30,7 +39,7 @@ Planning Relevance: BOUNDARY | PLANNING_CONSTRAINT | RESERVED_FOR_MATT | OUTCOME
 
 ### Outcome
 
-<one coherent observable outcome or initiative outcome>
+<connected initiative outcome landscape>
 
 ### Includes
 
@@ -42,27 +51,27 @@ Planning Relevance: BOUNDARY | PLANNING_CONSTRAINT | RESERVED_FOR_MATT | OUTCOME
 
 ## Planning Constraints
 
-- <unavoidable external, public, persisted, safety, authority, or deliberately preserved observable boundary, or None>
+- <unavoidable external, public, persisted, safety, authority, or deliberately preserved observable boundary, or use exact None>
 
 ## Candidate Outcome Areas
 
-- <candidate, or None>
+- <candidate>
+
+## Product Capability Dependencies
+
+- <product-level dependency, or use exact None>
 
 ## Decisions Reserved For Matt
 
-- <material product-policy, Behavior, or rendered-interaction decision, or None>
+- <material product-policy, Behavior, or rendered-interaction decision, or use exact None>
 
 ## Delivery Context
 
-- <verified non-normative repository, runtime, build, tool, test, or environment fact, or None>
+- <verified non-normative repository, runtime, build, tool, test, or environment fact, or use exact None>
 
 ## Outside The Assessed Landscape
 
-- <item, or None>
-
-## Unresolved Material Questions
-
-None
+- <item, or use exact None>
 
 ## Work Package Proposal
 
@@ -106,15 +115,15 @@ None
 
 ##### Decisions Reserved For Matt
 
-- <decision, or None>
+- <decision, or use exact None>
 
-### Release Cut
+### Outcome Horizon
 
-#### MVP
+#### Foundation
 
 - WP-001
 
-#### Next
+#### Expansion
 
 None
 
@@ -122,11 +131,102 @@ None
 
 None
 
-### Next Planning Units
+## Construction Candidates
 
-- ./work-packages/WP-001.md
+### Candidate A
+
+Outcome Area: WP-001
+Current Product State: <state>
+Target Product State: <state>
+Actor Or Operator: <actor or operator>
+Trigger Or Inspection Target: <trigger or canonical inspection target>
+Observable Result: <observable product result>
+Authoritative Readback: <authoritative product or canonical readback>
+Durable Foundation: <why this remains useful>
+Future Policy Avoided: <what this deliberately does not settle>
+Lead Disposition: SELECT | REJECT
+Reason: <comparison result>
+
+## Provisional Construction Horizon
+
+- <non-normative likely later capability, or use exact None>
+
+## Selected Next Increment
+
+### INC-001: <title>
+
+#### Work Package
+
+WP-001
+
+#### Suggested Work Slug
+
+<increment-work-slug>
+
+#### Selected Candidate
+
+Candidate A
+
+#### Current Product State
+
+<exact current state for this Increment>
+
+#### Target Product State
+
+<exact target state for this Increment>
+
+#### Observable Outcome
+
+Actor Or Operator: <exact selected actor or operator>
+Trigger Or Inspection Target: <exact selected trigger or canonical inspection target>
+Observable Result: <exact selected observable product result>
+Authoritative Readback: <exact selected authoritative product or canonical readback>
+
+#### Includes
+
+- <product scope required now>
+
+#### Excludes
+
+- <product scope deliberately not current>
+
+#### Required Product Dependencies
+
+- <observable prerequisite product result, or use exact None>
+
+#### Preserved Foundations
+
+- <durable product meaning later capability can rely on>
+
+#### Decisions Reserved For Matt
+
+- <decision, or use exact None>
+
+#### Deferred Until Re-entry
+
+- <future capability or policy deliberately deferred, or use exact None>
+
+#### Verification Boundary
+
+<how the selected product state can be observed or canonically inspected>
+
+#### Re-entry Contract
+
+<what actual delivered state must be inspected before selecting a later Increment>
+
+#### Delivery Context
+
+- <non-normative implementation or environment fact, or use exact None>
+
+#### Artifact
+
+./increments/INC-001.md
+
+## Unresolved Material Questions
+
+None
 
 ## Confirmation
 
 Confirmed By: <user or owner>
-Confirmed Scope: Planning Boundary, Planning Constraints, and, when present, the Work Package proposal; Decisions Reserved For Matt remain open for the next planning phase
+Confirmed Scope: Planning landscape, Work Package decomposition, Planning Constraints, and exactly one Selected Next Increment; Decisions Reserved For Matt remain open and Provisional Construction Horizon remains non-normative

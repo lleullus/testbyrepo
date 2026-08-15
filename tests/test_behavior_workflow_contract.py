@@ -196,7 +196,7 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
         for contract in (lead, matt, grilling):
             self.assertIn("newly identifiable", contract)
 
-    def test_scope_package_frame_and_ui_decisions_join_the_first_frontier(self) -> None:
+    def test_scope_increment_frame_and_ui_decisions_join_the_first_frontier(self) -> None:
         matt = (ROOT / "matt" / "skills" / "ask-matt" / "SKILL.md").read_text(encoding="utf-8")
         grill_me = (ROOT / "matt" / "skills" / "grill-me" / "SKILL.md").read_text(encoding="utf-8")
         grill_docs = (
@@ -204,16 +204,16 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         grilling = (ROOT / "matt" / "skills" / "grilling" / "SKILL.md").read_text(encoding="utf-8")
         shaper = (ROOT / "scope-shaper" / "SKILL.md").read_text(encoding="utf-8")
-        brief = (
+        increment = (
             ROOT
             / "scope-shaper"
             / "templates"
-            / "WORK-PACKAGE.template.md"
+            / "INCREMENT.template.md"
         ).read_text(encoding="utf-8")
         self.assertIn("before the first user-facing decision response", " ".join(matt.split()))
-        self.assertIn("Grill, Behavior, UI, and applicable Scope Shaper package-frame decisions", matt)
+        self.assertIn("Grill, Behavior, UI, and applicable Scope Shaper Increment-frame decisions", matt)
         self.assertIn("later explicit user action naming the", shaper)
-        self.assertIn("first integrated frontier", " ".join(brief.split()))
+        self.assertIn("Plan only this Increment", increment)
         for contract in (grill_me, grill_docs, grilling):
             normalized = " ".join(contract.split())
             self.assertIn("Central UI / UX Routing", normalized)

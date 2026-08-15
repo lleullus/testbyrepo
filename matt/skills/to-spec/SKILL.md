@@ -16,6 +16,7 @@ without choosing or beginning the implementation.
 
 - The most recently user-confirmed contract-only shared understanding.
 - The exact existing product project root and work slug.
+- `Source Increment`: the exact Scope-selected Increment path when Ask Matt entered from Scope Shaper, otherwise exact `None` for a direct next-increment-ready Ask Matt unit.
 - The planning owner, if one is named.
 - The completed Behavior Design result and every approved scoped Behavior authority adopted by the confirmed shared understanding.
 - The current adversarial-consensus activation or explicit withdrawal fact for this planning unit when one exists in the current conversation or caller handoff.
@@ -37,6 +38,22 @@ Reason: <missing Challenger binding | Intent Anchor confirmation | current lates
 ```
 
 If the user explicitly withdraws adversarial consensus for this planning unit, this additional admission gate no longer applies and ordinary To Spec admission continues. Do not create a receipt, flag file, sidecar, or persistent gate state; use only the current conversation/caller context.
+
+## Source Increment Admission
+
+Before drafting or writing the Spec, resolve `Source Increment` from the current Ask Matt/caller context.
+
+- For a direct next-increment-ready Ask Matt unit that never entered Scope Shaper, require exact `None`.
+- For Scope-shaped work, require one exact raw, non-symlink local `increments/INC-NNN.md` path under the exact Project Root. Run `../../../scope-shaper/tools/validate_increment.py` against it immediately before Spec drafting. Require it to remain the current `Status: ready-for-matt` Increment selected by its current Scope result, to remain bound to its immutable `Source-Scope-Revision`, and to have `Suggested-Work-Slug` exactly equal to this Spec's work slug.
+- Never convert a known Scope-shaped source to `None`, and never reuse a superseded, stale, drifted, wrong-project, or different-work-slug Increment merely because Matt previously completed planning against it.
+
+When this gate fails, do not draft or write the Spec. Return:
+
+```text
+TO SPEC: BLOCKED
+Reason: <missing Source Increment | stale or superseded Increment | project/work-slug mismatch | revision/Increment drift>
+Next action: return to the current Scope Shaper / Ask Matt boundary and establish one current admitted Increment
+```
 
 ## Terminal UI / UX Authority Gate
 
@@ -112,9 +129,19 @@ missing behavior inside the Spec.
 
 The most recently user-confirmed contract-only shared understanding is the
 normative source for product outcome, delivery scope, Non-Goals, and deliberate
-constraints. The approved Behavior authorities that understanding explicitly
-adopts are normative only for their exact behavioral scopes. Applicable UI
-authorities remain normative only for rendered design and interaction.
+constraints. When Ask Matt entered from a Scope-selected Increment, that shared
+understanding must remain within the exact current Increment and the immutable
+`Source-Scope-Revision` that approved it. The mutable current
+`SCOPE-SHAPING-RESULT.md` is navigation only for historical interpretation. The
+Increment revision's `Intent Horizon`, Work Package siblings, `Provisional
+Construction Horizon`, and the Increment's `Deferred Until Re-entry` content are
+context for future shaping, not authority for this Spec. If accurate Spec writing
+appears to need any of that deferred future capability, stop and return to Scope
+Shaper rather than importing it.
+
+The approved Behavior authorities that understanding explicitly adopts are
+normative only for their exact behavioral scopes. Applicable UI authorities
+remain normative only for rendered design and interaction.
 
 Repository code, prior Specs, Tickets, tests, documentation, prototypes, and
 runtime observations may explain the problem, verify current behavior, or
@@ -156,7 +183,10 @@ The document begins with a title, then these exact metadata keys:
 ```text
 Status: draft
 Owner: <user or named planning owner>
+Source-Increment: None | <project-relative docs/planning/scope-shaping/<scope-slug>/increments/INC-NNN.md path>
 ```
+
+For Scope-shaped work, resolve the admitted raw Increment from the exact Project Root and serialize its project-relative canonical path. For direct Ask Matt work, serialize exact `None`. This metadata is traceability only; it does not import the source revision's deferred or provisional future scope into the Spec.
 
 It contains these exact headings:
 

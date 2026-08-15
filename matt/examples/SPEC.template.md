@@ -2,8 +2,9 @@
 
 Status: draft
 Owner: <사용자 또는 지정된 planning owner>
+Source-Increment: None | <project-relative Scope Increment path>
 
-승인은 사용자 또는 명시된 planning owner가 확인하고, 제품 결정이 모두 해소된 뒤에만 `Status: approved`로 바꾼다. 이 파일은 복사해 직접 편집하는 Markdown 문서이며 별도 metadata나 도구가 필요 없다.
+승인은 사용자 또는 명시된 planning owner가 확인하고, 제품 결정이 모두 해소된 뒤에만 `Status: approved`로 바꾼다. Scope Shaper에서 온 작업이면 `Source-Increment`에 해당 Increment의 project-relative canonical path를 적고, 직접 Ask Matt 작업이면 정확히 `None`을 적는다. 이 trace는 미래 Scope를 가져오는 authority가 아니다.
 
 ## Problem
 

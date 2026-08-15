@@ -1,21 +1,15 @@
 # WP-001: <title>
 
-Status: ready-for-matt
+Status: scoped
 Project-Root: <absolute project root>
 Source-Scope-Result: ../SCOPE-SHAPING-RESULT.md
 Work-Package: WP-001
-Suggested-Work-Slug: <slug>
 
 ## Authority Notice
 
-This file carries one package boundary from the confirmed Scope result. The
-source retains investigation evidence, Planning Constraints, decomposition
-rationale, Decisions Reserved For Matt, Delivery Context, and confirmation.
-This file is not an approved Spec.
+This file carries one horizontal product-outcome boundary from the confirmed Scope result. The source retains investigation evidence, Planning Constraints, decomposition rationale, construction comparison, selected Increment, Delivery Context, and confirmation.
 
-Ask Matt must read the source result, apply only Planning Constraints whose scope
-contains this package, treat the source's applicable Decisions Reserved For
-Matt as unresolved, and use Delivery Context only as non-normative evidence.
+This Work Package is not an Ask Matt handoff, is never `ready-for-matt`, and does not authorize planning or delivery by itself. A later selected Increment may reference this package as its outcome area.
 
 ## Package Outcome
 
@@ -35,10 +29,4 @@ None
 
 ## Decisions Reserved For Matt
 
-- <package-specific decision, or None>
-
-## Matt Start
-
-Plan only this package. Confirm or correct the package frame inside Ask Matt's
-first integrated frontier, then follow normal Behavior Design and UI/UX routing.
-Implementation location, mechanism, and sequence remain implementation-owned.
+- <package-specific decision, or use exact None>
