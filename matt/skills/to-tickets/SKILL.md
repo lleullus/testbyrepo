@@ -479,7 +479,7 @@ treated as `Independent`. Before using the independent route, normalize it
 against the still-approved parent meaning and review it as a current Ticket. If
 normalization changes meaning, return to planning approval.
 
-Use only `draft`, `ready`, `blocked`, or `done` as the Ticket status value. `Worker:` must remain empty.
+Use only `draft`, `ready`, `blocked`, or `done` as the Ticket status value. To Tickets writes only planning-owned `draft` and `ready` states; `done` is reserved for a later delivery lifecycle that has actually satisfied the Ticket's authored completion obligations, and `blocked` may be used only under its approved blocker semantics. IIS Planning never infers or writes `done` merely because implementation appears to exist. `Worker:` must remain empty.
 Matt must not ask for, select, suggest, or record a Worker.
 
 Do not add `Initialization:`, `Planning-Root:`, a bootstrap manifest, exact

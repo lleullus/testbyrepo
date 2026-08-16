@@ -23,6 +23,22 @@ class IISEntryRoutingContractTests(unittest.TestCase):
         self.assertIn("choose exactly one durable next product construction Increment", shaper)
         self.assertIn("Scope Shaper has entry precedence whenever the next durable construction increment still has to be selected", router)
 
+    def test_continuation_preflight_uses_existing_artifact_lineage(self) -> None:
+        router = " ".join(REPO_ROUTER.read_text(encoding="utf-8").split())
+        for required in (
+            "Continuation Preflight",
+            "Ticket, then its exact sibling `SPEC.md`",
+            "Spec's exact `Source-Increment`",
+            "`done` is a later delivery-owned terminal marker",
+            "IIS CONTINUATION: DELIVERY REMAINS",
+            "Re-entry Contract",
+            "route to Scope Shaper for a fresh actual-product reinspection",
+            "route to Ask Matt with that exact Increment",
+            "IIS CONTINUATION: ARTIFACT REPAIR REQUIRED",
+            "IIS does not select workers, schedule Tickets, verify delivery, or change their status",
+        ):
+            self.assertIn(required, router)
+
     def test_explicit_ask_matt_keeps_leaf_but_not_admission_bypass(self) -> None:
         router = " ".join(REPO_ROUTER.read_text(encoding="utf-8").split())
         matt = " ".join((ROOT / "matt/skills/ask-matt/SKILL.md").read_text(encoding="utf-8").split())

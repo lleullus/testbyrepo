@@ -42,6 +42,8 @@ Legacy `ready-for-matt` Work Packages are not directly re-admitted. Scope Shaper
 
 Ticket Verification flows use current positional `Parent outcome ordinal`, `AC ordinals`, and `Behavior authority ordinals` so observable delivery obligations remain traceable to their parent outcome and semantic authorities without persistent IDs or a trace database.
 
-Ready Tickets are the interface to delivery. A separate delivery layer may later implement and verify a Ticket, but that layer is outside IIS and is not routed, scheduled, or supervised by this repository.
+Ready Tickets are the interface to delivery. A separate delivery layer may later implement and verify a Ticket, but that layer is outside IIS and is not routed, scheduled, or supervised by this repository. When that later lifecycle actually satisfies a Ticket's authored completion obligations it may mark the existing Ticket `Status: done`; IIS itself never infers delivery completion.
+
+When the user later explicitly asks IIS to continue prior Scope-shaped work, the router performs a continuation preflight over the existing artifact chain rather than creating a workflow ledger: Ticket -> sibling approved Spec -> `Source-Increment` -> immutable Scope revision -> current Scope navigation. Non-`done` sibling Tickets mean delivery remains outside IIS. All-`done` Tickets make the source Increment's `Re-entry Contract` due for fresh Scope Shaper inspection unless a newer validator-valid Scope revision already selects one exact `ready-for-matt` Increment, in which case continuation goes to Ask Matt. Broken or incomplete lineage fails closed for artifact repair.
 
 IIS does not use a controller database, persistent Goal state, implementation roster, verification roster, attempt ledger, evidence cache, event/replay engine, or generic workflow DSL.

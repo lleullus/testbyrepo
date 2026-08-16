@@ -355,6 +355,16 @@ class TicketValidatorTests(unittest.TestCase):
         self.fixture.write(blockers="- ../BLOCKER.md")
         self.assert_invalid("unresolved blocker")
 
+    def test_rejects_unresolved_blocker_for_done_ticket(self) -> None:
+        blocker = self.fixture.work / "BLOCKER.md"
+        blocker.write_text("# Blocker\n\nStatus: open\n", encoding="utf-8")
+        self.fixture.write(blockers="- ../BLOCKER.md", ticket_status="done")
+        self.assert_invalid("unresolved blocker")
+
+    def test_includes_done_as_valid_terminal_ticket_status(self) -> None:
+        self.fixture.write(ticket_status="done")
+        self.assert_valid()
+
     def test_rejects_inaccessible_assumed_existing_surface_when_declared_blocker_is_unresolved(self) -> None:
         blocker = self.fixture.work / "BLOCKER.md"
         blocker.write_text("# Blocker\n\nStatus: open\n", encoding="utf-8")

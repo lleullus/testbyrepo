@@ -388,7 +388,7 @@ def validate(ticket_path: str | Path) -> None:
         raise TicketValidationError(
             "Behavior Authorities and Verification flows do not close bidirectionally"
         )
-    _validate_blockers(ticket, _section(text, "Blockers"), status == "ready")
+    _validate_blockers(ticket, _section(text, "Blockers"), status in {"ready", "done"})
 
 
 def main(argv: list[str] | None = None) -> int:

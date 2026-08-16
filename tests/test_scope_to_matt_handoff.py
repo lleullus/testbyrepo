@@ -54,6 +54,18 @@ class ScopeToMattHandoffTests(unittest.TestCase):
         self.assertIn("ASK MATT: SCOPE SHAPING REQUIRED", matt)
         self.assertIn("before any Grill, Behavior, or UI work", matt)
 
+    def test_scope_confirmation_requires_complete_artifact_chain(self) -> None:
+        shaper = " ".join((ROOT / "scope-shaper/SKILL.md").read_text(encoding="utf-8").split())
+        for required in (
+            "complete artifact chain exists and validates",
+            "write the new immutable `revisions/SHAPE-NNN.md`",
+            "new selected `increments/INC-NNN.md`",
+            "before replacing current navigation",
+            "run both canonical Scope and selected-Increment validators",
+            "Re-entry Contract` is the durable planning continuation anchor",
+        ):
+            self.assertIn(required, shaper)
+
     def test_scope_selection_is_smallest_durable_product_state_not_smallest_task(self) -> None:
         shaper = " ".join((ROOT / "scope-shaper/SKILL.md").read_text(encoding="utf-8").split())
         rules = " ".join((ROOT / "scope-shaper/references/initiative-decomposition-rules.md").read_text(encoding="utf-8").split())

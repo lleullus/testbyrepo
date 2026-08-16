@@ -29,9 +29,35 @@ IIS carries no implementation-agent roster, verifier roster, scheduling order, c
 
 Apply explicit planning-leaf requests first. An explicit Scope Shaper request routes to Scope Shaper. An explicit Ask Matt request enters Ask Matt's own admission preflight rather than silently changing the requested leaf. Explicit To Spec and To Tickets requests keep their leaf-specific gates below.
 
-For an ordinary IIS workflow request, route directly to Ask Matt only when the request is already `next-increment-ready`: the current product baseline is identifiable; the request describes one durable observable state change with an actor or operator, trigger or inspection target, result, and authoritative readback; it does not bundle foundation, intermediate, and mature forms of the capability; no material product-capability ordering or foundation choice remains; and no independently acceptable sibling outcome still needs split/merge judgment.
+Before ordinary next-increment admission, run the Continuation Preflight below when the user clearly asks to continue previously Scope-shaped work, asks what comes next after an implementation/delivery result, or names an existing Scope-shaped Ticket, Spec, Increment, or Scope artifact as the work to continue. A continuation request is not a new-product request merely because delivery occurred outside IIS.
+
+For an ordinary IIS workflow request that is not a continuation, route directly to Ask Matt only when the request is already `next-increment-ready`: the current product baseline is identifiable; the request describes one durable observable state change with an actor or operator, trigger or inspection target, result, and authoritative readback; it does not bundle foundation, intermediate, and mature forms of the capability; no material product-capability ordering or foundation choice remains; and no independently acceptable sibling outcome still needs split/merge judgment.
 
 Route to Scope Shaper when any of those conditions is not established. New-product construction, whole-system or whole-platform requests, new core domain/lifecycle/ownership foundations, requests spanning multiple product maturity stages, and coherent outcomes that still require choosing what should exist first are Scope-Shaping work even when they can be described as one broad outcome. Technical depth, file count, or implementation layers alone do not decide this gate.
+
+### Continuation Preflight
+
+Continuation is derived from existing planning artifacts; IIS does not create a delivery ledger, persistent workflow state, scheduler, or completion database for it.
+
+When continuation applies:
+
+1. Resolve the strongest exact artifact available from the user's request and current conversation context. Prefer an exact Ticket, then its exact sibling `SPEC.md`, then that Spec's exact `Source-Increment`, then the Increment's immutable `Source-Scope-Revision` and current sibling `SCOPE-SHAPING-RESULT.md`. If no unique prior lineage can be established without guessing, ask only for the exact Ticket, Spec, Increment, or Scope artifact needed to identify it.
+2. For a Ticket-origin continuation, inspect every canonical sibling `TICKET-NNN.md` under the same approved Spec. Validate each Ticket structurally against the current approved parent meaning before trusting its status. `done` is a later delivery-owned terminal marker; `ready`, `blocked`, or `draft` means that Increment still has delivery work or an unresolved delivery boundary. Checking these authored statuses is planning admission evidence only; IIS does not select workers, schedule Tickets, verify delivery, or change their status.
+3. If any sibling Ticket is not `done`, stop continuation planning and report `IIS CONTINUATION: DELIVERY REMAINS` with the exact non-`done` Ticket paths/statuses. Do not enter Scope Shaper or plan a later Increment.
+4. If every sibling Ticket is `done`, read the source Increment's exact `Re-entry Contract` and inspect the current Scope navigation. If the current Scope still selects that source Increment, route to Scope Shaper for a fresh actual-product reinspection under that Re-entry Contract. Do not promote the provisional horizon directly.
+5. If the current Scope navigation has advanced to a later Scope revision, require the canonical Scope validator to pass and require its exact newly selected `increments/INC-NNN.md` to be the one valid `ready-for-matt` handoff. Then route to Ask Matt with that exact Increment. A prior delivered Increment may be `superseded`; that is planning-admission history, not the delivery-completion marker.
+6. If the current Scope result, immutable revision, selected Increment, parent Spec, or Ticket lineage is incomplete, drifted, missing, noncanonical, or validator-invalid, stop with `IIS CONTINUATION: ARTIFACT REPAIR REQUIRED`. Never infer a later Increment from prose, a provisional horizon, or an incomplete current Scope result.
+
+Report continuation routing explicitly:
+
+```text
+IIS CONTINUATION
+Source Increment: <exact INC-NNN path>
+Ticket delivery evidence: <all done | exact remaining Ticket statuses>
+Current Scope: <exact current Scope result path>
+Next action: <DELIVERY REMAINS | SCOPE SHAPING RE-ENTRY | ASK MATT | ARTIFACT REPAIR REQUIRED>
+Next artifact: <exact path when applicable>
+```
 
 ### Scope Shaping
 
