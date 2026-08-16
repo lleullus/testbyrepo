@@ -62,7 +62,6 @@ class ScopeToMattHandoffTests(unittest.TestCase):
             "new selected `increments/INC-NNN.md`",
             "before replacing current navigation",
             "run both canonical Scope and selected-Increment validators",
-            "Re-entry Contract` is the durable planning continuation anchor",
         ):
             self.assertIn(required, shaper)
 

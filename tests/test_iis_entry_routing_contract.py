@@ -23,21 +23,27 @@ class IISEntryRoutingContractTests(unittest.TestCase):
         self.assertIn("choose exactly one durable next product construction Increment", shaper)
         self.assertIn("Scope Shaper has entry precedence whenever the next durable construction increment still has to be selected", router)
 
-    def test_continuation_preflight_uses_existing_artifact_lineage(self) -> None:
+    def test_current_planning_state_check_is_read_only_and_stops(self) -> None:
         router = " ".join(REPO_ROUTER.read_text(encoding="utf-8").split())
         for required in (
-            "Continuation Preflight",
-            "Ticket, then its exact sibling `SPEC.md`",
-            "Spec's exact `Source-Increment`",
-            "`done` is a later delivery-owned terminal marker",
-            "IIS CONTINUATION: DELIVERY REMAINS",
-            "Re-entry Contract",
-            "route to Scope Shaper for a fresh actual-product reinspection",
-            "route to Ask Matt with that exact Increment",
-            "IIS CONTINUATION: ARTIFACT REPAIR REQUIRED",
-            "IIS does not select workers, schedule Tickets, verify delivery, or change their status",
+            "Current Planning State Check",
+            "read-only status inspection",
+            "Treat `Status: done` Tickets as completed delivery units",
+            "A prior Increment with `Status: superseded` is historical planning state",
+            "does not block reporting the current planning position",
+            "report that exact Increment and `Ask Matt` as the next leaf",
+            "report that Work Package as the next candidate area and `Scope Shaper` as the leaf",
+            "After reporting the state and next pointer, **STOP**",
+            "Do not invoke or execute Scope Shaper, Ask Matt, To Spec, To Tickets",
         ):
             self.assertIn(required, router)
+
+        for forbidden in (
+            "IIS CONTINUATION: DELIVERY REMAINS",
+            "IIS CONTINUATION: ARTIFACT REPAIR REQUIRED",
+            "route to Scope Shaper for a fresh actual-product reinspection",
+        ):
+            self.assertNotIn(forbidden, router)
 
     def test_explicit_ask_matt_keeps_leaf_but_not_admission_bypass(self) -> None:
         router = " ".join(REPO_ROUTER.read_text(encoding="utf-8").split())

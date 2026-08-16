@@ -355,8 +355,6 @@ Before writing or updating any durable Scope artifact, resolve `tools/prepare_sc
 
 A confirmed shaping pass is not durable until its complete artifact chain exists and validates. For a new revision, write the new immutable `revisions/SHAPE-NNN.md`, the new selected `increments/INC-NNN.md`, every required Work Package update, and the required prior-Increment `superseded` metadata before treating the new `SCOPE-SHAPING-RESULT.md` navigation state as complete. Prefer writing the immutable revision and selected Increment before replacing current navigation so an interruption cannot leave a current Scope result pointing only to nonexistent authority. After the current result is replaced, immediately run both canonical Scope and selected-Increment validators. If either validator fails, report Scope artifact closure as incomplete and do not report a confirmed handoff or continue to Ask Matt. A later entry encountering such an incomplete current artifact chain repairs or completes that exact confirmed pass before any new shaping decision.
 
-The selected Increment's `Re-entry Contract` is the durable planning continuation anchor after later delivery. Scope Shaper does not track delivery state, but a later IIS continuation may use completed Ticket status as evidence that this exact Re-entry Contract is due for fresh actual-product inspection.
-
 ### Source Authority And Immutable Revision
 
 Maintain one current Scope navigation/authority file and one immutable revision snapshot for each confirmed shaping pass:
