@@ -1,0 +1,7 @@
+interface:
+  display_name: "IIS Observatory"
+  short_description: "Inspect IIS project state and next work"
+  default_prompt: "Use $iis-observatory to show the current IIS project overview and next work."
+
+policy:
+  allow_implicit_invocation: true

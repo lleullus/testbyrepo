@@ -9,8 +9,21 @@ IIS is the planning layer that turns user intent into approved product authority
 - `behavior-design-lead/`: canonical Behavior authority design performed inside planning.
 - `matt/`: one-Increment product/Behavior/UI planning, optional explicit adversarial consensus, approved Spec creation, and reviewed Ready Ticket decomposition.
 - `planning-workspace/`: project-local planning workspace support.
+- `observatory/`: read-only IIS state scanner and CLI for cross-repository overview, repository health, next-work pointers, consistency checks, and planning history.
+- `iis-observatory/`: Codex skill wrapper for Observatory. The globally installed copy lives at `~/.codex/skills/iis-observatory/` and routes status inspection to the read-only CLI.
 - `iis-workflow/`: canonical planning-only entry router. A generic IIS request goes to Ask Matt only when it is already next-increment-ready; otherwise Scope Shaper first selects the Increment.
 - `repo-snapshot/`: independent Git working-tree snapshot skill.
+
+## Global skill synchronization
+
+The live Codex skill installs are synchronized from this repository:
+
+```bash
+python3 scripts/sync_installed_router.py
+python3 scripts/sync_installed_observatory.py
+```
+
+Use `--check` on either command to detect drift without changing the installed copy.
 
 ## Planning boundary
 
