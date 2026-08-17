@@ -1,0 +1,4 @@
+interface:
+  display_name: "IIS Adaptive Planning"
+  short_description: "Opt-in adaptive mode for IIS planning"
+  default_prompt: "Use IIS Adaptive Planning for this planning request while preserving the baseline IIS artifacts and authority."
