@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -116,6 +117,7 @@ class SlotService:
         }
         try:
             browser_pid = self.launcher.ensure_running(slot)
+            time.sleep(5)
             login = self.cdp.check_login(slot)
             state["prepared"] = True
             state["requires_reprepare"] = False
