@@ -1,0 +1,49 @@
+name: OMP Port CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20.x", "22.x"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: skills/lumin-repo-lens/package-lock.json
+      - name: Install engine dependencies
+        working-directory: skills/lumin-repo-lens
+        run: npm ci
+      - name: Verify OMP package surface
+        run: npm run verify
+      - name: Test OMP adapter
+        run: npm test
+      - name: Smoke complete audit engine
+        run: npm run smoke
+
+  bun:
+    name: OMP extension (Bun)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Test extension registration
+        run: bun test tests/omp-extension.test.ts
+      - name: Build OMP extension
+        run: |
+          rm -rf .tmp-omp-build
+          bun build extensions/lumin-repo-lens.ts \
+            --target=bun \
+            --external @oh-my-pi/pi-coding-agent \
+            --outdir .tmp-omp-build
