@@ -164,6 +164,14 @@ def scan_repository(
 def _load_artifacts(planning_root: Path, options: ScanOptions, state: ProjectState) -> list[Artifact]:
     artifacts: list[Artifact] = []
     for path in sorted(planning_root.rglob("*.md")):
+        try:
+            relative = path.relative_to(planning_root)
+        except ValueError:
+            continue
+        if relative.parts and relative.parts[0].lower() in {"observatory", "adaptive"}:
+            # Derived Observatory files and Adaptive provenance never become
+            # canonical Scope/Increment/Spec/Ticket authority.
+            continue
         lowered = path.name.lower()
         if ".template." in lowered or lowered.endswith(".template.md"):
             continue

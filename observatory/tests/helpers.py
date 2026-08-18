@@ -4,10 +4,12 @@ from pathlib import Path
 
 
 class RepoBuilder:
-    def __init__(self, root: Path, name: str = "repo") -> None:
+    def __init__(self, root: Path, name: str = "repo", *, git: bool = True) -> None:
         self.repo = root / name
         self.planning = self.repo / "docs" / "planning"
         self.planning.mkdir(parents=True, exist_ok=True)
+        if git:
+            (self.repo / ".git").mkdir(exist_ok=True)
 
     def write(self, relative: str, text: str) -> Path:
         path = self.repo / relative
@@ -21,6 +23,8 @@ class RepoBuilder:
         slug: str | None = "demo-work",
         work_package: str = "WP-001",
         status: str = "confirmed",
+        *,
+        increment_title: str | None = None,
     ) -> None:
         selected = f"Selected-Increment: {increment}\n" if increment else ""
         suggested = f"Suggested-Work-Slug: {slug}\n" if slug else ""
@@ -35,15 +39,28 @@ Work-Package: {work_package}
         )
         self.work_package(work_package)
         if increment:
-            self.increment(increment, slug=slug, work_package=work_package)
+            self.increment(
+                increment,
+                slug=slug,
+                work_package=work_package,
+                title=increment_title,
+            )
 
-    def work_package(self, identifier: str = "WP-001", status: str = "scoped") -> None:
+    def work_package(
+        self,
+        identifier: str = "WP-001",
+        status: str = "scoped",
+        *,
+        title: str | None = None,
+    ) -> None:
         number = identifier.split("-")[-1]
+        heading = title or f"{identifier} Work package"
         self.write(
             f"docs/planning/scope-shaping/current/WORK-PACKAGE-{number}.md",
             f"""
-# {identifier} Work package
+# {heading}
 Status: {status}
+Work-Package: {identifier}
 """,
         )
 
@@ -54,13 +71,15 @@ Status: {status}
         status: str = "ready-for-matt",
         slug: str | None = "demo-work",
         work_package: str = "WP-001",
+        title: str | None = None,
     ) -> None:
         number = identifier.split("-")[-1]
         suggested = f"Suggested-Work-Slug: {slug}\n" if slug else ""
+        heading = title or f"{identifier} Increment"
         self.write(
             f"docs/planning/scope-shaping/current/INCREMENT-{number}.md",
             f"""
-# {identifier} Increment
+# {heading}
 Status: {status}
 Parent-Work-Package: {work_package}
 {suggested}
@@ -73,12 +92,17 @@ Parent-Work-Package: {work_package}
         *,
         status: str = "approved",
         source_increment: str | None = "INC-001",
+        title: str = "Demo Spec",
     ) -> None:
-        source = f"Source-Increment: {source_increment}\n" if source_increment is not None else "Source-Increment: None\n"
+        source = (
+            f"Source-Increment: {source_increment}\n"
+            if source_increment is not None
+            else "Source-Increment: None\n"
+        )
         self.write(
             f"docs/planning/work/{slug}/SPEC.md",
             f"""
-# Demo Spec
+# {title}
 Status: {status}
 {source}
 """,
@@ -96,7 +120,11 @@ Status: {status}
     ) -> None:
         ticket_id = identifier or f"TKT-{number:03d}"
         status_line = f"Status: {status}\n" if include_status else ""
-        source = f"Source-Increment: {source_increment}\n" if source_increment is not None else "Source-Increment: None\n"
+        source = (
+            f"Source-Increment: {source_increment}\n"
+            if source_increment is not None
+            else "Source-Increment: None\n"
+        )
         self.write(
             f"docs/planning/work/{slug}/tickets/TICKET-{number:03d}.md",
             f"""

@@ -17,9 +17,15 @@ class StatusTransition:
     path: str
     before: str | None
     after: str | None
+    category: str = "canonical"
 
     def to_dict(self) -> dict[str, str | None]:
-        return {"path": self.path, "before": self.before, "after": self.after}
+        return {
+            "path": self.path,
+            "before": self.before,
+            "after": self.after,
+            "category": self.category,
+        }
 
 
 @dataclass
@@ -38,6 +44,7 @@ class HistoryEvent:
             "author": self.author,
             "subject": self.subject,
             "files": self.files,
+            "files_by_category": _files_by_category(self.files),
             "status_transitions": [item.to_dict() for item in self.transitions],
         }
 
@@ -117,7 +124,9 @@ def _parse_transitions(patch: str) -> list[StatusTransition]:
         before = removed.get(path, [None])[-1]
         after = added.get(path, [None])[-1]
         if before != after:
-            transitions.append(StatusTransition(path, before, after))
+            transitions.append(
+                StatusTransition(path, before, after, _history_category(path))
+            )
     return transitions
 
 
@@ -128,13 +137,69 @@ def render_history(events: list[HistoryEvent]) -> str:
         return "\n".join(lines) + "\n"
     for event in events:
         lines.append(f"{event.timestamp}  {event.commit[:8]}  {event.subject}")
+        by_transition: dict[str, list[StatusTransition]] = {
+            "canonical": [],
+            "adaptive": [],
+            "observatory": [],
+        }
         for transition in event.transitions:
-            before = transition.before or "∅"
-            after = transition.after or "∅"
-            lines.append(f"  {transition.path}: {before} → {after}")
-        if not event.transitions:
-            preview = ", ".join(event.files[:3])
-            if len(event.files) > 3:
-                preview += f" (+{len(event.files) - 3})"
-            lines.append(f"  planning files: {preview or 'none'}")
+            by_transition.setdefault(transition.category, []).append(transition)
+        labels = {
+            "canonical": "Canonical planning transitions",
+            "adaptive": "Adaptive provenance transitions",
+            "observatory": "Observatory projection transitions",
+        }
+        for category in ("canonical", "adaptive", "observatory"):
+            transitions = by_transition.get(category, [])
+            if not transitions:
+                continue
+            lines.append(f"  {labels[category]}:")
+            for transition in transitions:
+                before = transition.before or "∅"
+                after = transition.after or "∅"
+                lines.append(f"    {transition.path}: {before} → {after}")
+
+        grouped_files = _files_by_category(event.files)
+        transitioned_paths = {transition.path for transition in event.transitions}
+        for category, label in (
+            ("adaptive", "Adaptive provenance files"),
+            ("observatory", "Observatory projection files"),
+            ("canonical", "Canonical planning files"),
+        ):
+            files = [
+                path
+                for path in grouped_files.get(category, [])
+                if path not in transitioned_paths
+            ]
+            if files:
+                lines.append(f"  {label}: {_preview(files)}")
+        if not event.transitions and not event.files:
+            lines.append("  planning files: none")
     return "\n".join(lines) + "\n"
+
+
+def _history_category(path: str) -> str:
+    normalized = path.replace("\\", "/")
+    if normalized.startswith("docs/planning/adaptive/"):
+        return "adaptive"
+    if normalized.startswith("docs/planning/observatory/"):
+        return "observatory"
+    return "canonical"
+
+
+def _files_by_category(files: list[str]) -> dict[str, list[str]]:
+    grouped: dict[str, list[str]] = {
+        "canonical": [],
+        "adaptive": [],
+        "observatory": [],
+    }
+    for path in files:
+        grouped[_history_category(path)].append(path)
+    return grouped
+
+
+def _preview(files: list[str], limit: int = 3) -> str:
+    preview = ", ".join(files[:limit])
+    if len(files) > limit:
+        preview += f" (+{len(files) - limit})"
+    return preview or "none"

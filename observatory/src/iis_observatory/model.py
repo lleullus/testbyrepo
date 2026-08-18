@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import Any, Iterable
 import re
 
-__version__ = "0.1.7"
+__version__ = "0.2.1"
 SCHEMA_VERSION = "1.0"
+SNAPSHOT_SCHEMA_VERSION = "1.0"
 
 
 class ArtifactKind(str, Enum):

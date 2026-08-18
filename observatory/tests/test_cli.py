@@ -54,7 +54,7 @@ class CliTests(unittest.TestCase):
             root = Path(temp)
             main_repo = RepoBuilder(root, "x.com")
             main_repo.scope()
-            worktree = RepoBuilder(main_repo.repo / "worktrees", "feature")
+            worktree = RepoBuilder(main_repo.repo / "worktrees", "feature", git=False)
             worktree.scope()
             worktree.write(
                 ".git",
@@ -106,6 +106,66 @@ class CliTests(unittest.TestCase):
             code = main(["overview", "/definitely/missing/iis-root"])
         self.assertEqual(code, 2)
         self.assertIn("does not exist", stream_err.getvalue())
+
+    def test_snapshot_cli_missing_write_then_current(self) -> None:
+        with TemporaryDirectory() as temp:
+            builder = RepoBuilder(Path(temp), "repo")
+            builder.scope()
+            builder.spec()
+            builder.ticket(1, "done")
+
+            missing = StringIO()
+            with redirect_stdout(missing):
+                missing_code = main(["snapshot", str(builder.repo), "--check"])
+            self.assertEqual(missing_code, 7)
+            self.assertIn("Snapshot-Freshness: MISSING", missing.getvalue())
+
+            written = StringIO()
+            with redirect_stdout(written):
+                write_code = main(["snapshot", str(builder.repo), "--write"])
+            self.assertEqual(write_code, 0)
+            self.assertIn("Action: WRITTEN", written.getvalue())
+
+            current = StringIO()
+            with redirect_stdout(current):
+                current_code = main(["snapshot", str(builder.repo), "--check"])
+            self.assertEqual(current_code, 0)
+            self.assertIn("Snapshot-Freshness: CURRENT", current.getvalue())
+
+    def test_snapshot_cli_json_output(self) -> None:
+        with TemporaryDirectory() as temp:
+            builder = RepoBuilder(Path(temp), "repo")
+            builder.scope()
+            builder.spec()
+            builder.ticket(1, "done")
+            write_stream = StringIO()
+            with redirect_stdout(write_stream):
+                code = main([
+                    "snapshot",
+                    str(builder.repo),
+                    "--write",
+                    "--format",
+                    "json",
+                ])
+            self.assertEqual(code, 0)
+            payload = json.loads(write_stream.getvalue())
+            self.assertEqual(payload["action"], "WRITTEN")
+            self.assertEqual(payload["freshness"], "CURRENT")
+
+    def test_snapshot_cli_stale_exit_code(self) -> None:
+        with TemporaryDirectory() as temp:
+            builder = RepoBuilder(Path(temp), "repo")
+            builder.scope()
+            builder.spec()
+            builder.ticket(1, "ready")
+            with redirect_stdout(StringIO()):
+                self.assertEqual(main(["snapshot", str(builder.repo), "--write"]), 0)
+            builder.ticket(1, "done")
+            stale = StringIO()
+            with redirect_stdout(stale):
+                code = main(["snapshot", str(builder.repo), "--check"])
+            self.assertEqual(code, 6)
+            self.assertIn("Snapshot-Freshness: STALE", stale.getvalue())
 
 
 if __name__ == "__main__":

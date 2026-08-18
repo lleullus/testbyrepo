@@ -345,6 +345,64 @@ Suggested-Work-Slug: historical-work
             self.assertEqual(payload["follow_up"]["next_candidate_work_packages"], [])
             self.assertIn("next_work", payload)
 
+    def test_observatory_and_adaptive_companions_are_not_canonical_artifacts(self) -> None:
+        with TemporaryDirectory() as temp:
+            builder = RepoBuilder(Path(temp), "repo")
+            builder.scope("INC-004", "current-work", "WP-001")
+            builder.spec("current-work", source_increment="INC-004")
+            builder.ticket(1, "ready", slug="current-work", source_increment="INC-004")
+            builder.write(
+                "docs/planning/adaptive/current/TICKET-999.md",
+                "# TKT-999 Adaptive provenance lookalike\nStatus: ready\nSource-Increment: INC-004",
+            )
+            builder.write(
+                "docs/planning/observatory/SPEC.md",
+                "# Generated Overview Lookalike\nStatus: approved\nSource-Increment: INC-004",
+            )
+
+            state = scan_repository(builder.repo)
+            self.assertEqual(state.current_increment.identifier, "INC-004")
+            self.assertEqual(state.ticket_counts["total"], 1)
+            self.assertEqual(state.current_spec.relative_path, "docs/planning/work/current-work/SPEC.md")
+            self.assertEqual(state.health, Health.READY)
+
+    def test_adaptive_reshape_selects_replacement_increment_and_ignores_old_work(self) -> None:
+        with TemporaryDirectory() as temp:
+            builder = RepoBuilder(Path(temp), "repo")
+            builder.scope("INC-005", "replacement-work", "WP-001")
+            builder.write(
+                "docs/planning/scope-shaping/current/INCREMENT-004.md",
+                """
+# INC-004: Superseded shape
+Status: superseded
+Parent-Work-Package: WP-001
+Suggested-Work-Slug: old-work
+""",
+            )
+            builder.spec("old-work", source_increment="INC-004", title="Old Spec")
+            builder.ticket(1, "ready", slug="old-work", source_increment="INC-004")
+            builder.spec("replacement-work", source_increment="INC-005", title="Replacement Spec")
+            builder.ticket(1, "ready", slug="replacement-work", source_increment="INC-005")
+            builder.write(
+                "docs/planning/adaptive/current/ADAPTIVE-PLANNING-TRACE.md",
+                """
+# Adaptive Planning Trace
+Current Mandate Revision: 2
+## Material Events
+### 001 — reshape current increment
+Decision: INC-004 superseded; INC-005 selected
+Re-entry / next leaf: Ask Matt
+""",
+            )
+
+            state = scan_repository(builder.repo)
+            self.assertEqual(state.current_increment.identifier, "INC-005")
+            self.assertEqual(state.current_work_slug, "replacement-work")
+            self.assertEqual(state.current_spec.title, "Replacement Spec")
+            self.assertEqual(state.ticket_counts["total"], 1)
+            self.assertEqual(state.ticket_counts["ready"], 1)
+            self.assertEqual(state.health, Health.READY)
+
 
 if __name__ == "__main__":
     unittest.main()

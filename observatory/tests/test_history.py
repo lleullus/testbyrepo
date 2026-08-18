@@ -40,6 +40,32 @@ class HistoryTests(unittest.TestCase):
             self.assertEqual(len(latest.transitions), 1)
             self.assertEqual(latest.transitions[0].before, "draft")
             self.assertEqual(latest.transitions[0].after, "ready")
+            self.assertEqual(latest.transitions[0].category, "canonical")
+
+    def test_separates_adaptive_and_observatory_files(self) -> None:
+        with TemporaryDirectory() as temp:
+            repo = Path(temp)
+            self.run_git(repo, "init", "-q")
+            adaptive = repo / "docs/planning/adaptive/current/ADAPTIVE-PLANNING-MANDATE.md"
+            observatory = repo / "docs/planning/observatory/PROJECT-OVERVIEW.md"
+            adaptive.parent.mkdir(parents=True)
+            observatory.parent.mkdir(parents=True)
+            adaptive.write_text("# Mandate\nStatus: active\n", encoding="utf-8")
+            observatory.write_text(
+                "# Overview\nSnapshot-Freshness: current-at-generation\n",
+                encoding="utf-8",
+            )
+            self.run_git(repo, "add", ".")
+            self.run_git(repo, "commit", "-qm", "add derived planning records")
+
+            events = collect_history(repo, limit=1)
+            self.assertEqual(len(events), 1)
+            event = events[0]
+            self.assertEqual(event.transitions[0].category, "adaptive")
+            self.assertIn(
+                "docs/planning/observatory/PROJECT-OVERVIEW.md",
+                event.to_dict()["files_by_category"]["observatory"],
+            )
 
 
 if __name__ == "__main__":

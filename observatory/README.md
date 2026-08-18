@@ -30,7 +30,7 @@ Ready 1   Blocked 0   Planning 2   Inconsistent 0   Complete 2
 
 - Linux 또는 WSL
 - Python 3.11 이상
-- Git은 `history` 명령에만 필요
+- Git은 `history` 명령에 필요하며, snapshot에서는 생성 시점 참고 metadata로만 선택적으로 사용합니다.
 - 외부 Python 패키지 없음
 
 ## 설치
@@ -133,6 +133,43 @@ Health: READY
 STOP
 ```
 
+### Durable 프로젝트 상태판
+
+현재 상태를 Git에 보관할 수 있는 **파생 read model**로 기록하려면:
+
+```bash
+iis-observatory snapshot ~/project/tax --write
+```
+
+다음 두 파일만 갱신합니다.
+
+```text
+docs/planning/observatory/
+├── PROJECT-OVERVIEW.md
+└── project-state.json
+```
+
+이 파일들은 canonical IIS authority가 아닙니다. Scope, Work Package, Increment, Spec, Ticket을 변경하거나 다음 leaf를 실행하지 않습니다. 동일한 source fingerprint라면 `Action: UNCHANGED`로 끝나며 파일/mtime도 바꾸지 않습니다.
+
+사람용 `PROJECT-OVERVIEW.md`에는 현재 Ticket denominator가 있을 때 정확한 비율과 함께 진행 막대가 표시됩니다.
+
+```text
+Delivery Progress
+  Current Ticket delivery: ██████░░░░ 3 / 5 (60.0%) — exact ratio
+```
+
+작은 비율도 과장하지 않도록 fractional block을 사용합니다. 예를 들어 `1.2%`는 `▏░░░░░░░░░`처럼 표시되며 정확한 분자/분모/퍼센트가 항상 옆에 남습니다. 막대는 presentation-only이고 `Health`나 `Next Work` 판정에 영향을 주지 않습니다.
+
+저장된 상태판이 아직 최신인지 확인하려면:
+
+```bash
+iis-observatory snapshot ~/project/tax --check
+```
+
+결과는 `CURRENT`, `STALE`, `MISSING`, `INCONSISTENT` 중 하나입니다. Freshness는 Git HEAD가 아니라 canonical planning 입력과 표시되는 Adaptive provenance의 content fingerprint로 판정하며 `docs/planning/observatory/**` 자체는 fingerprint에서 제외합니다.
+
+Adaptive Mandate/Trace가 존재하면 provenance로만 표시합니다. 파일에 `Status: active`가 기록돼 있어도 현재 요청의 Adaptive 활성화를 추론하지 않습니다. 세부 계약은 [`docs/SNAPSHOT-CONTRACT.md`](docs/SNAPSHOT-CONTRACT.md), JSON 계약은 [`docs/PROJECT-STATE-SCHEMA.md`](docs/PROJECT-STATE-SCHEMA.md)를 참고합니다.
+
 ### JSON 출력
 
 ```bash
@@ -177,13 +214,14 @@ iis-observatory scan ~/project/tax --fail-on-inconsistent
 iis-observatory history ~/project/tax --limit 20
 ```
 
-`docs/planning`을 건드린 최근 커밋과 `Status:` 줄 전환을 보여줍니다. 이 명령도 Git을 읽기만 합니다.
+`docs/planning`을 건드린 최근 커밋과 `Status:` 줄 전환을 보여줍니다. Canonical planning, Adaptive provenance, Observatory projection은 별도 범주로 표시하며, 이 명령도 Git을 읽기만 합니다.
 
 ## 명령 목록
 
 ```text
 iis-observatory overview [ROOT]
 iis-observatory scan [REPOSITORY]
+iis-observatory snapshot [REPOSITORY] [--check|--write]
 iis-observatory doctor [ROOT]
 iis-observatory history [REPOSITORY]
 iis-observatory version

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.1
+
+- Add deterministic progress-bar rendering for exact-ratio snapshot measurements while always preserving the exact numerator, denominator, and percentage beside the bar.
+- Use fractional Unicode blocks for small non-zero ratios so a value such as 1.2% is not visually exaggerated into a full 10% cell.
+- Keep progress visualization presentation-only: it does not affect IIS health, next-work routing, or planning authority.
+
+## 0.2.0
+
+- Add durable read-only project snapshots under `docs/planning/observatory/PROJECT-OVERVIEW.md` and `project-state.json`.
+- Add `snapshot --write` and `snapshot --check` with CURRENT, STALE, MISSING, and INCONSISTENT freshness states.
+- Base snapshot freshness on a deterministic content fingerprint of current canonical planning inputs and displayed Adaptive provenance, excluding Observatory outputs themselves.
+- Refuse snapshot writes when canonical planning state is inconsistent, validate the Markdown/JSON pair with a recorded checksum, and make unchanged writes a true no-op.
+- Record Adaptive companion artifacts only as provenance and never infer current Adaptive Planning activation from their presence or recorded status.
+- Separate canonical planning, Adaptive provenance, and Observatory projection entries in Git-backed history output.
+
 ## 0.1.7
 
 - Show portfolio `Unit` as a stable planning identifier plus its authored title, for example `INC-003 · <Increment heading>`.

@@ -3,23 +3,35 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import json
-import os
 import sys
 from typing import Sequence
 
-from .discovery import discover_repositories, display_name, is_git_repository
+from .discovery import (
+    discover_repositories,
+    display_name,
+    has_iis_planning,
+    is_git_repository,
+)
 from .history import HistoryError, collect_history, render_history
 from .model import Health, __version__
 from .render import render_doctor, render_overview, render_overview_markdown, render_state
 from .scanner import ScanOptions, scan_repository
+from .snapshot import (
+    SnapshotError,
+    SnapshotFreshness,
+    check_snapshot,
+    render_snapshot_check,
+    render_snapshot_write,
+    write_snapshot,
+)
 
-COMMANDS = {"overview", "scan", "doctor", "history", "version", "-h", "--help"}
+COMMANDS = {"overview", "scan", "snapshot", "doctor", "history", "version", "-h", "--help"}
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="iis-observatory",
-        description="Read-only overview of IIS planning artifacts across repositories.",
+        description="Read-only overview and durable projection of IIS planning artifacts.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command")
@@ -47,6 +59,24 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--output", type=Path)
     scan.add_argument("--fail-on-inconsistent", action="store_true")
     scan.add_argument("--no-link-check", action="store_true")
+
+    snapshot = subparsers.add_parser(
+        "snapshot",
+        help="Check or write the durable PROJECT-OVERVIEW.md and project-state.json projection.",
+    )
+    snapshot.add_argument("repository", nargs="?", default=".")
+    mode = snapshot.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help="Check freshness without writing (default).",
+    )
+    mode.add_argument(
+        "--write",
+        action="store_true",
+        help="Atomically refresh the durable snapshot when needed.",
+    )
+    snapshot.add_argument("--format", choices=("text", "json"), default="text")
 
     doctor = subparsers.add_parser("doctor", help="Report planning-artifact inconsistencies.")
     doctor.add_argument("root", nargs="?", default="~/project")
@@ -83,6 +113,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _overview(args)
         if command == "scan":
             return _scan(args)
+        if command == "snapshot":
+            return _snapshot(args)
         if command == "doctor":
             return _doctor(args)
         if command == "history":
@@ -93,6 +125,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (FileNotFoundError, NotADirectoryError, PermissionError) as exc:
         print(f"iis-observatory: {exc}", file=sys.stderr)
         return 2
+    except SnapshotError as exc:
+        print(f"iis-observatory snapshot: {exc}", file=sys.stderr)
+        return 3
     parser.print_help()
     return 2
 
@@ -145,9 +180,32 @@ def _scan(args: argparse.Namespace) -> int:
     return 0 if state.planning_root else 4
 
 
+def _snapshot(args: argparse.Namespace) -> int:
+    repo = Path(args.repository).expanduser().resolve()
+    if args.write:
+        result = write_snapshot(repo)
+        if args.format == "json":
+            print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+        else:
+            print(render_snapshot_write(result), end="")
+        return 0
+
+    check = check_snapshot(repo)
+    if args.format == "json":
+        print(json.dumps(check.to_dict(), ensure_ascii=False, indent=2))
+    else:
+        print(render_snapshot_check(check), end="")
+    return {
+        SnapshotFreshness.CURRENT: 0,
+        SnapshotFreshness.STALE: 6,
+        SnapshotFreshness.MISSING: 7,
+        SnapshotFreshness.INCONSISTENT: 3,
+    }[check.freshness]
+
+
 def _doctor(args: argparse.Namespace) -> int:
     root = Path(args.root).expanduser().resolve()
-    if (root / "docs" / "planning").is_dir() and is_git_repository(root):
+    if has_iis_planning(root) and is_git_repository(root):
         repos = [root]
     else:
         repos = discover_repositories(

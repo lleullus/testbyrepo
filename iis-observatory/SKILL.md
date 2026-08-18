@@ -21,6 +21,15 @@ For one repository, run:
 /home/user01/project/iis-skills/observatory/bin/iis-observatory scan <repo>
 ```
 
+For a durable repository-local derived snapshot, run:
+
+```bash
+/home/user01/project/iis-skills/observatory/bin/iis-observatory snapshot <repo> --write
+/home/user01/project/iis-skills/observatory/bin/iis-observatory snapshot <repo> --check
+```
+
+`--write` may write only `docs/planning/observatory/PROJECT-OVERVIEW.md` and `project-state.json`. These are derived read models, never canonical IIS artifacts. Built-in progress bars render only an already-derived exact Ticket ratio and always preserve the exact numerator, denominator, and percent; the bar does not affect health or next-work routing.
+
 For artifact consistency checks, run:
 
 ```bash
@@ -37,7 +46,7 @@ Use `--format json` when machine-readable state is more useful than terminal ren
 
 ## Boundary
 
-Treat Observatory output as a read-only projection of existing `docs/planning/**` artifacts. Do not modify Scope, Work Package, Increment, Spec, or Ticket artifacts as part of inspection. Do not start Scope Shaper, Ask Matt, To Spec, To Tickets, implementation, or verification merely because Observatory reports that leaf as next.
+Treat Observatory output as a read-only projection of existing `docs/planning/**` artifacts. Do not modify Scope, Work Package, Increment, Spec, or Ticket artifacts as part of inspection. The explicit `snapshot --write` exception may refresh only the derived `docs/planning/observatory/**` files. Do not start Scope Shaper, Ask Matt, To Spec, To Tickets, implementation, or verification merely because Observatory reports that leaf as next. Adaptive companion artifacts may be reported as provenance, but their presence or recorded `Status: active` never establishes current Adaptive activation.
 
 For an explicit request to continue or execute the reported next work, leave Observatory and route the new request through the appropriate planning or delivery skill.
 

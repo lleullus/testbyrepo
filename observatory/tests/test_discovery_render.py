@@ -53,7 +53,7 @@ class DiscoveryAndRenderTests(unittest.TestCase):
             root = Path(temp)
             main = RepoBuilder(root, "x.com")
             main.scope()
-            worktree = RepoBuilder(main.repo / "worktrees", "feature")
+            worktree = RepoBuilder(main.repo / "worktrees", "feature", git=False)
             worktree.scope()
             worktree.write(
                 ".git",
@@ -70,7 +70,7 @@ class DiscoveryAndRenderTests(unittest.TestCase):
     def test_does_not_treat_submodule_gitfile_as_worktree(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)
-            submodule = RepoBuilder(root, "submodule")
+            submodule = RepoBuilder(root, "submodule", git=False)
             submodule.scope()
             submodule.write(".git", "gitdir: ../.git/modules/submodule\n")
 

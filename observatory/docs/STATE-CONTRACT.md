@@ -9,7 +9,7 @@ docs/planning/scope-shaping/**
 docs/planning/work/**
 ```
 
-Every command rescans those files. No controller database, workflow ledger, delivery roster, attempt history, or completion database is created.
+Every state calculation rescans those files. No controller database, workflow ledger, delivery roster, attempt history, or completion database is created. `snapshot --write` may persist only the derived read model under `docs/planning/observatory/**`; that directory and `docs/planning/adaptive/**` are excluded from canonical artifact selection.
 
 ## Selection precedence
 
@@ -66,6 +66,12 @@ Common terminal aliases such as `complete`, `completed`, `closed`, and `verified
 | `COMPLETE` | The current selected delivery unit's associated Tickets are all `done`. Authored follow-up Scope candidates may still exist and can point to `Scope Shaper`. |
 | `STALE` | Only a superseded lineage can be identified. |
 | `NO_IIS` | The repository has no `docs/planning` directory. |
+
+## Durable snapshot boundary
+
+`docs/planning/observatory/PROJECT-OVERVIEW.md` and `project-state.json` are generated projections only. Snapshot freshness uses a content fingerprint of current canonical state inputs plus displayed Adaptive provenance, never Git HEAD alone. The snapshot output directory is excluded from its own fingerprint. A stored Adaptive Mandate status is provenance and must not be interpreted as current Adaptive-mode activation.
+
+Built-in progress visualization is derived only from typed exact-ratio measurements. The visual bar never changes `Health`, current-unit selection, or `next_work` precedence, and the exact numerator/denominator/percent remains the authoritative measurement representation inside the projection.
 
 ## JSON stability
 
