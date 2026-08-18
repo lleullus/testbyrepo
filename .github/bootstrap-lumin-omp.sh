@@ -43,13 +43,16 @@ if needle not in text:
 path.write_text(text.replace(needle, replacement, 1))
 PY
 
-# The published branch contains only the port and its normal CI.
+# The generated branch commit excludes workflow files because Actions'
+# GITHUB_TOKEN cannot create/update workflows. CI is added immediately
+# afterward through the GitHub connector's workflow-capable credential.
 rm -rf \
   .port-overlay \
   .github/port-overlay.tar.gz \
   .github/bootstrap-lumin-omp.sh \
   .github/trigger-lumin-omp \
-  .github/workflows/bootstrap-lumin-omp.yml
+  .github/workflows/bootstrap-lumin-omp.yml \
+  .github/workflows/ci.yml
 
 node scripts/verify-omp-port.mjs
 node --test tests/*.test.mjs
