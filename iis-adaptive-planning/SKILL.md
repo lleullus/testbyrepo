@@ -40,6 +40,7 @@ Read these references before the corresponding work:
 - any durable artifact write: [references/05-artifact-contract.md](references/05-artifact-contract.md)
 - a verification result used as planning evidence: [references/06-verification-triage.md](references/06-verification-triage.md)
 - terminal or user-return report: [references/07-terminal-report.md](references/07-terminal-report.md)
+- when the user's current request also authorizes implementation/verification after planning: [references/08-delivery-continuation.md](references/08-delivery-continuation.md)
 
 ## Activation
 
@@ -67,6 +68,7 @@ The mandate establishes:
 - Hard Constraints
 - Non-Goals
 - delegated reshaping and planning-decision authority
+- Continuation Authority: `CURRENT_INCREMENT` | `BOUNDED_OUTCOME` | `MANDATE_OUTCOME`
 - Return-to-User Boundary
 - project/planning-unit applicability
 
@@ -153,6 +155,26 @@ If planning authority changes a contract, do not turn an earlier failed result i
 
 Adaptive Planning itself does not implement or verify Tickets. A caller may perform those separate actions only when the user's current request independently authorizes them.
 
+When the current user request already authorizes end-to-end delivery, reaching the Adaptive Planning terminal boundary does **not** require a new approval prompt before delivery. The outer caller may immediately continue with the separately discovered `ready-ticket-implement` and `ready-ticket-verify` skills under their own contracts. Use [references/08-delivery-continuation.md](references/08-delivery-continuation.md).
+
+If that separate verification lifecycle later produces planning-relevant evidence such as `CONTRACT_OVERREACH` or `CURRENT_INCREMENT_MISMATCH`, the outer caller may re-enter Adaptive Planning under the still-applicable Mandate when the same user execution envelope authorized adaptive correction. Adaptive then owns only the planning correction/reshaping; delivery remains owned by the separate delivery skills.
+
+## Success re-entry after delivery
+
+A successful current Increment may trigger a new Adaptive planning cycle only after its current canonical Tickets are actually `done` and the active Mandate's Continuation Authority is broader than `CURRENT_INCREMENT`.
+
+Before selecting anything next, inspect fresh actual product state and compare the applicable observable outcome against current authoritative readback. Do not infer success continuation from `done` status alone, and do not consume the existing Work Package list or Provisional Construction Horizon as an execution queue.
+
+Choose exactly one success disposition:
+
+- `MANDATE_SATISFIED` — the applicable bounded or Mandate outcome is already satisfied in actual product state; stop the broader Adaptive execution.
+- `NEXT_INCREMENT_REQUIRED` — the applicable outcome is not yet satisfied and current authority can determine that more construction is required; re-enter Scope Shaper against fresh actual state so it selects exactly one new current Increment.
+- `USER_DECISION_REQUIRED` — the outcome is not yet satisfied but a material user-owned trade-off remains after applying current authority and priorities; return only that decision to the user.
+
+`NEXT_INCREMENT_REQUIRED` never names the next WP/INC from a prior plan by default. Scope Shaper may preserve, split, merge, reorder, replace, or discard provisional structure under its current rules. Completion is judged against the applicable observable outcome, not by exhausting a roadmap or provisional horizon.
+
+Continuation Authority does not grant implementation or verification authority. If the outer user's current execution envelope also authorizes end-to-end delivery, that caller may take the newly produced Ready Ticket Set through the separate delivery skills and repeat the success re-entry after the next fully delivered Increment.
+
 ## Artifacts
 
 Always preserve the current canonical IIS artifact set. Adaptive does not replace Scope, Work Package, Increment, Behavior/UI authority, Spec, Ticket, or validator outputs.
@@ -160,7 +182,7 @@ Always preserve the current canonical IIS artifact set. Adaptive does not replac
 Additionally keep only the minimal Adaptive companion provenance described in [references/05-artifact-contract.md](references/05-artifact-contract.md):
 
 - `ADAPTIVE-PLANNING-MANDATE.md`
-- `ADAPTIVE-PLANNING-TRACE.md` only when material delegated decisions, reshaping, verification triage, or user-return decisions exist
+- `ADAPTIVE-PLANNING-TRACE.md` only when material delegated decisions, reshaping, verification triage, success re-entry/completion, or user-return decisions exist
 
 Never inject Adaptive-only metadata into canonical IIS artifacts merely for convenience.
 
@@ -187,4 +209,6 @@ Adaptive Planning ends at the same current-Increment product as Baseline IIS: on
 
 Report using [references/07-terminal-report.md](references/07-terminal-report.md), then STOP.
 
-Do not automatically implement, verify, plan the next provisional Increment, or declare the whole product complete merely because current Increment planning completed.
+`STOP` here is the **IIS Adaptive Planning ownership boundary**, not necessarily the end of the outer user's request. Do not implement or verify **as Adaptive Planning** merely because current Increment planning completed. If and only if the user's current request independently authorizes implementation/verification, return the Ready Ticket Set to the outer caller, which may continue immediately through the separate delivery skills without asking the user again.
+
+Do not plan the next provisional Increment or declare the whole product complete merely because current Increment planning completed. A broader success continuation begins only after the current Increment is actually delivered and the active Continuation Authority permits fresh outcome re-entry; even then Scope Shaper selects the next current Increment from actual state rather than consuming a provisional plan.

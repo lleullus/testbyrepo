@@ -48,6 +48,10 @@ The delta is limited to:
 
 Everything else remains current Baseline authority.
 
+The Ready Ticket Set remains the terminal **IIS Planning** product. This does not require the outer caller to terminate a broader user request. If that same current user request independently authorizes implementation and verification, the caller may consume the Ready Tickets through the separate delivery skills immediately after the planning boundary. That continuation does not extend IIS or Adaptive Planning authority into delivery.
+
+A broader `BOUNDED_OUTCOME` or `MANDATE_OUTCOME` continuation also does not turn one IIS planning cycle into a multi-Increment workflow. After a current Increment is fully delivered, Adaptive performs a fresh success re-entry; only when the applicable outcome is still unsatisfied does it start a new planning cycle and return to Scope Shaper for one new current Increment from actual state.
+
 ## Standing delegation is user authority, not inferred approval
 
 The user explicitly selects Adaptive and adopts the Mandate. That act gives standing authority for a bounded class of later planning decisions.

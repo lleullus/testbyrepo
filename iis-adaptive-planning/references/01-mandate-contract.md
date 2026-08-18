@@ -22,8 +22,9 @@ Normalize the current user authority into these fields:
 4. **Hard Constraints** — existing behavior, compatibility, authority, data, external contract, or other boundary the user does not delegate away.
 5. **Non-Goals** — capabilities or maturity explicitly outside the intended direction.
 6. **Delegated Planning Authority** — what Scope/INC reshaping and product-planning recommendation classes may be settled without a new per-artifact user response.
-7. **Return-to-User Boundary** — material choices that must return to the user when current authority cannot select one answer.
-8. **Applicability** — exact project root when available and the bounded initiative/scope/work context to which the Mandate applies.
+7. **Continuation Authority** — the success boundary after a delivered current Increment: `CURRENT_INCREMENT`, `BOUNDED_OUTCOME`, or `MANDATE_OUTCOME`.
+8. **Return-to-User Boundary** — material choices that must return to the user when current authority cannot select one answer.
+9. **Applicability** — exact project root when available and the bounded initiative/scope/work context to which the Mandate applies.
 
 Use [../templates/ADAPTIVE-PLANNING-MANDATE.template.md](../templates/ADAPTIVE-PLANNING-MANDATE.template.md) when a durable project-local record is available.
 
@@ -38,6 +39,22 @@ Examples:
 - If the exact project root is already known from the current request/repository, record it without asking.
 
 Ask only for a missing fact whose different answers would materially change product intent, Scope, ownership, observable behavior, completion meaning, or another Return-to-User Boundary.
+
+## Continuation Authority
+
+Use exactly one value:
+
+- `CURRENT_INCREMENT` — stop success progression after the current Increment is fully delivered. This is the default when the user did not explicitly authorize a broader success boundary.
+- `BOUNDED_OUTCOME` — after each fully delivered Increment, re-evaluate the exact bounded outcome named by `Applies-To`; if it is not yet satisfied, Scope Shaper may select another current Increment from fresh actual product state.
+- `MANDATE_OUTCOME` — after each fully delivered Increment, re-evaluate the Mandate's `Desired Product Outcome`; if it is not yet satisfied, Scope Shaper may select another current Increment from fresh actual product state.
+
+Continuation Authority is planning-continuation authority only. It does not authorize implementation or verification. Those separate delivery actions still require authority in the user's current execution envelope.
+
+Do not infer `BOUNDED_OUTCOME` or `MANDATE_OUTCOME` merely because `Applies-To` names an initiative, Scope, or Work Package. The user must authorize continuation to that larger success boundary in the current instruction or adopted Mandate.
+
+For an existing Adaptive Mandate created before this field existed, treat missing Continuation Authority as `CURRENT_INCREMENT`. Do not require reapproval merely to preserve that prior behavior; serialize the explicit field the next time the Mandate is materially revised.
+
+Success continuation never means consuming a pre-authored WP list or provisional horizon in order. After a delivered Increment, compare fresh actual product state with the applicable outcome; only when more construction is still required does Scope Shaper choose the next Increment.
 
 ## Recommended default delegation when user says "권장안으로 진행"
 

@@ -83,6 +83,78 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn("Special gates not covered by standing delegation", delegated)
         self.assertIn("Adversarial Planning Challenger", delegated)
 
+    def test_planning_terminal_does_not_erase_broader_user_delivery_authority(self) -> None:
+        skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
+        continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(
+            encoding="utf-8"
+        )
+        terminal = (ADAPTIVE / "references" / "07-terminal-report.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("outer caller may immediately continue", skill)
+        self.assertIn("IIS Adaptive Planning ownership", continuation)
+        self.assertIn("user's current execution envelope", continuation)
+        self.assertIn("ready-ticket-implement", continuation)
+        self.assertIn("ready-ticket-verify", continuation)
+        self.assertIn("without asking for another approval", terminal)
+        self.assertIn("Auditor Count 0", continuation)
+        self.assertIn("AC Runtime Auditor Count 0", continuation)
+
+    def test_end_to_end_delivery_can_reenter_adaptive_for_planning_failures(self) -> None:
+        continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("CONTRACT_OVERREACH", continuation)
+        self.assertIn("CURRENT_INCREMENT_MISMATCH", continuation)
+        self.assertIn("re-enters IIS Adaptive Planning", continuation)
+        self.assertIn("IMPLEMENTATION_DEFECT", continuation)
+        self.assertIn("VERIFICATION_MECHANISM_DEFECT", continuation)
+        self.assertIn("INCONCLUSIVE", continuation)
+        self.assertIn("all current Tickets VERIFIED -> done", continuation)
+
+    def test_success_continuation_reassesses_outcome_from_actual_state(self) -> None:
+        skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
+        mandate = (ADAPTIVE / "references" / "01-mandate-contract.md").read_text(
+            encoding="utf-8"
+        )
+        continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(
+            encoding="utf-8"
+        )
+        routing = (ADAPTIVE / "references" / "03-adaptive-routing.md").read_text(
+            encoding="utf-8"
+        )
+        template = (ADAPTIVE / "templates" / "ADAPTIVE-PLANNING-MANDATE.template.md").read_text(
+            encoding="utf-8"
+        )
+
+        for value in ("CURRENT_INCREMENT", "BOUNDED_OUTCOME", "MANDATE_OUTCOME"):
+            self.assertIn(value, mandate)
+            self.assertIn(value, template)
+
+        self.assertIn("default when the user did not explicitly authorize", mandate)
+        self.assertIn("Success re-entry after delivery", skill)
+        self.assertIn("MANDATE_SATISFIED", skill)
+        self.assertIn("NEXT_INCREMENT_REQUIRED", skill)
+        self.assertIn("USER_DECISION_REQUIRED", skill)
+        self.assertIn("fresh actual product state", continuation)
+        self.assertIn("does not automatically admit the next previously listed WP/INC", continuation)
+        self.assertIn("not a continuation through the Ready Ticket STOP", routing)
+
+    def test_success_continuation_does_not_turn_horizon_into_queue(self) -> None:
+        skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
+        mandate = (ADAPTIVE / "references" / "01-mandate-contract.md").read_text(
+            encoding="utf-8"
+        )
+        terminal = (ADAPTIVE / "references" / "07-terminal-report.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("do not consume the existing Work Package list", skill)
+        self.assertIn("never means consuming a pre-authored WP list", mandate)
+        self.assertIn("not a completion blocker", terminal)
+        self.assertIn("Completion requires fresh actual outcome evidence", terminal)
+
     def test_increment_reshaping_and_delivered_history_contract(self) -> None:
         reshape = (ADAPTIVE / "references" / "04-increment-reshaping.md").read_text(
             encoding="utf-8"

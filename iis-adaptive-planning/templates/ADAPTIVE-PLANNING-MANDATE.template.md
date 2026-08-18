@@ -40,6 +40,10 @@ None explicitly fixed
 
 - <delegated planning decision class, including INC reshaping as applicable>
 
+## Continuation Authority
+
+CURRENT_INCREMENT | BOUNDED_OUTCOME | MANDATE_OUTCOME
+
 ## Return-to-User Boundary
 
 - <material product choice that must return when current authority cannot decide it>
@@ -51,5 +55,6 @@ None explicitly fixed
 ## Notes
 
 - This Mandate delegates IIS planning judgment only.
+- Continuation Authority controls success re-entry after a delivered current Increment; it does not itself authorize delivery.
 - It does not authorize implementation, verification, deployment, credentials, production/shared external mutation, destructive action, worker selection, or adversarial-consensus activation.
 - Canonical IIS artifacts remain governed by current Baseline schemas and validators.

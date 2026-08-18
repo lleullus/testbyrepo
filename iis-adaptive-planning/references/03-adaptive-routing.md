@@ -142,6 +142,8 @@ Hard even in Adaptive:
 - complete Ready Ticket Set STOP;
 - boundary between IIS Planning and implementation/verification/delivery.
 
+A later success re-entry after every current Ticket is actually `done` is a **new Adaptive planning cycle**, not a continuation through the Ready Ticket STOP. It is governed by the active Mandate's Continuation Authority and `08-delivery-continuation.md`.
+
 ## Re-entry matrix
 
 | Observation | Primary meaning | Route |

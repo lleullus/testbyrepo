@@ -63,6 +63,7 @@ Material events:
 - standing delegated confirmation that advances a canonical artifact to a confirmed/approved/ready state;
 - INC split/merge/reorder/replace/defer/drop/foundation insertion/supersession;
 - verification triage that changes the owning route;
+- success re-entry that selects `NEXT_INCREMENT_REQUIRED` or establishes `MANDATE_SATISFIED`;
 - a Return-to-User decision and its later resolution;
 - a material Mandate revision.
 

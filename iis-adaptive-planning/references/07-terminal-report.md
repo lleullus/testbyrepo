@@ -8,6 +8,7 @@ Use only after the current canonical IIS terminal conditions are actually satisf
 IIS ADAPTIVE PLANNING COMPLETE
 
 Mandate: <exact companion path/revision or current-conversation authority>
+Continuation Authority: CURRENT_INCREMENT | BOUNDED_OUTCOME | MANDATE_OUTCOME
 Current Scope: <exact current Scope result or None for direct next-increment-ready work>
 Current Increment: <exact current INC or None for direct next-increment-ready work>
 Spec: <exact approved Spec>
@@ -28,7 +29,29 @@ STOP
 
 Do not append an offer to implement, verify, or plan the next provisional Increment as though those actions are part of IIS Planning.
 
-If the user's broader current request independently authorizes a separate delivery action, the caller may act on that authority after the IIS terminal result; that caller is not IIS Adaptive Planning.
+If the user's broader **current** request independently authorizes implementation/verification, the caller may act on that already-established authority immediately after the IIS terminal result without asking for another approval merely because the owning skill changes. The caller is not IIS Adaptive Planning; it must invoke the separate delivery skills under their own contracts. See `08-delivery-continuation.md`.
+
+If the current request does not authorize delivery, stop after this report.
+
+## Mandate success completion
+
+Use only after a fully delivered current Increment has entered success re-entry and fresh actual product state establishes `MANDATE_SATISFIED` for the applicable `BOUNDED_OUTCOME` or `MANDATE_OUTCOME`.
+
+```text
+IIS ADAPTIVE MANDATE COMPLETE
+
+Mandate: <exact companion path/revision or current-conversation authority>
+Continuation Authority: BOUNDED_OUTCOME | MANDATE_OUTCOME
+Applicable outcome: <exact bounded or Desired Product Outcome>
+Final delivered Increment: <exact INC path>
+Actual product result: <observable result>
+Authoritative readback: <fresh readback>
+Disposition: MANDATE_SATISFIED
+Remaining provisional horizon: non-authoritative; not a completion blocker
+STOP
+```
+
+Do not declare Mandate completion from Ticket `done` status, WP exhaustion, or a provisional horizon alone. Completion requires fresh actual outcome evidence.
 
 ## Return to user for a material product decision
 
