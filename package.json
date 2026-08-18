@@ -1,0 +1,37 @@
+{
+  "name": "lumin-repo-lens-omp",
+  "version": "0.9.0-omp.93",
+  "description": "OMP-native port of Lumin Repo Lens, an evidence-backed TS/JS repository structure lens.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "author": {
+    "name": "annyeong844"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lleullus/testbyrepo.git"
+  },
+  "keywords": [
+    "omp",
+    "oh-my-pi",
+    "repo-lens",
+    "typescript",
+    "dead-code",
+    "canonical-drift",
+    "refactor-plan"
+  ],
+  "omp": {
+    "extensions": [
+      "./extensions/lumin-repo-lens.ts"
+    ]
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "verify": "node scripts/verify-omp-port.mjs",
+    "smoke": "npm --prefix skills/lumin-repo-lens run smoke"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "lumin-repo-lens-omp-marketplace",
+  "owner": {
+    "name": "annyeong844"
+  },
+  "metadata": {
+    "description": "OMP-native distribution of Lumin Repo Lens.",
+    "version": "0.9.0-omp.93"
+  },
+  "plugins": [
+    {
+      "name": "lumin-repo-lens",
+      "source": "./",
+      "description": "Evidence-backed TS/JS repository structure lens for OMP.",
+      "version": "0.9.0-omp.93",
+      "author": {
+        "name": "annyeong844"
+      },
+      "repository": "https://github.com/lleullus/testbyrepo",
+      "license": "MIT",
+      "category": "development",
+      "keywords": [
+        "omp",
+        "repo-lens",
+        "typescript",
+        "dead-code",
+        "canonical-drift",
+        "refactor-plan"
+      ]
+    }
+  ]
+}
