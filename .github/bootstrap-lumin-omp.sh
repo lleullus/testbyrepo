@@ -24,7 +24,12 @@ rsync -a .port-overlay/ ./
 python3 scripts/transform-upstream.py
 
 # The published branch contains only the port and its normal CI.
-rm -rf .port-overlay .github/port-overlay.tar.gz .github/bootstrap-lumin-omp.sh .github/workflows/bootstrap-lumin-omp.yml
+rm -rf \
+  .port-overlay \
+  .github/port-overlay.tar.gz \
+  .github/bootstrap-lumin-omp.sh \
+  .github/trigger-lumin-omp \
+  .github/workflows/bootstrap-lumin-omp.yml
 
 node scripts/verify-omp-port.mjs
 node --test tests/*.test.mjs
