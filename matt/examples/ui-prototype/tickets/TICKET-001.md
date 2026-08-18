@@ -6,7 +6,7 @@ Project-Root: /home/user01/project/iis-skills/matt/examples/ui-prototype
 Worker:
 UI: yes
 
-이 문서의 `ready`는 승인된 Spec과 UI/UX 참조, 사용자 검토, 해결된 blocker를 나타내는 계약 상태 예시다. 실행 fixture나 실제 제품 요구사항이 아니며 구현 실행을 시작하지 않는다.
+이 문서의 `ready`는 승인된 Spec과 UI/UX 참조의 충실한 투영, 개별 Ticket·전체 Set 자체검수, canonical validator 통과와 해결된 blocker를 나타내는 계약 상태 예시다. 실행 fixture나 실제 제품 요구사항이 아니며 구현 실행을 시작하지 않는다.
 
 ## Goal
 

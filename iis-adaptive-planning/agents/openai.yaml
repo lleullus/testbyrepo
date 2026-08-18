@@ -1,4 +1,4 @@
 interface:
   display_name: "IIS Adaptive Planning"
-  short_description: "Opt-in adaptive mode for IIS planning"
-  default_prompt: "Use IIS Adaptive Planning for this planning request while preserving the baseline IIS artifacts and authority."
+  short_description: "Opt-in IIS planning with current-Increment delivery and correction"
+  default_prompt: "Use IIS Adaptive Planning explicitly: preserve Baseline IIS authority, continue the current Increment through the separate Ready Ticket delivery skills unless I request planning-only, and use authority-based corrective re-entry unless I request fail-and-report."

@@ -6,7 +6,7 @@ Project-Root: /home/user01/project/iis-skills/matt/examples/large-scope-shaping
 Worker:
 UI: no
 
-이 문서의 `ready`는 승인된 Spec과 사용자 검토 후의 계약 상태 예시다. 실행 fixture나 실제 제품 요구사항이 아니며 구현 실행을 시작하지 않는다.
+이 문서의 `ready`는 승인된 Spec을 충실히 투영하고 개별 Ticket·전체 Set 자체검수와 canonical validator를 통과한 계약 상태 예시다. 실행 fixture나 실제 제품 요구사항이 아니며 구현 실행을 시작하지 않는다.
 
 ## Goal
 

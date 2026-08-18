@@ -1,6 +1,6 @@
 ---
 name: to-spec
-description: Synthesize a local Markdown SPEC.md from the current planning conversation; it remains draft until explicitly approved.
+description: Synthesize and defect-review a local Markdown SPEC.md from current planning authority; adopt a faithful complete candidate unless the user explicitly requires a separate approval gate.
 disable-model-invocation: true
 ---
 
@@ -94,9 +94,9 @@ admission and must not be copied into Spec or Ticket acceptance criteria.
 A bounded rendered contract does not require a separate pre-Spec `DESIGN.md`
 when the confirmed shared understanding already fixes every rendered decision
 or direct preservation condition in that scope. Preserve them directly in the
-`## UI / UX` section; after explicit Spec approval, this exact Spec may serve as
-the scoped UI authority. An applicable external approved authority may be used
-instead.
+`## UI / UX` section. After this skill's adoption guard passes and the Spec
+reaches exact `Status: approved`, this exact Spec may serve as the scoped UI
+authority. An applicable external approved authority may be used instead.
 Do not block non-UI work or an engineering-only frontend change that exactly
 preserves UX and has no due-now direct rendered-result exercise. Any UI
 authority supplies rendered-design detail only; it cannot expand, reverse, or
@@ -280,11 +280,32 @@ mocks, private helpers, proposed test seams, implementation narration, and
 anticipated implementation commands cannot become the normative boundary or
 readback.
 
-## Approval Rules
+## Adoption and Optional Approval Rules
 
-Start with `Status: draft`. Change the exact status value to `approved` only after the user or explicitly named planning owner confirms it and no product, scope, boundary, or evidence-backed contract-contradiction decision remains unresolved. Never infer approval, and never use `approved` while any unresolved decision remains in `## Open Questions`.
+Start with `Status: draft`. Self-review is a leaf-local transition guard, not a
+new artifact lifecycle. Do not create review-progress statuses, sidecars,
+receipts, counters, or workflow records.
 
-Approval also requires one complete outcome-local `## Verification
+By default, change the exact status value to `approved` only after all existing
+admission gates and the Mandatory contract audit pass, the exact current
+candidate is a complete faithful projection of current authority, and no
+material finding or unresolved product/Scope/Behavior/UI/completion decision
+remains. Do not describe this default adoption as an explicit user approval and
+do not add provenance metadata to the canonical Spec.
+
+If the current user explicitly requires separate user or planning-owner
+approval of the completed Spec, run the same full self-review first and then
+wait for approval of that exact candidate. A material candidate delta requires
+fresh self-review and, when this optional gate is active, fresh approval.
+Explicit approval never overrides a failed guard or unresolved decision.
+
+Correct a local serialization, omission, or wording defect inside this same To
+Spec lifecycle and rerun the complete guard. If correction requires new or
+changed product meaning, return to Ask Matt or Scope Shaper instead of looping
+on the draft. Never use `approved` while any unresolved decision remains in
+`## Open Questions`.
+
+Adoption also requires one complete outcome-local `## Verification
 Expectations` item for every independently acceptable observable outcome. Keep
 the Spec draft when a runtime outcome lacks its acceptance boundary or
 authoritative readback; an `Independent` outcome lacks a directly established
@@ -297,18 +318,19 @@ decision, not proof of the eventual internal implementation path.
 
 For a Spec that adopts an external UI authority, any later change to that
 authority's scoped decisions invalidates the prior adoption. Keep or return the
-Spec to `draft` until the changed UI delta is reflected in shared understanding
-and explicitly approved; do not silently consume the changed document.
+Spec to `draft` until the changed UI delta is resolved by its owning authority,
+reflected in shared understanding, and the refreshed Spec passes the full
+adoption guard; do not silently consume the changed document.
 
 Any semantic change to an adopted Behavior authority returns that authority,
 this Spec, and affected unfinished Tickets to `draft`. A conflict among the
-shared understanding, Behavior authority, Spec, or UI authority blocks approval
+shared understanding, Behavior authority, Spec, or UI authority blocks adoption
 without an inferred priority.
 
-A Spec does not require a complete implementation approach before approval.
+A Spec does not require a complete implementation approach before adoption.
 
 When the approved outcome authorizes first product/package/application
-artifacts in a scope without current target readiness, approval does require the
+artifacts in a scope without current target readiness, adoption does require the
 three planning authorization facts to be resolved:
 
 1. the scope in which initialization mutation is authorized;
@@ -326,8 +348,8 @@ source absence into a permanent requirement. If any applicable fact remains
 unresolved, keep the Spec draft.
 
 Do not require Matt to identify, validate, or prove an implementation path
-before approval. Do not block approval because implementation feasibility has
-not yet been demonstrated. Block approval only when a specific unresolved contradiction
+before adoption. Do not block adoption because implementation feasibility has
+not yet been demonstrated. Block adoption only when a specific unresolved contradiction
 between the Desired Outcome and the confirmed constraints, Non-Goals, or an
 unavoidable external authority boundary is supported by verified evidence or
 clear logic.
@@ -336,7 +358,7 @@ A feasibility Open Question must name the exact conflicting contract clauses or
 external capability fact. It must not ask which endpoint, request shape,
 interface, algorithm, or implementation approach should be used.
 
-Do not block approval merely because the exact files, modules, endpoint,
+Do not block adoption merely because the exact files, modules, endpoint,
 abstraction, task sequence, or focused test seam are not yet known. Later Ticket
 delivery owns those decisions.
 

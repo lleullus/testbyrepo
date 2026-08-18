@@ -44,7 +44,7 @@ class IISAdaptivePlanningTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8").lower()
             self.assertNotIn("iis-adaptive-planning", text, path)
 
-    def test_current_baseline_approval_gates_still_exist(self) -> None:
+    def test_baseline_projection_uses_self_review_with_optional_approval(self) -> None:
         scope = (ROOT / "scope-shaper" / "SKILL.md").read_text(encoding="utf-8")
         matt = (ROOT / "matt" / "skills" / "ask-matt" / "SKILL.md").read_text(
             encoding="utf-8"
@@ -58,14 +58,19 @@ class IISAdaptivePlanningTests(unittest.TestCase):
 
         self.assertIn("one user confirmation", scope)
         self.assertIn("Require explicit user approval", matt)
-        self.assertIn("Never infer approval", spec)
-        self.assertIn("obtain the user's confirmation", tickets)
+        self.assertIn("Self-review is a leaf-local transition guard", spec)
+        self.assertIn("If the current user explicitly requires separate user or planning-owner", spec)
+        self.assertIn("Self-review is a leaf-local transition guard", tickets)
+        self.assertIn("If the current user explicitly requires separate user or planning-owner", tickets)
+        for text in (spec, tickets):
+            self.assertNotIn("self-reviewing", text)
+            self.assertNotIn("review-failed", text)
 
         routing = (ADAPTIVE / "references" / "03-adaptive-routing.md").read_text(
             encoding="utf-8"
         )
-        self.assertIn("standing delegated", routing)
-        self.assertIn("alternate execution contract", routing)
+        self.assertIn("Baseline To Spec self-review/adoption guard", routing)
+        self.assertIn("Baseline To Tickets whole-Set self-review/readiness guard", routing)
 
     def test_adaptive_delta_preserves_hard_boundaries(self) -> None:
         skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
@@ -83,7 +88,7 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn("Special gates not covered by standing delegation", delegated)
         self.assertIn("Adversarial Planning Challenger", delegated)
 
-    def test_planning_terminal_does_not_erase_broader_user_delivery_authority(self) -> None:
+    def test_adaptive_activation_defaults_current_increment_delivery_with_stop_override(self) -> None:
         skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
         continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(
             encoding="utf-8"
@@ -92,26 +97,44 @@ class IISAdaptivePlanningTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn("outer caller may immediately continue", skill)
-        self.assertIn("IIS Adaptive Planning ownership", continuation)
-        self.assertIn("user's current execution envelope", continuation)
+        self.assertIn("Under explicit Adaptive activation", skill)
+        self.assertIn("Explicit Adaptive activation", continuation)
+        self.assertIn("planning only", continuation)
         self.assertIn("ready-ticket-implement", continuation)
         self.assertIn("ready-ticket-verify", continuation)
-        self.assertIn("without asking for another approval", terminal)
-        self.assertIn("Auditor Count 0", continuation)
-        self.assertIn("AC Runtime Auditor Count 0", continuation)
+        self.assertIn("continues the current Increment", terminal)
+        self.assertIn("Auditor Count: 0", continuation)
+        self.assertIn("AC Runtime Auditor Count: 0", continuation)
 
     def test_end_to_end_delivery_can_reenter_adaptive_for_planning_failures(self) -> None:
         continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(
             encoding="utf-8"
         )
-        self.assertIn("CONTRACT_OVERREACH", continuation)
-        self.assertIn("CURRENT_INCREMENT_MISMATCH", continuation)
-        self.assertIn("re-enters IIS Adaptive Planning", continuation)
-        self.assertIn("IMPLEMENTATION_DEFECT", continuation)
-        self.assertIn("VERIFICATION_MECHANISM_DEFECT", continuation)
-        self.assertIn("INCONCLUSIVE", continuation)
-        self.assertIn("all current Tickets VERIFIED -> done", continuation)
+        for classification in (
+            "CONTRACT_OVERREACH",
+            "CURRENT_INCREMENT_MISMATCH",
+            "IMPLEMENTATION_DEFECT",
+            "VERIFICATION_MECHANISM_DEFECT",
+            "INCONCLUSIVE",
+        ):
+            self.assertIn(classification, continuation)
+        self.assertIn("Completion: COMPLETE", continuation)
+        self.assertIn("Status: ready", continuation)
+        self.assertIn("Corrective routing is the Adaptive default", continuation)
+        self.assertIn("no re-entry", continuation)
+        self.assertIn("Verification Verdict: VERIFIED", continuation)
+        self.assertIn("Ticket Progression: COMPLETED", continuation)
+        self.assertIn("Ticket status after verification: done", continuation)
+
+    def test_delivery_uses_invocation_local_evidence_economy_without_state_machine(self) -> None:
+        continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Invocation-local evidence economy", continuation)
+        self.assertIn("stop confidence-only duplicate evidence collection", continuation)
+        self.assertIn("Do not create evidence budgets, counters, modality quotas", continuation)
+        self.assertIn("Progress guard without retry machinery", continuation)
+        self.assertIn("Do not add a numeric retry policy", continuation)
 
     def test_success_continuation_reassesses_outcome_from_actual_state(self) -> None:
         skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
@@ -138,7 +161,7 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn("NEXT_INCREMENT_REQUIRED", skill)
         self.assertIn("USER_DECISION_REQUIRED", skill)
         self.assertIn("fresh actual product state", continuation)
-        self.assertIn("does not automatically admit the next previously listed WP/INC", continuation)
+        self.assertIn("never consumes a pre-authored Work Package/Increment list as a queue", continuation)
         self.assertIn("not a continuation through the Ready Ticket STOP", routing)
 
     def test_success_continuation_does_not_turn_horizon_into_queue(self) -> None:

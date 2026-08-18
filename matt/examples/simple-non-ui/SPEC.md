@@ -4,7 +4,7 @@ Status: approved
 Owner: 예시 planning owner
 Source-Increment: None
 
-이 문서의 `approved`는 사용자가 이미 확인하고 미해결 제품 결정이 없다는 계약 상태 예시일 뿐, 실제 제품 요구사항이나 실행 fixture가 아니다. 일반 non-UI 흐름에는 별도 initiative shaping이나 prototype이 필요하지 않다.
+이 문서의 `approved`는 확정된 shared understanding에 미해결 제품 결정이 없고 To Spec의 충실성·완전성·검증 가능성 자체검수를 통과했다는 계약 상태 예시일 뿐, 실제 제품 요구사항이나 실행 fixture가 아니다. 일반 non-UI 흐름에는 별도 initiative shaping이나 prototype이 필요하지 않다.
 
 ## Problem
 

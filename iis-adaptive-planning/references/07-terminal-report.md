@@ -29,9 +29,7 @@ STOP
 
 Do not append an offer to implement, verify, or plan the next provisional Increment as though those actions are part of IIS Planning.
 
-If the user's broader **current** request independently authorizes implementation/verification, the caller may act on that already-established authority immediately after the IIS terminal result without asking for another approval merely because the owning skill changes. The caller is not IIS Adaptive Planning; it must invoke the separate delivery skills under their own contracts. See `08-delivery-continuation.md`.
-
-If the current request does not authorize delivery, stop after this report.
+Under explicit Adaptive activation, this `STOP` is the IIS Planning ownership boundary. Unless the current user explicitly selected planning-only/stop-at-Ready-Tickets/no implementation/no verification, return the Ready Ticket Set to the outer caller, which continues the current Increment through the separate delivery skills without another approval merely because ownership changes. The caller is not IIS Adaptive Planning; see `08-delivery-continuation.md`.
 
 ## Mandate success completion
 
@@ -123,4 +121,4 @@ Contract changed: yes | no
 Fresh verification required: yes | pending evidence
 ```
 
-If the classification is fully delegated and calls for planning re-entry, continue the planning re-entry in the same Adaptive request rather than stopping merely to announce the classification. Report the triage at the eventual user-return or current-Increment terminal boundary.
+Unless the user explicitly disabled corrective re-entry, a material triage result continues to its owning correction route after an actual correction/new evidence rather than stopping merely to announce the classification. Report the triage at the eventual user-return or current-Increment terminal boundary. Success continuation into another Increment remains a separate Mandate decision.

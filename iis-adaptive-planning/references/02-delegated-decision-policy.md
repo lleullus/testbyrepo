@@ -49,14 +49,12 @@ Ask the smallest question that resolves the branch. Do not re-present already se
 
 ## Standing delegated confirmation by leaf
 
-When the delegated-decision test passes, the following ordinary Baseline confirmation events may be satisfied through standing delegation in Adaptive mode:
+When the delegated-decision test passes, the following user-owned planning confirmation events may be satisfied through standing delegation in Adaptive mode:
 
 - Scope Shaper's confirmation of the connected Scope-owned landscape, decomposition, and one selected next Increment;
-- ordinary Ask Matt approval of new/changed Behavior authority, UI authority, and integrated shared understanding after all material decisions are closed;
-- ordinary To Spec approval of the exact completed Spec projection;
-- ordinary To Tickets review/confirmation of the exact completed Ticket decomposition before `ready` transitions.
+- ordinary Ask Matt approval of new/changed Behavior authority, UI authority, and integrated shared understanding after all material decisions are closed.
 
-This changes only the **confirmation source**, not the substantive completion criteria.
+To Spec and To Tickets now use their Baseline leaf-local self-review/adoption guards for faithful structural projection. Adaptive does not relabel those default transitions as delegated confirmation or add another approval ceremony. This policy changes only genuinely user-owned planning decisions, not the substantive completion criteria.
 
 For each event:
 
@@ -108,7 +106,7 @@ Record only decisions whose provenance matters to later interpretation:
 
 - selected/reshaped Increment;
 - material product-policy or Behavior/UI choice made through delegation;
-- delegated confirmation that moves a canonical artifact to `confirmed`, `approved`, or `ready`;
+- a material delegated Scope/Behavior/UI/shared-understanding decision whose provenance affects later interpretation;
 - verification triage that changes planning direction;
 - user-return decision and its resolution.
 

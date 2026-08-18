@@ -14,7 +14,8 @@ Preserve the current IIS product-planning semantics, authority owners, canonical
 1. establish a user-authorized Planning Mandate;
 2. satisfy eligible repeated planning confirmations through standing delegated confirmation when the mandate resolves the decision;
 3. reshape the current Increment and re-enter the correct planning leaf when new evidence makes the current shape materially worse;
-4. classify later verification problems by authority and route them to implementation, verification setup, or planning instead of forcing a test pass.
+4. classify later verification problems by authority and route them to implementation, verification setup, or planning instead of forcing a test pass; and
+5. after current-Increment planning closes, return the Ready Ticket Set to the outer caller for separate implementation/verification and corrective handoff by default, unless the user explicitly requested a planning-only/stop boundary.
 
 Do not turn IIS into a controller, delivery orchestrator, workflow database, approval engine, agent-governance framework, or generic safety layer.
 
@@ -40,7 +41,7 @@ Read these references before the corresponding work:
 - any durable artifact write: [references/05-artifact-contract.md](references/05-artifact-contract.md)
 - a verification result used as planning evidence: [references/06-verification-triage.md](references/06-verification-triage.md)
 - terminal or user-return report: [references/07-terminal-report.md](references/07-terminal-report.md)
-- when the user's current request also authorizes implementation/verification after planning: [references/08-delivery-continuation.md](references/08-delivery-continuation.md)
+- current-Increment delivery/corrective handoff and explicit stop overrides: [references/08-delivery-continuation.md](references/08-delivery-continuation.md)
 
 ## Activation
 
@@ -74,7 +75,7 @@ The mandate establishes:
 
 Do not demand a form-filling ceremony. If the user's natural-language instruction establishes these sufficiently, record the mandate and proceed. Ask only when a material product choice cannot be resolved from current authority and the mandate.
 
-The mandate delegates **planning judgment only**. It never creates implementation, verification, deployment, credential, external-effect, destructive-action, worker-roster, or production authority.
+The mandate delegates **planning judgment only**. It never turns Adaptive Planning into implementation or verification authority and never grants deployment, credential, external-effect, destructive-action, worker-roster, or production authority. Separately, explicit Adaptive activation authorizes the outer caller's current-Increment implementation/verification handoff by default unless the user explicitly selects a planning-only/stop boundary; that execution remains owned by the delivery skills.
 
 ## Standing delegated confirmation
 
@@ -134,7 +135,7 @@ To Spec and To Tickets remain projection stages, not places to invent product me
 
 - If accurate Spec writing needs a new product decision, return to Ask Matt or Scope Shaper.
 - If Ticket decomposition requires strengthening/weakening product meaning, return upstream.
-- If the approved result projects cleanly, use standing delegated confirmation rather than asking for a redundant review.
+- For Spec/Ticket projection, use the current Baseline leaf's self-review/adoption guard and do not add a redundant Adaptive approval ceremony.
 - Keep the canonical `SPEC.md`, Ticket schema, status vocabulary, Behavior/UI authority adoption, Verification flow schema, and validators exactly as current IIS defines them.
 
 ## Verification evidence and re-entry
@@ -153,11 +154,9 @@ Never infer `CONTRACT_OVERREACH` merely because a requirement is difficult or ex
 
 If planning authority changes a contract, do not turn an earlier failed result into PASS. Validate the new planning artifacts and require fresh verification in the separate delivery lifecycle.
 
-Adaptive Planning itself does not implement or verify Tickets. A caller may perform those separate actions only when the user's current request independently authorizes them.
+Adaptive Planning itself does not implement or verify Tickets. Under explicit Adaptive activation, the outer caller continues the current Increment through the separately discovered `ready-ticket-implement` and `ready-ticket-verify` skills by default, unless the user explicitly requested planning-only, stop-at-Ready-Tickets, no implementation, or no verification. Use [references/08-delivery-continuation.md](references/08-delivery-continuation.md); do not insert a new approval prompt merely because ownership changes.
 
-When the current user request already authorizes end-to-end delivery, reaching the Adaptive Planning terminal boundary does **not** require a new approval prompt before delivery. The outer caller may immediately continue with the separately discovered `ready-ticket-implement` and `ready-ticket-verify` skills under their own contracts. Use [references/08-delivery-continuation.md](references/08-delivery-continuation.md).
-
-If that separate verification lifecycle later produces planning-relevant evidence such as `CONTRACT_OVERREACH` or `CURRENT_INCREMENT_MISMATCH`, the outer caller may re-enter Adaptive Planning under the still-applicable Mandate when the same user execution envelope authorized adaptive correction. Adaptive then owns only the planning correction/reshaping; delivery remains owned by the separate delivery skills.
+If that separate delivery lifecycle produces a material implementation, verification-mechanism, contract, or current-Increment defect, corrective routing/re-entry is the Adaptive default after an actual correction or new evidence, unless the user explicitly requested no corrective re-entry/fail-and-report. Adaptive owns only planning correction/reshaping; implementation and verification remain owned by the separate delivery skills. Success continuation into another Increment is separate and remains governed by Continuation Authority.
 
 ## Success re-entry after delivery
 
@@ -209,6 +208,6 @@ Adaptive Planning ends at the same current-Increment product as Baseline IIS: on
 
 Report using [references/07-terminal-report.md](references/07-terminal-report.md), then STOP.
 
-`STOP` here is the **IIS Adaptive Planning ownership boundary**, not necessarily the end of the outer user's request. Do not implement or verify **as Adaptive Planning** merely because current Increment planning completed. If and only if the user's current request independently authorizes implementation/verification, return the Ready Ticket Set to the outer caller, which may continue immediately through the separate delivery skills without asking the user again.
+`STOP` here is the **IIS Adaptive Planning ownership boundary**, not necessarily the end of the outer Adaptive execution. Do not implement or verify **as Adaptive Planning** merely because current Increment planning completed. Under explicit Adaptive activation, return the Ready Ticket Set to the outer caller, which continues through the separate delivery skills by default unless the user explicitly selected a planning-only/stop boundary.
 
 Do not plan the next provisional Increment or declare the whole product complete merely because current Increment planning completed. A broader success continuation begins only after the current Increment is actually delivered and the active Continuation Authority permits fresh outcome re-entry; even then Scope Shaper selects the next current Increment from actual state rather than consuming a provisional plan.

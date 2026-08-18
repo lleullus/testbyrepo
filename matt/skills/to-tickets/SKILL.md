@@ -1,6 +1,6 @@
 ---
 name: to-tickets
-description: Create reviewed local Markdown implementation Tickets from an approved SPEC.md.
+description: Create and defect-review local Markdown implementation Tickets from an approved SPEC.md; ready a faithful complete set unless the user explicitly requires a separate approval gate.
 disable-model-invocation: true
 ---
 
@@ -16,7 +16,7 @@ implementation steps, or starting implementation.
 
 - An exact approved parent Spec path.
 - The unique project root for the work.
-- The user's review of the proposed Ticket breakdown.
+- Any explicit current instruction requiring separate user or planning-owner approval of the completed Ticket Set after self-review. Absence means the default self-review readiness policy applies.
 
 Read the parent Spec first. Refuse to create Tickets from a missing or non-`approved` Spec. Preserve its scope and non-goals; a Ticket must not expand, reverse, or replace the parent Spec.
 
@@ -250,8 +250,9 @@ same product observation jointly decides them. Do not repeat an ordinal within
 one item. If the parent outcome order, Ticket AC order, or Ticket Behavior
 Authority order changes, or a mapped item is semantically edited, return the
 Ticket to `draft`, remap every affected ordinal against the current authored
-order, and obtain Ticket review again. Never preserve an ordinal as historical
-identity.
+order, and rerun the complete readiness review. When an explicit separate
+approval gate is active, obtain fresh approval of that exact refreshed Set.
+Never preserve an ordinal as historical identity.
 
 Project the exact mapped parent-Spec outcome contract for this increment without
 making it stronger, more solution-specific, or more executable-specific. The
@@ -399,10 +400,15 @@ locators inside the authored Ticket.
 
 ## Readiness Rules
 
-Draft the breakdown and obtain the user's confirmation before changing any Ticket to `ready`. A Ticket may be `ready` only when all of these are true:
+Draft the complete Ticket Set first. Self-review is a leaf-local transition guard, not a new artifact lifecycle. Do not create review-progress statuses, receipts, counters, approval records, or workflow state.
+
+Before changing any Ticket to `ready`, review the exact draft Set as a whole and require faithful parent-Spec/Behavior/UI projection, complete parent-outcome coverage, independently deliverable Ticket boundaries without hidden conflicting ownership, and executable verification/readback contracts. Correct local decomposition or serialization defects inside this To Tickets lifecycle and rerun the full review; if correction requires new or changed product meaning, return to the owning upstream planning authority.
+
+If the current user explicitly requires separate user or planning-owner approval of the completed Ticket Set, run the full self-review first and then obtain approval of that exact draft Set. A material Set delta requires fresh self-review and, when this optional gate is active, fresh approval. Explicit approval never overrides a failed readiness guard.
+
+A Ticket may be `ready` only when all of these are true:
 
 - The parent Spec is `approved`.
-- The user confirmed the Ticket.
 - `Blockers` uses the exact `None` or path-only form, and every referenced
   blocker is `resolved` or `done`.
 - Acceptance Criteria are observable.
@@ -442,7 +448,7 @@ Draft the breakdown and obtain the user's confirmation before changing any Ticke
   unresolved, and any remaining material private bootstrap choice is either
   fixed by the Spec or explicitly delegated there.
 
-Before changing a Ticket to `ready`, run the adjacent structural validator:
+Before changing any Ticket to `ready`, run the adjacent structural validator on every exact draft candidate:
 
 ```text
 python3 matt/skills/to-tickets/validate_ticket.py <absolute-ticket-path>
@@ -457,8 +463,12 @@ or Behavior-to-flow semantic correctness, material flow merge/split, solution
 specificity, blocker truth, runtime availability, evidence, or verdicts. To
 Tickets retains those authored review responsibilities.
 
-After every reviewed Ticket has reached `ready`, run the adjacent set validator
-against the exact approved parent Spec:
+When every draft candidate and the whole-Set review pass, and any explicitly
+requested separate approval gate is satisfied, perform one bounded readiness
+attempt: change only the intended Set's exact `Status: draft` values to
+`Status: ready`. Immediately rerun the same per-Ticket validator on every changed
+Ticket, then run the adjacent set validator against the exact approved parent
+Spec:
 
 ```text
 python3 matt/skills/to-tickets/validate_ticket_set.py <absolute-approved-Spec-path>
@@ -472,7 +482,12 @@ Verification flow. The set validator does not require unrelated global or
 preserved Behavior authorities to be copied into a Ticket. It is a
 planning-closure check, not a runtime state file, execution plan, evidence store,
 or semantic verifier.
-Do not report planning complete until it passes.
+
+If any post-transition per-Ticket or set validation fails, restore only Tickets
+changed by this readiness attempt to exact `Status: draft`, report the owning
+defect, and correct or route it under the rules above. This rollback is local
+file correction, not a new lifecycle state or retry engine. Do not report
+planning complete until the final ready Set passes.
 
 A legacy Ticket that lacks this outcome-local Verification form is not silently
 treated as `Independent`. Before using the independent route, normalize it

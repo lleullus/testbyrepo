@@ -6,7 +6,7 @@ Project-Root: <유일하게 결정되는 절대 프로젝트 경로>
 Worker:
 UI: no
 
-한 파일에는 독립적으로 관찰 가능한 하나의 desired-state Ticket만 적는다. 사용자의 검토가 끝나고 parent Spec이 `approved`이며, 모든 blocker가 해소되고, Acceptance Criteria가 관찰 가능하고, 프로젝트 경로가 유일하게 결정된 경우에만 `Status: ready`로 바꾼다. Ticket은 parent Spec의 범위를 확대하거나 뒤집지 않는다. Goal은 비규범적 요약이며 구현 의무의 유일한 위치가 될 수 없다. Blockers는 정확한 `None` 또는 경로-only 목록이어야 한다. `UI: yes`이면 parent Spec이 채택한 동일한 canonical UI authority target을 가리키는 경로-only 목록 항목을 References에 추가한다. Bounded rendered contract에서 parent Spec 자체가 scoped UI authority라면 그 Spec target을 가리킨다.
+한 파일에는 독립적으로 관찰 가능한 하나의 desired-state Ticket만 적는다. parent Spec이 `approved`이고, 각 Ticket과 전체 Set이 projection fidelity·coverage·deliverable boundary·verifiability 자체검수와 canonical validator를 통과하며, 모든 blocker가 해소되고 프로젝트 경로가 유일하게 결정된 경우에만 `Status: ready`로 바꾼다. 사용자가 이번 Set에 별도 승인을 명시적으로 요구한 경우에만 자체검수 통과 후 그 추가 게이트를 둔다. 자체검수 중간 상태나 별도 ledger는 만들지 않는다. Ticket은 parent Spec의 범위를 확대하거나 뒤집지 않는다. Goal은 비규범적 요약이며 구현 의무의 유일한 위치가 될 수 없다. Blockers는 정확한 `None` 또는 경로-only 목록이어야 한다. `UI: yes`이면 parent Spec이 채택한 동일한 canonical UI authority target을 가리키는 경로-only 목록 항목을 References에 추가한다. Bounded rendered contract에서 parent Spec 자체가 scoped UI authority라면 그 Spec target을 가리킨다.
 
 ## Goal
 

@@ -48,7 +48,7 @@ Use exactly one value:
 - `BOUNDED_OUTCOME` — after each fully delivered Increment, re-evaluate the exact bounded outcome named by `Applies-To`; if it is not yet satisfied, Scope Shaper may select another current Increment from fresh actual product state.
 - `MANDATE_OUTCOME` — after each fully delivered Increment, re-evaluate the Mandate's `Desired Product Outcome`; if it is not yet satisfied, Scope Shaper may select another current Increment from fresh actual product state.
 
-Continuation Authority is planning-continuation authority only. It does not authorize implementation or verification. Those separate delivery actions still require authority in the user's current execution envelope.
+Continuation Authority controls only success continuation beyond the delivered current Increment. It does not itself grant implementation or verification authority. Explicit Adaptive activation separately supplies the outer caller's default current-Increment delivery handoff unless the user opts out; broader concrete deployment/external-effect authority is still not implied.
 
 Do not infer `BOUNDED_OUTCOME` or `MANDATE_OUTCOME` merely because `Applies-To` names an initiative, Scope, or Work Package. The user must authorize continuation to that larger success boundary in the current instruction or adopted Mandate.
 
@@ -66,16 +66,15 @@ When the user explicitly selects Adaptive and broadly delegates recommended plan
 - selecting among equivalent planning shapes using the ordered Decision Priorities;
 - adopting existing applicable approved Behavior/UI authority unchanged;
 - resolving product details already determined by current approved authority;
-- completing accurate Spec projection;
-- completing accurate Ticket decomposition/review;
-- standing confirmation of those resulting planning artifacts.
+- resolving any genuinely user-owned planning choice that remains after current Baseline leaf self-review; and
+- allowing faithful Spec/Ticket structural projection to proceed under the current Baseline self-review/adoption guards without adding a redundant approval ceremony.
 
 Do not interpret broad delegation as authority to:
 
 - change the Desired Product Outcome;
 - violate Hard Constraints or Non-Goals;
 - choose among materially different unresolved user experiences, ownership models, compatibility trade-offs, irreversible external commitments, or similar user-owned alternatives when priorities do not decide them;
-- implement, verify, deploy, use credentials, mutate production/shared external resources, or perform destructive actions;
+- use the Mandate itself to expand implementation/verification authority beyond the explicit Adaptive current-Increment handoff, or to deploy, use credentials, mutate production/shared external resources, or perform destructive actions;
 - activate optional adversarial planning consensus or choose its Challenger.
 
 ## Decision Priorities

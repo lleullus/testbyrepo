@@ -16,8 +16,8 @@ Affected canonical artifacts: <paths or None>
 Re-entry / next leaf: Scope Shaper | Ask Matt | To Spec | To Tickets | terminal | user
 
 <!--
-Add entries only for material delegated decisions, canonical delegated confirmations,
-INC reshaping/lineage, verification triage, Mandate revision, or Return-to-User events.
+Add entries only for material delegated user-owned planning decisions,
+INC reshaping/lineage, verification triage, Mandate revision, or Return-to-User events. Baseline Spec/Ticket self-review adoption alone is not a trace event.
 Do not record private reasoning, every tool call, retry counters, implementation task lists,
 or agent-governance state.
 -->

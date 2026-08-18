@@ -12,7 +12,7 @@ Adaptive must distinguish:
 4. Parent Spec/current INC that is itself the wrong planning shape for the Mandate and actual product ordering;
 5. evidence that is insufficient to decide any of the above.
 
-Do not change the verifier's exact verdict. Add a separate Adaptive root-cause classification and route.
+Do not change the verifier's exact verdict. Add a separate Adaptive root-cause classification and route. Apply the transition discipline in `08-delivery-continuation.md`: under explicit Adaptive mode, a material correction is followed by fresh execution at the affected owner by default; an explicit no-corrective-re-entry/fail-and-report instruction changes that handoff to report-and-STOP. This is distinct from success continuation into another Increment.
 
 ## Required authority/evidence
 

@@ -18,18 +18,13 @@ Examples include, as applicable:
 
 The exact paths, metadata, headings, statuses, and validation requirements belong to current Baseline IIS. Do not redefine them here.
 
-## Approval status meaning remains user-authorized planning authority
+## Canonical status meaning remains Baseline-owned
 
 Adaptive does not invent statuses such as `auto-approved`, `adaptive-approved`, or `superseded` for artifact types whose current Baseline schema does not provide them.
 
-When standing delegated confirmation validly satisfies an ordinary planning approval:
+When standing delegated confirmation validly resolves a genuinely user-owned planning decision, write only the canonical Baseline status that decision normally permits, record the delegated provenance in the Adaptive companion trace, and never add a fake direct-user approval quote or unsupported metadata field.
 
-- write the same canonical status Baseline would write after direct approval (`confirmed`, `approved`, `ready`, etc. as currently defined);
-- treat that status as user-authorized through the explicitly adopted Adaptive Mandate;
-- record the different provenance in the Adaptive companion trace;
-- never add a fake direct-user approval quote or unsupported metadata field.
-
-This preserves downstream Baseline compatibility: canonical consumers continue to see the same complete planning authority, while the Adaptive trace explains how the confirmation was obtained.
+When current Baseline To Spec/To Tickets self-review adopts a faithful structural projection as `approved` or `ready`, preserve that Baseline meaning without manufacturing `DELEGATED_RECOMMENDATION` provenance merely because Adaptive is active. This keeps canonical consumers compatible and keeps the Adaptive trace limited to material Adaptive decisions.
 
 ## Companion provenance artifacts
 
@@ -60,7 +55,7 @@ Create it only when there is a material Adaptive event worth preserving. Use [..
 Material events:
 
 - a `DELEGATED_RECOMMENDATION` that materially affects observable product meaning;
-- standing delegated confirmation that advances a canonical artifact to a confirmed/approved/ready state;
+- a material standing-delegated user-owned planning decision whose provenance affects later interpretation;
 - INC split/merge/reorder/replace/defer/drop/foundation insertion/supersession;
 - verification triage that changes the owning route;
 - success re-entry that selects `NEXT_INCREMENT_REQUIRED` or establishes `MANDATE_SATISFIED`;

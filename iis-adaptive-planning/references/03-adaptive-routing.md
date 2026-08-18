@@ -11,7 +11,7 @@ For each leaf:
 3. apply the exact Adaptive confirmation/continuation delta below;
 4. if an unlisted conflict appears, treat it as Baseline contract drift rather than inventing another override.
 
-Do not run the Baseline leaf as an independent user-facing workflow and then try to ignore its approval prompt afterward. Perform the leaf under the already active Adaptive Mandate from the start.
+Apply the current Baseline leaf directly. Use the Adaptive Mandate only for genuinely user-owned planning decisions/continuation; do not reimplement a Baseline self-review/adoption guard or add another approval layer around To Spec/To Tickets.
 
 ## Starting route
 
@@ -93,12 +93,11 @@ Preserve:
 
 Adaptive delta:
 
-- draft the same canonical `SPEC.md`;
-- when the content is a complete faithful projection and the ordinary approval gate is eligible for delegation, standing delegated confirmation satisfies the planning approval and the canonical Spec may transition to exact `Status: approved`;
-- record the confirmation provenance in Adaptive trace, not the Spec schema;
+- use the current Baseline To Spec self-review/adoption guard unchanged;
+- do not add standing-delegation provenance for a faithful structural projection that Baseline already adopts by self-review;
 - continue to current To Tickets without a manual user request.
 
-If accurate Spec writing requires a new product requirement, boundary, Non-Goal, verification promise, or other material meaning, do not auto-approve it. Re-enter Ask Matt or Scope Shaper.
+If accurate Spec writing requires a new product requirement, boundary, Non-Goal, verification promise, or other material meaning, re-enter Ask Matt or Scope Shaper rather than weakening the guard.
 
 ### To Tickets
 
@@ -116,10 +115,9 @@ Preserve:
 
 Adaptive delta:
 
-- when the proposed breakdown is a faithful projection and the delegated-decision test passes, standing delegated confirmation satisfies the ordinary user review requirement;
-- canonical Tickets may transition from `draft` to `ready` only after every current readiness requirement is met;
-- run the exact current per-Ticket and set validators;
-- after a complete validated Ready Ticket Set exists, report current-Increment Adaptive Planning complete and hard STOP.
+- use the current Baseline To Tickets whole-Set self-review/readiness guard unchanged;
+- do not add standing-delegation provenance for a faithful structural projection that Baseline already readies by self-review;
+- after a complete validated Ready Ticket Set exists, report current-Increment Adaptive Planning complete and return the Set across the IIS Planning ownership boundary to the outer Adaptive route described in `08-delivery-continuation.md`.
 
 Do not use Adaptive to create preparatory Tickets, implementation sequences, or extra verification mechanisms.
 
@@ -139,8 +137,8 @@ Hard even in Adaptive:
 - unresolved user decision STOP;
 - special explicit-only gate STOP;
 - invalid/missing authority or validator failure STOP until the exact defect is resolved;
-- complete Ready Ticket Set STOP;
-- boundary between IIS Planning and implementation/verification/delivery.
+- complete Ready Ticket Set STOP for IIS Planning ownership;
+- boundary between IIS Planning and implementation/verification/delivery ownership. Under explicit Adaptive activation, `08-delivery-continuation.md` may continue the outer request across that boundary unless the user explicitly selected a stop override.
 
 A later success re-entry after every current Ticket is actually `done` is a **new Adaptive planning cycle**, not a continuation through the Ready Ticket STOP. It is governed by the active Mandate's Continuation Authority and `08-delivery-continuation.md`.
 
@@ -161,11 +159,9 @@ A later success re-entry after every current Ticket is actually `done` is a **ne
 
 ## Re-entry discipline
 
-Re-entry is not retrying the same answer until a validator passes.
+Re-entry is not retrying the same answer until a validator passes. Before repeating a leaf, identify a material candidate correction, changed canonical authority, or genuinely new evidence that makes the second pass different. If the same artifact/evidence/finding would repeat without such progress, stop at the owning boundary instead of adding retry state.
 
-Before repeating a leaf, identify the **new material fact or changed authority** that makes the second pass different.
-
-If there is no new evidence/authority and the same unresolved user-owned branch remains, return to the user.
+Within a planning leaf, perform additional investigation only when its possible result can change product/Scope/Behavior/UI/completion meaning, the planning disposition, or a Return-to-User boundary. Once current authority determines one complete faithful projection, advance instead of extending the leaf for confidence polishing.
 
 If a validator fails structurally, repair the structural projection without changing product meaning. If the only repair would change product meaning, return upstream.
 

@@ -4,7 +4,7 @@ Status: draft
 Owner: <사용자 또는 지정된 planning owner>
 Source-Increment: None | <project-relative Scope Increment path>
 
-승인은 사용자 또는 명시된 planning owner가 확인하고, 제품 결정이 모두 해소된 뒤에만 `Status: approved`로 바꾼다. Scope Shaper에서 온 작업이면 `Source-Increment`에 해당 Increment의 project-relative canonical path를 적고, 직접 Ask Matt 작업이면 정확히 `None`을 적는다. 이 trace는 미래 Scope를 가져오는 authority가 아니다.
+기본적으로 현재 planning authority를 충실히 투영하고 완전성·검증 가능성·미해결 material decision 부재를 결함 중심으로 자체검수한 뒤에만 `Status: approved`로 바꾼다. 사용자가 이번 후보에 별도 승인을 명시적으로 요구한 경우에만 자체검수 통과 후 그 추가 게이트를 둔다. 자체검수 중간 상태나 별도 receipt는 만들지 않는다. Scope Shaper에서 온 작업이면 `Source-Increment`에 해당 Increment의 project-relative canonical path를 적고, 직접 Ask Matt 작업이면 정확히 `None`을 적는다. 이 trace는 미래 Scope를 가져오는 authority가 아니다.
 
 ## Problem
 

@@ -11,7 +11,7 @@ IIS is a planning system. Route the user's planning request through next-increme
 
 A generic request to "start the IIS workflow" is not an alias for Ask Matt. Before routing an ordinary IIS request, decide whether the request already names one current, durable, observable product increment or whether Scope Shaper must first choose that increment from the user's larger intent and the actual current product state.
 
-The IIS terminal product for one admitted increment is one approved Spec and its reviewed Ready Ticket Set. Ready Tickets are the delivery interface. IIS does not implement them, verify them, schedule delivery agents, or declare the product complete.
+The IIS terminal product for one admitted increment is one approved Spec and its reviewed Ready Ticket Set. To Spec and To Tickets use defect-first, leaf-local self-review as the default guard for faithful projection; a separate per-artifact user or planning-owner approval is added only when the current user explicitly requires it. This review creates no additional lifecycle status, receipt, or workflow state. Ready Tickets are the delivery interface. IIS does not implement them, verify them, schedule delivery agents, or declare the product complete.
 
 Apply explicit planning-leaf requests before broader IIS inference.
 
@@ -96,7 +96,7 @@ An explicit To Spec request routes to:
 
 An explicit To Spec request does not withdraw, satisfy, or bypass an active adversarial-consensus instruction. When routing, pass the current adversarial-consensus activation or withdrawal fact to To Spec together with the exact current Challenger binding for To Spec's direct admission gate.
 
-To Spec serializes the approved shared understanding for the current increment into the canonical approved Spec. It does not start delivery or authorize a later increment.
+To Spec serializes the approved shared understanding for the current increment into the canonical Spec. By default it adopts the exact candidate as `approved` only after its complete leaf-local self-review and existing contract audit pass with no unresolved material decision; an explicit current request for separate user/planning-owner approval adds that gate after self-review. It does not start delivery or authorize a later increment.
 
 ### To Tickets
 
@@ -104,7 +104,7 @@ An explicit To Tickets request routes to:
 
 `/home/user01/project/iis-skills/matt/skills/to-tickets/SKILL.md`
 
-To Tickets projects the approved Spec into the smallest reviewed implementation Tickets, validates them, and stops when the complete Ready Ticket Set for the current increment is available.
+To Tickets projects the approved Spec into the smallest implementation Tickets, performs individual and whole-Set defect-first review, validates the guarded `draft -> ready` transition, and stops when the complete Ready Ticket Set for the current increment is available. Separate user/planning-owner approval is required only when the current user explicitly requests it.
 
 ## IIS Terminal Boundary
 
@@ -132,7 +132,7 @@ If the user requests whole-Spec delivery after planning, the caller may deliver 
 
 ## Planning Decision Boundary
 
-Ask the user only for unresolved product, Scope, Behavior, UI, completion-contract, or other planning-authority decisions owned by the current planning leaf. Do not ask the user to choose implementation files, libraries, endpoints, internal sequencing, workers, verifier topology, or delivery mechanics.
+Ask the user only for unresolved product, Scope, Behavior, UI, completion-contract, or other planning-authority decisions owned by the current planning leaf, or for a separate Spec/Ticket approval gate the current user explicitly requested. Do not add a redundant per-artifact approval prompt after a faithful projection passes its owning leaf's self-review. Do not ask the user to choose implementation files, libraries, endpoints, internal sequencing, workers, verifier topology, or delivery mechanics.
 
 ## Safety And Non-Goals
 

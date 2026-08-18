@@ -1,6 +1,6 @@
 # IIS Planning Skills
 
-IIS is the planning layer that turns user intent into approved product authority and a validated Ready Ticket Set for one current construction Increment. IIS ends at Ready Tickets. It does not implement Tickets, independently verify them, orchestrate delivery agents, or declare product completion.
+IIS is the planning layer that turns user intent into approved product authority and a validated Ready Ticket Set for one current construction Increment. Baseline IIS remains the default and ends at Ready Tickets. Spec and Ticket projection use leaf-local defect-first self-review by default; separate per-artifact user/planning-owner approval is an explicit option. IIS itself does not implement Tickets, independently verify them, orchestrate delivery agents, or declare product completion.
 
 ## Components
 
@@ -12,6 +12,7 @@ IIS is the planning layer that turns user intent into approved product authority
 - `observatory/`: read-only IIS state scanner and CLI for cross-repository overview, repository health, next-work pointers, consistency checks, and planning history.
 - `iis-observatory/`: Codex skill wrapper for Observatory. The globally installed copy lives at `~/.codex/skills/iis-observatory/` and routes status inspection to the read-only CLI.
 - `iis-workflow/`: canonical planning-only entry router. A generic IIS request goes to Ask Matt only when it is already next-increment-ready; otherwise Scope Shaper first selects the Increment.
+- `iis-adaptive-planning/`: explicit opt-in planning mode whose ownership still ends at Ready Tickets while the outer caller defaults the current Increment through separate implementation/verification and authority-based corrective re-entry unless the user selects a stop override.
 - `repo-snapshot/`: independent Git working-tree snapshot skill.
 
 ## Global skill synchronization
@@ -20,10 +21,17 @@ The live Codex skill installs are synchronized from this repository:
 
 ```bash
 python3 scripts/sync_installed_router.py
+python3 scripts/sync_installed_adaptive.py
 python3 scripts/sync_installed_observatory.py
 ```
 
-Use `--check` on either command to detect drift without changing the installed copy.
+Use `--check` on these commands to detect drift without changing the installed copy.
+
+## Adaptive execution boundary
+
+`IIS Adaptive Planning` remains explicit opt-in. Its planning authority still ends at the validated current Ready Ticket Set, but the outer caller continues that current Increment through the separately installed Ready Ticket implementation and verification skills by default unless the user explicitly selects planning-only/stop-at-Ready-Tickets/no implementation/no verification. Corrective re-entry after a material correction is the Adaptive default; success continuation beyond the current Increment remains separately controlled by the Mandate's Continuation Authority.
+
+The delivery skills keep their own authority and the verifier alone owns guarded `ready -> done`. Adaptive passes only a bounded invocation-local evidence-economy instruction; it adds no Graph database, scheduler, retry ledger, evidence budget, or extra Spec/Ticket review status.
 
 ## Planning boundary
 
@@ -37,10 +45,10 @@ Long-term intent + actual current product state
   -> Ask Matt
   -> Behavior/UI authority
   -> optional explicit adversarial consensus
-  -> approved Spec for that Increment
+  -> self-reviewed approved Spec for that Increment
   -> To Tickets
-  -> validated Ready Ticket Set for that Increment
-  -> IIS ends
+  -> self-reviewed, validated Ready Ticket Set for that Increment
+  -> Baseline IIS ends
 ```
 
 A Work Package is a horizontal outcome boundary with `Status: scoped`; it is not an Ask Matt handoff. Future construction can be described provisionally, but only the current selected `INC-NNN.md` is `ready-for-matt`. Every confirmed shaping pass has an immutable `revisions/SHAPE-NNN.md` snapshot, and its Increment keeps that exact revision as historical planning authority even after the current `SCOPE-SHAPING-RESULT.md` advances. After delivery, a later Scope Shaping cycle inspects the actual resulting product state before selecting another Increment; prior ready Increments become `superseded` so only one Scope-shaped handoff remains admissible.
@@ -55,7 +63,7 @@ Legacy `ready-for-matt` Work Packages are not directly re-admitted. Scope Shaper
 
 Ticket Verification flows use current positional `Parent outcome ordinal`, `AC ordinals`, and `Behavior authority ordinals` so observable delivery obligations remain traceable to their parent outcome and semantic authorities without persistent IDs or a trace database.
 
-Ready Tickets are the interface to delivery. A separate delivery layer may later implement and verify a Ticket, but that layer is outside IIS and is not routed, scheduled, or supervised by this repository. When that later lifecycle actually satisfies a Ticket's authored completion obligations it may mark the existing Ticket `Status: done`; IIS itself never infers delivery completion.
+Ready Tickets are the interface to delivery. Baseline IIS stops at that boundary. Under explicit IIS Adaptive Planning, the outer caller hands each exact Ready Ticket to the separate implementation and verification skills under their own contracts by default unless the user selected a stop override; IIS still does not own delivery execution, scheduling, or verdicts. When the verification lifecycle actually satisfies a Ticket's authored completion obligations it may mark the existing Ticket `Status: done`; IIS itself never infers delivery completion.
 
 When the user explicitly asks IIS only for the current state or next planning item, the router performs a read-only Current Planning State Check over the existing Scope/Work Package/Increment/Spec/Ticket artifacts. `done` Tickets are treated as completed, non-`done` Tickets in the current Increment are reported as remaining work, superseded historical Increments do not block the current pointer, and the already-authored Scope is used to report the next Work Package/Increment and which leaf would be used next. The check stops after reporting; it never executes Scope Shaper, Ask Matt, To Spec, or To Tickets on the user's behalf.
 

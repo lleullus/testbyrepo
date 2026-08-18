@@ -7,7 +7,7 @@ Baseline IIS remains independently complete. Adaptive installation must not alte
 ```text
 Baseline IIS
 - current iis-workflow activation and routing
-- current per-leaf approval/STOP behavior
+- current per-leaf self-review/approval/STOP behavior
 - current canonical artifacts and validators
 
 IIS Adaptive Planning
@@ -41,14 +41,14 @@ When and only when Adaptive is explicitly active, the user's adopted Mandate cha
 
 The delta is limited to:
 
-1. **Standing delegated planning confirmation** — a Baseline leaf's ordinary repeated user confirmation/review may be satisfied by the active Mandate when the candidate is fully within delegated authority and the delegated-decision test passes.
+1. **Standing delegated planning confirmation** — a Baseline leaf's ordinary user-owned planning decision may be satisfied by the active Mandate when the candidate is fully within delegated authority and the delegated-decision test passes. Baseline To Spec/To Tickets self-review adoption is not reclassified as delegated confirmation merely because Adaptive is active.
 2. **Intra-planning continuation** — an ordinary leaf STOP that exists to wait for the user to manually request the next IIS planning leaf becomes a return to the Adaptive router for the same current planning unit.
 3. **Planning re-entry/reshaping** — fresh evidence may send the current unit back to an earlier existing IIS planning leaf without requiring a new user prompt when the Mandate already authorizes that decision.
 4. **Verification-result triage** — a separate verifier result may be classified and fed back into the appropriate existing planning leaf as evidence.
 
 Everything else remains current Baseline authority.
 
-The Ready Ticket Set remains the terminal **IIS Planning** product. This does not require the outer caller to terminate a broader user request. If that same current user request independently authorizes implementation and verification, the caller may consume the Ready Tickets through the separate delivery skills immediately after the planning boundary. That continuation does not extend IIS or Adaptive Planning authority into delivery.
+The Ready Ticket Set remains the terminal **IIS Planning** product. Under explicit Adaptive activation, that ownership STOP returns the Set to the outer caller, which continues the current Increment through the separate delivery skills by default unless the user explicitly selected a planning-only/stop boundary. That continuation does not extend IIS or Adaptive Planning authority into delivery.
 
 A broader `BOUNDED_OUTCOME` or `MANDATE_OUTCOME` continuation also does not turn one IIS planning cycle into a multi-Increment workflow. After a current Increment is fully delivered, Adaptive performs a fresh success re-entry; only when the applicable outcome is still unsatisfied does it start a new planning cycle and return to Scope Shaper for one new current Increment from actual state.
 
@@ -56,14 +56,14 @@ A broader `BOUNDED_OUTCOME` or `MANDATE_OUTCOME` continuation also does not turn
 
 The user explicitly selects Adaptive and adopts the Mandate. That act gives standing authority for a bounded class of later planning decisions.
 
-Therefore a canonical `confirmed`, `approved`, or `ready` state reached through a valid Adaptive delegated confirmation still means the planning authority is complete and user-authorized for the active mode. The difference is provenance:
+When a canonical planning state is actually reached through a valid Adaptive delegated decision, preserve that distinct provenance:
 
-- direct per-artifact response: `USER_EXPLICIT`
-- mandate-resolved confirmation: `DELEGATED_RECOMMENDATION`
+- direct user-owned decision: `USER_EXPLICIT`
+- mandate-resolved decision: `DELEGATED_RECOMMENDATION`
 
-Never report a delegated confirmation as though the user uttered a direct approval for that artifact.
+Never report a delegated decision as though the user uttered a direct approval for that artifact. Baseline To Spec/To Tickets self-review adoption remains `STRUCTURAL_PROJECTION`/Baseline behavior and does not create a delegated-confirmation trace merely because Adaptive is active.
 
-Store provenance in the Adaptive companion trace. Do not add Adaptive-only metadata to canonical artifacts unless the current Baseline schema independently permits/owns that field.
+Store Adaptive decision provenance in the companion trace. Do not add Adaptive-only metadata to canonical artifacts unless the current Baseline schema independently permits/owns that field.
 
 ## Hard Baseline boundaries that Adaptive does not soften
 

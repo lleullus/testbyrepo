@@ -54,7 +54,7 @@ CURRENT_INCREMENT | BOUNDED_OUTCOME | MANDATE_OUTCOME
 
 ## Notes
 
-- This Mandate delegates IIS planning judgment only.
-- Continuation Authority controls success re-entry after a delivered current Increment; it does not itself authorize delivery.
-- It does not authorize implementation, verification, deployment, credentials, production/shared external mutation, destructive action, worker selection, or adversarial-consensus activation.
+- This Mandate delegates IIS planning judgment only; it does not make Adaptive Planning the implementation or verification authority.
+- Continuation Authority controls success re-entry after a delivered current Increment. Explicit Adaptive activation separately supplies the outer caller's default current-Increment delivery handoff unless the user opts out.
+- Neither the Mandate nor Adaptive activation authorizes deployment, credentials, production/shared external mutation, destructive action, worker selection, or adversarial-consensus activation.
 - Canonical IIS artifacts remain governed by current Baseline schemas and validators.

@@ -141,6 +141,20 @@ class BehaviorWorkflowContractTests(unittest.TestCase):
         ):
             self.assertIn(forbidden_surface, normalized)
 
+    def test_spec_and_ticket_self_review_are_leaf_local_transition_guards(self) -> None:
+        to_spec = (ROOT / "matt" / "skills" / "to-spec" / "SKILL.md").read_text(encoding="utf-8")
+        to_tickets = (ROOT / "matt" / "skills" / "to-tickets" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("Self-review is a leaf-local transition guard", to_spec)
+        self.assertIn("By default, change the exact status value to `approved`", to_spec)
+        self.assertIn("whole-Set review", to_tickets)
+        self.assertIn("structural validator on every exact draft candidate", to_tickets)
+        self.assertIn("one bounded readiness", to_tickets)
+        self.assertIn("restore only Tickets", to_tickets)
+        for text in (to_spec, to_tickets):
+            self.assertNotIn("self-reviewing", text)
+            self.assertNotIn("review-failed", text)
+            self.assertNotIn("approval ledger", text)
+
     def test_ui_authority_reaches_ready_ticket(self) -> None:
         to_spec = (ROOT / "matt" / "skills" / "to-spec" / "SKILL.md").read_text(encoding="utf-8")
         to_tickets = (ROOT / "matt" / "skills" / "to-tickets" / "SKILL.md").read_text(encoding="utf-8")
