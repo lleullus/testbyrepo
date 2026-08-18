@@ -23,6 +23,26 @@ rm -rf .claude-plugin hooks
 rsync -a .port-overlay/ ./
 python3 scripts/transform-upstream.py
 
+# Collection fields such as `paths` carry strings directly. Preserve them
+# when adapting OMP multi-file edit calls to the existing preimage engine.
+python3 - <<'PY'
+from pathlib import Path
+
+path = Path("extensions/adapter.mjs")
+text = path.read_text()
+needle = '  if (typeof value !== "object") return;\n'
+replacement = (
+    '  if (typeof value === "string") {\n'
+    '    addPath(out, value);\n'
+    '    return;\n'
+    '  }\n\n'
+    '  if (typeof value !== "object") return;\n'
+)
+if needle not in text:
+    raise SystemExit("adapter patch anchor not found")
+path.write_text(text.replace(needle, replacement, 1))
+PY
+
 # The published branch contains only the port and its normal CI.
 rm -rf \
   .port-overlay \
