@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SOURCE_REPO="https://github.com/annyeong844/lumin-repo-lens.git"
+SOURCE_SHA="f7a9cee61d49e06a8350cd125a6b0641a64a59c0"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+git clone --filter=blob:none --no-checkout "$SOURCE_REPO" "$tmp/source"
+git -C "$tmp/source" checkout --detach "$SOURCE_SHA"
+
+# Keep the bootstrap control files until the final commit.
+find . -mindepth 1 -maxdepth 1 \
+  ! -name .git ! -name .github \
+  -exec rm -rf {} +
+mkdir -p .port-overlay
+tar -xzf .github/port-overlay.tar.gz -C .port-overlay
+rsync -a --exclude='.git' --exclude='.github' "$tmp/source/" ./
+
+# Replace Claude host integration with OMP-native package surfaces.
+rm -rf .claude-plugin hooks
+rsync -a .port-overlay/ ./
+python3 scripts/transform-upstream.py
+
+# The published branch contains only the port and its normal CI.
+rm -rf .port-overlay .github/port-overlay.tar.gz .github/bootstrap-lumin-omp.sh .github/workflows/bootstrap-lumin-omp.yml
+
+node scripts/verify-omp-port.mjs
+node --test tests/*.test.mjs
+npm --prefix skills/lumin-repo-lens ci
+npm --prefix skills/lumin-repo-lens run smoke
+bun test tests/omp-extension.test.ts
+bun build extensions/lumin-repo-lens.ts \
+  --target=bun \
+  --external @oh-my-pi/pi-coding-agent \
+  --outdir "$tmp/omp-build"
+
+git status --short
