@@ -14,6 +14,7 @@ IIS is the planning layer that turns user intent into approved product authority
 - `iis-workflow/`: canonical planning-only entry router. A generic IIS request goes to Ask Matt only when it is already next-increment-ready; otherwise Scope Shaper first selects the Increment.
 - `iis-adaptive-planning/`: explicit opt-in planning mode whose ownership still ends at Ready Tickets while the outer caller defaults the current Increment through separate implementation/verification and authority-based corrective re-entry unless the user selects a stop override.
 - `repo-snapshot/`: independent Git working-tree snapshot skill.
+- `companion-skills/`: version-controlled companion skills that remain outside IIS Planning authority. Ready Ticket implementation/verification and shared review discipline live here as canonical sources while their live Codex entries are linked from `~/.codex/skills/`.
 
 ## Global skill synchronization
 
@@ -26,6 +27,8 @@ python3 scripts/sync_installed_observatory.py
 ```
 
 Use `--check` on these commands to detect drift without changing the installed copy.
+
+The three `companion-skills/` entries are not managed by these copy-sync scripts. Their canonical directories live in this repository and the corresponding `~/.codex/skills/<name>` entries are direct directory symlinks to those sources.
 
 ## Adaptive execution boundary
 

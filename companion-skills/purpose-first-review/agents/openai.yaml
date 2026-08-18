@@ -1,0 +1,4 @@
+interface:
+  display_name: "Purpose-First Review"
+  short_description: "Purpose-first material change review"
+  default_prompt: "Review this change with purpose-first discipline. If no material problem exists, say NO PROBLEM and stop."

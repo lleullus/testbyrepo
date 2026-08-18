@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ready Ticket Verify"
+  short_description: "Verify one Ready Ticket with runtime AC auditors"
+  default_prompt: "Use $ready-ticket-verify to author and report the integrated Ready Ticket runtime scenario, execute it once with Main, and attach the configured concurrent AC Runtime Auditors to that same execution."
