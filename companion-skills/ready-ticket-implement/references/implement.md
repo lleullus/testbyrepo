@@ -9,10 +9,10 @@
 - 현재 추가 사용자 지시
 - Auditor Count
 - Count `2`의 명시적 specialist 값
-- 각 활성 slot의 exact Model과 exact Reasoning Depth
+- 각 활성 slot에 명시되었거나 pinned Luna XHigh default로 해석된 exact Model과 exact Reasoning Depth
 - baseline revision과 baseline working-tree 상태
 
-감사를 요청하지 않았고 Count도 제공하지 않은 경우에만 Count `0`을 사용한다. 감사를 요청했지만 Count, Count 2 role 또는 active-slot binding이 부족하면 해당 configuration gap을 정확히 보고한다.
+감사를 요청하지 않았고 Count도 제공하지 않은 경우에만 Count `0`을 사용한다. 감사를 요청했지만 Count 또는 Count 2 role이 부족하면 해당 configuration gap을 정확히 보고한다. Active-slot model/thinking 생략은 Pi runner가 pinned Luna XHigh default로 해석한다.
 
 ## 2. Concurrent audit capability preflight
 

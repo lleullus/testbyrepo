@@ -30,6 +30,59 @@ Use `--check` on these commands to detect drift without changing the installed c
 
 The three `companion-skills/` entries are not managed by these copy-sync scripts. Their canonical directories live in this repository and the corresponding `~/.codex/skills/<name>` entries are direct directory symlinks to those sources.
 
+## Pi Ready Ticket delivery agents
+
+The project-local Pi resources under `.pi/` provide two fresh, isolated delivery owners:
+
+- `iis-ready-implement` executes the canonical `ready-ticket-implement` companion and never adjudicates verification or writes `done`.
+- `iis-ready-verify` executes the canonical `ready-ticket-verify` companion from fresh evidence, never remediates product source, and alone may perform the companion's guarded `ready -> done` transition.
+
+Each companion owns its owner and auditor source under `companion-skills/<name>/pi/`. The root `.pi/agents/` entries are discovery-only relative symlinks, so the companion remains the single source of truth.
+
+Both owners can start their role-specific read-only auditors through the project-local `iis-ready-audit` extension. Audit starts return a unique run ID immediately; evidence-bearing handoffs are delivered asynchronously to the owner, owner replies release exactly the matching waiting handoff, and only terminal run results satisfy final fan-in. Runtime state is invocation-local and every active audit is cancelled during owner-session shutdown.
+
+OMP-managed delivery uses the companion-owned executable runners directly; it does not ask a generic Pi parent to choose a delivery agent:
+
+```text
+companion-skills/ready-ticket-implement/pi/iis-ready-implement-runner.mjs
+companion-skills/ready-ticket-verify/pi/iis-ready-verify-runner.mjs
+```
+
+Each runner accepts only `--input <invocation.json|->`, rejects group/world-readable invocation files, validates its role-specific versioned input, and performs canonical Ticket/status/Project-Root preflight before starting Pi. It then starts one fresh no-session owner, loads only `.pi/extensions/iis-ready-audit/index.ts`, fixes the owner prompt, tools, thinking level, recursion depth, and isolation flags, and emits one sanitized `iis.pi.ready-ticket-run/v1` terminal JSON envelope on stdout. Pi progress uses tool names only; raw child stderr is buffered and sanitized in the envelope. Implement permits 0-3 uniquely named implementation auditor slots. Verify accepts uniquely assigned AC auditors with explicit linked authored-flow ordinals, has no generic mutation tool, and can progress the configured Ticket only through `iis_ticket_mark_done`.
+
+Both Ready Ticket owners default to Luna Max: Implement and Verify use `opencodex/gpt-5.6-luna` with `max` thinking when invocation overrides are absent. `ownerModel` or `IIS_READY_IMPLEMENT_MODEL` / `IIS_READY_VERIFY_MODEL` can override the exact model binding; optional invocation `ownerThinking` independently overrides the thinking level. The terminal envelope reports both resolved values. Pi provider/model configuration and any credentials are user-local at `~/.pi/agent/iis-ready-ticket/`, independently of OMP's `~/.omp/agent/models.yml` and OpenCode configuration. The repository contains only the secret-free `.pi/runner-agent-template/models.example.json`. `IIS_PI_AGENT_DIR` can replace the complete Pi-owned runtime configuration, while `IIS_PI_BIN` can replace the default `pi` executable.
+
+Both Pi auditor roles default to Luna XHigh: `opencodex/gpt-5.6-luna` with `xhigh` thinking. Each Implement slot or Verify AC auditor may explicitly override either value; omitted values resolve independently to these pinned defaults. Auditor bindings do not inherit the owner's resolved thinking.
+
+Before an owner starts, the runner checks only that invocation's owner and auditor bindings in the configured Pi `models.json`: exact provider/model identity, requested thinking support, provider API routing, and availability from Pi's authenticated model runtime. This preflight is read-only. It does not compare the full OMP/Pi catalogs, update configuration, or make inference requests.
+
+Synchronize the OMP `opencodex` catalog into this Pi runtime only through the explicit maintenance command:
+
+```bash
+scripts/sync-iis-pi-models.mjs --check
+scripts/sync-iis-pi-models.mjs --apply
+```
+
+`--check` reports full `opencodex` drift without changing files. `--apply` preserves Pi-owned credential/provider fields and non-`opencodex` configuration, stages a private `0600` config, validates Pi parsing/listing, performs one real inference smoke per configured API family, rechecks the initial OMP and Pi file hashes, then atomically replaces `models.json`. A stale input or failed smoke leaves the existing Pi config in place. OMP `compactionModel` and default-thinking policy, Pi `auth.json`, and non-`opencodex` OMP providers are outside this synchronization authority. The delivery runners never invoke this command automatically.
+
+Use schema `iis.pi.ready-ticket-implement/v1` for Implement and `iis.pi.ready-ticket-verify/v1` for Verify. Both require `runId`, canonical `ticket`, `projectRoot`, `targetIdentity`, and an explicit `auditors` array. Verify additionally requires explicit `diagnosticReverify`, accepts navigation-only `candidateTarget` and `implementationReport`, snapshots Git-visible product content or a bounded full non-Git Project Root before execution, and rejects any protected product delta after execution. Its only accepted Ticket delta is exact `Status: ready` to `Status: done` correlated with `VERIFIED` and `Ticket Progression: COMPLETED`. A nonzero Pi exit, missing canonical result, wrong owner/session identity, malformed terminal fields, or postcondition mismatch produces a failed terminal envelope rather than an inferred delivery result.
+
+The runners are the OMP process boundary. Start one managed runner for Implement, inspect its terminal envelope and stable target, then start the Verify runner as a separate fresh process. Auditor handoffs and fan-in remain internal to that Pi owner. OMP cancellation terminates the managed runner, which forwards the signal to the complete Pi process group.
+
+Install the Pi subagent extension once, then start Pi from this repository root so it discovers both `.pi/agents/` and `.pi/extensions/`:
+
+```bash
+pi install npm:@johnnywu/pi-subagents
+cd /path/to/iis-skills
+pi
+```
+
+Invoke one exact delivery owner with a self-contained task containing the canonical Ticket path, exact target Project Root, additional instructions, and complete companion-owned auditor configuration. Owner sessions must use `session: "none"`; forked delivery sessions are rejected.
+
+Auditors normally receive only `read`, `grep`, `find`, `ls`, and the blocking `iis_audit_handoff` tool. When a slot explicitly authorizes Oracle Browser, the runtime also exposes `bash` and injects the canonical Oracle Browser skill from `IIS_ORACLE_BROWSER_SKILL`, defaulting to `/home/user01/.codex/skills/oracle-browser/SKILL.md`. Skill availability alone is not Oracle submission authority.
+
+OMP-managed background execution preserves run-ID correlation, evidence-bearing handoff, owner reply, terminal-only completion, no polling, final fan-in, and shutdown containment without importing OMP or OpenCode client configuration into Pi. The Pi runtime does not create a workflow database, durable queue, retry ledger, or cross-Ticket audit state.
+
 ## Adaptive execution boundary
 
 `IIS Adaptive Planning` remains explicit opt-in. Its planning authority still ends at the validated current Ready Ticket Set, but the outer caller continues that current Increment through the separately installed Ready Ticket implementation and verification skills by default unless the user explicitly selects planning-only/stop-at-Ready-Tickets/no implementation/no verification. Corrective re-entry after a material correction is the Adaptive default; success continuation beyond the current Increment remains separately controlled by the Mandate's Continuation Authority.

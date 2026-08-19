@@ -1,2 +1,8 @@
 __pycache__/
 *.py[cod]
+
+# Pi runtime credentials and mutable state are user-local, never repository content.
+.pi/**/auth.json
+.pi/**/models.json
+.pi/**/models-store.json
+.pi/**/sessions/
