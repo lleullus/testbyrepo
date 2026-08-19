@@ -9,9 +9,22 @@ For each leaf:
 1. read the current canonical Baseline leaf;
 2. preserve all of its product semantics, evidence requirements, authority ownership, admission checks, canonical artifact rules, validators, and non-approval completion criteria;
 3. apply the exact Adaptive confirmation/continuation delta below;
-4. if an unlisted conflict appears, treat it as Baseline contract drift rather than inventing another override.
+4. preserve the closed invocation-local Run Contract from [09-run-contract.md](09-run-contract.md) across every leaf and ownership return; and
+5. if an unlisted conflict appears, treat it as Baseline contract drift rather than inventing another override.
 
 Apply the current Baseline leaf directly. Use the Adaptive Mandate only for genuinely user-owned planning decisions/continuation; do not reimplement a Baseline self-review/adoption guard or add another approval layer around To Spec/To Tickets.
+
+## Run Contract admission precedes routing
+
+Before the Starting route below can perform any planning mutation, the outer Adaptive caller must close and render one Run Contract.
+
+- If current authority determines Goal Outcome, Required Named Items, Candidate Named Items, Required Item Policy, Implementation, Verification, Run Completion Boundary, Completion Predicate, and Authoritative Readback, mark it `CLOSED` and route without another approval prompt.
+- If a material field remains unresolved, mark it `USER_INPUT_REQUIRED`, ask only for that smallest field, and hard STOP before mutation.
+- Read-only inspection needed to establish inspectable facts may precede closure.
+- A later leaf may expose a genuine material contradiction that requires a Run Contract revision; return only that decision and preserve all settled fields.
+- A Run Completion Boundary broader than the Mandate's Continuation Authority ceiling cannot close unless the current user instruction explicitly revises/adopts that broader authority.
+
+Do not treat this as a new Baseline admission gate. It belongs to the explicit outer Adaptive invocation and does not alter ordinary IIS requests.
 
 ## Starting route
 
@@ -43,7 +56,10 @@ Adaptive delta:
 
 - the ordinary single user confirmation of an otherwise complete Scope proposal may be satisfied by standing delegated confirmation when the Mandate resolves the selection and no Return-to-User Boundary is triggered;
 - after canonical Scope/Increment closure validates, do not expose the ordinary manual-continuation STOP; return the exact selected `ready-for-matt` Increment to the Adaptive router and continue to Ask Matt in the same planning request;
-- when a later leaf finds a construction-stage/foundation/split/merge/order defect, re-enter Scope Shaper directly if reshaping is delegated.
+- when a later leaf finds a construction-stage/foundation/split/merge/order defect, re-enter Scope Shaper directly if reshaping is delegated;
+- preserve Required Named Items across Increment selection and reshaping without forcing all obligations into one current Increment;
+- treat Candidate Named Items as mutable candidate means under the Mandate and evidence; and
+- do not select a next Increment that would make the Run Completion Boundary exceed the Mandate ceiling.
 
 Keep hard:
 
@@ -70,9 +86,10 @@ Adaptive delta:
 - if the delegated-decision test produces one answer, adopt it as `DELEGATED_RECOMMENDATION` and continue the dependency graph without a user round-trip;
 - if the frontier is empty after authority/Mandate resolution, continue directly;
 - ordinary final approval of completed Behavior/UI authority and integrated shared understanding may use standing delegated confirmation;
-- after completion, continue to current To Spec rather than stopping for a manual leaf request.
+- after completion, continue to current To Spec rather than stopping for a manual leaf request; and
+- preserve the Run Contract Goal Outcome, required/candidate classification, delivery-stage limits, and completion predicate without inventing current-Increment product meaning for later obligations.
 
-Return to the user only for the unresolved material frontier that survives the Mandate.
+Return to the user only for the unresolved material frontier that survives the Mandate and closed Run Contract.
 
 Keep hard:
 
@@ -95,7 +112,8 @@ Adaptive delta:
 
 - use the current Baseline To Spec self-review/adoption guard unchanged;
 - do not add standing-delegation provenance for a faithful structural projection that Baseline already adopts by self-review;
-- continue to current To Tickets without a manual user request.
+- continue to current To Tickets without a manual user request; and
+- project only the current Increment even when the outer Run Contract spans more Required Named Items or broader outcomes.
 
 If accurate Spec writing requires a new product requirement, boundary, Non-Goal, verification promise, or other material meaning, re-enter Ask Matt or Scope Shaper rather than weakening the guard.
 
@@ -116,10 +134,10 @@ Preserve:
 Adaptive delta:
 
 - use the current Baseline To Tickets whole-Set self-review/readiness guard unchanged;
-- do not add standing-delegation provenance for a faithful structural projection that Baseline already readies by self-review;
-- after a complete validated Ready Ticket Set exists, report current-Increment Adaptive Planning complete and return the Set across the IIS Planning ownership boundary to the outer Adaptive route described in `08-delivery-continuation.md`.
+- do not add standing-delegation provenance for a faithful structural projection that Baseline already readies by self-review; and
+- after a complete validated Ready Ticket Set exists, report current-Increment Adaptive **planning phase** complete and return the Set plus the closed Run Contract across the IIS Planning ownership boundary to the outer Adaptive route described in `08-delivery-continuation.md`.
 
-Do not use Adaptive to create preparatory Tickets, implementation sequences, or extra verification mechanisms.
+Do not use Adaptive to create preparatory Tickets, implementation sequences, extra verification mechanisms, or Tickets for Required Named Items that do not belong to the current Increment.
 
 ## STOP semantics
 
@@ -134,13 +152,18 @@ Soft under active Adaptive Mandate:
 Hard even in Adaptive:
 
 - status-only inspection STOP;
+- unresolved Run Contract field STOP before mutation;
 - unresolved user decision STOP;
 - special explicit-only gate STOP;
 - invalid/missing authority or validator failure STOP until the exact defect is resolved;
 - complete Ready Ticket Set STOP for IIS Planning ownership;
-- boundary between IIS Planning and implementation/verification/delivery ownership. Under explicit Adaptive activation, `08-delivery-continuation.md` may continue the outer request across that boundary unless the user explicitly selected a stop override.
+- boundary between IIS Planning and implementation/verification/delivery ownership. The outer route applies the closed Implementation and Verification fields rather than assuming both stages from the planning STOP.
 
-A later success re-entry after every current Ticket is actually `done` is a **new Adaptive planning cycle**, not a continuation through the Ready Ticket STOP. It is governed by the active Mandate's Continuation Authority and `08-delivery-continuation.md`.
+A hard owning STOP is not automatically whole-run success. The outer caller compares it with the active Run Completion Boundary and Completion Predicate. Blocked, inconclusive, user-return, contract-drift, and no-progress STOPs remain incomplete returns.
+
+`CURRENT_INCREMENT_IMPLEMENTED` is an outer implementation-only terminal. It does not create a success re-entry cycle and does not mark Tickets `done`.
+
+A later success re-entry after every current Ticket is actually `done` is a **new Adaptive planning cycle**, not a continuation through the Ready Ticket STOP. It is governed by the active Mandate's Continuation Authority ceiling, the closed Run Contract, and `08-delivery-continuation.md`.
 
 ## Re-entry matrix
 
@@ -155,13 +178,15 @@ A later success re-entry after every current Ticket is actually `done` is a **ne
 | Ticket omits/strengthens/weakens parent meaning | projection defect | To Tickets; Ask Matt if parent itself is wrong |
 | Ticket cannot form an independently acceptable product unit because current INC shape is wrong | construction shape defect | Scope Shaper |
 | Ticket cannot express required Behavior meaning because authority is incomplete | product contract incomplete | Ask Matt |
-| current canonical Spec/Ticket projection is complete and valid | normal forward route | continue / terminal |
+| current canonical Spec/Ticket projection is complete and valid | normal forward route | continue / planning terminal |
+| current Increment is delivered but Required Named Items or an outcome predicate remain unsatisfied | outer run incomplete | fresh actual-state Scope Shaper re-entry when authorized |
+| current Increment is implemented with Verification `no` | implementation-only terminal | report exact Run Contract result; no success re-entry |
 
 ## Re-entry discipline
 
-Re-entry is not retrying the same answer until a validator passes. Before repeating a leaf, identify a material candidate correction, changed canonical authority, or genuinely new evidence that makes the second pass different. If the same artifact/evidence/finding would repeat without such progress, stop at the owning boundary instead of adding retry state.
+Re-entry is not retrying the same answer until a validator passes. Before repeating a leaf, identify a material candidate correction, changed canonical authority, Run Contract revision, or genuinely new evidence that makes the second pass different. If the same artifact/evidence/finding would repeat without such progress, stop at the owning boundary instead of adding retry state.
 
-Within a planning leaf, perform additional investigation only when its possible result can change product/Scope/Behavior/UI/completion meaning, the planning disposition, or a Return-to-User boundary. Once current authority determines one complete faithful projection, advance instead of extending the leaf for confidence polishing.
+Within a planning leaf, perform additional investigation only when its possible result can change product/Scope/Behavior/UI/completion meaning, the planning disposition, a Run Contract field, or a Return-to-User boundary. Once current authority determines one complete faithful projection, advance instead of extending the leaf for confidence polishing.
 
 If a validator fails structurally, repair the structural projection without changing product meaning. If the only repair would change product meaning, return upstream.
 
@@ -173,6 +198,7 @@ Examples:
 
 - implementation demonstrates that an assumed existing product acceptance surface does not exist -> reconsider the planning contract/INC as applicable;
 - verifier establishes that a Ticket flow is stronger than its exact parent outcome -> projection re-entry;
-- current runtime shows the original INC is no longer the actual starting state -> Scope Shaper re-entry against the actual state.
+- current runtime shows the original INC is no longer the actual starting state -> Scope Shaper re-entry against the actual state;
+- a delivered current Increment leaves a Required Named Item or broader Completion Predicate unsatisfied -> success re-entry from actual state rather than declaring whole-run completion.
 
 Do not make planning history match an expected implementation. Re-plan from the actual current product state.

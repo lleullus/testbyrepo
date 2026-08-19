@@ -26,6 +26,14 @@ When standing delegated confirmation validly resolves a genuinely user-owned pla
 
 When current Baseline To Spec/To Tickets self-review adopts a faithful structural projection as `approved` or `ready`, preserve that Baseline meaning without manufacturing `DELEGATED_RECOMMENDATION` provenance merely because Adaptive is active. This keeps canonical consumers compatible and keeps the Adaptive trace limited to material Adaptive decisions.
 
+## Invocation-local Run Contract
+
+The compact form in [../templates/ADAPTIVE-RUN-CONTRACT.template.md](../templates/ADAPTIVE-RUN-CONTRACT.template.md) closes one invocation's Goal Outcome, Required Named Items, Candidate Named Items, Required Item Policy, independent Implementation/Verification fields, Run Completion Boundary, Completion Predicate, and Authoritative Readback.
+
+It is invocation-local authority, not a canonical IIS artifact and not a required third durable companion artifact. Do not add the form to canonical IIS artifacts, create a project-local workflow-state file for it, or use it as an attempt ledger.
+
+Carry the closed form in the current request/context and pass only its decision-critical fields across planning and delivery ownership boundaries. When a material Run Contract decision or revision affects later interpretation, summarize that decision in the Adaptive trace. Do not persist routine phase transitions, Ticket progress, or a copy of every form rendering.
+
 ## Companion provenance artifacts
 
 Use companion artifacts only to preserve Adaptive-specific authority/provenance that does not belong in canonical IIS schema.
@@ -46,7 +54,7 @@ If the project already has an established equivalent planning-provenance locatio
 
 Use [../templates/ADAPTIVE-PLANNING-MANDATE.template.md](../templates/ADAPTIVE-PLANNING-MANDATE.template.md).
 
-It records current user-authorized decision criteria. It is Adaptive authority, not product source code, implementation authority, or a replacement for Scope/Behavior/Spec.
+It records current user-authorized decision criteria and the maximum Continuation Authority ceiling. It is Adaptive authority, not product source code, implementation authority, an invocation terminal, or a replacement for Scope/Behavior/Spec.
 
 ### `ADAPTIVE-PLANNING-TRACE.md`
 
@@ -56,6 +64,7 @@ Material events:
 
 - a `DELEGATED_RECOMMENDATION` that materially affects observable product meaning;
 - a material standing-delegated user-owned planning decision whose provenance affects later interpretation;
+- a material Run Contract closure/revision whose required/candidate classification, delivery stages, or completion semantics affect later interpretation;
 - INC split/merge/reorder/replace/defer/drop/foundation insertion/supersession;
 - verification triage that changes the owning route;
 - success re-entry that selects `NEXT_INCREMENT_REQUIRED` or establishes `MANDATE_SATISFIED`;

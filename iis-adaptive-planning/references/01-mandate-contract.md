@@ -2,12 +2,14 @@
 
 ## Purpose
 
-The Mandate fixes **how to judge a good plan**, not the exact Increment, Spec shape, Ticket count, internal design, or future roadmap.
+The Mandate fixes **how to judge a good plan** and the maximum success-continuation authority available to Adaptive. It does not fix the exact Increment, Spec shape, Ticket count, internal design, future roadmap, or the terminal condition of every invocation.
 
-A useful Mandate is stable enough to support reshaping while leaving planning hypotheses mutable.
+A useful Mandate is stable enough to support reshaping while leaving planning hypotheses and invocation-local completion mutable.
 
 ```text
 Intent and decision criteria: comparatively stable
+Maximum success-continuation authority: comparatively stable
+Current invocation terminal: closed by the Adaptive Run Contract
 Current INC / planning shape: mutable
 Canonical IIS artifacts: durable and traceable
 ```
@@ -22,7 +24,7 @@ Normalize the current user authority into these fields:
 4. **Hard Constraints** — existing behavior, compatibility, authority, data, external contract, or other boundary the user does not delegate away.
 5. **Non-Goals** — capabilities or maturity explicitly outside the intended direction.
 6. **Delegated Planning Authority** — what Scope/INC reshaping and product-planning recommendation classes may be settled without a new per-artifact user response.
-7. **Continuation Authority** — the success boundary after a delivered current Increment: `CURRENT_INCREMENT`, `BOUNDED_OUTCOME`, or `MANDATE_OUTCOME`.
+7. **Continuation Authority** — the maximum success-continuation ceiling available after a delivered current Increment: `CURRENT_INCREMENT`, `BOUNDED_OUTCOME`, or `MANDATE_OUTCOME`.
 8. **Return-to-User Boundary** — material choices that must return to the user when current authority cannot select one answer.
 9. **Applicability** — exact project root when available and the bounded initiative/scope/work context to which the Mandate applies.
 
@@ -40,21 +42,29 @@ Examples:
 
 Ask only for a missing fact whose different answers would materially change product intent, Scope, ownership, observable behavior, completion meaning, or another Return-to-User Boundary.
 
-## Continuation Authority
+## Continuation Authority ceiling
 
 Use exactly one value:
 
-- `CURRENT_INCREMENT` — stop success progression after the current Increment is fully delivered. This is the default when the user did not explicitly authorize a broader success boundary.
-- `BOUNDED_OUTCOME` — after each fully delivered Increment, re-evaluate the exact bounded outcome named by `Applies-To`; if it is not yet satisfied, Scope Shaper may select another current Increment from fresh actual product state.
-- `MANDATE_OUTCOME` — after each fully delivered Increment, re-evaluate the Mandate's `Desired Product Outcome`; if it is not yet satisfied, Scope Shaper may select another current Increment from fresh actual product state.
+- `CURRENT_INCREMENT` — no success continuation is authorized beyond the fully delivered current Increment. This is the default when the user did not explicitly authorize a broader success boundary.
+- `BOUNDED_OUTCOME` — after each fully delivered Increment, Adaptive may re-evaluate one exact bounded outcome and, while that outcome remains unsatisfied, may let Scope Shaper select another current Increment from fresh actual product state.
+- `MANDATE_OUTCOME` — after each fully delivered Increment, Adaptive may re-evaluate the Mandate's Desired Product Outcome and, while it remains unsatisfied, may let Scope Shaper select another current Increment from fresh actual product state.
 
-Continuation Authority controls only success continuation beyond the delivered current Increment. It does not itself grant implementation or verification authority. Explicit Adaptive activation separately supplies the outer caller's default current-Increment delivery handoff unless the user opts out; broader concrete deployment/external-effect authority is still not implied.
+Continuation Authority is a **ceiling**, not the actual terminal of the current invocation. The invocation-local Run Completion Boundary and Completion Predicate in [09-run-contract.md](09-run-contract.md) define when that exact run succeeds.
 
-Do not infer `BOUNDED_OUTCOME` or `MANDATE_OUTCOME` merely because `Applies-To` names an initiative, Scope, or Work Package. The user must authorize continuation to that larger success boundary in the current instruction or adopted Mandate.
+A Run Completion Boundary must fit within this ceiling:
+
+- `CURRENT_INCREMENT` permits planning-only completion, current-Increment implementation completion, and current-Increment delivery completion. A named-required-items boundary is also within this ceiling only when current authority establishes that every required item is contained in the current Increment; otherwise it requires broader continuation authority.
+- `BOUNDED_OUTCOME` permits success continuation only as far as the exact bounded outcome authorized for the run.
+- `MANDATE_OUTCOME` permits success continuation as far as the Desired Product Outcome.
+
+If the current user instruction explicitly requires a Run Completion Boundary broader than the stored Mandate ceiling, revise or adopt the Mandate before the first mutation. If the current instruction does not grant that broader authority, return the exact authority gap. Never close a smaller Run Contract merely to avoid the revision, and never silently expand the Mandate.
+
+Do not infer `BOUNDED_OUTCOME` or `MANDATE_OUTCOME` merely because `Applies-To` names an initiative, Scope, or Work Package. `BOUNDED_OUTCOME` requires one exact bounded Completion Predicate in the Run Contract; applicability alone is not a completion test.
 
 For an existing Adaptive Mandate created before this field existed, treat missing Continuation Authority as `CURRENT_INCREMENT`. Do not require reapproval merely to preserve that prior behavior; serialize the explicit field the next time the Mandate is materially revised.
 
-Success continuation never means consuming a pre-authored WP list or provisional horizon in order. After a delivered Increment, compare fresh actual product state with the applicable outcome; only when more construction is still required does Scope Shaper choose the next Increment.
+Success continuation never means consuming a pre-authored WP list or provisional horizon in order. After a delivered Increment, compare fresh actual product state with the active Run Completion Predicate; only when more construction is still required and the ceiling permits it does Scope Shaper choose the next Increment.
 
 ## Recommended default delegation when user says "권장안으로 진행"
 
@@ -128,8 +138,8 @@ On a material change:
 
 1. record the new current Mandate revision in the companion file;
 2. record the changed authority/priorities in the Adaptive trace;
-3. re-evaluate current provisional planning artifacts and the current INC;
-4. reshape only what the new Mandate materially affects;
+3. re-evaluate the active Run Contract, current provisional planning artifacts, and the current INC;
+4. reshape only what the new Mandate materially affects; and
 5. never rewrite immutable Baseline Scope revisions or delivered `done` history.
 
 A later Mandate does not falsify prior history. It changes current planning authority from that point forward.

@@ -1,14 +1,42 @@
 # Adaptive Terminal and User-Return Reports
 
-## Current-Increment planning complete
+## Run Contract input required
+
+Use before any planning or delivery mutation when [09-run-contract.md](09-run-contract.md) cannot close one material field from current authority and inspectable facts.
+
+```text
+IIS ADAPTIVE RUN CONTRACT: USER INPUT REQUIRED
+
+Goal Outcome: <settled outcome or unresolved>
+Required Named Items: <settled list or None required>
+Candidate Named Items: <settled list or None named>
+Resolved fields:
+- <field: value>
+
+Decision required: <smallest exact unresolved field>
+Why different answers change the run: <required scope | candidate freedom | delivery stage | continuation authority | completion meaning>
+Options:
+- <option and consequence>
+
+Mutation started: no
+Next action after resolution: close Run Contract and enter <Scope Shaper | Ask Matt | To Spec | To Tickets>
+STOP
+```
+
+Do not ask the user to restate settled fields or approve a fully derived form.
+
+## Current-Increment planning phase complete
 
 Use only after the current canonical IIS terminal conditions are actually satisfied: one approved current Spec plus its reviewed, validated complete Ready Ticket Set.
 
 ```text
-IIS ADAPTIVE PLANNING COMPLETE
+IIS ADAPTIVE PLANNING PHASE COMPLETE
 
 Mandate: <exact companion path/revision or current-conversation authority>
-Continuation Authority: CURRENT_INCREMENT | BOUNDED_OUTCOME | MANDATE_OUTCOME
+Mandate Continuation Ceiling: CURRENT_INCREMENT | BOUNDED_OUTCOME | MANDATE_OUTCOME
+Implementation: yes | no
+Verification: yes | no
+Run Completion Boundary: READY_TICKET_SET | CURRENT_INCREMENT_IMPLEMENTED | CURRENT_INCREMENT_DELIVERED | NAMED_REQUIRED_ITEMS_DELIVERED | BOUNDED_OUTCOME_SATISFIED | MANDATE_OUTCOME_SATISFIED
 Current Scope: <exact current Scope result or None for direct next-increment-ready work>
 Current Increment: <exact current INC or None for direct next-increment-ready work>
 Spec: <exact approved Spec>
@@ -24,22 +52,105 @@ Reshaping:
 
 Unresolved user decisions: None
 Planning terminal: validated complete Ready Ticket Set
-STOP
+Whole-run predicate satisfied: yes | no
+Outer disposition: RUN_COMPLETE | CONTINUE_TO_IMPLEMENTATION | CONTINUE_TO_VERIFICATION | RETURN_AUTHORITY_GAP
+STOP — IIS Adaptive Planning ownership boundary
 ```
 
 Do not append an offer to implement, verify, or plan the next provisional Increment as though those actions are part of IIS Planning.
 
-Under explicit Adaptive activation, this `STOP` is the IIS Planning ownership boundary. Unless the current user explicitly selected planning-only/stop-at-Ready-Tickets/no implementation/no verification, return the Ready Ticket Set to the outer caller, which continues the current Increment through the separate delivery skills without another approval merely because ownership changes. The caller is not IIS Adaptive Planning; see `08-delivery-continuation.md`.
+Return the Ready Ticket Set and the closed Run Contract to the outer caller. Under explicit Adaptive activation, that outer caller continues the current Increment through exactly the enabled delivery stages without another approval merely because ownership changes.
+
+When the active Run Completion Boundary is `READY_TICKET_SET`, the planning phase also satisfies whole-run completion and the outer caller emits the Run Complete report below. For every broader boundary, planning phase completion alone is not whole-run success.
+
+## Current Increment implemented
+
+Use when `Implementation: yes`, `Verification: no`, and every current canonical Ticket in the validated Ready Ticket Set has one exact implementation lifecycle result with `Completion: COMPLETE`.
+
+```text
+IIS ADAPTIVE CURRENT INCREMENT IMPLEMENTED
+
+Current Increment: <exact INC path>
+Implementation denominator: <complete>/<total>
+Implementation results:
+- <Ticket path — exact implementation report/checkpoint>
+Verification requested: no
+Final Ticket states:
+- <Ticket path — exact current status>
+Run Completion Boundary: CURRENT_INCREMENT_IMPLEMENTED
+Completion Predicate satisfied: yes
+Independent verification claimed: no
+Ticket progression to done claimed: no
+Disposition: RUN_CONTRACT_SATISFIED
+STOP
+```
+
+Do not emit this report from one Ticket result, a partial denominator, or an implementation result that changed a Ticket to `done`.
+
+An implementation-only terminal does not authorize success re-entry into another Increment. If Required Named Items remain outside the current Increment, return the smallest Verification or Run Completion Boundary decision rather than claiming the broader run complete.
+
+## Adaptive run complete
+
+Use only when the active Run Contract's exact Completion Predicate is actually satisfied.
+
+```text
+IIS ADAPTIVE RUN COMPLETE
+
+Mandate: <exact companion path/revision or current-conversation authority>
+Mandate Continuation Ceiling: CURRENT_INCREMENT | BOUNDED_OUTCOME | MANDATE_OUTCOME
+Run Completion Boundary: READY_TICKET_SET | CURRENT_INCREMENT_IMPLEMENTED | CURRENT_INCREMENT_DELIVERED | NAMED_REQUIRED_ITEMS_DELIVERED | BOUNDED_OUTCOME_SATISFIED | MANDATE_OUTCOME_SATISFIED
+Goal Outcome: <exact Run Contract outcome>
+Required Named Items:
+- <item or None required>
+Candidate Named Items:
+- <item or None named>
+Required Item Policy: EXACT_REQUIRED_SET | REQUIRED_FLOOR | NONE_REQUIRED
+Implementation: yes | no
+Verification: yes | no
+Completion Predicate: <exact predicate>
+Authoritative Readback: <fresh attributable evidence>
+Final Current Increment: <exact INC path or None>
+Final Ticket evidence:
+- <exact Ticket path — implementation COMPLETE | done | planning-only ready>
+Disposition: RUN_CONTRACT_SATISFIED
+Remaining provisional horizon: non-authoritative; not a completion blocker
+STOP
+```
+
+Do not emit this report for a planning leaf STOP, one completed Ticket, one delivered Increment when Required Named Items remain, an implementation-only result when the boundary requires delivery, a blocked/inconclusive return, or roadmap exhaustion.
+
+Candidate Named Items do not block this report unless the user revised them into Required Named Items.
+
+## Current Increment delivered but run continues
+
+Use when every current canonical Ticket is exact `done`, but the active boundary is `NAMED_REQUIRED_ITEMS_DELIVERED`, `BOUNDED_OUTCOME_SATISFIED`, or `MANDATE_OUTCOME_SATISFIED` and its predicate is not yet satisfied.
+
+```text
+IIS ADAPTIVE CURRENT INCREMENT DELIVERED
+
+Current Increment: <exact INC path>
+Delivered Ticket denominator: <done>/<total>
+Run Completion Boundary: <active broader boundary>
+Required Named Items remaining:
+- <item or None>
+Completion Predicate satisfied: no
+Fresh actual product result: <observable result>
+Next disposition: NEXT_INCREMENT_REQUIRED | USER_DECISION_REQUIRED | EVIDENCE_REQUIRED
+STOP — current delivery unit only
+```
+
+This report is a phase boundary, not whole-run success.
 
 ## Mandate success completion
 
-Use only after a fully delivered current Increment has entered success re-entry and fresh actual product state establishes `MANDATE_SATISFIED` for the applicable `BOUNDED_OUTCOME` or `MANDATE_OUTCOME`.
+Use only after a fully delivered current Increment has entered success re-entry and fresh actual product state establishes `MANDATE_SATISFIED` for the applicable `BOUNDED_OUTCOME_SATISFIED` or `MANDATE_OUTCOME_SATISFIED` Run Completion Boundary.
 
 ```text
 IIS ADAPTIVE MANDATE COMPLETE
 
 Mandate: <exact companion path/revision or current-conversation authority>
-Continuation Authority: BOUNDED_OUTCOME | MANDATE_OUTCOME
+Mandate Continuation Ceiling: BOUNDED_OUTCOME | MANDATE_OUTCOME
+Run Completion Boundary: BOUNDED_OUTCOME_SATISFIED | MANDATE_OUTCOME_SATISFIED
 Applicable outcome: <exact bounded or Desired Product Outcome>
 Final delivered Increment: <exact INC path>
 Actual product result: <observable result>
@@ -53,12 +164,14 @@ Do not declare Mandate completion from Ticket `done` status, WP exhaustion, or a
 
 ## Return to user for a material product decision
 
-Use only when the active Mandate cannot resolve a real user-owned branch.
+Use only when the active Mandate or closed Run Contract cannot resolve a real user-owned branch.
 
 ```text
 IIS ADAPTIVE PLANNING: USER DECISION REQUIRED
 
 Current planning unit: <Scope / INC / Ask Matt unit>
+Mandate Continuation Ceiling: <active ceiling>
+Run Completion Boundary: <active boundary>
 Decision: <smallest exact unresolved decision>
 Why current authority cannot select one answer: <reason>
 
@@ -70,10 +183,29 @@ What remains unchanged:
 - <settled authority that will not be reopened>
 
 Next leaf after resolution: <Scope Shaper | Ask Matt | To Spec | To Tickets>
+Whole-run completion: no
 STOP
 ```
 
 Do not dump the entire planning analysis. Ask only for the branch that blocks authoritative continuation.
+
+## Run Contract authority gap
+
+Use when the requested Run Completion Boundary exceeds the Mandate's current Continuation Authority ceiling and the current instruction does not itself authorize an exact Mandate revision.
+
+```text
+IIS ADAPTIVE RUN CONTRACT: AUTHORITY GAP
+
+Mandate Continuation Ceiling: <CURRENT_INCREMENT | BOUNDED_OUTCOME | MANDATE_OUTCOME>
+Requested Run Completion Boundary: <boundary>
+Required continuation: <why another Increment or broader outcome authority is needed>
+Smallest decision required: <revise Mandate ceiling | choose a narrower boundary>
+Mutation started: no | stopped before broader re-entry
+Whole-run completion: no
+STOP
+```
+
+Do not silently lower the Run Completion Boundary or expand the Mandate.
 
 ## Baseline contract drift
 
@@ -83,10 +215,11 @@ Use when current Baseline changes make the Adaptive Delta impossible to apply wi
 IIS ADAPTIVE PLANNING: CONTRACT DRIFT
 
 Current Baseline rule: <exact rule/leaf>
-Adaptive delta affected: <confirmation | continuation | reshaping | triage>
+Adaptive delta affected: <confirmation | continuation | reshaping | triage | run completion>
 Conflict: <why both cannot be preserved>
 Baseline IIS remains usable: yes
 Adaptive planning continued: no
+Whole-run completion: no
 STOP
 ```
 
@@ -103,7 +236,7 @@ Examples:
 - active adversarial gate missing Challenger/Intent Anchor -> current gate's exact result
 - external/operator verification evidence unavailable -> verifier/triage result as applicable
 
-Adaptive trace may record the disposition, but does not replace the owning result.
+Adaptive trace may record the disposition, but does not replace the owning result. Every such return is whole-run incomplete unless the active Completion Predicate was already independently satisfied.
 
 ## Verification triage report
 
@@ -119,6 +252,7 @@ Primary authority basis: <exact parent authority>
 Disposition: <implementation | verification mechanism | Scope Shaper | Ask Matt | To Tickets | evidence required>
 Contract changed: yes | no
 Fresh verification required: yes | pending evidence
+Whole-run completion: no unless the active predicate is independently satisfied
 ```
 
-Unless the user explicitly disabled corrective re-entry, a material triage result continues to its owning correction route after an actual correction/new evidence rather than stopping merely to announce the classification. Report the triage at the eventual user-return or current-Increment terminal boundary. Success continuation into another Increment remains a separate Mandate decision.
+Unless the user explicitly disabled corrective re-entry, a material triage result continues to its owning correction route after an actual correction/new evidence rather than stopping merely to announce the classification. Report the triage at the eventual user-return, planning-phase, current-Increment, or Run Contract terminal boundary. Success continuation into another Increment remains governed by the Mandate ceiling and closed Run Contract.

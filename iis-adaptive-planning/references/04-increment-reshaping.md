@@ -40,6 +40,22 @@ When the Mandate authorizes general Adaptive reshaping and no Return-to-User Bou
 
 Use product meaning and counterfactual dependency, not technical layers, to decide these operations.
 
+## Run Contract preservation
+
+Apply the active invocation-local Run Contract in [09-run-contract.md](09-run-contract.md) before treating a user-named item as mutable scope.
+
+- Every Required Named Item remains a whole-run obligation across split, reorder, replacement, foundation insertion, and success re-entry.
+- Under `EXACT_REQUIRED_SET`, Adaptive may add supporting work needed to deliver the Required Named Items but may not add another independent user-visible completion obligation without a Run Contract revision.
+- Under `REQUIRED_FLOOR`, Adaptive may add other product outcomes when current authority establishes they are required or materially necessary for the Goal Outcome.
+- Candidate Named Items may be preserved, replaced, deferred, or dropped when current evidence and Mandate priorities establish a materially better route to the Goal Outcome.
+- `NONE_REQUIRED` adds no item-level obligation beyond the Goal Outcome and Completion Predicate.
+
+Required Named Items and Candidate Named Items may coexist. A mixed assignment such as required A/B plus candidate C must remain mixed; do not convert the complete list to all-required or all-candidate during reshaping.
+
+A reshape may replace the current Increment and therefore the current Ticket denominator. It does not lower the Run Completion Boundary, erase Required Named Items, move them into the Candidate list, or turn planning-phase completion into whole-run completion.
+
+If a proposed reshape would remove a Required Named Item, move it into the Candidate list, change the Required Item Policy, or materially change the Completion Predicate, return for a Run Contract revision unless current user authority already establishes that exact change.
+
 ## Evidence before reshape
 
 Before changing the current selected INC:
@@ -101,13 +117,17 @@ Use **defer** when:
 
 - the capability is still consistent with the Desired Product Outcome;
 - it is not required for the current durable outcome;
-- later need/order depends on future actual product state or policy.
+- later need/order depends on future actual product state or policy; and
+- it is not a Required Named Item that would be omitted from successful whole-run completion.
 
 Use **drop** when:
 
 - the capability is not supported by the current Mandate/approved intent;
 - it came from speculative implementation/test thinking rather than product authority;
-- retaining it in the horizon would incorrectly imply intended future scope.
+- retaining it in the horizon would incorrectly imply intended future scope; and
+- it is not protected as a Required Named Item by the active Run Contract.
+
+Candidate Named Items may be deferred or dropped under these rules. Required Named Items may not.
 
 Do not create a future INC merely to preserve every discarded idea.
 
@@ -133,6 +153,7 @@ Return to the user when reshaping exposes a material product trade-off not resol
 
 - ship a limited but durable user mode now versus delay for a stronger atomic ownership model when both satisfy stated priorities equally;
 - preserve a legacy compatibility promise versus intentionally break it to simplify the future domain model when no priority resolves the conflict;
-- choose which of two independent user outcome areas should be pursued first when neither has a product dependency or priority advantage.
+- choose which of two independent user outcome areas should be pursued first when neither has a product dependency or priority advantage;
+- move an item from Required Named Items to Candidate Named Items or lower the Mandate continuation ceiling when current authority does not already establish that change.
 
 Do **not** return merely to ask permission for the mechanical act of split/merge/reorder when the better product shape is already determined by authority.

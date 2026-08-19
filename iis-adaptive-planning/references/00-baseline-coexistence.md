@@ -13,6 +13,7 @@ Baseline IIS
 IIS Adaptive Planning
 - explicit opt-in only
 - same product-planning semantics and canonical artifacts
+- invocation-local Run Contract closure
 - exact process delta for delegated confirmations and planning re-entry
 ```
 
@@ -37,20 +38,25 @@ Repository/runtime facts remain evidence unless the current Baseline already tre
 
 ## Exact Adaptive Delta
 
-When and only when Adaptive is explicitly active, the user's adopted Mandate changes **how eligible planning confirmation and intra-planning continuation are satisfied**. It does not change the product authority being confirmed.
+When and only when Adaptive is explicitly active, the user's adopted Mandate and closed invocation-local Run Contract change **how eligible planning confirmation, intra-planning continuation, and outer whole-run completion are satisfied**. They do not change the product authority being confirmed.
 
 The delta is limited to:
 
-1. **Standing delegated planning confirmation** — a Baseline leaf's ordinary user-owned planning decision may be satisfied by the active Mandate when the candidate is fully within delegated authority and the delegated-decision test passes. Baseline To Spec/To Tickets self-review adoption is not reclassified as delegated confirmation merely because Adaptive is active.
-2. **Intra-planning continuation** — an ordinary leaf STOP that exists to wait for the user to manually request the next IIS planning leaf becomes a return to the Adaptive router for the same current planning unit.
-3. **Planning re-entry/reshaping** — fresh evidence may send the current unit back to an earlier existing IIS planning leaf without requiring a new user prompt when the Mandate already authorizes that decision.
-4. **Verification-result triage** — a separate verifier result may be classified and fed back into the appropriate existing planning leaf as evidence.
+1. **Run Contract closure and terminal discipline** — before the first planning mutation, normalize current authority into one compact invocation-local contract that separates Required Named Items from Candidate Named Items, fixes the Required Item Policy, records Implementation and Verification independently, and closes the Run Completion Boundary, Completion Predicate, and Authoritative Readback. Ask only for a material unresolved field. A Baseline leaf STOP or Ready Ticket terminal remains exactly what Baseline says; it becomes whole-run completion only when the outer Run Contract predicate is satisfied.
+2. **Standing delegated planning confirmation** — a Baseline leaf's ordinary user-owned planning decision may be satisfied by the active Mandate when the candidate is fully within delegated authority and the delegated-decision test passes. Baseline To Spec/To Tickets self-review adoption is not reclassified as delegated confirmation merely because Adaptive is active.
+3. **Intra-planning continuation** — an ordinary leaf STOP that exists to wait for the user to manually request the next IIS planning leaf becomes a return to the Adaptive router for the same current planning unit.
+4. **Planning re-entry/reshaping** — fresh evidence may send the current unit back to an earlier existing IIS planning leaf without requiring a new user prompt when the Mandate already authorizes that decision. Required Named Items and the active Completion Predicate remain preserved across that reshape; Candidate Named Items remain mutable under current authority.
+5. **Verification-result triage** — a separate verifier result may be classified and fed back into the appropriate existing planning leaf as evidence.
 
 Everything else remains current Baseline authority.
 
-The Ready Ticket Set remains the terminal **IIS Planning** product. Under explicit Adaptive activation, that ownership STOP returns the Set to the outer caller, which continues the current Increment through the separate delivery skills by default unless the user explicitly selected a planning-only/stop boundary. That continuation does not extend IIS or Adaptive Planning authority into delivery.
+The Run Contract is not a Baseline artifact, new product-authority layer, or durable workflow state. It constrains the outer Adaptive invocation: which user-named items remain obligations, which remain candidate means, which delivery stages are authorized, and which observable condition permits whole-run success. It never causes one current Spec or Ticket to absorb multi-Increment scope.
 
-A broader `BOUNDED_OUTCOME` or `MANDATE_OUTCOME` continuation also does not turn one IIS planning cycle into a multi-Increment workflow. After a current Increment is fully delivered, Adaptive performs a fresh success re-entry; only when the applicable outcome is still unsatisfied does it start a new planning cycle and return to Scope Shaper for one new current Increment from actual state.
+The Ready Ticket Set remains the terminal **IIS Planning** product. Under explicit Adaptive activation, that ownership STOP returns the Set and closed Run Contract to the outer caller, which applies the independently closed Implementation and Verification fields. That continuation does not extend IIS or Adaptive Planning authority into delivery.
+
+A broader `NAMED_REQUIRED_ITEMS_DELIVERED`, `BOUNDED_OUTCOME_SATISFIED`, or `MANDATE_OUTCOME_SATISFIED` Run Completion Boundary also does not turn one IIS planning cycle into a multi-Increment workflow. After a current Increment is fully delivered, Adaptive performs a fresh success re-entry; only when the active predicate is still unsatisfied and the Mandate ceiling permits it does it start a new planning cycle and return to Scope Shaper for one new current Increment from actual state.
+
+`CURRENT_INCREMENT_IMPLEMENTED` is an implementation-only outer terminal. It does not mark Tickets `done`, claim independent verification, or authorize success re-entry into another Increment.
 
 ## Standing delegation is user authority, not inferred approval
 
@@ -65,6 +71,8 @@ Never report a delegated decision as though the user uttered a direct approval f
 
 Store Adaptive decision provenance in the companion trace. Do not add Adaptive-only metadata to canonical artifacts unless the current Baseline schema independently permits/owns that field.
 
+A fully derived `CLOSED` Run Contract is likewise not a user approval event. It is a normalization of current authority. Ask only when a material field is genuinely unresolved.
+
 ## Hard Baseline boundaries that Adaptive does not soften
 
 The following remain hard even in Adaptive mode:
@@ -75,7 +83,9 @@ The following remain hard even in Adaptive mode:
 - a missing project root, invalid canonical path, unresolved authority conflict, failed validator, or unavailable required evidence is not cured by delegation;
 - the complete Ready Ticket Set is the terminal IIS Planning output for the current Increment;
 - implementation and verification are outside IIS Planning;
-- planning completion never authorizes deployment, credentials, production/external effects, or destructive operations.
+- planning completion never authorizes deployment, credentials, production/external effects, or destructive operations;
+- a Run Contract cannot weaken or bypass any of these boundaries;
+- an unsatisfied Run Contract cannot be reported as successful merely because an owning leaf stopped.
 
 ## Current Baseline drift
 
@@ -86,7 +96,7 @@ If a future Baseline change makes the exact Adaptive Delta ambiguous or impossib
 ```text
 IIS ADAPTIVE PLANNING: CONTRACT DRIFT
 Baseline change: <exact current rule>
-Adaptive delta affected: <confirmation | continuation | reshaping | triage>
+Adaptive delta affected: <run closure | confirmation | continuation | reshaping | triage>
 Why it cannot be applied without changing IIS meaning: <reason>
 STOP
 ```

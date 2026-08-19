@@ -1,4 +1,4 @@
 interface:
   display_name: "IIS Adaptive Planning"
-  short_description: "Opt-in IIS planning with current-Increment delivery and correction"
-  default_prompt: "Use IIS Adaptive Planning explicitly: preserve Baseline IIS authority, continue the current Increment through the separate Ready Ticket delivery skills unless I request planning-only, and use authority-based corrective re-entry unless I request fail-and-report."
+  short_description: "Opt-in IIS planning with explicit run completion and correction"
+  default_prompt: "Use IIS Adaptive Planning explicitly: preserve Baseline IIS authority, close the invocation-local Adaptive Run Contract from my current instructions before the first planning mutation, keep Required Named Items distinct from Candidate Named Items, apply Implementation and Verification independently with both yes by default unless I override either stage, ask only for any unresolved material field, use authority-based corrective re-entry unless I request fail-and-report, and never treat a planning phase, one implementation result, one Ticket, or one Increment as whole-run completion unless the closed Run Contract says so."
