@@ -132,8 +132,8 @@ function parseOutput(output) {
     return { status: "NOT_STARTED", reason };
   }
   if (!output.includes("READY TICKET VERIFICATION RESULT")) throw new Error("missing canonical READY TICKET VERIFICATION RESULT");
-  const verdict = output.match(/^Verification Verdict:\s*(VERIFIED|FAILED|INCONCLUSIVE)\s*$/m);
-  const progression = output.match(/^Ticket Progression:\s*(COMPLETED|NOT APPLICABLE|FAILED)\s*$/m);
+  const verdict = output.match(/^Verification Verdict:\s*`?(VERIFIED|FAILED|INCONCLUSIVE)`?\s*$/m);
+  const progression = output.match(/^Ticket Progression:\s*`?(COMPLETED|NOT APPLICABLE|FAILED)`?\s*$/m);
   const status = output.match(/^Ticket status after verification:\s*`?(ready|done)`?\s*$/m);
   if (!verdict) throw new Error("missing or invalid Verification Verdict");
   if (!progression) throw new Error("missing or invalid Ticket Progression");

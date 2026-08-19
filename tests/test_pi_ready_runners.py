@@ -158,6 +158,17 @@ class PiReadyRunnerTests(unittest.TestCase):
                         "Credential echo: apiKey=supersecret123\\n"
                         "Completion: COMPLETE"
                     )
+                elif os.environ.get("PI_STUB_QUOTED_RESULT") == "1":
+                    output = (
+                        "Pi Owner Agent: iis-ready-verify\\n"
+                        "Pi Owner Session: none\\n"
+                        "Pi Audit Run IDs:\\n"
+                        "Pi Audit Fan-In: NOT REQUESTED\\n\\n"
+                        "READY TICKET VERIFICATION RESULT\\n"
+                        "Verification Verdict: `FAILED`\\n"
+                        "Ticket Progression: `NOT APPLICABLE`\\n"
+                        "Ticket status after verification: `ready`"
+                    )
                 elif os.environ.get("PI_STUB_COMPLETED") == "1":
                     output = (
                         "Pi Owner Agent: iis-ready-verify\\n"
@@ -561,6 +572,23 @@ class PiReadyRunnerTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 1)
         self.assertEqual(terminal["processStatus"], "FAILED")
         self.assertIn("missing Verify Pi owner identity", terminal["error"])
+        self.assertIsNotNone(capture)
+
+    def test_verify_accepts_markdown_quoted_canonical_result_fields(self) -> None:
+        completed, terminal, capture = self.run_runner(
+            VERIFY,
+            self.verify_invocation(),
+            extra_env={"PI_STUB_QUOTED_RESULT": "1"},
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(
+            terminal["workflow"],
+            {
+                "verdict": "FAILED",
+                "progression": "NOT APPLICABLE",
+                "ticketStatus": "ready",
+            },
+        )
         self.assertIsNotNone(capture)
 
     def test_verify_admission_failure_is_a_completed_not_started_workflow(self) -> None:
