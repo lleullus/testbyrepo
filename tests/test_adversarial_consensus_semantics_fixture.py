@@ -29,7 +29,56 @@ def can_to_spec(
     return challenger and intent_anchor and consensus and post_consensus_final_approval
 
 
+def purpose_first_path(
+    *,
+    material_problem: bool,
+    purpose_achieved: bool,
+    purpose_undermined: bool,
+) -> str:
+    if not material_problem:
+        return "NO PROBLEM"
+    if not purpose_achieved:
+        return "PURPOSE FAILURE"
+    if purpose_undermined:
+        return "PURPOSE UNDERMINING"
+    return "TRADEOFF ELIGIBLE"
+
+
 class AdversarialConsensusSemanticsFixtureTests(unittest.TestCase):
+    def test_purpose_first_path_blocks_tradeoff_until_material_and_purpose_gates_pass(self) -> None:
+        self.assertEqual(
+            purpose_first_path(
+                material_problem=False,
+                purpose_achieved=False,
+                purpose_undermined=True,
+            ),
+            "NO PROBLEM",
+        )
+        self.assertEqual(
+            purpose_first_path(
+                material_problem=True,
+                purpose_achieved=False,
+                purpose_undermined=False,
+            ),
+            "PURPOSE FAILURE",
+        )
+        self.assertEqual(
+            purpose_first_path(
+                material_problem=True,
+                purpose_achieved=True,
+                purpose_undermined=True,
+            ),
+            "PURPOSE UNDERMINING",
+        )
+        self.assertEqual(
+            purpose_first_path(
+                material_problem=True,
+                purpose_achieved=True,
+                purpose_undermined=False,
+            ),
+            "TRADEOFF ELIGIBLE",
+        )
+
     def test_active_gate_cannot_be_bypassed_by_explicit_to_spec(self) -> None:
         self.assertTrue(can_to_spec(active=False))
         self.assertTrue(can_to_spec(active=True, withdrawn=True))

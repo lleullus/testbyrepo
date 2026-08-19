@@ -51,7 +51,9 @@ Use this authority order throughout the gate:
 2. the current user-confirmed Intent Anchor as a derivative representation of
    that conversation, never as a replacement for it;
 3. unavoidable verified external contracts and current directly observed facts;
-4. tradeoff analysis against the user's currently confirmed outcome and priorities;
+4. the ordered Purpose-First material-problem and purpose-gate result, followed
+   only then by purpose-preserving tradeoff analysis against the user's currently
+   confirmed outcome and priorities;
 5. Matt's current candidate planning contract; and
 6. Challenger proposals or claims.
 
@@ -64,9 +66,11 @@ rather than defending the superseded meaning.
 
 Observed implementation behavior is evidence about the current product, not
 product policy by itself unless the confirmed contract adopts that behavior.
-Convenience, simplicity, cost, speed, reversibility, minimum change, and familiar
-patterns matter only to the extent that they materially affect the user's
-outcome.
+Convenience, simplicity, cost, speed, reversibility, and familiar patterns do not
+outrank the confirmed purpose. After the purpose gate passes, consider their
+material effects on the user's outcome, complexity, context interaction, drift,
+auditability, and maintenance. Among sufficiently purpose-preserving options,
+prefer the minimum-sufficient change rather than the most elaborate defense.
 
 ## Position In Ask Matt
 
@@ -80,6 +84,52 @@ Run this gate after that current frontier is resolved and the complete
 provisional candidate contract is available, but before new or changed Behavior
 or UI authority receives final approval and before the integrated shared
 understanding is finally approved for `to-spec`.
+
+## Required Purpose-First Review Discipline
+
+Before preparing the Challenger attack and before Matt/Main adjudicates any
+challenge, read `../../../companion-skills/purpose-first-review/SKILL.md` in full
+and apply it as the required review discipline. Do not replace it with a
+remembered summary or duplicate its full rulebook here. This skill continues to
+own adversarial activation, authority, counterpart, continuity, and consensus
+boundaries.
+
+If the canonical Purpose-First Review cannot be read, do not invoke the
+Challenger or claim consensus. Return:
+
+```text
+ADVERSARIAL CONSENSUS: BLOCKED
+Reason: canonical purpose-first review discipline unavailable
+```
+
+For each attacked candidate rule, boundary, assumption, or omission, apply these
+gates in order:
+
+1. **Establish the purpose** — state the concrete failure mode being prevented,
+   the guarantee being preserved, and the observable success condition.
+2. **Material-problem admission** — require a plausible trigger, causal path,
+   and material impact tied to the current candidate. Preference, a cleaner
+   design, remote hypotheticals, negligible impact, pre-existing unrelated
+   problems, or imperfection alone are not findings. A better alternative does
+   not make the current candidate defective.
+3. **Purpose gate** — decide whether the candidate materially achieves its
+   purpose and whether it materially undermines that purpose. Classify a failure
+   as `PURPOSE FAILURE` or `PURPOSE UNDERMINING`; do not offset it with unrelated
+   benefits.
+4. **Purpose-preserving comparison** — only after an option passes the purpose
+   gate, compare realistic tradeoffs. A candidate that fails the gate cannot be
+   retained by weighted tradeoff; compare only corrections that restore and
+   preserve the purpose sufficiently.
+5. **Minimum-sufficient correction** — prefer an existing mechanism,
+   clarification or consolidation, or a narrow control at the failure layer
+   before broader/global instruction or review expansion. Add a safeguard only
+   when it provides distinct material protection.
+
+Review-rule growth, duplicate defensive prose, context expansion, instruction
+conflict, false assurance, and drift are themselves material only when they
+plausibly weaken the gate's purpose. After `NO PROBLEM`, close that attack and
+stop; do not prolong the debate with optional polish or increasingly remote
+objections.
 
 ## Intent Anchor Confirmation
 
@@ -148,17 +198,30 @@ agent, or fallback.
 
 ## Challenger Attack Contract
 
-For every material challenge, require the Challenger to identify:
+For every alleged challenge, require the Challenger to identify:
 
 ```text
+Purpose: <failure mode, preserved guarantee, and observable success condition>
 Challenge: <candidate rule, assumption, boundary, or omission being attacked>
+Material problem: <plausible trigger -> causal path -> material impact>
+Material-problem result: ESTABLISHED | NOT ESTABLISHED
+Candidate relationship: <introduced or materially worsened by candidate | pre-existing/unrelated>
 Counterexample: <concrete different in-scope observable result>
 Intent impact: <which confirmed user outcome or priority is affected>
 Evidence: <direct fact, external contract, or explicit inference and uncertainty>
-Alternative: <stronger proposed result>
-Alternative tradeoffs: <new losses, risks, costs, and uncertainty>
-Required correction: <what should change if the attack prevails>
+Purpose-gate result: NOT APPLICABLE | PASS | PURPOSE FAILURE | PURPOSE UNDERMINING
+Alternative: <stronger purpose-preserving result, when needed>
+Minimum-sufficient correction: <smallest sufficient change if a finding survives>
+Alternative tradeoffs: <new losses, risks, costs, and uncertainty after the alternative passes the purpose gate>
 ```
+
+A better alternative alone is not a finding. If `Material-problem result` is
+`NOT ESTABLISHED`, set `Purpose-gate result` to `NOT APPLICABLE`, return
+`NO PROBLEM` for that attack, and do not require a correction. If the result is
+`PURPOSE FAILURE` or `PURPOSE UNDERMINING`, do not
+retain the current candidate by offsetting the failure against unrelated
+benefits. Apply the same material-problem and purpose gates to every proposed
+alternative before treating it as stronger.
 
 As applicable, attack unsupported assumptions; invented priorities; unauthorized
 Scope expansion or reduction; hidden product policy; identity and ownership;
@@ -183,23 +246,41 @@ Perform all of the following:
 
 1. **Intent defense** — identify the applicable original user context and
    confirmed Intent Anchor.
-2. **Candidate defense or honest abandonment** — state the strongest current
+2. **Material-problem admission** — confirm the concrete trigger, causal path,
+   material impact, and whether the current candidate introduced or materially
+   worsened the problem. If that case is not established, record `NO PROBLEM`
+   and close the attack rather than manufacturing a finding.
+3. **Purpose gate** — determine whether the candidate materially achieves its
+   established purpose and whether it materially undermines that purpose. A
+   `PURPOSE FAILURE` or `PURPOSE UNDERMINING` result cannot be offset by unrelated
+   benefits.
+4. **Candidate defense or honest abandonment** — state the strongest current
    basis for the candidate; when direct evidence defeats it, abandon the
    candidate rather than fabricate a defense.
-3. **Counterattack** — attack the Challenger alternative for sacrificed user
-   results, new failure modes, hidden policy, Scope drift, unverifiable promises,
-   implementation convenience promoted into policy, and other material costs.
-4. **Alternative expansion** — do not restrict the decision to Matt's first idea
+5. **Counterattack** — apply the same material-problem and purpose gates to the
+   Challenger alternative, including sacrificed user results, new failure modes,
+   hidden policy, Scope drift, unverifiable promises, implementation convenience
+   promoted into policy, duplicated safeguards, context growth, instruction
+   conflict, false assurance, drift, and other material costs.
+6. **Alternative expansion** — do not restrict the decision to Matt's first idea
    versus the Challenger's first idea; consider a materially stronger third
    alternative when one exists.
-5. **Tradeoff adjudication** — compare direction and magnitude of user impact,
-   likelihood, uncertainty, evidence strength, interactions with other decisions,
-   and importance under the user's confirmed priorities.
-6. **Disposition** — assign exactly one current disposition:
+7. **Minimum-sufficient correction** — among sufficiently purpose-preserving
+   corrections, prefer the smallest clear mechanism that supplies the distinct
+   material protection needed. Do not add broad review rules or defensive prose
+   when an existing mechanism, clarification, consolidation, or narrow control
+   is sufficient.
+8. **Tradeoff adjudication** — only among options that pass the purpose gate,
+   compare direction and magnitude of user impact, likelihood, uncertainty,
+   evidence strength, interactions with other decisions, context and operating
+   complexity, drift risk, auditability, maintenance, reversibility, and
+   importance under the user's confirmed priorities.
+9. **Disposition** — assign exactly one current disposition:
 
 ```text
+NO PROBLEM            No concrete material defect or purpose failure was established; close the attack.
 ADOPTED               Challenger correction is stronger.
-DEFENDED              The current candidate remains stronger.
+DEFENDED              The current purpose-preserving candidate remains stronger; no required correction is established.
 RECONSTRUCTED         A stronger third result replaces both presented options.
 USER DECISION REQUIRED Material user outcomes remain different without a sufficiently stronger answer.
 RETURN TO SCOPE SHAPER The challenge changes the bounded package/initiative boundary.
@@ -233,6 +314,12 @@ objection, add material evidence, add a material counterexample, identify a real
 user-owned decision, or assess the latest reconstructed candidate. Repeating a
 closed objection without new support is not progress.
 
+`NO PROBLEM`, `NO MATERIAL OBJECTION`, and `CONCEDE` are stop conditions for
+that attack unless later materially new evidence or a new counterexample reopens
+it. Optional improvements that establish no material defect cannot keep the
+debate open. Do not split one root cause or add review clauses merely to create
+more findings.
+
 If the designated counterpart is unavailable or refuses the protocol such that
 no current compliant adversarial assessment can be obtained, do not let Matt
 unilaterally declare victory. Return:
@@ -261,14 +348,19 @@ Return `ADVERSARIAL CONSENSUS REACHED` only when all are true:
 
 - the Challenger reviewed the latest complete candidate, not an obsolete draft;
 - every material objection has an explicit closure;
+- every alleged challenge has an explicit material-problem result and, when
+  admitted, an explicit purpose-gate result;
 - the Challenger states that no material objection remains;
 - Matt directly confirms that no Challenger counterexample was ignored;
 - Matt directly verifies every load-bearing local fact it relies on rather than
   adopting Challenger narration as fact;
+- no `PURPOSE FAILURE` or `PURPOSE UNDERMINING` remains in the latest candidate;
 - no unresolved user-owned product decision remains;
 - the candidate does not conflict with current Scope, Behavior, UI, or
   verification authority;
-- no clearly stronger material alternative remains unexamined; and
+- no clearly stronger material alternative remains unexamined;
+- every adopted or reconstructed safeguard is a minimum-sufficient correction
+  with distinct material protection rather than defensive rule growth; and
 - no material candidate change occurred after the Challenger's final review.
 
 Consensus is advisory planning closure, not final product authority. After
@@ -299,8 +391,9 @@ or superseded orchestration contract.
 ## Non-Goals
 
 Do not create a persistent debate record, workflow runtime, consensus database,
-vote, majority rule, generic multi-agent council, mandatory review for ordinary
-Ask Matt work, second verification authority, implementation review role, or
-Challenger-owned product policy. The gate exists only to strengthen the user's
-confirmed planning result when the user explicitly asked for this exact process
-and exact counterpart.
+vote, majority rule, generic multi-agent council, finding quota, speculative
+objection loop, optional-polish loop, duplicated Purpose-First rulebook, broad
+review-rule accumulation, mandatory review for ordinary Ask Matt work, second
+verification authority, implementation review role, or Challenger-owned product
+policy. The gate exists only to strengthen the user's confirmed planning result
+when the user explicitly asked for this exact process and exact counterpart.

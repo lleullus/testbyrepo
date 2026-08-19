@@ -9,6 +9,7 @@ GATE = (ROOT / "matt/skills/adversarial-consensus/SKILL.md").read_text(encoding=
 MATT = (ROOT / "matt/skills/ask-matt/SKILL.md").read_text(encoding="utf-8")
 BEHAVIOR = (ROOT / "behavior-design-lead/SKILL.md").read_text(encoding="utf-8")
 ROUTER = (ROOT / "iis-workflow/SKILL.md").read_text(encoding="utf-8")
+PURPOSE_FIRST = (ROOT / "companion-skills/purpose-first-review/SKILL.md").read_text(encoding="utf-8")
 
 
 def normalized(text: str) -> str:
@@ -74,17 +75,67 @@ class AdversarialConsensusContractTests(unittest.TestCase):
             "Main Defense And Counterattack",
             "Passive acceptance",
             "Intent defense",
+            "Material-problem admission",
+            "Purpose gate",
             "Candidate defense or honest abandonment",
             "Counterattack",
             "Alternative expansion",
+            "Minimum-sufficient correction",
             "Tradeoff adjudication",
             "direction and magnitude of user impact",
             "likelihood, uncertainty, evidence strength",
+            "NO PROBLEM",
             "ADOPTED",
             "DEFENDED",
             "RECONSTRUCTED",
             "USER DECISION REQUIRED",
             "RETURN TO SCOPE SHAPER",
+        ):
+            self.assertIn(required, body)
+
+    def test_gate_loads_canonical_purpose_first_review_and_applies_ordered_gates(self) -> None:
+        body = normalized(GATE)
+        purpose = normalized(PURPOSE_FIRST)
+        for required in (
+            "../../../companion-skills/purpose-first-review/SKILL.md",
+            "read `../../../companion-skills/purpose-first-review/SKILL.md` in full",
+            "Do not replace it with a remembered summary or duplicate its full rulebook here",
+            "canonical purpose-first review discipline unavailable",
+            "Establish the purpose",
+            "Material-problem admission",
+            "Purpose gate",
+            "Purpose-preserving comparison",
+            "PURPOSE FAILURE",
+            "PURPOSE UNDERMINING",
+            "Purpose-gate result: NOT APPLICABLE | PASS | PURPOSE FAILURE | PURPOSE UNDERMINING",
+            "set `Purpose-gate result` to `NOT APPLICABLE`",
+            "A better alternative does not make the current candidate defective",
+            "only after an option passes the purpose gate",
+        ):
+            self.assertIn(required, body)
+        for required in (
+            "Review to determine whether a material problem exists",
+            "Treat purpose as a pass condition",
+            "Minimum-sufficient-change rule",
+            "Anti-bloat stop rule",
+        ):
+            self.assertIn(required, purpose)
+        self.assertLess(body.index("Establish the purpose"), body.index("Material-problem admission"))
+        self.assertLess(body.index("Material-problem admission"), body.index("Purpose gate"))
+        self.assertLess(body.index("Purpose gate"), body.index("Purpose-preserving comparison"))
+
+    def test_minimum_sufficient_correction_and_anti_bloat_are_terminal_contracts(self) -> None:
+        body = normalized(GATE)
+        for required in (
+            "prefer an existing mechanism, clarification or consolidation, or a narrow control",
+            "before broader/global instruction or review expansion",
+            "distinct material protection",
+            "After `NO PROBLEM`, close that attack and stop",
+            "Optional improvements that establish no material defect cannot keep the debate open",
+            "Do not split one root cause or add review clauses merely to create more findings",
+            "every adopted or reconstructed safeguard is a minimum-sufficient correction",
+            "duplicated Purpose-First rulebook",
+            "broad review-rule accumulation",
         ):
             self.assertIn(required, body)
 
