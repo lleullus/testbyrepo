@@ -41,8 +41,12 @@ export interface AuditRunSnapshot {
 }
 
 export type AuditRuntimeEvent =
+  | { type: "STARTING"; run: AuditRunSnapshot }
+  | { type: "RUNNING"; run: AuditRunSnapshot }
   | { type: "HANDOFF"; run: AuditRunSnapshot; sequence: number; body: string }
-  | { type: "TERMINAL"; run: AuditRunSnapshot };
+  | { type: "RESUMED"; run: AuditRunSnapshot }
+  | { type: "TERMINAL"; run: AuditRunSnapshot }
+  | { type: "FAN_IN_COMPLETE"; runs: AuditRunSnapshot[] };
 
 export interface AuditSessionFactory<TSessionInput> {
   (
@@ -117,6 +121,7 @@ export class AuditRuntime<TSessionInput> {
       terminalEmitted: false,
     };
     this.runs.set(runId, record);
+    this.emit({ type: "STARTING", run: this.snapshot(record) });
     void this.execute(record);
     return this.snapshot(record);
   }
@@ -136,6 +141,7 @@ export class AuditRuntime<TSessionInput> {
     const pending = record.pendingReply;
     record.pendingReply = undefined;
     record.status = "RUNNING";
+    this.emit({ type: "RESUMED", run: this.snapshot(record) });
     pending.resolve(body);
     return this.snapshot(record);
   }
@@ -164,7 +170,9 @@ export class AuditRuntime<TSessionInput> {
         `fan-in incomplete: ${unfinished.map((record) => `${record.runId}:${record.status}`).join(", ")}`,
       );
     }
-    return records.map((record) => this.snapshot(record));
+    const snapshots = records.map((record) => this.snapshot(record));
+    this.emit({ type: "FAN_IN_COMPLETE", runs: snapshots });
+    return snapshots;
   }
 
   async shutdown(reason = "owner session shutdown"): Promise<void> {
@@ -187,6 +195,7 @@ export class AuditRuntime<TSessionInput> {
       }
 
       record.status = "RUNNING";
+      this.emit({ type: "RUNNING", run: this.snapshot(record) });
       await session.prompt(record.spec.task);
       if ((record.status as AuditRunStatus) === "CANCELLED") return;
 

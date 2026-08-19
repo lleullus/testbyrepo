@@ -145,6 +145,10 @@ class PiDeliveryAgentTests(unittest.TestCase):
             self.assertIn("`DIRECT` is a preserved compatibility mode only", body)
             self.assertIn("Never choose it as fallback", body)
             self.assertIn("references/lifecycle.md", body)
+            self.assertIn("cursor-based log follow", body)
+            self.assertIn("before process exit", body)
+            self.assertIn("`iis.pi.progress/v1`", body)
+            self.assertIn("deduplicate replayed lower or equal sequences", body)
 
     def test_runners_enforce_deterministic_preflight_and_verify_postcondition(self) -> None:
         implement = IMPLEMENT_RUNNER.read_text(encoding="utf-8")
@@ -173,6 +177,10 @@ class PiDeliveryAgentTests(unittest.TestCase):
         self.assertIn("sanitizeTerminalText", source)
         self.assertIn("invocation file must not grant group or other permissions", source)
         self.assertNotIn("process.stderr.write(text)", source)
+        self.assertIn('const PROGRESS_SCHEMA = "iis.pi.progress/v1"', source)
+        self.assertIn("parseAuditProgress", source)
+        self.assertIn("IIS_PI_PROGRESS_PROTOCOL", source)
+        self.assertIn("[invalid child audit progress event]", source)
 
 
 if __name__ == "__main__":

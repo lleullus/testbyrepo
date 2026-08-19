@@ -10,6 +10,21 @@ const TASK_LIMIT = 64 * 1024;
 const STDERR_LIMIT = 64 * 1024;
 const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const THINKING = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
+const PROGRESS_SCHEMA = "iis.pi.progress/v1";
+const AUDIT_PROGRESS_PREFIX = "IIS_PI_AUDIT_EVENT ";
+const AUDIT_RUN_ID = /^iis-audit-[0-9a-f-]+$/;
+const AUDIT_ROLES = new Set(["implementation", "verification"]);
+const AUDIT_TERMINAL = new Set(["COMPLETED", "BLOCKED", "FAILED", "CANCELLED"]);
+const AUDIT_EVENTS = new Set([
+  "AUDITOR_STARTING",
+  "AUDITOR_RUNNING",
+  "AUDITOR_WAITING_REPLY",
+  "AUDITOR_RESUMED",
+  "AUDITOR_TERMINAL",
+  "FAN_IN_COMPLETE",
+]);
+const DEFAULT_HEARTBEAT_MS = 60_000;
+const TOOL_NAME = /^[A-Za-z0-9_-]{1,128}$/;
 
 export function repositoryRoot(sourceUrl) {
   return resolve(dirname(fileURLToPath(sourceUrl)), "../../..");
@@ -149,6 +164,103 @@ function appendTail(current, chunk) {
   return joined.length <= STDERR_LIMIT ? joined : joined.slice(joined.length - STDERR_LIMIT);
 }
 
+function progressHeartbeatMs() {
+  if (process.env.NODE_ENV !== "test") return DEFAULT_HEARTBEAT_MS;
+  const configured = Number(process.env.PI_STUB_PROGRESS_HEARTBEAT_MS);
+  return Number.isFinite(configured) && configured >= 10 ? configured : DEFAULT_HEARTBEAT_MS;
+}
+
+function createProgressReporter(runId, startedAt) {
+  const startedMs = Date.parse(startedAt);
+  const heartbeatMs = progressHeartbeatMs();
+  let sequence = 0;
+  let lastObservedAt = Date.now();
+  let lastHeartbeatAt = 0;
+  let stopped = false;
+
+  const emit = (event, fields = {}, observed = true) => {
+    if (stopped) return;
+    const now = Date.now();
+    if (observed) lastObservedAt = now;
+    sequence += 1;
+    process.stderr.write(`${JSON.stringify({
+      schema: PROGRESS_SCHEMA,
+      runId,
+      sequence,
+      timestamp: new Date(now).toISOString(),
+      event,
+      elapsedMs: Math.max(0, now - startedMs),
+      ...fields,
+    })}\n`);
+  };
+
+  const timer = setInterval(() => {
+    const now = Date.now();
+    const inactiveMs = now - lastObservedAt;
+    if (inactiveMs < heartbeatMs || now - lastHeartbeatAt < heartbeatMs) return;
+    lastHeartbeatAt = now;
+    emit("RUN_ALIVE", { inactiveMs }, false);
+  }, Math.max(10, Math.min(heartbeatMs, 15_000)));
+  timer.unref();
+
+  return {
+    emit,
+    observe() {
+      lastObservedAt = Date.now();
+    },
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
+}
+
+function safeToolName(value) {
+  return typeof value === "string" && TOOL_NAME.test(value) ? value : "unknown";
+}
+
+function parseAuditProgress(line) {
+  if (!line.startsWith(AUDIT_PROGRESS_PREFIX)) return undefined;
+  let event;
+  try {
+    event = JSON.parse(line.slice(AUDIT_PROGRESS_PREFIX.length));
+  } catch {
+    throw new Error("invalid child audit progress JSON");
+  }
+  if (!event || typeof event !== "object" || Array.isArray(event) || !AUDIT_EVENTS.has(event.event)) {
+    throw new Error("invalid child audit progress event");
+  }
+  if (event.event === "FAN_IN_COMPLETE") {
+    if (!Array.isArray(event.auditRunIds) || event.auditRunIds.some((runId) => !AUDIT_RUN_ID.test(runId))) {
+      throw new Error("invalid child audit fan-in identity");
+    }
+    if (!Number.isInteger(event.terminalAuditors) || event.terminalAuditors !== event.auditRunIds.length) {
+      throw new Error("invalid child audit fan-in count");
+    }
+    return {
+      event: event.event,
+      fields: { auditRunIds: event.auditRunIds, terminalAuditors: event.terminalAuditors },
+    };
+  }
+  if (!AUDIT_RUN_ID.test(event.auditRunId) || !AUDIT_ROLES.has(event.role)) {
+    throw new Error("invalid child auditor identity");
+  }
+  if (!Number.isInteger(event.handoffSequence) || event.handoffSequence < 0) {
+    throw new Error("invalid child auditor handoff sequence");
+  }
+  const fields = {
+    auditRunId: event.auditRunId,
+    role: event.role,
+    handoffSequence: event.handoffSequence,
+  };
+  if (event.event === "AUDITOR_TERMINAL") {
+    if (!AUDIT_TERMINAL.has(event.terminalStatus)) throw new Error("invalid child auditor terminal status");
+    fields.terminalStatus = event.terminalStatus;
+  }
+  return { event: event.event, fields };
+}
+
 function sanitizeTerminalText(value, values) {
   if (typeof value !== "string" || !value) return value;
   let sanitized = value;
@@ -194,41 +306,55 @@ function emitTerminal(config, values) {
   process.stdout.write(`${JSON.stringify(terminalEnvelope(config, values))}\n`);
 }
 
-async function execute(config, invocation, startedAt) {
+async function execute(config, invocation, startedAt, progress) {
   const root = repositoryRoot(config.sourceUrl);
   const agentPath = resolve(root, config.agentRelativePath);
   const extensionPath = resolve(root, ".pi/extensions/iis-ready-audit/index.ts");
-  const agent = parseAgentSource(await readFile(agentPath, "utf8"), agentPath);
-  assertAgentContract(agent, config);
+  let agent;
+  let normalized;
+  let preflight;
+  let postconditionCapture;
+  let task;
+  try {
+    agent = parseAgentSource(await readFile(agentPath, "utf8"), agentPath);
+    assertAgentContract(agent, config);
 
-  const configuredModel = process.env[config.modelEnvironment] || config.defaultModel;
-  const normalized = await config.normalize(invocation, configuredModel, config.defaultThinking);
-  const preflight = config.preflight ? await config.preflight(normalized, root) : { proceed: true };
-  if (!preflight.proceed) {
-    const finishedAt = new Date().toISOString();
-    return {
-      normalized,
-      terminal: terminalEnvelope(config, {
-        ...normalized,
-        startedAt,
-        finishedAt,
-        processStatus: "COMPLETED",
-        workflow: preflight.workflow,
-        output: preflight.output,
-        preflight: {
-          validator: preflight.validator,
-          validatorResult: preflight.validatorResult,
-          status: preflight.status || null,
-        },
-      }),
-      exitCode: 0,
-    };
+    const configuredModel = process.env[config.modelEnvironment] || config.defaultModel;
+    normalized = await config.normalize(invocation, configuredModel, config.defaultThinking);
+    preflight = config.preflight ? await config.preflight(normalized, root) : { proceed: true };
+    if (!preflight.proceed) {
+      progress.emit("PREFLIGHT_FAILED", {
+        failureStage: "ADMISSION",
+        configuredAuditors: normalized.auditors.length,
+      });
+      const finishedAt = new Date().toISOString();
+      return {
+        normalized,
+        terminal: terminalEnvelope(config, {
+          ...normalized,
+          startedAt,
+          finishedAt,
+          processStatus: "COMPLETED",
+          workflow: preflight.workflow,
+          output: preflight.output,
+          preflight: {
+            validator: preflight.validator,
+            validatorResult: preflight.validatorResult,
+            status: preflight.status || null,
+          },
+        }),
+        exitCode: 0,
+      };
+    }
+    postconditionCapture = config.capturePostcondition
+      ? await config.capturePostcondition(normalized, preflight)
+      : undefined;
+    task = config.buildTask(normalized, preflight);
+    if (task.length > TASK_LIMIT) throw new Error(`generated task exceeds ${TASK_LIMIT} characters`);
+  } catch (error) {
+    progress.emit("PREFLIGHT_FAILED", { failureStage: "ADMISSION" });
+    throw error;
   }
-  const postconditionCapture = config.capturePostcondition
-    ? await config.capturePostcondition(normalized, preflight)
-    : undefined;
-  const task = config.buildTask(normalized, preflight);
-  if (task.length > TASK_LIMIT) throw new Error(`generated task exceeds ${TASK_LIMIT} characters`);
 
   const promptDirectory = await mkdtemp(join(tmpdir(), `${config.agent}-`));
   const promptPath = join(promptDirectory, "system-prompt.md");
@@ -238,7 +364,13 @@ async function execute(config, invocation, startedAt) {
   let receivedSignal;
   let stderr = "";
   let stdoutBuffer = "";
+  let childStderrBuffer = "";
   let output = "";
+  let progressError = false;
+  let toolStarts = 0;
+  let toolFinishes = 0;
+  const startedAuditors = new Set();
+  const terminalAuditors = new Set();
 
   const forwardSignal = (signal) => {
     receivedSignal = signal;
@@ -306,27 +438,47 @@ async function execute(config, invocation, startedAt) {
       PI_SUBAGENT_DEPTH: "1",
       PI_SUBAGENT_MAX_DEPTH: "0",
       PI_SUBAGENT_ALLOWED: "",
+      IIS_PI_PROGRESS_PROTOCOL: PROGRESS_SCHEMA,
     });
 
     Object.assign(env, config.childEnvironment ? config.childEnvironment(normalized, preflight) : {});
-    preflight.modelBindings = await assertModelBindings({
-      agentDir,
-      piBinary,
-      env,
-      bindings: [
-        { role: `${config.mode.toLowerCase()} owner`, model: normalized.ownerModel, thinking: normalized.ownerThinking },
-        ...normalized.auditors.map((auditor, index) => ({
-          role: `${config.mode.toLowerCase()} auditor ${index + 1}`,
-          model: auditor.model,
-          thinking: auditor.thinking,
-        })),
-      ],
+    try {
+      preflight.modelBindings = await assertModelBindings({
+        agentDir,
+        piBinary,
+        env,
+        bindings: [
+          { role: `${config.mode.toLowerCase()} owner`, model: normalized.ownerModel, thinking: normalized.ownerThinking },
+          ...normalized.auditors.map((auditor, index) => ({
+            role: `${config.mode.toLowerCase()} auditor ${index + 1}`,
+            model: auditor.model,
+            thinking: auditor.thinking,
+          })),
+        ],
+      });
+    } catch (error) {
+      progress.emit("PREFLIGHT_FAILED", {
+        failureStage: "MODEL_BINDING",
+        configuredAuditors: normalized.auditors.length,
+      });
+      throw error;
+    }
+    progress.emit("PREFLIGHT_PASSED", {
+      configuredAuditors: normalized.auditors.length,
+      ownerModel: normalized.ownerModel,
+      ownerThinking: normalized.ownerThinking,
     });
     child = spawn(piBinary, args, {
       cwd: root,
       env,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
+    });
+    child.once("spawn", () => {
+      progress.emit("OWNER_PROCESS_STARTED", {
+        ownerModel: normalized.ownerModel,
+        ownerThinking: normalized.ownerThinking,
+      });
     });
 
     const processLine = (line) => {
@@ -338,8 +490,24 @@ async function execute(config, invocation, startedAt) {
         stderr = appendTail(stderr, `[unparsed stdout] ${line}\n`);
         return;
       }
+      progress.observe();
       if (event.type === "tool_execution_start") {
-        process.stderr.write(`[${config.agent}] tool ${String(event.toolName || "unknown")}\n`);
+        toolStarts += 1;
+        progress.emit("OWNER_ACTIVITY", {
+          activity: "TOOL_STARTED",
+          toolName: safeToolName(event.toolName),
+          toolStarts,
+          toolFinishes,
+        });
+      } else if (event.type === "tool_execution_end") {
+        toolFinishes += 1;
+        progress.emit("OWNER_ACTIVITY", {
+          activity: "TOOL_FINISHED",
+          toolName: safeToolName(event.toolName),
+          toolStarts,
+          toolFinishes,
+          isError: Boolean(event.isError),
+        });
       }
       if (event.type === "message_end") {
         const text = assistantText(event.message);
@@ -347,14 +515,43 @@ async function execute(config, invocation, startedAt) {
       }
     };
 
+    const processChildStderrLine = (line) => {
+      if (!line.startsWith(AUDIT_PROGRESS_PREFIX)) {
+        stderr = appendTail(stderr, `${line}\n`);
+        return;
+      }
+      try {
+        const auditProgress = parseAuditProgress(line);
+        if (!auditProgress) return;
+        if (auditProgress.fields.auditRunId) startedAuditors.add(auditProgress.fields.auditRunId);
+        if (auditProgress.event === "AUDITOR_TERMINAL") {
+          terminalAuditors.add(auditProgress.fields.auditRunId);
+        }
+        progress.emit(auditProgress.event, {
+          ...auditProgress.fields,
+          configuredAuditors: normalized.auditors.length,
+          startedAuditors: startedAuditors.size,
+          terminalAuditors: terminalAuditors.size,
+        });
+      } catch {
+        progressError = true;
+        stderr = appendTail(stderr, "[invalid child audit progress event]\n");
+      }
+    };
+
     child.stdout.on("data", (chunk) => {
+      progress.observe();
       stdoutBuffer += String(chunk);
       const lines = stdoutBuffer.split("\n");
       stdoutBuffer = lines.pop() || "";
       for (const line of lines) processLine(line);
     });
     child.stderr.on("data", (chunk) => {
-      stderr = appendTail(stderr, String(chunk));
+      progress.observe();
+      childStderrBuffer += String(chunk);
+      const lines = childStderrBuffer.split("\n");
+      childStderrBuffer = lines.pop() || "";
+      for (const line of lines) processChildStderrLine(line);
     });
 
     const childExitCode = await new Promise((resolveExit, reject) => {
@@ -362,13 +559,17 @@ async function execute(config, invocation, startedAt) {
       child.once("close", (code) => resolveExit(code ?? 1));
     });
     if (stdoutBuffer.trim()) processLine(stdoutBuffer);
+    if (childStderrBuffer) processChildStderrLine(childStderrBuffer);
 
-    const finishedAt = new Date().toISOString();
     let postcondition;
     if (config.verifyPostcondition) {
+      progress.emit("POSTCONDITION_STARTED");
       try {
         postcondition = await config.verifyPostcondition(postconditionCapture, normalized, preflight);
+        progress.emit("POSTCONDITION_PASSED");
       } catch (error) {
+        progress.emit("POSTCONDITION_FAILED");
+        const finishedAt = new Date().toISOString();
         return {
           normalized,
           terminal: terminalEnvelope(config, {
@@ -387,6 +588,7 @@ async function execute(config, invocation, startedAt) {
         };
       }
     }
+    const finishedAt = new Date().toISOString();
     if (receivedSignal) {
       return {
         normalized,
@@ -419,6 +621,24 @@ async function execute(config, invocation, startedAt) {
           preflight,
           postcondition,
           error: `Pi exited with code ${childExitCode}`,
+        }),
+        exitCode: 1,
+      };
+    }
+    if (progressError) {
+      return {
+        normalized,
+        terminal: terminalEnvelope(config, {
+          ...normalized,
+          startedAt,
+          finishedAt,
+          childExitCode,
+          processStatus: "FAILED",
+          output,
+          stderr,
+          preflight,
+          postcondition,
+          error: "invalid child audit progress event",
         }),
         exitCode: 1,
       };
@@ -474,14 +694,26 @@ export async function runOwner(config) {
   const startedAt = new Date().toISOString();
   let invocation;
   let runId = "unknown";
+  let progress;
   try {
     const inputPath = parseArguments(process.argv.slice(2));
     invocation = await readInvocation(inputPath);
-    if (invocation && typeof invocation === "object" && typeof invocation.runId === "string") runId = invocation.runId;
-    const result = await execute(config, invocation, startedAt);
+    runId = requireRunId(invocation?.runId);
+    progress = createProgressReporter(runId, startedAt);
+    progress.emit("RUN_STARTED", { mode: config.mode, agent: config.agent });
+    const result = await execute(config, invocation, startedAt, progress);
+    const terminalEvent = result.terminal.processStatus === "COMPLETED"
+      ? "RUN_COMPLETED"
+      : result.terminal.processStatus === "CANCELLED"
+        ? "RUN_CANCELLED"
+        : "RUN_FAILED";
+    progress.emit(terminalEvent);
+    progress.stop();
     process.stdout.write(`${JSON.stringify(result.terminal)}\n`);
     process.exitCode = result.exitCode;
   } catch (error) {
+    progress?.emit("RUN_FAILED");
+    progress?.stop();
     const finishedAt = new Date().toISOString();
     emitTerminal(config, {
       runId,
@@ -491,5 +723,7 @@ export async function runOwner(config) {
       error: error instanceof Error ? error.message : String(error),
     });
     process.exitCode = 1;
+  } finally {
+    progress?.stop();
   }
 }

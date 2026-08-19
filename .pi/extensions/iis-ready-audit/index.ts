@@ -30,6 +30,10 @@ const AGENT_PATHS: Record<AuditRole, string> = {
 const DEFAULT_ORACLE_SKILL = "/home/user01/.codex/skills/oracle-browser/SKILL.md";
 const TERMINAL = new Set(["COMPLETED", "BLOCKED", "FAILED", "CANCELLED"]);
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+const PROGRESS_SCHEMA = "iis.pi.progress/v1";
+const AUDIT_PROGRESS_PREFIX = "IIS_PI_AUDIT_EVENT ";
+
+type OwnerAuditEvent = Extract<AuditRuntimeEvent, { type: "HANDOFF" | "TERMINAL" }>;
 
 type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
@@ -109,7 +113,7 @@ async function configuredVerificationFiles(): Promise<{ ticket: string; validato
   return { ticket, validator };
 }
 
-function eventMessage(event: AuditRuntimeEvent): string {
+function eventMessage(event: OwnerAuditEvent): string {
   if (event.type === "HANDOFF") {
     return [
       "PI AUDITOR HANDOFF",
@@ -137,6 +141,30 @@ function eventMessage(event: AuditRuntimeEvent): string {
     "This terminal event is evidence, not automatic acceptance. Fan in every required run before completion.",
   ].join("\n");
 }
+function emitAuditProgress(event: AuditRuntimeEvent): void {
+  if (process.env.IIS_PI_PROGRESS_PROTOCOL !== PROGRESS_SCHEMA) return;
+  let progress: Record<string, unknown>;
+  if (event.type === "FAN_IN_COMPLETE") {
+    progress = {
+      event: "FAN_IN_COMPLETE",
+      auditRunIds: event.runs.map((run) => run.runId),
+      terminalAuditors: event.runs.length,
+    };
+  } else {
+    const base = {
+      auditRunId: event.run.runId,
+      role: event.run.role,
+      handoffSequence: event.run.handoffSequence,
+    };
+    if (event.type === "STARTING") progress = { event: "AUDITOR_STARTING", ...base };
+    else if (event.type === "RUNNING") progress = { event: "AUDITOR_RUNNING", ...base };
+    else if (event.type === "HANDOFF") progress = { event: "AUDITOR_WAITING_REPLY", ...base };
+    else if (event.type === "RESUMED") progress = { event: "AUDITOR_RESUMED", ...base };
+    else progress = { event: "AUDITOR_TERMINAL", ...base, terminalStatus: event.run.status };
+  }
+  process.stderr.write(`${AUDIT_PROGRESS_PREFIX}${JSON.stringify(progress)}\n`);
+}
+
 
 export default function iisReadyAuditExtension(pi: ExtensionAPI): void {
   let shuttingDown = false;
@@ -201,7 +229,8 @@ export default function iisReadyAuditExtension(pi: ExtensionAPI): void {
       };
     },
     (event) => {
-      if (shuttingDown) return;
+      emitAuditProgress(event);
+      if (shuttingDown || (event.type !== "HANDOFF" && event.type !== "TERMINAL")) return;
       pi.sendMessage(
         {
           customType: event.type === "HANDOFF" ? "iis-audit-handoff" : "iis-audit-terminal",

@@ -72,6 +72,13 @@ test("background run hands off, waits for owner reply, and fans in terminal outp
   const terminal = await collector.wait((event) => event.type === "TERMINAL");
   assert.equal(terminal.run.status, "COMPLETED");
   assert.equal(runtime.fanIn([started.runId])[0].status, "COMPLETED");
+  assert.deepEqual(
+    collector.events.map((event) => event.type),
+    ["STARTING", "RUNNING", "HANDOFF", "RESUMED", "TERMINAL", "FAN_IN_COMPLETE"],
+  );
+  const fanIn = collector.events.at(-1);
+  assert.equal(fanIn.runs.length, 1);
+  assert.equal(fanIn.runs[0].runId, started.runId);
 });
 
 test("wrong handoff sequence is rejected without releasing the auditor", async () => {
