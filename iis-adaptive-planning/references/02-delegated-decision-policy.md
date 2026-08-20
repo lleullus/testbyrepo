@@ -66,11 +66,34 @@ For each event:
 
 Do not add a fake user quote or write `user explicitly approved`.
 
+## Pre-consensus delegated Intent Anchor finalization
+
+Ordinary Baseline adversarial consensus still requires direct user confirmation of the Intent Anchor. In explicit Adaptive mode only, that confirmation event may instead be satisfied through standing delegation after the user explicitly activates adversarial consensus and designates the exact Challenger.
+
+Ask Matt first constructs the same current Baseline Intent Anchor, then compares it in authority order against: the current user conversation including later explicit changes; the current user-adopted Mandate; the closed Run Contract; applicable current Scope/Behavior/UI/verification authority; and directly verified current facts. The Anchor remains a derivative representation and never replaces or outranks the user's words.
+
+Standing delegated Intent Anchor finalization is valid only when all of the following hold:
+
+1. Adaptive is currently explicitly active and the applicable Mandate/Run Contract remain current;
+2. the user explicitly activated adversarial consensus and designated the exact Challenger;
+3. the Anchor contains every applicable Baseline Intent Anchor field and the exact designated Challenger;
+4. the Anchor does not materially omit, weaken, reorder, or contradict current user authority, and any still-provisional interpretation is clearly marked provisional;
+5. the delegated-decision test above passes and current authority determines one faithful Anchor rather than two materially different user-owned interpretations;
+6. no Return-to-User Boundary or unresolved authority conflict exists;
+7. the Challenger disclosure remains within current user/host authority and does not require sensitive/private, unrelated-repository, or other material disclosure expansion; and
+8. the current user has not explicitly required direct Intent Anchor review for this Adaptive invocation.
+
+If an Anchor omission or mismatch can be corrected deterministically from current authority without a new user-owned choice, correct it and re-run this test instead of asking for confirmation. Do not return to the user for wording polish or a restatement of already-settled authority.
+
+When all eight conditions hold, finalize the exact current Intent Anchor as `DELEGATED_RECOMMENDATION` and invoke the exact designated Challenger without another user approval. Carry that provenance in the current invocation context; do not claim the user directly confirmed the Anchor and do not create a new receipt, sidecar, or persistent gate state merely for this event. A routine faithful delegated Anchor finalization is not a material Adaptive trace event by itself; trace only a material correction or user-return decision when later interpretation requires it under the artifact contract.
+
+If the test does not close, return only the smallest unresolved material Anchor, authority, or disclosure decision. Direct user confirmation of the exact current Anchor has provenance `USER_EXPLICIT`. If the user's response materially changes product meaning or the Challenger binding, update the affected authority and re-evaluate the current Anchor before Challenger invocation.
+
 ## Post-consensus delegated finalization
 
 In explicit Adaptive mode, Ask Matt alone owns the authority-delta review after `ADVERSARIAL CONSENSUS REACHED` for the latest complete candidate. The Challenger owns review and objection closure; To Spec owns admission/projection after finalization and must not independently reinterpret the Mandate or rerun this review.
 
-Compare the latest reviewed candidate against, in authority order: the current user conversation including later explicit changes; the current user-adopted Mandate; the closed Run Contract; the user-confirmed Intent Anchor as a derivative representation that never replaces the user's words; applicable current Scope/Behavior/UI/verification authority; and directly verified current facts. Facts constrain the review but do not become product authority by themselves.
+Compare the latest reviewed candidate against, in authority order: the current user conversation including later explicit changes; the current user-adopted Mandate; the closed Run Contract; the current finalized Intent Anchor as a derivative representation that never replaces the user's words; applicable current Scope/Behavior/UI/verification authority; and directly verified current facts. The Anchor finalization provenance may be `USER_EXPLICIT` or `DELEGATED_RECOMMENDATION` under the pre-consensus Adaptive rule above. Facts constrain the review but do not become product authority by themselves.
 
 Classify the authority delta exactly once as:
 
@@ -81,7 +104,7 @@ Classify the authority delta exactly once as:
 Standing delegated post-consensus finalization is valid only when all of the following hold:
 
 1. Adaptive is currently explicitly active and the applicable Mandate/Run Contract remain current;
-2. the user explicitly activated adversarial consensus, designated the exact Challenger, and confirmed the current Intent Anchor;
+2. the user explicitly activated adversarial consensus, designated the exact Challenger, and the current Intent Anchor finalization provenance is `USER_EXPLICIT` or `DELEGATED_RECOMMENDATION`;
 3. the latest complete candidate has current `ADVERSARIAL CONSENSUS REACHED` and no material candidate change occurred after the Challenger's final review;
 4. the delegated-decision test above still passes;
 5. authority delta is exactly `NONE`;
@@ -98,10 +121,11 @@ Unless the current Baseline later changes them, do not use standing delegation f
 
 - activating adversarial planning consensus;
 - selecting/designating the exact Adversarial Planning Challenger;
-- the adversarial gate's exact user-confirmed Intent Anchor;
 - the invocation-local Run Contract Approval Gate explicitly activated by the affirmative `/승인게이트` modifier;
 - authority owned by an external operator/credential holder rather than IIS planning;
 - concrete destructive/production/external-effect authorization.
+
+Ordinary non-Adaptive Intent Anchor confirmation remains direct-user-only. In explicit Adaptive mode, only the exact pre-consensus faithful-Anchor rule above may satisfy that confirmation event through standing delegation; an explicit current request for direct Anchor review still requires the user response.
 
 Only direct user approval of the exact rendered current `CLOSED` Run Contract satisfies an active Run Contract Approval Gate. Do not use `DELEGATED_RECOMMENDATION`, inherited authority, structural projection, reviewer agreement, or a downstream leaf confirmation to release it.
 

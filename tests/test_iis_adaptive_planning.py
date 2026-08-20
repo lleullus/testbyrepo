@@ -88,6 +88,49 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn("Special gates not covered by standing delegation", delegated)
         self.assertIn("Adversarial Planning Challenger", delegated)
 
+    def test_adaptive_intent_anchor_can_finalize_by_delegation_without_changing_baseline(self) -> None:
+        skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
+        coexistence = (ADAPTIVE / "references" / "00-baseline-coexistence.md").read_text(
+            encoding="utf-8"
+        )
+        delegated = (ADAPTIVE / "references" / "02-delegated-decision-policy.md").read_text(
+            encoding="utf-8"
+        )
+        routing = (ADAPTIVE / "references" / "03-adaptive-routing.md").read_text(
+            encoding="utf-8"
+        )
+        baseline_gate = (ROOT / "matt" / "skills" / "adversarial-consensus" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        baseline_to_spec = (ROOT / "matt" / "skills" / "to-spec" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        baseline_gate_normalized = " ".join(baseline_gate.split())
+
+        self.assertIn("Pre-consensus delegated Intent Anchor finalization", delegated)
+        self.assertIn("finalize the exact current Intent Anchor as `DELEGATED_RECOMMENDATION`", delegated)
+        self.assertIn("invoke the exact designated Challenger without another user approval", delegated)
+        self.assertIn("Ordinary non-Adaptive Intent Anchor confirmation remains direct-user-only", delegated)
+        self.assertIn("ordinary Baseline adversarial consensus still requires direct user confirmation", coexistence)
+        self.assertIn("explicit current request for direct Anchor review", routing)
+        self.assertIn("satisfies the Baseline `user-confirmed Intent Anchor` admission condition", routing)
+        self.assertIn("a user-confirmed Intent Anchor for the current candidate", baseline_to_spec)
+        self.assertNotIn(
+            "activation, exact Challenger designation, and the Intent Anchor remain direct-user-only",
+            skill,
+        )
+        self.assertNotIn(
+            "activation, exact Challenger binding, and user-confirmed Intent Anchor remain direct-user-only",
+            coexistence,
+        )
+
+        # Baseline adversarial consensus remains unchanged and still owns direct confirmation.
+        self.assertIn("Ask the user only to confirm", baseline_gate_normalized)
+        self.assertIn(
+            "Challenger invocation is not allowed before that confirmation",
+            baseline_gate_normalized,
+        )
+
     def test_post_consensus_delegated_finalization_is_adaptive_only_and_scope_safe(self) -> None:
         skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
         coexistence = (ADAPTIVE / "references" / "00-baseline-coexistence.md").read_text(

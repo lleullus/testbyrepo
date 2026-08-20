@@ -58,6 +58,28 @@ def can_adaptive_to_spec(
     return False
 
 
+def adaptive_intent_anchor_finalization(
+    *,
+    active: bool,
+    challenger: bool,
+    standing_authority_valid: bool,
+    anchor_faithful: bool,
+    correction_determinable: bool = False,
+    unresolved_material_interpretation: bool = False,
+    disclosure_expansion: bool = False,
+    direct_review_required: bool = False,
+) -> str:
+    if not active or not challenger:
+        return "BLOCKED"
+    if direct_review_required:
+        return "USER_EXPLICIT_REQUIRED"
+    if disclosure_expansion or unresolved_material_interpretation or not standing_authority_valid:
+        return "USER_DECISION_REQUIRED"
+    if not anchor_faithful and not correction_determinable:
+        return "USER_DECISION_REQUIRED"
+    return "DELEGATED_RECOMMENDATION"
+
+
 def purpose_first_path(
     *,
     material_problem: bool,
@@ -132,6 +154,55 @@ class AdversarialConsensusSemanticsFixtureTests(unittest.TestCase):
                 post_consensus_final_approval=True,
             )
         )
+
+    def test_adaptive_pre_consensus_intent_anchor_finalization_is_bounded_and_automatic(self) -> None:
+        base = {
+            "active": True,
+            "challenger": True,
+            "standing_authority_valid": True,
+            "anchor_faithful": True,
+        }
+
+        self.assertEqual(
+            adaptive_intent_anchor_finalization(**base),
+            "DELEGATED_RECOMMENDATION",
+        )
+        self.assertEqual(
+            adaptive_intent_anchor_finalization(
+                **(base | {"anchor_faithful": False, "correction_determinable": True})
+            ),
+            "DELEGATED_RECOMMENDATION",
+        )
+        for override in (
+            {"standing_authority_valid": False},
+            {"anchor_faithful": False},
+            {"unresolved_material_interpretation": True},
+            {"disclosure_expansion": True},
+        ):
+            self.assertEqual(
+                adaptive_intent_anchor_finalization(**(base | override)),
+                "USER_DECISION_REQUIRED",
+            )
+        self.assertEqual(
+            adaptive_intent_anchor_finalization(**(base | {"direct_review_required": True})),
+            "USER_EXPLICIT_REQUIRED",
+        )
+        self.assertEqual(
+            adaptive_intent_anchor_finalization(**(base | {"active": False})),
+            "BLOCKED",
+        )
+        self.assertEqual(
+            adaptive_intent_anchor_finalization(**(base | {"challenger": False})),
+            "BLOCKED",
+        )
+
+        delegated = normalized(ADAPTIVE_DELEGATED)
+        routing = normalized(ADAPTIVE_ROUTING)
+        self.assertIn("Pre-consensus delegated Intent Anchor finalization", delegated)
+        self.assertIn("finalize the exact current Intent Anchor as `DELEGATED_RECOMMENDATION`", delegated)
+        self.assertIn("invoke the exact designated Challenger without another user approval", delegated)
+        self.assertIn("finalize the Anchor as `DELEGATED_RECOMMENDATION`", routing)
+        self.assertIn("explicit current request for direct Anchor review", routing)
 
     def test_adaptive_post_consensus_finalization_accepts_only_valid_current_authority(self) -> None:
         base = {
