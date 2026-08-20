@@ -126,6 +126,81 @@ class IISAdaptiveRunContractTests(unittest.TestCase):
         self.assertIn("revise/adopt the Mandate before mutation", contract)
         self.assertNotIn("the success boundary after a delivered current Increment", mandate)
 
+    def test_required_scope_boundary_scenarios_and_post_shape_revalidation(self) -> None:
+        contract = (ADAPTIVE / "references" / "09-run-contract.md").read_text(
+            encoding="utf-8"
+        )
+        routing = (ADAPTIVE / "references" / "03-adaptive-routing.md").read_text(
+            encoding="utf-8"
+        )
+
+        expected = {
+            "WHOLE_REQUIRED_NO_INCREMENT": (
+                "current-Increment coverage is not established",
+                "`CLOSED` is forbidden",
+            ),
+            "WHOLE_REQUIRED_FOUNDATION_INCREMENT": (
+                "foundation/partial Increment",
+                "`CONTRACT_DRIFT`",
+            ),
+            "CURRENT_INCREMENT_REQUIRED_ONLY": (
+                "every unsatisfied Required Named Item is covered",
+                "current-Increment boundary is allowed",
+            ),
+            "WHOLE_REQUIRED_BOUNDED_OUTCOME": (
+                "`BOUNDED_OUTCOME_SATISFIED`",
+                "preserving outer Required Named Items",
+            ),
+            "LEAF_APPROVAL_ONLY": (
+                "owning leaf approval/confirmation",
+                "Run Completion Boundary, and Completion Predicate remain unchanged",
+            ),
+            "REQUIRED_REMAINS_AFTER_DELIVERY": (
+                "current Increment is delivered",
+                "`RUN_COMPLETE` is forbidden",
+            ),
+        }
+
+        rows: dict[str, tuple[str, str]] = {}
+        for line in contract.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("| `"):
+                continue
+            cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+            if len(cells) != 3:
+                continue
+            scenario = cells[0].strip("`")
+            if scenario in expected:
+                self.assertNotIn(scenario, rows)
+                rows[scenario] = (cells[1], cells[2])
+
+        self.assertEqual(set(rows), set(expected))
+        for scenario, (condition_fragment, result_fragment) in expected.items():
+            condition, result = rows[scenario]
+            self.assertIn(condition_fragment, condition)
+            self.assertIn(result_fragment, result)
+            self.assertEqual(contract.count(f"| `{scenario}` |"), 1)
+
+        self.assertIn(
+            "A form is `CLOSED` only when satisfying its Run Completion Boundary",
+            contract,
+        )
+        self.assertIn("required-item coverage is unknown or partial", contract)
+        self.assertIn(
+            "A broader ceiling does not silently upgrade a narrower active boundary",
+            contract,
+        )
+        self.assertIn(
+            "is leaf-local and is not by itself an outer Run Contract revision",
+            contract,
+        )
+        self.assertIn("#### Post-shape Run Contract revalidation", routing)
+        self.assertIn(
+            "Repeat the same revalidation whenever a material reshape changes",
+            routing,
+        )
+        self.assertIn("do not enter Ask Matt", routing)
+
     def test_run_contract_is_invocation_local_not_persistent_controller_state(self) -> None:
         contract = (ADAPTIVE / "references" / "09-run-contract.md").read_text(
             encoding="utf-8"

@@ -55,11 +55,20 @@ Preserve:
 Adaptive delta:
 
 - the ordinary single user confirmation of an otherwise complete Scope proposal may be satisfied by standing delegated confirmation when the Mandate resolves the selection and no Return-to-User Boundary is triggered;
-- after canonical Scope/Increment closure validates, do not expose the ordinary manual-continuation STOP; return the exact selected `ready-for-matt` Increment to the Adaptive router and continue to Ask Matt in the same planning request;
+- after canonical Scope/Increment closure validates, perform the post-shape Run Contract revalidation below; only after it passes, do not expose the ordinary manual-continuation STOP and return the exact selected `ready-for-matt` Increment to the Adaptive router to continue to Ask Matt in the same planning request;
 - when a later leaf finds a construction-stage/foundation/split/merge/order defect, re-enter Scope Shaper directly if reshaping is delegated;
 - preserve Required Named Items across Increment selection and reshaping without forcing all obligations into one current Increment;
 - treat Candidate Named Items as mutable candidate means under the Mandate and evidence; and
 - do not select a next Increment that would make the Run Completion Boundary exceed the Mandate ceiling.
+
+#### Post-shape Run Contract revalidation
+
+After canonical Scope/Increment closure and before Ask Matt handoff, compare the unsatisfied Required Named Items with the selected Increment's Includes/Excludes/Deferred scope, the active Run Completion Boundary, Completion Predicate, and Mandate Continuation Authority ceiling. Repeat the same revalidation whenever a material reshape changes the selected current Increment.
+
+- If the active boundary is a broader named-item or outcome boundary and the Mandate ceiling permits it, continue with exactly one selected Increment while preserving the outer Required Named Items and Completion Predicate.
+- If the active boundary is a current-Increment terminal and every unsatisfied Required Named Item is covered by the selected Increment, continue normally.
+- If the active boundary is a current-Increment terminal but unsatisfied Required Named Items remain outside the selected Increment, treat that as contract mismatch and do not enter Ask Matt. A broader Mandate ceiling does not silently upgrade the narrow active boundary. Revise the Run Contract from already-clear current user authority or return only the exact boundary decision to the user; do not shrink Required Named Items.
+- If the active boundary actually requires continuation beyond the Mandate ceiling, revise/adopt the Mandate only when current user authority grants that continuation; otherwise return the exact authority gap. Never close a smaller boundary merely to avoid the revision.
 
 Keep hard:
 

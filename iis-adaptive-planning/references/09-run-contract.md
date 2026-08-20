@@ -167,13 +167,23 @@ Before marking the form `CLOSED`:
 - outcome-satisfaction boundaries require fresh actual product evidence and an authoritative readback;
 - the Run Completion Boundary must remain within current user authority and the Mandate's Continuation Authority ceiling.
 
+### Required-item coverage invariant
+
+A form is `CLOSED` only when satisfying its Run Completion Boundary and Completion Predicate necessarily satisfies every currently unsatisfied Required Named Item to the completion meaning promised by that boundary.
+
+`READY_TICKET_SET`, `CURRENT_INCREMENT_IMPLEMENTED`, and `CURRENT_INCREMENT_DELIVERED` are current-Increment terminals. When Required Named Items exist, one of those boundaries may close only when every currently unsatisfied Required Named Item is either already satisfied by fresh authoritative readback or current authority establishes that the selected current Increment covers it in its approved Includes and completion contract.
+
+If the current Increment is not yet shaped, or required-item coverage is unknown or partial, do not infer that the broader Required Named Items are covered by a current-Increment terminal. This does not prohibit a current-Increment boundary when there are no Required Named Items or current authority independently establishes that the required scope is exactly the selected current Increment.
+
+`NAMED_REQUIRED_ITEMS_DELIVERED`, `BOUNDED_OUTCOME_SATISFIED`, and `MANDATE_OUTCOME_SATISFIED` may span multiple Increments when the enabled delivery stages and Mandate ceiling permit that continuation. Do not force those outer obligations into one selected Increment merely to make coverage look complete.
+
 Ceiling checks use actual continuation requirements, not the boundary label alone:
 
 - `CURRENT_INCREMENT` permits `READY_TICKET_SET`, `CURRENT_INCREMENT_IMPLEMENTED`, and `CURRENT_INCREMENT_DELIVERED`. It permits `NAMED_REQUIRED_ITEMS_DELIVERED` only when current authority establishes every Required Named Item is covered by the current Increment.
 - a named-item or bounded predicate that requires another Increment needs at least `BOUNDED_OUTCOME`;
 - `MANDATE_OUTCOME_SATISFIED` requires `MANDATE_OUTCOME`.
 
-If the current instruction explicitly grants a broader boundary than the stored ceiling, revise/adopt the Mandate before mutation. Otherwise return the exact authority gap. Never close a smaller boundary merely to avoid that revision.
+The Mandate Continuation Authority is only the maximum success-continuation ceiling; the active Run Completion Boundary remains the invocation terminal. A broader ceiling does not silently upgrade a narrower active boundary. If current user authority already establishes a broader boundary than the stored ceiling, revise/adopt the Mandate before mutation. If current authority establishes a broader active boundary within the existing ceiling, revise the Run Contract before mutation. Otherwise return only the exact unresolved boundary or authority gap. Never close a smaller boundary merely to avoid that revision, and never shrink Required Named Items to fit it.
 
 Concrete counterexample:
 
@@ -185,6 +195,17 @@ Current evidence: A and B require multiple Increments
 ```
 
 This form is not `CLOSED`. It requires an explicit Mandate revision or a user-owned boundary change.
+
+### Normative cross-field scenarios
+
+| Scenario | Condition | Required result |
+| --- | --- | --- |
+| `WHOLE_REQUIRED_NO_INCREMENT` | broader Required Named Items exist, current-Increment coverage is not established, and the boundary is `READY_TICKET_SET`, `CURRENT_INCREMENT_IMPLEMENTED`, or `CURRENT_INCREMENT_DELIVERED` | `CLOSED` is forbidden; revise from already-clear broader current authority or return `USER_INPUT_REQUIRED`. |
+| `WHOLE_REQUIRED_FOUNDATION_INCREMENT` | a selected foundation/partial Increment leaves unsatisfied Required Named Items outside it while the active boundary is a current-Increment terminal | `CONTRACT_DRIFT`; do not enter Ask Matt until the Run Contract is revised from current authority or the exact boundary decision returns to the user. |
+| `CURRENT_INCREMENT_REQUIRED_ONLY` | every unsatisfied Required Named Item is covered by the selected current Increment and the delivery-stage combination matches the boundary | the corresponding current-Increment boundary is allowed. |
+| `WHOLE_REQUIRED_BOUNDED_OUTCOME` | broader Required Named Items remain, the boundary is `BOUNDED_OUTCOME_SATISFIED`, and the Mandate ceiling permits it | `CLOSED` is allowed; project only one current Increment while preserving outer Required Named Items and the Completion Predicate. |
+| `LEAF_APPROVAL_ONLY` | Scope, Intent Anchor, Behavior/UI, Spec, Ticket, or current Increment receives only its owning leaf approval/confirmation | outer Goal Outcome, required/candidate classification, delivery stages, Run Completion Boundary, and Completion Predicate remain unchanged. |
+| `REQUIRED_REMAINS_AFTER_DELIVERY` | the current Increment is delivered but broader Required Named Items or the broader outcome predicate remain unsatisfied | `RUN_COMPLETE` is forbidden; use fresh-state success re-entry and its existing next disposition. |
 
 ## Carry-forward and reshaping
 
@@ -200,6 +221,8 @@ Pass only its decision-critical fields to another owner:
 - Run Completion Boundary;
 - Completion Predicate; and
 - Authoritative Readback.
+
+Approval or confirmation of Scope, an Intent Anchor, Behavior/UI authority, a Spec, a Ticket, or the current Increment is leaf-local and is not by itself an outer Run Contract revision. Goal Outcome, required/candidate classification, Required Item Policy, Implementation, Verification, Run Completion Boundary, and Completion Predicate change only when current user authority actually changes or already clearly determines that outer-run meaning. Natural-language user authority is sufficient; do not require the user to name Run Contract fields explicitly, but do not treat a leaf approval as withdrawal or narrowing of broader authority.
 
 A reshape may change the current Increment, Spec, Ticket Set, ordering, and denominator. It does not erase Required Named Items, convert them into candidates, or lower the Run Completion Boundary. Recompute the current canonical denominator after a valid reshape and continue against the same Run Contract.
 
