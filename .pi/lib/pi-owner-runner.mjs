@@ -170,7 +170,65 @@ function progressHeartbeatMs() {
   return Number.isFinite(configured) && configured >= 10 ? configured : DEFAULT_HEARTBEAT_MS;
 }
 
-function createProgressReporter(runId, startedAt) {
+function progressSummary(mode, event, fields = {}) {
+  const modeLabel = mode === "VERIFY" ? "Verify" : "Implement";
+  const auditorLabel = mode === "VERIFY" ? "AC auditors" : "Implementation auditors";
+  const configuredAuditors = Number.isInteger(fields.configuredAuditors) ? fields.configuredAuditors : 0;
+  const terminalAuditors = Number.isInteger(fields.terminalAuditors) ? fields.terminalAuditors : 0;
+  const failedAuditors = Number.isInteger(fields.failedAuditors) ? fields.failedAuditors : 0;
+  const blockedAuditors = Number.isInteger(fields.blockedAuditors) ? fields.blockedAuditors : 0;
+  const cancelledAuditors = Number.isInteger(fields.cancelledAuditors) ? fields.cancelledAuditors : 0;
+
+  switch (event) {
+    case "RUN_STARTED":
+      return `${mode === "VERIFY" ? "🔎" : "🚀"} ${modeLabel} started`;
+    case "PREFLIGHT_PASSED":
+      return configuredAuditors > 0
+        ? `✓ Preflight passed · ${configuredAuditors} ${mode === "VERIFY" ? "AC auditors" : "auditors"} configured`
+        : "✓ Preflight passed · no auditors configured";
+    case "PREFLIGHT_FAILED":
+      return `! Preflight failed${fields.failureStage ? ` · ${fields.failureStage}` : ""}`;
+    case "OWNER_PROCESS_STARTED":
+      return "● Owner process started";
+    case "OWNER_STATUS":
+      if (fields.status === "INSPECTING") {
+        return mode === "VERIFY" ? "● Inspecting verification target" : "● Inspecting ticket and repository";
+      }
+      if (fields.status === "UPDATING") return "● Updating implementation";
+      if (fields.status === "RUNNING_COMMAND") return "● Running repository command";
+      if (fields.status === "FINALIZING_TICKET") return "● Finalizing Ticket status";
+      return "● Owner working";
+    case "AUDITOR_STATUS": {
+      const suffix = `${terminalAuditors}/${configuredAuditors} terminal`;
+      const issues = [
+        failedAuditors > 0 ? `${failedAuditors} failed` : null,
+        blockedAuditors > 0 ? `${blockedAuditors} blocked` : null,
+        cancelledAuditors > 0 ? `${cancelledAuditors} cancelled` : null,
+      ].filter(Boolean);
+      if (issues.length > 0) return `! ${auditorLabel} · ${issues.join(", ")} · ${suffix}`;
+      if (fields.fanInComplete) return `✓ ${auditorLabel} · ${terminalAuditors}/${configuredAuditors} fan-in complete`;
+      return `◐ ${auditorLabel} · ${suffix}`;
+    }
+    case "POSTCONDITION_STARTED":
+      return "● Checking final Ticket state";
+    case "POSTCONDITION_PASSED":
+      return "✓ Final Ticket state passed";
+    case "POSTCONDITION_FAILED":
+      return "! Final Ticket state failed";
+    case "RUN_ALIVE":
+      return `● Still running · no new observable activity for ${Math.floor((fields.inactiveMs || 0) / 1000)}s`;
+    case "RUN_COMPLETED":
+      return "● Pi run finished · reading final result";
+    case "RUN_CANCELLED":
+      return "! Pi run cancelled";
+    case "RUN_FAILED":
+      return "! Pi run failed";
+    default:
+      return `${modeLabel} · ${event}`;
+  }
+}
+
+function createProgressReporter(runId, startedAt, mode) {
   const startedMs = Date.parse(startedAt);
   const heartbeatMs = progressHeartbeatMs();
   let sequence = 0;
@@ -184,11 +242,12 @@ function createProgressReporter(runId, startedAt) {
     if (observed) lastObservedAt = now;
     sequence += 1;
     process.stderr.write(`${JSON.stringify({
+      summary: progressSummary(mode, event, fields),
+      event,
       schema: PROGRESS_SCHEMA,
       runId,
       sequence,
       timestamp: new Date(now).toISOString(),
-      event,
       elapsedMs: Math.max(0, now - startedMs),
       ...fields,
     })}\n`);
@@ -218,6 +277,16 @@ function createProgressReporter(runId, startedAt) {
 
 function safeToolName(value) {
   return typeof value === "string" && TOOL_NAME.test(value) ? value : "unknown";
+}
+
+function ownerStatusForTool(mode, value) {
+  const toolName = safeToolName(value);
+  if (["read", "grep", "find", "ls"].includes(toolName)) return "INSPECTING";
+  if (toolName === "bash") return "RUNNING_COMMAND";
+  if (mode === "IMPLEMENT" && ["edit", "write"].includes(toolName)) return "UPDATING";
+  if (mode === "VERIFY" && toolName === "iis_ticket_mark_done") return "FINALIZING_TICKET";
+  if (toolName.startsWith("iis_audit_")) return undefined;
+  return "WORKING";
 }
 
 function parseAuditProgress(line) {
@@ -367,10 +436,24 @@ async function execute(config, invocation, startedAt, progress) {
   let childStderrBuffer = "";
   let output = "";
   let progressError = false;
-  let toolStarts = 0;
-  let toolFinishes = 0;
+  let lastOwnerStatus;
   const startedAuditors = new Set();
   const terminalAuditors = new Set();
+  const auditorTerminalStatuses = new Map();
+
+  const auditorAggregate = (fanInComplete = false) => {
+    const statuses = [...auditorTerminalStatuses.values()];
+    return {
+      configuredAuditors: normalized.auditors.length,
+      startedAuditors: startedAuditors.size,
+      terminalAuditors: terminalAuditors.size,
+      completedAuditors: statuses.filter((status) => status === "COMPLETED").length,
+      blockedAuditors: statuses.filter((status) => status === "BLOCKED").length,
+      failedAuditors: statuses.filter((status) => status === "FAILED").length,
+      cancelledAuditors: statuses.filter((status) => status === "CANCELLED").length,
+      fanInComplete,
+    };
+  };
 
   const forwardSignal = (signal) => {
     receivedSignal = signal;
@@ -492,22 +575,11 @@ async function execute(config, invocation, startedAt, progress) {
       }
       progress.observe();
       if (event.type === "tool_execution_start") {
-        toolStarts += 1;
-        progress.emit("OWNER_ACTIVITY", {
-          activity: "TOOL_STARTED",
-          toolName: safeToolName(event.toolName),
-          toolStarts,
-          toolFinishes,
-        });
-      } else if (event.type === "tool_execution_end") {
-        toolFinishes += 1;
-        progress.emit("OWNER_ACTIVITY", {
-          activity: "TOOL_FINISHED",
-          toolName: safeToolName(event.toolName),
-          toolStarts,
-          toolFinishes,
-          isError: Boolean(event.isError),
-        });
+        const status = ownerStatusForTool(config.mode, event.toolName);
+        if (status && status !== lastOwnerStatus) {
+          lastOwnerStatus = status;
+          progress.emit("OWNER_STATUS", { status });
+        }
       }
       if (event.type === "message_end") {
         const text = assistantText(event.message);
@@ -525,14 +597,14 @@ async function execute(config, invocation, startedAt, progress) {
         if (!auditProgress) return;
         if (auditProgress.fields.auditRunId) startedAuditors.add(auditProgress.fields.auditRunId);
         if (auditProgress.event === "AUDITOR_TERMINAL") {
-          terminalAuditors.add(auditProgress.fields.auditRunId);
+          const auditRunId = auditProgress.fields.auditRunId;
+          const isNewTerminal = !terminalAuditors.has(auditRunId);
+          terminalAuditors.add(auditRunId);
+          auditorTerminalStatuses.set(auditRunId, auditProgress.fields.terminalStatus);
+          if (isNewTerminal) progress.emit("AUDITOR_STATUS", auditorAggregate(false));
+        } else if (auditProgress.event === "FAN_IN_COMPLETE") {
+          progress.emit("AUDITOR_STATUS", auditorAggregate(true));
         }
-        progress.emit(auditProgress.event, {
-          ...auditProgress.fields,
-          configuredAuditors: normalized.auditors.length,
-          startedAuditors: startedAuditors.size,
-          terminalAuditors: terminalAuditors.size,
-        });
       } catch {
         progressError = true;
         stderr = appendTail(stderr, "[invalid child audit progress event]\n");
@@ -699,7 +771,7 @@ export async function runOwner(config) {
     const inputPath = parseArguments(process.argv.slice(2));
     invocation = await readInvocation(inputPath);
     runId = requireRunId(invocation?.runId);
-    progress = createProgressReporter(runId, startedAt);
+    progress = createProgressReporter(runId, startedAt, config.mode);
     progress.emit("RUN_STARTED", { mode: config.mode, agent: config.agent });
     const result = await execute(config, invocation, startedAt, progress);
     const terminalEvent = result.terminal.processStatus === "COMPLETED"

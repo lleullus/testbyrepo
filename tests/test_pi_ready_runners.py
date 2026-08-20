@@ -231,8 +231,14 @@ class PiReadyRunnerTests(unittest.TestCase):
                         terminalAuditors=1,
                     )
 
-                print(json.dumps({"type": "tool_execution_start", "toolName": "read"}))
-                print(json.dumps({"type": "tool_execution_end", "toolName": "read", "isError": False}))
+                tool_sequence = [
+                    name
+                    for name in os.environ.get("PI_STUB_TOOL_SEQUENCE", "read").split(",")
+                    if name
+                ]
+                for tool_name in tool_sequence:
+                    print(json.dumps({"type": "tool_execution_start", "toolName": tool_name}))
+                    print(json.dumps({"type": "tool_execution_end", "toolName": tool_name, "isError": False}))
                 print(json.dumps({
                     "type": "message_end",
                     "message": {"role": "assistant", "content": [{"type": "text", "text": output}]},
@@ -287,6 +293,8 @@ class PiReadyRunnerTests(unittest.TestCase):
     def progress_events(self, stderr: str) -> list[dict[str, object]]:
         events = [json.loads(line) for line in stderr.splitlines() if line]
         for event in events:
+            self.assertEqual(next(iter(event)), "summary")
+            self.assertIsInstance(event["summary"], str)
             self.assertEqual(event["schema"], "iis.pi.progress/v1")
             self.assertIsInstance(event["sequence"], int)
             self.assertIsInstance(event["timestamp"], str)
@@ -425,16 +433,58 @@ class PiReadyRunnerTests(unittest.TestCase):
                 "RUN_STARTED",
                 "PREFLIGHT_PASSED",
                 "OWNER_PROCESS_STARTED",
-                "OWNER_ACTIVITY",
-                "OWNER_ACTIVITY",
+                "OWNER_STATUS",
                 "RUN_COMPLETED",
             ],
         )
-        self.assertEqual(events[3]["activity"], "TOOL_STARTED")
-        self.assertEqual(events[3]["toolName"], "read")
-        self.assertEqual(events[4]["activity"], "TOOL_FINISHED")
-        self.assertEqual(events[4]["toolFinishes"], 1)
-        self.assertNotIn("summary", completed.stderr)
+        self.assertEqual(events[3]["status"], "INSPECTING")
+        self.assertEqual(events[3]["summary"], "● Inspecting ticket and repository")
+        for forbidden in ("toolName", "toolStarts", "toolFinishes", "TOOL_STARTED", "TOOL_FINISHED"):
+            self.assertNotIn(forbidden, completed.stderr)
+
+    def test_runner_coalesces_owner_tool_activity_into_meaningful_status_changes(self) -> None:
+        completed, _terminal, _capture = self.run_runner(
+            IMPLEMENT,
+            self.implement_invocation(),
+            extra_env={"PI_STUB_TOOL_SEQUENCE": "read,find,grep,read,edit,write,bash,bash"},
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        owner_events = [
+            event
+            for event in self.progress_events(completed.stderr)
+            if event["event"] == "OWNER_STATUS"
+        ]
+        self.assertEqual(
+            [event["status"] for event in owner_events],
+            ["INSPECTING", "UPDATING", "RUNNING_COMMAND"],
+        )
+        self.assertEqual(
+            [event["summary"] for event in owner_events],
+            [
+                "● Inspecting ticket and repository",
+                "● Updating implementation",
+                "● Running repository command",
+            ],
+        )
+
+    def test_verify_owner_status_uses_verify_specific_meaning(self) -> None:
+        completed, _terminal, _capture = self.run_runner(
+            VERIFY,
+            self.verify_invocation(),
+            extra_env={"PI_STUB_TOOL_SEQUENCE": "read,find,bash,iis_ticket_mark_done"},
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        owner_events = [
+            event
+            for event in self.progress_events(completed.stderr)
+            if event["event"] == "OWNER_STATUS"
+        ]
+        self.assertEqual(
+            [event["status"] for event in owner_events],
+            ["INSPECTING", "RUNNING_COMMAND", "FINALIZING_TICKET"],
+        )
+        self.assertEqual(owner_events[0]["summary"], "● Inspecting verification target")
+        self.assertEqual(owner_events[-1]["summary"], "● Finalizing Ticket status")
 
     def test_verify_reports_postcondition_before_terminal_progress(self) -> None:
         completed, _terminal, _capture = self.run_runner(
@@ -459,30 +509,15 @@ class PiReadyRunnerTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         events = self.progress_events(completed.stderr)
-        audit_events = [
-            event
-            for event in events
-            if str(event["event"]).startswith("AUDITOR_")
-            or event["event"] == "FAN_IN_COMPLETE"
-        ]
-        self.assertEqual(
-            [event["event"] for event in audit_events],
-            [
-                "AUDITOR_STARTING",
-                "AUDITOR_RUNNING",
-                "AUDITOR_WAITING_REPLY",
-                "AUDITOR_RESUMED",
-                "AUDITOR_TERMINAL",
-                "FAN_IN_COMPLETE",
-            ],
-        )
-        self.assertEqual(audit_events[2]["handoffSequence"], 1)
-        self.assertEqual(audit_events[4]["terminalStatus"], "COMPLETED")
-        self.assertEqual(audit_events[4]["terminalAuditors"], 1)
-        self.assertEqual(audit_events[5]["configuredAuditors"], 1)
+        audit_events = [event for event in events if event["event"] == "AUDITOR_STATUS"]
+        self.assertEqual([event["fanInComplete"] for event in audit_events], [False, True])
+        self.assertEqual(audit_events[0]["terminalAuditors"], 1)
+        self.assertEqual(audit_events[0]["completedAuditors"], 1)
+        self.assertEqual(audit_events[1]["configuredAuditors"], 1)
+        self.assertEqual(audit_events[1]["summary"], "✓ AC auditors · 1/1 fan-in complete")
         self.assertNotIn("private child diagnostic", completed.stderr)
         self.assertIn("private child diagnostic", terminal["stderr"])
-        for forbidden in ("assignment", "task", "body", "prompt", "reasoning"):
+        for forbidden in ("auditRunId", "handoffSequence", "assignment", "task", "body", "prompt", "reasoning"):
             self.assertNotIn(forbidden, completed.stderr)
 
     def test_malformed_child_progress_fails_without_live_payload_leak(self) -> None:
@@ -537,6 +572,7 @@ class PiReadyRunnerTests(unittest.TestCase):
         self.assertIsNotNone(heartbeat)
         assert heartbeat is not None
         self.assertGreaterEqual(heartbeat["inactiveMs"], 50)
+        self.assertIn("no new observable activity", heartbeat["summary"])
         self.assertNotIn("thinking", heartbeat)
         self.assertNotIn("provider", heartbeat)
         self.assertEqual(json.loads(stdout)["processStatus"], "COMPLETED")
