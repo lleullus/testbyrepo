@@ -95,6 +95,10 @@ Adaptive delta:
 - if the delegated-decision test produces one answer, adopt it as `DELEGATED_RECOMMENDATION` and continue the dependency graph without a user round-trip;
 - if the frontier is empty after authority/Mandate resolution, continue directly;
 - ordinary final approval of completed Behavior/UI authority and integrated shared understanding may use standing delegated confirmation;
+- when adversarial consensus is active, keep activation, exact Challenger designation, and Intent Anchor confirmation direct-user-only, then after current `ADVERSARIAL CONSENSUS REACHED` let Ask Matt alone classify the latest reviewed candidate's authority delta as `NONE`, `MATERIAL`, or `UNCERTAIN` using `02-delegated-decision-policy.md`;
+- for exact `NONE` with all delegated-finalization eligibility checks passing, approve the applicable completed Behavior/UI authority, finalize the exact integrated shared understanding as `DELEGATED_RECOMMENDATION`, and continue to To Spec without another user round-trip;
+- for `MATERIAL` or `UNCERTAIN`, return only the exact unresolved authority decision to the user; if the user's response materially changes the candidate while adversarial activation remains current, require renewed Challenger review before finalization;
+- whether finalization is `USER_EXPLICIT` or `DELEGATED_RECOMMENDATION`, treat it as leaf-local and do not revise the Run Contract Goal Outcome, Required Named Items, required/candidate classification, delivery-stage limits, Run Completion Boundary, or Completion Predicate without independent current user authority;
 - after completion, continue to current To Spec rather than stopping for a manual leaf request; and
 - preserve the Run Contract Goal Outcome, required/candidate classification, delivery-stage limits, and completion predicate without inventing current-Increment product meaning for later obligations.
 
@@ -104,7 +108,7 @@ Keep hard:
 
 - authority conflict;
 - a material decision outside delegation;
-- active adversarial-consensus direct-user-only gates preserved by Baseline coexistence;
+- adversarial-consensus activation, exact Challenger binding, Intent Anchor confirmation, and any separately required disclosure expansion;
 - any current leaf requirement that cannot be satisfied by evidence or valid authority.
 
 ### To Spec
@@ -120,6 +124,10 @@ Preserve:
 Adaptive delta:
 
 - use the current Baseline To Spec self-review/adoption guard unchanged;
+- when an active adversarial-consensus gate reaches To Spec, accept only an exact Ask Matt-finalized latest shared understanding whose finalization provenance is `USER_EXPLICIT` or `DELEGATED_RECOMMENDATION`, whose latest complete candidate has current `ADVERSARIAL CONSENSUS REACHED`, whose Challenger final review has no later material candidate change, and whose applicable Behavior/UI authority is approved;
+- in explicit Adaptive mode, a valid Ask Matt `DELEGATED_RECOMMENDATION` finalization satisfies the Baseline post-consensus finalization precondition for that exact candidate; ordinary non-Adaptive To Spec still requires the Baseline direct final user approval;
+- do not reinterpret the Mandate or Run Contract, reclassify `NONE`/`MATERIAL`/`UNCERTAIN`, or rerun the delegated-decision test inside To Spec; if the finalized authority is missing, stale, conflicting, or appears to require new product meaning, return to Ask Matt rather than creating a second finalization owner;
+- carry finalization provenance only in the current invocation context; do not create a receipt, sidecar, gate-state file, or canonical Adaptive metadata for it;
 - do not add standing-delegation provenance for a faithful structural projection that Baseline already adopts by self-review;
 - continue to current To Tickets without a manual user request; and
 - project only the current Increment even when the outer Run Contract spans more Required Named Items or broader outcomes.

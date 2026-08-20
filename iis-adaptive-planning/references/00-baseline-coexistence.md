@@ -44,9 +44,10 @@ The delta is limited to:
 
 1. **Run Contract closure and terminal discipline** — before the first planning mutation, normalize current authority into one compact invocation-local contract that separates Required Named Items from Candidate Named Items, fixes the Required Item Policy, records Implementation and Verification independently, and closes the Run Completion Boundary, Completion Predicate, and Authoritative Readback. Ask only for a material unresolved field. A Baseline leaf STOP or Ready Ticket terminal remains exactly what Baseline says; it becomes whole-run completion only when the outer Run Contract predicate is satisfied.
 2. **Standing delegated planning confirmation** — a Baseline leaf's ordinary user-owned planning decision may be satisfied by the active Mandate when the candidate is fully within delegated authority and the delegated-decision test passes. Baseline To Spec/To Tickets self-review adoption is not reclassified as delegated confirmation merely because Adaptive is active.
-3. **Intra-planning continuation** — an ordinary leaf STOP that exists to wait for the user to manually request the next IIS planning leaf becomes a return to the Adaptive router for the same current planning unit.
-4. **Planning re-entry/reshaping** — fresh evidence may send the current unit back to an earlier existing IIS planning leaf without requiring a new user prompt when the Mandate already authorizes that decision. Required Named Items and the active Completion Predicate remain preserved across that reshape; Candidate Named Items remain mutable under current authority.
-5. **Verification-result triage** — a separate verifier result may be classified and fed back into the appropriate existing planning leaf as evidence.
+3. **Post-consensus delegated finalization** — when adversarial consensus was explicitly activated with an exact user-designated Challenger and user-confirmed Intent Anchor, Ask Matt may satisfy the Baseline post-consensus final integrated approval through standing delegation only after current `ADVERSARIAL CONSENSUS REACHED`, an authority-delta result of `NONE`, a still-passing delegated-decision test, no Return-to-User Boundary or authority conflict, and no material candidate change after the Challenger's final review. This changes only how that finalization approval is satisfied in explicit Adaptive mode; it does not make Challenger consensus itself product authority or change ordinary Baseline finalization.
+4. **Intra-planning continuation** — an ordinary leaf STOP that exists to wait for the user to manually request the next IIS planning leaf becomes a return to the Adaptive router for the same current planning unit.
+5. **Planning re-entry/reshaping** — fresh evidence may send the current unit back to an earlier existing IIS planning leaf without requiring a new user prompt when the Mandate already authorizes that decision. Required Named Items and the active Completion Predicate remain preserved across that reshape; Candidate Named Items remain mutable under current authority.
+6. **Verification-result triage** — a separate verifier result may be classified and fed back into the appropriate existing planning leaf as evidence.
 
 Everything else remains current Baseline authority.
 
@@ -79,7 +80,7 @@ The following remain hard even in Adaptive mode:
 
 - a status-only/current-state request is read-only and stops after reporting;
 - adversarial planning consensus remains explicit-only and Adaptive never chooses/activates a Challenger;
-- when adversarial consensus is active, its exact direct-user-only binding/Intent Anchor/final-approval requirements remain direct-user-only unless the current Baseline itself changes that contract;
+- the adversarial gate's activation, exact Challenger binding, and user-confirmed Intent Anchor remain direct-user-only; ordinary Baseline post-consensus final approval also remains direct-user-owned by default, while explicit Adaptive mode may satisfy only that finalization event through the exact no-authority-delta standing-delegation rule above;
 - a missing project root, invalid canonical path, unresolved authority conflict, failed validator, or unavailable required evidence is not cured by delegation;
 - the complete Ready Ticket Set is the terminal IIS Planning output for the current Increment;
 - implementation and verification are outside IIS Planning;

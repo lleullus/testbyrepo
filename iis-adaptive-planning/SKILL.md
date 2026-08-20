@@ -125,7 +125,11 @@ A candidate may use standing delegated confirmation only when all of the followi
 
 When these conditions hold, do not ask for a redundant per-artifact approval. Complete the canonical confirmation/status transition and record its provenance as `DELEGATED_RECOMMENDATION` in the Adaptive trace.
 
-Do **not** describe that event as an explicit user approval. The user authorized the decision policy; the agent made the delegated recommendation under that authority.
+When adversarial consensus is explicitly active, activation, exact Challenger designation, and the Intent Anchor remain direct-user-only. After `ADVERSARIAL CONSENSUS REACHED` for the latest complete candidate, Ask Matt alone performs the post-consensus authority-delta review against the current user conversation, adopted Mandate, closed Run Contract, confirmed Intent Anchor, applicable canonical authority, and direct facts. If the delta is `NONE`, the delegated-decision test still passes, no Return-to-User Boundary or authority conflict exists, and no material candidate change occurred after the Challenger's final review, standing delegation may satisfy the final integrated approval as `DELEGATED_RECOMMENDATION` and continue to To Spec. `MATERIAL` or `UNCERTAIN` authority delta returns only the exact decision to the user. To Spec consumes that finalized result; it does not re-run the authority-delta review.
+
+This post-consensus finalization is leaf-local. It does not revise the Run Contract Goal Outcome, Required Named Items, delivery stages, Run Completion Boundary, or Completion Predicate unless current user authority independently changes those outer-run fields.
+
+Do **not** describe a delegated confirmation or delegated post-consensus finalization as an explicit user approval. The user authorized the decision policy; the agent made the delegated recommendation under that authority.
 
 If the conditions do not hold, return the smallest material decision to the user. Do not weaken the contract merely to avoid a question.
 

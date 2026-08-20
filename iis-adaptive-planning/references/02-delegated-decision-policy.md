@@ -66,6 +66,32 @@ For each event:
 
 Do not add a fake user quote or write `user explicitly approved`.
 
+## Post-consensus delegated finalization
+
+In explicit Adaptive mode, Ask Matt alone owns the authority-delta review after `ADVERSARIAL CONSENSUS REACHED` for the latest complete candidate. The Challenger owns review and objection closure; To Spec owns admission/projection after finalization and must not independently reinterpret the Mandate or rerun this review.
+
+Compare the latest reviewed candidate against, in authority order: the current user conversation including later explicit changes; the current user-adopted Mandate; the closed Run Contract; the user-confirmed Intent Anchor as a derivative representation that never replaces the user's words; applicable current Scope/Behavior/UI/verification authority; and directly verified current facts. Facts constrain the review but do not become product authority by themselves.
+
+Classify the authority delta exactly once as:
+
+- `NONE` — the latest candidate requires no new user-owned product authority and remains determinable inside the current delegated authority;
+- `MATERIAL` — accepting the candidate requires a user-owned product meaning, boundary, priority, or authority change not already delegated; or
+- `UNCERTAIN` — current authority is insufficient to determine whether such a material change exists.
+
+Standing delegated post-consensus finalization is valid only when all of the following hold:
+
+1. Adaptive is currently explicitly active and the applicable Mandate/Run Contract remain current;
+2. the user explicitly activated adversarial consensus, designated the exact Challenger, and confirmed the current Intent Anchor;
+3. the latest complete candidate has current `ADVERSARIAL CONSENSUS REACHED` and no material candidate change occurred after the Challenger's final review;
+4. the delegated-decision test above still passes;
+5. authority delta is exactly `NONE`;
+6. no Return-to-User Boundary or unresolved authority conflict exists; and
+7. finalization remains inside the current Run Contract, including its Required Named Items, delivery stages, Run Completion Boundary, and Completion Predicate.
+
+When all seven conditions hold, Ask Matt may approve the applicable completed Behavior/UI authority, finalize the exact integrated shared understanding, record `DELEGATED_RECOMMENDATION`, and continue to To Spec without another user approval. This is not a claim that the user directly approved that candidate and does not revise the outer Run Contract.
+
+For `MATERIAL` or `UNCERTAIN`, return only the exact unresolved authority decision to the user. If the user accepts the exact latest candidate without changing its meaning, finalization provenance is `USER_EXPLICIT`. If the user materially changes the candidate while responding and adversarial activation remains current, the affected consensus is no longer current and the changed latest candidate must return to the exact designated Challenger before finalization.
+
 ## Special gates not covered by standing delegation
 
 Unless the current Baseline later changes them, do not use standing delegation for:
@@ -73,11 +99,10 @@ Unless the current Baseline later changes them, do not use standing delegation f
 - activating adversarial planning consensus;
 - selecting/designating the exact Adversarial Planning Challenger;
 - the adversarial gate's exact user-confirmed Intent Anchor;
-- the adversarial gate's post-consensus direct final user approval when the current Baseline explicitly requires it;
 - authority owned by an external operator/credential holder rather than IIS planning;
 - concrete destructive/production/external-effect authorization.
 
-These are not ordinary repeated IIS artifact reviews.
+The Baseline post-consensus direct final approval remains the ordinary non-Adaptive rule. Only the exact explicit-Adaptive post-consensus rule above may satisfy that finalization event through standing delegation.
 
 ## Facts versus decisions
 

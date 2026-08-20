@@ -88,6 +88,48 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn("Special gates not covered by standing delegation", delegated)
         self.assertIn("Adversarial Planning Challenger", delegated)
 
+    def test_post_consensus_delegated_finalization_is_adaptive_only_and_scope_safe(self) -> None:
+        skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
+        coexistence = (ADAPTIVE / "references" / "00-baseline-coexistence.md").read_text(
+            encoding="utf-8"
+        )
+        delegated = (ADAPTIVE / "references" / "02-delegated-decision-policy.md").read_text(
+            encoding="utf-8"
+        )
+        routing = (ADAPTIVE / "references" / "03-adaptive-routing.md").read_text(
+            encoding="utf-8"
+        )
+        contract = (ADAPTIVE / "references" / "09-run-contract.md").read_text(
+            encoding="utf-8"
+        )
+        matt = (ROOT / "matt" / "skills" / "ask-matt" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        to_spec = (ROOT / "matt" / "skills" / "to-spec" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Ask Matt alone performs the post-consensus authority-delta review", skill)
+        self.assertIn("Post-consensus delegated finalization", delegated)
+        self.assertIn("Ask Matt alone owns the authority-delta review", delegated)
+        self.assertIn("authority delta is exactly `NONE`", delegated)
+        self.assertIn("For `MATERIAL` or `UNCERTAIN`", delegated)
+        self.assertIn("does not revise the outer Run Contract", delegated)
+        self.assertIn("ordinary non-Adaptive To Spec still requires", routing)
+        self.assertIn("do not reinterpret the Mandate or Run Contract", routing)
+        self.assertIn("finalization is `USER_EXPLICIT` or `DELEGATED_RECOMMENDATION`", routing)
+
+        # The earlier whole-run scope closure remains authoritative across finalization.
+        self.assertIn("Required-item coverage invariant", contract)
+        self.assertIn("`LEAF_APPROVAL_ONLY`", contract)
+        self.assertIn("`REQUIRED_REMAINS_AFTER_DELIVERY`", contract)
+        self.assertIn("do not revise the Run Contract Goal Outcome", routing)
+
+        # Baseline remains directly user-approved and unchanged by the Adaptive overlay.
+        self.assertIn("Require explicit user approval", matt)
+        self.assertIn("post-consensus final integrated user approval", to_spec)
+        self.assertIn("or change ordinary Baseline finalization", coexistence)
+
     def test_adaptive_activation_defaults_current_increment_delivery_with_stop_override(self) -> None:
         skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
         continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(

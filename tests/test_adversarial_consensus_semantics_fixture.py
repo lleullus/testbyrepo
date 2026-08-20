@@ -9,6 +9,13 @@ ROUTER = (ROOT / "iis-workflow/SKILL.md").read_text(encoding="utf-8")
 MATT = (ROOT / "matt/skills/ask-matt/SKILL.md").read_text(encoding="utf-8")
 GATE = (ROOT / "matt/skills/adversarial-consensus/SKILL.md").read_text(encoding="utf-8")
 TO_SPEC = (ROOT / "matt/skills/to-spec/SKILL.md").read_text(encoding="utf-8")
+ADAPTIVE = ROOT / "iis-adaptive-planning"
+ADAPTIVE_DELEGATED = (ADAPTIVE / "references" / "02-delegated-decision-policy.md").read_text(
+    encoding="utf-8"
+)
+ADAPTIVE_ROUTING = (ADAPTIVE / "references" / "03-adaptive-routing.md").read_text(
+    encoding="utf-8"
+)
 
 
 def normalized(text: str) -> str:
@@ -27,6 +34,28 @@ def can_to_spec(
     if not active or withdrawn:
         return True
     return challenger and intent_anchor and consensus and post_consensus_final_approval
+
+
+def can_adaptive_to_spec(
+    *,
+    active: bool,
+    challenger: bool,
+    intent_anchor: bool,
+    consensus: bool,
+    finalization_provenance: str,
+    standing_authority_valid: bool,
+    material_authority_delta: str,
+    candidate_changed_after_final_review: bool = False,
+) -> bool:
+    if not active or not challenger or not intent_anchor or not consensus:
+        return False
+    if candidate_changed_after_final_review:
+        return False
+    if finalization_provenance == "USER_EXPLICIT":
+        return True
+    if finalization_provenance == "DELEGATED_RECOMMENDATION":
+        return standing_authority_valid and material_authority_delta == "NONE"
+    return False
 
 
 def purpose_first_path(
@@ -103,6 +132,75 @@ class AdversarialConsensusSemanticsFixtureTests(unittest.TestCase):
                 post_consensus_final_approval=True,
             )
         )
+
+    def test_adaptive_post_consensus_finalization_accepts_only_valid_current_authority(self) -> None:
+        base = {
+            "active": True,
+            "challenger": True,
+            "intent_anchor": True,
+            "consensus": True,
+            "standing_authority_valid": True,
+            "material_authority_delta": "NONE",
+        }
+
+        self.assertTrue(
+            can_adaptive_to_spec(
+                **base,
+                finalization_provenance="USER_EXPLICIT",
+            )
+        )
+        self.assertTrue(
+            can_adaptive_to_spec(
+                **base,
+                finalization_provenance="DELEGATED_RECOMMENDATION",
+            )
+        )
+        self.assertFalse(
+            can_adaptive_to_spec(
+                **(base | {"standing_authority_valid": False}),
+                finalization_provenance="DELEGATED_RECOMMENDATION",
+            )
+        )
+        for delta in ("MATERIAL", "UNCERTAIN"):
+            self.assertFalse(
+                can_adaptive_to_spec(
+                    **(base | {"material_authority_delta": delta}),
+                    finalization_provenance="DELEGATED_RECOMMENDATION",
+                )
+            )
+        self.assertFalse(
+            can_adaptive_to_spec(
+                **base,
+                finalization_provenance="NONE",
+            )
+        )
+        for missing_gate in ("active", "challenger", "intent_anchor", "consensus"):
+            self.assertFalse(
+                can_adaptive_to_spec(
+                    **(base | {missing_gate: False}),
+                    finalization_provenance="DELEGATED_RECOMMENDATION",
+                )
+            )
+        self.assertFalse(
+            can_adaptive_to_spec(
+                **base,
+                finalization_provenance="DELEGATED_RECOMMENDATION",
+                candidate_changed_after_final_review=True,
+            )
+        )
+
+    def test_adaptive_overlay_assigns_delta_to_ask_matt_without_rewriting_baseline_gate(self) -> None:
+        delegated = normalized(ADAPTIVE_DELEGATED)
+        routing = normalized(ADAPTIVE_ROUTING)
+        baseline_to_spec = normalized(TO_SPEC)
+
+        self.assertIn("Ask Matt alone owns the authority-delta review", delegated)
+        self.assertIn("The Challenger owns review and objection closure", delegated)
+        self.assertIn("To Spec owns admission/projection after finalization", delegated)
+        self.assertIn("authority delta is exactly `NONE`", delegated)
+        self.assertIn("ordinary non-Adaptive To Spec still requires", routing)
+        self.assertIn("do not reinterpret the Mandate or Run Contract", routing)
+        self.assertIn("post-consensus final integrated user approval", baseline_to_spec)
 
     def test_pre_consensus_approval_is_not_reused_as_final_approval(self) -> None:
         pre_consensus_approval = True
