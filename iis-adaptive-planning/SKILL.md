@@ -74,10 +74,13 @@ The Run Contract establishes:
 - Verification: `yes` | `no`;
 - Run Completion Boundary: `READY_TICKET_SET` | `CURRENT_INCREMENT_IMPLEMENTED` | `CURRENT_INCREMENT_DELIVERED` | `NAMED_REQUIRED_ITEMS_DELIVERED` | `BOUNDED_OUTCOME_SATISFIED` | `MANDATE_OUTCOME_SATISFIED`;
 - one observable Completion Predicate;
-- Authoritative Readback; and
+- Authoritative Readback;
+- Run Contract Approval Gate: `required` | `not_required`; and
 - Source Authority.
 
-Auto-fill every field current user authority, the applicable Mandate, canonical planning authority, or inspectable facts determine. A fully derived `CLOSED` form is not another approval ceremony: render it compactly and proceed.
+Auto-fill every field current user authority, the applicable Mandate, canonical planning authority, or inspectable facts determine. A fully derived `CLOSED` form normally proceeds without another approval prompt. The only Run Contract-local exception is an affirmative `/승인게이트` modifier on the current explicitly active Adaptive invocation: set `Run Contract Approval Gate: required`, render the exact `CLOSED` form, and STOP before the first planning or delivery mutation until the user directly approves that rendered contract. Without that modifier, set `Run Contract Approval Gate: not_required` and proceed normally.
+
+`/승인게이트` does not activate Adaptive by itself and does not change Goal Outcome, required/candidate meaning, delivery stages, completion meaning, Mandate authority, or any Baseline leaf approval. Standing delegation cannot satisfy this gate. If the user materially revises the decision-critical Run Contract meaning while responding, re-close and re-render the revised contract before requesting direct approval again; leaf-local planning or delivery changes inside the approved contract do not create another approval gate.
 
 If a material field remains unresolved, mark the form `USER_INPUT_REQUIRED`, ask only for the smallest field whose different answers would change required scope, candidate freedom, delivery stages, success continuation, or completion meaning, and STOP before mutation. Do not ask the user to repeat settled fields or decide an inspectable fact.
 

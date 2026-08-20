@@ -99,8 +99,11 @@ Unless the current Baseline later changes them, do not use standing delegation f
 - activating adversarial planning consensus;
 - selecting/designating the exact Adversarial Planning Challenger;
 - the adversarial gate's exact user-confirmed Intent Anchor;
+- the invocation-local Run Contract Approval Gate explicitly activated by the affirmative `/승인게이트` modifier;
 - authority owned by an external operator/credential holder rather than IIS planning;
 - concrete destructive/production/external-effect authorization.
+
+Only direct user approval of the exact rendered current `CLOSED` Run Contract satisfies an active Run Contract Approval Gate. Do not use `DELEGATED_RECOMMENDATION`, inherited authority, structural projection, reviewer agreement, or a downstream leaf confirmation to release it.
 
 The Baseline post-consensus direct final approval remains the ordinary non-Adaptive rule. Only the exact explicit-Adaptive post-consensus rule above may satisfy that finalization event through standing delegation.
 

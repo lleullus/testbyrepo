@@ -4,13 +4,14 @@
 
 Close the meaning of one explicit Adaptive invocation before planning mutation so the outer execution cannot stop at a smaller result than the user assigned, silently treat required work as disposable, or collapse a mixed required/candidate assignment into one inaccurate list-wide label.
 
-The Run Contract answers five questions:
+The Run Contract answers six questions:
 
 1. what result this invocation must produce;
 2. which user-named items are required obligations and which are candidate means;
 3. which delivery stages the user authorized for this invocation;
-4. which execution boundary counts as whole-run completion; and
-5. what observable evidence proves that boundary is satisfied.
+4. which execution boundary counts as whole-run completion;
+5. what observable evidence proves that boundary is satisfied; and
+6. whether this exact closed contract requires direct user release before the first mutation.
 
 It is a compact invocation contract, not a second Mandate, approval ceremony, workflow database, execution ledger, or roadmap.
 
@@ -20,11 +21,13 @@ Before the first Adaptive planning mutation:
 
 1. inspect the current user instruction, applicable Mandate, canonical planning authority, and inspectable current facts;
 2. normalize them into the form in [../templates/ADAPTIVE-RUN-CONTRACT.template.md](../templates/ADAPTIVE-RUN-CONTRACT.template.md);
-3. mark the form `CLOSED` only when every material field is determined by current authority;
-4. when one or more material fields remain unresolved, mark it `USER_INPUT_REQUIRED` and ask only for the smallest unresolved field whose different answers would change required scope, candidate freedom, delivery stages, success continuation, or completion meaning; and
-5. do not begin Scope, Behavior/UI, Spec, Ticket, implementation, or verification mutation until the contract is `CLOSED`.
+3. set `Run Contract Approval Gate: required` only when the current user uses exact `/승인게이트` as an affirmative directive/modifier on the current explicitly active Adaptive invocation; otherwise set `not_required`. Quoted, explanatory, hypothetical, or negated mentions do not activate the gate, and `/승인게이트` does not activate Adaptive by itself;
+4. mark the form `CLOSED` only when every material field is determined by current authority;
+5. when one or more material fields remain unresolved, mark it `USER_INPUT_REQUIRED` and ask only for the smallest unresolved field whose different answers would change required scope, candidate freedom, delivery stages, success continuation, or completion meaning;
+6. when the form is `CLOSED` and `Run Contract Approval Gate: required`, render the exact current form and STOP before mutation until the user directly approves that rendered contract; and
+7. do not begin Scope, Behavior/UI, Spec, Ticket, implementation, or verification mutation until the contract is `CLOSED` and any required Run Contract Approval Gate has been directly satisfied.
 
-Read-only inspection needed to close inspectable facts is allowed. Do not ask the user to restate information that current authority already determines. A fully derived `CLOSED` form proceeds without another approval prompt.
+Read-only inspection needed to close inspectable facts is allowed. Do not ask the user to restate information that current authority already determines. A fully derived `CLOSED` form proceeds without another approval prompt only when `Run Contract Approval Gate: not_required`; the explicit gate is the only Run Contract-local pre-mutation approval exception.
 
 ## Required fields
 
@@ -150,6 +153,19 @@ Use `Not yet established` only when establishing the readback is itself legitima
 
 Record the current instruction and applicable Mandate revision concisely. Do not fabricate a user quote.
 
+### Run Contract Approval Gate
+
+Use exactly one value:
+
+- `not_required` — default. No affirmative gate modifier applies to this exact Adaptive invocation, so a fully derived `CLOSED` contract proceeds under the normal Adaptive rules.
+- `required` — the current user explicitly applied `/승인게이트` as an affirmative directive/modifier to this exact Adaptive invocation. Render the complete current `CLOSED` Run Contract and STOP before the first planning or delivery mutation until the user directly approves that rendered contract.
+
+This gate is Run Contract-local execution release only. It is not Adaptive activation, a Mandate field, a product requirement, a Run Completion Boundary, a Return-to-User Boundary, a Baseline leaf approval, or a delivery approval. Do not infer it from risk, size, uncertainty, Required Named Items, enabled verification, or any other heuristic. Do not activate it from quoted, explanatory, hypothetical, or negated uses of `/승인게이트`.
+
+`Run Contract Approval Gate: required` does not change `Status: CLOSED` into `USER_INPUT_REQUIRED`: the contract meaning is already closed; mutation release is merely withheld. Do not create `AWAITING_APPROVAL`, `APPROVED`, `REJECTED`, expiry, attempt, or other approval-state machinery. Current-conversation direct user approval of the exact rendered contract is sufficient, and standing delegation cannot satisfy this gate.
+
+If the user's approval response materially changes Goal Outcome, Required Named Items, Candidate Named Items, Required Item Policy, Implementation, Verification, Run Completion Boundary, Completion Predicate, or the completion meaning of Authoritative Readback, apply the new authority, re-close and re-render the revised Run Contract, and require fresh direct approval. Scope shape, Increment decomposition, faithful Spec/Ticket projection, candidate treatment already allowed by the closed contract, implementation details, or delivery progress do not retrigger this Run Contract gate by themselves.
+
 ## Consistency checks
 
 Before marking the form `CLOSED`:
@@ -165,7 +181,9 @@ Before marking the form `CLOSED`:
 - an unsatisfied outcome-satisfaction boundary that requires new delivery needs sufficient implementation/verification authority; an outcome already satisfied in fresh actual state may close without starting those stages;
 - `CURRENT_INCREMENT_DELIVERED` always means the complete current canonical Ticket denominator, never one selected Ticket;
 - outcome-satisfaction boundaries require fresh actual product evidence and an authoritative readback;
-- the Run Completion Boundary must remain within current user authority and the Mandate's Continuation Authority ceiling.
+- the Run Completion Boundary must remain within current user authority and the Mandate's Continuation Authority ceiling;
+- `Run Contract Approval Gate` is `required` only from the affirmative exact invocation modifier above and otherwise is `not_required`; and
+- an active required gate preserves `Status: CLOSED` but forbids mutation until direct user approval of the rendered current form.
 
 ### Required-item coverage invariant
 
@@ -224,6 +242,8 @@ Pass only its decision-critical fields to another owner:
 
 Approval or confirmation of Scope, an Intent Anchor, Behavior/UI authority, a Spec, a Ticket, or the current Increment is leaf-local and is not by itself an outer Run Contract revision. Goal Outcome, required/candidate classification, Required Item Policy, Implementation, Verification, Run Completion Boundary, and Completion Predicate change only when current user authority actually changes or already clearly determines that outer-run meaning. Natural-language user authority is sufficient; do not require the user to name Run Contract fields explicitly, but do not treat a leaf approval as withdrawal or narrowing of broader authority.
 
+Do not pass `Run Contract Approval Gate` downstream as a Scope, Ask Matt, Spec, Ticket, implementation, or verification approval requirement. It remains an outer Run Contract release control. Once the exact rendered contract has been directly approved, downstream owners follow their existing authority unless the Run Contract's decision-critical meaning is materially revised as described above.
+
 A reshape may change the current Increment, Spec, Ticket Set, ordering, and denominator. It does not erase Required Named Items, convert them into candidates, or lower the Run Completion Boundary. Recompute the current canonical denominator after a valid reshape and continue against the same Run Contract.
 
 Candidate Named Items may be preserved, replaced, deferred, or dropped when the Mandate and evidence establish a materially better route. A material user revision may move an item between lists or change the Required Item Policy. Apply the new authority prospectively and record a concise material trace entry when the revision changes planning meaning or completion.
@@ -246,6 +266,6 @@ Emit whole-run success only when the active Completion Predicate is actually sat
 
 ## Persistence boundary
 
-The Run Contract is invocation-local authority. Render it at activation and carry it in the current request/context; do not create a required third durable companion artifact or persistent run state.
+The Run Contract is invocation-local authority. Render it at activation and carry it in the current request/context; do not create a required third durable companion artifact, persistent run state, or approval ledger. An active `/승인게이트` is likewise invocation-local and does not persist into later Adaptive invocations unless the user explicitly applies it again.
 
 When its meaning materially affects later interpretation, summarize the relevant user-owned required/candidate classification, delivery-stage revision, or completion revision in `ADAPTIVE-PLANNING-TRACE.md`. Do not log routine phase transitions, delivery progress, retry counts, or private reasoning.

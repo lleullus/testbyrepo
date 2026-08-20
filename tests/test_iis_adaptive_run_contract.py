@@ -22,7 +22,50 @@ class IISAdaptiveRunContractTests(unittest.TestCase):
         self.assertIn("Status: CLOSED | USER_INPUT_REQUIRED", template)
         self.assertIn("do not ask the user to restate", contract.lower())
         self.assertIn("ask only for the smallest unresolved field", contract)
-        self.assertIn("A fully derived `CLOSED` form proceeds without another approval prompt", contract)
+        self.assertIn(
+            "A fully derived `CLOSED` form proceeds without another approval prompt only when",
+            contract,
+        )
+
+    def test_explicit_run_contract_approval_gate_is_local_and_direct_user_only(self) -> None:
+        skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
+        coexistence = (ADAPTIVE / "references" / "00-baseline-coexistence.md").read_text(
+            encoding="utf-8"
+        )
+        delegated = (ADAPTIVE / "references" / "02-delegated-decision-policy.md").read_text(
+            encoding="utf-8"
+        )
+        contract = (ADAPTIVE / "references" / "09-run-contract.md").read_text(
+            encoding="utf-8"
+        )
+        template = (ADAPTIVE / "templates" / "ADAPTIVE-RUN-CONTRACT.template.md").read_text(
+            encoding="utf-8"
+        )
+        mandate = (ADAPTIVE / "references" / "01-mandate-contract.md").read_text(
+            encoding="utf-8"
+        )
+        continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Run Contract Approval Gate: required | not_required", template)
+        self.assertIn("`/승인게이트`", skill)
+        self.assertIn("`/승인게이트`", coexistence)
+        self.assertIn("quoted, explanatory, hypothetical, or negated", contract)
+        self.assertIn("does not activate Adaptive by itself", contract)
+        self.assertIn("Run Contract-local execution release only", contract)
+        self.assertIn("standing delegation cannot satisfy this gate", contract)
+        self.assertIn("Run Contract Approval Gate explicitly activated", delegated)
+        self.assertIn(
+            "direct user approval of the exact rendered current `CLOSED` Run Contract",
+            delegated,
+        )
+        self.assertIn(
+            "does not add Mandate, Scope, Ask Matt, Spec, Ticket, implementation, or verification approval gates",
+            template,
+        )
+        self.assertNotIn("Run Contract Approval Gate", mandate)
+        self.assertNotIn("Run Contract Approval Gate", continuation)
 
     def test_run_contract_is_an_exact_adaptive_delta_before_routing(self) -> None:
         coexistence = (ADAPTIVE / "references" / "00-baseline-coexistence.md").read_text(

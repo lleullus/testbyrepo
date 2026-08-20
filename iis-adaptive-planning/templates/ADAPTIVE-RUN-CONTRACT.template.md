@@ -3,6 +3,7 @@
 Status: CLOSED | USER_INPUT_REQUIRED
 Project-Root: <exact absolute project root | Not established yet>
 Mandate: <companion path/revision | current-conversation authority>
+Run Contract Approval Gate: required | not_required
 
 ## Goal Outcome
 
@@ -61,7 +62,10 @@ or, only when `Status: USER_INPUT_REQUIRED`:
 
 - Auto-fill every field current authority determines; do not ask the user to restate it.
 - Required Named Items and Candidate Named Items may coexist; no item may appear in both.
-- A `CLOSED` form is not a new approval ceremony and proceeds without redundant confirmation.
+- Default `Run Contract Approval Gate` to `not_required`. Set it to `required` only when exact `/승인게이트` is an affirmative directive/modifier on the current explicitly active Adaptive invocation; quoted, explanatory, hypothetical, or negated mentions do not activate it, and the token does not activate Adaptive by itself.
+- A `CLOSED` form proceeds without redundant confirmation when the gate is `not_required`. When the gate is `required`, render this exact `CLOSED` form and STOP before the first planning or delivery mutation until direct user approval.
+- The gate is Run Contract-only. It does not add Mandate, Scope, Ask Matt, Spec, Ticket, implementation, or verification approval gates and cannot be satisfied through standing delegation.
+- If direct approval materially revises decision-critical Run Contract meaning, re-close and re-render the revised form before requesting approval again; downstream changes already allowed by the approved contract do not retrigger the gate.
 - Do not begin planning or delivery mutation while a material field remains unresolved.
 - Implementation and Verification are independent invocation fields; preserve explicit `do not implement` and `do not verify` overrides.
 - Continuation Authority is the Mandate ceiling; this form's Run Completion Boundary is the actual invocation terminal within that ceiling.
