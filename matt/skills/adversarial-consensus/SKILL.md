@@ -127,9 +127,10 @@ gates in order:
 
 Review-rule growth, duplicate defensive prose, context expansion, instruction
 conflict, false assurance, and drift are themselves material only when they
-plausibly weaken the gate's purpose. After `NO PROBLEM`, close that attack and
-stop; do not prolong the debate with optional polish or increasingly remote
-objections.
+plausibly weaken the gate's purpose. After `NO PROBLEM`, stop extending that
+review branch with optional polish or increasingly remote objections. This
+anti-bloat stop does not turn Matt's adjudication into Challenger closure; the
+continuity rules still govern a Challenger-opened material objection.
 
 ## Intent Anchor Confirmation
 
@@ -249,7 +250,12 @@ Perform all of the following:
 2. **Material-problem admission** — confirm the concrete trigger, causal path,
    material impact, and whether the current candidate introduced or materially
    worsened the problem. If that case is not established, record `NO PROBLEM`
-   and close the attack rather than manufacturing a finding.
+   as Matt's current adjudication rather than manufacturing a finding. When the
+   Challenger itself returned `Material-problem result: NOT ESTABLISHED`, Matt
+   may close that attack after confirming the result and making no material
+   candidate change. When the Challenger returned `ESTABLISHED`, a Matt-issued
+   `NO PROBLEM` does not itself close the objection; apply the continuity rules
+   below.
 3. **Purpose gate** — determine whether the candidate materially achieves its
    established purpose and whether it materially undermines that purpose. A
    `PURPOSE FAILURE` or `PURPOSE UNDERMINING` result cannot be offset by unrelated
@@ -278,7 +284,7 @@ Perform all of the following:
 9. **Disposition** — assign exactly one current disposition:
 
 ```text
-NO PROBLEM            No concrete material defect or purpose failure was established; close the attack.
+NO PROBLEM            No concrete material defect or purpose failure was established in Matt's adjudication.
 ADOPTED               Challenger correction is stronger.
 DEFENDED              The current purpose-preserving candidate remains stronger; no required correction is established.
 RECONSTRUCTED         A stronger third result replaces both presented options.
@@ -287,10 +293,22 @@ RETURN TO SCOPE SHAPER The challenge changes the bounded package/initiative boun
 OUT OF SCOPE           The challenge does not affect the current approved planning unit.
 ```
 
+These dispositions are Matt/Main adjudications, not Challenger closure states.
+
 A reconstructed result is not a midpoint for the sake of agreement. It must be
 better supported against the confirmed user outcome.
 
 ## Debate Continuity And Progress
+
+Continuation is state-based, not round-based. Unless `USER DECISION REQUIRED`
+or `RETURN TO SCOPE SHAPER` returns control outside the debate, invoke the same
+Challenger again when either a material objection the Challenger opened lacks a
+Challenger closure, or Matt's adjudication produced a material candidate delta
+that the Challenger has not reviewed. A Matt-issued `NO PROBLEM` or `DEFENDED`
+rebuttal must be returned for Challenger assessment while its material objection
+remains open. After `ADOPTED` or `RECONSTRUCTED` materially changes the
+candidate, give the Challenger the latest complete candidate rather than
+treating Matt's disposition as agreement.
 
 Prefer the same Challenger conversation or resumable context for follow-ups so
 the counterpart must answer Matt's defense and counterattack rather than restart
@@ -301,7 +319,7 @@ open objection, rebuttal, or new evidence needed for the next exchange. This is
 current-invocation conversational continuity, not a workflow database, roster,
 queue, ledger, or persistent IIS state.
 
-After Matt responds, require the Challenger to do one of:
+For each required continuation, require the Challenger to do one of:
 
 ```text
 CONCEDE       Close the objection after considering Matt's rebuttal.
@@ -309,16 +327,22 @@ MAINTAIN      Keep it open with materially new evidence or a new counterexample.
 USER DECISION Show why the remaining difference is genuinely user-owned.
 ```
 
+Do not invoke another round merely to satisfy a count. If the Challenger's
+current assessment contains only `NO MATERIAL OBJECTION` or Challenger-issued
+`NO PROBLEM` results for `NOT ESTABLISHED` attacks, Matt confirms the
+load-bearing facts, and no material candidate delta follows, no follow-up
+invocation is required.
+
 There is no fixed round count. Every further round must close a material
 objection, add material evidence, add a material counterexample, identify a real
 user-owned decision, or assess the latest reconstructed candidate. Repeating a
 closed objection without new support is not progress.
 
-`NO PROBLEM`, `NO MATERIAL OBJECTION`, and `CONCEDE` are stop conditions for
-that attack unless later materially new evidence or a new counterexample reopens
-it. Optional improvements that establish no material defect cannot keep the
-debate open. Do not split one root cause or add review clauses merely to create
-more findings.
+A Challenger-issued `NO PROBLEM` for a `NOT ESTABLISHED` attack, `NO MATERIAL
+OBJECTION`, and `CONCEDE` are stop conditions for that attack unless later
+materially new evidence or a new counterexample reopens it. Optional
+improvements that establish no material defect cannot keep the debate open. Do
+not split one root cause or add review clauses merely to create more findings.
 
 If the designated counterpart is unavailable or refuses the protocol such that
 no current compliant adversarial assessment can be obtained, do not let Matt

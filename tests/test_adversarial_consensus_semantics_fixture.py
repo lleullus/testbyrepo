@@ -95,6 +95,26 @@ def purpose_first_path(
     return "TRADEOFF ELIGIBLE"
 
 
+def adversarial_next_step(
+    *,
+    challenger_opened_material_objection: bool,
+    matt_disposition: str,
+    challenger_followup: str = "NONE",
+    unreviewed_material_candidate_delta: bool = False,
+) -> str:
+    if matt_disposition == "USER DECISION REQUIRED" or challenger_followup == "USER DECISION":
+        return "USER DECISION"
+    if matt_disposition == "RETURN TO SCOPE SHAPER":
+        return "RETURN TO SCOPE SHAPER"
+    if challenger_followup == "MAINTAIN":
+        return "CONTINUE"
+    if unreviewed_material_candidate_delta:
+        return "CONTINUE"
+    if challenger_opened_material_objection and challenger_followup != "CONCEDE":
+        return "CONTINUE"
+    return "COMPLETE ELIGIBLE"
+
+
 class AdversarialConsensusSemanticsFixtureTests(unittest.TestCase):
     def test_purpose_first_path_blocks_tradeoff_until_material_and_purpose_gates_pass(self) -> None:
         self.assertEqual(
@@ -129,6 +149,73 @@ class AdversarialConsensusSemanticsFixtureTests(unittest.TestCase):
             ),
             "TRADEOFF ELIGIBLE",
         )
+
+    def test_no_material_objection_and_unchanged_candidate_need_no_extra_round(self) -> None:
+        self.assertEqual(
+            adversarial_next_step(
+                challenger_opened_material_objection=False,
+                matt_disposition="NO PROBLEM",
+            ),
+            "COMPLETE ELIGIBLE",
+        )
+
+    def test_matt_adjudication_does_not_close_a_challenger_material_objection(self) -> None:
+        for disposition in ("NO PROBLEM", "DEFENDED", "ADOPTED", "RECONSTRUCTED"):
+            with self.subTest(disposition=disposition):
+                self.assertEqual(
+                    adversarial_next_step(
+                        challenger_opened_material_objection=True,
+                        matt_disposition=disposition,
+                    ),
+                    "CONTINUE",
+                )
+
+    def test_challenger_closure_and_unreviewed_candidate_delta_control_continuation(self) -> None:
+        self.assertEqual(
+            adversarial_next_step(
+                challenger_opened_material_objection=True,
+                matt_disposition="DEFENDED",
+                challenger_followup="CONCEDE",
+            ),
+            "COMPLETE ELIGIBLE",
+        )
+        self.assertEqual(
+            adversarial_next_step(
+                challenger_opened_material_objection=True,
+                matt_disposition="DEFENDED",
+                challenger_followup="MAINTAIN",
+            ),
+            "CONTINUE",
+        )
+        self.assertEqual(
+            adversarial_next_step(
+                challenger_opened_material_objection=False,
+                matt_disposition="ADOPTED",
+                challenger_followup="CONCEDE",
+                unreviewed_material_candidate_delta=True,
+            ),
+            "CONTINUE",
+        )
+        self.assertEqual(
+            adversarial_next_step(
+                challenger_opened_material_objection=True,
+                matt_disposition="DEFENDED",
+                challenger_followup="USER DECISION",
+            ),
+            "USER DECISION",
+        )
+        for disposition, expected in (
+            ("USER DECISION REQUIRED", "USER DECISION"),
+            ("RETURN TO SCOPE SHAPER", "RETURN TO SCOPE SHAPER"),
+        ):
+            with self.subTest(disposition=disposition):
+                self.assertEqual(
+                    adversarial_next_step(
+                        challenger_opened_material_objection=True,
+                        matt_disposition=disposition,
+                    ),
+                    expected,
+                )
 
     def test_active_gate_cannot_be_bypassed_by_explicit_to_spec(self) -> None:
         self.assertTrue(can_to_spec(active=False))

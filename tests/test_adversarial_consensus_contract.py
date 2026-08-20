@@ -130,7 +130,8 @@ class AdversarialConsensusContractTests(unittest.TestCase):
             "prefer an existing mechanism, clarification or consolidation, or a narrow control",
             "before broader/global instruction or review expansion",
             "distinct material protection",
-            "After `NO PROBLEM`, close that attack and stop",
+            "After `NO PROBLEM`, stop extending that review branch",
+            "anti-bloat stop does not turn Matt's adjudication into Challenger closure",
             "Optional improvements that establish no material defect cannot keep the debate open",
             "Do not split one root cause or add review clauses merely to create more findings",
             "every adopted or reconstructed safeguard is a minimum-sufficient correction",
@@ -142,6 +143,15 @@ class AdversarialConsensusContractTests(unittest.TestCase):
     def test_debate_requires_substantive_progress_without_fixed_round_limit_or_vote(self) -> None:
         body = normalized(GATE)
         for required in (
+            "These dispositions are Matt/Main adjudications, not Challenger closure states",
+            "Continuation is state-based, not round-based",
+            "Unless `USER DECISION REQUIRED` or `RETURN TO SCOPE SHAPER` returns control outside the debate",
+            "a material objection the Challenger opened lacks a Challenger closure",
+            "a material candidate delta that the Challenger has not reviewed",
+            "A Matt-issued `NO PROBLEM` or `DEFENDED` rebuttal",
+            "After `ADOPTED` or `RECONSTRUCTED` materially changes the candidate",
+            "Do not invoke another round merely to satisfy a count",
+            "A Challenger-issued `NO PROBLEM` for a `NOT ESTABLISHED` attack",
             "There is no fixed round count",
             "Repeating a closed objection without new support is not progress",
             "CONCEDE",
