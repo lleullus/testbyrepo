@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { access, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertModelBindings } from "./model-binding-preflight.mjs";
 
@@ -94,6 +95,41 @@ export async function canonicalFile(value, field) {
   const canonical = await realpath(requested);
   if (!(await stat(canonical)).isFile()) throw new Error(`${field} is not a file`);
   return canonical;
+}
+
+async function isExecutable(path) {
+  try {
+    await access(path, process.platform === "win32" ? fsConstants.F_OK : fsConstants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function resolvePiBinary(configured = process.env.IIS_PI_BIN) {
+  const requested = typeof configured === "string" ? configured.trim() : "";
+  if (requested && (isAbsolute(requested) || requested.includes("/") || requested.includes("\\"))) {
+    const candidate = isAbsolute(requested) ? requested : resolve(requested);
+    if (await isExecutable(candidate)) return candidate;
+    throw new Error(`configured IIS_PI_BIN is not executable: ${requested}`);
+  }
+
+  const command = requested || "pi";
+  const names = process.platform === "win32" && !/\.(?:bat|cmd|exe)$/i.test(command)
+    ? [command, `${command}.cmd`, `${command}.exe`, `${command}.bat`]
+    : [command];
+  const directories = [
+    ...(process.env.PATH || "").split(delimiter).filter(Boolean),
+    join(homedir(), ".local", "bin"),
+    join(homedir(), ".bun", "bin"),
+  ];
+  for (const directory of new Set(directories)) {
+    for (const name of names) {
+      const candidate = join(directory, name);
+      if (await isExecutable(candidate)) return candidate;
+    }
+  }
+  throw new Error("Pi executable is unavailable; set IIS_PI_BIN or install pi in PATH, ~/.local/bin, or ~/.bun/bin");
 }
 
 function parseArguments(argv) {
@@ -471,7 +507,7 @@ async function execute(config, invocation, startedAt, progress) {
   process.once("SIGTERM", onSigTerm);
 
   try {
-    const piBinary = process.env.IIS_PI_BIN || "pi";
+    const piBinary = await resolvePiBinary();
     const agentDir = process.env.IIS_PI_AGENT_DIR || resolve(homedir(), ".pi/agent/iis-ready-ticket");
     const args = [
       "--mode", "json",

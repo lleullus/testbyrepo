@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -441,6 +442,51 @@ class PiReadyRunnerTests(unittest.TestCase):
         self.assertEqual(events[3]["summary"], "● Inspecting ticket and repository")
         for forbidden in ("toolName", "toolStarts", "toolFinishes", "TOOL_STARTED", "TOOL_FINISHED"):
             self.assertNotIn(forbidden, completed.stderr)
+
+    def test_runner_resolves_pi_from_user_local_bin_when_managed_path_omits_it(self) -> None:
+        restricted_home = self.work / "restricted-home"
+        local_bin = restricted_home / ".local" / "bin"
+        local_bin.mkdir(parents=True)
+        local_pi = local_bin / "pi"
+        shutil.copy2(self.stub, local_pi)
+        local_pi.chmod(0o755)
+
+        node = shutil.which("node")
+        self.assertIsNotNone(node)
+        assert node is not None
+        restricted_path = os.pathsep.join(
+            [str(Path(node).parent), "/usr/bin", "/bin"]
+        )
+        self.assertIsNone(shutil.which("pi", path=restricted_path))
+
+        input_path = self.work / "restricted-path-invocation.json"
+        capture_path = self.work / "restricted-path-capture.json"
+        input_path.write_text(
+            json.dumps(self.implement_invocation()), encoding="utf-8"
+        )
+        input_path.chmod(0o600)
+        env = {
+            **os.environ,
+            "HOME": str(restricted_home),
+            "PATH": restricted_path,
+            "NODE_ENV": "test",
+            "PI_STUB_CAPTURE": str(capture_path),
+            "IIS_PI_AGENT_DIR": str(self.agent_dir),
+        }
+        env.pop("IIS_PI_BIN", None)
+        completed = subprocess.run(
+            [str(IMPLEMENT), "--input", str(input_path)],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=20,
+            check=False,
+        )
+        terminal = json.loads(completed.stdout)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(terminal["processStatus"], "COMPLETED")
+        self.assertTrue(capture_path.exists())
 
     def test_runner_coalesces_owner_tool_activity_into_meaningful_status_changes(self) -> None:
         completed, _terminal, _capture = self.run_runner(
