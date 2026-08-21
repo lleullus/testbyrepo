@@ -1,1 +1,0 @@
-../../companion-skills/ready-ticket-implement/pi/iis-ready-implement.md

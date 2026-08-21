@@ -26,19 +26,19 @@ Auditor Count: 1 | 2 | 3
 
 Auditor 1:
   Role: PRIMARY_CONTRACT_IMPLEMENTATION
-  Model: <explicit exact model, otherwise opencodex/gpt-5.6-luna>
-  Reasoning Depth: <explicit exact depth, otherwise xhigh>
+  Model: <exact caller/user-designated model>
+  Reasoning Depth: <exact caller/user-designated depth>
 
 Auditor 2 when active:
   Role when Count=2: BEHAVIOR_AUTHORITY | VERIFICATION_REGRESSION
   Role when Count=3: BEHAVIOR_AUTHORITY
-  Model: <explicit exact model, otherwise opencodex/gpt-5.6-luna>
-  Reasoning Depth: <explicit exact depth, otherwise xhigh>
+  Model: <exact caller/user-designated model>
+  Reasoning Depth: <exact caller/user-designated depth>
 
 Auditor 3 when Count=3:
   Role: VERIFICATION_REGRESSION
-  Model: <explicit exact model, otherwise opencodex/gpt-5.6-luna>
-  Reasoning Depth: <explicit exact depth, otherwise xhigh>
+  Model: <exact caller/user-designated model>
+  Reasoning Depth: <exact caller/user-designated depth>
 ```
 
 Count `2`에서 Auditor 2 role은 caller/user가 명시하거나 caller/user가 명시한 `AUTO_BY_MATERIAL_RISK`를 Main이 dispatch 전에 해석한 결과여야 한다. 값이 없으면 실행하지 않는다.
@@ -50,8 +50,8 @@ Count `2`에서 Auditor 2 role은 caller/user가 명시하거나 caller/user가 
 - Count `3`은 Primary, Behavior/Authority, Verification/Regression 세 역할이다.
 - 역할을 중복 배치하지 않는다.
 - Auditor가 스스로 count나 role을 바꾸지 않는다.
-- 각 active slot은 dispatch 전에 exact Model과 exact Reasoning Depth로 해석되어야 한다. 생략된 값은 Pi runner의 pinned Luna XHigh default로 해석한다.
-- Host는 첫 source change 전에 명시값 또는 pinned default로 해석된 exact slot configuration으로 execution context를 성공적으로 시작해야 한다. 명시값을 pinned default나 다른 binding으로 대체하지 않는다. 성공적으로 시작된 뒤 self-reported model/depth/runtime metadata/display label은 diagnostic only다.
+- 각 active slot은 exact Model과 exact Reasoning Depth가 모두 있어야 한다.
+- Host는 첫 source change 전에 exact requested slot configuration으로 execution context를 성공적으로 시작해야 한다. Host default나 대체 binding을 사용하지 않는다. 성공적으로 시작된 뒤 self-reported model/depth/runtime metadata/display label은 diagnostic only다.
 - Active slot을 실행할 capability가 없으면 다른 slot, 다른 model/depth 또는 순차 review로 대체하지 않는다.
 
 `VERIFICATION_REGRESSION`이라는 role 이름은 구현 중 verification surface와 regression risk를 감사한다는 뜻이다. Separate verification authority를 수행하거나 verification verdict를 내린다는 뜻이 아니다.

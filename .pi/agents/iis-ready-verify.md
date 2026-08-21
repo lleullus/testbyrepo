@@ -1,1 +1,0 @@
-../../companion-skills/ready-ticket-verify/pi/iis-ready-verify.md
