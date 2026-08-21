@@ -1,4 +1,4 @@
 interface:
   display_name: "Ready Ticket Implement"
-  short_description: "Implement one Ready Ticket with optional concurrent auditors"
-  default_prompt: "Use $ready-ticket-implement to implement the specified Ready Ticket with the exact optional Auditor Count and bindings; perform implementation self-check only and do not adjudicate the separate verification authority."
+  short_description: "Implement one Ready Ticket through one worker"
+  default_prompt: "Use $ready-ticket-implement to assign the exact Ready Ticket to one implementation worker by default, preserve the Ticket contract, perform implementation self-check, and leave final verification to the separate verifier."

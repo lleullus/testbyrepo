@@ -1,21 +1,49 @@
 # Ready Ticket Verification Workflow
 
-## 1. Admission and current authority
+## 1. Invocation and subagent-first dispatch
+
+Top-level invocation uses `SUBAGENT` unless the current user explicitly requests `DIRECT`.
+
+Outer Main must:
+
+1. Confirm one non-blocking verifier worker can access the Project Root, send parent-directed messages and return one terminal result.
+2. Assign one exact Ticket to one worker with optional navigation inputs, Additional User Instructions and `Delegated Worker: yes`.
+3. Include exact targets, non-goals, required evidence and the communication contract below in the assignment.
+4. Receive the scenario handoff and material-turn reports, steering only for newer user authority or decision-critical evidence.
+5. Receive the terminal `READY TICKET VERIFICATION RESULT`, check exact Ticket/target identity and required terminal fields, and present the caller-facing result without issuing a second AC/Ticket verdict.
+
+```text
+# Communication
+
+- After canonical admission, authority/target binding and integrated scenario authoring, send VERIFICATION SCENARIO REPORT to the direct parent non-blocking before the first product/runtime action.
+- Continue safe authorized verification without waiting for acknowledgement or approval.
+- Send VERIFICATION TURN REPORT only when a material change to target identity, authority mapping, scenario execution, evidence attribution, expected authoritative readback or terminal progression can change adjudication.
+- Do not report routine progress, normal command output or confidence-only updates.
+- Do not create a suspended live workflow for missing authority. Return the correct VERIFICATION NOT STARTED, INCONCLUSIVE or progression result with exact evidence limits.
+- End with one terminal READY TICKET VERIFICATION RESULT.
+```
+
+If required child/message/result capability is unavailable, return `SUBAGENT CAPABILITY UNAVAILABLE`. Do not fall back to `DIRECT` automatically.
+
+A worker receiving `Delegated Worker: yes` and an explicit `DIRECT` invocation perform the verification core below directly and never delegate this skill again.
+
+## 2. Admission and current authority
 
 Before any runtime/product action:
 
-1. Resolve the current discovered `iis-workflow` skill only as the canonical planning-authority locator. Follow its current `### To Tickets` route target and require the adjacent `validate_ticket.py`. Do not invoke IIS planning, hard-code a remembered validator path, or copy validator rules into this skill.
-2. Run that current validator against the exact absolute Ticket path. Continue only when it returns exact `VALID`. If the route/validator is unavailable, return `VERIFICATION NOT STARTED: CANONICAL VALIDATOR UNAVAILABLE`; if validation fails, return `VERIFICATION NOT STARTED: CANONICAL TICKET INVALID`. Do not issue AC verdicts or start product/runtime work.
-3. After `VALID`, read the exact Ticket and derive its `Status`, `Parent-Spec`, `Project-Root`, `UI`, Acceptance Criteria, Scope, Non-Goals, Blockers, Verification flows, Behavior Authorities, and References from the Ticket itself. Any caller-supplied candidate target or implementation report is navigation only and cannot override these values.
-4. Resolve the parent Spec and referenced Behavior/UI authorities from the validated Ticket. Require the Ticket path, `Project-Root`, parent Spec, blockers, and adopted authorities to remain canonical, current, applicable, and nonconflicting. A current authority contradiction stops verification before scenario authoring or AC verdicts.
-5. Enumerate every current top-level AC once in authored order and every authored Verification flow once in authored order.
-6. Confirm every AC is linked by current ordinal to at least one Verification flow, every flow links at least one AC, every referenced Behavior ordinal is current, and the authored Behavior Authority set is covered as required by the current canonical contract.
-7. Preserve each Verification flow's exact authored product meaning. Do not infer a missing flow, remap ordinals from implementation shape, normalize a legacy flow, or strengthen/relax a decision boundary.
-8. Bind the exact current verification target from the validated Ticket plus direct current repository/runtime observation: source/config/build/artifact/runtime checkpoint, actual entrypoint or canonical inspection target, acceptance surface, and authoritative readback. A candidate target from the caller is only a hint and must be rejected or corrected when stale or inconsistent.
+1. Resolve the currently discovered `iis-workflow` skill only as the canonical planning-authority locator. Follow its current `### To Tickets` route target and require the adjacent `validate_ticket.py`.
+2. Run that validator against the exact absolute Ticket path. Continue only when it returns exact `VALID`.
+3. If the route/validator is unavailable, return `VERIFICATION NOT STARTED: CANONICAL VALIDATOR UNAVAILABLE`. If validation fails, return `VERIFICATION NOT STARTED: CANONICAL TICKET INVALID`. Do not issue AC verdicts or start product/runtime work.
+4. After `VALID`, derive `Status`, `Parent-Spec`, `Project-Root`, `UI`, Acceptance Criteria, Scope, Non-Goals, Blockers, Verification flows, Behavior Authorities and References from the Ticket itself.
+5. Resolve parent Spec and referenced Behavior/UI authorities. Require canonical current paths, applicable authority and no unresolved contradiction.
+6. Enumerate every current top-level AC once in authored order and every authored Verification flow once in authored order.
+7. Confirm every AC is linked to at least one flow, every flow links at least one AC, and referenced Behavior ordinals remain current.
+8. Preserve each flow's exact authored meaning. Do not infer a missing flow, remap ordinals from implementation shape, normalize a legacy flow or strengthen/relax a decision boundary.
+9. Bind the exact current verification target from the validated Ticket plus direct repository/runtime observation: source/config/build/artifact/runtime checkpoint, actual entrypoint or canonical inspection target, acceptance surface and authoritative readback.
 
-Structural `VALID` admits the current Ticket schema only; it never establishes semantic mapping, current target availability, runtime evidence, or verdicts.
+Caller-supplied candidate targets and implementation reports are navigation only. Structural `VALID` admits schema only; it never establishes semantic mapping, current target availability, runtime evidence or verdicts.
 
-Return `VERIFICATION NOT STARTED` without AC verdicts when canonical admission, current authority, Ticket-to-parent projection, or current verification-target binding cannot be established before product execution.
+Return without AC verdicts when canonical admission, current authority, Ticket-to-parent projection or current target binding cannot be established.
 
 ```text
 VERIFICATION NOT STARTED
@@ -24,56 +52,56 @@ Reason:
 AC verdicts: Not issued
 ```
 
-## 2. Status semantics
+## 3. Status semantics
 
 Normal first verification requires exact `Status: ready`.
 
 - `draft` / `blocked`: do not start.
-- `ready`: authoritative verification may progress to `done` only on final `VERIFIED`.
+- `ready`: may progress to `done` only on final `VERIFIED` and successful guarded progression.
 - `done`: only explicit diagnostic re-verification is allowed. Do not rewrite status or claim to reopen delivery authority.
 
-If the Ticket status or authored contract changes during a normal verification cycle, stop progression. Do not write `done` from a stale contract.
+If Ticket status or authored contract changes during a normal cycle, stop progression. Do not write `done` from a stale contract.
 
-## 3. Verification target stability
+## 4. Verification target stability
 
-Record enough current identity to attribute all evidence to one stable implementation target. Use an existing bounded identity such as current Git revision plus working-tree state, build/artifact identity, canonical document state, or running version/checkpoint. Do not invent a persistent verification ID, digest system, retained-source store, or workflow ledger.
+Record enough current identity to attribute all evidence to one stable implementation target. Use an existing bounded identity such as current Git revision plus working-tree state, build/artifact identity, canonical document state or running version/checkpoint. Do not invent a persistent verification ID, retained-source store or workflow ledger.
 
-The target source/config/build must remain stable throughout an authoritative cycle. Authored verification triggers may intentionally mutate disposable/product test state, but unrelated implementation/source/config mutation invalidates affected evidence and Ticket progression authority.
+The target source/config/build must remain stable throughout an authoritative cycle. Authored triggers may intentionally mutate disposable/product test state, but unrelated implementation/source/config mutation invalidates affected evidence and Ticket progression authority.
 
-If such drift occurs:
+If target drift occurs:
 
-- preserve already observed contradictions only when their attribution remains exact and current;
+- preserve already observed contradictions only when attribution remains exact and current;
 - otherwise classify affected flow evidence as stale/unattributable;
 - do not carry a prior PASS across the drift;
-- re-establish a stable target and run fresh required observations before `VERIFIED`.
+- re-establish a stable target and obtain fresh required observations before `VERIFIED`.
 
-## 4. Main authors the integrated scenario alone
+## 5. Integrated scenario ownership
 
-Main converts the authored Verification section into one integrated execution plan. AC Runtime Auditors are not started yet and do not contribute to scenario authoring.
+The verifier worker converts the authored Verification section into one integrated execution plan before any product/runtime action.
 
-Treat each authored Verification flow as one normative scenario block. Common setup, environment, disposable targets, or cleanup may be coordinated across blocks when that does not change flow meaning, but do not merge materially distinct flows or split a flow around implementation seams.
+Treat each authored flow as one normative scenario block. Common setup, environment, disposable targets or cleanup may be coordinated only when flow meaning remains unchanged. Do not merge materially distinct flows or split one flow around implementation seams.
 
-Before deriving execution steps for a flow, resolve its current `Parent outcome ordinal` against the approved parent Spec and directly confirm the Ticket flow preserves the mapped parent outcome's exact `Disposition`, `Independent verification required`, `Acceptance surface`, `External condition`, and every authored conditional-boundary label/value. Also confirm the Ticket's trigger/inspection target, acceptance boundary, expected observable result, authoritative readback, decision boundary, and mapped Behavior authorities preserve the parent meaning without adding a new precondition or stricter result. A material mismatch returns `VERIFICATION NOT STARTED: TICKET/PARENT PROJECTION MISMATCH`; do not normalize the Ticket or author a compensating scenario.
+Before deriving execution steps, resolve each flow's `Parent outcome ordinal` against the approved parent Spec and confirm preservation of exact `Disposition`, `Independent verification required`, `Acceptance surface`, `External condition`, every authored conditional boundary, trigger/inspection target, acceptance boundary, expected result, authoritative readback, decision boundary and mapped Behavior authority.
+
+A material projection mismatch returns `VERIFICATION NOT STARTED: TICKET/PARENT PROJECTION MISMATCH`; do not normalize the Ticket or author a compensating scenario.
 
 ### Scenario materiality gate
 
-Freeze every authored Verification flow and authored conditional boundary as the mandatory verification denominator before considering discretionary scenario expansion. This gate never permits omission, weakening, merging, or early termination of required flow, boundary, or evidence coverage.
+Freeze every authored flow and conditional boundary as the mandatory denominator. This gate never permits omission, weakening, merging or early termination of required coverage.
 
-For this gate, derive verification purpose only from the current canonical Ticket contract, its mapped parent outcome, and applicable Behavior/UI authority. Do not substitute broader product intent, implementation preference, or reviewer intuition.
+Add a derived positive variation, counterexample, boundary exercise or observation only when it materially tests an authored decision boundary or prevents a concrete plausible false verdict or attribution error. Require a contract anchor and plausible failure path. Do not expand the scenario merely for exhaustiveness.
 
-Add a derived positive variation, counterexample, boundary exercise, or extra observation only when it materially tests an authored acceptance/decision boundary or prevents a concrete plausible false verdict or evidence-attribution error. Require an identifiable contract anchor and a plausible failure path. Do not add cases merely because they are theoretically possible, implementation-interesting, or make the scenario appear more exhaustive. If no additional material case exists beyond the authored obligations, add none and continue with the mandatory denominator.
+Reject expansion that invents a new trigger, precondition, Scope, acceptance surface or stricter/weaker result; requires unrelated product mutation; or obscures the core verification. Prefer the smallest sufficient scenario.
 
-Reject a discretionary expansion when it would invent a new trigger, precondition, Scope, acceptance surface, or stricter/weaker result; require unrelated product mutation; or add complexity/context that materially obscures or destabilizes the core verification. Among remaining purpose-preserving options, prefer the smallest sufficient scenario.
-
-For each block keep the authored contract and Main-derived execution separate:
+For each block keep authored contract and derived execution separate:
 
 ```text
 Scenario Block:
 Flow ordinal:
 
 Authored Contract:
-  <copy the validated Ticket flow's exact ordered label/value sequence without renaming, dropping, merging, or collapsing any field>
-  <preserve every validator-admitted optional boundary under its exact authored label and value>
+  <copy the validated Ticket flow's exact ordered label/value sequence>
+  <preserve every validator-admitted optional boundary under its exact label and value>
 
 Derived Execution Plan:
   Setup:
@@ -87,64 +115,35 @@ Derived Execution Plan:
   INCONCLUSIVE condition:
 ```
 
-Do not replace exact authored labels with convenience aliases such as `Trigger / inspection target` or collapse multiple optional boundaries into one generic field. The current canonical core includes `Independent verification required` and `Acceptance surface`; both must remain visible in the authored contract. Preserve any future validator-admitted authored field as part of that exact contract rather than silently dropping it.
+Do not replace exact authored labels with convenience aliases or silently drop future validator-admitted fields.
 
-## 5. Coverage matrices and runtime-auditor selection
+## 6. Coverage matrices
 
-Build current navigation matrices from the validated authored mapping before execution. They are invocation-local navigation only, not persistent IDs or a copied acceptance schema.
+Build invocation-local navigation matrices before execution. They are not persistent IDs or copied acceptance schema.
 
 ```text
 AC Coverage Matrix:
 AC 1 -> Flow 1
 AC 2 -> Flow 2, 3
-...
 
 Behavior Authority Coverage Matrix:
 Behavior 1 -> Flow 1, 3
-...
 
 Parent Outcome Mapping Matrix:
 Flow 1 -> Parent outcome 1
 Flow 2 -> Parent outcome 2
-...
 ```
 
-`AC Runtime Auditor Count` may be `0` through the current top-level AC count.
+## 7. Scenario report handoff
 
-- If no audit was requested and no count was supplied, use `0`.
-- Count greater than the AC count is invalid.
-- One selected auditor owns exactly one unique current AC ordinal.
-- `EXPLICIT`: selected unique ordinals must exactly match the requested Count.
-- `AUTO_BY_MATERIAL_RISK`: Main selects exactly Count unique ACs after the complete integrated scenario is authored.
-
-For automatic selection, prefer ACs with greater material risk or observation complexity, such as:
-
-- multiple mapped Verification flows or strong cross-AC coupling;
-- ordering, concurrency, retry, duplicate, lifecycle, interruption, persistence, terminal, or identity semantics;
-- externally visible/irreversible effects or difficult cleanup;
-- operator/external conditions that can create false positive/negative judgments;
-- UI interaction or multi-layer authoritative readback;
-- weak or easily confused readback/attribution surfaces;
-- implementation-time findings that make direct evidence attribution especially important.
-
-Selection changes observation density only. Main still verifies every AC.
-
-## 6. Binding policy
-
-A caller/user may designate a default exact Model and Reasoning Depth for all selected AC Runtime Auditors and may provide exact per-AC overrides. A per-AC override applies only to that selected AC; otherwise the supplied default applies. Preserve every supplied exact binding and do not silently substitute another value.
-
-When neither a default nor an applicable per-AC exact binding was supplied for a selected AC, a current host-provided invocation-local observer role may be used. Model identity alone never grants verdict or broader authority.
-
-Before runtime execution, confirm the host can start the full selected observer Count concurrently with every explicit requested auditor agent/configuration. If the exact requested agent/configuration cannot be started or the full concurrent observer capacity cannot be provided, report the exact configuration/capability problem before the first runtime/product action. Do not silently reduce Count or turn missing observers into post-hoc review. Once an exact requested auditor agent/configuration is successfully started, binding admission is closed: later auditor self-reported model/depth/runtime metadata or display labels are diagnostic only and cannot invalidate the slot, require re-audit, downgrade `VERIFIED`, or block the Ticket `ready -> done` transition.
-
-## 7. Report the scenario before execution
-
-Emit the following before the first runtime/product action:
+Before the first product/runtime action, emit:
 
 ```text
 VERIFICATION SCENARIO REPORT
 
 Ticket:
+Execution Mode: SUBAGENT | DIRECT
+Verifier worker identity: <identity> | DIRECT
 Ticket status:
 Verification target:
 Target-stability check:
@@ -166,110 +165,83 @@ Ordering / interruption / persistence / UI / external-effect boundaries:
 Authoritative readbacks:
 Evidence-capture points:
 Cleanup / terminal conditions:
-
-AC Runtime Auditor Count:
-Selection: AUTO_BY_MATERIAL_RISK | EXPLICIT
-Selected ACs:
-Selection reasons:
-Requested bindings:
-
 Authority-required actions:
 Execution disposition: PROCEED | AUTHORITY REQUIRED | BLOCKED
 ```
 
-This is a report, not an automatic approval gate. Safe local execution and read-only canonical inspection continue. Pause only for a genuinely authority-bearing action or missing required operator/external condition.
+In `SUBAGENT`, send the report to the direct parent non-blocking and continue when `Execution disposition: PROCEED`. The report is not an approval gate. In `DIRECT`, report it to the caller with the same informational meaning.
 
-## 8. Start auditors, then Main starts runtime
+## 8. Runtime-first execution
 
-After the scenario report and immediately before the first product/runtime action:
-
-1. Start every configured AC Runtime Auditor concurrently.
-2. Give each auditor the complete Main-authored integrated scenario plus its one assigned AC, mapped flows, applicable authority, expected evidence/readbacks, and the stable verification target.
-3. Confirm all required auditors are active/attached before Main performs the first runtime action.
-4. For every selected AC, complete the same-execution evidence-visibility preflight from [ac-runtime-auditors.md](ac-runtime-auditors.md): required initial-state, transient-event, authoritative-readback, pre-cleanup evidence, and distinct terminal-result visibility must be available for that exact Main execution. A started but evidence-blind observer does not satisfy requested coverage.
-5. If any selected AC lacks required visibility, report `AC RUNTIME AUDIT CAPABILITY UNAVAILABLE` and do not start the authoritative runtime execution. Do not substitute late/post-hoc review or wave execution.
-6. Main then executes the integrated scenario. Auditors observe; they do not trigger or replay scenario actions themselves.
-
-A late-started observer that missed required initial-state or earlier runtime evidence does not satisfy the requested AC runtime-audit coverage unless all missed evidence remains directly and unambiguously attributable from the same live execution.
-
-## 9. Main runtime-first execution
-
-Main directly performs the authored product trigger or canonical inspection and directly captures the authoritative readback for every required flow.
+The verifier worker directly performs each authored trigger or canonical inspection and directly captures authoritative readback for every required flow.
 
 Evidence priority when applicable:
 
 1. actual runtime / canonical acceptance-surface observation;
 2. authoritative product/canonical readback;
 3. rendered UI interaction/readback when UI is the acceptance surface;
-4. deterministic fake/controlled environment evidence when the contract permits it;
+4. deterministic fake/controlled-environment evidence when the contract permits it;
 5. source/diff/unit tests as supporting explanation and regression evidence.
 
-Passing implementation tests does not substitute for a Ticket-authored runtime/UI/provider/canonical readback. Conversely, do not invent runtime for a source/artifact/document/structure claim whose approved acceptance boundary is direct canonical inspection.
+Passing implementation tests do not substitute for a Ticket-authored runtime/UI/provider/canonical readback. Conversely, do not invent runtime for a source/artifact/document/structure claim whose approved boundary is direct canonical inspection.
 
-Exercise all applicable authored positive and material counterexample cases. Examples include reverse completion ordering, duplicate/repeated observation, interruption, timeout, stale identity, concurrent first use, refresh/reopen, partial external response, retry vs re-observation, Scope-excluded behavior, or user-visible/canonical disagreement — only where the Ticket contract makes them relevant.
+Exercise authored positive and material counterexample cases, including ordering, duplicate, interruption, timeout, stale identity, concurrency, refresh/reopen, partial external response, retry, Scope-excluded behavior or user-visible/canonical disagreement only where the Ticket makes them relevant.
 
-## 10. Intermediate auditor findings during Main execution
+## 9. Material verification turns
 
-AC Runtime Auditors may report a material finding while Main is still executing when it can change safe evidence capture or prevent a false verdict. Examples:
+Send a `VERIFICATION TURN REPORT` only when direct evidence creates a material change such as:
 
-- required initial state for the assigned AC was not actually established;
-- Main is about to pass the terminal observation point without capturing an authored readback;
-- observed identity/order/terminal state conflicts with the assigned AC;
-- evidence is not attributable to the declared target or current scenario step;
-- a required negative/absence window has not reached its authored terminal condition;
-- current evidence for the assigned AC is incomplete even though the scenario is about to move on.
+- declared target identity no longer matches the observed source/config/build/runtime target;
+- current authority or Ticket-to-parent projection changes or becomes contradictory;
+- an expected acceptance surface or authoritative readback is unavailable or materially different;
+- an authored flow needs a bounded scenario amendment to preserve evidence capture without changing product meaning;
+- evidence attribution changes a plausible flow result among `SATISFIED`, `CONTRADICTED` and `INCONCLUSIVE`;
+- cleanup, terminal window, external/operator condition or guarded progression becomes materially limiting.
 
-Main owns the response. The auditor does not perform the missing trigger or modify the scenario/runtime itself.
+```text
+VERIFICATION TURN REPORT
 
-If a bounded extra observation is already inside the authored flow and does not change initial state, trigger meaning, decision boundary, or external authority, Main may capture it and record a `SCENARIO AMENDMENT` note.
+Ticket:
+Turn:
+Scenario block / flow:
+Previous assumption:
+New attributable evidence:
+Material effect on execution or adjudication:
+Affected AC / authority / target:
+Safe work continuing:
+Parent action needed: NONE | STEERING | USER/OPERATOR AUTHORITY
+```
 
-If satisfying a finding would require a new product trigger, materially different initial state, stronger/weaker decision boundary, Scope expansion, or new external/destructive authority, do not silently extend the scenario. Report the material amendment/authority problem and rerun the affected flow from a valid fresh state when allowed; otherwise classify it `INCONCLUSIVE`.
+A bounded observation already inside the authored flow may be recorded as `SCENARIO AMENDMENT`. Do not use a turn report to invent a trigger, initial state, decision boundary, Scope or authority.
 
-## 11. Disposition-specific execution
+If required authority is unavailable, return the correct evidence limit instead of waiting in a live suspended state.
+
+## 10. Disposition-specific execution
 
 ### Independent
 
-Main must obtain fresh direct evidence from the authored acceptance boundary/readback. `Independent verification required: yes` cannot be closed by implementation narration, tests, prior auditor output, or source plausibility.
+Obtain fresh direct evidence from the authored acceptance boundary/readback. `Independent verification required: yes` cannot be closed by implementation narration, tests, source plausibility or prior verification.
 
 ### Operator-assisted
 
-Execute the product-owned portion and use only the authored operator-owned action/evidence path for the operator portion. Lack of operator credentials or a naturally occurring external condition is not automatically a product defect. Missing required operator evidence leaves the affected flow/AC `INCONCLUSIVE`.
+Execute the product-owned portion and use only the authored operator-owned action/evidence path for the operator portion. Missing credentials, operator evidence or naturally occurring external condition leaves the affected flow/AC `INCONCLUSIVE` unless direct contradiction exists.
 
 ### Not independently verifiable
 
-Do not invent a fresh surface. Verify the approved absence/reason and only the current canonical facts/evidence that the disposition actually permits. A limited PASS means the authored no-independent-surface contract is not contradicted; it does not claim a nonexistent direct product observation.
+Do not invent a fresh surface. Verify the approved absence/reason and only the current canonical facts the disposition permits. A limited PASS does not claim nonexistent direct observation.
 
-## 12. AC Runtime Auditor fan-in
-
-Before final AC verdicts, collect the terminal assessment from every requested AC Runtime Auditor. Main verifies decision-critical auditor claims directly against current evidence.
-
-Auditor assessment categories are advisory evidence classifications, not AC verdicts:
-
-```text
-EVIDENCE SUFFICIENT
-CONTRADICTION OBSERVED
-EVIDENCE INSUFFICIENT
-STALE / UNATTRIBUTABLE
-```
-
-No vote, majority, model rank, or number of agreeing auditors can override the authored decision boundary or current authoritative evidence.
-
-If an auditor reports a material contradiction or attribution problem, Main directly reopens the exact relevant evidence/readback. If the conflict cannot be resolved on the stable target, the affected AC cannot be PASS.
-
-If a requested auditor disappears or cannot return an attributable terminal assessment after authoritative execution has started, do not silently reduce Count. Main may still report `FAILED` when Main direct evidence already establishes an AC contradiction; otherwise the requested observation coverage is incomplete, so the whole Ticket cannot be `VERIFIED` and is `INCONCLUSIVE`.
-
-## 13. Flow and AC adjudication
+## 11. Flow and AC adjudication
 
 For every authored flow assign exactly one result:
 
-- `SATISFIED`: all required observable/readback conditions for that flow's disposition are established and no decision-boundary contradiction remains.
+- `SATISFIED`: all required observable/readback conditions are established and no decision-boundary contradiction remains.
 - `CONTRADICTED`: fresh attributable evidence directly violates the authored decision boundary.
-- `INCONCLUSIVE`: required evidence/authority/terminal condition/current attribution could not be established without a direct contradiction.
+- `INCONCLUSIVE`: required evidence, authority, terminal condition or current attribution could not be established without a direct contradiction.
 
 For every top-level AC in authored order:
 
 - `FAIL` if any required mapped flow is `CONTRADICTED` for that AC obligation.
-- `PASS` only when all mapped required flow obligations for that AC are `SATISFIED` under their dispositions and applicable boundaries.
+- `PASS` only when all mapped obligations are `SATISFIED` under their dispositions and boundaries.
 - otherwise `INCONCLUSIVE`.
 
 Whole Ticket:
@@ -280,45 +252,82 @@ any AC FAIL           -> FAILED
 otherwise             -> INCONCLUSIVE
 ```
 
-## 14. Scope, Non-Goals, and cross-AC closure
+## 12. Scope, Non-Goals, cross-AC closure and cleanup
 
-Before `VERIFIED`, Main directly checks that the executed current product did not introduce or expose forbidden Scope/Non-Goal behavior relevant to the Ticket and that satisfying one AC did not contradict another AC or adopted Behavior/UI authority.
+Before `VERIFIED`, directly check that the current product did not introduce or expose forbidden Scope/Non-Goal behavior relevant to the Ticket and that satisfying one AC did not contradict another AC or adopted Behavior/UI authority.
 
-Do not use source search alone when the Ticket defines an observable runtime/user boundary.
+Complete every authored cleanup, absence window, process stop, disposable-target disposal and external-effect terminal condition required for attributable evidence.
 
-## 15. Cleanup and terminal conditions
+A still-running duplicate-sensitive effect, incomplete cleanup or unfinished absence/ordering window prevents final `VERIFIED` when it affects the decision boundary. Capture necessary evidence before disposing of a temporary target.
 
-Complete every authored cleanup, absence window, process stop, disposable-target disposal, and external-effect terminal condition required to attribute the evidence safely.
+## 13. Terminal status transition
 
-A still-running duplicate-sensitive effect, incomplete cleanup that can change the target, or unfinished absence/ordering window prevents final `VERIFIED` when it affects the authored decision boundary.
-
-Capture necessary authoritative evidence before disposing of a temporary target. Narration about an already-destroyed target does not replace a missing raw/current readback.
-
-## 16. Terminal status transition
-
-Keep verification verdict and Ticket progression as separate results.
+Keep verification verdict and Ticket progression separate.
 
 For normal first verification of `Status: ready`:
 
 - `FAILED` -> keep `ready`; `Ticket Progression: NOT APPLICABLE`.
 - `INCONCLUSIVE` -> keep `ready`; `Ticket Progression: NOT APPLICABLE`.
-- `VERIFIED` -> attempt terminal progression only through the guarded sequence below.
+- `VERIFIED` -> attempt guarded progression only through the sequence below.
 
 Before `ready -> done`:
 
-1. Re-read the exact Ticket from disk and require the verification target/source/config/build identity used for the verdict is still current and attributable.
-2. Resolve the current canonical To Tickets validator through the same admission path and run it again against the exact Ticket; require exact `VALID`.
-3. Re-resolve the current parent Spec and adopted Behavior/UI authorities and require the same Ticket-to-parent projection/currentness checks still hold.
-4. Require the Ticket is still the exact canonical `Status: ready` contract that was verified. If any contract/status/path/currentness check changed, do not write `done`; report `Ticket Progression: FAILED` with the exact stale/currentness reason.
-5. Perform one guarded targeted replacement of only the top metadata `Status: ready` line with `Status: done`. Reject stale content, concurrent edit, path drift, or ambiguous/multiple status matches rather than broad rewriting.
-6. Immediately run the same current canonical validator on the resulting Ticket and require exact `VALID`.
+1. Re-read the exact Ticket and require the verification target/source/config/build identity used for the verdict is still current and attributable.
+2. Resolve the current canonical To Tickets validator through the same admission path and require exact `VALID`.
+3. Re-resolve current parent Spec and adopted Behavior/UI authorities and require the same projection/currentness checks still hold.
+4. Require the Ticket is still the exact canonical `Status: ready` contract that was verified.
+5. Perform one guarded targeted replacement of only the top metadata `Status: ready` line with `Status: done`. Reject stale content, concurrent edit, path drift or ambiguous status matches.
+6. Immediately run the same validator and require exact `VALID`.
 
-When steps 1-6 succeed, report `Ticket Progression: COMPLETED` and `Ticket Status: done`.
+When all steps succeed, report `Ticket Progression: COMPLETED` and `Ticket status after verification: done`.
 
-If the status write or post-write validation fails, preserve the already-established `Verification Verdict: VERIFIED` but report `Ticket Progression: FAILED` and the exact observed Ticket status/failure. Do not claim terminal delivery progression succeeded and do not rewrite any AC, Verification flow, Spec, Scope, Behavior/UI authority, or other planning meaning to repair it.
+If the status write or post-write validation fails, preserve `Verification Verdict: VERIFIED` but report `Ticket Progression: FAILED` and the exact observed status/failure. Do not rewrite ACs, Verification flows, Spec, Scope, Behavior/UI authority or other planning meaning.
 
-Diagnostic re-verification of `done` never rewrites status and reports `Ticket Progression: NOT APPLICABLE`. A diagnostic `FAILED`/`INCONCLUSIVE` is reported as a current contradiction that requires separate reopen/planning authority.
+Diagnostic re-verification of `done` never rewrites status and reports `Ticket Progression: NOT APPLICABLE`.
 
-## 17. No remediation loop
+## 14. No remediation loop
 
-Verification ends with evidence and verdict. Do not automatically edit source, invoke `ready-ticket-implement`, create a follow-up Ticket, reopen planning, or continue to a later Increment. The caller/user decides the next action.
+Verification ends with evidence and verdict. Do not automatically edit source, invoke `ready-ticket-implement`, create a follow-up Ticket, reopen planning or continue to a later Increment. The caller/user decides the next action.
+
+## 15. Final report
+
+```text
+READY TICKET VERIFICATION RESULT
+
+Ticket:
+Execution Mode: SUBAGENT | DIRECT
+Verifier worker identity: <identity> | DIRECT
+Ticket status before verification:
+Verification target:
+Target stability:
+Scenario handoff report: SENT | NOT APPLICABLE
+Material turn reports: None | <concise list>
+
+Scenario report:
+Executed scenario blocks:
+Environment / external conditions:
+Cleanup / terminal conditions:
+
+Flow results:
+- Flow ordinal / parent outcome:
+  AC ordinals:
+  Result: SATISFIED | CONTRADICTED | INCONCLUSIVE
+  Runtime / canonical observation:
+  Authoritative readback:
+  Evidence limit:
+
+AC results:
+- AC ordinal:
+  Verdict: PASS | FAIL | INCONCLUSIVE
+  Linked flows:
+  Verifier evidence:
+  Remaining uncertainty:
+
+Scope / Non-Goals:
+Cross-AC findings:
+Implementation-report differences:
+
+Verification Verdict: VERIFIED | FAILED | INCONCLUSIVE
+Ticket Progression: COMPLETED | NOT APPLICABLE | FAILED
+Ticket status after verification:
+```

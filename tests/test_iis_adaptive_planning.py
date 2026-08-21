@@ -188,8 +188,11 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn("ready-ticket-implement", continuation)
         self.assertIn("ready-ticket-verify", continuation)
         self.assertIn("continues the current Increment", terminal)
-        self.assertIn("Auditor Count: 0", continuation)
-        self.assertIn("AC Runtime Auditor Count: 0", continuation)
+        self.assertIn("normal `SUBAGENT` default", continuation)
+        self.assertIn("explicit current user request for `DIRECT`", continuation)
+        self.assertIn("Do not pass the internal `Delegated Worker: yes` marker", continuation)
+        self.assertNotIn("Auditor Count", continuation)
+        self.assertNotIn("AC Runtime Auditor", continuation)
 
     def test_end_to_end_delivery_can_reenter_adaptive_for_planning_failures(self) -> None:
         continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(

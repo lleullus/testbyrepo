@@ -1,0 +1,144 @@
+from __future__ import annotations
+
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+IMPLEMENT = ROOT / "companion-skills" / "ready-ticket-implement"
+VERIFY = ROOT / "companion-skills" / "ready-ticket-verify"
+ADAPTIVE_CONTINUATION = (
+    ROOT / "iis-adaptive-planning" / "references" / "08-delivery-continuation.md"
+)
+
+
+class DeliverySubagentContractTests(unittest.TestCase):
+    def test_retired_observer_contracts_are_removed(self) -> None:
+        self.assertFalse((IMPLEMENT / "references" / "concurrent-auditors.md").exists())
+        self.assertFalse((VERIFY / "references" / "ac-runtime-auditors.md").exists())
+        self.assertEqual(
+            {path.name for path in (IMPLEMENT / "references").iterdir()},
+            {"implement.md"},
+        )
+        self.assertEqual(
+            {path.name for path in (VERIFY / "references").iterdir()},
+            {"verify.md"},
+        )
+
+    def test_delivery_surfaces_have_no_retired_observer_vocabulary(self) -> None:
+        paths = (
+            IMPLEMENT / "SKILL.md",
+            IMPLEMENT / "references" / "implement.md",
+            IMPLEMENT / "agents" / "openai.yaml",
+            VERIFY / "SKILL.md",
+            VERIFY / "references" / "verify.md",
+            VERIFY / "agents" / "openai.yaml",
+            ADAPTIVE_CONTINUATION,
+        )
+        forbidden = (
+            "auditor",
+            "Auditor",
+            "AC Runtime Auditor",
+            "Auditor Count",
+            "동시감사",
+            "감사자",
+        )
+        for path in paths:
+            text = path.read_text(encoding="utf-8")
+            for token in forbidden:
+                self.assertNotIn(token, text, f"{token!r} remained in {path}")
+
+    def test_implementation_is_subagent_first_with_explicit_direct_only(self) -> None:
+        skill = (IMPLEMENT / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (IMPLEMENT / "references" / "implement.md").read_text(encoding="utf-8")
+
+        self.assertIn("Top-level 기본 실행 모드는 `SUBAGENT`", skill)
+        self.assertIn("사용자가 현재 요청에서 명시한 경우에만", skill)
+        self.assertIn("`Delegated Worker: yes`", skill)
+        self.assertIn("다시 위임하지 않고", skill)
+        self.assertIn("실패를 `DIRECT`로 자동 대체하지 않는다", skill)
+        self.assertIn("정확히 한 명의 implementation worker", skill)
+        self.assertIn("Top-level invocation에서 사용자가 `DIRECT`를 명시하지 않았으면", workflow)
+        self.assertIn("한 명의 non-blocking implementation worker", workflow)
+
+    def test_implementation_reports_are_early_non_blocking_and_event_driven(self) -> None:
+        workflow = (IMPLEMENT / "references" / "implement.md").read_text(encoding="utf-8")
+
+        handoff = workflow.index("IMPLEMENTATION HANDOFF REPORT")
+        implementation = workflow.index("## 5. 구현")
+        self.assertLess(handoff, implementation)
+        self.assertIn("첫 source-file 변경 전에", workflow)
+        self.assertIn("approval gate가 아니다", workflow)
+        self.assertIn("acknowledgement나 approval을 기다리지 않고", workflow)
+        self.assertIn("IMPLEMENTATION TURN REPORT", workflow)
+        self.assertIn("초기 handoff의 방향을 material하게 바꾸는 경우에만", workflow)
+        self.assertIn("정상 진행, 단순 tool activity", workflow)
+        self.assertIn("live wait를 만들지 말고", workflow)
+
+    def test_implementation_preserves_delivery_authority_boundaries(self) -> None:
+        skill = (IMPLEMENT / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (IMPLEMENT / "references" / "implement.md").read_text(encoding="utf-8")
+
+        self.assertIn("Separate verification authority", skill)
+        self.assertIn("이 스킬은 Ticket status를 `done`으로 바꾸지 않는다", skill)
+        self.assertIn("Status: ready", workflow)
+        self.assertIn("Verification status: NOT ADJUDICATED BY THIS SKILL", workflow)
+        self.assertIn("Completion: COMPLETE | BLOCKED | PARTIAL", workflow)
+
+    def test_verification_is_subagent_first_and_verifier_owns_verdict(self) -> None:
+        skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (VERIFY / "references" / "verify.md").read_text(encoding="utf-8")
+
+        self.assertIn("Top-level default execution mode is `SUBAGENT`", skill)
+        self.assertIn("one verifier worker", skill)
+        self.assertIn("`Delegated Worker: yes`", skill)
+        self.assertIn("never delegates this skill again", skill)
+        self.assertIn("Never silently fall back to `DIRECT`", skill)
+        self.assertIn("does not become a second verification authority", skill)
+        self.assertIn("present the caller-facing result without issuing a second AC/Ticket verdict", workflow)
+
+    def test_verification_scenario_handoff_and_material_turns_are_non_blocking(self) -> None:
+        workflow = (VERIFY / "references" / "verify.md").read_text(encoding="utf-8")
+
+        report = workflow.index("## 7. Scenario report handoff")
+        runtime = workflow.index("## 8. Runtime-first execution")
+        self.assertLess(report, runtime)
+        self.assertIn("before the first product/runtime action", workflow)
+        self.assertIn("direct parent non-blocking", workflow)
+        self.assertIn("not an approval gate", workflow)
+        self.assertIn("VERIFICATION TURN REPORT", workflow)
+        self.assertIn("only when direct evidence creates a material change", workflow)
+        self.assertIn("Do not report routine progress", workflow)
+        self.assertIn("instead of waiting in a live suspended state", workflow)
+
+    def test_verification_preserves_full_adjudication_and_done_guard(self) -> None:
+        skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (VERIFY / "references" / "verify.md").read_text(encoding="utf-8")
+
+        self.assertIn("every authored Verification flow", skill)
+        self.assertIn("Independent verification required", workflow)
+        self.assertIn("all ACs PASS          -> VERIFIED", workflow)
+        self.assertIn("Perform one guarded targeted replacement", workflow)
+        self.assertIn("Ticket Progression: COMPLETED | NOT APPLICABLE | FAILED", workflow)
+        self.assertIn("Do not automatically edit source", workflow)
+
+    def test_adaptive_defers_to_delivery_mode_and_does_not_forge_worker_role(self) -> None:
+        continuation = ADAPTIVE_CONTINUATION.read_text(encoding="utf-8")
+
+        self.assertIn("normal `SUBAGENT` default", continuation)
+        self.assertIn("explicit current user request for `DIRECT`", continuation)
+        self.assertIn("Do not pass the internal `Delegated Worker: yes` marker", continuation)
+        self.assertIn("Select only a currently admissible Ticket", continuation)
+
+    def test_openai_metadata_matches_worker_first_contract(self) -> None:
+        implement_yaml = (IMPLEMENT / "agents" / "openai.yaml").read_text(encoding="utf-8")
+        verify_yaml = (VERIFY / "agents" / "openai.yaml").read_text(encoding="utf-8")
+
+        self.assertIn("$ready-ticket-implement", implement_yaml)
+        self.assertIn("one implementation worker", implement_yaml)
+        self.assertIn("$ready-ticket-verify", verify_yaml)
+        self.assertIn("one verifier worker", verify_yaml)
+
+
+if __name__ == "__main__":
+    unittest.main()

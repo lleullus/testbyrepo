@@ -9,7 +9,7 @@ Keep ownership separate even when the outer Adaptive execution continues:
 3. Current instructions override those fields independently: `planning only` or `stop after Ready Tickets` selects `no`/`no`; `do not verify` preserves implementation authority as `yes`/`no`; `do not implement` never invents implementation authority.
 4. Before any planning or delivery mutation, the outer caller must carry one `CLOSED` Run Contract from [09-run-contract.md](09-run-contract.md). Planning ownership completion, one Ticket completion, and one Increment completion are not whole-run completion unless that contract's boundary says so.
 
-The delivery calls are not actions performed **by** Adaptive Planning. `ready-ticket-implement` and `ready-ticket-verify` retain their own exact authority, admission, evidence, auditor, status, and terminal contracts. Adaptive activation never implies deployment, credentials, production/shared external mutation, destructive action, or another concrete authority not otherwise present.
+The delivery calls are not actions performed **by** Adaptive Planning. `ready-ticket-implement` and `ready-ticket-verify` retain their own exact authority, admission, evidence, execution topology, status, and terminal contracts. Adaptive activation never implies deployment, credentials, production/shared external mutation, destructive action, or another concrete authority not otherwise present.
 
 ## Run Contract handoff
 
@@ -28,15 +28,15 @@ Do not turn the form into delivery authority. The exact Ticket remains the imple
 
 A reshaped current Increment may create a new canonical Ready Ticket denominator. Re-read the current validated Set after planning correction rather than retaining a stale denominator.
 
-## Delivery skill discovery and audit defaults
+## Delivery skill discovery and execution defaults
 
 Before each enabled delivery phase, discover and use the current installed skill contract.
 
 - `ready-ticket-implement` owns one exact Ready Ticket implementation and implementer self-check.
 - `ready-ticket-verify` owns one exact Ready Ticket fresh verification, final verdict, and guarded `ready -> done` progression.
+- Invoke each exact delivery skill once and let its current execution-mode contract choose the top-level default. Preserve an explicit current user request for `DIRECT`; otherwise do not override the delivery skill's normal `SUBAGENT` default.
+- Do not pass the internal `Delegated Worker: yes` marker from Adaptive Planning. That marker belongs only to the delivery skill's own parent-to-worker assignment and prevents recursive delegation.
 - Do not infer Ticket-set parallelism, worker scheduling, or a persistent queue from the existence of a Ready Ticket Set. Select only a currently admissible Ticket using canonical blockers, product dependencies, shared-workspace safety, and current repository evidence.
-
-When no audit was requested and no count was supplied, let each current delivery skill apply its own normal default; under the current contracts this is `Auditor Count: 0` for implementation and `AC Runtime Auditor Count: 0` for verification. Preserve any exact user-supplied audit configuration.
 
 Do not invoke a disabled stage merely to obtain stronger evidence. In particular, `Verification: no` means no `ready-ticket-verify` call and no `done` claim.
 
