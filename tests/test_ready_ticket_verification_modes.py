@@ -39,11 +39,11 @@ class ReadyTicketVerificationModeTests(unittest.TestCase):
         self.assertIn("The current Main is the sole verifier", skill)
         self.assertIn("No child role issues `SATISFIED`, `CONTRADICTED`", skill)
         self.assertIn("Workers never edit Ticket status", skill)
-        self.assertIn("Flow/AC/Ticket verdict | None | None", roles)
-        self.assertIn("`ready -> done` | None | None", roles)
-        self.assertIn("Runner is not a fifth analyst and not a verifier", roles)
+        self.assertIn("Flow/AC/Ticket verdict | None", roles)
+        self.assertIn("`ready -> done` | None", roles)
+        self.assertIn("Main owns all product/runtime execution and final adjudication", roles)
 
-    def test_fixed_four_analysts_and_one_runner_are_complete(self) -> None:
+    def test_fixed_four_analysts_and_main_execution_are_complete(self) -> None:
         skill = (ENSEMBLE / "SKILL.md").read_text(encoding="utf-8")
         roles = (ENSEMBLE / "references" / "role-contracts.md").read_text(
             encoding="utf-8"
@@ -54,15 +54,14 @@ class ReadyTicketVerificationModeTests(unittest.TestCase):
             "ORACLE_CHALLENGER",
             "EVIDENCE_ARCHITECT",
             "SEMANTIC_MATERIALITY_REVIEWER",
-            "FLOW_RUNNER",
         )
         for role in role_names:
             self.assertIn(role, skill)
             self.assertIn(role, roles)
 
         self.assertIn("Use all four analyst roles for every ensemble verification", skill)
-        self.assertIn("one runner alone performs product/runtime actions", skill)
-        self.assertIn("Assign exactly one `FLOW_RUNNER`", (
+        self.assertIn("Main itself performs every frozen Ticket-authorized product/runtime action", skill)
+        self.assertIn("## 6. Wave 3 — Main direct execution", (
             ENSEMBLE / "references" / "orchestration.md"
         ).read_text(encoding="utf-8"))
 
@@ -80,6 +79,7 @@ class ReadyTicketVerificationModeTests(unittest.TestCase):
         self.assertIn("Serialize target binding", skill)
         self.assertIn("Do not use one continuing context for several roles", orchestration)
         self.assertIn("No analyst executes the trigger", orchestration)
+        self.assertIn("Main does not delegate a separate execution runner", orchestration)
 
     def test_role_design_targets_contract_to_proof_and_evidence_to_meaning(self) -> None:
         orchestration = (ENSEMBLE / "references" / "orchestration.md").read_text(
@@ -120,12 +120,12 @@ class ReadyTicketVerificationModeTests(unittest.TestCase):
         )
 
         self.assertIn("A successful report from another target is not partial evidence", orchestration)
-        self.assertIn("Do not immediately re-dispatch the same runner action", orchestration)
+        self.assertIn("Do not immediately repeat the same action", orchestration)
         self.assertIn("same exact read-only assignment", orchestration)
         self.assertIn("up to three times", orchestration)
         self.assertIn("expired/unknown child session or workspace identity", orchestration)
-        self.assertIn("EXECUTION STATE UNKNOWN", roles)
-        self.assertIn("do not repeat; report unknown execution state", roles)
+        self.assertIn("If execution or duplicate effect cannot be determined", orchestration)
+        self.assertNotIn("FLOW_RUNNER", roles)
 
     def test_direct_and_ensemble_share_terminal_meaning(self) -> None:
         direct = (DIRECT / "references" / "verify.md").read_text(encoding="utf-8")
@@ -170,7 +170,7 @@ class ReadyTicketVerificationModeTests(unittest.TestCase):
         self.assertIn("do not split final AC ownership across workers", (
             ENSEMBLE / "SKILL.md"
         ).read_text(encoding="utf-8"))
-        self.assertIn("one `FLOW_RUNNER`", (
+        self.assertIn("Main direct execution", (
             ENSEMBLE / "references" / "orchestration.md"
         ).read_text(encoding="utf-8"))
 

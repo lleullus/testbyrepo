@@ -6,8 +6,8 @@ Main gives each child one complete bounded assignment. Never tell a child to "ve
 
 ```text
 Assignment ID:
-Phase: PREFLIGHT | POST_RUN | RUNNER
-Role: CONTRACT_INTERPRETER | ORACLE_CHALLENGER | EVIDENCE_ARCHITECT | SEMANTIC_MATERIALITY_REVIEWER | FLOW_RUNNER
+Phase: PREFLIGHT | POST_RUN
+Role: CONTRACT_INTERPRETER | ORACLE_CHALLENGER | EVIDENCE_ARCHITECT | SEMANTIC_MATERIALITY_REVIEWER
 Delegated Ensemble Role: yes
 Configured worker identity / slot:
 Exact Ticket:
@@ -17,7 +17,7 @@ Target fingerprint:
 Authority paths and identities:
 Allowed evidence:
 Required source anchors:
-Frozen scenario / runner evidence: None | <exact packet>
+Frozen scenario / Main execution evidence: None | <exact packet>
 Explicit exclusions:
 Exact question:
 Why the answer can change verification:
@@ -26,23 +26,23 @@ Required output fields:
 
 A child receiving `Delegated Ensemble Role: yes` performs only the assigned role and never invokes this skill, the DIRECT verifier, implementation, planning or another worker.
 
-Reject or return `BLOCKED` for an assignment that is open-ended, mutating beyond the runner contract, missing actual target identity, addressed to another role/slot, or internally inconsistent.
+Reject or return `BLOCKED` for an assignment that is open-ended, mutating, missing actual target identity, addressed to another role/slot, or internally inconsistent.
 
 ## 2. Common authority envelope
 
-| Concern | Analyst authority | FLOW_RUNNER authority |
-| --- | --- | --- |
-| Read Ticket/Spec/Behavior/UI | Exact assignment | Exact assignment/scenario |
-| Inspect repository/runtime/canonical evidence | Allowed role evidence only | Frozen actions/readbacks only |
-| Product/runtime mutation | None | Only exact authorized frozen trigger/test state |
-| Product source/config/test edit | None | None |
-| Planning/Ticket edit | None | None, including status |
-| User interaction | None | None unless Main supplied exact operator evidence path |
-| Further delegation | None | None |
-| Flow/AC/Ticket verdict | None | None |
-| `ready -> done` | None | None |
+| Concern | Analyst authority |
+| --- | --- |
+| Read Ticket/Spec/Behavior/UI | Exact assignment |
+| Inspect repository/runtime/canonical evidence | Allowed role evidence only |
+| Product/runtime mutation | None |
+| Product source/config/test edit | None |
+| Planning/Ticket edit | None |
+| User interaction | None |
+| Further delegation | None |
+| Flow/AC/Ticket verdict | None |
+| `ready -> done` | None |
 
-Analysts separate observed facts from inference and leave every material gap explicit. Runner reports actions and raw readbacks without interpreting them as verdicts.
+Analysts separate observed facts from inference and leave every material gap explicit. Main owns all product/runtime execution and final adjudication.
 
 ## 3. Common analyst report
 
@@ -145,7 +145,7 @@ Contract interpretation result: ESTABLISHED | DEFECT | UNRESOLVED
 
 ### 4.5 POST_RUN duties
 
-Using only the frozen scenario and raw runner evidence:
+Using only the frozen scenario and Main's raw execution evidence:
 
 - compare each claim component with actual evidence;
 - identify which component is supported, directly contradicted or unresolved;
@@ -205,7 +205,7 @@ Oracle challenges:
 
 ### 5.5 POST_RUN duties
 
-Inspect raw runner evidence and ask:
+Inspect Main's raw execution evidence and ask:
 
 > Could this exact evidence exist while the approved claim is still materially false?
 
@@ -257,7 +257,7 @@ For every claim/flow:
 5. for preservation, define when before/after identity is required;
 6. identify target drift signals;
 7. identify side-effect, duplicate, credential, cleanup and terminal-window risks;
-8. define exact runner actions and readbacks without changing product meaning; and
+8. define exact Main actions and readbacks without changing product meaning; and
 9. identify any missing authority or unsafe/unavailable action.
 
 ### 6.4 PREFLIGHT role-specific output
@@ -268,7 +268,7 @@ Target identity:
 - Claim / Flow:
   Claim class:
   Authoritative surface/readback:
-  Required runner action or inspection:
+  Required Main action or inspection:
   Evidence capture:
   Bounded absence universe:
   Explicit exclusions:
@@ -282,7 +282,7 @@ Evidence-plan result: ESTABLISHED | DEFECT | UNRESOLVED
 
 ### 6.5 POST_RUN duties
 
-- verify actual runner root/target/action identity;
+- verify Main's actual root/target/action identity;
 - determine whether every required capture occurred;
 - verify absence-search scope matches the authorized universe;
 - verify preservation evidence covers the mutation-capable boundary when required;
@@ -378,74 +378,7 @@ Cross-AC / Behavior findings:
 
 Do not use keyword/count presence as semantic support unless the approved contract makes that exact representation decisive.
 
-## 8. FLOW_RUNNER
-
-### 8.1 Purpose
-
-Perform Main's frozen Ticket-authorized actions once on the exact target and return raw attributable evidence. Runner is not a fifth analyst and not a verifier.
-
-### 8.2 Assignment requirements
-
-Runner assignment must include:
-
-- exact target packet;
-- every authored flow and Main's frozen derived execution;
-- exact allowed actions/commands/interactions;
-- evidence capture points;
-- side-effect/duplicate/credential constraints;
-- cleanup/terminal conditions;
-- explicit exclusions; and
-- required result identity fields.
-
-An incomplete or ambiguous assignment returns `BLOCKED` before action.
-
-### 8.3 Execution method
-
-1. Confirm actual root, workspace and target fingerprint before the first material action.
-2. Perform only the frozen action or canonical inspection.
-3. Record exact action, relevant complete output/readback and evidence anchors.
-4. Do not replace a failed tool with a different target/path/environment.
-5. For read-only transport errors, retry only under Main/host policy with identical inputs.
-6. For mutation-capable action timeout/network failure, do not repeat; report unknown execution state.
-7. Capture required evidence before cleanup destroys a temporary target.
-8. Complete cleanup and terminal windows exactly as assigned.
-9. Reconfirm target identity and report unrelated drift.
-
-### 8.4 Runner output
-
-```text
-FLOW EXECUTION EVIDENCE
-
-Assignment ID:
-Role: FLOW_RUNNER
-Configured worker identity / slot:
-Actual worker identity:
-Actual Project Root:
-Actual Workspace ID:
-Actual Ticket:
-Target before:
-Target after:
-Unrelated target drift: None | <exact change>
-Terminal Status: COMPLETED | BLOCKED | EXECUTION STATE UNKNOWN
-
-Executed flows:
-- Flow ordinal:
-  Actions actually performed:
-  Exact command/interaction/canonical inspection:
-  Raw observation/output:
-  Authoritative readback anchors:
-  Artifact/screenshot references:
-  Missing evidence:
-  Directly observed contradiction:
-  Cleanup / terminal condition:
-
-Execution errors and error layer:
-State-changing uncertainty:
-```
-
-Runner may report a directly observed contradiction as a fact but never assigns flow result, AC verdict, whole-Ticket verdict or progression.
-
-## 9. Role correction and continuation
+## 8. Role correction and continuation
 
 A role report may be resumed for one bounded targeted rebuttal or missing-field correction only when Main supplies exact new authority/evidence and the same target. Do not broaden the role, show unrelated role conclusions or ask it to become a general verifier.
 

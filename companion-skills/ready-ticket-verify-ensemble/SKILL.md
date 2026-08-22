@@ -1,6 +1,6 @@
 ---
 name: ready-ticket-verify-ensemble
-description: "Explicitly verify one existing IIS Ready Ticket with a weak-agent ensemble. Main remains the sole verifier; four fixed read-only analyst roles independently inspect one stable target in parallel waves, one runner alone performs product/runtime actions, and Main adjudicates every authored Verification flow and AC and owns the guarded done transition. Use only when the user explicitly selects ensemble or team verification; never infer this mode from model capability."
+description: "Explicitly verify one existing IIS Ready Ticket with a weak-agent ensemble. Main remains the sole verifier and directly performs the Ticket-authorized product/runtime actions; four fixed read-only analyst roles independently inspect one stable target in parallel waves, challenge the contract and evidence, and Main adjudicates every authored Verification flow and AC and owns the guarded done transition. Use only when the user explicitly selects ensemble or team verification; never infer this mode from model capability."
 ---
 
 # Ready Ticket Verify Ensemble
@@ -14,7 +14,7 @@ The current Main is the sole verifier. It owns canonical admission, target bindi
 The ensemble supplies bounded evidence and challenges; it does not distribute verifier authority:
 
 - `CONTRACT_INTERPRETER`, `ORACLE_CHALLENGER`, `EVIDENCE_ARCHITECT` and `SEMANTIC_MATERIALITY_REVIEWER` are read-only advisory analysts.
-- `FLOW_RUNNER` is the only child role allowed to perform the frozen Ticket-authorized product/runtime actions.
+- Main itself performs every frozen Ticket-authorized product/runtime action and captures the raw authoritative evidence. No child role executes the product/runtime trigger.
 - No child role issues `SATISFIED`, `CONTRADICTED`, AC `PASS`/`FAIL`, whole-Ticket verdict or Ticket status mutation.
 
 Before work, read [references/orchestration.md](references/orchestration.md) and [references/role-contracts.md](references/role-contracts.md) in full. Main must also read:
@@ -52,7 +52,7 @@ Before canonical product/runtime action, confirm the host can provide:
 1. at least two independent child contexts, with four concurrent analyst contexts preferred;
 2. the same exact Project Root and target snapshot to every used role;
 3. parent-directed terminal results containing actual worker identity, actual root and actual target identity;
-4. one later single `FLOW_RUNNER` context; and
+4. Main itself can directly access the required product/runtime/canonical surfaces and perform the exact authorized frozen actions; and
 5. no forced sharing of another role's conclusions before independent reports are returned.
 
 Four analysts may run concurrently. When only two independent analyst contexts are available, run two roles and then the other two as a second read-only batch without disclosing first-batch conclusions. One reusable child context or a shared conversation that retains another role's conclusions is not independent ensemble capability.
@@ -74,7 +74,7 @@ Use all four analyst roles for every ensemble verification. Do not ask a weak Ma
 Wave 0  Main binds exact authority and target snapshot
 Wave 1  Four independent read-only analyst preflights
 Wave 2  Main admits and closes material objections; freezes one scenario
-Wave 3  One FLOW_RUNNER executes the frozen actions and captures raw evidence
+Wave 3  Main directly executes the frozen actions and captures raw evidence
 Wave 4  Four independent analyst post-run evidence reviews
 Wave 5  Main applies the canonical flow/AC/Ticket rules and guarded progression
 ```
@@ -85,6 +85,7 @@ Parallelize only read-only work on the same stable snapshot. Serialize target bi
 
 - All authored Verification flows and conditional boundaries remain the mandatory denominator.
 - Analysts inspect the complete integrated Ticket contract; do not split final AC ownership across workers.
+- Analysts never execute the product/runtime trigger. Main owns the single authoritative execution path for the invocation.
 - Worker agreement is neither required nor sufficient. Do not vote, average confidence or count supporting workers.
 - A concrete material objection survives until closed by exact authority or fresh attributable evidence, not by other workers' disagreement.
 - Main uses one invocation-local assignment/objection table only; do not create a product file, persistent roster, queue, receipt, evidence ledger or workflow database.
@@ -112,7 +113,7 @@ Only Main may perform the sibling DIRECT verifier's guarded `Status: ready` to `
 ## Safety and stop boundary
 
 - Analysts are read-only and never delegate further.
-- Runner never edits product source/config/tests or planning authority to manufacture a pass.
+- Main does not edit product source/config/tests or planning authority to manufacture a pass during verification.
 - Side-effectful, duplicate-sensitive, irreversible, credential-bearing, shared/production, message, payment or deployment actions require the exact existing Ticket/user authority.
-- A runner dispatch/result transport failure leaves execution state unknown until Main reads authoritative current state; do not immediately launch the same action again.
+- A transport/network failure during a Main-owned mutation-capable action leaves execution state unknown until Main reads authoritative current state; do not immediately repeat the same action.
 - Verification ends with evidence, verdict and any guarded progression result. Do not automatically remediate implementation, invoke planning, create follow-up Tickets or continue to another Increment.

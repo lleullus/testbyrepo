@@ -19,7 +19,7 @@ Main applies the current sibling DIRECT verifier's canonical rules for:
 - guarded `ready -> done`; and
 - no automatic remediation or planning continuation.
 
-Do not inherit the sibling skill's DIRECT-only child topology. In this skill, analysts and runner are advisory/evidence roles under Main-owned verification authority; they are not delegated verifiers.
+Do not inherit the sibling skill's DIRECT-only child topology. In this skill, analysts are advisory read-only roles under Main-owned verification authority. Main itself executes the frozen product/runtime actions and owns the resulting raw evidence packet.
 
 ## 2. Purpose-first materiality discipline
 
@@ -80,13 +80,13 @@ Use current existing identities. Do not create a retained verification ID, repos
 
 ### 3.3 Assignment identities
 
-Create invocation-local assignment labels for the four roles and runner. Preserve:
+Create invocation-local assignment labels for the four analyst roles. Preserve:
 
 - assignment ID;
 - logical role;
 - actual worker identity when returned;
 - target packet identity;
-- phase (`PREFLIGHT`, `RUNNER`, `POST_RUN`); and
+- phase (`PREFLIGHT`, `POST_RUN`); and
 - terminal report status.
 
 These values remain in Main's current context only.
@@ -162,7 +162,7 @@ Allow at most one targeted rebuttal round per objection in this invocation. If t
 
 ### 5.4 Preflight disposition
 
-Do not start the runner when any of the following remains:
+Do not start Main's product/runtime execution when any of the following remains:
 
 - material semantic-contract defect that prevents the authored flow from deciding an approved claim;
 - current Ticket/parent/Behavior/UI projection contradiction;
@@ -189,7 +189,7 @@ When no blocking objection remains, Main authors and freezes one integrated scen
 Flow ordinal:
 Authored contract:
 Setup:
-Exact runner actions / canonical inspections:
+Exact Main actions / canonical inspections:
 Evidence capture points:
 Bounded absence universe, when applicable:
 Preservation checks, when applicable:
@@ -203,7 +203,7 @@ Derived checks may close a concrete false-verdict or attribution path, but may n
 
 ### 5.6 Informational preflight report
 
-Before runner execution, emit:
+Before Main execution, emit:
 
 ```text
 ENSEMBLE VERIFICATION PREFLIGHT REPORT
@@ -217,7 +217,7 @@ Material objections: None | <closed/open summary>
 Scenario blocks:
 Authoritative readbacks:
 Absence / preservation boundaries:
-Runner actions:
+Main execution actions:
 Cleanup / terminal conditions:
 Authority-required actions:
 Execution disposition: PROCEED | AUTHORITY REQUIRED | BLOCKED
@@ -225,45 +225,60 @@ Execution disposition: PROCEED | AUTHORITY REQUIRED | BLOCKED
 
 This is informational, not an approval gate. Continue when `PROCEED` and current authority permits the frozen actions.
 
-## 6. Wave 3 — Single Flow Runner
+## 6. Wave 3 — Main direct execution
 
-Assign exactly one `FLOW_RUNNER` the frozen scenario and target packet.
+Main performs the frozen scenario directly on the exact target. This is the only product/runtime execution path in the ensemble lifecycle.
 
 ### 6.1 Single execution ownership
 
-- No analyst executes the trigger.
-- Do not start two runners for different ACs or flows.
-- The runner may coordinate common setup/cleanup across authored flows only when Main's frozen scenario preserves their meaning.
-- The runner returns raw observations and evidence limits; it does not adjudicate them.
+- No analyst executes the trigger or owns runtime mutation.
+- Main does not delegate a separate execution runner.
+- Main may coordinate common setup/cleanup across authored flows only when the frozen scenario preserves their meaning.
+- Main captures raw observations, authoritative readbacks, evidence limits and cleanup/terminal state before adjudication.
 
-### 6.2 Runner target and action gate
+### 6.2 Target and action gate
 
-Before each material action, runner confirms the actual root and current target still match the assignment. A mismatch stops execution and is reported; runner does not choose another root, revision, environment or path.
+Before each material action, Main confirms the actual root and current target still match the frozen target packet. A mismatch stops execution; do not choose another root, revision, environment or path to bypass the mismatch.
+
+For each flow Main records:
+
+```text
+Flow ordinal:
+Target before:
+Actions actually performed:
+Exact command/interaction/canonical inspection:
+Raw observation/output:
+Authoritative readback anchors:
+Artifact/screenshot references:
+Missing evidence:
+Directly observed contradiction:
+Cleanup / terminal condition:
+Target after:
+Unrelated target drift:
+```
+
+This Main-owned packet is raw verification evidence. Do not pre-label it with flow/AC/Ticket verdicts before Wave 4 review.
 
 ### 6.3 State-changing uncertainty
 
-A network/transport failure after runner dispatch or during a mutation-capable action does not prove success or failure and does not prove anything about the target files/data.
+A network/transport failure during a mutation-capable Main action does not prove success or failure and does not prove anything about the target files/data.
 
-Do not immediately re-dispatch the same runner action. Main first reads current authoritative state and any existing operation history that the contract already provides.
+Do not immediately repeat the same action. Main first reads current authoritative state and any existing operation history that the contract already provides.
 
-- If fresh readback establishes the action definitely did not occur and a repeat remains authorized/safe, Main may issue one new explicit runner assignment.
+- If fresh readback establishes the action definitely did not occur and a repeat remains authorized/safe, Main may perform a new explicit attempt after recording that state check.
 - If execution or duplicate effect cannot be determined, affected flow evidence is `INCONCLUSIVE`.
 - Do not add a new ledger merely to resolve the uncertainty.
 
-### 6.4 Runner result identity
-
-Main rejects a runner report whose actual target differs from the frozen packet. Do not reinterpret evidence from a nearby environment as current-target evidence.
-
 ## 7. Wave 4 — Independent post-run evidence review
 
-Return the runner's raw evidence packet to all four logical analyst roles.
+Return Main's raw evidence packet to all four logical analyst roles.
 
 Prefer resuming the exact role worker. When resumption is unavailable, start a fresh isolated worker for that logical role with only:
 
 - its original assignment;
 - its own preflight report;
 - the frozen target/scenario;
-- the runner raw evidence; and
+- Main's raw execution evidence; and
 - no other role conclusions or Main tentative verdict.
 
 Each role performs only its post-run responsibilities from [role-contracts.md](role-contracts.md).
@@ -282,7 +297,7 @@ Before adjudication, require:
 - required cleanup and terminal windows complete; and
 - every material post-run objection closed or classified.
 
-If the Ticket, parent authority or implementation target materially changed after Wave 0, do not reuse analyst agreement. Before runner action, return `VERIFICATION NOT STARTED: ENSEMBLE TARGET CHANGED`. During/after runner action, classify affected flows `INCONCLUSIVE` unless a direct attributable contradiction remains current.
+If the Ticket, parent authority or implementation target materially changed after Wave 0, do not reuse analyst agreement. Before Main execution, return `VERIFICATION NOT STARTED: ENSEMBLE TARGET CHANGED`. During/after Main execution, classify affected flows `INCONCLUSIVE` unless a direct attributable contradiction remains current.
 
 ### 8.2 Flow truth table
 
@@ -398,7 +413,7 @@ Team execution:
 - ORACLE_CHALLENGER: <worker / terminal>
 - EVIDENCE_ARCHITECT: <worker / terminal>
 - SEMANTIC_MATERIALITY_REVIEWER: <worker / terminal>
-- FLOW_RUNNER: <worker / terminal>
+- Main execution: DIRECT
 - Concurrency used:
 
 Preflight:
