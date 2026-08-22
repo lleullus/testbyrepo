@@ -85,31 +85,43 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("Verification status: NOT ADJUDICATED BY THIS SKILL", workflow)
         self.assertIn("Completion: COMPLETE | BLOCKED | PARTIAL", workflow)
 
-    def test_verification_is_subagent_first_and_verifier_owns_verdict(self) -> None:
+    def test_verification_is_direct_and_main_owns_verdict(self) -> None:
         skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
         workflow = (VERIFY / "references" / "verify.md").read_text(encoding="utf-8")
 
-        self.assertIn("Top-level default execution mode is `SUBAGENT`", skill)
-        self.assertIn("one verifier worker", skill)
-        self.assertIn("`Delegated Worker: yes`", skill)
-        self.assertIn("never delegates this skill again", skill)
-        self.assertIn("Never silently fall back to `DIRECT`", skill)
-        self.assertIn("does not become a second verification authority", skill)
-        self.assertIn("present the caller-facing result without issuing a second AC/Ticket verdict", workflow)
+        self.assertIn("Execution mode is `DIRECT` only", skill)
+        self.assertIn("The current Main is the sole verifier", skill)
+        self.assertIn("does not delegate this verification authority", skill)
+        self.assertIn("DIRECT VERIFIER REQUIRED", skill)
+        self.assertNotIn("Top-level default execution mode is `SUBAGENT`", skill)
+        self.assertIn("This skill is `DIRECT` only", workflow)
+        self.assertIn("does not delegate verification", workflow)
 
-    def test_verification_scenario_handoff_and_material_turns_are_non_blocking(self) -> None:
+    def test_verification_requires_semantic_contract_check_and_claim_sufficient_evidence(self) -> None:
+        skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
         workflow = (VERIFY / "references" / "verify.md").read_text(encoding="utf-8")
 
-        report = workflow.index("## 7. Scenario report handoff")
-        runtime = workflow.index("## 8. Runtime-first execution")
+        self.assertIn("semantically compare every AC and mapped Verification flow", skill)
+        self.assertIn("## 3. Semantic contract check", workflow)
+        self.assertIn("false-positive or false-negative", workflow)
+        self.assertIn("Bounded active-surface universe", workflow)
+        self.assertIn("Semantic and qualitative claims", workflow)
+        self.assertIn("Process/history claims", workflow)
+        self.assertIn("do not create a new run ledger", workflow)
+        self.assertNotIn("ADEQUATE | INADEQUATE | UNRESOLVED", workflow)
+        self.assertNotIn("Acceptance-contract adequacy gate", skill)
+
+    def test_verification_scenario_report_and_material_turns_are_direct(self) -> None:
+        workflow = (VERIFY / "references" / "verify.md").read_text(encoding="utf-8")
+
+        report = workflow.index("## 8. Scenario report")
+        runtime = workflow.index("## 9. Evidence sufficiency and execution")
         self.assertLess(report, runtime)
-        self.assertIn("before the first product/runtime action", workflow)
-        self.assertIn("direct parent non-blocking", workflow)
-        self.assertIn("not an approval gate", workflow)
+        self.assertIn("Before the first product/runtime action", workflow)
+        self.assertIn("informational, not an approval gate", workflow)
         self.assertIn("VERIFICATION TURN REPORT", workflow)
         self.assertIn("only when direct evidence creates a material change", workflow)
-        self.assertIn("Do not report routine progress", workflow)
-        self.assertIn("instead of waiting in a live suspended state", workflow)
+        self.assertIn("waiting in a live suspended state", workflow)
 
     def test_verification_preserves_full_adjudication_and_done_guard(self) -> None:
         skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
@@ -118,26 +130,30 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("every authored Verification flow", skill)
         self.assertIn("Independent verification required", workflow)
         self.assertIn("all ACs PASS          -> VERIFIED", workflow)
+        self.assertIn("no unresolved material semantic-contract defect", skill)
         self.assertIn("Perform one guarded targeted replacement", workflow)
         self.assertIn("Ticket Progression: COMPLETED | NOT APPLICABLE | FAILED", workflow)
         self.assertIn("Do not automatically edit source", workflow)
 
-    def test_adaptive_defers_to_delivery_mode_and_does_not_forge_worker_role(self) -> None:
+    def test_adaptive_routes_implementation_and_explicit_verification_modes(self) -> None:
         continuation = ADAPTIVE_CONTINUATION.read_text(encoding="utf-8")
 
-        self.assertIn("normal `SUBAGENT` default", continuation)
-        self.assertIn("explicit current user request for `DIRECT`", continuation)
-        self.assertIn("Do not pass the internal `Delegated Worker: yes` marker", continuation)
+        self.assertIn("`ready-ticket-implement` retains its normal `SUBAGENT` default", continuation)
+        self.assertIn("otherwise use DIRECT-only `ready-ticket-verify`", continuation)
+        self.assertIn("use `ready-ticket-verify-ensemble` only when the current user explicitly selects", continuation)
+        self.assertIn("without issuing a second verdict", continuation)
+        self.assertIn("Do not pass `Delegated Worker: yes` or `Delegated Ensemble Role: yes` from Adaptive", continuation)
         self.assertIn("Select only a currently admissible Ticket", continuation)
 
-    def test_openai_metadata_matches_worker_first_contract(self) -> None:
+    def test_openai_metadata_matches_current_delivery_contracts(self) -> None:
         implement_yaml = (IMPLEMENT / "agents" / "openai.yaml").read_text(encoding="utf-8")
         verify_yaml = (VERIFY / "agents" / "openai.yaml").read_text(encoding="utf-8")
 
         self.assertIn("$ready-ticket-implement", implement_yaml)
         self.assertIn("one implementation worker", implement_yaml)
         self.assertIn("$ready-ticket-verify", verify_yaml)
-        self.assertIn("one verifier worker", verify_yaml)
+        self.assertIn("directly verify", verify_yaml)
+        self.assertIn("semantically check", verify_yaml)
 
 
 if __name__ == "__main__":

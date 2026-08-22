@@ -24,7 +24,7 @@ Do not turn IIS into a controller, delivery orchestrator, workflow database, app
 
 There is no separately invokable Adaptive Run skill. `Run` in **Adaptive Run Contract** means the lifetime of the current explicit Adaptive invocation initiated through this one `iis-adaptive-planning` skill.
 
-The **Outer Main** is the main agent handling that current explicit Adaptive invocation. It owns only Run Contract closure and carry-forward, phase routing from exact owner results, fresh completion assessment, and the final caller-facing result. It does not become a second planning, implementation, or verification authority: current IIS leaves retain product-planning authority, `ready-ticket-implement` retains implementation authority, and `ready-ticket-verify` retains verification verdict and guarded `done` authority.
+The **Outer Main** is the main agent handling that current explicit Adaptive invocation. It owns only Run Contract closure and carry-forward, phase routing from exact owner results, fresh completion assessment, and the final caller-facing result. It does not become a second planning, implementation, or verification authority: current IIS leaves retain product-planning authority, `ready-ticket-implement` retains implementation authority, and the currently selected Ready Ticket verification skill (`ready-ticket-verify` or explicit-only `ready-ticket-verify-ensemble`) retains verification verdict and guarded `done` authority. When Outer Main enters that skill's sole-verifier role, it acts as that exact owner for the verification phase and returns to Adaptive routing after the terminal result.
 
 This is a thin invocation-local handoff role, not a persistent controller, scheduler, queue, retry ledger, workflow database, or new product-authority layer.
 
@@ -192,7 +192,7 @@ To Spec and To Tickets remain projection stages, not places to invent product me
 
 ## Verification evidence and re-entry
 
-Adaptive Planning may consume a fresh exact result from the separate `ready-ticket-verify` lifecycle as evidence. It does not replace or rewrite the verifier verdict.
+Adaptive Planning may consume a fresh exact result from the separately selected `ready-ticket-verify` or explicit-only `ready-ticket-verify-ensemble` lifecycle as evidence. It does not replace or rewrite the verifier verdict.
 
 Classify the underlying problem using [references/06-verification-triage.md](references/06-verification-triage.md):
 
@@ -206,7 +206,7 @@ Never infer `CONTRACT_OVERREACH` merely because a requirement is difficult or ex
 
 If planning authority changes a contract, do not turn an earlier failed result into PASS. Validate the new planning artifacts and require fresh verification when Verification remains enabled.
 
-Adaptive Planning itself does not implement or verify Tickets. Outer Main invokes the separately discovered `ready-ticket-implement` only when `Implementation: yes` and `ready-ticket-verify` only when `Verification: yes`. Use [references/08-delivery-continuation.md](references/08-delivery-continuation.md); do not insert a new approval prompt merely because ownership changes.
+Adaptive Planning itself does not implement or verify Tickets. Outer Main invokes the separately discovered `ready-ticket-implement` only when `Implementation: yes`; when `Verification: yes`, it invokes exactly one verification skill selected under [references/08-delivery-continuation.md](references/08-delivery-continuation.md): DIRECT `ready-ticket-verify` by default or explicit-only `ready-ticket-verify-ensemble` when the current user selected ensemble/team verification. Do not insert a new approval prompt merely because ownership changes.
 
 If an enabled delivery lifecycle produces a material implementation, verification-mechanism, contract, or current-Increment defect, corrective routing/re-entry is the Adaptive default after an actual correction or new evidence, unless the user explicitly requested no corrective re-entry/fail-and-report. Adaptive owns only planning correction/reshaping; implementation and verification remain owned by the separate delivery skills. A disabled stage is an authority boundary, not a failure to be bypassed.
 
