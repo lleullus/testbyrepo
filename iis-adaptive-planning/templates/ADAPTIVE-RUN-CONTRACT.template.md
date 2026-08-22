@@ -68,5 +68,6 @@ or, only when `Status: USER_INPUT_REQUIRED`:
 - If direct approval materially revises decision-critical Run Contract meaning, re-close and re-render the revised form before requesting approval again; downstream changes already allowed by the approved contract do not retrigger the gate.
 - Do not begin planning or delivery mutation while a material field remains unresolved.
 - Implementation and Verification are independent invocation fields; preserve explicit `do not implement` and `do not verify` overrides.
+- With explicit Adaptive activation and no narrower stop or broader named-item/outcome terminal, the default current-Increment terminal is `CURRENT_INCREMENT_DELIVERED`, subject to Required-item coverage and the Mandate ceiling.
 - Continuation Authority is the Mandate ceiling; this form's Run Completion Boundary is the actual invocation terminal within that ceiling.
 - This form is invocation-local and is not a canonical IIS artifact or required durable companion file.

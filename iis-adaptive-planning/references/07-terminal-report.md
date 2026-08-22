@@ -51,17 +51,18 @@ Reshaping:
 - <old -> new INC summary, or None>
 
 Unresolved user decisions: None
-Planning terminal: validated complete Ready Ticket Set
+Planning owner terminal: validated complete Ready Ticket Set
+Planning owner result: STOP — terminal IIS Planning output
 Whole-run predicate satisfied: yes | no
+Returned to: Outer Main
 Outer disposition: RUN_COMPLETE | CONTINUE_TO_IMPLEMENTATION | CONTINUE_TO_VERIFICATION | RETURN_AUTHORITY_GAP
-STOP — IIS Adaptive Planning ownership boundary
 ```
 
 Do not append an offer to implement, verify, or plan the next provisional Increment as though those actions are part of IIS Planning.
 
-Return the Ready Ticket Set and the closed Run Contract to the outer caller. Under explicit Adaptive activation, that outer caller continues the current Increment through exactly the enabled delivery stages without another approval merely because ownership changes.
+Return the Ready Ticket Set and the closed Run Contract to Outer Main. Under explicit Adaptive activation, Outer Main continues the current Increment through exactly the enabled delivery stages without another approval merely because ownership changes. The planning owner STOP is not an invocation STOP.
 
-When the active Run Completion Boundary is `READY_TICKET_SET`, the planning phase also satisfies whole-run completion and the outer caller emits the Run Complete report below. For every broader boundary, planning phase completion alone is not whole-run success.
+When the active Run Completion Boundary is `READY_TICKET_SET`, the planning phase also satisfies whole-run completion and Outer Main emits the Run Complete report below. For every broader boundary, planning phase completion alone is not whole-run success.
 
 ## Current Increment implemented
 
@@ -121,9 +122,16 @@ Do not emit this report for a planning leaf STOP, one completed Ticket, one deli
 
 Candidate Named Items do not block this report unless the user revised them into Required Named Items.
 
-## Current Increment delivered but run continues
+## Current Increment delivered and broader completion assessment
 
-Use when every current canonical Ticket is exact `done`, but the active boundary is `NAMED_REQUIRED_ITEMS_DELIVERED`, `BOUNDED_OUTCOME_SATISFIED`, or `MANDATE_OUTCOME_SATISFIED` and its predicate is not yet satisfied.
+Use after every current canonical Ticket is exact `done` when the active boundary is `NAMED_REQUIRED_ITEMS_DELIVERED`, `BOUNDED_OUTCOME_SATISFIED`, or `MANDATE_OUTCOME_SATISFIED`. Fresh actual product state and attributable authoritative readback must produce exactly one disposition:
+
+- `RUN_CONTRACT_SATISFIED` — use the single `IIS ADAPTIVE RUN COMPLETE` report above; do not emit a second Mandate-complete terminal.
+- `NEXT_INCREMENT_REQUIRED` — record the nonterminal transition below and continue through Outer Main to Scope Shaper in the same invocation.
+- `USER_DECISION_REQUIRED` — use the material product decision report below.
+- `EVIDENCE_REQUIRED` — use the completion-evidence report below and do not infer completion or Scope Shaper re-entry.
+
+For `NEXT_INCREMENT_REQUIRED`:
 
 ```text
 IIS ADAPTIVE CURRENT INCREMENT DELIVERED
@@ -135,32 +143,12 @@ Required Named Items remaining:
 - <item or None>
 Completion Predicate satisfied: no
 Fresh actual product result: <observable result>
-Next disposition: NEXT_INCREMENT_REQUIRED | USER_DECISION_REQUIRED | EVIDENCE_REQUIRED
-STOP — current delivery unit only
+Next disposition: NEXT_INCREMENT_REQUIRED
+Returned to: Outer Main -> Scope Shaper
+Invocation STOP: no
 ```
 
-This report is a phase boundary, not whole-run success.
-
-## Mandate success completion
-
-Use only after a fully delivered current Increment has entered success re-entry and fresh actual product state establishes `MANDATE_SATISFIED` for the applicable `BOUNDED_OUTCOME_SATISFIED` or `MANDATE_OUTCOME_SATISFIED` Run Completion Boundary.
-
-```text
-IIS ADAPTIVE MANDATE COMPLETE
-
-Mandate: <exact companion path/revision or current-conversation authority>
-Mandate Continuation Ceiling: BOUNDED_OUTCOME | MANDATE_OUTCOME
-Run Completion Boundary: BOUNDED_OUTCOME_SATISFIED | MANDATE_OUTCOME_SATISFIED
-Applicable outcome: <exact bounded or Desired Product Outcome>
-Final delivered Increment: <exact INC path>
-Actual product result: <observable result>
-Authoritative readback: <fresh readback>
-Disposition: MANDATE_SATISFIED
-Remaining provisional horizon: non-authoritative; not a completion blocker
-STOP
-```
-
-Do not declare Mandate completion from Ticket `done` status, WP exhaustion, or a provisional horizon alone. Completion requires fresh actual outcome evidence.
+This is a nonterminal transition, not whole-run success. Do not stop merely to announce it, and do not declare completion from Ticket `done` status, WP exhaustion, or a provisional horizon alone. Completion requires fresh actual outcome evidence.
 
 ## Return to user for a material product decision
 
@@ -188,6 +176,27 @@ STOP
 ```
 
 Do not dump the entire planning analysis. Ask only for the branch that blocks authoritative continuation.
+
+## Completion evidence required
+
+Use when a fully delivered current Increment reaches broader completion assessment but current attributable evidence cannot determine whether the active Completion Predicate is satisfied or whether more product construction is required.
+
+```text
+IIS ADAPTIVE COMPLETION EVIDENCE REQUIRED
+
+Current Increment: <exact INC path>
+Run Completion Boundary: <active broader boundary>
+Completion Predicate: <exact predicate>
+Available readback: <what was established>
+Missing evidence: <smallest exact authoritative readback, operator evidence, or external condition>
+Why completion cannot be decided: <attribution or availability gap>
+Disposition: EVIDENCE_REQUIRED
+Scope Shaper re-entry inferred: no
+Whole-run completion: no
+STOP
+```
+
+Do not classify missing completion evidence as product failure, Run Contract satisfaction, or a need for another Increment. Resume only when the missing attributable evidence or changed external condition can make one of the other dispositions valid.
 
 ## Run Contract authority gap
 

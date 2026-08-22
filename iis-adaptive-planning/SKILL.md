@@ -16,9 +16,17 @@ Preserve the current IIS product-planning semantics, authority owners, canonical
 3. satisfy eligible repeated planning confirmations through standing delegated confirmation when the mandate resolves the decision;
 4. reshape the current Increment and re-enter the correct planning leaf when new evidence makes the current shape materially worse;
 5. classify later verification problems by authority and route them to implementation, verification setup, or planning instead of forcing a test pass; and
-6. after current-Increment planning closes, return the Ready Ticket Set and closed Run Contract to the outer caller, which applies the independently closed Implementation and Verification fields.
+6. after current-Increment planning closes, return the Ready Ticket Set and closed Run Contract to the current invocation's Outer Main, which applies the independently closed Implementation and Verification fields.
 
 Do not turn IIS into a controller, delivery orchestrator, workflow database, approval engine, agent-governance framework, or generic safety layer.
+
+## Single-entry invocation and Outer Main
+
+There is no separately invokable Adaptive Run skill. `Run` in **Adaptive Run Contract** means the lifetime of the current explicit Adaptive invocation initiated through this one `iis-adaptive-planning` skill.
+
+The **Outer Main** is the main agent handling that current explicit Adaptive invocation. It owns only Run Contract closure and carry-forward, phase routing from exact owner results, fresh completion assessment, and the final caller-facing result. It does not become a second planning, implementation, or verification authority: current IIS leaves retain product-planning authority, `ready-ticket-implement` retains implementation authority, and `ready-ticket-verify` retains verification verdict and guarded `done` authority.
+
+This is a thin invocation-local handoff role, not a persistent controller, scheduler, queue, retry ledger, workflow database, or new product-authority layer.
 
 ## Required current authority
 
@@ -88,6 +96,8 @@ Required Named Items and Candidate Named Items may coexist. Do not collapse a mi
 
 Implementation and Verification are independent invocation fields. Preserve explicit `do not implement` and `do not verify` overrides. `Verification: no` never permits a verifier call, a `done` claim, or a delivered/outcome boundary that still requires verification.
 
+When explicit Adaptive activation supplies no narrower stop override and no broader named-item or outcome terminal, close the default current-Increment execution envelope as `Implementation: yes`, `Verification: yes`, and `Run Completion Boundary: CURRENT_INCREMENT_DELIVERED`, subject to the Required-item coverage invariant and Mandate Continuation Authority ceiling in `references/09-run-contract.md`. Do not force this current-Increment terminal when current authority already assigns a broader outcome or when required-item coverage is unknown or partial.
+
 Do not let a planning leaf STOP, one implementation report, one Ticket, or one current Increment stand in for whole-run completion unless the closed Run Completion Boundary and Completion Predicate say so.
 
 The Run Contract is invocation-local authority, not a third durable companion artifact or workflow state. Carry its decision-critical fields through planning, delivery, corrective re-entry, and success re-entry. Record only a material closure/revision in the Adaptive trace when later interpretation requires it.
@@ -111,7 +121,7 @@ Do not demand a form-filling ceremony. If the user's natural-language instructio
 
 The Mandate fixes how to judge a good plan and the **maximum authorized success-continuation ceiling**. The Run Contract fixes what this invocation must preserve and what exact predicate ends it. If the Run Completion Boundary needs broader continuation than the stored ceiling and the current instruction explicitly grants it, revise/adopt the Mandate before mutation. Otherwise return the exact authority gap. Never silently stop early or expand authority.
 
-The mandate delegates **planning judgment only**. It never turns Adaptive Planning into implementation or verification authority and never grants deployment, credential, external-effect, destructive-action, worker-roster, or production authority. Under explicit Adaptive activation, the outer caller defaults Implementation and Verification to `yes` unless the user independently overrides either field; execution remains owned by the delivery skills.
+The mandate delegates **planning judgment only**. It never turns Adaptive Planning into implementation or verification authority and never grants deployment, credential, external-effect, destructive-action, worker-roster, or production authority. Under explicit Adaptive activation, Outer Main defaults `Implementation: yes` and `Verification: yes` unless the user independently overrides either field; execution remains owned by the delivery skills.
 
 ## Standing delegated confirmation
 
@@ -156,7 +166,7 @@ For the current planning unit:
    - `CURRENT_INCREMENT_PLANNING_COMPLETE`
 8. for a nonterminal planning disposition, re-enter the correct existing IIS leaf without inventing a new leaf;
 9. when one approved Spec and its validated complete Ready Ticket Set exist for the current Increment, report **planning phase** completion and STOP at the IIS Planning ownership boundary; and
-10. let the outer caller compare that phase result with the active delivery-stage fields, Run Completion Boundary, and Completion Predicate before declaring whole-run success or continuing.
+10. return that exact owner result to Outer Main, which compares it with the active delivery-stage fields, Run Completion Boundary, and Completion Predicate before declaring whole-run success or continuing.
 
 Do not use retry counters, a workflow ledger, persistent controller state, or agent scheduling to implement this loop. It is a planning judgment loop in the current request/context plus durable planning artifacts and one invocation-local Run Contract.
 
@@ -196,11 +206,11 @@ Never infer `CONTRACT_OVERREACH` merely because a requirement is difficult or ex
 
 If planning authority changes a contract, do not turn an earlier failed result into PASS. Validate the new planning artifacts and require fresh verification when Verification remains enabled.
 
-Adaptive Planning itself does not implement or verify Tickets. The outer caller invokes the separately discovered `ready-ticket-implement` only when `Implementation: yes` and `ready-ticket-verify` only when `Verification: yes`. Use [references/08-delivery-continuation.md](references/08-delivery-continuation.md); do not insert a new approval prompt merely because ownership changes.
+Adaptive Planning itself does not implement or verify Tickets. Outer Main invokes the separately discovered `ready-ticket-implement` only when `Implementation: yes` and `ready-ticket-verify` only when `Verification: yes`. Use [references/08-delivery-continuation.md](references/08-delivery-continuation.md); do not insert a new approval prompt merely because ownership changes.
 
 If an enabled delivery lifecycle produces a material implementation, verification-mechanism, contract, or current-Increment defect, corrective routing/re-entry is the Adaptive default after an actual correction or new evidence, unless the user explicitly requested no corrective re-entry/fail-and-report. Adaptive owns only planning correction/reshaping; implementation and verification remain owned by the separate delivery skills. A disabled stage is an authority boundary, not a failure to be bypassed.
 
-## Success re-entry after delivery
+## Post-delivery completion assessment and success re-entry
 
 A successful current Increment may trigger a new Adaptive planning cycle only after:
 
@@ -213,11 +223,12 @@ A successful current Increment may trigger a new Adaptive planning cycle only af
 
 Before selecting anything next, inspect fresh actual product state and compare the active Completion Predicate against current authoritative readback. Do not infer success continuation from `done` status alone, and do not consume the existing Work Package list or Provisional Construction Horizon as an execution queue.
 
-Choose exactly one success disposition:
+Choose exactly one completion-assessment disposition:
 
-- `MANDATE_SATISFIED` — the applicable Required Named Items, bounded outcome, or Mandate predicate is already satisfied in actual product state; stop the broader Adaptive execution and report Run Contract completion.
+- `RUN_CONTRACT_SATISFIED` — the active Required Named Items, bounded outcome, or Mandate outcome predicate is satisfied in fresh actual product state; stop the Adaptive invocation and report Run Contract completion.
 - `NEXT_INCREMENT_REQUIRED` — the active predicate is not yet satisfied and current authority can determine that more construction is required; re-enter Scope Shaper against fresh actual state so it selects exactly one new current Increment.
 - `USER_DECISION_REQUIRED` — the active predicate is not yet satisfied but a material user-owned trade-off remains after applying current authority and priorities; return only that decision to the user.
+- `EVIDENCE_REQUIRED` — current attributable evidence cannot determine whether the active predicate is satisfied or whether more construction is required; obtain only the missing authoritative readback or operator/external evidence and do not infer completion, product defect, or Scope Shaper re-entry.
 
 `NEXT_INCREMENT_REQUIRED` never names the next WP/INC from a prior plan by default. Scope Shaper may preserve, split, merge, reorder, replace, or discard provisional structure under its current rules. Completion is judged against the active observable predicate, not by exhausting a roadmap or provisional horizon.
 
@@ -267,8 +278,8 @@ Adaptive Planning ends at the same current-Increment product as Baseline IIS: on
 
 Report the result as `IIS ADAPTIVE PLANNING PHASE COMPLETE` using [references/07-terminal-report.md](references/07-terminal-report.md), then STOP at the planning ownership boundary.
 
-`STOP` here is the **IIS Adaptive Planning ownership boundary**, not necessarily the end of the outer Adaptive execution. Do not implement or verify **as Adaptive Planning** merely because current Increment planning completed. Return the Ready Ticket Set and closed Run Contract to the outer caller.
+`STOP` here is the **IIS Planning owner boundary**, not necessarily the end of the current Adaptive invocation. Do not implement or verify **as IIS Planning** merely because current Increment planning completed. Return the Ready Ticket Set and closed Run Contract to Outer Main; this owner STOP is not an invocation STOP.
 
-The outer caller applies Implementation and Verification independently and emits `IIS ADAPTIVE RUN COMPLETE` only when the active Run Completion Boundary and Completion Predicate are actually satisfied. `CURRENT_INCREMENT_IMPLEMENTED` stops after the complete implementation denominator without verifier progression. Broader delivery or outcome boundaries require the exact enabled stages and current Mandate ceiling.
+Outer Main applies Implementation and Verification independently and emits `IIS ADAPTIVE RUN COMPLETE` only when the active Run Completion Boundary and Completion Predicate are actually satisfied. `CURRENT_INCREMENT_IMPLEMENTED` stops after the complete implementation denominator without verifier progression. Broader delivery or outcome boundaries require the exact enabled stages and current Mandate ceiling.
 
 Do not plan the next provisional Increment or declare the whole product complete merely because current Increment planning completed. A broader success continuation begins only after the current Increment is actually delivered, the active Run Contract requires it, and the Mandate ceiling permits it; even then Scope Shaper selects the next current Increment from actual state rather than consuming a provisional plan.

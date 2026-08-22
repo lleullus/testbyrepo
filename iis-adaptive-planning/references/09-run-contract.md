@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Close the meaning of one explicit Adaptive invocation before planning mutation so the outer execution cannot stop at a smaller result than the user assigned, silently treat required work as disposable, or collapse a mixed required/candidate assignment into one inaccurate list-wide label.
+Close the meaning of one explicit Adaptive invocation before planning mutation so that current invocation cannot stop at a smaller result than the user assigned, silently treat required work as disposable, or collapse a mixed required/candidate assignment into one inaccurate list-wide label.
 
 The Run Contract answers six questions:
 
@@ -88,6 +88,8 @@ Verification: yes | no
 ```
 
 Preserve the current Adaptive default: explicit Adaptive activation selects `Implementation: yes` and `Verification: yes` unless current user authority overrides either stage.
+
+When current authority supplies no planning-only, implementation-only, no-verification, named-required-item, bounded-outcome, or Mandate-outcome terminal, the default current-Increment terminal is `CURRENT_INCREMENT_DELIVERED`. Close that default only when the Required-item coverage invariant permits a current-Increment boundary; do not use it to shrink broader Required Named Items, replace a broader outcome already assigned by the user, or bypass an unresolved coverage or Mandate-ceiling decision.
 
 Apply exact overrides independently:
 
@@ -223,7 +225,9 @@ This form is not `CLOSED`. It requires an explicit Mandate revision or a user-ow
 | `CURRENT_INCREMENT_REQUIRED_ONLY` | every unsatisfied Required Named Item is covered by the selected current Increment and the delivery-stage combination matches the boundary | the corresponding current-Increment boundary is allowed. |
 | `WHOLE_REQUIRED_BOUNDED_OUTCOME` | broader Required Named Items remain, the boundary is `BOUNDED_OUTCOME_SATISFIED`, and the Mandate ceiling permits it | `CLOSED` is allowed; project only one current Increment while preserving outer Required Named Items and the Completion Predicate. |
 | `LEAF_APPROVAL_ONLY` | Scope, Intent Anchor, Behavior/UI, Spec, Ticket, or current Increment receives only its owning leaf approval/confirmation | outer Goal Outcome, required/candidate classification, delivery stages, Run Completion Boundary, and Completion Predicate remain unchanged. |
+| `DEFAULT_ADAPTIVE_CURRENT_INCREMENT` | explicit Adaptive activation supplies no narrower stop, broader named-item/outcome terminal, or unresolved required-item coverage | close `Implementation: yes`, `Verification: yes`, and `CURRENT_INCREMENT_DELIVERED` as the default current-Increment terminal. |
 | `REQUIRED_REMAINS_AFTER_DELIVERY` | the current Increment is delivered but broader Required Named Items or the broader outcome predicate remain unsatisfied | `RUN_COMPLETE` is forbidden; use fresh-state success re-entry and its existing next disposition. |
+| `POST_DELIVERY_EVIDENCE_GAP` | the current Increment is delivered under a broader boundary but attributable authoritative readback cannot determine satisfaction or the need for more construction | return `EVIDENCE_REQUIRED`; do not infer completion, product defect, or Scope Shaper re-entry. |
 
 ## Carry-forward and reshaping
 
@@ -262,7 +266,7 @@ Likewise:
 - delivered Tickets are not proof of an outcome-satisfaction boundary without fresh authoritative readback; and
 - a provisional Work Package or Increment list is never a completion queue.
 
-Emit whole-run success only when the active Completion Predicate is actually satisfied. `RETURN_TO_USER`, `BLOCKED`, `INCONCLUSIVE`, `CONTRACT_DRIFT`, unavailable authority, and no-material-progress are incomplete returns, not successful completion.
+Emit whole-run success only when the active Completion Predicate is actually satisfied. `RETURN_TO_USER`, `EVIDENCE_REQUIRED`, `BLOCKED`, `INCONCLUSIVE`, `CONTRACT_DRIFT`, unavailable authority, and no-material-progress are incomplete returns, not successful completion.
 
 ## Persistence boundary
 

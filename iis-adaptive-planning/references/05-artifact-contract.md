@@ -67,7 +67,7 @@ Material events:
 - a material Run Contract closure/revision whose required/candidate classification, delivery stages, or completion semantics affect later interpretation;
 - INC split/merge/reorder/replace/defer/drop/foundation insertion/supersession;
 - verification triage that changes the owning route;
-- success re-entry that selects `NEXT_INCREMENT_REQUIRED` or establishes `MANDATE_SATISFIED`;
+- success re-entry that selects `NEXT_INCREMENT_REQUIRED`, returns `EVIDENCE_REQUIRED`, or establishes `RUN_CONTRACT_SATISFIED`;
 - a Return-to-User decision and its later resolution;
 - a material Mandate revision.
 

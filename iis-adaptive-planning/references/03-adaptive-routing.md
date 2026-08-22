@@ -16,7 +16,7 @@ Apply the current Baseline leaf directly. Use the Adaptive Mandate only for genu
 
 ## Run Contract admission precedes routing
 
-Before the Starting route below can perform any planning mutation, the outer Adaptive caller must close and render one Run Contract.
+Before the Starting route below can perform any planning mutation, Outer Main for the current explicit Adaptive invocation must close and render one Run Contract.
 
 - If current authority determines Goal Outcome, Required Named Items, Candidate Named Items, Required Item Policy, Implementation, Verification, Run Completion Boundary, Completion Predicate, and Authoritative Readback, mark it `CLOSED` and route without another approval prompt.
 - If a material field remains unresolved, mark it `USER_INPUT_REQUIRED`, ask only for that smallest field, and hard STOP before mutation.
@@ -155,7 +155,7 @@ Adaptive delta:
 
 - use the current Baseline To Tickets whole-Set self-review/readiness guard unchanged;
 - do not add standing-delegation provenance for a faithful structural projection that Baseline already readies by self-review; and
-- after a complete validated Ready Ticket Set exists, report current-Increment Adaptive **planning phase** complete and return the Set plus the closed Run Contract across the IIS Planning ownership boundary to the outer Adaptive route described in `08-delivery-continuation.md`.
+- after a complete validated Ready Ticket Set exists, report current-Increment Adaptive **planning phase** complete and return the Set plus the closed Run Contract across the IIS Planning ownership boundary to Outer Main as described in `08-delivery-continuation.md`.
 
 Do not use Adaptive to create preparatory Tickets, implementation sequences, extra verification mechanisms, or Tickets for Required Named Items that do not belong to the current Increment.
 
@@ -177,11 +177,11 @@ Hard even in Adaptive:
 - special explicit-only gate STOP;
 - invalid/missing authority or validator failure STOP until the exact defect is resolved;
 - complete Ready Ticket Set STOP for IIS Planning ownership;
-- boundary between IIS Planning and implementation/verification/delivery ownership. The outer route applies the closed Implementation and Verification fields rather than assuming both stages from the planning STOP.
+- boundary between IIS Planning and implementation/verification/delivery ownership. Outer Main applies the closed Implementation and Verification fields rather than assuming both stages from the planning STOP.
 
-A hard owning STOP is not automatically whole-run success. The outer caller compares it with the active Run Completion Boundary and Completion Predicate. Blocked, inconclusive, user-return, contract-drift, and no-progress STOPs remain incomplete returns.
+An owner STOP is not an invocation STOP. Outer Main compares every exact owner result with the active Run Completion Boundary and Completion Predicate. Blocked, inconclusive, user-return, contract-drift, and no-progress STOPs remain incomplete returns; only an actually satisfied Run Contract is whole-invocation success.
 
-`CURRENT_INCREMENT_IMPLEMENTED` is an outer implementation-only terminal. It does not create a success re-entry cycle and does not mark Tickets `done`.
+`CURRENT_INCREMENT_IMPLEMENTED` is an implementation-only invocation terminal. It does not create a success re-entry cycle and does not mark Tickets `done`.
 
 A later success re-entry after every current Ticket is actually `done` is a **new Adaptive planning cycle**, not a continuation through the Ready Ticket STOP. It is governed by the active Mandate's Continuation Authority ceiling, the closed Run Contract, and `08-delivery-continuation.md`.
 

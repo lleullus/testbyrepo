@@ -147,7 +147,54 @@ class IISAdaptiveRunContractTests(unittest.TestCase):
         self.assertIn("IIS ADAPTIVE PLANNING PHASE COMPLETE", terminal)
         self.assertIn("IIS ADAPTIVE CURRENT INCREMENT IMPLEMENTED", terminal)
         self.assertIn("IIS ADAPTIVE RUN COMPLETE", terminal)
+        self.assertNotIn("IIS ADAPTIVE MANDATE COMPLETE", terminal)
         self.assertIn("every current canonical Ticket", continuation)
+
+    def test_default_adaptive_execution_closes_at_current_increment_delivery(self) -> None:
+        skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
+        contract = (ADAPTIVE / "references" / "09-run-contract.md").read_text(
+            encoding="utf-8"
+        )
+        continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(
+            encoding="utf-8"
+        )
+
+        for text in (skill, contract, continuation):
+            self.assertIn("Implementation: yes", text)
+            self.assertIn("Verification: yes", text)
+            self.assertIn("CURRENT_INCREMENT_DELIVERED", text)
+
+        self.assertIn("default current-Increment terminal", contract)
+        self.assertIn("Required-item coverage invariant", contract)
+        self.assertIn("broader outcome", contract)
+
+    def test_post_delivery_dispositions_are_closed_and_consistent(self) -> None:
+        skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
+        continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(
+            encoding="utf-8"
+        )
+        terminal = (ADAPTIVE / "references" / "07-terminal-report.md").read_text(
+            encoding="utf-8"
+        )
+        artifact = (ADAPTIVE / "references" / "05-artifact-contract.md").read_text(
+            encoding="utf-8"
+        )
+
+        dispositions = (
+            "RUN_CONTRACT_SATISFIED",
+            "NEXT_INCREMENT_REQUIRED",
+            "USER_DECISION_REQUIRED",
+            "EVIDENCE_REQUIRED",
+        )
+        for disposition in dispositions:
+            self.assertIn(disposition, skill)
+            self.assertIn(disposition, continuation)
+            self.assertIn(disposition, terminal)
+
+        self.assertIn("RUN_CONTRACT_SATISFIED", artifact)
+        self.assertNotIn("MANDATE_SATISFIED", skill)
+        self.assertNotIn("MANDATE_SATISFIED", continuation)
+        self.assertNotIn("MANDATE_SATISFIED", terminal)
 
     def test_mandate_continuation_authority_is_a_ceiling_not_the_run_terminal(self) -> None:
         mandate = (ADAPTIVE / "references" / "01-mandate-contract.md").read_text(
@@ -198,9 +245,17 @@ class IISAdaptiveRunContractTests(unittest.TestCase):
                 "owning leaf approval/confirmation",
                 "Run Completion Boundary, and Completion Predicate remain unchanged",
             ),
+            "DEFAULT_ADAPTIVE_CURRENT_INCREMENT": (
+                "no narrower stop",
+                "`CURRENT_INCREMENT_DELIVERED` as the default current-Increment terminal",
+            ),
             "REQUIRED_REMAINS_AFTER_DELIVERY": (
                 "current Increment is delivered",
                 "`RUN_COMPLETE` is forbidden",
+            ),
+            "POST_DELIVERY_EVIDENCE_GAP": (
+                "authoritative readback cannot determine satisfaction",
+                "return `EVIDENCE_REQUIRED`",
             ),
         }
 
@@ -263,6 +318,7 @@ class IISAdaptiveRunContractTests(unittest.TestCase):
         self.assertIn("Required Named Items distinct from Candidate Named Items", agent)
         self.assertIn("Implementation and Verification independently", agent)
         self.assertIn("both yes by default unless I override either stage", agent)
+        self.assertIn("CURRENT_INCREMENT_DELIVERED by default", agent)
         self.assertIn("whole-run completion", agent)
 
 

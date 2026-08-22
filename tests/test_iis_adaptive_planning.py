@@ -175,6 +175,9 @@ class IISAdaptivePlanningTests(unittest.TestCase):
 
     def test_adaptive_activation_defaults_current_increment_delivery_with_stop_override(self) -> None:
         skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
+        contract = (ADAPTIVE / "references" / "09-run-contract.md").read_text(
+            encoding="utf-8"
+        )
         continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(
             encoding="utf-8"
         )
@@ -184,6 +187,8 @@ class IISAdaptivePlanningTests(unittest.TestCase):
 
         self.assertIn("Under explicit Adaptive activation", skill)
         self.assertIn("Explicit Adaptive activation", continuation)
+        self.assertIn("CURRENT_INCREMENT_DELIVERED", contract)
+        self.assertIn("default current-Increment terminal", contract)
         self.assertIn("planning only", continuation)
         self.assertIn("ready-ticket-implement", continuation)
         self.assertIn("ready-ticket-verify", continuation)
@@ -193,6 +198,34 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn("Do not pass the internal `Delegated Worker: yes` marker", continuation)
         self.assertNotIn("Auditor Count", continuation)
         self.assertNotIn("AC Runtime Auditor", continuation)
+
+    def test_single_entry_outer_main_and_owner_stop_are_explicit(self) -> None:
+        skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
+        routing = (ADAPTIVE / "references" / "03-adaptive-routing.md").read_text(
+            encoding="utf-8"
+        )
+        terminal = (ADAPTIVE / "references" / "07-terminal-report.md").read_text(
+            encoding="utf-8"
+        )
+        continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("There is no separately invokable Adaptive Run skill", skill)
+        self.assertIn("Outer Main", skill)
+        self.assertIn("current explicit Adaptive invocation", skill)
+        self.assertIn("does not become a second planning, implementation, or verification authority", skill)
+        self.assertIn("Planning owner result: STOP", terminal)
+        self.assertIn("Returned to: Outer Main", terminal)
+        self.assertIn("owner STOP is not an invocation STOP", routing)
+        self.assertIn("thin invocation-local handoff owner", continuation)
+
+        payload = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in ADAPTIVE.rglob("*")
+            if path.is_file() and path.suffix in {".md", ".yaml"}
+        )
+        self.assertNotIn("outer caller", payload.lower())
 
     def test_end_to_end_delivery_can_reenter_adaptive_for_planning_failures(self) -> None:
         continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(
@@ -244,10 +277,11 @@ class IISAdaptivePlanningTests(unittest.TestCase):
             self.assertIn(value, template)
 
         self.assertIn("default when the user did not explicitly authorize", mandate)
-        self.assertIn("Success re-entry after delivery", skill)
-        self.assertIn("MANDATE_SATISFIED", skill)
+        self.assertIn("Post-delivery completion assessment and success re-entry", skill)
+        self.assertIn("RUN_CONTRACT_SATISFIED", skill)
         self.assertIn("NEXT_INCREMENT_REQUIRED", skill)
         self.assertIn("USER_DECISION_REQUIRED", skill)
+        self.assertIn("EVIDENCE_REQUIRED", skill)
         self.assertIn("fresh actual product state", continuation)
         self.assertIn("never consumes a pre-authored Work Package/Increment list as a queue", continuation)
         self.assertIn("not a continuation through the Ready Ticket STOP", routing)

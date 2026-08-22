@@ -1,15 +1,18 @@
-# Delivery Continuation Outside Adaptive Planning
+# Delivery Continuation After the IIS Planning Ownership Boundary
 
 ## Ownership and closed Run Contract
 
-Keep ownership separate even when the outer Adaptive execution continues:
+Keep ownership separate while the current explicit Adaptive invocation continues:
 
-1. **IIS Adaptive Planning ownership** ends at one approved Spec plus its validated complete Ready Ticket Set.
-2. **Explicit Adaptive activation** defaults the outer caller to `Implementation: yes` and `Verification: yes`.
-3. Current instructions override those fields independently: `planning only` or `stop after Ready Tickets` selects `no`/`no`; `do not verify` preserves implementation authority as `yes`/`no`; `do not implement` never invents implementation authority.
-4. Before any planning or delivery mutation, the outer caller must carry one `CLOSED` Run Contract from [09-run-contract.md](09-run-contract.md). Planning ownership completion, one Ticket completion, and one Increment completion are not whole-run completion unless that contract's boundary says so.
+1. **IIS Planning ownership** ends at one approved Spec plus its validated complete Ready Ticket Set.
+2. **Explicit Adaptive activation** defaults Outer Main to `Implementation: yes` and `Verification: yes`.
+3. When current authority supplies no narrower stop override and no broader named-item or outcome terminal, the default current-Increment terminal is `CURRENT_INCREMENT_DELIVERED`, subject to the Run Contract Required-item coverage invariant and Mandate ceiling.
+4. Current instructions override those fields independently: `planning only` or `stop after Ready Tickets` selects `no`/`no`; `do not verify` preserves implementation authority as `yes`/`no`; `do not implement` never invents implementation authority.
+5. Before any planning or delivery mutation, Outer Main must carry one `CLOSED` Run Contract from [09-run-contract.md](09-run-contract.md). Planning ownership completion, one Ticket completion, and one Increment completion are not whole-run completion unless that contract's boundary says so.
 
-The delivery calls are not actions performed **by** Adaptive Planning. `ready-ticket-implement` and `ready-ticket-verify` retain their own exact authority, admission, evidence, execution topology, status, and terminal contracts. Adaptive activation never implies deployment, credentials, production/shared external mutation, destructive action, or another concrete authority not otherwise present.
+Outer Main is the thin invocation-local handoff owner defined by the top-level skill. It carries the Run Contract, invokes each exact owner only when enabled, receives exact terminal results, and performs fresh completion assessment; it does not become a second planning, implementation, or verification authority.
+
+The delivery calls are not actions performed **by** IIS Planning. `ready-ticket-implement` and `ready-ticket-verify` retain their own exact authority, admission, evidence, execution topology, status, and terminal contracts. Adaptive activation never implies deployment, credentials, production/shared external mutation, destructive action, or another concrete authority not otherwise present.
 
 ## Run Contract handoff
 
@@ -24,7 +27,7 @@ Pass the following exact decision-critical Run Contract fields through the exist
 - Completion Predicate; and
 - Authoritative Readback.
 
-Do not turn the form into delivery authority. The exact Ticket remains the implementation and verification contract. Run Contract fields prevent the outer caller from dropping Required Named Items, treating Candidate Named Items as obligations, running a disabled delivery stage, or terminating at the wrong phase; they do not authorize a delivery owner to expand one Ticket.
+Do not turn the form into delivery authority. The exact Ticket remains the implementation and verification contract. Run Contract fields prevent Outer Main from dropping Required Named Items, treating Candidate Named Items as obligations, running a disabled delivery stage, or terminating at the wrong phase; they do not authorize a delivery owner to expand one Ticket.
 
 A reshaped current Increment may create a new canonical Ready Ticket denominator. Re-read the current validated Set after planning correction rather than retaining a stale denominator.
 
@@ -155,7 +158,7 @@ If the same artifact/target, same evidence, same finding, and same route would r
 
 An explicit no-corrective-re-entry override stops cross-owner continuation after the current owner reports its terminal result/classification. It does not suppress normal local self-correction inside that owner before the terminal result, and it does not convert an unsatisfied Run Contract into success.
 
-## Success continuation by Run Completion Boundary
+## Completion assessment and success continuation by Run Completion Boundary
 
 Corrective re-entry above does not itself authorize another Increment. A current Increment is fully delivered only after every current canonical Ticket in its approved Ready Ticket Set has reached exact `done` through the owning verification lifecycle.
 
@@ -178,21 +181,18 @@ CURRENT_INCREMENT_DELIVERED
   -> emit IIS ADAPTIVE RUN COMPLETE
 
 NAMED_REQUIRED_ITEMS_DELIVERED
-  -> requires non-empty Required Named Items and Verification yes
-  -> inspect every Required Named Item
-  -> confirm each applicable observable result and authoritative readback
-  -> Candidate Named Items do not block completion
-  -> if all are satisfied: Run Contract satisfied
-  -> otherwise: inspect fresh actual product state and return to Scope Shaper for one new current Increment when the Mandate ceiling permits
-
 BOUNDED_OUTCOME_SATISFIED
-  -> inspect the exact bounded Completion Predicate in fresh actual product state
-  -> MANDATE_SATISFIED | NEXT_INCREMENT_REQUIRED | USER_DECISION_REQUIRED
-
 MANDATE_OUTCOME_SATISFIED
-  -> inspect the Mandate Desired Product Outcome and authoritative readback in fresh actual product state
-  -> MANDATE_SATISFIED | NEXT_INCREMENT_REQUIRED | USER_DECISION_REQUIRED
+  -> require fresh actual product state and attributable authoritative readback
+  -> perform the completion assessment below
 ```
+
+For any broader boundary, Outer Main chooses exactly one disposition from fresh actual product state:
+
+- `RUN_CONTRACT_SATISFIED` — the active Required Named Items, bounded outcome, or Mandate outcome predicate is satisfied; emit `IIS ADAPTIVE RUN COMPLETE`.
+- `NEXT_INCREMENT_REQUIRED` — the predicate is unsatisfied, current authority establishes that more product construction is required, and the Mandate ceiling permits it; return to Scope Shaper for exactly one new current Increment.
+- `USER_DECISION_REQUIRED` — the predicate is unsatisfied but a material user-owned product choice remains after applying the Mandate and current authority; return only that decision.
+- `EVIDENCE_REQUIRED` — current attributable evidence cannot determine satisfaction or the need for more construction; obtain only the missing authoritative readback or operator/external evidence and do not infer completion, product defect, or Scope Shaper re-entry.
 
 The Mandate's Continuation Authority is the ceiling for success continuation; the Run Completion Boundary is the actual terminal of this invocation. If the boundary would exceed the ceiling and the current instruction does not explicitly revise that authority, the Run Contract should never have closed. Return the exact authority gap rather than silently stopping early or expanding authority.
 
@@ -206,7 +206,7 @@ An implementation-only run cannot use verified success re-entry to span several 
 
 - Adaptive Planning never becomes implementation or verification authority.
 - Delivery skills never rewrite Scope, Spec, Ticket meaning to make verification pass.
-- The outer caller never invents deployment, credential, production/shared external mutation, destructive-action, or other missing authority.
+- Outer Main never invents deployment, credential, production/shared external mutation, destructive-action, or other missing authority.
 - A material user-owned product trade-off outside current authority returns to the user.
 - `done` belongs only to the verifier's guarded terminal progression.
 - `Verification: no` is never treated as permission to infer a verifier verdict.
