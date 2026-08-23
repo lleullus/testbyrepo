@@ -135,14 +135,14 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("Ticket Progression: COMPLETED | NOT APPLICABLE | FAILED", workflow)
         self.assertIn("Do not automatically edit source", workflow)
 
-    def test_adaptive_routes_implementation_and_explicit_verification_modes(self) -> None:
+    def test_adaptive_routes_implementation_and_direct_verification(self) -> None:
         continuation = ADAPTIVE_CONTINUATION.read_text(encoding="utf-8")
 
         self.assertIn("`ready-ticket-implement` retains its normal `SUBAGENT` default", continuation)
-        self.assertIn("otherwise use DIRECT-only `ready-ticket-verify`", continuation)
-        self.assertIn("use `ready-ticket-verify-ensemble` only when the current user explicitly selects", continuation)
+        self.assertIn("`ready-ticket-verify` owns one exact Ready Ticket fresh verification", continuation)
+        self.assertIn("For verification, use DIRECT-only `ready-ticket-verify`", continuation)
         self.assertIn("without issuing a second verdict", continuation)
-        self.assertIn("Do not pass `Delegated Worker: yes` or `Delegated Ensemble Role: yes` from Adaptive", continuation)
+        self.assertIn("Do not pass `Delegated Worker: yes` from Adaptive", continuation)
         self.assertIn("Select only a currently admissible Ticket", continuation)
 
     def test_openai_metadata_matches_current_delivery_contracts(self) -> None:

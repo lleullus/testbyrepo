@@ -194,10 +194,9 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn("ready-ticket-verify", continuation)
         self.assertIn("continues the current Increment", terminal)
         self.assertIn("`ready-ticket-implement` retains its normal `SUBAGENT` default", continuation)
-        self.assertIn("use `ready-ticket-verify-ensemble` only when the current user explicitly selects", continuation)
-        self.assertIn("otherwise use DIRECT-only `ready-ticket-verify`", continuation)
-        self.assertIn("do not fall back from one verification mode to the other", continuation)
-        self.assertIn("Do not pass `Delegated Worker: yes` or `Delegated Ensemble Role: yes` from Adaptive", continuation)
+        self.assertIn("`ready-ticket-verify` owns one exact Ready Ticket fresh verification", continuation)
+        self.assertIn("For verification, use DIRECT-only `ready-ticket-verify`", continuation)
+        self.assertIn("Do not pass `Delegated Worker: yes` from Adaptive", continuation)
         self.assertNotIn("Auditor Count", continuation)
         self.assertNotIn("AC Runtime Auditor", continuation)
 

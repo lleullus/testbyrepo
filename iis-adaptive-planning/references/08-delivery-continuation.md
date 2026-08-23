@@ -36,13 +36,13 @@ A reshaped current Increment may create a new canonical Ready Ticket denominator
 Before each enabled delivery phase, discover and use the current installed skill contract.
 
 - `ready-ticket-implement` owns one exact Ready Ticket implementation and implementer self-check.
-- `ready-ticket-verify` and explicit-only `ready-ticket-verify-ensemble` are alternative execution topologies for the same one-Ticket fresh verification, final verdict and guarded `ready -> done` authority. They are never both invoked for one verification lifecycle.
+- `ready-ticket-verify` owns one exact Ready Ticket fresh verification, final verdict, and guarded `ready -> done` progression.
 - Invoke each exact delivery skill once and follow its current execution-mode contract. `ready-ticket-implement` retains its normal `SUBAGENT` default unless the current user explicitly requests `DIRECT`.
-- For verification, use `ready-ticket-verify-ensemble` only when the current user explicitly selects ensemble/team verification for the exact Ticket; otherwise use DIRECT-only `ready-ticket-verify`. Do not infer the selection from model capability, cost, task difficulty or available workers, and do not fall back from one verification mode to the other after capability or execution failure.
-- In either verification mode, Outer Main enters that skill's exact sole-verifier role for the selected Ticket, produces its terminal verifier result, then returns to Adaptive continuation without issuing a second verdict. Do not pass `Delegated Worker: yes` or `Delegated Ensemble Role: yes` from Adaptive; those markers, when applicable, belong only to the selected delivery skill's own internal assignments.
+- For verification, use DIRECT-only `ready-ticket-verify`. Outer Main enters that skill's exact sole-verifier role for the Ticket, produces its terminal verifier result, then returns to Adaptive continuation without issuing a second verdict.
+- Do not pass `Delegated Worker: yes` from Adaptive. That marker belongs only to `ready-ticket-implement`'s own internal assignment.
 - Do not infer Ticket-set parallelism, worker scheduling, or a persistent queue from the existence of a Ready Ticket Set. Select only a currently admissible Ticket using canonical blockers, product dependencies, shared-workspace safety, and current repository evidence.
 
-Do not invoke a disabled stage merely to obtain stronger evidence. In particular, `Verification: no` means no Ready Ticket verification skill call and no `done` claim.
+Do not invoke a disabled stage merely to obtain stronger evidence. In particular, `Verification: no` means no `ready-ticket-verify` call and no `done` claim.
 
 ## Invocation-local evidence economy
 

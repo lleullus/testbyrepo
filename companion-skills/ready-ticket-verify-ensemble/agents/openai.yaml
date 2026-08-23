@@ -1,6 +1,0 @@
-interface:
-  display_name: "Ready Ticket Verify Ensemble"
-  short_description: "Verify one Ready Ticket with a weak-agent team"
-  default_prompt: "Use $ready-ticket-verify-ensemble to verify the exact Ready Ticket with four independent read-only analysts, Main-owned direct product/runtime execution, Main-owned adjudication, and the guarded done transition."
-policy:
-  allow_implicit_invocation: false

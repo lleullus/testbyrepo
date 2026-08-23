@@ -23,7 +23,7 @@ Before classifying, reopen enough current authority to compare the failing claim
 - Parent Spec;
 - adopted Behavior/UI authority relevant to the claim;
 - exact Ticket and authored Verification flow(s);
-- exact fresh result/evidence from the verification mode selected for that Ticket (`ready-ticket-verify` or explicit-only `ready-ticket-verify-ensemble`);
+- exact fresh `ready-ticket-verify` result/evidence as available;
 - current runtime/repository evidence needed to attribute the observed behavior.
 
 Implementation reports, prior test names, logs, and mocks are navigation/support unless the approved contract makes that exact surface authoritative.

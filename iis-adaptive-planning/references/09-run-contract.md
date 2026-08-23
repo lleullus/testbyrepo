@@ -99,7 +99,7 @@ Apply exact overrides independently:
 - do not implement -> never infer implementation authority merely because verification or a broader outcome was requested;
 - do not verify -> never run the verifier or claim `done`.
 
-The fields express the outer invocation envelope only. They do not change the exact authority, admission, or result ownership of `ready-ticket-implement` or the currently selected one-Ticket verifier (`ready-ticket-verify` or explicit-only `ready-ticket-verify-ensemble`).
+The fields express the outer invocation envelope only. They do not change the exact authority, admission, or result ownership of `ready-ticket-implement` or `ready-ticket-verify`.
 
 ### Run Completion Boundary
 
