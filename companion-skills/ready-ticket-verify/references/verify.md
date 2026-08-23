@@ -1,19 +1,20 @@
 # Ready Ticket Verification Workflow
 
-## 1. Direct invocation
+## 1. Direct-first invocation
 
-This skill is `DIRECT` only. The current Main performs the verifier role for one exact Ticket and does not delegate verification, AC ownership or runtime verification to child workers.
+Execution defaults to `DIRECT`, and `DIRECT` is the only currently supported verification topology. The current Main performs the verifier role for one exact Ticket and does not delegate verification, AC ownership or runtime verification to child workers.
 
 Before verification:
 
 1. Bind the exact Ticket and optional navigation inputs.
 2. Confirm this invocation can directly access the Project Root, required product/canonical surfaces and caller-facing result path.
 3. Carry current Additional User Instructions without allowing them to silently rewrite the Ticket or approved parent authority.
-4. If this invocation cannot directly own the verifier role, return `DIRECT VERIFIER REQUIRED` with no AC verdicts.
+4. If the current user explicitly requests `SUBAGENT` verification, return `SUBAGENT VERIFICATION UNSUPPORTED` with no AC verdicts. Do not silently switch to DIRECT.
+5. If this invocation cannot directly own the verifier role, return `DIRECT VERIFIER REQUIRED` with no AC verdicts.
 
 The verifier emits the informational scenario report before product/runtime action, continues without waiting for approval when execution is authorized, emits material-turn reports only when adjudication can change, and ends with one `READY TICKET VERIFICATION RESULT`.
 
-Do not create a verifier roster, parallel AC verifiers, nested verification workers or an implicit fallback topology inside this skill.
+Do not create a verifier roster, parallel AC verifiers, nested verification workers or an implicit fallback topology inside this skill. Model capability, task difficulty, cost or worker availability never changes the execution topology automatically.
 
 ## 2. Admission and current authority
 

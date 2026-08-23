@@ -12,11 +12,13 @@
 
 정상 Ticket 상태는 exact `ready`다. `done`이면 재구현하지 않고 현재 terminal marker를 보고한다. `draft` 또는 `blocked`이면 delivery를 시작하지 않는다.
 
-## 2. Subagent-first dispatch
+## 2. Direct-first execution topology
 
-Top-level invocation에서 사용자가 `DIRECT`를 명시하지 않았으면 `SUBAGENT`를 사용한다.
+Top-level invocation은 `DIRECT`가 기본이다. 현재 사용자가 이 exact implementation stage에 `SUBAGENT`를 명시한 경우에만 `SUBAGENT`를 사용한다. 모델 capability, 작업 난도, 비용 또는 worker availability만으로 mode를 바꾸지 않으며 `DIRECT`와 `SUBAGENT` 사이의 자동 전환이나 실패 후 fallback은 없다.
 
-Outer Main은:
+`DIRECT`에서는 현재 Main이 아래 implementation core를 직접 수행하고 다시 위임하지 않는다.
+
+`SUBAGENT`에서 Outer Main은:
 
 1. 한 명의 non-blocking implementation worker를 시작할 capability, 같은 Project Root 접근, parent-directed message와 terminal result capability를 확인한다.
 2. exact Ticket, Project Root, 추가 사용자 지시와 `Delegated Worker: yes`를 하나의 완전한 assignment에 담는다.
@@ -37,7 +39,7 @@ Outer Main은:
 
 필요 capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 보고한다. `DIRECT`로 자동 전환하지 않는다.
 
-`Delegated Worker: yes`를 받은 worker와 명시적 `DIRECT` invocation은 아래 implementation core를 직접 수행하며 다시 위임하지 않는다.
+`Delegated Worker: yes`를 받은 worker는 아래 implementation core를 직접 수행하며 다시 위임하지 않는다.
 
 ## 3. Contract preflight
 

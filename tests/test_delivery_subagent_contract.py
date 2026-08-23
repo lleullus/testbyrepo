@@ -48,18 +48,19 @@ class DeliverySubagentContractTests(unittest.TestCase):
             for token in forbidden:
                 self.assertNotIn(token, text, f"{token!r} remained in {path}")
 
-    def test_implementation_is_subagent_first_with_explicit_direct_only(self) -> None:
+    def test_implementation_is_direct_first_with_explicit_subagent_only(self) -> None:
         skill = (IMPLEMENT / "SKILL.md").read_text(encoding="utf-8")
         workflow = (IMPLEMENT / "references" / "implement.md").read_text(encoding="utf-8")
 
-        self.assertIn("Top-level 기본 실행 모드는 `SUBAGENT`", skill)
-        self.assertIn("사용자가 현재 요청에서 명시한 경우에만", skill)
+        self.assertIn("Top-level 기본 실행 모드는 `DIRECT`", skill)
+        self.assertIn("현재 사용자가 이 exact implementation stage에 `SUBAGENT`를 명시한 경우에만", skill)
         self.assertIn("`Delegated Worker: yes`", skill)
         self.assertIn("다시 위임하지 않고", skill)
         self.assertIn("실패를 `DIRECT`로 자동 대체하지 않는다", skill)
         self.assertIn("정확히 한 명의 implementation worker", skill)
-        self.assertIn("Top-level invocation에서 사용자가 `DIRECT`를 명시하지 않았으면", workflow)
+        self.assertIn("Top-level invocation은 `DIRECT`가 기본", workflow)
         self.assertIn("한 명의 non-blocking implementation worker", workflow)
+        self.assertIn("자동 전환이나 실패 후 fallback은 없다", workflow)
 
     def test_implementation_reports_are_early_non_blocking_and_event_driven(self) -> None:
         workflow = (IMPLEMENT / "references" / "implement.md").read_text(encoding="utf-8")
@@ -85,17 +86,19 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("Verification status: NOT ADJUDICATED BY THIS SKILL", workflow)
         self.assertIn("Completion: COMPLETE | BLOCKED | PARTIAL", workflow)
 
-    def test_verification_is_direct_and_main_owns_verdict(self) -> None:
+    def test_verification_is_direct_first_and_main_owns_verdict(self) -> None:
         skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
         workflow = (VERIFY / "references" / "verify.md").read_text(encoding="utf-8")
 
-        self.assertIn("Execution mode is `DIRECT` only", skill)
+        self.assertIn("Execution defaults to `DIRECT`", skill)
+        self.assertIn("only currently supported verification topology", skill)
         self.assertIn("The current Main is the sole verifier", skill)
         self.assertIn("does not delegate this verification authority", skill)
         self.assertIn("DIRECT VERIFIER REQUIRED", skill)
-        self.assertNotIn("Top-level default execution mode is `SUBAGENT`", skill)
-        self.assertIn("This skill is `DIRECT` only", workflow)
+        self.assertIn("SUBAGENT VERIFICATION UNSUPPORTED", skill)
+        self.assertIn("Execution defaults to `DIRECT`", workflow)
         self.assertIn("does not delegate verification", workflow)
+        self.assertIn("Do not silently switch to DIRECT", workflow)
 
     def test_verification_requires_semantic_contract_check_and_claim_sufficient_evidence(self) -> None:
         skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
@@ -135,12 +138,14 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("Ticket Progression: COMPLETED | NOT APPLICABLE | FAILED", workflow)
         self.assertIn("Do not automatically edit source", workflow)
 
-    def test_adaptive_routes_implementation_and_direct_verification(self) -> None:
+    def test_adaptive_routes_direct_first_delivery_without_auto_topology_switch(self) -> None:
         continuation = ADAPTIVE_CONTINUATION.read_text(encoding="utf-8")
 
-        self.assertIn("`ready-ticket-implement` retains its normal `SUBAGENT` default", continuation)
+        self.assertIn("Delivery defaults to `DIRECT`", continuation)
+        self.assertIn("`ready-ticket-implement` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT", continuation)
         self.assertIn("`ready-ticket-verify` owns one exact Ready Ticket fresh verification", continuation)
-        self.assertIn("For verification, use DIRECT-only `ready-ticket-verify`", continuation)
+        self.assertIn("`ready-ticket-verify` defaults to `DIRECT`", continuation)
+        self.assertIn("only currently supported topology", continuation)
         self.assertIn("without issuing a second verdict", continuation)
         self.assertIn("Do not pass `Delegated Worker: yes` from Adaptive", continuation)
         self.assertIn("Select only a currently admissible Ticket", continuation)
@@ -150,9 +155,10 @@ class DeliverySubagentContractTests(unittest.TestCase):
         verify_yaml = (VERIFY / "agents" / "openai.yaml").read_text(encoding="utf-8")
 
         self.assertIn("$ready-ticket-implement", implement_yaml)
-        self.assertIn("one implementation worker", implement_yaml)
+        self.assertIn("directly implement", implement_yaml)
+        self.assertIn("SUBAGENT only when I explicitly select it", implement_yaml)
         self.assertIn("$ready-ticket-verify", verify_yaml)
-        self.assertIn("directly verify", verify_yaml)
+        self.assertIn("default DIRECT mode", verify_yaml)
         self.assertIn("semantically check", verify_yaml)
 
 

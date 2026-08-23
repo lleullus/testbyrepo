@@ -1,6 +1,6 @@
 ---
 name: ready-ticket-verify
-description: "Directly verify one existing IIS Ready Ticket against a stable current implementation target, semantically check that its authored AC/Verification flow can meaningfully decide the approved product claims, adjudicate every authored Verification flow and AC from fresh evidence, and own the guarded terminal done transition. This skill is DIRECT-only and does not delegate verification to a child worker."
+description: "Verify one existing IIS Ready Ticket against a stable current implementation target, semantically check that its authored AC/Verification flow can meaningfully decide the approved product claims, adjudicate every authored Verification flow and AC from fresh evidence, and own the guarded terminal done transition. Execution defaults to DIRECT, and DIRECT is the only currently supported verification topology."
 ---
 
 # Ready Ticket Verify
@@ -29,11 +29,12 @@ Derive `Status`, `Parent-Spec`, `Project-Root`, `UI`, Acceptance Criteria, Scope
 
 ## Execution topology
 
-Execution mode is `DIRECT` only.
+Execution defaults to `DIRECT`, and `DIRECT` is the only currently supported verification topology.
 
 - The current Main performs the complete verifier role in this invocation.
 - Do not assign this skill, any AC, or any Verification flow to a child verifier and do not create a verifier roster or parallel verification scenarios.
-- Do not infer another execution mode from model capability and do not silently fall back to another verification topology.
+- If the current user explicitly requests `SUBAGENT` verification, return `SUBAGENT VERIFICATION UNSUPPORTED` without issuing AC verdicts. Do not silently run DIRECT instead.
+- Do not infer another execution mode from model capability, task difficulty, cost or worker availability and do not silently fall back to another verification topology.
 - If the current invocation cannot directly own the caller-facing verifier role, return `DIRECT VERIFIER REQUIRED` without issuing AC verdicts.
 
 ## Canonical admission gate

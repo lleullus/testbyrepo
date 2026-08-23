@@ -37,8 +37,9 @@ Before each enabled delivery phase, discover and use the current installed skill
 
 - `ready-ticket-implement` owns one exact Ready Ticket implementation and implementer self-check.
 - `ready-ticket-verify` owns one exact Ready Ticket fresh verification, final verdict, and guarded `ready -> done` progression.
-- Invoke each exact delivery skill once and follow its current execution-mode contract. `ready-ticket-implement` retains its normal `SUBAGENT` default unless the current user explicitly requests `DIRECT`.
-- For verification, use DIRECT-only `ready-ticket-verify`. Outer Main enters that skill's exact sole-verifier role for the Ticket, produces its terminal verifier result, then returns to Adaptive continuation without issuing a second verdict.
+- Invoke each exact delivery skill once and follow its current execution-mode contract. Delivery defaults to `DIRECT`; Adaptive never chooses another topology from model capability, task difficulty, cost or worker availability and never falls back between topologies after a capability failure.
+- `ready-ticket-implement` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT for that implementation stage; otherwise current Main performs the implementation role directly.
+- `ready-ticket-verify` defaults to `DIRECT`, and DIRECT is its only currently supported topology. Outer Main enters that skill's exact sole-verifier role for the Ticket, produces its terminal verifier result, then returns to Adaptive continuation without issuing a second verdict. An explicit unsupported SUBAGENT-verification request is returned as such rather than silently run as DIRECT.
 - Do not pass `Delegated Worker: yes` from Adaptive. That marker belongs only to `ready-ticket-implement`'s own internal assignment.
 - Do not infer Ticket-set parallelism, worker scheduling, or a persistent queue from the existence of a Ready Ticket Set. Select only a currently admissible Ticket using canonical blockers, product dependencies, shared-workspace safety, and current repository evidence.
 

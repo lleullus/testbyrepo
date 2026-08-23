@@ -1,6 +1,6 @@
 ---
 name: ready-ticket-implement
-description: "Implement one existing IIS Ready Ticket and perform implementer self-check. Use for exact Ready Ticket delivery. The default top-level path assigns the Ticket to one delegated implementation worker; DIRECT execution is allowed only when explicitly requested. This skill never performs or adjudicates the separate verification authority."
+description: "Implement one existing IIS Ready Ticket and perform implementer self-check. Use for exact Ready Ticket delivery. Execution defaults to DIRECT; SUBAGENT execution is supported only when the current user explicitly selects it. This skill never performs or adjudicates the separate verification authority."
 ---
 
 # Ready Ticket Implement
@@ -21,10 +21,11 @@ description: "Implement one existing IIS Ready Ticket and perform implementer se
 
 ## 실행 topology
 
-Top-level 기본 실행 모드는 `SUBAGENT`다.
+Top-level 기본 실행 모드는 `DIRECT`다.
 
-- `SUBAGENT`: Outer Main이 exact Ticket 하나를 정확히 한 명의 implementation worker에게 할당한다.
-- `DIRECT`: 사용자가 현재 요청에서 명시한 경우에만 Outer Main이 implementation worker 역할을 직접 수행한다.
+- `DIRECT`: 현재 Main이 implementation worker 역할을 직접 수행한다.
+- `SUBAGENT`: 현재 사용자가 이 exact implementation stage에 `SUBAGENT`를 명시한 경우에만 Outer Main이 exact Ticket 하나를 정확히 한 명의 implementation worker에게 할당한다.
+- 모델 capability, 작업 난도, 비용 또는 worker availability만으로 execution mode를 바꾸지 않는다. `DIRECT`와 `SUBAGENT` 사이의 자동 전환이나 실패 후 fallback은 없다.
 
 `SUBAGENT`에서는 다음을 지킨다.
 
@@ -35,7 +36,7 @@ Top-level 기본 실행 모드는 `SUBAGENT`다.
 5. 실패를 `DIRECT`로 자동 대체하지 않는다.
 6. 한 Ticket을 여러 implementation worker에게 나누거나 worker roster, queue, retry ledger 또는 별도 review lifecycle을 만들지 않는다.
 
-Outer Main은 assignment, current user instruction 전달, worker의 handoff/turn report 수신, 필요한 steering, terminal result 수신과 caller-facing fan-in을 소유한다. 구현 의미와 self-check는 worker가 소유하며, Outer Main은 별도의 구현자로 중복 행동하지 않는다.
+`DIRECT`에서는 현재 Main이 아래 implementation core를 직접 수행한다. `SUBAGENT`에서는 Outer Main이 assignment, current user instruction 전달, worker의 handoff/turn report 수신, 필요한 steering, terminal result 수신과 caller-facing fan-in을 소유한다. 구현 의미와 self-check는 delegated worker가 소유하며, Outer Main은 별도의 구현자로 중복 행동하지 않는다.
 
 ## Ready Ticket 상태 게이트
 
