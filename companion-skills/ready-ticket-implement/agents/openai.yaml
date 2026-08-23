@@ -1,4 +1,4 @@
 interface:
   display_name: "Ready Ticket Implement"
   short_description: "Implement one Ready Ticket with direct-first execution"
-  default_prompt: "Use $ready-ticket-implement to directly implement the exact Ready Ticket by default, preserve the Ticket contract, perform implementation self-check, use SUBAGENT only when I explicitly select it for this stage, and leave final verification to the separate verifier."
+  default_prompt: "Use $ready-ticket-implement to directly implement the exact Ready Ticket by default, preserve the Ticket contract, perform implementation self-check, use SUBAGENT only when I explicitly select it for this stage, and leave heuristic probing plus final verification to their separate owners."

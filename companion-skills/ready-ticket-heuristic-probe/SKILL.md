@@ -94,6 +94,7 @@ Execution Mode: DIRECT | SUBAGENT
 Heuristic Probe Lead:
 Ticket status before probe:
 Probe Target:
+Authority Snapshot: <Ticket + Parent Spec + applicable Behavior/UI current identities>
 Target Stability:
 Heuristic Method: production-heuristic-probing
 Probe Frontier Matrix:

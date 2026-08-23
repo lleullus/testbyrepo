@@ -9,7 +9,7 @@ description: "Implement one existing IIS Ready Ticket and perform implementer se
 
 이 스킬은 IIS Planning이 만든 하나의 Ready Ticket을 그 Ticket이 승인한 제품 자체에 구현한다. IIS Planning을 재개하거나 Ticket 의미를 다시 계획하지 않는다.
 
-구현 worker는 구현과 구현자 self-check를 소유한다. Separate verification authority의 실행 여부, AC verdict, whole-Ticket verdict와 terminal `done` 전이는 소유하지 않는다.
+구현 worker는 구현과 구현자 self-check를 소유한다. Separate heuristic-probe authority의 finding/exploration과 Separate verification authority의 실행 여부, AC verdict, whole-Ticket verdict와 terminal `done` 전이는 소유하지 않는다.
 
 실제 작업 전에 [references/implement.md](references/implement.md)를 전부 읽는다.
 
@@ -120,4 +120,4 @@ Parent/user authority가 실제로 필요한 unresolved decision에 도달하면
 4. Authored independent-verification requirement와 관련 implementation/self-check evidence가 final handoff에 보존되었다.
 5. Worker가 decision-critical source claim, diff, artifact, command와 runtime behavior를 직접 확인했다.
 
-`Completion: COMPLETE`여도 exact Ticket의 `Status: ready`는 변경하지 않는다. 구현 target/checkpoint와 self-check evidence를 separate verification authority에 넘긴다. 이후 verification이나 IIS planning continuation을 자동 실행하지 않는다.
+`Completion: COMPLETE`여도 exact Ticket의 `Status: ready`는 변경하지 않는다. 구현 target/checkpoint와 self-check evidence를 separate heuristic-probe authority와 separate verification authority에 넘길 수 있는 navigation handoff로 보존한다. 이후 heuristic probing, verification 또는 IIS planning continuation을 자동 실행하지 않는다.

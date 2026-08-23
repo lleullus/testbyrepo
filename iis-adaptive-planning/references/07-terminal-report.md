@@ -55,7 +55,7 @@ Planning owner terminal: validated complete Ready Ticket Set
 Planning owner result: STOP — terminal IIS Planning output
 Whole-run predicate satisfied: yes | no
 Returned to: Outer Main
-Outer disposition: RUN_COMPLETE | CONTINUE_TO_IMPLEMENTATION | CONTINUE_TO_VERIFICATION | RETURN_AUTHORITY_GAP
+Outer disposition: RUN_COMPLETE | CONTINUE_TO_IMPLEMENTATION | CONTINUE_TO_HEURISTIC_PROBE | RETURN_AUTHORITY_GAP
 ```
 
 Do not append an offer to implement, verify, or plan the next provisional Increment as though those actions are part of IIS Planning.
@@ -76,6 +76,7 @@ Implementation denominator: <complete>/<total>
 Implementation results:
 - <Ticket path — exact implementation report/checkpoint>
 Verification requested: no
+Heuristic probe claimed: no
 Final Ticket states:
 - <Ticket path — exact current status>
 Run Completion Boundary: CURRENT_INCREMENT_IMPLEMENTED
@@ -112,7 +113,7 @@ Completion Predicate: <exact predicate>
 Authoritative Readback: <fresh attributable evidence>
 Final Current Increment: <exact INC path or None>
 Final Ticket evidence:
-- <exact Ticket path — implementation COMPLETE | done | planning-only ready>
+- <exact Ticket path — implementation result | heuristic-probe result when Verification is yes | final canonical status>
 Disposition: RUN_CONTRACT_SATISFIED
 Remaining provisional horizon: non-authoritative; not a completion blocker
 STOP

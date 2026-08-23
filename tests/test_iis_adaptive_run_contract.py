@@ -114,10 +114,14 @@ class IISAdaptiveRunContractTests(unittest.TestCase):
 
         self.assertIn("Implementation: yes | no", template)
         self.assertIn("Verification: yes | no", template)
+        self.assertNotIn("Heuristic Probing:", template)
         self.assertIn("implement but do not verify -> `yes` / `no`", contract)
         self.assertIn("CURRENT_INCREMENT_IMPLEMENTED", contract)
-        self.assertIn("do not verify -> never run the verifier or claim `done`", contract)
-        self.assertIn("do not verify", continuation)
+        self.assertIn("`Verification: yes` means", contract)
+        self.assertIn("required `ready-ticket-heuristic-probe` gate", contract)
+        self.assertIn("not a third Run Contract field", contract)
+        self.assertIn("do not verify -> never run the heuristic-probe gate or verifier", contract)
+        self.assertIn("`Verification: no` means no `ready-ticket-heuristic-probe` call", continuation)
         self.assertIn("no success re-entry into another Increment", continuation)
         self.assertNotIn("PLANNING_ONLY | PLAN_IMPLEMENT_VERIFY", template)
 

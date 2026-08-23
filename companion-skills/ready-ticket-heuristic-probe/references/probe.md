@@ -110,6 +110,7 @@ Execution Mode: DIRECT | SUBAGENT
 Heuristic Probe Lead: Main
 Ticket status:
 Probe target:
+Authority Snapshot: <Ticket + Parent Spec + applicable Behavior/UI current identities>
 Target-stability check:
 Heuristic method: production-heuristic-probing
 
@@ -291,6 +292,7 @@ Execution Mode: DIRECT | SUBAGENT
 Heuristic Probe Lead: Main
 Ticket status before probe:
 Probe Target:
+Authority Snapshot: <Ticket + Parent Spec + applicable Behavior/UI current identities>
 Target Stability:
 Heuristic Method: production-heuristic-probing
 

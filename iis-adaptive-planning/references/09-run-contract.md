@@ -87,7 +87,7 @@ Implementation: yes | no
 Verification: yes | no
 ```
 
-Preserve the current Adaptive default: explicit Adaptive activation selects `Implementation: yes` and `Verification: yes` unless current user authority overrides either stage.
+Preserve the current Adaptive default: explicit Adaptive activation selects `Implementation: yes` and `Verification: yes` unless current user authority overrides either stage. `Verification: yes` means the current Ticket must pass the required `ready-ticket-heuristic-probe` gate before final `ready-ticket-verify`; heuristic probing is an internal verification-enabled delivery gate, not a third Run Contract field or separate whole-run terminal.
 
 When current authority supplies no planning-only, implementation-only, no-verification, named-required-item, bounded-outcome, or Mandate-outcome terminal, the default current-Increment terminal is `CURRENT_INCREMENT_DELIVERED`. Close that default only when the Required-item coverage invariant permits a current-Increment boundary; do not use it to shrink broader Required Named Items, replace a broader outcome already assigned by the user, or bypass an unresolved coverage or Mandate-ceiling decision.
 
@@ -95,11 +95,11 @@ Apply exact overrides independently:
 
 - planning-only, stop-at-Ready-Tickets, no implementation and no verification -> `no` / `no`;
 - implement but do not verify -> `yes` / `no`;
-- verify an already implemented current target without implementation -> `no` / `yes` when current evidence and the separate verifier admission permit it;
+- verify an already implemented current target without implementation -> `no` / `yes` when current evidence can bind one stable current target and the separate heuristic-probe/verifier admissions permit it;
 - do not implement -> never infer implementation authority merely because verification or a broader outcome was requested;
-- do not verify -> never run the verifier or claim `done`.
+- do not verify -> never run the heuristic-probe gate or verifier and never claim `done`.
 
-The fields express the outer invocation envelope only. They do not change the exact authority, admission, or result ownership of `ready-ticket-implement` or `ready-ticket-verify`.
+The fields express the outer invocation envelope only. They do not change the exact authority, admission, or result ownership of `ready-ticket-implement`, `ready-ticket-heuristic-probe`, or `ready-ticket-verify`.
 
 ### Run Completion Boundary
 

@@ -1,6 +1,6 @@
 ---
 name: ready-ticket-verify
-description: "Verify one existing IIS Ready Ticket against a stable current implementation target, semantically check that its authored AC/Verification flow can meaningfully decide the approved product claims, adjudicate every authored Verification flow and AC from fresh evidence, and own the guarded terminal done transition. Execution defaults to DIRECT, and DIRECT is the only currently supported verification topology."
+description: "Verify one existing IIS Ready Ticket against a stable current implementation target, require a current COMPLETE Ready Ticket heuristic-probe handoff for normal ready verification, semantically check that its authored AC/Verification flow can meaningfully decide the approved product claims, adjudicate every authored Verification flow and AC from fresh verifier-owned evidence, and own the guarded terminal done transition. Execution defaults to DIRECT, and DIRECT is the only currently supported verification topology."
 ---
 
 # Ready Ticket Verify
@@ -18,6 +18,10 @@ Before work, read [references/verify.md](references/verify.md) in full.
 Required contract-authority input:
 
 - Ticket: `<exact absolute canonical TICKET-NNN.md path>`
+
+Required for normal delivery verification of `Status: ready`:
+
+- Heuristic Probe Result / Evidence: `<current READY TICKET HEURISTIC PROBE RESULT for this exact Ticket/authority/implementation target>`
 
 Optional navigation inputs:
 
@@ -49,11 +53,33 @@ Before deriving runtime execution, semantically compare every AC and mapped Veri
 
 ## Ticket status gate
 
-- Normal first verification input is exact `Status: ready`.
+- Normal delivery verification input is exact `Status: ready`.
 - `draft` or `blocked` does not enter verification and receives no AC verdicts.
 - `done` permits only explicit diagnostic re-verification. Diagnostic re-verification never reopens or rewrites status.
 - `FAILED` or `INCONCLUSIVE` leaves a normal `ready` Ticket at `ready`.
 - A normal `ready` Ticket changes to `done` only after final `VERIFIED` on a stable target and the guarded progression succeeds.
+
+## Required heuristic probe gate
+
+Normal delivery verification of a `ready` Ticket requires one current terminal result from `ready-ticket-heuristic-probe` before verifier product/runtime execution.
+
+Require all of the following:
+
+1. exact same canonical Ticket;
+2. `Probe Completion: COMPLETE`;
+3. Probe `Authority Snapshot` still matches the current Ticket, Parent Spec and applicable Behavior/UI authorities;
+4. Probe target is the same current implementation target the verifier binds;
+5. Probe cleanup/terminal state is closed and no material source/config/build/runtime drift occurred after the probe.
+
+Return without AC verdicts when the gate cannot be established:
+
+- missing result: `VERIFICATION NOT STARTED: REQUIRED HEURISTIC PROBE RESULT MISSING`;
+- `PARTIAL`, `BLOCKED`, malformed or otherwise non-complete result: `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`;
+- stale Ticket/authority/target/cleanup attribution: `VERIFICATION NOT STARTED: HEURISTIC PROBE RESULT STALE`.
+
+Probe findings are navigation/counterexample seeds, not flow or AC verdicts and not automatic implementation defects. `Material Findings: None` is not PASS evidence. Where a finding is material and current, the verifier incorporates it into its own scenario and obtains verifier-owned current evidence. A probe result never satisfies `Independent verification required: yes` by itself.
+
+Explicit diagnostic re-verification of an already `done` Ticket does not require this normal delivery gate unless the current user explicitly asks for a fresh heuristic probe as part of that diagnostic.
 
 ## Scenario ownership
 

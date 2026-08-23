@@ -1,4 +1,4 @@
 interface:
   display_name: "Ready Ticket Verify"
   short_description: "Verify one Ready Ticket with Main-owned verdict"
-  default_prompt: "Use $ready-ticket-verify in its default DIRECT mode to verify the exact Ready Ticket, semantically check that each authored AC/Verification flow can decide its approved claim, execute every authored Verification flow on a stable target, adjudicate every AC, and own the guarded done transition."
+  default_prompt: "Use $ready-ticket-verify in its default DIRECT mode to verify the exact Ready Ticket, require a current COMPLETE ready-ticket heuristic-probe handoff for normal ready verification, semantically check that each authored AC/Verification flow can decide its approved claim, obtain fresh verifier-owned evidence for every authored Verification flow, adjudicate every AC, and own the guarded done transition."

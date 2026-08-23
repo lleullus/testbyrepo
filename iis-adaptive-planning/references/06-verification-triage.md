@@ -23,6 +23,7 @@ Before classifying, reopen enough current authority to compare the failing claim
 - Parent Spec;
 - adopted Behavior/UI authority relevant to the claim;
 - exact Ticket and authored Verification flow(s);
+- exact current `ready-ticket-heuristic-probe` result/evidence as available;
 - exact fresh `ready-ticket-verify` result/evidence as available;
 - current runtime/repository evidence needed to attribute the observed behavior.
 
@@ -48,9 +49,9 @@ This includes a contract that is coherent in isolation but bundles later maturit
 
 ### 3. Verification mechanism check
 
-If the contract is valid and correctly placed, ask whether the actual verification mechanism measured the authored acceptance boundary/readback under attributable conditions.
+If the contract is valid and correctly placed, ask whether the required heuristic-probe gate and final verification mechanism each operated on the correct current target/authority and whether the final verifier measured the authored acceptance boundary/readback under attributable conditions.
 
-If **no**, classify `VERIFICATION_MECHANISM_DEFECT` or `INCONCLUSIVE` depending on whether the mechanism itself is wrong versus merely unavailable.
+If **no**, classify `VERIFICATION_MECHANISM_DEFECT` or `INCONCLUSIVE` depending on whether the probe/verifier mechanism itself is wrong versus merely unavailable. A heuristic finding is not itself a product contradiction until the verifier adjudicates it against current authority.
 
 ### 4. Runtime contradiction check
 
@@ -84,8 +85,10 @@ Do not shrink the contract merely because the correct implementation is difficul
 
 ## `VERIFICATION_MECHANISM_DEFECT`
 
-Use when the product contract is valid but the concrete verification apparatus does not measure it correctly, for example:
+Use when the product contract is valid but the concrete heuristic-probe or final-verification apparatus does not measure/currently attribute it correctly, for example:
 
+- probe or verifier binds the wrong implementation target/authority snapshot;
+- probe workers interfere through shared mutable state and corrupt attribution;
 - wrong fixture or initial state;
 - harness invokes a different flow than the authored trigger;
 - observation uses a private/internal state instead of the authoritative readback;
@@ -96,13 +99,14 @@ Use when the product contract is valid but the concrete verification apparatus d
 Route:
 
 ```text
-Primary owner: separate verification lifecycle / harness owner
+Primary owner: separate heuristic-probe and/or verification lifecycle / harness owner
 Product implementation change: Do not infer
 Planning re-entry: None unless the failure exposes an actual product-observability contract defect
+Fresh heuristic probe: Required when probe mechanism/currentness was affected; otherwise reuse only after currentness is re-established
 Fresh verification: Required
 ```
 
-Do not add product APIs, debug hooks, persistence, ledgers, or test-only product behavior merely to satisfy an invalid harness.
+Do not add product APIs, debug hooks, persistence, ledgers, probe state, or test-only product behavior merely to satisfy an invalid probe/verifier harness.
 
 ## `CONTRACT_OVERREACH`
 

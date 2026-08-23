@@ -17,7 +17,7 @@ IIS Adaptive Planning
 - exact process delta for delegated confirmations and planning re-entry
 ```
 
-There is no separate Adaptive Run skill. Outer Main is the main agent for the current explicit Adaptive invocation; it carries the Run Contract and routes exact owner results without taking over Baseline planning, implementation, or verification authority.
+There is no separate Adaptive Run skill. Outer Main is the main agent for the current explicit Adaptive invocation; it carries the Run Contract and routes exact owner results without taking over Baseline planning, implementation, heuristic-exploration, or verification authority.
 
 Do not edit `iis-workflow`, Scope Shaper, Ask Matt, To Spec, To Tickets, Behavior/UI authority skills, their templates, or validators merely to make Adaptive work.
 
@@ -56,7 +56,7 @@ Everything else remains current Baseline authority.
 
 The Run Contract is not a Baseline artifact, new product-authority layer, or durable workflow state. It constrains the outer Adaptive invocation: which user-named items remain obligations, which remain candidate means, which delivery stages are authorized, and which observable condition permits whole-run success. It never causes one current Spec or Ticket to absorb multi-Increment scope.
 
-The Ready Ticket Set remains the terminal **IIS Planning** product. Under explicit Adaptive activation, that ownership STOP returns the Set and closed Run Contract to Outer Main, which applies the independently closed Implementation and Verification fields. That continuation does not extend IIS Planning authority into delivery, and the owner STOP is not an invocation STOP.
+The Ready Ticket Set remains the terminal **IIS Planning** product. Under explicit Adaptive activation, that ownership STOP returns the Set and closed Run Contract to Outer Main, which applies the independently closed Implementation and Verification fields. When Verification is enabled, the current delivery contract requires heuristic probing before final verification; this does not create a third Run Contract field or extend IIS Planning authority into delivery, and the owner STOP is not an invocation STOP.
 
 A broader `NAMED_REQUIRED_ITEMS_DELIVERED`, `BOUNDED_OUTCOME_SATISFIED`, or `MANDATE_OUTCOME_SATISFIED` Run Completion Boundary also does not turn one IIS planning cycle into a multi-Increment workflow. After a current Increment is fully delivered, Adaptive performs a fresh success re-entry; only when the active predicate is still unsatisfied and the Mandate ceiling permits it does it start a new planning cycle and return to Scope Shaper for one new current Increment from actual state.
 
@@ -86,7 +86,7 @@ The following remain hard even in Adaptive mode:
 - adversarial planning consensus activation and exact Challenger binding remain direct-user-only; ordinary Baseline Intent Anchor confirmation remains direct-user-only, while explicit Adaptive mode may satisfy only that Anchor confirmation through the exact faithful-Anchor standing-delegation rule above; ordinary Baseline post-consensus final approval also remains direct-user-owned by default, while explicit Adaptive mode may satisfy only that finalization event through the exact no-authority-delta standing-delegation rule above;
 - a missing project root, invalid canonical path, unresolved authority conflict, failed validator, or unavailable required evidence is not cured by delegation;
 - the complete Ready Ticket Set is the terminal IIS Planning output for the current Increment;
-- implementation and verification are outside IIS Planning;
+- implementation, heuristic probing, and verification are outside IIS Planning;
 - planning completion never authorizes deployment, credentials, production/external effects, or destructive operations;
 - a Run Contract cannot weaken or bypass any of these boundaries;
 - an unsatisfied Run Contract cannot be reported as successful merely because an owning leaf stopped.

@@ -36,14 +36,16 @@ A reshaped current Increment may create a new canonical Ready Ticket denominator
 Before each enabled delivery phase, discover and use the current installed skill contract.
 
 - `ready-ticket-implement` owns one exact Ready Ticket implementation and implementer self-check.
+- `ready-ticket-heuristic-probe` owns one exact Ready Ticket's bounded heuristic exploration, Ticket-derived probe frontier, material findings/minimal triggers, target attribution and cleanup; it never owns verifier verdicts or `done`.
 - `ready-ticket-verify` owns one exact Ready Ticket fresh verification, final verdict, and guarded `ready -> done` progression.
-- Invoke each exact delivery skill once and follow its current execution-mode contract. Delivery defaults to `DIRECT`; Adaptive never chooses another topology from model capability, task difficulty, cost or worker availability and never falls back between topologies after a capability failure.
+- Invoke each exact delivery skill once per current owner pass and follow its current execution-mode contract. Delivery defaults to `DIRECT`; Adaptive never chooses another topology from model capability, task difficulty, cost or worker availability and never falls back between topologies after a capability failure.
 - `ready-ticket-implement` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT for that implementation stage; otherwise current Main performs the implementation role directly.
+- `ready-ticket-heuristic-probe` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT for that probe stage; otherwise current Main performs the Heuristic Probe Lead/executor role directly. Any internal parallel lanes belong to that skill's own SUBAGENT contract.
 - `ready-ticket-verify` defaults to `DIRECT`, and DIRECT is its only currently supported topology. Outer Main enters that skill's exact sole-verifier role for the Ticket, produces its terminal verifier result, then returns to Adaptive continuation without issuing a second verdict. An explicit unsupported SUBAGENT-verification request is returned as such rather than silently run as DIRECT.
-- Do not pass `Delegated Worker: yes` from Adaptive. That marker belongs only to `ready-ticket-implement`'s own internal assignment.
+- Do not pass `Delegated Worker: yes` or `Delegated Probe Worker: yes` from Adaptive. Those markers belong only to the implementation/probe skills' own internal assignments.
 - Do not infer Ticket-set parallelism, worker scheduling, or a persistent queue from the existence of a Ready Ticket Set. Select only a currently admissible Ticket using canonical blockers, product dependencies, shared-workspace safety, and current repository evidence.
 
-Do not invoke a disabled stage merely to obtain stronger evidence. In particular, `Verification: no` means no `ready-ticket-verify` call and no `done` claim.
+Do not invoke a disabled stage merely to obtain stronger evidence. `Verification: yes` includes the required current heuristic-probe gate followed by final verification; `Verification: no` means no `ready-ticket-heuristic-probe` call, no `ready-ticket-verify` call, and no `done` claim.
 
 ## Invocation-local evidence economy
 
@@ -57,15 +59,15 @@ This does **not** weaken authored Verification flows, independent-verification r
 
 Invoke implementation only when `Implementation: yes`.
 
-Continue from implementation to verification only when all of the following hold:
+Continue from implementation to the heuristic-probe gate only when all of the following hold:
 
 - `Verification: yes`;
 - the current implementation report for the exact Ticket contains `Completion: COMPLETE`; and
-- the canonical Ticket remains exact `Status: ready` for the verifier.
+- the canonical Ticket remains exact `Status: ready` for the next delivery owners.
 
-Preserve the exact implementation target/checkpoint and self-check evidence as navigation for verification; they do not become verification verdicts.
+Preserve the exact implementation target/checkpoint and self-check evidence as navigation for heuristic probing and verification; they do not become heuristic findings or verification verdicts.
 
-`Completion: BLOCKED | PARTIAL` or any unavailable/non-complete implementation result is not silently converted into verification. Correct only the condition owned by implementation/current authority, and repeat the implementation lifecycle only after a material candidate delta, changed canonical authority, or genuinely new evidence makes the new pass different.
+`Completion: BLOCKED | PARTIAL` or any unavailable/non-complete implementation result is not silently converted into heuristic probing or verification. Correct only the condition owned by implementation/current authority, and repeat the implementation lifecycle only after a material candidate delta, changed canonical authority, or genuinely new evidence makes the new pass different.
 
 When `Verification: no`, retain the exact implementation result and canonical Ticket status. After every current canonical Ticket has one exact `Completion: COMPLETE` result, apply the active boundary:
 
@@ -84,9 +86,30 @@ any delivered/outcome boundary not already satisfied
 
 One complete implementation report is not the current-Increment implementation denominator.
 
+## Heuristic probe gate handoff
+
+When `Verification: yes`, every normal `Status: ready` Ticket must pass `ready-ticket-heuristic-probe` before `ready-ticket-verify`, whether the current invocation just implemented the Ticket or is verifying an already implemented current target.
+
+Invoke the probe only after current canonical Ticket/authority and one stable attributable implementation target are established. When `Implementation: yes`, use the exact COMPLETE implementation target/checkpoint as navigation. When `Implementation: no`, bind the already implemented current target directly; do not infer that implementation history merely from a `ready` status.
+
+Continue from heuristic probing to verification only when all of the following hold:
+
+- the exact probe result is `READY TICKET HEURISTIC PROBE RESULT` for the same Ticket;
+- `Probe Completion: COMPLETE`;
+- the probe `Authority Snapshot` still matches current Ticket/Parent Spec/applicable Behavior/UI authority;
+- the probe target is the same current target the verifier will bind;
+- cleanup/terminal state is closed; and
+- the canonical Ticket remains exact `Status: ready`.
+
+A `COMPLETE` result with `Material Findings: None` is valid gate completion but is not PASS evidence. A `COMPLETE` result with material findings also proceeds to the verifier; Adaptive does not classify a finding as `IMPLEMENTATION_DEFECT`, planning defect, or Ticket failure before verifier adjudication. Preserve findings/minimal triggers as navigation/counterexample seeds for `ready-ticket-verify`.
+
+`Probe Completion: PARTIAL | BLOCKED`, `HEURISTIC PROBE NOT STARTED`, unavailable SUBAGENT capability after an explicit SUBAGENT request, stale target/authority, or incomplete cleanup does not enter verification. Correct only the exact probe-owned capability/mechanism/evidence/currentness condition when current authority permits; do not silently run another topology or skip the gate.
+
+Any material implementation or planning-authority change makes the prior probe result non-current for supportive delivery evidence and requires a fresh probe before fresh verification. A verifier-only mechanism correction may reuse the existing probe only after the verifier re-establishes that Ticket authority, probe target, cleanup and implementation target are still current.
+
 ## Verification terminal routing
 
-Invoke verification only when `Verification: yes`. Route from the verifier's exact result fields, not from an inferred summary:
+Invoke verification only when `Verification: yes` and the current heuristic-probe gate above is `COMPLETE` for the same Ticket/authority/implementation target. Pass the exact current Probe Result as the verifier's required handoff. Route from the verifier's exact result fields, not from an inferred summary:
 
 ```text
 Verification Verdict: VERIFIED
@@ -119,33 +142,36 @@ Unless the current user explicitly requested `no re-entry`, `fail and report`, o
 ```text
 IMPLEMENTATION_DEFECT
   -> if Implementation is yes: ready-ticket-implement on the still-ready exact Ticket
-  -> if Verification is yes: fresh ready-ticket-verify
+  -> any implementation correction changes the target -> if Verification is yes: fresh ready-ticket-heuristic-probe -> fresh ready-ticket-verify
   -> if a required stage is disabled: return the exact authority gap
 
 VERIFICATION_MECHANISM_DEFECT
-  -> if Verification is yes: correct only the verification-owned setup/mechanism
-  -> fresh ready-ticket-verify
-  -> if Verification is no: do not invoke the verifier
+  -> identify whether the defect is in the heuristic-probe mechanism/currentness boundary or only in the final verifier mechanism
+  -> probe mechanism/currentness defect: correct only that mechanism -> fresh ready-ticket-heuristic-probe -> fresh ready-ticket-verify
+  -> verifier-only mechanism defect with unchanged Ticket/authority/implementation target and still-current COMPLETE probe: fresh ready-ticket-verify may reuse that current probe handoff
+  -> if probe currentness cannot be established: fresh ready-ticket-heuristic-probe before fresh verification
+  -> if Verification is no: do not invoke the probe or verifier
 
 CONTRACT_OVERREACH
   -> re-enter IIS Adaptive Planning at the owning planning leaf
   -> To Tickets when only Ticket projection is wrong
   -> To Spec / Ask Matt when parent product meaning is wrong or incomplete
   -> fresh validated Ready Ticket(s)
-  -> repeat only the enabled delivery stages
+  -> repeat only the enabled delivery stages; when Verification is yes, fresh probe precedes fresh verification
 
 CURRENT_INCREMENT_MISMATCH
   -> re-enter Scope Shaper against fresh actual product state
   -> current canonical planning route
   -> fresh Ready Ticket Set
-  -> repeat only the enabled delivery stages
+  -> repeat only the enabled delivery stages; when Verification is yes, fresh probe precedes fresh verification
 
 INCONCLUSIVE
-  -> obtain only the missing evidence, operator condition, or attributable target owned by the current contract
+  -> obtain only the missing evidence, operator condition, attributable target, or probe/verifier mechanism state owned by the current contract
+  -> if the gap invalidated or prevented the probe gate: fresh ready-ticket-heuristic-probe before verification
   -> continue only when that new evidence makes a valid next route available
 ```
 
-Do not retroactively turn an earlier verifier failure into PASS after planning changes. New planning authority requires fresh applicable delivery/verification evidence.
+Do not retroactively turn an earlier verifier failure into PASS after planning changes. New planning authority requires fresh applicable delivery evidence; when Verification is enabled, that includes a fresh current heuristic-probe gate before fresh verification.
 
 ## Progress guard without retry machinery
 
@@ -153,7 +179,7 @@ Before repeating a planning or delivery owner, identify at least one material ch
 
 - corrected planning/implementation candidate;
 - changed canonical authority;
-- newly attributable verification target/mechanism; or
+- newly attributable heuristic-probe/verification target or mechanism; or
 - genuinely new evidence/external condition.
 
 If the same artifact/target, same evidence, same finding, and same route would repeat without such a change, stop at the owning boundary and report the unresolved condition as whole-run incomplete. Do not add a numeric retry policy, persistent attempt ledger, or workflow state.
@@ -206,12 +232,13 @@ An implementation-only run cannot use verified success re-entry to span several 
 
 ## Hard boundaries
 
-- Adaptive Planning never becomes implementation or verification authority.
-- Delivery skills never rewrite Scope, Spec, Ticket meaning to make verification pass.
+- Adaptive Planning never becomes implementation, heuristic-exploration, or verification authority.
+- Delivery skills never rewrite Scope, Spec, Ticket meaning to make probing or verification pass.
+- A heuristic finding alone is never an Adaptive implementation/planning defect classification or verifier verdict.
 - Outer Main never invents deployment, credential, production/shared external mutation, destructive-action, or other missing authority.
 - A material user-owned product trade-off outside current authority returns to the user.
 - `done` belongs only to the verifier's guarded terminal progression.
-- `Verification: no` is never treated as permission to infer a verifier verdict.
+- `Verification: no` is never treated as permission to run heuristic probing, infer a verifier verdict, or claim `done`.
 - Candidate Named Items are not completion obligations; Required Named Items are not disposable.
 - No phase, Ticket, or Increment may claim whole-run success before the active Completion Predicate is satisfied.
 - This route is a thin handoff discipline, not a controller, scheduler, workflow database, approval engine, or generic Graph runtime.

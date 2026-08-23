@@ -191,14 +191,17 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn("default current-Increment terminal", contract)
         self.assertIn("planning only", continuation)
         self.assertIn("ready-ticket-implement", continuation)
+        self.assertIn("ready-ticket-heuristic-probe", continuation)
         self.assertIn("ready-ticket-verify", continuation)
         self.assertIn("continues the current Increment", terminal)
         self.assertIn("Delivery defaults to `DIRECT`", continuation)
         self.assertIn("`ready-ticket-implement` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT", continuation)
+        self.assertIn("`ready-ticket-heuristic-probe` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT", continuation)
         self.assertIn("`ready-ticket-verify` owns one exact Ready Ticket fresh verification", continuation)
         self.assertIn("`ready-ticket-verify` defaults to `DIRECT`", continuation)
         self.assertIn("only currently supported topology", continuation)
-        self.assertIn("Do not pass `Delegated Worker: yes` from Adaptive", continuation)
+        self.assertIn("`Delegated Worker: yes` or `Delegated Probe Worker: yes`", continuation)
+        self.assertIn("`Verification: yes` includes the required current heuristic-probe gate", continuation)
         self.assertNotIn("Auditor Count", continuation)
         self.assertNotIn("AC Runtime Auditor", continuation)
 
@@ -243,9 +246,11 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         ):
             self.assertIn(classification, continuation)
         self.assertIn("Completion: COMPLETE", continuation)
+        self.assertIn("Probe Completion: COMPLETE", continuation)
         self.assertIn("Status: ready", continuation)
         self.assertIn("Corrective routing is the Adaptive default", continuation)
         self.assertIn("no re-entry", continuation)
+        self.assertIn("fresh ready-ticket-heuristic-probe", continuation)
         self.assertIn("Verification Verdict: VERIFIED", continuation)
         self.assertIn("Ticket Progression: COMPLETED", continuation)
         self.assertIn("Ticket status after verification: done", continuation)
@@ -259,6 +264,12 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn("Do not create evidence budgets, counters, modality quotas", continuation)
         self.assertIn("Progress guard without retry machinery", continuation)
         self.assertIn("Do not add a numeric retry policy", continuation)
+
+        artifact = (ADAPTIVE / "references" / "05-artifact-contract.md").read_text(encoding="utf-8")
+        self.assertIn("READY TICKET HEURISTIC PROBE RESULT", artifact)
+        self.assertIn("not a canonical IIS artifact", artifact)
+        self.assertIn("probe ledger", artifact)
+        self.assertIn("worker/model rosters", artifact)
 
     def test_success_continuation_reassesses_outcome_from_actual_state(self) -> None:
         skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")

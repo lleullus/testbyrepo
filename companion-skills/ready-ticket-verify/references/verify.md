@@ -30,7 +30,7 @@ Before any runtime/product action:
 8. Preserve each flow's exact authored meaning. Do not infer a missing flow, remap ordinals from implementation shape, normalize a legacy flow or strengthen/relax a decision boundary.
 9. Bind the exact current verification target from the validated Ticket plus direct repository/runtime observation: source/config/build/artifact/runtime checkpoint, actual entrypoint or canonical inspection target, acceptance surface and authoritative readback.
 
-Caller-supplied candidate targets and implementation reports are navigation only. Structural `VALID` admits schema only; it never establishes semantic correctness, current target availability, runtime evidence or verdicts.
+Caller-supplied candidate targets and implementation reports are navigation only. For normal `ready` verification, the Heuristic Probe Result is a required currentness/admission handoff, but its findings remain navigation/counterexample seeds and never establish flow/AC/Ticket verdicts. Structural `VALID` admits schema only; it never establishes semantic correctness, current target availability, runtime evidence or verdicts.
 
 Return without AC verdicts when canonical admission, current authority, Ticket-to-parent projection or current target binding cannot be established.
 
@@ -51,7 +51,7 @@ If a material semantic gap means the authored verification contract cannot decid
 
 ## 4. Status semantics
 
-Normal first verification requires exact `Status: ready`.
+Normal delivery verification requires exact `Status: ready`.
 
 - `draft` / `blocked`: do not start.
 - `ready`: may progress to `done` only on final `VERIFIED` and successful guarded progression.
@@ -72,6 +72,25 @@ If target drift occurs:
 - do not carry a prior PASS across the drift;
 - re-establish a stable target and obtain fresh required observations before `VERIFIED`.
 
+### Required heuristic probe gate
+
+Normal delivery verification of exact `Status: ready` requires one terminal `READY TICKET HEURISTIC PROBE RESULT` before any verifier-owned product/runtime action.
+
+Require all of the following against fresh current authority and target binding:
+
+1. the result names the same exact canonical Ticket;
+2. `Probe Completion: COMPLETE`;
+3. its `Authority Snapshot` matches the current Ticket, Parent Spec and applicable Behavior/UI authorities;
+4. its `Probe Target` matches the exact current verification target;
+5. its cleanup/terminal state is closed; and
+6. no material Ticket/authority/source/config/build/artifact/runtime drift makes the probe attribution stale.
+
+When the required result is absent, return `VERIFICATION NOT STARTED: REQUIRED HEURISTIC PROBE RESULT MISSING`. When the result is `PARTIAL`, `BLOCKED`, malformed or otherwise non-complete, return `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`. When Ticket, authority, target or cleanup attribution is stale, return `VERIFICATION NOT STARTED: HEURISTIC PROBE RESULT STALE`. These returns issue no AC verdicts.
+
+`Material Findings: None` is not evidence that any flow is satisfied. A probe finding is a counterexample/navigation seed, not a verifier result, implementation-defect classification or substitute for fresh verifier-owned evidence. A probe result never satisfies an authored `Independent verification required: yes` obligation by itself.
+
+Explicit diagnostic re-verification of an already `done` Ticket is outside this normal delivery gate unless the current user explicitly requests a fresh heuristic probe as part of that diagnostic.
+
 ## 6. Integrated scenario ownership
 
 After the semantic contract check finds no material gap that prevents the authored flow from deciding its approved claims, convert the authored Verification section into one integrated execution plan before any product/runtime action.
@@ -89,6 +108,25 @@ Freeze every authored flow and conditional boundary as the mandatory denominator
 Add a derived positive variation, counterexample, boundary exercise or observation only when it materially tests an authored decision boundary, closes a concrete false-verdict path or prevents a concrete attribution error. Require a contract anchor and plausible failure path. Do not expand the scenario merely for exhaustiveness.
 
 Reject expansion that invents a new trigger, precondition, Scope, acceptance surface or stricter/weaker result; requires unrelated product mutation; or obscures the core verification. Prefer the smallest sufficient scenario.
+
+For every material finding in the current heuristic-probe handoff, reopen its exact current contract anchor before using it. Assign one verifier-owned disposition:
+
+```text
+Heuristic Finding Disposition:
+- REPRODUCED
+- CURRENT_READBACK_CONFIRMED
+- OUT_OF_SCOPE
+- UNATTRIBUTABLE
+- SUPERSEDED_BY_CURRENT_TARGET
+```
+
+- `REPRODUCED`: the verifier safely exercises the finding's minimized trigger on the current target and captures fresh authoritative evidence.
+- `CURRENT_READBACK_CONFIRMED`: a current direct canonical/product readback independently establishes the material behavior without repeating an unsafe or unnecessary trigger.
+- `OUT_OF_SCOPE`: current authority does not make the observed behavior part of this Ticket's claim; do not fail or expand the Ticket for it.
+- `UNATTRIBUTABLE`: the finding cannot be tied decisively to the current target/authority; it is not a FAIL. If the missing attribution is required to decide an authored flow, that flow remains `INCONCLUSIVE`.
+- `SUPERSEDED_BY_CURRENT_TARGET`: current target/authority changed so the old finding no longer describes the object being verified; do not carry it forward.
+
+A probe finding never substitutes for verifier execution when the authored disposition requires independent verification. Prefer the minimized trigger when it is safe and material, but the verifier still owns the fresh action/readback and final adjudication.
 
 For each block keep authored contract and derived execution separate:
 
@@ -149,6 +187,8 @@ Target-stability check:
 Environment:
 External/operator conditions:
 Semantic contract check: <no material gap found | exact blocking defect already returned before execution>
+Heuristic probe gate: CURRENT | diagnostic-not-required
+Heuristic findings / verifier dispositions: None | <finding -> disposition>
 
 Scenario Blocks:
 - <all authored Verification flows in authored order>
@@ -307,7 +347,7 @@ A still-running duplicate-sensitive effect, incomplete cleanup or unfinished abs
 
 Keep verification verdict and Ticket progression separate.
 
-For normal first verification of `Status: ready`:
+For normal delivery verification of `Status: ready`:
 
 - `FAILED` -> keep `ready`; `Ticket Progression: NOT APPLICABLE`.
 - `INCONCLUSIVE` -> keep `ready`; `Ticket Progression: NOT APPLICABLE`.
@@ -343,6 +383,8 @@ Verifier: Main / DIRECT
 Ticket status before verification:
 Verification target:
 Target stability:
+Heuristic probe result: <exact current result / diagnostic-not-required>
+Heuristic finding dispositions: None | <finding -> disposition>
 Material turn reports: None | <concise list>
 
 Semantic contract findings: None | <exact material gap and owning contract location>

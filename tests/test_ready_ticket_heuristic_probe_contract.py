@@ -116,6 +116,8 @@ class ReadyTicketHeuristicProbeContractTests(unittest.TestCase):
         self.assertIn("Material Findings: None | <findings>", self.skill)
 
     def test_target_drift_and_mutation_ambiguity_are_bounded(self) -> None:
+        self.assertIn("Authority Snapshot", self.skill)
+        self.assertIn("Authority Snapshot", self.workflow)
         self.assertIn("source/config/build/artifact/runtime checkpoint", self.workflow)
         self.assertIn("invalidate supportive evidence", self.workflow)
         self.assertIn("does not prove the action happened or did not happen", self.workflow)

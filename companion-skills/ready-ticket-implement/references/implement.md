@@ -155,8 +155,8 @@ Required implementation, self-check와 evidence가 닫히면 Ticket과 무관한
 - `done`은 separate verification authority가 최종 verdict에 따라 소유하는 terminal delivery marker다.
 - 구현 완료, passing tests 또는 implementer self-check만으로 `done`을 쓰지 않는다.
 - Spec, Scope, Increment, AC, Verification flow, Behavior/UI Authority 또는 다른 planning source를 수정하지 않는다.
-- separate verification authority가 사용할 exact implementation target/checkpoint와 self-check/runtime evidence를 handoff한다.
-- 이후 verification이나 planning continuation을 자동 실행하지 않는다.
+- separate heuristic-probe authority와 separate verification authority가 사용할 exact implementation target/checkpoint와 self-check/runtime evidence를 navigation handoff로 보존한다.
+- 이후 heuristic probing, verification이나 planning continuation을 자동 실행하지 않는다.
 
 ## 9. 종료 보고
 
@@ -172,9 +172,11 @@ Implemented scope:
 Non-Goals preserved:
 Verification flows used for implementation/self-check:
 Authoritative readback:
+Separate heuristic-probe authority required before normal verification: yes when verification is requested
+Heuristic probe status: NOT RUN BY THIS SKILL
 Separate verification authority required:
 Verification status: NOT ADJUDICATED BY THIS SKILL
-Verification evidence handoff:
+Heuristic-probe / verification evidence handoff:
 Tests/runtime evidence:
 Implementation handoff report: SENT | NOT APPLICABLE
 Material turn reports: None | <concise list>

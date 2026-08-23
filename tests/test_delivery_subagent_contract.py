@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 IMPLEMENT = ROOT / "companion-skills" / "ready-ticket-implement"
+PROBE = ROOT / "companion-skills" / "ready-ticket-heuristic-probe"
 VERIFY = ROOT / "companion-skills" / "ready-ticket-verify"
 ADAPTIVE_CONTINUATION = (
     ROOT / "iis-adaptive-planning" / "references" / "08-delivery-continuation.md"
@@ -80,10 +81,13 @@ class DeliverySubagentContractTests(unittest.TestCase):
         skill = (IMPLEMENT / "SKILL.md").read_text(encoding="utf-8")
         workflow = (IMPLEMENT / "references" / "implement.md").read_text(encoding="utf-8")
 
+        self.assertIn("Separate heuristic-probe authority", skill)
         self.assertIn("Separate verification authority", skill)
         self.assertIn("이 스킬은 Ticket status를 `done`으로 바꾸지 않는다", skill)
         self.assertIn("Status: ready", workflow)
+        self.assertIn("Heuristic probe status: NOT RUN BY THIS SKILL", workflow)
         self.assertIn("Verification status: NOT ADJUDICATED BY THIS SKILL", workflow)
+        self.assertIn("Heuristic-probe / verification evidence handoff", workflow)
         self.assertIn("Completion: COMPLETE | BLOCKED | PARTIAL", workflow)
 
     def test_verification_is_direct_first_and_main_owns_verdict(self) -> None:
@@ -99,6 +103,30 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("Execution defaults to `DIRECT`", workflow)
         self.assertIn("does not delegate verification", workflow)
         self.assertIn("Do not silently switch to DIRECT", workflow)
+
+    def test_verification_requires_current_complete_heuristic_probe_gate(self) -> None:
+        skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (VERIFY / "references" / "verify.md").read_text(encoding="utf-8")
+
+        combined = skill + workflow
+        self.assertIn("Heuristic Probe Result / Evidence", skill)
+        self.assertIn("Probe Completion: COMPLETE", combined)
+        self.assertIn("Authority Snapshot", combined)
+        self.assertIn("REQUIRED HEURISTIC PROBE RESULT MISSING", combined)
+        self.assertIn("HEURISTIC PROBE GATE INCOMPLETE", combined)
+        self.assertIn("HEURISTIC PROBE RESULT STALE", combined)
+        self.assertIn("`Material Findings: None` is not", combined)
+        self.assertIn("never satisfies an authored `Independent verification required: yes`", workflow)
+        self.assertNotIn("first verification", combined)
+        self.assertIn("normal delivery verification", combined)
+        for disposition in (
+            "REPRODUCED",
+            "CURRENT_READBACK_CONFIRMED",
+            "OUT_OF_SCOPE",
+            "UNATTRIBUTABLE",
+            "SUPERSEDED_BY_CURRENT_TARGET",
+        ):
+            self.assertIn(disposition, workflow)
 
     def test_verification_requires_semantic_contract_check_and_claim_sufficient_evidence(self) -> None:
         skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
@@ -143,22 +171,34 @@ class DeliverySubagentContractTests(unittest.TestCase):
 
         self.assertIn("Delivery defaults to `DIRECT`", continuation)
         self.assertIn("`ready-ticket-implement` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT", continuation)
+        self.assertIn("`ready-ticket-heuristic-probe` owns one exact Ready Ticket", continuation)
+        self.assertIn("`ready-ticket-heuristic-probe` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT", continuation)
         self.assertIn("`ready-ticket-verify` owns one exact Ready Ticket fresh verification", continuation)
         self.assertIn("`ready-ticket-verify` defaults to `DIRECT`", continuation)
         self.assertIn("only currently supported topology", continuation)
         self.assertIn("without issuing a second verdict", continuation)
-        self.assertIn("Do not pass `Delegated Worker: yes` from Adaptive", continuation)
+        self.assertIn("`Delegated Worker: yes` or `Delegated Probe Worker: yes`", continuation)
         self.assertIn("Select only a currently admissible Ticket", continuation)
+
+        implementation = continuation.index("## Implementation handoff")
+        probe = continuation.index("## Heuristic probe gate handoff")
+        verification = continuation.index("## Verification terminal routing")
+        self.assertLess(implementation, probe)
+        self.assertLess(probe, verification)
 
     def test_openai_metadata_matches_current_delivery_contracts(self) -> None:
         implement_yaml = (IMPLEMENT / "agents" / "openai.yaml").read_text(encoding="utf-8")
+        probe_yaml = (PROBE / "agents" / "openai.yaml").read_text(encoding="utf-8")
         verify_yaml = (VERIFY / "agents" / "openai.yaml").read_text(encoding="utf-8")
 
         self.assertIn("$ready-ticket-implement", implement_yaml)
         self.assertIn("directly implement", implement_yaml)
         self.assertIn("SUBAGENT only when I explicitly select it", implement_yaml)
+        self.assertIn("$ready-ticket-heuristic-probe", probe_yaml)
+        self.assertIn("run DIRECT by default", probe_yaml)
         self.assertIn("$ready-ticket-verify", verify_yaml)
         self.assertIn("default DIRECT mode", verify_yaml)
+        self.assertIn("current COMPLETE ready-ticket heuristic-probe handoff", verify_yaml)
         self.assertIn("semantically check", verify_yaml)
 
 
