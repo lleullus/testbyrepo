@@ -252,7 +252,7 @@ def ui_state():
                 activeTag: document.activeElement ? document.activeElement.tagName : null,
                 coarse: matchMedia('(pointer: coarse)').matches,
                 maxTouchPoints: navigator.maxTouchPoints,
-                fontSize: Number(document.querySelector('.font-size-status')?.textContent),
+                fontSize: Number(window.term.options.fontSize),
                 ctrlPressed: document.querySelector('.ctrl-button')?.getAttribute('aria-pressed') === 'true',
                 shiftPressed: document.querySelector('.shift-button')?.getAttribute('aria-pressed') === 'true',
                 fullscreen: Boolean(document.fullscreenElement),
@@ -293,11 +293,10 @@ try:
     results['initial'] = initial
     expected_labels = ['TAB', '⇧', '←', '↑', '↓', '→', 'ESC', 'CTRL', 'A−', 'A+', '⛶']
     assert initial['labels'] == expected_labels, initial
-    assert initial['rowCount'] == 2 and not initial['toolbarOverflow'], initial
-    assert initial['rowStates'][0]['labels'] == ['TAB', '⇧', '←', '↑', '↓', '→'], initial
-    assert initial['rowStates'][1]['labels'] == ['ESC', 'CTRL', 'A−', 'A+', '⛶'], initial
-    assert all(row['oneLine'] and not row['overflow'] for row in initial['rowStates']), initial
-    assert 72 <= initial['toolbarHeight'] <= 76, initial
+    assert initial['rowCount'] == 1 and not initial['toolbarOverflow'], initial
+    assert initial['rowStates'][0]['labels'] == expected_labels, initial
+    assert initial['rowStates'][0]['oneLine'] and not initial['rowStates'][0]['overflow'], initial
+    assert 30 <= initial['toolbarHeight'] <= 32, initial
     assert initial['toolbarBottom'] == initial['viewportHeight'] and initial['fullscreenButton'], initial
     assert initial['maxTouchPoints'] > 0, initial
     assert not initial['activeIsTextarea'] and not initial['shiftPressed'], initial
@@ -306,8 +305,8 @@ try:
     landscape = ui_state()
     results['landscape'] = landscape
     assert landscape['labels'] == expected_labels, landscape
-    assert landscape['rowCount'] == 2 and not landscape['toolbarOverflow'], landscape
-    assert all(row['oneLine'] and not row['overflow'] for row in landscape['rowStates']), landscape
+    assert landscape['rowCount'] == 1 and not landscape['toolbarOverflow'], landscape
+    assert landscape['rowStates'][0]['oneLine'] and not landscape['rowStates'][0]['overflow'], landscape
     assert landscape['toolbarBottom'] == landscape['viewportHeight'], landscape
     set_device(390, 844)
 
@@ -342,6 +341,29 @@ try:
     assert modifier_exclusive['shiftPressed'] and not modifier_exclusive['ctrlPressed'], modifier_exclusive
     tap('.shift-button')
     assert not ui_state()['shiftPressed'], ui_state()
+
+    tap('.ctrl-button')
+    assert ui_state()['ctrlPressed'], ui_state()
+    tap('.tab-button')
+    ctrl_after_tab = ui_state()
+    results['ctrlClearsOnTab'] = ctrl_after_tab
+    assert not ctrl_after_tab['ctrlPressed'] and not ctrl_after_tab['activeIsTextarea'], ctrl_after_tab
+    terminal_tap()
+    term_input('\x03')
+    time.sleep(0.1)
+
+    ctrl_after_arrows = {}
+    for selector in ('.arrow-left', '.arrow-up', '.arrow-down', '.arrow-right'):
+        tap('.ctrl-button')
+        assert ui_state()['ctrlPressed'], ui_state()
+        tap(selector)
+        state = ui_state()
+        ctrl_after_arrows[selector] = state['ctrlPressed']
+        assert not state['ctrlPressed'] and not state['activeIsTextarea'], (selector, state)
+        terminal_tap()
+        term_input('\x03')
+        time.sleep(0.1)
+    results['ctrlClearsOnArrows'] = ctrl_after_arrows
 
     tab_hex = capture_toolbar_bytes(lambda: tap('.tab-button'))
     shift_tab_hex = capture_toolbar_bytes(lambda: (tap('.shift-button'), tap('.tab-button')))
@@ -448,12 +470,12 @@ try:
     first_pid = pids[-1]
 
     terminal_tap()
-    tap('.fullscreen-group button')
+    tap('.fullscreen-button')
     time.sleep(0.4)
     full_on = ui_state()
     results['fullscreenEnter'] = full_on
     assert full_on['fullscreen'] and not full_on['activeIsTextarea'], full_on
-    tap('.fullscreen-group button')
+    tap('.fullscreen-button')
     time.sleep(0.4)
     full_off = ui_state()
     results['fullscreenExit'] = full_off

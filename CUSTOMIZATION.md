@@ -14,8 +14,9 @@ Maintain the custom ttyd 1.7.7 frontend used by the Android Web Terminal without
 ## Customized source
 
 - `html/src/components/terminal/index.tsx`
-  - two-row bottom toolbar: TAB / Shift / arrows plus ESC / CTRL / font-size / fullscreen
+  - single-row compact bottom toolbar: TAB / Shift / arrows / ESC / CTRL / font-size / fullscreen
   - Shift as a one-shot modifier for TAB and arrow keys
+  - CTRL clears when TAB or an arrow is used because Ctrl+TAB / Ctrl+arrow are not implemented
   - terminal blur before toolbar actions
   - keyboard-safe toolbar interaction
 - `html/src/components/terminal/xterm/index.ts`
@@ -24,13 +25,13 @@ Maintain the custom ttyd 1.7.7 frontend used by the Android Web Terminal without
   - TAB / Shift+Tab byte sequences
   - normal/application cursor-mode arrows and Shift+arrow sequences
 - `html/src/style/index.scss`
-  - compact two-row bottom toolbar layout
+  - compact single-row bottom toolbar layout sized to fit 390px portrait without horizontal scrolling
 - `html/src/template.html`
   - mobile viewport configuration
 - `staging/check_staging.py`
-  - portrait/landscape two-row UI and focus checks
+  - portrait/landscape single-row UI and focus checks
   - PTY byte checks for TAB, Shift+Tab, normal/application arrows and Shift+arrows
-  - CTRL, font resize and fullscreen regression checks
+  - CTRL cleanup on TAB/arrows plus CTRL, font resize and fullscreen regression checks
 - `staging/check_fresh_session.py`
   - fresh-session regression check
 
@@ -113,6 +114,7 @@ Toolbar interaction and terminal typing interaction must stay separate.
 - Terminal body tap: may focus xterm and summon the Android keyboard.
 - Shift is a toolbar-only one-shot modifier for TAB and arrow keys; terminal body tap clears it.
 - CTRL and Shift are mutually exclusive when arming modifiers.
+- TAB or an arrow clears an armed CTRL state; Ctrl+TAB and Ctrl+arrow are intentionally unsupported.
 - Arrow buttons must follow xterm's `applicationCursorKeysMode`; Shift+arrow uses xterm's modifier form.
 - `navigator.virtualKeyboard.hide()` may be used only as a best-effort helper; correct focus ownership is the primary mechanism.
 

@@ -76,107 +76,92 @@ export class Terminal extends Component<Props, State> {
                         this.blurTerminalAndHideKeyboard();
                     }}
                 >
-                    <div class="toolbar-row secondary-row">
-                        <div class="toolbar-group">
-                            <button class="toolbar-button tab-button" type="button" onClick={this.sendTab}>
-                                TAB
-                            </button>
-                            <button
-                                class={
-                                    shiftArmed ? 'toolbar-button shift-button active' : 'toolbar-button shift-button'
-                                }
-                                type="button"
-                                aria-label="Shift"
-                                aria-pressed={shiftArmed}
-                                onClick={this.toggleShift}
-                            >
-                                ⇧
-                            </button>
-                        </div>
-                        <div class="toolbar-group navigation-group">
-                            <button
-                                class="toolbar-button arrow-button arrow-left"
-                                type="button"
-                                aria-label="Arrow left"
-                                onClick={() => this.sendArrow('left')}
-                            >
-                                ←
-                            </button>
-                            <button
-                                class="toolbar-button arrow-button arrow-up"
-                                type="button"
-                                aria-label="Arrow up"
-                                onClick={() => this.sendArrow('up')}
-                            >
-                                ↑
-                            </button>
-                            <button
-                                class="toolbar-button arrow-button arrow-down"
-                                type="button"
-                                aria-label="Arrow down"
-                                onClick={() => this.sendArrow('down')}
-                            >
-                                ↓
-                            </button>
-                            <button
-                                class="toolbar-button arrow-button arrow-right"
-                                type="button"
-                                aria-label="Arrow right"
-                                onClick={() => this.sendArrow('right')}
-                            >
-                                →
-                            </button>
-                        </div>
-                    </div>
-                    <div class="toolbar-row primary-row">
-                        <div class="toolbar-group">
-                            <button class="toolbar-button escape-button" type="button" onClick={this.sendEscape}>
-                                ESC
-                            </button>
-                            <button
-                                class={ctrlArmed ? 'toolbar-button ctrl-button active' : 'toolbar-button ctrl-button'}
-                                type="button"
-                                aria-pressed={ctrlArmed}
-                                onClick={this.toggleCtrl}
-                            >
-                                {ctrlArmed ? 'CTRL●' : 'CTRL'}
-                            </button>
-                        </div>
-                        <div class="toolbar-group font-group">
-                            <button
-                                class="toolbar-button font-decrease-button"
-                                type="button"
-                                onClick={() => this.changeFontSize(-1)}
-                            >
-                                A−
-                            </button>
-                            <span class="font-size-status" aria-label={`Font size ${fontSize} pixels`}>
-                                {fontSize}
-                            </span>
-                            <button
-                                class="toolbar-button font-increase-button"
-                                type="button"
-                                onClick={() => this.changeFontSize(1)}
-                            >
-                                A+
-                            </button>
-                        </div>
-                        <div class="toolbar-group fullscreen-group">
-                            <button
-                                class={
-                                    isFullscreen
-                                        ? 'toolbar-button fullscreen-button active'
-                                        : 'toolbar-button fullscreen-button'
-                                }
-                                type="button"
-                                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-                                title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-                                aria-pressed={isFullscreen}
-                                onClick={this.toggleFullscreen}
-                            >
-                                ⛶
-                            </button>
-                        </div>
+                    <div class="toolbar-row">
+                        <button class="toolbar-button tab-button" type="button" onClick={this.sendTab}>
+                            TAB
+                        </button>
+                        <button
+                            class={shiftArmed ? 'toolbar-button shift-button active' : 'toolbar-button shift-button'}
+                            type="button"
+                            aria-label="Shift"
+                            aria-pressed={shiftArmed}
+                            onClick={this.toggleShift}
+                        >
+                            ⇧
+                        </button>
+                        <button
+                            class="toolbar-button arrow-button arrow-left"
+                            type="button"
+                            aria-label="Arrow left"
+                            onClick={() => this.sendArrow('left')}
+                        >
+                            ←
+                        </button>
+                        <button
+                            class="toolbar-button arrow-button arrow-up"
+                            type="button"
+                            aria-label="Arrow up"
+                            onClick={() => this.sendArrow('up')}
+                        >
+                            ↑
+                        </button>
+                        <button
+                            class="toolbar-button arrow-button arrow-down"
+                            type="button"
+                            aria-label="Arrow down"
+                            onClick={() => this.sendArrow('down')}
+                        >
+                            ↓
+                        </button>
+                        <button
+                            class="toolbar-button arrow-button arrow-right"
+                            type="button"
+                            aria-label="Arrow right"
+                            onClick={() => this.sendArrow('right')}
+                        >
+                            →
+                        </button>
+                        <button class="toolbar-button escape-button" type="button" onClick={this.sendEscape}>
+                            ESC
+                        </button>
+                        <button
+                            class={ctrlArmed ? 'toolbar-button ctrl-button active' : 'toolbar-button ctrl-button'}
+                            type="button"
+                            aria-pressed={ctrlArmed}
+                            onClick={this.toggleCtrl}
+                        >
+                            CTRL
+                        </button>
+                        <button
+                            class="toolbar-button font-decrease-button"
+                            type="button"
+                            aria-label={`Decrease font size; current ${fontSize} pixels`}
+                            onClick={() => this.changeFontSize(-1)}
+                        >
+                            A−
+                        </button>
+                        <button
+                            class="toolbar-button font-increase-button"
+                            type="button"
+                            aria-label={`Increase font size; current ${fontSize} pixels`}
+                            onClick={() => this.changeFontSize(1)}
+                        >
+                            A+
+                        </button>
+                        <button
+                            class={
+                                isFullscreen
+                                    ? 'toolbar-button fullscreen-button active'
+                                    : 'toolbar-button fullscreen-button'
+                            }
+                            type="button"
+                            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                            title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                            aria-pressed={isFullscreen}
+                            onClick={this.toggleFullscreen}
+                        >
+                            ⛶
+                        </button>
                     </div>
                 </div>
                 <div
@@ -210,6 +195,10 @@ export class Terminal extends Component<Props, State> {
         if (this.state.shiftArmed) this.setState({ shiftArmed: false });
     }
 
+    private clearCtrlArmed() {
+        if (this.state.ctrlArmed) this.xterm.setCtrlArmed(false);
+    }
+
     @bind
     private handleTerminalPointerDown() {
         this.clearShiftArmed();
@@ -220,6 +209,7 @@ export class Terminal extends Component<Props, State> {
         this.blurTerminalAndHideKeyboard();
         const shifted = this.state.shiftArmed;
         this.clearShiftArmed();
+        this.clearCtrlArmed();
         this.xterm.sendTab(shifted);
     }
 
@@ -235,6 +225,7 @@ export class Terminal extends Component<Props, State> {
         this.blurTerminalAndHideKeyboard();
         const shifted = this.state.shiftArmed;
         this.clearShiftArmed();
+        this.clearCtrlArmed();
         this.xterm.sendArrow(direction, shifted);
     }
 
