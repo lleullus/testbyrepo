@@ -199,8 +199,14 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn("`ready-ticket-heuristic-probe` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT", continuation)
         self.assertIn("`ready-ticket-verify` owns one exact Ready Ticket fresh verification", continuation)
         self.assertIn("`ready-ticket-verify` defaults to `DIRECT`", continuation)
-        self.assertIn("only currently supported topology", continuation)
-        self.assertIn("`Delegated Worker: yes` or `Delegated Probe Worker: yes`", continuation)
+        self.assertIn("uses `SUBAGENT` only when the current user explicitly selects SUBAGENT for that exact verification stage", continuation)
+        self.assertIn("exactly one delegated verifier", continuation)
+        self.assertIn("## Invocation-local delivery checkpoint continuation", continuation)
+        self.assertIn("PARENT CONTINUATION DECISION", continuation)
+        self.assertIn("Decision: CONTINUE | STEER | STOP", continuation)
+        self.assertIn("Outer Main does not issue a second verifier verdict", continuation)
+        self.assertIn("`Delegated Verifier: yes`", continuation)
+        self.assertIn("Adaptive delivery routing and verification triage wait for the exact terminal owner result", continuation)
         self.assertIn("`Verification: yes` includes the required current heuristic-probe gate", continuation)
         self.assertNotIn("Auditor Count", continuation)
         self.assertNotIn("AC Runtime Auditor", continuation)
@@ -341,6 +347,9 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn('Does the disputed requirement have current product authority', triage)
         self.assertIn("A hard or expensive requirement is **not** overreach", triage)
         self.assertIn("No retroactive PASS", triage)
+        self.assertIn("Classification begins only from the exact terminal `ready-ticket-verify` result", triage)
+        self.assertIn("scenario checkpoint, material-turn checkpoint, pre-progression checkpoint", triage)
+        self.assertIn("is nonterminal and cannot by itself receive", triage)
 
     def test_companion_artifacts_do_not_replace_canonical_artifacts(self) -> None:
         artifact = (ADAPTIVE / "references" / "05-artifact-contract.md").read_text(
@@ -351,6 +360,11 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn("ADAPTIVE-PLANNING-TRACE.md", artifact)
         self.assertIn("Do not add persistent decision IDs", artifact)
         self.assertIn("never add a fake direct-user approval quote", artifact)
+        self.assertIn("Implementation/verification checkpoint reports and Parent continuation decisions", artifact)
+        self.assertIn("invocation-local delivery messages", artifact)
+        self.assertIn("not canonical IIS artifacts", artifact)
+        self.assertIn("checkpoint IDs/ledgers", artifact)
+        self.assertIn("do not persist the checkpoint itself", artifact)
 
     def test_live_installed_skill_matches_canonical_source(self) -> None:
         self.assertTrue(INSTALLED.is_dir(), INSTALLED)

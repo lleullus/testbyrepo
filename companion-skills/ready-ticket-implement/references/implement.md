@@ -20,26 +20,46 @@ Top-level invocation은 `DIRECT`가 기본이다. 현재 사용자가 이 exact 
 
 `SUBAGENT`에서 Outer Main은:
 
-1. 한 명의 non-blocking implementation worker를 시작할 capability, 같은 Project Root 접근, parent-directed message와 terminal result capability를 확인한다.
+1. 한 명의 implementation worker를 시작할 capability, 같은 Project Root 접근, checkpoint return/continuation과 terminal result capability를 확인한다.
 2. exact Ticket, Project Root, 추가 사용자 지시와 `Delegated Worker: yes`를 하나의 완전한 assignment에 담는다.
 3. worker assignment에 exact targets, Scope/Non-Goals, 요구되는 observable evidence와 다음 communication contract를 포함한다.
-4. worker의 handoff/turn report를 수신하고, 새로운 사용자 지시나 decision-critical evidence가 있을 때만 steering한다.
+4. worker의 checkpoint report를 수신하고 `CONTINUE | STEER | STOP` 중 하나의 bounded continuation decision을 반환한다.
 5. terminal `IMPLEMENT RESULT`를 수신해 exact Ticket identity와 필수 terminal fields를 확인한 뒤 caller-facing 결과를 작성한다.
 
 ```text
 # Communication
 
-- Contract preflight가 닫힌 뒤 첫 source-file 변경 전에 direct parent에게 IMPLEMENTATION HANDOFF REPORT를 non-blocking으로 보낸다.
-- 보고 후 acknowledgement나 approval을 기다리지 않고 안전한 구현을 계속한다.
+- Contract preflight가 닫힌 뒤 첫 source-file 변경 전에 direct parent에게 IMPLEMENTATION HANDOFF REPORT를 PRE_ACTION checkpoint로 반환한다.
+- Parent continuation decision 전에는 Protected next phase인 FIRST_SOURCE_FILE_CHANGE를 넘지 않는다.
 - Initial interpretation, authority mapping, change surface 또는 evidence strategy가 material하게 바뀌는 경우에만 IMPLEMENTATION TURN REPORT를 보낸다.
 - 정상 진행, 단순 tool activity, 일시적 test failure, 스타일 또는 내부 리팩터링은 보고하지 않는다.
-- Parent/user authority가 필요한 unresolved decision에서는 live wait를 만들지 말고 evidence와 exact blocker를 포함한 terminal BLOCKED result를 반환한다.
+- Material-turn report 뒤에는 새 방향에 의존하는 작업을 Parent continuation decision 전에 진행하지 않는다.
+- Parent/user authority가 필요한 unresolved decision이 bounded continuation으로 해결될 수 없으면 evidence와 exact blocker를 포함한 terminal BLOCKED result를 반환한다.
 - 성공 또는 blocker는 반드시 terminal IMPLEMENT RESULT로 끝낸다.
 ```
 
 필요 capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 보고한다. `DIRECT`로 자동 전환하지 않는다.
 
 `Delegated Worker: yes`를 받은 worker는 아래 implementation core를 직접 수행하며 다시 위임하지 않는다.
+
+### SUBAGENT checkpoint continuation
+
+`SUBAGENT` checkpoint는 logical phase boundary다. required live-wait primitive, direct-user approval gate 또는 durable workflow state가 아니다.
+
+Checkpoint에서는 다음을 지킨다.
+
+1. delegated owner는 완전한 checkpoint report를 Parent Main에게 반환한다.
+2. report에 적힌 `Protected next phase`를 Parent decision 전에 넘어가지 않는다.
+3. Parent Main은 정확히 하나를 반환한다.
+   - `CONTINUE`: 현재 방향으로 보호된 다음 phase 진입을 허용한다.
+   - `STEER`: exact authority/evidence anchor를 가진 bounded correction을 전달한다. decision-critical 내용이 바뀌면 worker는 같은 checkpoint를 갱신해 다시 반환한다.
+   - `STOP`: 보호된 다음 phase로 진입하지 않고 기존 `BLOCKED | PARTIAL` owner terminal 형식으로 pass를 닫는다.
+4. 동일 Ticket과 implementation stage에는 한 시점에 정확히 하나의 delegated owner lane만 존재한다.
+5. 동일한 checkpoint를 material delta 없이 반복하거나 periodic progress checkpoint로 사용하지 않는다.
+6. checkpoint continuation capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 반환한다.
+7. `DIRECT`로 자동 fallback하지 않는다.
+
+Continuation은 특정 harness API를 요구하지 않는다. live child session의 yield/reply, 동일 resumable child session의 return/resume, 또는 이전 child가 inactive임을 확인한 attributable continuation invocation으로 구현할 수 있다. Attributable continuation은 exact Ticket, Project Root, current working tree/target identity, 이전 checkpoint payload, Parent decision과 변경 이후 baseline/currentness를 다시 확인하고 이전 worker를 명시적으로 supersede한다. 핵심 규칙은 `Parent decision 전에는 protected next phase로 넘어가지 않는다`이다.
 
 ## 3. Contract preflight
 
@@ -58,23 +78,30 @@ Top-level invocation은 `DIRECT`가 기본이다. 현재 사용자가 이 exact 
 
 ## 4. Implementation handoff report
 
-Delegated worker는 contract preflight 직후, 첫 source-file 변경 전에 다음 보고를 direct parent에게 non-blocking으로 보낸다.
+Delegated worker는 contract preflight 직후, 첫 source-file 변경 전에 다음 보고를 direct parent에게 `PRE_ACTION` checkpoint로 반환한다.
 
 ```text
 IMPLEMENTATION HANDOFF REPORT
 
 Ticket:
+Execution Mode: SUBAGENT
+Worker identity:
 Baseline:
 Observable product outcome:
 Authority / Verification-flow anchors:
 Expected change surface:
 Authoritative readback / self-check target:
+Scope / Non-Goals boundary:
 Material uncertainty: None | <exact uncertainty>
+
+Checkpoint: PRE_ACTION
+Protected next phase: FIRST_SOURCE_FILE_CHANGE
+Checkpoint state: PARENT_CONTINUATION_REQUIRED
 ```
 
-이 보고는 approval gate가 아니다. Outer Main이 실제 material contradiction이나 최신 사용자 지시를 발견하면 running worker에게 steering할 수 있지만, routine acknowledgement는 필요하지 않다.
+이 checkpoint를 반환한 worker는 Parent decision 전에는 source 파일을 변경하지 않는다. Outer Main은 exact Ticket/assignment identity, observable outcome의 의미 보존, Scope/Non-Goals와 change surface, authoritative readback의 결정력, 명백한 authority mismatch나 unresolved blocker만 bounded하게 검토한다. Outer Main이 구현 방법을 다시 설계하거나 코드를 직접 구현하지 않는다.
 
-`DIRECT`에서는 같은 내용을 implementation preflight record로 유지하되 parent message는 `NOT APPLICABLE`이다.
+`DIRECT`에서는 같은 내용을 implementation preflight record로 유지하되 `Checkpoint: NOT_APPLICABLE`이고 Parent continuation은 없다.
 
 ## 5. 구현
 
@@ -129,11 +156,16 @@ Previous direction:
 New direct evidence:
 Material change:
 Affected flow / authority / scope:
-Safe work continuing:
-Parent action needed: NONE | STEERING | USER/AUTHORITY DECISION
+Current working-tree state:
+Proposed new direction:
+
+Checkpoint: MATERIAL_TURN
+Protected next phase:
+Checkpoint state: PARENT_CONTINUATION_REQUIRED
+Work permitted before continuation: NONE
 ```
 
-`Parent action needed: NONE | STEERING`이면 safe work를 계속한다. 사용자나 parent authority가 없이는 진행할 수 없으면 추가 대기를 만들지 않고 terminal `Completion: BLOCKED`로 닫는다.
+보고를 반환한 뒤에는 새 방향에 의존하는 작업을 계속하지 않는다. Parent가 `CONTINUE`하면 제안 방향으로 진행한다. `STEER`로 decision-critical 내용이 바뀌면 같은 `MATERIAL_TURN` checkpoint를 갱신해 다시 반환한다. `STOP` 또는 bounded continuation으로 해결할 수 없는 authority blocker면 terminal `Completion: BLOCKED` 또는 해당 owner terminal 형식으로 닫는다.
 
 ## 7. Completion self-check
 
@@ -180,6 +212,9 @@ Heuristic-probe / verification evidence handoff:
 Tests/runtime evidence:
 Implementation handoff report: SENT | NOT APPLICABLE
 Material turn reports: None | <concise list>
+Checkpoint decisions:
+- PRE_ACTION: CONTINUE | STEERED_THEN_CONTINUE | STOP | NOT_APPLICABLE
+- MATERIAL_TURN: None | <turn -> decision>
 External conditions / limitations:
 Working-tree scope:
 Completion: COMPLETE | BLOCKED | PARTIAL

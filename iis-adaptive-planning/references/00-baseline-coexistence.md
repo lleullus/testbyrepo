@@ -58,6 +58,8 @@ The Run Contract is not a Baseline artifact, new product-authority layer, or dur
 
 The Ready Ticket Set remains the terminal **IIS Planning** product. Under explicit Adaptive activation, that ownership STOP returns the Set and closed Run Contract to Outer Main, which applies the independently closed Implementation and Verification fields. When Verification is enabled, the current delivery contract requires heuristic probing before final verification; this does not create a third Run Contract field or extend IIS Planning authority into delivery, and the owner STOP is not an invocation STOP.
 
+Delegated delivery continuation checkpoints are internal phase-release messages under already established user authority. They are not the `/승인게이트` Run Contract Approval Gate, direct-user approval, a new Run Contract field, or a Mandate/Scope/Spec/Ticket approval gate. They do not change the Baseline artifact/status contract or create durable workflow state.
+
 A broader `NAMED_REQUIRED_ITEMS_DELIVERED`, `BOUNDED_OUTCOME_SATISFIED`, or `MANDATE_OUTCOME_SATISFIED` Run Completion Boundary also does not turn one IIS planning cycle into a multi-Increment workflow. After a current Increment is fully delivered, Adaptive performs a fresh success re-entry; only when the active predicate is still unsatisfied and the Mandate ceiling permits it does it start a new planning cycle and return to Scope Shaper for one new current Increment from actual state.
 
 `CURRENT_INCREMENT_IMPLEMENTED` is an implementation-only outer terminal. It does not mark Tickets `done`, claim independent verification, or authorize success re-entry into another Increment.

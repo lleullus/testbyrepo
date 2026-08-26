@@ -60,22 +60,31 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("실패를 `DIRECT`로 자동 대체하지 않는다", skill)
         self.assertIn("정확히 한 명의 implementation worker", skill)
         self.assertIn("Top-level invocation은 `DIRECT`가 기본", workflow)
-        self.assertIn("한 명의 non-blocking implementation worker", workflow)
+        self.assertIn("한 명의 implementation worker", workflow)
+        self.assertIn("checkpoint return/continuation", workflow)
         self.assertIn("자동 전환이나 실패 후 fallback은 없다", workflow)
 
-    def test_implementation_reports_are_early_non_blocking_and_event_driven(self) -> None:
+    def test_implementation_reports_are_checkpointed_and_event_driven(self) -> None:
         workflow = (IMPLEMENT / "references" / "implement.md").read_text(encoding="utf-8")
 
         handoff = workflow.index("IMPLEMENTATION HANDOFF REPORT")
         implementation = workflow.index("## 5. 구현")
         self.assertLess(handoff, implementation)
         self.assertIn("첫 source-file 변경 전에", workflow)
-        self.assertIn("approval gate가 아니다", workflow)
-        self.assertIn("acknowledgement나 approval을 기다리지 않고", workflow)
+        self.assertIn("Checkpoint: PRE_ACTION", workflow)
+        self.assertIn("Protected next phase: FIRST_SOURCE_FILE_CHANGE", workflow)
+        self.assertIn("Parent decision 전에는 source 파일을 변경하지 않는다", workflow)
+        self.assertIn("logical phase boundary", workflow)
+        self.assertIn("required live-wait primitive, direct-user approval gate 또는 durable workflow state가 아니다", workflow)
+        self.assertIn("CONTINUE", workflow)
+        self.assertIn("STEER", workflow)
+        self.assertIn("STOP", workflow)
         self.assertIn("IMPLEMENTATION TURN REPORT", workflow)
         self.assertIn("초기 handoff의 방향을 material하게 바꾸는 경우에만", workflow)
         self.assertIn("정상 진행, 단순 tool activity", workflow)
-        self.assertIn("live wait를 만들지 말고", workflow)
+        self.assertIn("Work permitted before continuation: NONE", workflow)
+        self.assertIn("periodic progress checkpoint로 사용하지 않는다", workflow)
+        self.assertIn("Checkpoint: NOT_APPLICABLE", workflow)
 
     def test_implementation_preserves_delivery_authority_boundaries(self) -> None:
         skill = (IMPLEMENT / "SKILL.md").read_text(encoding="utf-8")
@@ -90,19 +99,24 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("Heuristic-probe / verification evidence handoff", workflow)
         self.assertIn("Completion: COMPLETE | BLOCKED | PARTIAL", workflow)
 
-    def test_verification_is_direct_first_and_main_owns_verdict(self) -> None:
+    def test_verification_is_direct_first_with_explicit_checkpointed_subagent(self) -> None:
         skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
         workflow = (VERIFY / "references" / "verify.md").read_text(encoding="utf-8")
 
         self.assertIn("Execution defaults to `DIRECT`", skill)
-        self.assertIn("only currently supported verification topology", skill)
-        self.assertIn("The current Main is the sole verifier", skill)
-        self.assertIn("does not delegate this verification authority", skill)
-        self.assertIn("DIRECT VERIFIER REQUIRED", skill)
-        self.assertIn("SUBAGENT VERIFICATION UNSUPPORTED", skill)
+        self.assertIn("current user explicitly selects `SUBAGENT` for this exact verification stage", skill)
+        self.assertIn("Delegated Verifier: yes", skill)
+        self.assertIn("Exactly one delegated verifier", skill)
+        self.assertIn("does not split ACs or flows", skill)
+        self.assertIn("verifier roster", skill)
+        self.assertIn("run parallel verifiers", skill)
+        self.assertIn("delegate again", skill)
+        self.assertIn("SUBAGENT CAPABILITY UNAVAILABLE", skill)
+        self.assertIn("fall back from failed explicit `SUBAGENT` to `DIRECT`", skill)
         self.assertIn("Execution defaults to `DIRECT`", workflow)
-        self.assertIn("does not delegate verification", workflow)
-        self.assertIn("Do not silently switch to DIRECT", workflow)
+        self.assertIn("Delegated Verifier: yes", workflow)
+        self.assertIn("Exactly one delegated verifier", workflow)
+        self.assertIn("never auto-fallback to `DIRECT`", workflow)
 
     def test_verification_requires_current_complete_heuristic_probe_gate(self) -> None:
         skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
@@ -142,17 +156,22 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertNotIn("ADEQUATE | INADEQUATE | UNRESOLVED", workflow)
         self.assertNotIn("Acceptance-contract adequacy gate", skill)
 
-    def test_verification_scenario_report_and_material_turns_are_direct(self) -> None:
+    def test_verification_scenario_report_and_material_turns_are_mode_specific(self) -> None:
         workflow = (VERIFY / "references" / "verify.md").read_text(encoding="utf-8")
 
         report = workflow.index("## 8. Scenario report")
         runtime = workflow.index("## 9. Evidence sufficiency and execution")
         self.assertLess(report, runtime)
         self.assertIn("Before the first product/runtime action", workflow)
-        self.assertIn("informational, not an approval gate", workflow)
+        self.assertIn("Checkpoint: NOT_APPLICABLE | PRE_RUNTIME", workflow)
+        self.assertIn("In `DIRECT`, the report is informational and has no Parent continuation", workflow)
+        self.assertIn("`PRE_RUNTIME` is mandatory", workflow)
+        self.assertIn("FIRST_PRODUCT_OR_RUNTIME_ACTION", workflow)
         self.assertIn("VERIFICATION TURN REPORT", workflow)
         self.assertIn("only when direct evidence creates a material change", workflow)
-        self.assertIn("waiting in a live suspended state", workflow)
+        self.assertIn("Checkpoint: NOT_APPLICABLE | MATERIAL_TURN", workflow)
+        self.assertIn("Work permitted before continuation: NONE when SUBAGENT", workflow)
+        self.assertIn("not periodic progress", workflow)
 
     def test_verification_preserves_full_adjudication_and_done_guard(self) -> None:
         skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
@@ -166,6 +185,26 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("Ticket Progression: COMPLETED | NOT APPLICABLE | FAILED", workflow)
         self.assertIn("Do not automatically edit source", workflow)
 
+    def test_verification_pre_progression_checkpoint_precedes_done_and_is_verified_only(self) -> None:
+        workflow = (VERIFY / "references" / "verify.md").read_text(encoding="utf-8")
+
+        checkpoint = workflow.index("VERIFICATION PRE-PROGRESSION CHECKPOINT")
+        guarded_write = workflow.index("Perform one guarded targeted replacement")
+        self.assertLess(checkpoint, guarded_write)
+        self.assertIn("Candidate whole-Ticket verdict: VERIFIED", workflow)
+        self.assertIn("Checkpoint: PRE_PROGRESSION", workflow)
+        self.assertIn("FINAL_VERIFIED_AND_GUARDED_READY_TO_DONE", workflow)
+        self.assertIn("rechecks currentness and performs the existing guarded progression", workflow)
+        self.assertIn("`FAILED` and `INCONCLUSIVE` candidates have no `PRE_PROGRESSION` checkpoint", workflow)
+        self.assertIn("Parent does not rerun runtime verification or issue its own verdict", workflow)
+        self.assertIn("Parent may use `STOP` at `PRE_PROGRESSION` only when", workflow)
+        self.assertIn("emits the existing terminal `READY TICKET VERIFICATION RESULT`", workflow)
+        self.assertIn("`Verification Verdict: INCONCLUSIVE`", workflow)
+        self.assertIn("`Ticket Progression: NOT APPLICABLE`", workflow)
+        self.assertIn("`Ticket status after verification: ready`", workflow)
+        self.assertIn("it performs no `done` mutation", workflow)
+        self.assertIn("Parent Main does not issue or substitute that verdict", workflow)
+
     def test_adaptive_routes_direct_first_delivery_without_auto_topology_switch(self) -> None:
         continuation = ADAPTIVE_CONTINUATION.read_text(encoding="utf-8")
 
@@ -175,9 +214,17 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("`ready-ticket-heuristic-probe` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT", continuation)
         self.assertIn("`ready-ticket-verify` owns one exact Ready Ticket fresh verification", continuation)
         self.assertIn("`ready-ticket-verify` defaults to `DIRECT`", continuation)
-        self.assertIn("only currently supported topology", continuation)
-        self.assertIn("without issuing a second verdict", continuation)
-        self.assertIn("`Delegated Worker: yes` or `Delegated Probe Worker: yes`", continuation)
+        self.assertIn("uses `SUBAGENT` only when the current user explicitly selects SUBAGENT for that exact verification stage", continuation)
+        self.assertIn("exactly one delegated verifier", continuation)
+        self.assertIn("Outer Main does not issue a second verifier verdict", continuation)
+        self.assertIn("PARENT CONTINUATION DECISION", continuation)
+        self.assertIn("Decision: CONTINUE | STEER | STOP", continuation)
+        self.assertIn("nonterminal invocation-local delivery message", continuation)
+        self.assertIn("verification triage wait for the exact terminal owner result", continuation)
+        self.assertIn("never falls back between topologies after a capability failure", continuation)
+        self.assertIn("`Delegated Worker: yes`, `Delegated Probe Worker: yes`, or `Delegated Verifier: yes`", continuation)
+        self.assertIn("Do not forward a checkpoint as a user approval prompt.", continuation)
+        self.assertIn("Do not create a checkpoint ledger or persistent state.", continuation)
         self.assertIn("Select only a currently admissible Ticket", continuation)
 
         implementation = continuation.index("## Implementation handoff")
@@ -200,6 +247,9 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("default DIRECT mode", verify_yaml)
         self.assertIn("current COMPLETE ready-ticket heuristic-probe handoff", verify_yaml)
         self.assertIn("semantically check", verify_yaml)
+        self.assertIn("explicitly select SUBAGENT", verify_yaml)
+        self.assertIn("PRE_RUNTIME", verify_yaml)
+        self.assertIn("PRE_PROGRESSION", verify_yaml)
 
 
 if __name__ == "__main__":

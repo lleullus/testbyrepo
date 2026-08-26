@@ -36,6 +36,8 @@ Carry the closed form in the current request/context and pass only its decision-
 
 A `READY TICKET HEURISTIC PROBE RESULT` is likewise an invocation-local delivery handoff, not a canonical IIS artifact or required durable companion artifact. Do not create project-local `HEURISTIC-PROBE-RESULT.md`, probe ledger, worker roster, evidence cache, probe state database, or retained workflow record merely to carry the gate. Preserve only the current result in the active delivery context. If a material probe finding is later adjudicated by the verifier and changes the Adaptive corrective route, the existing verification-triage trace may cite that evidence; routine finding-free probes, lane inventories, worker/model rosters and probe progress are not Adaptive provenance events.
 
+Implementation/verification checkpoint reports and Parent continuation decisions are also invocation-local delivery messages. They are not canonical IIS artifacts, Adaptive companion artifacts, trace events by default, progress heartbeats, checkpoint IDs/ledgers, or workflow state. Preserve them only in the active owner/Parent continuation context. If a checkpoint exposes a material authority fact that later changes terminal routing, record the resulting route only after the exact terminal owner result exists; do not persist the checkpoint itself as new provenance machinery.
+
 ## Companion provenance artifacts
 
 Use companion artifacts only to preserve Adaptive-specific authority/provenance that does not belong in canonical IIS schema.

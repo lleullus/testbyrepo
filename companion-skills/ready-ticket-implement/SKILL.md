@@ -1,6 +1,6 @@
 ---
 name: ready-ticket-implement
-description: "Implement one existing IIS Ready Ticket and perform implementer self-check. Use for exact Ready Ticket delivery. Execution defaults to DIRECT; SUBAGENT execution is supported only when the current user explicitly selects it. This skill never performs or adjudicates the separate verification authority."
+description: "Implement one existing IIS Ready Ticket and perform implementer self-check. Use for exact Ready Ticket delivery. Execution defaults to DIRECT; SUBAGENT execution is supported only when the current user explicitly selects it and is mandatory checkpointed execution. This skill never performs or adjudicates the separate verification authority."
 ---
 
 # Ready Ticket Implement
@@ -29,14 +29,14 @@ Top-level 기본 실행 모드는 `DIRECT`다.
 
 `SUBAGENT`에서는 다음을 지킨다.
 
-1. 현재 host가 한 명의 non-blocking child worker, 같은 Project Root 접근, parent-directed message와 terminal result를 제공할 수 있는지 확인한다.
+1. 현재 host가 한 명의 delegated child worker, 같은 Project Root 접근, checkpoint return/continuation과 terminal result를 제공할 수 있는지 확인한다.
 2. exact Ticket, Project Root, 추가 사용자 지시와 `Delegated Worker: yes`를 worker assignment에 포함한다.
 3. `Delegated Worker: yes`를 받은 worker는 이 스킬을 다시 위임하지 않고 implementation core를 직접 수행한다.
-4. worker를 시작할 수 없거나 필요한 parent-message/terminal-result capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 보고한다.
+4. worker를 시작할 수 없거나 필요한 checkpoint return/continuation/terminal-result capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 보고한다.
 5. 실패를 `DIRECT`로 자동 대체하지 않는다.
 6. 한 Ticket을 여러 implementation worker에게 나누거나 worker roster, queue, retry ledger 또는 별도 review lifecycle을 만들지 않는다.
 
-`DIRECT`에서는 현재 Main이 아래 implementation core를 직접 수행한다. `SUBAGENT`에서는 Outer Main이 assignment, current user instruction 전달, worker의 handoff/turn report 수신, 필요한 steering, terminal result 수신과 caller-facing fan-in을 소유한다. 구현 의미와 self-check는 delegated worker가 소유하며, Outer Main은 별도의 구현자로 중복 행동하지 않는다.
+`DIRECT`에서는 현재 Main이 아래 implementation core를 직접 수행한다. `SUBAGENT`에서는 Outer Main이 assignment, current user instruction 전달, worker의 checkpoint report 수신, `CONTINUE | STEER | STOP` continuation decision, terminal result 수신과 caller-facing fan-in을 소유한다. 구현 의미와 self-check는 delegated worker가 소유하며, Outer Main은 별도의 구현자로 중복 행동하지 않는다.
 
 ## Ready Ticket 상태 게이트
 
@@ -106,11 +106,11 @@ Verification flow가 1차 제품 관찰 단위다. 한 flow가 여러 AC를 판�
 
 ## 보고와 종료
 
-Delegated worker는 contract preflight 뒤 첫 source-file 변경 전에 `IMPLEMENTATION HANDOFF REPORT`를 direct parent에게 non-blocking으로 보낸다. 보고 후 승인이나 acknowledgement를 기다리지 않고 안전한 구현을 계속한다.
+Delegated worker는 contract preflight 뒤 첫 source-file 변경 전에 `IMPLEMENTATION HANDOFF REPORT`를 `PRE_ACTION` checkpoint로 direct parent에게 반환한다. Parent decision 전에는 `FIRST_SOURCE_FILE_CHANGE` 보호 구간으로 넘어가지 않는다.
 
-구현 방향, authority 해석, change surface 또는 evidence 전략이 material하게 바뀌는 경우에만 `IMPLEMENTATION TURN REPORT`를 보낸다. 정상 진행, 일시적 test failure, 스타일 또는 단순한 내부 리팩터링은 중간 보고 사유가 아니다.
+구현 방향, authority 해석, change surface 또는 evidence 전략이 material하게 바뀌는 경우에만 `IMPLEMENTATION TURN REPORT`를 `MATERIAL_TURN` checkpoint로 반환한다. 정상 진행, 일시적 test failure, 스타일 또는 단순한 내부 리팩터링은 중간 보고 사유가 아니며 periodic progress checkpoint를 만들지 않는다.
 
-Parent/user authority가 실제로 필요한 unresolved decision에 도달하면 live wait state를 만들지 않는다. 확보한 evidence와 정확한 blocker를 포함해 `Completion: BLOCKED` terminal result를 반환한다.
+Checkpoint는 logical phase boundary이며 required live-wait primitive, direct-user approval gate 또는 durable workflow state가 아니다. Parent는 `CONTINUE | STEER | STOP` 중 정확히 하나를 반환한다. checkpoint continuation capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 반환하고 `DIRECT`로 자동 fallback하지 않는다. Parent/user authority가 실제로 필요한 unresolved decision에 도달해 bounded continuation으로 해결할 수 없으면 확보한 evidence와 정확한 blocker를 포함해 `Completion: BLOCKED` terminal result를 반환한다.
 
 `IMPLEMENT` 완료에는 다음이 필요하다.
 

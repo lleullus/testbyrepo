@@ -2,19 +2,45 @@
 
 ## 1. Direct-first invocation
 
-Execution defaults to `DIRECT`, and `DIRECT` is the only currently supported verification topology. The current Main performs the verifier role for one exact Ticket and does not delegate verification, AC ownership or runtime verification to child workers.
+Execution defaults to `DIRECT`.
 
-Before verification:
+- `DIRECT`: the current Main owns the complete verifier core for one exact Ticket and current direct behavior remains unchanged.
+- `SUBAGENT`: use only when the current user explicitly selects it for this exact verification stage. Exactly one delegated verifier owns the whole verifier core; do not split ACs/flows, create a verifier roster, run parallel verifiers or delegate again.
+- No automatic topology selection or fallback. Explicit `SUBAGENT` capability failure returns `SUBAGENT CAPABILITY UNAVAILABLE` with no product/runtime/status mutation.
 
-1. Bind the exact Ticket and optional navigation inputs.
-2. Confirm this invocation can directly access the Project Root, required product/canonical surfaces and caller-facing result path.
-3. Carry current Additional User Instructions without allowing them to silently rewrite the Ticket or approved parent authority.
-4. If the current user explicitly requests `SUBAGENT` verification, return `SUBAGENT VERIFICATION UNSUPPORTED` with no AC verdicts. Do not silently switch to DIRECT.
-5. If this invocation cannot directly own the verifier role, return `DIRECT VERIFIER REQUIRED` with no AC verdicts.
+Before verification, bind the exact Ticket and optional navigation inputs, carry current Additional User Instructions without silently rewriting authority, and confirm access to the required Project Root/product/canonical surfaces. A `SUBAGENT` assignment includes:
 
-The verifier emits the informational scenario report before product/runtime action, continues without waiting for approval when execution is authorized, emits material-turn reports only when adjudication can change, and ends with one `READY TICKET VERIFICATION RESULT`.
+```text
+Ticket:
+Heuristic Probe Result / Evidence:
+Candidate Verification Target:
+Implementation Report / Evidence:
+Additional User Instructions:
+Delegated Verifier: yes
+```
 
-Do not create a verifier roster, parallel AC verifiers, nested verification workers or an implicit fallback topology inside this skill. Model capability, task difficulty, cost or worker availability never changes the execution topology automatically.
+The delegated verifier continues to own canonical admission, semantic contract check, complete authored Flow denominator, scenario authorship, runtime/canonical evidence, heuristic finding disposition, every Flow adjudication, every AC verdict, Scope/Non-Goals and cross-AC closure, whole-Ticket verdict and guarded status write. Parent Main does not perform a second verification pass.
+
+### SUBAGENT checkpoint continuation
+
+A checkpoint is a logical phase boundary. It is not a required live-wait primitive, direct-user approval gate or durable workflow state.
+
+At a checkpoint:
+
+1. delegated owner returns a complete checkpoint report to Parent Main;
+2. it does not cross the named `Protected next phase` before Parent decision;
+3. Parent returns exactly one decision:
+   - `CONTINUE`: release the protected next phase;
+   - `STEER`: provide a bounded correction with exact authority/evidence anchor; if decision-critical content changes, the verifier updates and resubmits the same checkpoint;
+   - `STOP`: do not enter the protected phase and close with the applicable existing `VERIFICATION NOT STARTED | INCONCLUSIVE | terminal progression` owner contract;
+4. only one delegated owner lane exists for the same Ticket/stage at a time;
+5. do not repeat a checkpoint without material delta or create periodic progress checkpoints;
+6. if checkpoint continuation capability is unavailable, return `SUBAGENT CAPABILITY UNAVAILABLE`;
+7. never auto-fallback to `DIRECT`.
+
+Continuation is harness-neutral: it may use live child yield/reply, same-session return/resume, or an attributable continuation invocation after confirming the prior child is inactive. A replacement continuation explicitly supersedes the prior worker and rechecks exact Ticket, target/current working-tree identity, previous checkpoint payload, Parent decision and baseline/currentness. The hard rule is: do not cross the protected next phase before Parent decision.
+
+The verifier ends with one `READY TICKET VERIFICATION RESULT`. Checkpoint reports are nonterminal and do not themselves carry Adaptive defect classification.
 
 ## 2. Admission and current authority
 
@@ -179,8 +205,8 @@ Before the first product/runtime action, emit:
 VERIFICATION SCENARIO REPORT
 
 Ticket:
-Execution Mode: DIRECT
-Verifier: Main / DIRECT
+Execution Mode: DIRECT | SUBAGENT
+Verifier: Main / DIRECT | <delegated verifier identity>
 Ticket status:
 Verification target:
 Target-stability check:
@@ -188,7 +214,7 @@ Environment:
 External/operator conditions:
 Semantic contract check: <no material gap found | exact blocking defect already returned before execution>
 Heuristic probe gate: CURRENT | diagnostic-not-required
-Heuristic findings / verifier dispositions: None | <finding -> disposition>
+Heuristic findings / proposed verifier dispositions: None | <finding -> disposition>
 
 Scenario Blocks:
 - <all authored Verification flows in authored order>
@@ -209,9 +235,13 @@ Preservation checks:
 Cleanup / terminal conditions:
 Authority-required actions:
 Execution disposition: PROCEED | AUTHORITY REQUIRED | BLOCKED
+
+Checkpoint: NOT_APPLICABLE | PRE_RUNTIME
+Protected next phase: NOT_APPLICABLE | FIRST_PRODUCT_OR_RUNTIME_ACTION
+Checkpoint state: NOT_APPLICABLE | PARENT_CONTINUATION_REQUIRED
 ```
 
-The report is informational, not an approval gate. Continue safe authorized verification when `Execution disposition: PROCEED` without waiting for acknowledgement.
+In `DIRECT`, the report is informational and has no Parent continuation. In `SUBAGENT`, `PRE_RUNTIME` is mandatory after semantic/scenario closure and before the first product/runtime action; the delegated verifier does not cross `FIRST_PRODUCT_OR_RUNTIME_ACTION` before Parent `CONTINUE`. Parent reviews authored Flow/AC denominator completeness, heuristic-finding coverage, authoritative readback strength, Scope and obvious target/authority mismatch only; Parent does not execute the flows or issue AC verdicts.
 
 ## 9. Evidence sufficiency and execution
 
@@ -285,17 +315,21 @@ Turn:
 Scenario block / flow:
 Previous assumption:
 New attributable evidence:
-Material effect on semantic contract, execution or adjudication:
+Material effect:
 Affected AC / authority / target:
-Safe work continuing:
-Caller/operator action needed: NONE | USER/OPERATOR AUTHORITY
+Proposed continuation direction:
+
+Checkpoint: NOT_APPLICABLE | MATERIAL_TURN
+Protected next phase: NOT_APPLICABLE | <exact protected phase>
+Checkpoint state: NOT_APPLICABLE | PARENT_CONTINUATION_REQUIRED
+Work permitted before continuation: NONE when SUBAGENT
 ```
 
 A bounded observation already inside the authored flow may be recorded as `SCENARIO AMENDMENT`. Do not use a turn report to invent a trigger, initial state, decision boundary, Scope or authority.
 
-If new evidence establishes a material semantic gap in the authored verification contract before an authoritative verdict can be completed, stop rather than forcing the observed product into the old flow. Do not issue AC verdicts from a contract that can no longer decide them.
+In `DIRECT`, the report remains informational and verifier-owned execution continues under current authority. In `SUBAGENT`, the report becomes a `MATERIAL_TURN` checkpoint only when the changed evidence can alter adjudication or safe progression; after returning it, do not perform work that depends on the changed direction before Parent continuation. `STEER` that changes decision-critical content requires an updated checkpoint before protected work resumes.
 
-If required authority is unavailable, return the correct evidence limit instead of waiting in a live suspended state.
+If new evidence establishes a terminal blocker or material semantic gap that prevents authoritative adjudication, do not create an unnecessary checkpoint: return the applicable existing `VERIFICATION NOT STARTED`, `FAILED` or `INCONCLUSIVE` terminal result. Checkpoints are for cases that can continue after bounded resynchronization, not periodic progress or terminal blockers.
 
 ## 11. Disposition-specific execution
 
@@ -353,6 +387,40 @@ For normal delivery verification of `Status: ready`:
 - `INCONCLUSIVE` -> keep `ready`; `Ticket Progression: NOT APPLICABLE`.
 - `VERIFIED` -> attempt guarded progression only through the sequence below.
 
+For `SUBAGENT`, after all Flow adjudications and AC candidate verdicts are closed, Scope/Non-Goals and cleanup are closed, and candidate whole-Ticket verdict is `VERIFIED`, return this checkpoint before final `VERIFIED` emission or status mutation:
+
+```text
+VERIFICATION PRE-PROGRESSION CHECKPOINT
+
+Ticket:
+Execution Mode: SUBAGENT
+Verifier:
+Verification target:
+Target stability:
+Candidate whole-Ticket verdict: VERIFIED
+
+Flow closure:
+- <every authored Flow and candidate result>
+
+AC closure:
+- <every AC and candidate verdict>
+
+Heuristic finding dispositions:
+Scope / Non-Goals closure:
+Cross-AC closure:
+Evidence limits:
+Cleanup / terminal conditions:
+Ticket status currently observed:
+
+Checkpoint: PRE_PROGRESSION
+Protected next phase: FINAL_VERIFIED_AND_GUARDED_READY_TO_DONE
+Checkpoint state: PARENT_CONTINUATION_REQUIRED
+```
+
+Parent reviews only obvious closure errors: missing authored Flow/AC, `INCONCLUSIVE` evidence paired with candidate `VERIFIED`, missing heuristic disposition or Scope/Non-Goals closure, incomplete cleanup, target/status drift, or direct internal contradiction. Parent does not rerun runtime verification or issue its own verdict. `FAILED` and `INCONCLUSIVE` candidates have no `PRE_PROGRESSION` checkpoint and terminate without `done` mutation.
+
+On Parent `CONTINUE`, the delegated verifier rechecks currentness and performs the existing guarded progression. On `STEER`, it reopens only the bounded Flow/evidence/closure identified by Parent and resubmits `PRE_PROGRESSION` if the candidate remains `VERIFIED`. Parent may use `STOP` at `PRE_PROGRESSION` only when current authority, target currentness, current user instruction, evidence closure, or progression authority means candidate `VERIFIED` can no longer be finalized. On that `STOP`, the delegated verifier re-adjudicates the candidate under that exact evidence limit and emits the existing terminal `READY TICKET VERIFICATION RESULT` with `Verification Verdict: INCONCLUSIVE`, `Ticket Progression: NOT APPLICABLE`, and `Ticket status after verification: ready`; it performs no `done` mutation. Parent Main does not issue or substitute that verdict.
+
 Before `ready -> done`:
 
 1. Re-read the exact Ticket and require the verification target/source/config/build identity used for the verdict is still current and attributable.
@@ -378,14 +446,18 @@ Verification ends with evidence and verdict. Do not automatically edit source, i
 READY TICKET VERIFICATION RESULT
 
 Ticket:
-Execution Mode: DIRECT
-Verifier: Main / DIRECT
+Execution Mode: DIRECT | SUBAGENT
+Verifier: Main / DIRECT | <delegated verifier identity>
 Ticket status before verification:
 Verification target:
 Target stability:
 Heuristic probe result: <exact current result / diagnostic-not-required>
 Heuristic finding dispositions: None | <finding -> disposition>
 Material turn reports: None | <concise list>
+Checkpoint decisions:
+- PRE_RUNTIME: CONTINUE | STEERED_THEN_CONTINUE | STOP | NOT_APPLICABLE
+- MATERIAL_TURN: None | <turn -> decision>
+- PRE_PROGRESSION: CONTINUE | STEERED_THEN_CONTINUE | STOP | NOT_APPLICABLE
 
 Semantic contract findings: None | <exact material gap and owning contract location>
 

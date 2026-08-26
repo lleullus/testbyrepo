@@ -65,7 +65,11 @@ class IISAdaptiveRunContractTests(unittest.TestCase):
             template,
         )
         self.assertNotIn("Run Contract Approval Gate", mandate)
-        self.assertNotIn("Run Contract Approval Gate", continuation)
+        self.assertIn("not the `/승인게이트` Run Contract release", continuation)
+        self.assertIn("do not add a Run Contract field", contract)
+        self.assertIn("do not require a template change", contract)
+        self.assertNotIn("Checkpoint:", template)
+        self.assertNotIn("Parent continuation", template)
 
     def test_run_contract_is_an_exact_adaptive_delta_before_routing(self) -> None:
         coexistence = (ADAPTIVE / "references" / "00-baseline-coexistence.md").read_text(

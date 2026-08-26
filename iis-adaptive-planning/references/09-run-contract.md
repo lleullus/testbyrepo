@@ -101,6 +101,8 @@ Apply exact overrides independently:
 
 The fields express the outer invocation envelope only. They do not change the exact authority, admission, or result ownership of `ready-ticket-implement`, `ready-ticket-heuristic-probe`, or `ready-ticket-verify`.
 
+Delegated implementation/verification checkpoints and Parent continuation decisions are invocation-local delivery messages only. They do not add a Run Contract field, do not modify `Implementation` or `Verification`, do not activate or satisfy the `/승인게이트` Run Contract Approval Gate, and do not require a template change. Their phase-release authority comes from the already closed Run Contract, current user instructions, and the exact delivery skill contract.
+
 ### Run Completion Boundary
 
 Use exactly one value:

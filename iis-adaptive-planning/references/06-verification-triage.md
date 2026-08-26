@@ -14,6 +14,8 @@ Adaptive must distinguish:
 
 Do not change the verifier's exact verdict. Add a separate Adaptive root-cause classification and route. Apply the transition discipline in `08-delivery-continuation.md`: under explicit Adaptive mode, a material correction is followed by fresh execution at the affected owner by default; an explicit no-corrective-re-entry/fail-and-report instruction changes that handoff to report-and-STOP. This is distinct from success continuation into another Increment.
 
+Classification begins only from the exact terminal `ready-ticket-verify` result plus applicable current authority/evidence. A scenario checkpoint, material-turn checkpoint, pre-progression checkpoint, candidate verdict, Parent steering decision, or partial observation is nonterminal and cannot by itself receive `IMPLEMENTATION_DEFECT`, `VERIFICATION_MECHANISM_DEFECT`, `CONTRACT_OVERREACH`, `CURRENT_INCREMENT_MISMATCH`, or `INCONCLUSIVE` Adaptive classification.
+
 ## Required authority/evidence
 
 Before classifying, reopen enough current authority to compare the failing claim precisely:

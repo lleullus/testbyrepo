@@ -39,13 +39,44 @@ Before each enabled delivery phase, discover and use the current installed skill
 - `ready-ticket-heuristic-probe` owns one exact Ready Ticket's bounded heuristic exploration, Ticket-derived probe frontier, material findings/minimal triggers, target attribution and cleanup; it never owns verifier verdicts or `done`.
 - `ready-ticket-verify` owns one exact Ready Ticket fresh verification, final verdict, and guarded `ready -> done` progression.
 - Invoke each exact delivery skill once per current owner pass and follow its current execution-mode contract. Delivery defaults to `DIRECT`; Adaptive never chooses another topology from model capability, task difficulty, cost or worker availability and never falls back between topologies after a capability failure.
-- `ready-ticket-implement` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT for that implementation stage; otherwise current Main performs the implementation role directly.
+- `ready-ticket-implement` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT for that implementation stage; otherwise current Main performs the implementation role directly. Explicit implementation SUBAGENT follows its mandatory PRE_ACTION/material-turn checkpoint contract.
 - `ready-ticket-heuristic-probe` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT for that probe stage; otherwise current Main performs the Heuristic Probe Lead/executor role directly. Any internal parallel lanes belong to that skill's own SUBAGENT contract.
-- `ready-ticket-verify` defaults to `DIRECT`, and DIRECT is its only currently supported topology. Outer Main enters that skill's exact sole-verifier role for the Ticket, produces its terminal verifier result, then returns to Adaptive continuation without issuing a second verdict. An explicit unsupported SUBAGENT-verification request is returned as such rather than silently run as DIRECT.
-- Do not pass `Delegated Worker: yes` or `Delegated Probe Worker: yes` from Adaptive. Those markers belong only to the implementation/probe skills' own internal assignments.
+- `ready-ticket-verify` defaults to `DIRECT`. It uses `SUBAGENT` only when the current user explicitly selects SUBAGENT for that exact verification stage; exactly one delegated verifier owns the whole verifier core and its mandatory scenario/material-turn/pre-progression checkpoint contract. Outer Main does not issue a second verifier verdict.
+- Do not pass `Delegated Worker: yes`, `Delegated Probe Worker: yes`, or `Delegated Verifier: yes` from Adaptive. Those markers belong only to each delivery skill's own internal child assignment.
 - Do not infer Ticket-set parallelism, worker scheduling, or a persistent queue from the existence of a Ready Ticket Set. Select only a currently admissible Ticket using canonical blockers, product dependencies, shared-workspace safety, and current repository evidence.
 
 Do not invoke a disabled stage merely to obtain stronger evidence. `Verification: yes` includes the required current heuristic-probe gate followed by final verification; `Verification: no` means no `ready-ticket-heuristic-probe` call, no `ready-ticket-verify` call, and no `done` claim.
+
+## Invocation-local delivery checkpoint continuation
+
+A checkpoint from explicit implementation/verification `SUBAGENT` execution is a nonterminal invocation-local delivery message. Outer Main may release the protected next phase only after checking:
+
+- exact Ticket, stage and target identity;
+- the closed Run Contract and current user instructions;
+- checkpoint denominator completeness;
+- obvious authority/Scope contradiction;
+- that the protected phase has not already been crossed; and
+- continuation capability plus currentness.
+
+Outer Main returns exactly:
+
+```text
+PARENT CONTINUATION DECISION
+
+Ticket:
+Stage: IMPLEMENTATION | VERIFICATION
+Checkpoint: PRE_ACTION | PRE_RUNTIME | MATERIAL_TURN | PRE_PROGRESSION
+Decision: CONTINUE | STEER | STOP
+Authority / evidence anchor:
+Bounded steering: None | <exact correction>
+Reason:
+```
+
+`STEER` must identify the problematic checkpoint field, current authority/evidence anchor, why the protected phase cannot safely proceed unchanged, and the bounded correction. Vague preference-based steering is not sufficient.
+
+Checkpoint review must not redesign the implementation diff from scratch, rerun all verifier flows, issue a Parent AC/whole-Ticket verdict, or convert a checkpoint into Adaptive defect classification. Do not forward a checkpoint as a user approval prompt. Do not create a checkpoint ledger or persistent state. A checkpoint is internal phase release under already established user authority, not the `/승인게이트` Run Contract release or any new Mandate/Scope/Spec/Ticket approval gate.
+
+Adaptive delivery routing and verification triage wait for the exact terminal owner result. A checkpoint, candidate verdict, Parent steering decision, or partial observation is not a terminal implementation/verifier result.
 
 ## Invocation-local evidence economy
 

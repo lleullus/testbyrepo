@@ -1,6 +1,6 @@
 ---
 name: ready-ticket-verify
-description: "Verify one existing IIS Ready Ticket against a stable current implementation target, require a current COMPLETE Ready Ticket heuristic-probe handoff for normal ready verification, semantically check that its authored AC/Verification flow can meaningfully decide the approved product claims, adjudicate every authored Verification flow and AC from fresh verifier-owned evidence, and own the guarded terminal done transition. Execution defaults to DIRECT, and DIRECT is the only currently supported verification topology."
+description: "Verify one existing IIS Ready Ticket against a stable current implementation target, require a current COMPLETE Ready Ticket heuristic-probe handoff for normal ready verification, semantically check that its authored AC/Verification flow can meaningfully decide the approved product claims, adjudicate every authored Verification flow and AC from fresh verifier-owned evidence, and own the guarded terminal done transition. Execution defaults to DIRECT; SUBAGENT verification is supported only when the current user explicitly selects it for this exact stage and uses mandatory checkpoint continuation."
 ---
 
 # Ready Ticket Verify
@@ -9,7 +9,7 @@ description: "Verify one existing IIS Ready Ticket against a stable current impl
 
 Verify one exact IIS Ready Ticket directly from fresh current product/canonical evidence.
 
-The current Main is the sole verifier. It owns semantic preflight, the complete authored Verification-flow denominator, every AC verdict, cross-AC reconciliation, Scope/Non-Goals verification, the whole-Ticket verdict and guarded `ready -> done` progression. It does not delegate this verification authority to a child worker.
+In `DIRECT`, the current Main owns the complete verifier core. In explicit `SUBAGENT`, exactly one delegated verifier owns semantic preflight, the complete authored Verification-flow denominator, scenario authorship, verifier-owned evidence, every flow/AC verdict, cross-AC reconciliation, Scope/Non-Goals verification, the whole-Ticket verdict and guarded `ready -> done` progression. Parent Main owns only bounded checkpoint continuation and terminal fan-in; it does not repeat the verifier core or issue a second verdict.
 
 Before work, read [references/verify.md](references/verify.md) in full.
 
@@ -33,13 +33,15 @@ Derive `Status`, `Parent-Spec`, `Project-Root`, `UI`, Acceptance Criteria, Scope
 
 ## Execution topology
 
-Execution defaults to `DIRECT`, and `DIRECT` is the only currently supported verification topology.
+Execution defaults to `DIRECT`.
 
-- The current Main performs the complete verifier role in this invocation.
-- Do not assign this skill, any AC, or any Verification flow to a child verifier and do not create a verifier roster or parallel verification scenarios.
-- If the current user explicitly requests `SUBAGENT` verification, return `SUBAGENT VERIFICATION UNSUPPORTED` without issuing AC verdicts. Do not silently run DIRECT instead.
-- Do not infer another execution mode from model capability, task difficulty, cost or worker availability and do not silently fall back to another verification topology.
-- If the current invocation cannot directly own the caller-facing verifier role, return `DIRECT VERIFIER REQUIRED` without issuing AC verdicts.
+- `DIRECT`: the current Main performs the complete verifier core and current behavior remains unchanged.
+- `SUBAGENT`: use only when the current user explicitly selects `SUBAGENT` for this exact verification stage. Exactly one delegated verifier owns the complete Ticket verification core.
+- Include exact `Ticket`, `Heuristic Probe Result / Evidence`, `Candidate Verification Target`, `Implementation Report / Evidence`, `Additional User Instructions`, and `Delegated Verifier: yes` in the child assignment.
+- A delegated verifier does not split ACs or flows across workers, create a verifier roster, run parallel verifiers, or delegate again.
+- The host must support checkpoint return/continuation plus terminal result. If not, return `SUBAGENT CAPABILITY UNAVAILABLE` without product/runtime/status mutation.
+- Do not infer another execution mode from model capability, task difficulty, cost or worker availability. Do not automatically switch topology or fall back from failed explicit `SUBAGENT` to `DIRECT`.
+- Parent Main receives nonterminal checkpoint reports and returns `CONTINUE | STEER | STOP`; it does not execute all flows again or issue its own AC/whole-Ticket verdict.
 
 ## Canonical admission gate
 
@@ -97,11 +99,14 @@ Do not relax or rewrite those criteria after observing results.
 
 ## Scenario report and material turns
 
-Before the first product/runtime action, produce `VERIFICATION SCENARIO REPORT` to the caller as informational output and continue unless a genuine authority/operator condition requires stopping. It is not an approval gate.
+Before the first product/runtime action, produce `VERIFICATION SCENARIO REPORT` after semantic preflight and integrated scenario closure.
 
-Produce `VERIFICATION TURN REPORT` only when target identity, authority mapping, scenario execution, evidence attribution or an expected authoritative readback changes materially enough to affect flow adjudication or safe terminal progression. Routine progress, normal command output and confidence-only updates are not report events.
+- `DIRECT`: the report remains informational with `Checkpoint: NOT_APPLICABLE`; continue under the existing direct verifier authority.
+- `SUBAGENT`: return the report as `Checkpoint: PRE_RUNTIME`, `Protected next phase: FIRST_PRODUCT_OR_RUNTIME_ACTION`, `Checkpoint state: PARENT_CONTINUATION_REQUIRED`. Do not perform the protected product/runtime action before Parent `CONTINUE`.
 
-When unresolved caller/operator/external authority is required, do not create a suspended live workflow. Return the correct `VERIFICATION NOT STARTED`, `INCONCLUSIVE` or terminal progression result with exact evidence limits.
+Produce `VERIFICATION TURN REPORT` only when target identity, authority mapping, scenario execution, evidence attribution or an expected authoritative readback changes materially enough to affect flow adjudication or safe terminal progression. Routine progress, normal command output and confidence-only updates are not report events. In `SUBAGENT`, a material turn is a `MATERIAL_TURN` checkpoint and work depending on the changed direction does not continue before Parent continuation.
+
+Checkpoint continuation is a logical phase boundary, not a required live-wait primitive, direct-user approval gate or durable workflow state. Parent returns exactly one of `CONTINUE | STEER | STOP`. If bounded continuation cannot resolve required caller/operator/external authority, return the correct `VERIFICATION NOT STARTED`, `INCONCLUSIVE` or terminal progression result with exact evidence limits.
 
 ## Disposition handling
 
@@ -145,7 +150,11 @@ Whole Ticket: VERIFIED | FAILED | INCONCLUSIVE
 
 ## Terminal `done` transition
 
-For a normal `Status: ready` Ticket, the verifier may attempt `Status: done` only after:
+For a normal `Status: ready` Ticket, first close every authored Verification flow, require every current AC candidate verdict to be `PASS`, close Scope/Non-Goals and cleanup/terminal conditions, and establish candidate `Whole Ticket: VERIFIED`.
+
+In `SUBAGENT`, before final `VERIFIED` emission or any `ready -> done` mutation, the delegated verifier must return `VERIFICATION PRE-PROGRESSION CHECKPOINT` with `Checkpoint: PRE_PROGRESSION`, `Protected next phase: FINAL_VERIFIED_AND_GUARDED_READY_TO_DONE`, and `Checkpoint state: PARENT_CONTINUATION_REQUIRED`. Parent reviews only denominator/closure completeness, obvious contradiction, target/status drift and evidence-limit consistency; it does not rerun runtime flows or issue a second verdict. `FAILED` or `INCONCLUSIVE` candidates do not use this checkpoint.
+
+After `CONTINUE` (`DIRECT` reaches this point without Parent checkpoint), the verifier may attempt `Status: done` only after:
 
 1. every authored Verification flow has an attributable final result;
 2. every current AC is `PASS`;
@@ -156,6 +165,8 @@ For a normal `Status: ready` Ticket, the verifier may attempt `Status: done` onl
 7. the exact Ticket is still the same canonical `Status: ready` contract immediately before the write.
 
 Then perform one guarded targeted replacement of only the top metadata `Status: ready` line with `Status: done` and require immediate exact `VALID` post-write validation.
+
+If Parent returns `STEER`, the delegated verifier reopens only the bounded flow/evidence/closure identified by the steering and resubmits `PRE_PROGRESSION` if the candidate remains `VERIFIED`. Parent may return `STOP` at `PRE_PROGRESSION` only when current authority, target currentness, current user instruction, evidence closure, or progression authority means candidate `VERIFIED` can no longer be finalized. In that case the delegated verifier, not Parent Main, emits the existing terminal `Verification Verdict: INCONCLUSIVE`, reports `Ticket Progression: NOT APPLICABLE`, leaves the Ticket at `Status: ready`, and performs no `done` mutation.
 
 Keep `Verification Verdict` separate from `Ticket Progression`. A `VERIFIED` verdict remains the evidence verdict if the guarded write or post-write validation fails; report `Ticket Progression: FAILED` without pretending delivery progression completed.
 
