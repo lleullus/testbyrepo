@@ -147,6 +147,10 @@ export class Xterm {
         this.sendData(shifted ? '\x1b[Z' : '\t');
     }
 
+    public sendEnter() {
+        this.sendData('\r');
+    }
+
     public sendArrow(direction: 'left' | 'up' | 'down' | 'right', shifted = false) {
         const suffix = { left: 'D', up: 'A', down: 'B', right: 'C' }[direction];
         if (shifted) {

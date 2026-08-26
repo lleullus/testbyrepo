@@ -121,6 +121,14 @@ export class Terminal extends Component<Props, State> {
                         >
                             →
                         </button>
+                        <button
+                            class="toolbar-button enter-button"
+                            type="button"
+                            aria-label="Enter"
+                            onClick={this.sendEnter}
+                        >
+                            ↵
+                        </button>
                         <button class="toolbar-button escape-button" type="button" onClick={this.sendEscape}>
                             ESC
                         </button>
@@ -227,6 +235,14 @@ export class Terminal extends Component<Props, State> {
         this.clearShiftArmed();
         this.clearCtrlArmed();
         this.xterm.sendArrow(direction, shifted);
+    }
+
+    @bind
+    private sendEnter() {
+        this.blurTerminalAndHideKeyboard();
+        this.clearShiftArmed();
+        this.clearCtrlArmed();
+        this.xterm.sendEnter();
     }
 
     @bind

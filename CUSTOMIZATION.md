@@ -14,15 +14,16 @@ Maintain the custom ttyd 1.7.7 frontend used by the Android Web Terminal without
 ## Customized source
 
 - `html/src/components/terminal/index.tsx`
-  - single-row compact bottom toolbar: TAB / Shift / arrows / ESC / CTRL / font-size / fullscreen
+  - single-row compact bottom toolbar: TAB / Shift / arrows / Enter / ESC / CTRL / font-size / fullscreen
   - Shift as a one-shot modifier for TAB and arrow keys
+  - Enter sends CR and clears armed Shift/CTRL state
   - CTRL clears when TAB or an arrow is used because Ctrl+TAB / Ctrl+arrow are not implemented
   - terminal blur before toolbar actions
   - keyboard-safe toolbar interaction
 - `html/src/components/terminal/xterm/index.ts`
   - mobile/touch auto-focus policy
   - terminal blur and control-data handling
-  - TAB / Shift+Tab byte sequences
+  - TAB / Shift+Tab and Enter byte sequences
   - normal/application cursor-mode arrows and Shift+arrow sequences
 - `html/src/style/index.scss`
   - compact single-row bottom toolbar layout sized to fit 390px portrait without horizontal scrolling
@@ -30,8 +31,8 @@ Maintain the custom ttyd 1.7.7 frontend used by the Android Web Terminal without
   - mobile viewport configuration
 - `staging/check_staging.py`
   - portrait/landscape single-row UI and focus checks
-  - PTY byte checks for TAB, Shift+Tab, normal/application arrows and Shift+arrows
-  - CTRL cleanup on TAB/arrows plus CTRL, font resize and fullscreen regression checks
+  - PTY byte checks for Enter, TAB, Shift+Tab, normal/application arrows and Shift+arrows
+  - modifier cleanup on Enter/TAB/arrows plus CTRL, font resize and fullscreen regression checks
 - `staging/check_fresh_session.py`
   - fresh-session regression check
 

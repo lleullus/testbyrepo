@@ -291,7 +291,7 @@ try:
 
     initial = ui_state()
     results['initial'] = initial
-    expected_labels = ['TAB', '⇧', '←', '↑', '↓', '→', 'ESC', 'CTRL', 'A−', 'A+', '⛶']
+    expected_labels = ['TAB', '⇧', '←', '↑', '↓', '→', '↵', 'ESC', 'CTRL', 'A−', 'A+', '⛶']
     assert initial['labels'] == expected_labels, initial
     assert initial['rowCount'] == 1 and not initial['toolbarOverflow'], initial
     assert initial['rowStates'][0]['labels'] == expected_labels, initial
@@ -342,6 +342,20 @@ try:
     tap('.shift-button')
     assert not ui_state()['shiftPressed'], ui_state()
 
+    tap('.shift-button')
+    assert ui_state()['shiftPressed'], ui_state()
+    tap('.enter-button')
+    shift_after_enter = ui_state()
+    results['shiftClearsOnEnter'] = shift_after_enter
+    assert not shift_after_enter['shiftPressed'] and not shift_after_enter['activeIsTextarea'], shift_after_enter
+
+    tap('.ctrl-button')
+    assert ui_state()['ctrlPressed'], ui_state()
+    tap('.enter-button')
+    ctrl_after_enter = ui_state()
+    results['ctrlClearsOnEnter'] = ctrl_after_enter
+    assert not ctrl_after_enter['ctrlPressed'] and not ctrl_after_enter['activeIsTextarea'], ctrl_after_enter
+
     tap('.ctrl-button')
     assert ui_state()['ctrlPressed'], ui_state()
     tap('.tab-button')
@@ -364,6 +378,10 @@ try:
         term_input('\x03')
         time.sleep(0.1)
     results['ctrlClearsOnArrows'] = ctrl_after_arrows
+
+    enter_hex = capture_toolbar_bytes(lambda: tap('.enter-button'))
+    results['enterBytes'] = enter_hex
+    assert enter_hex == '0d', enter_hex
 
     tab_hex = capture_toolbar_bytes(lambda: tap('.tab-button'))
     shift_tab_hex = capture_toolbar_bytes(lambda: (tap('.shift-button'), tap('.tab-button')))
