@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import shlex
 import signal
 import socket
 import subprocess
@@ -79,6 +80,14 @@ def evaluate(expression, user_gesture=False):
     if 'value' in remote:
         return remote['value']
     return None
+
+
+def set_device(width, height):
+    call(
+        'Emulation.setDeviceMetricsOverride',
+        {'width': width, 'height': height, 'deviceScaleFactor': 1, 'mobile': True},
+    )
+    time.sleep(0.2)
 
 
 def wait_until(expression, timeout=8):
@@ -177,21 +186,66 @@ def wait_text(marker, timeout=5):
     raise AssertionError(f'missing terminal marker {marker!r}; tail={last[-1200:]}')
 
 
+key_capture_index = 0
+
+
+def capture_toolbar_bytes(action, application_cursor=False):
+    global key_capture_index
+    key_capture_index += 1
+    marker = f'KEY_{key_capture_index}'
+    cursor_mode = '\x1b[?1h' if application_cursor else '\x1b[?1l'
+    terminal_tap()
+    term_input('\x03')
+    time.sleep(0.1)
+    script = (
+        "import os,termios,tty;"
+        "fd=0;old=termios.tcgetattr(fd);"
+        f"print({cursor_mode!r}+{(marker + '_READY')!r},end='',flush=True);"
+        "tty.setraw(fd);"
+        "data=os.read(fd,64);"
+        "termios.tcsetattr(fd,termios.TCSADRAIN,old);"
+        f"print('\\n\\x1b[?1l{marker}_HEX='+data.hex(),flush=True)"
+    )
+    send_command('python3 -c ' + shlex.quote(script))
+    wait_text(marker + '_READY')
+    wait_until(
+        f"Boolean(window.term) && window.term.modes.applicationCursorKeysMode === {str(application_cursor).lower()}"
+    )
+    action()
+    text = wait_text(marker + '_HEX=')
+    matches = re.findall(re.escape(marker) + r'_HEX=([0-9a-f]+)', text)
+    if not matches:
+        raise AssertionError(f'key bytes not captured for {marker}: {text[-1200:]}')
+    return matches[-1]
+
+
 def ui_state():
     return evaluate(
         """(() => {
             const toolbar = document.querySelector('.mobile-toolbar');
             const buttons = [...document.querySelectorAll('.mobile-toolbar button')];
+            const toolbarRows = [...document.querySelectorAll('.toolbar-row')];
             const textarea = document.querySelector('.xterm-helper-textarea');
-            if (!toolbar || !textarea || !window.term) return null;
+            if (!toolbar || !textarea || !window.term || toolbarRows.length === 0) return null;
             const tr = toolbar.getBoundingClientRect();
-            const tops = buttons.map(b => Math.round(b.getBoundingClientRect().top));
+            const rowStates = toolbarRows.map(row => {
+                const rowButtons = [...row.querySelectorAll('button')];
+                const tops = rowButtons.map(button => Math.round(button.getBoundingClientRect().top));
+                return {
+                    labels: rowButtons.map(button => (button.textContent || '').trim()),
+                    oneLine: tops.length > 0 && tops.every(top => top === tops[0]),
+                    overflow: row.scrollWidth > row.clientWidth,
+                    height: Math.round(row.getBoundingClientRect().height),
+                };
+            });
             return {
                 labels: buttons.map(b => (b.textContent || '').trim()),
-                oneRow: tops.every(t => t === tops[0]),
+                rowCount: toolbarRows.length,
+                rowStates,
                 toolbarTop: Math.round(tr.top),
                 toolbarBottom: Math.round(tr.bottom),
                 toolbarHeight: Math.round(tr.height),
+                viewportWidth: window.innerWidth,
                 viewportHeight: window.innerHeight,
                 toolbarOverflow: toolbar.scrollWidth > toolbar.clientWidth,
                 activeIsTextarea: document.activeElement === textarea,
@@ -200,9 +254,11 @@ def ui_state():
                 maxTouchPoints: navigator.maxTouchPoints,
                 fontSize: Number(document.querySelector('.font-size-status')?.textContent),
                 ctrlPressed: document.querySelector('.ctrl-button')?.getAttribute('aria-pressed') === 'true',
+                shiftPressed: document.querySelector('.shift-button')?.getAttribute('aria-pressed') === 'true',
                 fullscreen: Boolean(document.fullscreenElement),
                 rows: window.term.rows,
                 cols: window.term.cols,
+                applicationCursorKeysMode: window.term.modes.applicationCursorKeysMode,
                 fullscreenButton: Boolean(document.querySelector('button[aria-label*="fullscreen" i]')),
             };
         })()"""
@@ -225,10 +281,7 @@ try:
     ws = websocket.create_connection(target['webSocketDebuggerUrl'], timeout=10)
     call('Page.enable')
     call('Runtime.enable')
-    call(
-        'Emulation.setDeviceMetricsOverride',
-        {'width': 390, 'height': 844, 'deviceScaleFactor': 1, 'mobile': True},
-    )
+    set_device(390, 844)
     call('Emulation.setTouchEmulationEnabled', {'enabled': True, 'maxTouchPoints': 5})
     call('Page.navigate', {'url': URL})
 
@@ -238,14 +291,28 @@ try:
 
     initial = ui_state()
     results['initial'] = initial
-    assert initial['labels'] == ['ESC', 'CTRL', 'A−', 'A+', '⛶'], initial
-    assert initial['oneRow'] and not initial['toolbarOverflow'], initial
+    expected_labels = ['TAB', '⇧', '←', '↑', '↓', '→', 'ESC', 'CTRL', 'A−', 'A+', '⛶']
+    assert initial['labels'] == expected_labels, initial
+    assert initial['rowCount'] == 2 and not initial['toolbarOverflow'], initial
+    assert initial['rowStates'][0]['labels'] == ['TAB', '⇧', '←', '↑', '↓', '→'], initial
+    assert initial['rowStates'][1]['labels'] == ['ESC', 'CTRL', 'A−', 'A+', '⛶'], initial
+    assert all(row['oneLine'] and not row['overflow'] for row in initial['rowStates']), initial
+    assert 72 <= initial['toolbarHeight'] <= 76, initial
     assert initial['toolbarBottom'] == initial['viewportHeight'] and initial['fullscreenButton'], initial
     assert initial['maxTouchPoints'] > 0, initial
-    assert not initial['activeIsTextarea'], initial
+    assert not initial['activeIsTextarea'] and not initial['shiftPressed'], initial
+
+    set_device(844, 390)
+    landscape = ui_state()
+    results['landscape'] = landscape
+    assert landscape['labels'] == expected_labels, landscape
+    assert landscape['rowCount'] == 2 and not landscape['toolbarOverflow'], landscape
+    assert all(row['oneLine'] and not row['overflow'] for row in landscape['rowStates']), landscape
+    assert landscape['toolbarBottom'] == landscape['viewportHeight'], landscape
+    set_device(390, 844)
 
     if os.environ.get('WEBTERM_UI_ONLY') == '1':
-        print(json.dumps({'initial': initial, 'PASS': True}, ensure_ascii=False, indent=2))
+        print(json.dumps({'initial': initial, 'landscape': landscape, 'PASS': True}, ensure_ascii=False, indent=2))
         raise SystemExit(0)
 
     terminal_tap()
@@ -253,14 +320,80 @@ try:
     results['terminalTapFocus'] = after_terminal_tap['activeIsTextarea']
     assert after_terminal_tap['activeIsTextarea'], after_terminal_tap
 
-    tap('.mobile-toolbar button')
+    tap('.escape-button')
     after_escape_tap = ui_state()
     results['escapeBlur'] = not after_escape_tap['activeIsTextarea']
     assert not after_escape_tap['activeIsTextarea'], after_escape_tap
 
+    tap('.shift-button')
+    shift_armed = ui_state()
+    results['shiftArmed'] = shift_armed
+    assert shift_armed['shiftPressed'] and not shift_armed['activeIsTextarea'], shift_armed
+    terminal_tap()
+    shift_after_terminal_tap = ui_state()
+    results['shiftClearsOnTerminalTap'] = shift_after_terminal_tap
+    assert shift_after_terminal_tap['activeIsTextarea'] and not shift_after_terminal_tap['shiftPressed'], shift_after_terminal_tap
+
+    tap('.ctrl-button')
+    assert ui_state()['ctrlPressed'], ui_state()
+    tap('.shift-button')
+    modifier_exclusive = ui_state()
+    results['modifierExclusive'] = modifier_exclusive
+    assert modifier_exclusive['shiftPressed'] and not modifier_exclusive['ctrlPressed'], modifier_exclusive
+    tap('.shift-button')
+    assert not ui_state()['shiftPressed'], ui_state()
+
+    tab_hex = capture_toolbar_bytes(lambda: tap('.tab-button'))
+    shift_tab_hex = capture_toolbar_bytes(lambda: (tap('.shift-button'), tap('.tab-button')))
+    results['tabBytes'] = {'tab': tab_hex, 'shiftTab': shift_tab_hex}
+    assert tab_hex == '09', tab_hex
+    assert shift_tab_hex == '1b5b5a', shift_tab_hex
+    assert not ui_state()['shiftPressed'] and not ui_state()['activeIsTextarea'], ui_state()
+
+    normal_arrows = {}
+    normal_expected = {
+        '.arrow-left': '1b5b44',
+        '.arrow-up': '1b5b41',
+        '.arrow-down': '1b5b42',
+        '.arrow-right': '1b5b43',
+    }
+    for selector, expected in normal_expected.items():
+        actual = capture_toolbar_bytes(lambda selector=selector: tap(selector))
+        normal_arrows[selector] = actual
+        assert actual == expected, (selector, actual)
+    results['normalArrowBytes'] = normal_arrows
+
+    application_arrows = {}
+    application_expected = {
+        '.arrow-left': '1b4f44',
+        '.arrow-up': '1b4f41',
+        '.arrow-down': '1b4f42',
+        '.arrow-right': '1b4f43',
+    }
+    for selector, expected in application_expected.items():
+        actual = capture_toolbar_bytes(lambda selector=selector: tap(selector), application_cursor=True)
+        application_arrows[selector] = actual
+        assert actual == expected, (selector, actual)
+    results['applicationArrowBytes'] = application_arrows
+
+    shifted_arrows = {}
+    shifted_expected = {
+        '.arrow-left': '1b5b313b3244',
+        '.arrow-up': '1b5b313b3241',
+        '.arrow-down': '1b5b313b3242',
+        '.arrow-right': '1b5b313b3243',
+    }
+    for selector, expected in shifted_expected.items():
+        actual = capture_toolbar_bytes(lambda selector=selector: (tap('.shift-button'), tap(selector)))
+        shifted_arrows[selector] = actual
+        assert actual == expected, (selector, actual)
+        assert not ui_state()['shiftPressed'], ui_state()
+    results['shiftArrowBytes'] = shifted_arrows
+    assert not ui_state()['activeIsTextarea'], ui_state()
+
     terminal_tap()
     before_font = ui_state()
-    tap('.font-group button:last-child')
+    tap('.font-increase-button')
     after_plus = ui_state()
     results['fontPlus'] = {'before': before_font, 'after': after_plus}
     assert not after_plus['activeIsTextarea'], after_plus
@@ -269,7 +402,7 @@ try:
     assert (after_plus['rows'], after_plus['cols']) != (before_font['rows'], before_font['cols']), (before_font, after_plus)
 
     terminal_tap()
-    tap('.font-group button:first-child')
+    tap('.font-decrease-button')
     after_minus = ui_state()
     results['fontMinus'] = after_minus
     assert not after_minus['activeIsTextarea'], after_minus
@@ -293,7 +426,7 @@ try:
     send_command('cat -v')
     time.sleep(0.2)
     terminal_tap()
-    tap('.mobile-toolbar button:first-child')
+    tap('.escape-button')
     assert not ui_state()['activeIsTextarea'], ui_state()
     terminal_tap()
     press_enter()

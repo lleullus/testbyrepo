@@ -143,6 +143,21 @@ export class Xterm {
         this.sendData('\x1b');
     }
 
+    public sendTab(shifted = false) {
+        this.sendData(shifted ? '\x1b[Z' : '\t');
+    }
+
+    public sendArrow(direction: 'left' | 'up' | 'down' | 'right', shifted = false) {
+        const suffix = { left: 'D', up: 'A', down: 'B', right: 'C' }[direction];
+        if (shifted) {
+            this.sendData(`\x1b[1;2${suffix}`);
+            return;
+        }
+
+        const prefix = this.terminal?.modes.applicationCursorKeysMode ? '\x1bO' : '\x1b[';
+        this.sendData(prefix + suffix);
+    }
+
     public toggleCtrlArmed() {
         this.setCtrlArmed(!this.ctrlArmed);
     }
@@ -265,7 +280,7 @@ export class Xterm {
 
     private ctrlArmed = false;
 
-    private setCtrlArmed(armed: boolean) {
+    public setCtrlArmed(armed: boolean) {
         this.ctrlArmed = armed;
         this.ctrlStateCb(armed);
     }

@@ -14,18 +14,23 @@ Maintain the custom ttyd 1.7.7 frontend used by the Android Web Terminal without
 ## Customized source
 
 - `html/src/components/terminal/index.tsx`
-  - ESC / CTRL / font-size / fullscreen toolbar
+  - two-row bottom toolbar: TAB / Shift / arrows plus ESC / CTRL / font-size / fullscreen
+  - Shift as a one-shot modifier for TAB and arrow keys
   - terminal blur before toolbar actions
   - keyboard-safe toolbar interaction
 - `html/src/components/terminal/xterm/index.ts`
   - mobile/touch auto-focus policy
   - terminal blur and control-data handling
+  - TAB / Shift+Tab byte sequences
+  - normal/application cursor-mode arrows and Shift+arrow sequences
 - `html/src/style/index.scss`
-  - compact bottom toolbar layout
+  - compact two-row bottom toolbar layout
 - `html/src/template.html`
   - mobile viewport configuration
 - `staging/check_staging.py`
-  - mobile-size UI, focus, PTY, CTRL and fullscreen checks
+  - portrait/landscape two-row UI and focus checks
+  - PTY byte checks for TAB, Shift+Tab, normal/application arrows and Shift+arrows
+  - CTRL, font resize and fullscreen regression checks
 - `staging/check_fresh_session.py`
   - fresh-session regression check
 
@@ -106,6 +111,9 @@ Toolbar interaction and terminal typing interaction must stay separate.
 - Page load on touch/mobile: do not auto-focus xterm input.
 - Toolbar actions: blur terminal input and do not refocus it afterward.
 - Terminal body tap: may focus xterm and summon the Android keyboard.
+- Shift is a toolbar-only one-shot modifier for TAB and arrow keys; terminal body tap clears it.
+- CTRL and Shift are mutually exclusive when arming modifiers.
+- Arrow buttons must follow xterm's `applicationCursorKeysMode`; Shift+arrow uses xterm's modifier form.
 - `navigator.virtualKeyboard.hide()` may be used only as a best-effort helper; correct focus ownership is the primary mechanism.
 
 ## Rollback
