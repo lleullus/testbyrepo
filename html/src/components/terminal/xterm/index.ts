@@ -101,7 +101,8 @@ export class Xterm {
 
     constructor(
         private options: XtermOptions,
-        private sendCb: () => void
+        private sendCb: () => void,
+        private ctrlStateCb: (armed: boolean) => void = () => undefined
     ) {}
 
     dispose() {
@@ -120,6 +121,30 @@ export class Xterm {
     @bind
     public sendFile(files: FileList) {
         this.zmodemAddon?.sendFile(files);
+    }
+
+    public blur() {
+        this.terminal?.blur();
+    }
+
+    public fit() {
+        if (!this.terminal) return;
+        this.fitAddon.fit();
+        requestAnimationFrame(() => this.fitAddon.fit());
+    }
+
+    public setFontSize(fontSize: number) {
+        if (!this.terminal) return;
+        this.terminal.options.fontSize = fontSize;
+        this.fit();
+    }
+
+    public sendEscape() {
+        this.sendData('\x1b');
+    }
+
+    public toggleCtrlArmed() {
+        this.setCtrlArmed(!this.ctrlArmed);
     }
 
     @bind
@@ -173,7 +198,7 @@ export class Xterm {
                 }
             })
         );
-        register(terminal.onData(data => sendData(data)));
+        register(terminal.onData(this.onTerminalData));
         register(terminal.onBinary(data => sendData(Uint8Array.from(data, v => v.charCodeAt(0)))));
         register(
             terminal.onResize(({ cols, rows }) => {
@@ -238,6 +263,27 @@ export class Xterm {
         }
     }
 
+    private ctrlArmed = false;
+
+    private setCtrlArmed(armed: boolean) {
+        this.ctrlArmed = armed;
+        this.ctrlStateCb(armed);
+    }
+
+    @bind
+    private onTerminalData(data: string) {
+        if (this.ctrlArmed) {
+            this.setCtrlArmed(false);
+            if (/^[a-zA-Z]$/.test(data)) {
+                const code = data.toUpperCase().charCodeAt(0) - 64;
+                this.sendData(String.fromCharCode(code));
+                return;
+            }
+        }
+
+        this.sendData(data);
+    }
+
     @bind
     public connect() {
         this.socket = new WebSocket(this.options.wsUrl, ['tty']);
@@ -268,7 +314,9 @@ export class Xterm {
 
         this.doReconnect = this.reconnect;
         this.initListeners();
-        terminal.focus();
+        const isTouchDevice =
+            (window.matchMedia?.('(pointer: coarse)').matches ?? false) || navigator.maxTouchPoints > 0;
+        if (!isTouchDevice) terminal.focus();
     }
 
     @bind
