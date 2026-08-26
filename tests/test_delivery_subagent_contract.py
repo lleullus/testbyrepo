@@ -86,6 +86,31 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("periodic progress checkpoint로 사용하지 않는다", workflow)
         self.assertIn("Checkpoint: NOT_APPLICABLE", workflow)
 
+    def test_implementation_resyncs_non_discretionarily_on_authority_or_readback_drift(self) -> None:
+        skill = (IMPLEMENT / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (IMPLEMENT / "references" / "implement.md").read_text(encoding="utf-8")
+
+        self.assertIn("worker의 materiality threshold를 적용하지 않는다", skill)
+        self.assertIn("### 비재량 재동기화", workflow)
+        self.assertIn("exact authority artifact 자체에 scoped되고 content-sensitive", workflow)
+        self.assertIn("canonical path + file/content SHA", workflow)
+        self.assertIn("repository-wide working-tree 변화는 authority drift로 취급하지 않으며", workflow)
+        self.assertIn("current `Parent-released anchor`", workflow)
+        self.assertIn("Parent가 `CONTINUE`하면", workflow)
+        self.assertIn("invocation-local 최신 `Parent-released anchor`", workflow)
+        self.assertIn("currentness 비교는 최신 `Parent-released anchor`", workflow)
+        self.assertIn("unavailable 또는 non-attributable", workflow)
+        self.assertIn("다른 readback으로 substitution", workflow)
+        self.assertIn("기존 `MATERIAL_TURN` checkpoint", workflow)
+        self.assertIn("`Completion: BLOCKED`", workflow)
+        self.assertIn("`SUBAGENT`에서는", workflow)
+        self.assertIn("최신 `Parent-released anchor`와 대조", workflow)
+        self.assertIn("`DIRECT`에서는 Parent checkpoint나 `Parent-released anchor`를 만들지 않는다", workflow)
+        self.assertIn("현재 Main이 exact Ticket과 적용되는 canonical Parent Spec/Behavior/UI Authority 및 authoritative readback을 직접 다시 결합", workflow)
+        self.assertIn("새 persistent snapshot, registry 또는 workflow state를 만들지 않는다", workflow)
+        self.assertIn("checkpoint ledger, persistent authority snapshot 또는 별도 state machine", workflow)
+        self.assertNotIn("PRE_COMPLETION", skill + workflow)
+
     def test_implementation_preserves_delivery_authority_boundaries(self) -> None:
         skill = (IMPLEMENT / "SKILL.md").read_text(encoding="utf-8")
         workflow = (IMPLEMENT / "references" / "implement.md").read_text(encoding="utf-8")

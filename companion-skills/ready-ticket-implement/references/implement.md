@@ -65,7 +65,7 @@ Continuation은 특정 harness API를 요구하지 않는다. live child session
 
 첫 source-file 변경 전에:
 
-1. Ticket 전체와 연결된 Parent Spec, Behavior/UI Authority, constraints와 references를 읽는다.
+1. Ticket 전체와 연결된 Parent Spec, Behavior/UI Authority, constraints와 references를 읽고, exact Ticket과 적용되는 canonical Parent Spec/Behavior/UI Authority의 현재 bounded identity를 기록한다. 각 identity는 exact authority artifact 자체에 scoped되고 content-sensitive해야 한다. 예를 들어 canonical path + file/content SHA 또는 동등한 artifact-scoped revision을 사용한다. 구현 자체가 만드는 repository-wide working-tree 변화는 authority drift로 취급하지 않으며, persistent authority ID나 registry를 새로 만들지 않는다.
 2. 한 문장으로 observable product outcome을 적는다.
 3. 각 authored Verification flow의 initial state, trigger, acceptance boundary, expected result, authoritative readback, decision boundary와 disposition을 정리한다.
 4. Scope와 Non-Goals에서 생겨야 하는 것과 생기면 안 되는 것을 분리한다.
@@ -99,9 +99,22 @@ Protected next phase: FIRST_SOURCE_FILE_CHANGE
 Checkpoint state: PARENT_CONTINUATION_REQUIRED
 ```
 
+`Authority / Verification-flow anchors`에는 위에서 고정한 exact Ticket과 적용되는 canonical parent authority의 bounded identity를 함께 보존한다. `Authoritative readback / self-check target`에는 completion evidence를 결정할 exact acceptance/readback target을 적는다. 이 정보는 invocation-local currentness 비교를 위한 것이며 새 persistent snapshot, registry 또는 workflow state를 만들지 않는다.
+
 이 checkpoint를 반환한 worker는 Parent decision 전에는 source 파일을 변경하지 않는다. Outer Main은 exact Ticket/assignment identity, observable outcome의 의미 보존, Scope/Non-Goals와 change surface, authoritative readback의 결정력, 명백한 authority mismatch나 unresolved blocker만 bounded하게 검토한다. Outer Main이 구현 방법을 다시 설계하거나 코드를 직접 구현하지 않는다.
 
 `DIRECT`에서는 같은 내용을 implementation preflight record로 유지하되 `Checkpoint: NOT_APPLICABLE`이고 Parent continuation은 없다.
+
+### 비재량 재동기화
+
+`SUBAGENT`에서 `PRE_ACTION` 이후 아래 사실 중 하나가 확인되면 delegated worker는 자신의 materiality threshold를 적용하지 않는다. `PRE_ACTION`에서 Parent가 처음 release한 authority/readback anchor가 initial `Parent-released anchor`다.
+
+1. exact Ticket 또는 적용되는 canonical Parent Spec/Behavior/UI Authority의 bounded identity가 current `Parent-released anchor`에서 달라졌다.
+2. current `Parent-released anchor`에 선언된 authoritative readback이 completion evidence에 대해 unavailable 또는 non-attributable해졌거나, 계속하려면 다른 readback으로 substitution해야 한다.
+
+해당 변화에 의존하는 작업은 즉시 멈춘다. 현재 canonical authority 안에서 faithful implementation direction과 결정력 있는 readback을 다시 확정할 수 있으면 기존 `MATERIAL_TURN` checkpoint를 반환하고 Parent `CONTINUE | STEER | STOP` 전에는 보호된 다음 phase로 넘어가지 않는다. Parent가 `CONTINUE`하면 그 checkpoint에서 재확정된 authority/readback identity가 invocation-local 최신 `Parent-released anchor`가 된다. `STEER`가 decision-critical 내용을 바꾸면 worker는 갱신된 같은 checkpoint를 다시 반환하고, 이후 Parent `CONTINUE`된 내용만 최신 anchor가 된다. `STOP` 또는 `Completion: BLOCKED`에서는 anchor를 갱신하지 않는다. 현재 authority 안에서 faithful direction 또는 결정력 있는 readback을 확정할 수 없으면 새 제품 의미나 약한 대체 readback을 Parent checkpoint로 승인받으려 하지 말고 `Completion: BLOCKED`로 닫는다.
+
+이 규칙은 최초 `PRE_ACTION`을 provenance로 보존하되 currentness 비교는 최신 `Parent-released anchor`를 사용한다. 새 checkpoint 종류, periodic polling, checkpoint ledger, persistent authority snapshot 또는 별도 state machine을 만들지 않는다. 같은 사실을 material delta 없이 반복 보고하지 않는다.
 
 ## 5. 구현
 
@@ -171,7 +184,8 @@ Work permitted before continuation: NONE
 
 Completion candidate 전에:
 
-- intended product outcome과 authoritative readback을 확인한다.
+- `SUBAGENT`에서는 exact Ticket과 적용되는 canonical Parent Spec/Behavior/UI Authority의 현재 bounded identity를 다시 확인하고 최신 `Parent-released anchor`와 대조한다. drift가 있으면 `Completion: COMPLETE`를 내지 않고 위 비재량 재동기화 규칙을 적용한다. intended product outcome과 최신 anchor의 authoritative readback도 다시 확인하고, 그 readback이 unavailable/non-attributable하거나 substitution이 필요하면 같은 규칙을 적용한다.
+- `DIRECT`에서는 Parent checkpoint나 `Parent-released anchor`를 만들지 않는다. 현재 Main이 exact Ticket과 적용되는 canonical Parent Spec/Behavior/UI Authority 및 authoritative readback을 직접 다시 결합한다. 현재 authority 안에서 faithful implementation direction과 결정력 있는 readback이 유지되면 기존 DIRECT self-check를 계속하고, 확정할 수 없으면 `Completion: BLOCKED`로 닫는다.
 - Scope/Non-Goals를 다시 읽는다.
 - 모든 authored Verification-flow obligation에 연결된 tests/runtime evidence를 실행한다.
 - pre-existing diff와 Ticket delta를 분리한다.

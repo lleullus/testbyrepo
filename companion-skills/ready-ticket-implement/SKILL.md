@@ -110,6 +110,8 @@ Delegated worker는 contract preflight 뒤 첫 source-file 변경 전에 `IMPLEM
 
 구현 방향, authority 해석, change surface 또는 evidence 전략이 material하게 바뀌는 경우에만 `IMPLEMENTATION TURN REPORT`를 `MATERIAL_TURN` checkpoint로 반환한다. 정상 진행, 일시적 test failure, 스타일 또는 단순한 내부 리팩터링은 중간 보고 사유가 아니며 periodic progress checkpoint를 만들지 않는다.
 
+단, `SUBAGENT`에서는 `PRE_ACTION` 이후 exact Ticket 또는 적용되는 canonical Parent Spec/Behavior/UI Authority가 current Parent-released anchor에서 바뀌거나, 그 anchor의 authoritative readback이 unavailable/non-attributable해지거나 substitution을 요구하면 worker의 materiality threshold를 적용하지 않는다. 변경된 authority/readback에 의존하는 작업 전에 기존 `MATERIAL_TURN`을 반환하고, Parent `CONTINUE`로 release된 최신 authority/readback을 이후 currentness 기준으로 사용한다. 현재 authority 안에서 faithful implementation direction 또는 결정력 있는 readback을 확정할 수 없으면 `Completion: BLOCKED`로 닫는다. `DIRECT`에서는 Parent checkpoint를 만들지 않고 현재 Main이 canonical authority/readback을 직접 재확인하며, faithful direction을 확정할 수 없을 때만 `Completion: BLOCKED`로 닫는다.
+
 Checkpoint는 logical phase boundary이며 required live-wait primitive, direct-user approval gate 또는 durable workflow state가 아니다. Parent는 `CONTINUE | STEER | STOP` 중 정확히 하나를 반환한다. checkpoint continuation capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 반환하고 `DIRECT`로 자동 fallback하지 않는다. Parent/user authority가 실제로 필요한 unresolved decision에 도달해 bounded continuation으로 해결할 수 없으면 확보한 evidence와 정확한 blocker를 포함해 `Completion: BLOCKED` terminal result를 반환한다.
 
 `IMPLEMENT` 완료에는 다음이 필요하다.
