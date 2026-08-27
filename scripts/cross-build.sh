@@ -16,6 +16,21 @@ MBEDTLS_VERSION="${MBEDTLS_VERSION:-2.28.5}"
 LIBUV_VERSION="${LIBUV_VERSION:-1.44.2}"
 LIBWEBSOCKETS_VERSION="${LIBWEBSOCKETS_VERSION:-4.3.3}"
 
+if [ -z "${CMAKE_BIN:-}" ]; then
+    if command -v cmake >/dev/null 2>&1; then
+        CMAKE_BIN="$(command -v cmake)"
+    elif python3 -c 'import cmake' >/dev/null 2>&1; then
+        CMAKE_BIN="$(python3 -c 'import cmake; print(cmake.CMAKE_BIN_DIR + "/cmake")')"
+    else
+        echo "cmake not found" >&2
+        exit 1
+    fi
+fi
+
+cmake_configure() {
+    "${CMAKE_BIN}" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 "$@"
+}
+
 build_zlib() {
     echo "=== Building zlib-${ZLIB_VERSION} (${TARGET})..."
     curl -fSsLo- "https://zlib.net/fossils/zlib-${ZLIB_VERSION}.tar.gz" | tar xz -C "${BUILD_DIR}"
@@ -30,7 +45,7 @@ build_json-c() {
     curl -fSsLo- "https://s3.amazonaws.com/json-c_releases/releases/json-c-${JSON_C_VERSION}.tar.gz" | tar xz -C "${BUILD_DIR}"
     pushd "${BUILD_DIR}/json-c-${JSON_C_VERSION}"
         rm -rf build && mkdir -p build && cd build
-        cmake -DCMAKE_TOOLCHAIN_FILE="${BUILD_DIR}/cross-${TARGET}.cmake" \
+        cmake_configure -DCMAKE_TOOLCHAIN_FILE="${BUILD_DIR}/cross-${TARGET}.cmake" \
             -DCMAKE_BUILD_TYPE=RELEASE \
             -DCMAKE_INSTALL_PREFIX="${STAGE_DIR}" \
             -DBUILD_SHARED_LIBS=OFF \
@@ -46,7 +61,7 @@ build_mbedtls() {
     curl -fSsLo- "https://github.com/ARMmbed/mbedtls/archive/v${MBEDTLS_VERSION}.tar.gz" | tar xz -C "${BUILD_DIR}"
     pushd "${BUILD_DIR}/mbedtls-${MBEDTLS_VERSION}"
         rm -rf build && mkdir -p build && cd build
-        cmake -DCMAKE_TOOLCHAIN_FILE="${BUILD_DIR}/cross-${TARGET}.cmake" \
+        cmake_configure -DCMAKE_TOOLCHAIN_FILE="${BUILD_DIR}/cross-${TARGET}.cmake" \
             -DCMAKE_BUILD_TYPE=RELEASE \
             -DCMAKE_INSTALL_PREFIX="${STAGE_DIR}" \
             -DENABLE_TESTING=OFF \
@@ -59,9 +74,16 @@ build_libuv() {
     echo "=== Building libuv-${LIBUV_VERSION} (${TARGET})..."
     curl -fSsLo- "https://dist.libuv.org/dist/v${LIBUV_VERSION}/libuv-v${LIBUV_VERSION}.tar.gz" | tar xz -C "${BUILD_DIR}"
     pushd "${BUILD_DIR}/libuv-v${LIBUV_VERSION}"
-        ./autogen.sh
-        env CFLAGS=-fPIC ./configure --disable-shared --enable-static --prefix="${STAGE_DIR}" --host="${TARGET}"
+        rm -rf build && mkdir -p build && cd build
+        cmake_configure -DCMAKE_TOOLCHAIN_FILE="${BUILD_DIR}/cross-${TARGET}.cmake" \
+            -DCMAKE_BUILD_TYPE=RELEASE \
+            -DCMAKE_INSTALL_PREFIX="${STAGE_DIR}" \
+            -DLIBUV_BUILD_TESTS=OFF \
+            -DLIBUV_BUILD_BENCH=OFF \
+            ..
         make -j"$(nproc)" install
+        rm -f "${STAGE_DIR}"/lib/libuv.so*
+        mv "${STAGE_DIR}/lib/libuv_a.a" "${STAGE_DIR}/lib/libuv.a"
     popd
 }
 
@@ -89,7 +111,7 @@ build_libwebsockets() {
         sed -i 's/ OR PC_OPENSSL_FOUND//g' lib/tls/CMakeLists.txt
         sed -i '/PC_OPENSSL/d' lib/tls/CMakeLists.txt
         rm -rf build && mkdir -p build && cd build
-        cmake -DCMAKE_TOOLCHAIN_FILE="${BUILD_DIR}/cross-${TARGET}.cmake" \
+        cmake_configure -DCMAKE_TOOLCHAIN_FILE="${BUILD_DIR}/cross-${TARGET}.cmake" \
             -DCMAKE_BUILD_TYPE=RELEASE \
             -DCMAKE_INSTALL_PREFIX="${STAGE_DIR}" \
             -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" \
@@ -119,7 +141,7 @@ build_libwebsockets() {
 build_ttyd() {
     echo "=== Building ttyd (${TARGET})..."
     rm -rf build && mkdir -p build && cd build
-    cmake -DCMAKE_TOOLCHAIN_FILE="${BUILD_DIR}/cross-${TARGET}.cmake" \
+    cmake_configure -DCMAKE_TOOLCHAIN_FILE="${BUILD_DIR}/cross-${TARGET}.cmake" \
         -DCMAKE_INSTALL_PREFIX="${STAGE_DIR}" \
         -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" \
         -DCMAKE_C_FLAGS="-Os -ffunction-sections -fdata-sections -fno-unwind-tables -fno-asynchronous-unwind-tables -flto" \
