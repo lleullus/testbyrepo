@@ -15,6 +15,7 @@
 #define OUTPUT '0'
 #define SET_WINDOW_TITLE '1'
 #define SET_PREFERENCES '2'
+#define SET_SESSION_STATE '3'
 
 // url paths
 struct endpoints {
@@ -28,6 +29,8 @@ extern volatile bool force_exit;
 extern struct lws_context *context;
 extern struct server *server;
 extern struct endpoints endpoints;
+
+struct tty_session;
 
 struct pss_http {
   char path[128];
@@ -43,6 +46,9 @@ struct pss_tty {
   char user[30];
   char address[50];
   char path[128];
+  char resume_id[33];
+  bool resumed;
+  bool resume_reset;
   char **args;
   int argc;
 
@@ -52,14 +58,10 @@ struct pss_tty {
 
   pty_process *process;
   pty_buf_t *pty_buf;
+  struct tty_session *session;
 
   int lws_close_status;
 };
-
-typedef struct {
-  struct pss_tty *pss;
-  bool ws_closed;
-} pty_ctx_t;
 
 struct server {
   int client_count;        // client count

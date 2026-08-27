@@ -63,6 +63,7 @@ void pty_buf_free(pty_buf_t *buf) {
 static void read_cb(uv_stream_t *stream, ssize_t n, const uv_buf_t *buf) {
   uv_read_stop(stream);
   pty_process *process = (pty_process *) stream->data;
+  process->paused = true;
   if (n <= 0) {
     if (n == UV_ENOBUFS || n == 0) return;
     process->read_cb(process, NULL, true);
@@ -123,13 +124,14 @@ void pty_pause(pty_process *process) {
   if (process == NULL) return;
   if (process->paused) return;
   uv_read_stop((uv_stream_t *) process->out);
+  process->paused = true;
 }
 
 void pty_resume(pty_process *process) {
   if (process == NULL) return;
   if (!process->paused) return;
   process->out->data = process;
-  uv_read_start((uv_stream_t *) process->out, alloc_cb, read_cb);
+  if (uv_read_start((uv_stream_t *) process->out, alloc_cb, read_cb) == 0) process->paused = false;
 }
 
 int pty_write(pty_process *process, pty_buf_t *buf) {

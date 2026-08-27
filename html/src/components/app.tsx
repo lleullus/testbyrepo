@@ -7,7 +7,12 @@ import type { ClientOptions, FlowControl } from './terminal/xterm';
 
 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const path = window.location.pathname.replace(/[/]+$/, '');
-const wsUrl = [protocol, '//', window.location.host, path, '/ws', window.location.search].join('');
+const resumeId = Array.from(window.crypto.getRandomValues(new Uint8Array(16)), byte =>
+    byte.toString(16).padStart(2, '0')
+).join('');
+const wsParams = new URLSearchParams(window.location.search);
+wsParams.set('resume', resumeId);
+const wsUrl = [protocol, '//', window.location.host, path, '/ws?', wsParams.toString()].join('');
 const tokenUrl = [window.location.protocol, '//', window.location.host, path, '/token'].join('');
 const clientOptions = {
     rendererType: 'webgl',

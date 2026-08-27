@@ -27,6 +27,7 @@ enum Command {
     OUTPUT = '0',
     SET_WINDOW_TITLE = '1',
     SET_PREFERENCES = '2',
+    SET_SESSION_STATE = '3',
 
     // client side
     INPUT = '0',
@@ -74,6 +75,9 @@ function addEventListener(target: EventTarget, type: string, listener: EventList
     return toDisposable(() => target.removeEventListener(type, listener));
 }
 
+const RECONNECT_WINDOW_MS = 60_000;
+const RECONNECT_MAX_DELAY_MS = 5_000;
+
 export class Xterm {
     private disposables: IDisposable[] = [];
     private textEncoder = new TextEncoder();
@@ -96,6 +100,11 @@ export class Xterm {
     private resizeOverlay = true;
     private reconnect = true;
     private doReconnect = true;
+    private reconnectStartedAt = 0;
+    private reconnectAttempts = 0;
+    private reconnectTimer?: number;
+    private reconnectScrollWrites = 0;
+    private reconnecting = false;
 
     private writeFunc = (data: ArrayBuffer) => this.writeData(new Uint8Array(data));
 
@@ -106,6 +115,10 @@ export class Xterm {
     ) {}
 
     dispose() {
+        if (this.reconnectTimer !== undefined) {
+            window.clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = undefined;
+        }
         for (const d of this.disposables) {
             d.dispose();
         }
@@ -245,6 +258,12 @@ export class Xterm {
     public writeData(data: string | Uint8Array) {
         const { terminal, textEncoder } = this;
         const { limit, highWater, lowWater } = this.options.flowControl;
+        const afterWrite = () => {
+            if (this.reconnectScrollWrites <= 0) return;
+            this.reconnectScrollWrites--;
+            terminal.scrollToBottom();
+            requestAnimationFrame(() => terminal.scrollToBottom());
+        };
 
         this.written += data.length;
         if (this.written > limit) {
@@ -253,6 +272,7 @@ export class Xterm {
                 if (this.pending < lowWater) {
                     this.socket?.send(textEncoder.encode(Command.RESUME));
                 }
+                afterWrite();
             });
             this.pending++;
             this.written = 0;
@@ -260,7 +280,7 @@ export class Xterm {
                 this.socket?.send(textEncoder.encode(Command.PAUSE));
             }
         } else {
-            terminal.write(data);
+            terminal.write(data, afterWrite);
         }
     }
 
@@ -312,7 +332,7 @@ export class Xterm {
         register(addEventListener(socket, 'open', this.onSocketOpen));
         register(addEventListener(socket, 'message', this.onSocketData as EventListener));
         register(addEventListener(socket, 'close', this.onSocketClose as EventListener));
-        register(addEventListener(socket, 'error', () => (this.doReconnect = false)));
+        register(addEventListener(socket, 'error', () => console.warn('[ttyd] websocket error')));
     }
 
     @bind
@@ -324,11 +344,12 @@ export class Xterm {
         this.socket?.send(textEncoder.encode(msg));
 
         if (this.opened) {
-            terminal.reset();
+            this.reconnecting = true;
             terminal.options.disableStdin = false;
-            overlayAddon.showOverlay('Reconnected', 300);
+            overlayAddon.showOverlay('Restoring session...');
         } else {
             this.opened = true;
+            this.reconnecting = false;
         }
 
         this.doReconnect = this.reconnect;
@@ -342,26 +363,48 @@ export class Xterm {
     private onSocketClose(event: CloseEvent) {
         console.log(`[ttyd] websocket connection closed with code: ${event.code}`);
 
-        const { refreshToken, connect, doReconnect, overlayAddon } = this;
+        const { doReconnect, overlayAddon } = this;
         overlayAddon.showOverlay('Connection Closed');
         this.dispose();
 
         // 1000: CLOSE_NORMAL
         if (event.code !== 1000 && doReconnect) {
+            this.scheduleReconnect();
+        } else {
+            this.waitForManualReconnect();
+        }
+    }
+
+    private scheduleReconnect() {
+        const now = Date.now();
+        if (this.reconnectStartedAt === 0) this.reconnectStartedAt = now;
+
+        const remaining = RECONNECT_WINDOW_MS - (now - this.reconnectStartedAt);
+        if (remaining <= 0 || !this.doReconnect) {
+            this.waitForManualReconnect();
+            return;
+        }
+
+        const delay = Math.min(1000 * 2 ** Math.min(this.reconnectAttempts, 3), RECONNECT_MAX_DELAY_MS, remaining);
+        this.reconnectAttempts++;
+        this.overlayAddon.showOverlay('Reconnecting...');
+        this.reconnectTimer = window.setTimeout(() => {
+            this.reconnectTimer = undefined;
+            this.refreshToken().then(this.connect);
+        }, delay);
+    }
+
+    private waitForManualReconnect() {
+        const { terminal, overlayAddon, refreshToken, connect } = this;
+        const keyDispose = terminal.onKey(e => {
+            if (e.domEvent.key !== 'Enter') return;
+            keyDispose.dispose();
+            this.reconnectStartedAt = 0;
+            this.reconnectAttempts = 0;
             overlayAddon.showOverlay('Reconnecting...');
             refreshToken().then(connect);
-        } else {
-            const { terminal } = this;
-            const keyDispose = terminal.onKey(e => {
-                const event = e.domEvent;
-                if (event.key === 'Enter') {
-                    keyDispose.dispose();
-                    overlayAddon.showOverlay('Reconnecting...');
-                    refreshToken().then(connect);
-                }
-            });
-            overlayAddon.showOverlay('Press ⏎ to Reconnect');
-        }
+        });
+        overlayAddon.showOverlay('Press ⏎ to Reconnect');
     }
 
     @bind
@@ -420,6 +463,27 @@ export class Xterm {
                     ...this.parseOptsFromUrlQuery(window.location.search),
                 } as Preferences);
                 break;
+            case Command.SET_SESSION_STATE: {
+                const state = textDecoder.decode(data);
+                if (!this.reconnecting) break;
+
+                if (state === 'fresh' || state === 'resumed-reset') {
+                    this.terminal.reset();
+                }
+                if (state === 'resumed' || state === 'resumed-reset') {
+                    this.reconnectScrollWrites = 4;
+                    this.terminal.scrollToBottom();
+                    requestAnimationFrame(() => this.terminal.scrollToBottom());
+                    this.overlayAddon.showOverlay('Reconnected', 300);
+                } else {
+                    this.reconnectScrollWrites = 0;
+                    this.overlayAddon.showOverlay('New Session', 300);
+                }
+                this.reconnectStartedAt = 0;
+                this.reconnectAttempts = 0;
+                this.reconnecting = false;
+                break;
+            }
             default:
                 console.warn(`[ttyd] unknown command: ${cmd}`);
                 break;
