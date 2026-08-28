@@ -18,7 +18,7 @@ static char initial_cmds[] = {SET_WINDOW_TITLE, SET_PREFERENCES, SET_SESSION_STA
 #define SESSION_ID_LENGTH 32
 #define SESSION_BACKLOG_MAX (8 * 1024 * 1024)
 #define SESSION_REPLAY_CHUNK (64 * 1024)
-#define SESSION_GRACE_DEFAULT_MS 600000
+#define SESSION_GRACE_DEFAULT_MS 3600000
 
 struct tty_session {
   char id[SESSION_ID_LENGTH + 1];
@@ -41,7 +41,7 @@ static uint64_t session_grace_ms(void) {
   if (value == NULL || *value == '\0') return SESSION_GRACE_DEFAULT_MS;
   char *end = NULL;
   long seconds = strtol(value, &end, 10);
-  if (end == value || *end != '\0' || seconds < 1 || seconds > 600) return SESSION_GRACE_DEFAULT_MS;
+  if (end == value || *end != '\0' || seconds < 1 || seconds > 3600) return SESSION_GRACE_DEFAULT_MS;
   return (uint64_t)seconds * 1000;
 }
 
