@@ -2,21 +2,31 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { bindAuthority, checkAuthorityCurrentness, isInsideProject } from "./authority-binding.js";
+import { bindAuthority, checkAuthorityCurrentness, isInsideProject, validateTicketWith } from "./authority-binding.js";
 import {
   MAX_OBSERVATION_OUTPUT_BYTES,
   prepareObservation,
   recordObservationResult,
 } from "./observation-ledger.js";
-import { parseSimpleReadOnlyCommand, runArgv, validateInspectRequest, validateMutationRequest } from "./argv-policy.js";
+import { isReadOnlyArgv, parseSimpleReadOnlyCommand, runArgv, validateInspectRequest, validateMutationRequest } from "./argv-policy.js";
 import { inventoryAllowedForPhase, isBroadInventory } from "./inventory-policy.js";
 import { ReadyLifecycle } from "./lifecycle.js";
+import {
+  dependencyProvenance,
+  environmentTaint,
+  fileDigest,
+  productionPathProvenance,
+  resolveAcceptanceRunner,
+  resolveEvidencePath,
+  scanFileGraph,
+  scanProspectiveMutation,
+} from "./no-mock-policy.js";
 import { classifyError } from "./retry-policy.js";
 import { ManagedServiceRegistry } from "./service-supervisor.js";
 import { RuntimeStore, stableDigest } from "./state-store.js";
 import { buildExactToolMap, mappedPolicy } from "./tool-map.js";
 
-const INTERNAL_TOOLS = new Set(["ready_guard", "ready_argv", "ready_service"]);
+const INTERNAL_TOOLS = new Set(["ready_guard", "ready_argv", "ready_service", "ready_verify_guard"]);
 
 function sessionId(ctx) {
   const id = ctx?.sessionManager?.getSessionId?.();
@@ -47,6 +57,15 @@ function runtimeView(state) {
       ? { tool_call_id: state.uncertainty.tool_call_id, detail: state.uncertainty.detail, resolution: state.uncertainty.resolution ?? null }
       : null,
     managed_service: state.managed_service ? { pid: state.managed_service.pid, argv: state.managed_service.argv } : null,
+    verification_verdict: state.verification_verdict ?? null,
+    zero_mock: {
+      violations: state.zero_mock?.violations?.length ?? 0,
+      touched_paths: state.zero_mock?.touched_paths?.length ?? 0,
+      self_check_paths: state.zero_mock?.self_check_paths?.length ?? 0,
+      observed_paths: state.zero_mock?.observed_paths?.length ?? 0,
+      acceptance_provenance: state.zero_mock?.acceptance_provenance?.length ?? 0,
+      inspection_provenance: state.zero_mock?.inspection_provenance?.length ?? 0,
+    },
   };
 }
 
@@ -56,6 +75,14 @@ function isReadySkillRead(event) {
   if (/^skill:\/\/ready-ticket-implement(?=[:/]|$)/.test(raw)) return true;
   const normalized = raw.replace(/\\/g, "/").replace(/:[0-9]+(?:-[0-9]+)?$/, "");
   return normalized.endsWith("/ready-ticket-implement/SKILL.md");
+}
+
+function isReadyVerifySkillRead(event) {
+  if (event?.toolName !== "read") return false;
+  const raw = String(event?.input?.path ?? "");
+  if (/^skill:\/\/ready-ticket-verify(?=[:/]|$)/.test(raw)) return true;
+  const normalized = raw.replace(/\\/g, "/").replace(/:[0-9]+(?:-[0-9]+)?$/, "");
+  return normalized.endsWith("/ready-ticket-verify/SKILL.md");
 }
 
 function nearestExistingCanonical(absolutePath) {
@@ -140,6 +167,14 @@ function resolveSnapshotOutcome(snapshot) {
   return "inconclusive";
 }
 
+function exactReadyDoneProgression(beforeText, afterText) {
+  if (typeof beforeText !== "string" || typeof afterText !== "string") return false;
+  const matches = beforeText.match(/^Status:\s*ready\s*$/gm) || [];
+  if (matches.length !== 1) return false;
+  const expected = beforeText.replace(/^Status:\s*ready\s*$/m, "Status: done");
+  return afterText === expected;
+}
+
 function contentBytes(content) {
   return Buffer.byteLength(
     (content || [])
@@ -170,6 +205,307 @@ function repeatedMutationReason(state, mutationDigest) {
   return null;
 }
 
+function ensureZeroMockState(state) {
+  state.zero_mock ??= {};
+  state.zero_mock.violations ??= [];
+  state.zero_mock.touched_paths ??= [];
+  state.zero_mock.self_check_paths ??= [];
+  state.zero_mock.observed_paths ??= [];
+  state.zero_mock.observed_evidence ??= {};
+  state.zero_mock.acceptance_provenance ??= [];
+  state.zero_mock.inspection_provenance ??= [];
+  return state.zero_mock;
+}
+
+function recordZeroMockViolations(state, violations) {
+  const zeroMock = ensureZeroMockState(state);
+  const seen = new Set(zeroMock.violations.map(item => `${item.code}|${item.path}|${item.detail}`));
+  for (const violation of violations || []) {
+    const key = `${violation.code}|${violation.path}|${violation.detail}`;
+    if (!seen.has(key)) {
+      zeroMock.violations.push(violation);
+      seen.add(key);
+    }
+  }
+  return zeroMock.violations;
+}
+
+function recordZeroMockPaths(state, field, paths) {
+  const zeroMock = ensureZeroMockState(state);
+  const values = new Set(zeroMock[field] || []);
+  for (const value of paths || []) if (value) values.add(value);
+  zeroMock[field] = [...values];
+}
+
+function currentZeroMockScan(state) {
+  const zeroMock = ensureZeroMockState(state);
+  const existingTouched = zeroMock.touched_paths.filter(file => fs.existsSync(file) && fs.statSync(file).isFile());
+  const report = scanFileGraph(state.project_root, [...existingTouched, ...zeroMock.self_check_paths]);
+  const violations = [...report.violations, ...environmentTaint()];
+  recordZeroMockViolations(state, violations);
+  return { ...report, violations, mock_taint: violations.length > 0 || zeroMock.violations.length > 0 };
+}
+
+function recordInspectionEvidence(state, params) {
+  if (!params.production_entrypoint || !params.authoritative_readback_path) {
+    throw new Error("direct inspection admission requires production_entrypoint and authoritative_readback_path");
+  }
+  const productionResult = productionPathProvenance(
+    state.project_root,
+    [params.production_entrypoint],
+    params.production_entrypoint,
+  );
+  const production = productionResult.production_entrypoint;
+  const readback = resolveEvidencePath(state.project_root, params.authoritative_readback_path, "authoritative readback path");
+  const zeroMock = ensureZeroMockState(state);
+  const observed = zeroMock.observed_evidence?.[readback];
+  if (
+    !observed
+    || observed.mutation_revision !== Number(state.mutation_revision ?? 0)
+    || observed.sha256 !== fileDigest(readback)
+  ) {
+    throw new Error("direct inspection admission requires a current successful runtime read of the unchanged authoritative readback path");
+  }
+  const dependencies = Array.isArray(params.dependency_paths) && params.dependency_paths.length > 0
+    ? dependencyProvenance(state.project_root, params.dependency_paths)
+    : [];
+  const scan = scanFileGraph(state.project_root, [production, readback, ...dependencies.map(item => item.path)]);
+  const violations = [
+    ...environmentTaint(),
+    ...productionResult.violations,
+    ...scan.violations,
+    ...dependencyUsageViolations(scan.scanned_paths, dependencies),
+  ];
+  recordZeroMockPaths(state, "self_check_paths", [production, readback, ...dependencies.map(item => item.path)]);
+  recordZeroMockViolations(state, violations);
+  if (violations.length > 0) {
+    throw new Error(`Zero-Mock direct inspection is tainted or unproven: ${violations.map(item => item.code).join(", ")}`);
+  }
+  const provenance = {
+    status: "PASSED",
+    production_entrypoint: production,
+    dependencies,
+    authoritative_readback: {
+      available: true,
+      kind: "path",
+      path: readback,
+      sha256: fileDigest(readback),
+    },
+    mock_taint: false,
+    mutation_revision: Number(state.mutation_revision ?? 0),
+    recorded_at: new Date().toISOString(),
+  };
+  ensureZeroMockState(state).inspection_provenance.push(provenance);
+  return provenance;
+}
+
+function prospectiveZeroMockReason(event, target) {
+  if (!target) return null;
+  const violations = scanProspectiveMutation(event.input, target);
+  if (violations.length === 0) return null;
+  return `Zero-Mock Delivery blocked mutation before execution: ${violations.map(item => item.code).join(", ")}`;
+}
+
+function unverifiableCustomToolReason(pi, toolName) {
+  const matches = (pi.getAllTools?.() || []).filter(tool => tool?.name === toolName);
+  const unverifiable = matches.find(tool => ["mcp", "extension", "sdk"].includes(tool?.sourceInfo?.source));
+  return unverifiable
+    ? `Zero-Mock Delivery blocks custom/MCP tool without verifiable execution provenance: ${toolName}`
+    : null;
+}
+
+function projectRootFromTicket(ticketPath) {
+  const text = fs.readFileSync(ticketPath, "utf8");
+  const match = text.match(/^Project-Root:\s*(.+?)\s*$/m);
+  if (!match) throw new Error("Ticket Project-Root metadata is missing");
+  return match[1].trim();
+}
+
+function dependencyUsageViolations(scannedPaths, dependencies) {
+  const texts = scannedPaths
+    .filter(file => fs.existsSync(file) && fs.statSync(file).isFile())
+    .map(file => fs.readFileSync(file, "utf8"));
+  const implicitRunnerConfig = new Set(["package.json", "pyproject.toml", "setup.cfg", "tox.ini"]);
+  return dependencies.flatMap(item => {
+    const basename = path.basename(item.path);
+    if (implicitRunnerConfig.has(basename)) return [];
+    if (texts.some(text => text.includes(basename))) return [];
+    return [{
+      code: "DEPENDENCY_PATH_UNPROVEN",
+      path: item.path,
+      detail: `declared dependency/config is not referenced by the production/evidence closure: ${basename}`,
+    }];
+  });
+}
+
+function acceptanceTestPaths(projectRoot, rawPaths) {
+  if (!Array.isArray(rawPaths) || rawPaths.length === 0) throw new Error("ready_argv acceptance requires evidence_paths");
+  return rawPaths.map(raw => resolveEvidencePath(projectRoot, raw, "acceptance evidence path"));
+}
+
+async function runAcceptanceEvidence({ lifecycle, store, state, params, signal }) {
+  if (!["ACTIVE", "VERIFY_ACTIVE"].includes(state.phase)) {
+    throw new Error(`ready_argv acceptance is unavailable in phase ${state.phase}`);
+  }
+  const runner = resolveAcceptanceRunner(params.argv, state.project_root);
+  const evidencePaths = acceptanceTestPaths(state.project_root, params.evidence_paths);
+  const production = productionPathProvenance(state.project_root, evidencePaths, params.production_entrypoint);
+  const dependencies = dependencyProvenance(state.project_root, params.dependency_paths);
+  const dependencyPaths = dependencies.map(item => item.path);
+  const scan = scanFileGraph(state.project_root, [...evidencePaths, production.production_entrypoint, ...dependencyPaths]);
+  const violations = [
+    ...environmentTaint(),
+    ...production.violations,
+    ...scan.violations,
+    ...dependencyUsageViolations(scan.scanned_paths, dependencies),
+  ];
+  const preExecutionDigests = new Map(
+    scan.scanned_paths
+      .filter(file => fs.existsSync(file) && fs.statSync(file).isFile())
+      .map(file => [file, fileDigest(file)]),
+  );
+  recordZeroMockPaths(state, "self_check_paths", [...evidencePaths, production.production_entrypoint, ...dependencyPaths]);
+  recordZeroMockViolations(state, violations);
+  store.writeExecution(state);
+  if (violations.length > 0) {
+    throw new Error(`Zero-Mock acceptance blocked by mock-tainted or unproven evidence: ${violations.map(item => item.code).join(", ")}`);
+  }
+  const hasReadbackPath = typeof params.authoritative_readback_path === "string" && params.authoritative_readback_path.length > 0;
+  const hasReadbackArgv = Array.isArray(params.readback_argv) && params.readback_argv.length > 0;
+  if (!hasReadbackPath && !hasReadbackArgv) {
+    throw new Error("ready_argv acceptance requires authoritative_readback_path or readback_argv");
+  }
+  if (hasReadbackArgv && !isReadOnlyArgv(params.readback_argv)) {
+    throw new Error("authoritative readback argv must be on the structured read-only allowlist");
+  }
+  let readbackBeforeDigest = null;
+  if (hasReadbackPath) {
+    const absolute = path.isAbsolute(params.authoritative_readback_path)
+      ? path.resolve(params.authoritative_readback_path)
+      : path.resolve(state.project_root, params.authoritative_readback_path);
+    if (!isInsideProject(state.project_root, absolute)) {
+      throw new Error(`authoritative readback path is outside Project Root: ${absolute}`);
+    }
+    if (fs.existsSync(absolute) && fs.statSync(absolute).isFile()) readbackBeforeDigest = fileDigest(absolute);
+  }
+
+  const syntheticId = `ready-acceptance-${crypto.randomUUID()}`;
+  lifecycle.beginOperation(state.execution_id, { toolCallId: syntheticId, kind: "observation" });
+  let testResult;
+  try {
+    testResult = await runArgv(params.argv, { cwd: state.project_root, signal });
+  } catch (error) {
+    lifecycle.finishOperation(state.execution_id, syntheticId, { mutationApplied: false });
+    throw error;
+  }
+
+  const changedEvidence = [];
+  for (const [file, beforeDigest] of preExecutionDigests.entries()) {
+    let afterDigest = null;
+    try {
+      afterDigest = fileDigest(file);
+    } catch {
+      afterDigest = null;
+    }
+    if (afterDigest !== beforeDigest) {
+      changedEvidence.push({
+        code: "ACCEPTANCE_EVIDENCE_MUTATION",
+        path: file,
+        detail: "acceptance runner modified a production/test/config provenance input",
+      });
+    }
+  }
+  const postScan = scanFileGraph(state.project_root, [...evidencePaths, production.production_entrypoint, ...dependencyPaths]);
+  const postViolations = [...changedEvidence, ...postScan.violations];
+  if (postViolations.length > 0) {
+    const current = lifecycle.status(state.execution_id);
+    recordZeroMockViolations(current, postViolations);
+    store.writeExecution(current);
+    lifecycle.finishOperation(state.execution_id, syntheticId, { mutationApplied: false });
+    throw new Error(`Zero-Mock acceptance invalidated its own evidence inputs: ${postViolations.map(item => item.code).join(", ")}`);
+  }
+
+  let authoritativeReadback = { available: false };
+  if (testResult.exitCode === 0 && !testResult.timedOut) {
+    if (params.authoritative_readback_path) {
+      try {
+        const readbackPath = resolveEvidencePath(state.project_root, params.authoritative_readback_path, "authoritative readback path");
+        const reserved = new Set([...evidencePaths, ...dependencyPaths]);
+        if (reserved.has(readbackPath)) throw new Error("authoritative readback must be distinct from test/config provenance inputs");
+        const afterDigest = fileDigest(readbackPath);
+        const basename = path.basename(readbackPath);
+        const referenced = scan.scanned_paths
+          .filter(file => fs.existsSync(file) && fs.statSync(file).isFile())
+          .some(file => fs.readFileSync(file, "utf8").includes(basename));
+        const producedOrChanged = readbackBeforeDigest === null || readbackBeforeDigest !== afterDigest;
+        if (!referenced && !producedOrChanged) {
+          throw new Error("authoritative readback path is not attributable to the production/evidence execution");
+        }
+        authoritativeReadback = {
+          available: true,
+          kind: "path",
+          path: readbackPath,
+          sha256: afterDigest,
+          attribution: referenced ? "referenced_by_execution_closure" : "created_or_changed_by_execution",
+        };
+      } catch (error) {
+        authoritativeReadback = { available: false, kind: "path", error: String(error?.message ?? error) };
+      }
+    } else if (hasReadbackArgv) {
+      try {
+        const readbackResult = await runArgv(params.readback_argv, { cwd: state.project_root, signal });
+        authoritativeReadback = {
+          available: readbackResult.exitCode === 0 && !readbackResult.timedOut,
+          kind: "argv",
+          argv: params.readback_argv,
+          exit_code: readbackResult.exitCode,
+          stdout_sha256: crypto.createHash("sha256").update(readbackResult.stdout).digest("hex"),
+        };
+      } catch (error) {
+        authoritativeReadback = {
+          available: false,
+          kind: "argv",
+          argv: params.readback_argv,
+          error: String(error?.message ?? error),
+        };
+      }
+    }
+  }
+
+  const status = testResult.exitCode === 0 && !testResult.timedOut && authoritativeReadback.available ? "PASSED"
+    : testResult.exitCode === 0 && !testResult.timedOut ? "INCONCLUSIVE"
+      : "FAILED";
+  const current = lifecycle.status(state.execution_id);
+  ensureZeroMockState(current).acceptance_provenance.push({
+    command: params.argv,
+    runner,
+    mutation_revision: Number(current.mutation_revision ?? 0),
+    production_entrypoint: production.production_entrypoint,
+    dependencies,
+    evidence_paths: evidencePaths,
+    authoritative_readback: authoritativeReadback,
+    mock_taint: false,
+    status,
+    exit_code: testResult.exitCode,
+    timed_out: testResult.timedOut,
+    recorded_at: new Date().toISOString(),
+  });
+  store.writeExecution(current);
+  lifecycle.finishOperation(state.execution_id, syntheticId, { mutationApplied: false });
+  if (status === "PASSED") lifecycle.noteCurrentEvidence(state.execution_id, current.mutation_revision);
+  return {
+    status,
+    runner,
+    command: params.argv,
+    production_entrypoint: production.production_entrypoint,
+    dependencies,
+    authoritative_readback: authoritativeReadback,
+    mock_taint: false,
+    stdout: testResult.stdout.slice(0, MAX_OBSERVATION_OUTPUT_BYTES),
+    stderr: testResult.stderr.slice(0, MAX_OBSERVATION_OUTPUT_BYTES),
+  };
+}
+
 function maybeRewritePath(event, target) {
   if (!target || /^[a-z][a-z0-9+.-]*:\/\//i.test(target)) return undefined;
   if (!["read", "write", "grep", "glob"].includes(event.toolName)) return undefined;
@@ -186,7 +522,7 @@ function targetMatchesDrift(state, event, cwd) {
 async function authorityGate(lifecycle, state, event, cwd) {
   const currentness = await lifecycle.checkAuthorityCurrentness(state);
   if (currentness.current) return { allowed: true, state };
-  if (!["AUTHORITY_REVIEW_REQUIRED", "MATERIAL_TURN_REQUIRED"].includes(state.phase)) {
+  if (!["AUTHORITY_REVIEW_REQUIRED", "MATERIAL_TURN_REQUIRED", "VERIFY_AUTHORITY_REVIEW_REQUIRED"].includes(state.phase)) {
     state = lifecycle.markAuthorityDrift(state.execution_id, currentness.changed);
   }
   if (targetMatchesDrift(state, event, cwd)) return { allowed: true, state, reviewRead: true };
@@ -195,17 +531,30 @@ async function authorityGate(lifecycle, state, event, cwd) {
     state,
     reason: state.execution_mode === "SUBAGENT"
       ? "Ready authority changed. Re-read the changed authority and issue MATERIAL_TURN before further guarded work."
-      : "Ready authority changed. Re-read the changed authority and call begin_direct again to rebind before further guarded work.",
+      : state.execution_mode === "VERIFY"
+        ? "Ready verification authority changed. Re-read the changed authority, resolve the verifier material turn, and call ready_verify_guard begin again to rebind."
+        : "Ready authority changed. Re-read the changed authority and call begin_direct again to rebind before further guarded work.",
   };
 }
 
 function requireWorkerExecution(lifecycle, sid) {
   const session = lifecycle.sessionState(sid);
   if (!session?.execution_id) throw new Error("current session has no bound Ready execution");
-  if (session.role !== "worker") throw new Error("current session is the SUBAGENT parent and may not perform implementation work");
+  if (!new Set(["worker", "verifier"]).has(session.role)) {
+    throw new Error("current session is the SUBAGENT parent and may not execute guarded Ready argv");
+  }
   const state = lifecycle.status(session.execution_id);
   if (state.session_id !== sid) throw new Error("current session does not own the bound Ready execution");
   return state;
+}
+
+function isAcceptanceCommand(argv, projectRoot) {
+  try {
+    resolveAcceptanceRunner(argv, projectRoot);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function validateExplicitTargets(state, targets) {
@@ -258,7 +607,11 @@ export function installReadyRuntime(pi, options = {}) {
   pi.on("tool_call", async (event, ctx) => {
     const sid = sessionId(ctx);
     if (isReadySkillRead(event)) {
-      lifecycle.armSession(sid);
+      lifecycle.armSession(sid, "IMPLEMENT");
+      return;
+    }
+    if (isReadyVerifySkillRead(event)) {
+      lifecycle.armSession(sid, "VERIFY");
       return;
     }
     if (INTERNAL_TOOLS.has(event.toolName)) return;
@@ -266,7 +619,13 @@ export function installReadyRuntime(pi, options = {}) {
     const session = lifecycle.sessionState(sid);
     if (!session?.armed) return;
     const policy = mappedPolicy(toolMap, event.toolName);
-    if (!policy) return;
+    if (!policy) {
+      if (session.execution_id) {
+        const reason = unverifiableCustomToolReason(pi, event.toolName);
+        if (reason) return { block: true, reason };
+      }
+      return;
+    }
 
     let effectivePolicy = policy;
     let normalizedObservationInput = event.input;
@@ -295,6 +654,7 @@ export function installReadyRuntime(pi, options = {}) {
       return;
     }
     if (state.session_id !== sid) return { block: true, reason: "Ready execution/session binding mismatch." };
+    const verifierMode = session.role === "verifier" && state.execution_mode === "VERIFY";
 
     if (state.phase === "MUTATION_UNCERTAIN") {
       const snapshot = state.uncertainty?.operation?.mutation_snapshot;
@@ -315,8 +675,15 @@ export function installReadyRuntime(pi, options = {}) {
     }
 
     const current = lifecycle.status(state.execution_id);
-    if (effectivePolicy === "mutation" && current.phase !== "ACTIVE") {
-      return { block: true, reason: `Ready runtime blocks source mutation in phase ${current.phase}.` };
+    if (effectivePolicy === "mutation") {
+      if (verifierMode) {
+        const verifierTarget = pathFromEvent(event, ctx.cwd);
+        if (current.phase !== "VERIFY_VERIFIED_ADMITTED" || verifierTarget !== current.ticket_path || current.verification_progression_used) {
+          return { block: true, reason: "Zero-Mock verifier runtime is read-only except for one admitted exact Ticket ready-to-done progression." };
+        }
+      } else if (current.phase !== "ACTIVE") {
+        return { block: true, reason: `Ready runtime blocks source mutation in phase ${current.phase}.` };
+      }
     }
     if (current.active_operation) {
       return { block: true, reason: `Ready execution already has active guarded operation ${current.active_operation.tool_call_id}.` };
@@ -327,8 +694,12 @@ export function installReadyRuntime(pi, options = {}) {
       const confinement = projectConfinementReason(current, target);
       if (confinement) return { block: true, reason: confinement };
       if (effectivePolicy === "mutation") {
-        const protectedReason = protectedMutationReason(current, target);
-        if (protectedReason) return { block: true, reason: protectedReason };
+        if (!(verifierMode && target === current.ticket_path)) {
+          const protectedReason = protectedMutationReason(current, target);
+          if (protectedReason) return { block: true, reason: protectedReason };
+        }
+        const zeroMockReason = prospectiveZeroMockReason(event, target);
+        if (zeroMockReason) return { block: true, reason: zeroMockReason };
       }
     }
     if (policy === "dynamic") {
@@ -352,6 +723,7 @@ export function installReadyRuntime(pi, options = {}) {
         executionId: current.execution_id,
         kind: "observation",
         observationDigest: prepared.digest,
+        targetPath: target,
         sessionId: sid,
       });
     } else {
@@ -369,6 +741,11 @@ export function installReadyRuntime(pi, options = {}) {
         executionId: current.execution_id,
         kind: "mutation",
         mutationDigest,
+        targetPath: target,
+        verifierProgression: verifierMode && target === current.ticket_path,
+        verifierProgressionBeforeText: verifierMode && target === current.ticket_path && fs.existsSync(target)
+          ? fs.readFileSync(target, "utf8")
+          : null,
         sessionId: sid,
       });
     }
@@ -401,6 +778,16 @@ export function installReadyRuntime(pi, options = {}) {
         errorClassification: classification,
         incomplete: bytes > MAX_OBSERVATION_OUTPUT_BYTES,
       });
+      if (!event.isError && tracked.targetPath && !/^[a-z][a-z0-9+.-]*:\/\//i.test(tracked.targetPath)) {
+        recordZeroMockPaths(state, "observed_paths", [tracked.targetPath]);
+        if (fs.existsSync(tracked.targetPath) && fs.statSync(tracked.targetPath).isFile()) {
+          ensureZeroMockState(state).observed_evidence[tracked.targetPath] = {
+            sha256: fileDigest(tracked.targetPath),
+            mutation_revision: Number(state.mutation_revision ?? 0),
+            observed_at: new Date().toISOString(),
+          };
+        }
+      }
       store.writeExecution(state);
       lifecycle.finishOperation(tracked.executionId, event.toolCallId, { mutationApplied: false });
       return;
@@ -408,8 +795,31 @@ export function installReadyRuntime(pi, options = {}) {
 
     const state = lifecycle.status(tracked.executionId);
     if (!event.isError) {
-      lifecycle.finishOperation(tracked.executionId, event.toolCallId, { mutationApplied: true });
+      const finished = lifecycle.finishOperation(tracked.executionId, event.toolCallId, { mutationApplied: true });
+      if (tracked.targetPath) {
+        recordZeroMockPaths(finished, "touched_paths", [tracked.targetPath]);
+        if (fs.existsSync(tracked.targetPath) && fs.statSync(tracked.targetPath).isFile()) {
+          const scan = scanFileGraph(finished.project_root, [tracked.targetPath]);
+          recordZeroMockViolations(finished, scan.violations);
+        }
+      }
+      if (tracked.verifierProgression) {
+        const afterText = fs.existsSync(tracked.targetPath) ? fs.readFileSync(tracked.targetPath, "utf8") : null;
+        finished.verification_progression_used = true;
+        finished.verification_progression_exact = exactReadyDoneProgression(
+          tracked.verifierProgressionBeforeText,
+          afterText,
+        );
+      }
+      store.writeExecution(finished);
       return;
+    }
+    if (tracked.targetPath) {
+      recordZeroMockPaths(state, "touched_paths", [tracked.targetPath]);
+      if (fs.existsSync(tracked.targetPath) && fs.statSync(tracked.targetPath).isFile()) {
+        recordZeroMockViolations(state, scanFileGraph(state.project_root, [tracked.targetPath]).violations);
+      }
+      store.writeExecution(state);
     }
     const classification = classifyError(event.content);
     if (classification === "TRANSPORT_NETWORK") {
@@ -511,6 +921,13 @@ export function installReadyRuntime(pi, options = {}) {
         case "complete": {
           const execution = lifecycle.status(params.execution_id);
           if (execution.managed_service) await services.stop(execution.execution_id, sid);
+          const scan = currentZeroMockScan(execution);
+          const provenance = execution.zero_mock?.acceptance_provenance || [];
+          const badProvenance = provenance.filter(item => item.mock_taint !== false || item.status !== "PASSED");
+          store.writeExecution(execution);
+          if (scan.mock_taint || badProvenance.length > 0) {
+            throw new Error("Zero-Mock Delivery blocks COMPLETE because current implementation/self-check evidence is mock-tainted or non-passing.");
+          }
           value = await lifecycle.complete(params.execution_id, sid);
           return resultText(runtimeView(value));
         }
@@ -544,11 +961,16 @@ export function installReadyRuntime(pi, options = {}) {
     label: "Ready Argv",
     description: "Run explicit structured argv for Ready inspection or mutation. Shell strings are not accepted.",
     parameters: z.object({
-      action: z.enum(["inspect", "mutate"]),
+      action: z.enum(["inspect", "mutate", "acceptance"]),
       version: z.literal(1),
       commands: z.array(z.array(z.string())).optional(),
       argv: z.array(z.string()).optional(),
       target_paths: z.array(z.string()).optional(),
+      evidence_paths: z.array(z.string()).optional(),
+      production_entrypoint: z.string().optional(),
+      dependency_paths: z.array(z.string()).optional(),
+      authoritative_readback_path: z.string().optional(),
+      readback_argv: z.array(z.string()).optional(),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const sid = sessionId(ctx);
@@ -557,6 +979,12 @@ export function installReadyRuntime(pi, options = {}) {
       if (!authority.current) {
         lifecycle.markAuthorityDrift(state.execution_id, authority.changed);
         throw new Error("Ready authority changed; re-confirm authority before ready_argv execution");
+      }
+
+      if (params.action === "acceptance") {
+        if (!params.production_entrypoint) throw new Error("ready_argv acceptance requires production_entrypoint");
+        const result = await runAcceptanceEvidence({ lifecycle, store, state, params, signal });
+        return resultText(result);
       }
 
       if (params.action === "inspect") {
@@ -612,8 +1040,18 @@ export function installReadyRuntime(pi, options = {}) {
         return resultText({ action: "inspect", results: outputs });
       }
 
+      if (state.execution_mode === "VERIFY") throw new Error("Zero-Mock verifier runtime is read-only; ready_argv mutate is unavailable.");
       if (state.phase !== "ACTIVE") throw new Error(`ready_argv mutate requires ACTIVE execution; found ${state.phase}`);
       const request = validateMutationRequest({ version: params.version, argv: params.argv });
+      if (isAcceptanceCommand(request.argv, state.project_root)) {
+        throw new Error("acceptance tests must run through ready_argv acceptance so Zero-Mock provenance is recorded");
+      }
+      const argvTaint = scanProspectiveMutation({ argv: request.argv }, "<ready_argv mutate>");
+      if (argvTaint.length > 0) {
+        recordZeroMockViolations(state, argvTaint);
+        store.writeExecution(state);
+        throw new Error(`Zero-Mock Delivery blocked structured mutation: ${argvTaint.map(item => item.code).join(", ")}`);
+      }
       const targetPaths = validateExplicitTargets(state, params.target_paths);
       const confinement = argvConfinementReason(state, request.argv);
       if (confinement) throw new Error(confinement);
@@ -669,6 +1107,14 @@ export function installReadyRuntime(pi, options = {}) {
           });
         }
       }
+      const postMutationState = lifecycle.status(state.execution_id);
+      recordZeroMockPaths(postMutationState, "touched_paths", targetPaths);
+      for (const targetPath of targetPaths) {
+        if (fs.existsSync(targetPath) && fs.statSync(targetPath).isFile()) {
+          recordZeroMockViolations(postMutationState, scanFileGraph(postMutationState.project_root, [targetPath]).violations);
+        }
+      }
+      store.writeExecution(postMutationState);
       return resultText({
         action: "mutate",
         argv: request.argv,
@@ -678,6 +1124,69 @@ export function installReadyRuntime(pi, options = {}) {
         stderr: result.stderr.slice(0, MAX_OBSERVATION_OUTPUT_BYTES),
         execution: runtimeView(lifecycle.status(state.execution_id)),
       });
+    },
+  });
+
+  pi.registerTool({
+    name: "ready_verify_guard",
+    label: "Ready Verify Guard",
+    description: "Bind the Zero-Mock verifier runtime and admit only mock-clean VERIFIED evidence without changing verifier verdict authority.",
+    parameters: z.object({
+      action: z.enum(["begin", "admit", "post_validate", "status"]),
+      ticket_path: z.string().optional(),
+      project_root: z.string().optional(),
+      execution_id: z.string().optional(),
+      verdict: z.enum(["VERIFIED", "FAILED", "INCONCLUSIVE"]).optional(),
+      production_entrypoint: z.string().optional(),
+      dependency_paths: z.array(z.string()).optional(),
+      authoritative_readback_path: z.string().optional(),
+    }),
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const sid = sessionId(ctx);
+      if (params.action === "begin") {
+        if (!params.ticket_path) throw new Error("ready_verify_guard begin requires ticket_path");
+        const projectRoot = params.project_root ?? projectRootFromTicket(params.ticket_path);
+        const value = await lifecycle.beginVerification({ sessionId: sid, projectRoot, ticketPath: params.ticket_path });
+        return resultText(runtimeView(value));
+      }
+      const session = lifecycle.sessionState(sid);
+      const executionId = params.execution_id ?? session?.execution_id;
+      if (!executionId) throw new Error("current verifier session has no bound execution");
+      if (params.action === "status") return resultText(runtimeView(lifecycle.status(executionId)));
+      if (params.action === "admit") {
+        const state = lifecycle.status(executionId);
+        const scan = currentZeroMockScan(state);
+        if (params.verdict === "VERIFIED" && scan.mock_taint) {
+          store.writeExecution(state);
+          throw new Error("mock-tainted verification evidence cannot be admitted for VERIFIED");
+        }
+        const cleanAcceptance = (state.zero_mock?.acceptance_provenance || []).some(
+          item => item.status === "PASSED" && item.mock_taint === false && item.authoritative_readback?.available === true,
+        );
+        if (params.verdict === "VERIFIED" && !cleanAcceptance && params.authoritative_readback_path) {
+          recordInspectionEvidence(state, params);
+        }
+        store.writeExecution(state);
+        const value = await lifecycle.admitVerification(executionId, sid, params.verdict);
+        return resultText(runtimeView(value));
+      }
+      if (params.action === "post_validate") {
+        const state = lifecycle.status(executionId);
+        if (
+          state.execution_mode !== "VERIFY"
+          || state.phase !== "VERIFY_VERIFIED_ADMITTED"
+          || !state.verification_progression_used
+          || state.verification_progression_exact !== true
+        ) {
+          throw new Error("post_validate requires one exact admitted Status: ready to Status: done Ticket progression");
+        }
+        validateTicketWith(state.validator_path, state.ticket_path, state.project_root);
+        const status = fs.readFileSync(state.ticket_path, "utf8").match(/^Status:\s*(.+?)\s*$/m)?.[1]?.trim();
+        if (status !== "done") throw new Error(`post-progression Ticket status must be exact done; found ${status ?? "missing"}`);
+        const value = lifecycle.finishVerificationProgression(executionId, sid);
+        return resultText(runtimeView(value));
+      }
+      throw new Error(`unsupported ready_verify_guard action: ${params.action}`);
     },
   });
 

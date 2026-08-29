@@ -252,10 +252,21 @@ Evidence priority when applicable:
 1. actual runtime / canonical acceptance-surface observation;
 2. authoritative product/canonical readback;
 3. rendered UI interaction/readback when UI is the acceptance surface;
-4. deterministic fake/controlled-environment evidence when the contract permits it;
-5. source/diff/unit tests as supporting explanation and regression evidence.
+4. isolated actual dependency evidence (for example a real temporary database/container using the real schema/persistence path);
+5. source/diff/mock-free tests as supporting explanation and regression evidence.
 
 Passing implementation tests do not substitute for a Ticket-authored runtime/UI/provider/canonical readback. Conversely, do not invent runtime for a source/artifact/document/structure claim whose approved boundary is direct canonical inspection.
+
+### Zero-Mock evidence gate
+
+Verification evidence is mock-tainted and inadmissible if its execution path uses mock/fake/stub implementations, Python/JS dependency patching, HTTP/database/provider interception, in-memory fake repositories/databases, mock-mode environment flags, or fake/intercepted responses. This is enforced by the same runtime policy used during implementation, not by wording alone.
+
+1. Load `ready-ticket-verify`, then bind the exact Ticket with `ready_verify_guard begin` before the first product/runtime verification action.
+2. Run acceptance tests only through `ready_argv acceptance`. The runtime statically scans Python and JS/TS mocking/interception APIs, follows project-local imports so renamed wrappers remain tainted, and rejects unverifiable custom runner/MCP execution. When the authored authority is direct source/artifact/canonical inspection rather than a test, use the native read path and let `ready_verify_guard admit` bind that current successful read as direct-inspection provenance; do not invent a test merely to satisfy the runtime.
+3. Record command, current revision, production entrypoint, actual dependency/config digest, authoritative readback and `mock_taint: false` for clean evidence.
+4. An unavailable real external service/dependency/readback produces `INCONCLUSIVE`; never replace it with a fake to obtain a verdict.
+5. `ready_verify_guard admit` rejects candidate `VERIFIED` when current evidence is mock-tainted, lacks clean acceptance or current direct-inspection provenance, or lacks actual authoritative readback. The runtime does not issue the AC or Whole-Ticket verdict itself.
+6. Product source/config/test mutation remains blocked in verifier mode. Only the existing one-time exact Ticket progression after admitted `VERIFIED` is allowed, followed by `ready_verify_guard post_validate` and exact canonical `VALID`.
 
 ### Existence and current-state claims
 

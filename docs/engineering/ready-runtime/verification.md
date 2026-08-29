@@ -6,15 +6,15 @@ The implementation keeps `ready-ticket-implement` caller-facing inputs, DIRECT/S
 
 ## Runtime verification
 
-- Ready runtime Node suite: 11/11 passed.
-- Repository Ready runtime contract: 3/3 passed.
+- Ready runtime Node suite: 19/19 passed.
+- Repository Ready runtime contract: 4/4 passed.
 - Existing delivery/subagent contract: 14/14 passed.
 - Adaptive planning contract: 18/18 passed.
 - Adaptive run contract: 12/12 passed.
-- Full repository suite after implementation: 227 tests run, 226 passed, 1 failed.
+- Full repository suite after Zero-Mock implementation: 228 tests run, 227 passed, 1 failed.
 - The single full-suite failure is the same worktree-local baseline failure captured before implementation: `test_global_cli_link_targets_canonical_observatory`. The global observatory CLI still resolves to `/home/user01/project/iis-skills/observatory/bin/iis-observatory`, while a test executed from this worktree expects the worktree-local path. No Ready runtime change touches that installation.
 
-Runtime tests cover DIRECT and SUBAGENT binding, PRE_ACTION and MATERIAL_TURN gating, parent mutation exclusion, exact tool-result attribution, authority binding/currentness, protected authority writes, Project Root confinement, duplicate observation blocking, mutation revision/current evidence, broad inventory blocking, bounded read retry, deterministic mutation repeat blocking, mutation uncertainty, interrupted-operation recovery, structured argv, and managed local-service ownership/cleanup.
+Runtime tests cover DIRECT and SUBAGENT binding, PRE_ACTION and MATERIAL_TURN gating, parent mutation exclusion, exact tool-result attribution, authority binding/currentness, protected authority writes, Project Root confinement, duplicate observation blocking, mutation revision/current evidence, broad inventory blocking, bounded read retry, deterministic mutation repeat blocking, mutation uncertainty, interrupted-operation recovery, structured argv, managed local-service ownership/cleanup, Zero-Mock mutation blocking, renamed-wrapper taint propagation, mock-mode environment blocking, unknown MCP fail-closed behavior, actual SQLite persistence, unavailable readback disposition, verifier read-only enforcement, exact ready-to-done progression, and current direct-inspection provenance.
 
 ## Async boundary
 
@@ -35,4 +35,8 @@ The runtime install script supports:
 
 Current live preflight result: `SKILL_DRIFT`.
 
-The live Ready Skill is a symlink resolving to `/home/user01/project/iis-skills/companion-skills/ready-ticket-implement`, while this implementation lives in `/home/user01/project/iis-skills-wt-ready-click-runtime`. Their current Skill payloads differ. The runtime extension is therefore intentionally not installed live yet; installing it alone would arm the old Skill without the required runtime begin procedure. Once the matching Ready Skill source is live, `--preflight` must return `READY` before runtime sync.
+The live `ready-ticket-implement` and `ready-ticket-verify` payloads still resolve from `/home/user01/project/iis-skills`, while this implementation lives in `/home/user01/project/iis-skills-wt-ready-click-runtime`. The current payloads differ. The runtime extension is therefore intentionally not installed live yet; installing it alone would arm old delivery/verifier instructions without the required runtime procedures. Once both matching Ready Skill payloads are live, `--preflight` must return `READY` before runtime sync.
+
+## Zero-Mock Delivery extension
+
+A later runtime delta adds Zero-Mock Delivery as an implementation and verification invariant. Python and JS/TS mock/patch/interception APIs are statically taint-checked with project-local import-closure propagation, acceptance runners are structured and provenance-recorded, unknown custom/MCP runners fail closed, and candidate COMPLETE/VERIFIED cannot consume mock-tainted or unavailable-readback evidence. Actual temporary SQLite persistence is covered as an allowed real-dependency fixture.

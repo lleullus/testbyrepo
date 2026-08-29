@@ -50,6 +50,15 @@ Top-level 기본 실행 모드는 `DIRECT`다.
 - native Bash가 구조적으로 read-only인지 확정되지 않으면 shell 문자열을 추측하지 않고 structured `ready_argv`를 사용한다.
 - terminal 결과 전에 runtime도 `complete` 또는 `block`으로 닫는다. runtime state/tool 이름은 caller-facing result의 새 필수 필드가 아니다.
 
+### Zero-Mock Delivery 불변조건
+
+구현, self-check와 completion evidence는 실제 production code path와 실제 dependency/readback만 사용한다. mock/fake/stub 구현, patching API, HTTP/database/provider interception, in-memory fake repository, mock-mode 환경변수와 가짜 응답을 acceptance evidence로 사용하지 않는다.
+
+- acceptance test는 `ready_argv acceptance`로 실행해 command, current mutation revision, production entrypoint, actual dependency/config, authoritative readback과 `mock_taint: false` provenance를 남긴다. 일반 Bash나 `ready_argv mutate`로 acceptance runner를 우회하지 않는다.
+- 임시 디렉터리, 격리된 실제 DB/container, 실제 schema/persistence와 입력용 seed data는 허용한다.
+- 실제 외부 dependency 또는 authoritative readback을 사용할 수 없으면 mock으로 대체하지 않고 `Completion: BLOCKED`로 닫는다.
+- runtime이 mock-taint violation을 기록했거나 acceptance provenance가 clean PASS가 아니면 `ready_guard complete`는 `Completion: COMPLETE` 진입을 허용하지 않는다.
+
 ## 제품 의미 해석
 
 구현 시작 전 한 문장으로 `이번 Ticket이 실제 제품에 추가하거나 변경하는 observable product outcome`을 고정한다. 제품 의미는 다음 authority에 계속 속한다.

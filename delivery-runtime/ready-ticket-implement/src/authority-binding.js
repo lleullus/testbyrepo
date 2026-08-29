@@ -166,7 +166,7 @@ export function resolveCanonicalValidator() {
   return { workflowPath, toTicketsSkill, validator };
 }
 
-function validateTicket(validator, ticketPath, projectRoot) {
+export function validateTicketWith(validator, ticketPath, projectRoot) {
   const result = spawnSync("python3", [validator, ticketPath], {
     cwd: projectRoot,
     encoding: "utf8",
@@ -216,7 +216,7 @@ export async function bindAuthority({ ticketPath, projectRoot }) {
   }
 
   const { validator } = resolveCanonicalValidator();
-  validateTicket(validator, canonicalTicket, canonicalRoot);
+  validateTicketWith(validator, canonicalTicket, canonicalRoot);
 
   const parentValue = metadataValue(ticketText, "Parent-Spec");
   if (!parentValue) throw new Error("Ticket Parent-Spec metadata is missing");

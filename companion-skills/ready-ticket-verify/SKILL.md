@@ -122,9 +122,18 @@ Preserve the authored operator-owned acceptance path. Verify the product-owned p
 
 Do not create a new verification surface. Confirm the approved absence/reason and only the evidence allowed by the authored disposition.
 
+## Zero-Mock verification admission
+
+`ready-ticket-verify` also runs under the Ready runtime Zero-Mock gate. Before product/runtime verification, call `ready_verify_guard begin` for the exact Ticket. Any acceptance test used by the verifier runs through `ready_argv acceptance`; mock/fake/stub implementation, dependency patching, HTTP/database/provider interception, in-memory fake repository, mock-mode environment flags and fake response evidence are prohibited.
+
+- Actual production entrypoint, actual dependency/config/schema/persistence, temporary directories, isolated real DB/container and seed input data are allowed.
+- If the actual external dependency or authoritative readback is unavailable, do not substitute a mock; the affected flow/AC remains `INCONCLUSIVE`.
+- Candidate `VERIFIED` is not admissible until `ready_verify_guard admit` confirms current mock-free acceptance provenance 또는, authored boundary가 direct canonical inspection인 경우 current successful read에 결합된 mock-free direct-inspection provenance와 authoritative readback. `FAILED` and `INCONCLUSIVE` keep their existing semantic ownership and do not require fake replacement evidence.
+- After the existing guarded exact `ready -> done` replacement, use `ready_verify_guard post_validate` so the same canonical validator must still return exact `VALID` before the verifier runtime closes.
+
 ## Evidence sufficiency
 
-Runtime/acceptance-surface observation and authoritative readback are load-bearing when the Ticket defines them. Implementation reports, source shape, mocks, logs, tests or prior verification are navigation/support only unless the Ticket explicitly makes that exact target the acceptance boundary.
+Runtime/acceptance-surface observation and authoritative readback are load-bearing when the Ticket defines them. Implementation reports, source shape, logs, tests or prior verification are navigation/support only unless the Ticket explicitly makes that exact target the acceptance boundary. Mock-tainted evidence is never admissible verification evidence.
 
 Match evidence to the actual claim:
 

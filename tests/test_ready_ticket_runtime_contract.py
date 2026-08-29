@@ -38,12 +38,26 @@ class ReadyTicketRuntimeContractTests(unittest.TestCase):
         self.assertIn("does not decide product meaning", readme)
         self.assertIn("does not", readme)
 
+    def test_zero_mock_contract_is_runtime_enforced_for_implementation_and_verification(self) -> None:
+        implement = (ROOT / "companion-skills" / "ready-ticket-implement" / "SKILL.md").read_text(encoding="utf-8")
+        verify = (ROOT / "companion-skills" / "ready-ticket-verify" / "SKILL.md").read_text(encoding="utf-8")
+        runtime = (RUNTIME / "src" / "no-mock-policy.js").read_text(encoding="utf-8")
+        adapter = (RUNTIME / "src" / "omp-adapter.js").read_text(encoding="utf-8")
+        self.assertIn("Zero-Mock Delivery 불변조건", implement)
+        self.assertIn("ready_argv acceptance", implement)
+        self.assertIn("Zero-Mock verification admission", verify)
+        self.assertIn("Mock-tainted evidence is never admissible", verify)
+        self.assertIn("PY_UNITTEST_MOCK", runtime)
+        self.assertIn("JS_MOCK_API", runtime)
+        self.assertIn('name: "ready_verify_guard"', adapter)
+
     def test_install_sync_is_explicit_checkable_and_removable(self) -> None:
         with tempfile.TemporaryDirectory(prefix="iis-ready-runtime-install-") as directory:
             target = Path(directory) / "ready-ticket-implement-runtime"
             env = os.environ.copy()
             env["IIS_READY_RUNTIME_INSTALL_DIR"] = str(target)
             env["IIS_READY_SKILL_INSTALL_DIR"] = str(ROOT / "companion-skills" / "ready-ticket-implement")
+            env["IIS_READY_VERIFY_SKILL_INSTALL_DIR"] = str(ROOT / "companion-skills" / "ready-ticket-verify")
 
             preflight = subprocess.run(
                 [os.fspath(SYNC), "--preflight"], cwd=ROOT, env=env, text=True, capture_output=True, check=False

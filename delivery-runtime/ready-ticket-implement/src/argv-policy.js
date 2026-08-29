@@ -104,12 +104,13 @@ export function parseSimpleReadOnlyCommand(command) {
 export async function runArgv(argv, { cwd, timeoutMs = 120_000, signal } = {}) {
   const normalized = assertArgv(argv);
   return new Promise((resolve, reject) => {
-    const child = spawn(normalized[0], normalized.slice(1), {
+    const options = {
       cwd,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
-      signal,
-    });
+    };
+    if (signal) options.signal = signal;
+    const child = spawn(normalized[0], normalized.slice(1), options);
     const stdout = [];
     const stderr = [];
     child.stdout.on("data", chunk => stdout.push(chunk));
