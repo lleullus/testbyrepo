@@ -107,8 +107,8 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("최신 `Parent-released anchor`와 대조", workflow)
         self.assertIn("`DIRECT`에서는 Parent checkpoint나 `Parent-released anchor`를 만들지 않는다", workflow)
         self.assertIn("현재 Main이 exact Ticket과 적용되는 canonical Parent Spec/Behavior/UI Authority 및 authoritative readback을 직접 다시 결합", workflow)
-        self.assertIn("새 persistent snapshot, registry 또는 workflow state를 만들지 않는다", workflow)
-        self.assertIn("checkpoint ledger, persistent authority snapshot 또는 별도 state machine", workflow)
+        self.assertIn("runtime의 persistent state는 실행 guard 내부에만 존재", workflow)
+        self.assertIn("runtime의 internal state machine/authority snapshot은 이 enforcement에만 쓰며", workflow)
         self.assertNotIn("PRE_COMPLETION", skill + workflow)
 
     def test_implementation_preserves_delivery_authority_boundaries(self) -> None:

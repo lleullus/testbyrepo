@@ -59,13 +59,24 @@ Checkpoint에서는 다음을 지킨다.
 6. checkpoint continuation capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 반환한다.
 7. `DIRECT`로 자동 fallback하지 않는다.
 
-Continuation은 특정 harness API를 요구하지 않는다. live child session의 yield/reply, 동일 resumable child session의 return/resume, 또는 이전 child가 inactive임을 확인한 attributable continuation invocation으로 구현할 수 있다. Attributable continuation은 exact Ticket, Project Root, current working tree/target identity, 이전 checkpoint payload, Parent decision과 변경 이후 baseline/currentness를 다시 확인하고 이전 worker를 명시적으로 supersede한다. 핵심 규칙은 `Parent decision 전에는 protected next phase로 넘어가지 않는다`이다.
+Continuation은 특정 harness API를 제품 계약으로 요구하지 않는다. 다만 runtime assignment는 exact Ticket/Project Root와 정확히 한 child session에 one-use로 bind되고 parent는 checkpoint와 terminal result를 회수하는 joined lifecycle을 유지한다. detached child, background delivery queue, polling controller 또는 persistent execution scheduler로 continuation을 넘기지 않는다. 핵심 규칙은 `Parent decision 전에는 protected next phase로 넘어가지 않는다`이다.
+
+### Ready runtime binding
+
+`ready-ticket-implement`를 읽으면 current session은 runtime에서 ARMED된다. 외부 invocation 입력은 바꾸지 않는다.
+
+- `DIRECT`: contract preflight 전에 exact Ticket과 Project Root로 `ready_guard begin_direct`를 호출한다.
+- `SUBAGENT`: Outer Main이 `ready_guard assign_subagent`로 exact assignment를 만들고, 지정된 한 worker가 그 `assignment_id`로 `ready_guard begin_delegated`를 호출한다.
+- runtime이 current `iis-workflow`의 To Tickets route와 exact validator, Ticket status, Parent Spec, applicable Behavior/UI Authority, Git/worktree identity를 직접 bind한다. worker가 digest를 제출해 runtime에 신뢰시키지 않는다.
+- runtime은 Project Root confinement, protected authority mutation, observation ledger, broad inventory, mutation revision/current evidence, retry classification, operation lock과 managed local service를 소유한다. 이 내부 state는 product authority나 caller-facing Ready result가 아니다.
+- native Bash가 구조적으로 read-only임을 확인할 수 없으면 자유 shell string을 추측하지 않는다. 필요한 write-capable command는 explicit `ready_argv mutate`의 argv와 target paths로 실행한다.
+- terminal owner는 기존 `IMPLEMENT RESULT`를 내기 전에 runtime을 `complete` 또는 `block`으로 닫는다. runtime debug/state는 기존 result의 새 필수 field가 아니다.
 
 ## 3. Contract preflight
 
 첫 source-file 변경 전에:
 
-1. Ticket 전체와 연결된 Parent Spec, Behavior/UI Authority, constraints와 references를 읽고, exact Ticket과 적용되는 canonical Parent Spec/Behavior/UI Authority의 현재 bounded identity를 기록한다. 각 identity는 exact authority artifact 자체에 scoped되고 content-sensitive해야 한다. 예를 들어 canonical path + file/content SHA 또는 동등한 artifact-scoped revision을 사용한다. 구현 자체가 만드는 repository-wide working-tree 변화는 authority drift로 취급하지 않으며, persistent authority ID나 registry를 새로 만들지 않는다.
+1. Ticket 전체와 연결된 Parent Spec, Behavior/UI Authority, constraints와 references를 읽고 의미를 결합한다. runtime binding이 exact Ticket과 적용되는 canonical Parent Spec/Behavior/UI Authority의 bounded identity를 계산하며, 각 identity는 exact authority artifact 자체에 scoped되고 content-sensitive하다. runtime은 canonical path + file/content SHA를 사용한다. repository-wide working-tree 변화는 authority drift로 취급하지 않으며 exact authority artifact currentness만 비교한다.
 2. 한 문장으로 observable product outcome을 적는다.
 3. 각 authored Verification flow의 initial state, trigger, acceptance boundary, expected result, authoritative readback, decision boundary와 disposition을 정리한다.
 4. Scope와 Non-Goals에서 생겨야 하는 것과 생기면 안 되는 것을 분리한다.
@@ -99,7 +110,7 @@ Protected next phase: FIRST_SOURCE_FILE_CHANGE
 Checkpoint state: PARENT_CONTINUATION_REQUIRED
 ```
 
-`Authority / Verification-flow anchors`에는 위에서 고정한 exact Ticket과 적용되는 canonical parent authority의 bounded identity를 함께 보존한다. `Authoritative readback / self-check target`에는 completion evidence를 결정할 exact acceptance/readback target을 적는다. 이 정보는 invocation-local currentness 비교를 위한 것이며 새 persistent snapshot, registry 또는 workflow state를 만들지 않는다.
+`Authority / Verification-flow anchors`에는 runtime이 bind한 exact Ticket과 적용되는 canonical parent authority의 bounded identity를 함께 보존한다. `Authoritative readback / self-check target`에는 completion evidence를 결정할 exact acceptance/readback target을 적는다. runtime의 persistent state는 실행 guard 내부에만 존재하며 이 report에 새 caller-facing snapshot, registry 또는 workflow contract를 추가하지 않는다.
 
 이 checkpoint를 반환한 worker는 Parent decision 전에는 source 파일을 변경하지 않는다. Outer Main은 exact Ticket/assignment identity, observable outcome의 의미 보존, Scope/Non-Goals와 change surface, authoritative readback의 결정력, 명백한 authority mismatch나 unresolved blocker만 bounded하게 검토한다. Outer Main이 구현 방법을 다시 설계하거나 코드를 직접 구현하지 않는다.
 
@@ -114,7 +125,7 @@ Checkpoint state: PARENT_CONTINUATION_REQUIRED
 
 해당 변화에 의존하는 작업은 즉시 멈춘다. 현재 canonical authority 안에서 faithful implementation direction과 결정력 있는 readback을 다시 확정할 수 있으면 기존 `MATERIAL_TURN` checkpoint를 반환하고 Parent `CONTINUE | STEER | STOP` 전에는 보호된 다음 phase로 넘어가지 않는다. Parent가 `CONTINUE`하면 그 checkpoint에서 재확정된 authority/readback identity가 invocation-local 최신 `Parent-released anchor`가 된다. `STEER`가 decision-critical 내용을 바꾸면 worker는 갱신된 같은 checkpoint를 다시 반환하고, 이후 Parent `CONTINUE`된 내용만 최신 anchor가 된다. `STOP` 또는 `Completion: BLOCKED`에서는 anchor를 갱신하지 않는다. 현재 authority 안에서 faithful direction 또는 결정력 있는 readback을 확정할 수 없으면 새 제품 의미나 약한 대체 readback을 Parent checkpoint로 승인받으려 하지 말고 `Completion: BLOCKED`로 닫는다.
 
-이 규칙은 최초 `PRE_ACTION`을 provenance로 보존하되 currentness 비교는 최신 `Parent-released anchor`를 사용한다. 새 checkpoint 종류, periodic polling, checkpoint ledger, persistent authority snapshot 또는 별도 state machine을 만들지 않는다. 같은 사실을 material delta 없이 반복 보고하지 않는다.
+이 규칙은 최초 `PRE_ACTION`을 provenance로 보존하되 currentness 비교는 최신 `Parent-released anchor`와 runtime authority binding을 사용한다. 새 checkpoint 종류나 caller-facing checkpoint ledger를 만들지 않고 periodic polling도 하지 않는다. runtime의 internal state machine/authority snapshot은 이 enforcement에만 쓰며 delivery contract나 제품 state로 노출하지 않는다. 같은 사실을 material delta 없이 반복 보고하지 않는다.
 
 ## 5. 구현
 

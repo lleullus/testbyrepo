@@ -1,0 +1,10 @@
+{
+  "name": "iis-ready-ticket-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OMP runtime guard for ready-ticket-implement",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}

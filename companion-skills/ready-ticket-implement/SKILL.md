@@ -25,35 +25,34 @@ Top-level 기본 실행 모드는 `DIRECT`다.
 
 - `DIRECT`: 현재 Main이 implementation worker 역할을 직접 수행한다.
 - `SUBAGENT`: 현재 사용자가 이 exact implementation stage에 `SUBAGENT`를 명시한 경우에만 Outer Main이 exact Ticket 하나를 정확히 한 명의 implementation worker에게 할당한다.
-- 모델 capability, 작업 난도, 비용 또는 worker availability만으로 execution mode를 바꾸지 않는다. `DIRECT`와 `SUBAGENT` 사이의 자동 전환이나 실패 후 fallback은 없다.
+- 모델 capability, 작업 난도, 비용 또는 worker availability만으로 mode를 바꾸지 않는다. 실패를 `DIRECT`로 자동 대체하지 않는다.
+- Outer Main은 exact Ticket, Project Root, 추가 사용자 지시와 `Delegated Worker: yes`를 worker assignment에 포함한다. `Delegated Worker: yes`를 받은 worker는 이 스킬을 다시 위임하지 않고 implementation core를 직접 수행한다.
+- 한 Ticket을 여러 worker로 분할하지 않으며 detached worker, background delivery queue, polling controller 또는 persistent execution scheduler를 만들지 않는다.
+- 필요한 child/checkpoint/terminal capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 보고한다.
 
-`SUBAGENT`에서는 다음을 지킨다.
-
-1. 현재 host가 한 명의 delegated child worker, 같은 Project Root 접근, checkpoint return/continuation과 terminal result를 제공할 수 있는지 확인한다.
-2. exact Ticket, Project Root, 추가 사용자 지시와 `Delegated Worker: yes`를 worker assignment에 포함한다.
-3. `Delegated Worker: yes`를 받은 worker는 이 스킬을 다시 위임하지 않고 implementation core를 직접 수행한다.
-4. worker를 시작할 수 없거나 필요한 checkpoint return/continuation/terminal-result capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 보고한다.
-5. 실패를 `DIRECT`로 자동 대체하지 않는다.
-6. 한 Ticket을 여러 implementation worker에게 나누거나 worker roster, queue, retry ledger 또는 별도 review lifecycle을 만들지 않는다.
-
-`DIRECT`에서는 현재 Main이 아래 implementation core를 직접 수행한다. `SUBAGENT`에서는 Outer Main이 assignment, current user instruction 전달, worker의 checkpoint report 수신, `CONTINUE | STEER | STOP` continuation decision, terminal result 수신과 caller-facing fan-in을 소유한다. 구현 의미와 self-check는 delegated worker가 소유하며, Outer Main은 별도의 구현자로 중복 행동하지 않는다.
+`SUBAGENT`에서 Outer Main은 assignment, checkpoint continuation (`CONTINUE | STEER | STOP`)과 terminal fan-in만 소유하며 source implementation을 중복 수행하지 않는다.
 
 ## Ready Ticket 상태 게이트
 
-- 시작 시 exact Ticket의 top metadata `Status:`를 직접 확인한다. 정상 입력은 exact `ready`뿐이다.
-- `done`이면 이미 terminal delivery marker가 있는 Ticket이므로 다시 구현하지 않고 현재 상태를 보고한다.
-- `draft` 또는 `blocked`이면 delivery를 시작하지 않는다. 상태를 임의로 승격하거나 planning 결정을 대신하지 않는다.
+- 시작 정상 상태는 exact `ready`다.
+- `done`이면 재구현하지 않는다.
+- `draft` 또는 `blocked`이면 구현을 시작하지 않는다.
 - 이 스킬은 Ticket status를 `done`으로 바꾸지 않는다. 정상 구현 입력인 `ready`는 구현 완료 후에도 그대로 유지한다.
 
-## 메타 용어와 제품 도메인 분리
+## Ready runtime guard
 
-이 스킬의 `Ready Ticket`, `implementation worker`, `handoff report`, `turn report`, `checkpoint`와 `terminal result`는 에이전트 작업 절차를 설명하는 메타 용어다. Ticket, Parent Spec, Behavior Authority 또는 승인된 UI Authority가 제품 개념으로 직접 정의하지 않은 한 제품 파일명, 모듈, 클래스, 함수, DB schema, API, CLI, route, command, engine, queue, lease, manager, orchestration layer 또는 제품 상태로 만들지 않는다.
+이 스킬을 읽은 execution은 내부 Ready runtime을 사용한다. runtime은 제품 의미를 판정하지 않고 authority currentness와 관찰·mutation의 실행 규율만 강제한다.
 
-구현 시작 전 한 문장으로 `이번 Ticket이 실제 제품에 추가하거나 변경하는 observable product outcome`을 적는다. 첫 source-file 변경은 그 outcome 또는 승인된 product invariant에 직접 연결되어야 한다.
+- `DIRECT`: source/config mutation 전에 exact Ticket과 Project Root로 `ready_guard begin_direct`를 완료한다.
+- `SUBAGENT`: Outer Main이 exact Ticket과 Project Root로 `ready_guard assign_subagent`를 실행하고, 지정된 한 child가 받은 assignment로 `ready_guard begin_delegated`를 완료한다.
+- runtime은 exact Ticket status/validator와 적용되는 Parent Spec·Behavior/UI Authority를 직접 bind한다. worker가 digest나 revision을 제출해 대신 증명하지 않는다.
+- Project Root confinement, protected authority write, duplicate observation, broad rescan, mutation revision/current evidence, bounded retry, operation serialization과 managed local service lifecycle은 runtime 책임이다.
+- native Bash가 구조적으로 read-only인지 확정되지 않으면 shell 문자열을 추측하지 않고 structured `ready_argv`를 사용한다.
+- terminal 결과 전에 runtime도 `complete` 또는 `block`으로 닫는다. runtime state/tool 이름은 caller-facing result의 새 필수 필드가 아니다.
 
-## 권위와 해석
+## 제품 의미 해석
 
-다음 자료를 모두 읽되 각 항목의 정확한 authority/evidence 역할만 적용한다.
+구현 시작 전 한 문장으로 `이번 Ticket이 실제 제품에 추가하거나 변경하는 observable product outcome`을 고정한다. 제품 의미는 다음 authority에 계속 속한다.
 
 1. 현재의 명시적 사용자 지시
 2. Ticket 전체
@@ -63,63 +62,24 @@ Top-level 기본 실행 모드는 `DIRECT`다.
 6. Implementation Constraints와 References
 7. 현재 repository/runtime의 직접 관찰 사실
 
-- Ticket: 이번 구현의 완료·변경 경계
-- Parent Spec: 상위 제품 결과와 승인된 제품 계약
-- Behavior Authority: 상태, 관계, identity, ownership, lifecycle, ordering과 semantic meaning
-- Design/UI Authority: 사용자-visible 구조, 상태 표현과 상호작용
-- Implementation Constraints: 승인되었거나 외부적으로 강제된 기술 선택 경계
-- References와 repository/runtime: 해석과 실행을 위한 evidence/context이며 새 제품 권위가 아님
+Ticket은 이번 구현 경계, Parent Spec은 상위 결과, Behavior Authority는 identity·ownership·ordering·lifecycle 의미, Design/UI Authority는 사용자-visible 구조와 상호작용을 소유한다. References와 repository/runtime는 evidence/context이지 새 제품 권위가 아니다.
 
-구현 편의, 기존 구조, 익숙한 설계, 최소 변경 또는 테스트 편의를 이유로 승인된 사용자 결과를 축소·대체·재정의하지 않는다. 실질적 authority 충돌이 있으면 한쪽을 임의 선택하지 않고 정확한 충돌과 영향을 보고한다.
+구현 편의, 기존 구조, 최소 변경 또는 test 편의를 이유로 승인된 결과를 축소·대체하지 않는다. Scope/Non-Goals 밖 제품 surface나 lifecycle guarantee를 만들지 않는다. 실질적 authority 충돌로 faithful direction을 확정할 수 없으면 `Completion: BLOCKED`로 닫는다.
 
-## Verification-flow 해석
+## Verification-flow 해석과 self-check
 
-파일 작업이나 self-check를 나누기 전에 Ticket의 각 authored Verification flow를 그대로 읽는다.
+각 authored Verification flow의 Parent outcome/AC/Behavior authority mapping, initial state, trigger, acceptance boundary, expected observable result, authoritative readback, decision boundary, disposition, authored independent-verification requirement, acceptance surface, external condition과 적용되는 ordering/interruption/persistence/external-effect/UI 경계를 그대로 사용한다.
 
-- Parent outcome ordinal
-- AC ordinals
-- Behavior authority ordinals
-- Initial state
-- Trigger or inspection target
-- Acceptance boundary
-- Expected observable result
-- Authoritative readback
-- Decision boundary
-- Disposition
-- Independent verification requirement, 실제로 authored된 경우
-- Acceptance surface
-- External condition
-- Ticket에 실제 존재하는 ordering, interruption, persistence, external-effect, UI interaction 경계
+Verification flow를 임의의 1:1 파일 작업으로 바꾸지 않는다. 구현 change와 self-check evidence를 각 flow에 연결하고, acceptance boundary와 authoritative readback으로 current product 결과를 확인한다. Authored independent-verification requirement가 있으면 원문 의미와 관련 implementation/self-check evidence를 final handoff에 보존하되 충족 여부는 판정하지 않는다.
 
-Authored independent-verification requirement가 있으면 원문 의미와 관련 implementation/self-check evidence를 final handoff에 보존한다. 이 스킬은 그 요구의 충족 여부를 판정하지 않는다.
+## Checkpoint와 종료
 
-Verification flow가 1차 제품 관찰 단위다. 한 flow가 여러 AC를 판정하거나 한 AC가 여러 flow에 걸릴 수 있으므로 AC 문장을 임의의 1:1 파일 작업으로 바꾸지 않는다.
+`SUBAGENT` worker는 contract preflight 뒤 첫 source-file 변경 전에 `IMPLEMENTATION HANDOFF REPORT`를 `PRE_ACTION` checkpoint로 direct parent에게 반환하고 Parent decision 전 `FIRST_SOURCE_FILE_CHANGE`로 넘어가지 않는다. `DIRECT`에는 Parent checkpoint가 없다.
 
-## 결과 원칙
+구현 방향, authority 해석, change surface 또는 evidence 전략이 material하게 바뀌는 경우에만 `IMPLEMENTATION TURN REPORT`를 `MATERIAL_TURN` checkpoint로 반환한다. 정상 진행, 일시적 test failure, 스타일 또는 단순 리팩터링은 periodic progress checkpoint 사유가 아니다.
 
-- 파일, 클래스, 함수 또는 테스트 이름보다 Ticket의 observable result를 우선한다.
-- Identity, ownership, membership, ordering, duplicate 방지, terminal 보호, interruption 이후 상태와 persistence lifecycle을 보존한다.
-- 외부 provider, canonical storage 또는 기존 runtime이 권위일 때 편의용 독립 사본이나 암묵적 history/ledger를 만들지 않는다.
-- Ticket이 지정한 acceptance boundary와 authoritative readback으로 완료 여부를 확인한다.
-- Scope/Non-Goals 밖 UI, API, route, 저장, external effect, session/resource 또는 lifecycle guarantee를 만들지 않는다.
-- 외부 조건 불충족을 제품 성공이나 제품 결함으로 꾸미지 않는다.
+`SUBAGENT`에서 PRE_ACTION 이후 runtime이 exact Ticket 또는 적용되는 canonical Parent Spec/Behavior/UI Authority drift를 감지하거나 authoritative readback이 unavailable/non-attributable해지거나 substitution을 요구하면 worker의 materiality threshold를 적용하지 않는다. 기존 `MATERIAL_TURN`을 반환하고 release 전 변경된 방향에 의존하는 mutation을 하지 않는다. `DIRECT`에서는 Parent checkpoint 없이 current authority/readback을 직접 재확인한다.
 
-## 보고와 종료
+`IMPLEMENT` 완료에는 Ticket Scope/Non-Goals 보존, 모든 authored Verification-flow obligation에 연결된 current self-check evidence, unresolved authority conflict/material blocker 부재, authored independent-verification requirement evidence 보존, decision-critical source/diff/artifact/command/runtime behavior의 직접 확인이 필요하다.
 
-Delegated worker는 contract preflight 뒤 첫 source-file 변경 전에 `IMPLEMENTATION HANDOFF REPORT`를 `PRE_ACTION` checkpoint로 direct parent에게 반환한다. Parent decision 전에는 `FIRST_SOURCE_FILE_CHANGE` 보호 구간으로 넘어가지 않는다.
-
-구현 방향, authority 해석, change surface 또는 evidence 전략이 material하게 바뀌는 경우에만 `IMPLEMENTATION TURN REPORT`를 `MATERIAL_TURN` checkpoint로 반환한다. 정상 진행, 일시적 test failure, 스타일 또는 단순한 내부 리팩터링은 중간 보고 사유가 아니며 periodic progress checkpoint를 만들지 않는다.
-
-단, `SUBAGENT`에서는 `PRE_ACTION` 이후 exact Ticket 또는 적용되는 canonical Parent Spec/Behavior/UI Authority가 current Parent-released anchor에서 바뀌거나, 그 anchor의 authoritative readback이 unavailable/non-attributable해지거나 substitution을 요구하면 worker의 materiality threshold를 적용하지 않는다. 변경된 authority/readback에 의존하는 작업 전에 기존 `MATERIAL_TURN`을 반환하고, Parent `CONTINUE`로 release된 최신 authority/readback을 이후 currentness 기준으로 사용한다. 현재 authority 안에서 faithful implementation direction 또는 결정력 있는 readback을 확정할 수 없으면 `Completion: BLOCKED`로 닫는다. `DIRECT`에서는 Parent checkpoint를 만들지 않고 현재 Main이 canonical authority/readback을 직접 재확인하며, faithful direction을 확정할 수 없을 때만 `Completion: BLOCKED`로 닫는다.
-
-Checkpoint는 logical phase boundary이며 required live-wait primitive, direct-user approval gate 또는 durable workflow state가 아니다. Parent는 `CONTINUE | STEER | STOP` 중 정확히 하나를 반환한다. checkpoint continuation capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 반환하고 `DIRECT`로 자동 fallback하지 않는다. Parent/user authority가 실제로 필요한 unresolved decision에 도달해 bounded continuation으로 해결할 수 없으면 확보한 evidence와 정확한 blocker를 포함해 `Completion: BLOCKED` terminal result를 반환한다.
-
-`IMPLEMENT` 완료에는 다음이 필요하다.
-
-1. Ticket Scope와 Non-Goals가 보존되었다.
-2. 모든 authored Verification-flow obligation에 연결된 self-check와 runtime/readback evidence가 있다.
-3. Unresolved authority conflict나 material blocker가 없다.
-4. Authored independent-verification requirement와 관련 implementation/self-check evidence가 final handoff에 보존되었다.
-5. Worker가 decision-critical source claim, diff, artifact, command와 runtime behavior를 직접 확인했다.
-
-`Completion: COMPLETE`여도 exact Ticket의 `Status: ready`는 변경하지 않는다. 구현 target/checkpoint와 self-check evidence를 separate heuristic-probe authority와 separate verification authority에 넘길 수 있는 navigation handoff로 보존한다. 이후 heuristic probing, verification 또는 IIS planning continuation을 자동 실행하지 않는다.
+`Completion: COMPLETE`여도 exact Ticket의 `Status: ready`는 유지한다. 구현 target/checkpoint와 self-check evidence를 separate heuristic-probe authority와 separate verification authority에 넘길 navigation handoff로 보존하며 이후 probe, verification 또는 IIS planning continuation을 자동 실행하지 않는다.
