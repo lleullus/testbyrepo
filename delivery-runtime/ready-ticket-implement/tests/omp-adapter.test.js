@@ -135,6 +135,29 @@ function makeAcceptanceFixture(project, expectedContent) {
   };
 }
 
+test("extension registration defers action methods until the runtime is initialized", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-omp-load-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const pi = mockPi();
+  const getAllTools = pi.getAllTools;
+  let initialized = false;
+  let actionCalls = 0;
+  pi.getAllTools = () => {
+    actionCalls += 1;
+    if (!initialized) throw new Error("Extension runtime not initialized");
+    return getAllTools();
+  };
+
+  assert.doesNotThrow(() => installReadyRuntime(pi, { dataRoot: path.join(root, "state") }));
+  assert.equal(actionCalls, 0);
+
+  initialized = true;
+  await assert.doesNotReject(() => pi.emit("resources_discover", {}, context("load", root)));
+  assert.equal(actionCalls, 1);
+  await pi.emit("session_start", {}, context("load", root));
+  assert.equal(actionCalls, 2);
+});
+
 test("OMP adapter enforces DIRECT runtime gates, exact result attribution, path rewrite, stale evidence, and idle cleanup", async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-omp-direct-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

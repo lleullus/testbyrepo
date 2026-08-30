@@ -686,10 +686,12 @@ export function installReadyRuntime(pi, options = {}) {
   const services = options.services ?? new ManagedServiceRegistry({ lifecycle });
   const readySkillDir = options.readySkillDir;
   const operationIndex = new Map();
-  let toolMap = buildExactToolMap(pi);
+  let toolMap = { mapped: {}, boundaries: [], customMutationBoundary: [] };
+  let toolMapInitialized = false;
 
   const refreshToolMap = () => {
     toolMap = buildExactToolMap(pi);
+    toolMapInitialized = true;
     return toolMap;
   };
 
@@ -712,6 +714,7 @@ export function installReadyRuntime(pi, options = {}) {
   });
 
   pi.on("tool_call", async (event, ctx) => {
+    if (!toolMapInitialized) refreshToolMap();
     const sid = sessionId(ctx);
     if (isReadySkillRead(event)) {
       lifecycle.armSession(sid, "IMPLEMENT");
