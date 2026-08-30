@@ -9,13 +9,6 @@ function sameRequestedPath(left, right) {
   return path.resolve(left) === path.resolve(right);
 }
 
-function hasStoredEvidenceFingerprint(item) {
-  return item?.fingerprint?.payload
-    && typeof item.fingerprint.payload === "object"
-    && typeof item.fingerprint.sha256 === "string"
-    && /^[a-f0-9]{64}$/.test(item.fingerprint.sha256);
-}
-
 function executionFromBinding(binding, fields) {
   const createdAt = now();
   return {
@@ -36,15 +29,6 @@ function executionFromBinding(binding, fields) {
     uncertainty: null,
     last_failed_mutation: null,
     authority_drift: null,
-    zero_mock: {
-      violations: [],
-      touched_paths: [],
-      self_check_paths: [],
-      observed_paths: [],
-      observed_evidence: {},
-      acceptance_provenance: [],
-      inspection_provenance: [],
-    },
     created_at: createdAt,
     updated_at: createdAt,
   };
@@ -61,10 +45,10 @@ export class ReadyLifecycle {
     this.checkAuthorityCurrentness = checkAuthorityCurrentness;
   }
 
-  armSession(sessionId, armedMode = "IMPLEMENT") {
+  armSession(sessionId) {
     return this.store.withLock(() => {
       const current = this.store.readSession(sessionId) || {};
-      const next = { ...current, armed: true, armed_mode: armedMode, updated_at: now() };
+      const next = { ...current, armed: true, updated_at: now() };
       this.store.writeSession(sessionId, next);
       return next;
     });
@@ -105,7 +89,7 @@ export class ReadyLifecycle {
 
   async beginDirect({ sessionId, projectRoot, ticketPath }) {
     const session = this.store.readSession(sessionId);
-    if (!session?.armed || session.armed_mode === "VERIFY") throw new Error("ready-ticket-implement session is not ARMED; read the Skill before begin_direct");
+    if (!session?.armed) throw new Error("ready-ticket-implement session is not ARMED; read the Skill before begin_direct");
 
     const existing = session.execution_id ? this.store.readExecution(session.execution_id) : null;
     if (
@@ -161,58 +145,6 @@ export class ReadyLifecycle {
         execution_id: state.execution_id,
         session_id: sessionId,
         mode: "DIRECT",
-        updated_at: now(),
-      });
-      return state;
-    });
-  }
-
-  async beginVerification({ sessionId, projectRoot, ticketPath }) {
-    const session = this.store.readSession(sessionId);
-    if (!session?.armed || session.armed_mode !== "VERIFY") {
-      throw new Error("ready-ticket-verify session is not ARMED; read the verifier Skill before begin");
-    }
-    const existing = session.execution_id ? this.store.readExecution(session.execution_id) : null;
-    if (
-      existing
-      && existing.execution_mode === "VERIFY"
-      && ["VERIFY_ACTIVE", "VERIFY_AUTHORITY_REVIEW_REQUIRED"].includes(existing.phase)
-      && sameRequestedPath(existing.project_root, projectRoot)
-      && sameRequestedPath(existing.ticket_path, ticketPath)
-    ) {
-      const binding = await this.bindAuthority({ projectRoot, ticketPath });
-      const rebound = { ...existing, ...binding, phase: "VERIFY_ACTIVE", authority_drift: null, updated_at: now() };
-      this.store.withLock(() => {
-        this.store.writeExecution(rebound);
-        this.store.writeActiveTicket(binding.project_root, binding.ticket_path, {
-          identity: rebound.execution_id, execution_id: rebound.execution_id, session_id: sessionId, mode: "VERIFY", updated_at: now(),
-        });
-      });
-      return rebound;
-    }
-    const binding = await this.bindAuthority({ projectRoot, ticketPath });
-    return this.store.withLock(() => {
-      const active = this.store.readActiveTicket(binding.project_root, binding.ticket_path);
-      if (active) throw new Error(`exact Ticket already has an active Ready execution: ${active.identity}`);
-      const state = executionFromBinding(binding, {
-        sessionId,
-        executionMode: "VERIFY",
-        phase: "VERIFY_ACTIVE",
-      });
-      this.store.writeExecution(state);
-      this.store.writeSession(sessionId, {
-        ...session,
-        armed: true,
-        armed_mode: "VERIFY",
-        role: "verifier",
-        execution_id: state.execution_id,
-        updated_at: now(),
-      });
-      this.store.writeActiveTicket(binding.project_root, binding.ticket_path, {
-        identity: state.execution_id,
-        execution_id: state.execution_id,
-        session_id: sessionId,
-        mode: "VERIFY",
         updated_at: now(),
       });
       return state;
@@ -477,12 +409,7 @@ export class ReadyLifecycle {
       if (state.phase !== "MUTATION_UNCERTAIN" || !state.uncertainty) throw new Error("Ready execution is not mutation-uncertain");
       if (outcome === "inconclusive") return state;
       if (outcome === "applied") state.mutation_revision = Number(state.mutation_revision ?? 0) + 1;
-      if (state.execution_mode === "VERIFY") {
-        state.phase = "VERIFY_VERIFIED_ADMITTED";
-        if (outcome === "applied") state.verification_progression_used = true;
-      } else {
-        state.phase = "ACTIVE";
-      }
+      state.phase = "ACTIVE";
       state.uncertainty = { ...state.uncertainty, resolution: outcome, resolved_at: now() };
       state.updated_at = now();
       this.store.writeExecution(state);
@@ -504,11 +431,7 @@ export class ReadyLifecycle {
     return this.store.withLock(() => {
       const state = this.status(executionId);
       state.authority_drift = { changed, detected_at: now() };
-      state.phase = state.execution_mode === "SUBAGENT"
-        ? "MATERIAL_TURN_REQUIRED"
-        : state.execution_mode === "VERIFY"
-          ? "VERIFY_AUTHORITY_REVIEW_REQUIRED"
-          : "AUTHORITY_REVIEW_REQUIRED";
+      state.phase = state.execution_mode === "SUBAGENT" ? "MATERIAL_TURN_REQUIRED" : "AUTHORITY_REVIEW_REQUIRED";
       state.updated_at = now();
       this.store.writeExecution(state);
       return state;
@@ -548,71 +471,6 @@ export class ReadyLifecycle {
       const assignment = current.assignment_id ? this.store.readAssignment(current.assignment_id) : null;
       if (assignment) this.store.writeAssignment({ ...assignment, status: "terminal", updated_at: now() });
       return current;
-    });
-  }
-
-  async admitVerification(executionId, ownerSessionId, verdict, { currentEvidenceVerified = false } = {}) {
-    if (!new Set(["VERIFIED", "FAILED", "INCONCLUSIVE"]).has(verdict)) {
-      throw new Error(`invalid verification verdict: ${verdict}`);
-    }
-    const state = this.status(executionId);
-    assertOwner(state, ownerSessionId);
-    if (state.execution_mode !== "VERIFY" || state.phase !== "VERIFY_ACTIVE") {
-      throw new Error(`verification admission is not available in phase ${state.phase}`);
-    }
-    if (verdict === "VERIFIED") {
-      if ((state.zero_mock?.violations || []).length > 0) {
-        throw new Error("mock-tainted evidence cannot be admitted for VERIFIED");
-      }
-      const cleanAcceptance = (state.zero_mock?.acceptance_provenance || []).some(
-        item => item.status === "PASSED"
-          && item.mock_taint === false
-          && item.authoritative_readback?.available === true
-          && hasStoredEvidenceFingerprint(item),
-      );
-      const cleanInspection = (state.zero_mock?.inspection_provenance || []).some(
-        item => item.status === "PASSED"
-          && item.mock_taint === false
-          && item.authoritative_readback?.available === true
-          && hasStoredEvidenceFingerprint(item),
-      );
-      if (!currentEvidenceVerified || (!cleanAcceptance && !cleanInspection)) {
-        throw new Error("VERIFIED requires current Zero-Mock acceptance or direct-inspection provenance with authoritative readback and a gate-revalidated fingerprint");
-      }
-      await this.bindAuthority({ projectRoot: state.project_root, ticketPath: state.ticket_path });
-      const currentness = await this.checkAuthorityCurrentness(state);
-      if (!currentness.current) {
-        this.markAuthorityDrift(executionId, currentness.changed);
-        throw new Error("authority artifacts changed before VERIFIED admission");
-      }
-    }
-    return this.store.withLock(() => {
-      const current = this.status(executionId);
-      current.verification_verdict = verdict;
-      current.phase = verdict === "VERIFIED" ? "VERIFY_VERIFIED_ADMITTED" : "VERIFY_TERMINAL";
-      current.updated_at = now();
-      this.store.writeExecution(current);
-      if (verdict !== "VERIFIED") {
-        this.#releaseActiveTicket(current);
-        this.#deactivateSessions(current);
-      }
-      return current;
-    });
-  }
-
-  finishVerificationProgression(executionId, ownerSessionId) {
-    return this.store.withLock(() => {
-      const state = this.status(executionId);
-      assertOwner(state, ownerSessionId);
-      if (state.execution_mode !== "VERIFY" || state.phase !== "VERIFY_VERIFIED_ADMITTED") {
-        throw new Error(`verification progression is not available in phase ${state.phase}`);
-      }
-      state.phase = "VERIFY_DONE";
-      state.updated_at = now();
-      this.store.writeExecution(state);
-      this.#releaseActiveTicket(state);
-      this.#deactivateSessions(state);
-      return state;
     });
   }
 

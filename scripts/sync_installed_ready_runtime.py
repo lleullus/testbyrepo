@@ -13,17 +13,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_DIR = ROOT / "delivery-runtime" / "ready-ticket-implement"
 CANONICAL_SKILL_DIR = ROOT / "companion-skills" / "ready-ticket-implement"
-CANONICAL_VERIFY_SKILL_DIR = ROOT / "companion-skills" / "ready-ticket-verify"
 INSTALLED_SKILL_DIR = Path(
     os.environ.get(
         "IIS_READY_SKILL_INSTALL_DIR",
         str(Path.home() / ".codex" / "skills" / "ready-ticket-implement"),
-    )
-).expanduser()
-INSTALLED_VERIFY_SKILL_DIR = Path(
-    os.environ.get(
-        "IIS_READY_VERIFY_SKILL_INSTALL_DIR",
-        str(Path.home() / ".codex" / "skills" / "ready-ticket-verify"),
     )
 ).expanduser()
 INSTALLED_DIR = Path(
@@ -34,21 +27,17 @@ INSTALLED_DIR = Path(
 ).expanduser()
 
 TOP_LEVEL_FILES = {"index.js", "package.json", "README.md", "CLICK-PROVENANCE.md"}
-SKILL_PAYLOADS = (
-    (CANONICAL_SKILL_DIR, INSTALLED_SKILL_DIR, (Path("SKILL.md"), Path("agents/openai.yaml"), Path("references/implement.md"))),
-    (CANONICAL_VERIFY_SKILL_DIR, INSTALLED_VERIFY_SKILL_DIR, (Path("SKILL.md"), Path("agents/openai.yaml"), Path("references/verify.md"))),
-)
+SKILL_FILES = (Path("SKILL.md"), Path("agents/openai.yaml"), Path("references/implement.md"))
 
 
 def _skill_same() -> bool:
-    for canonical_dir, installed_dir, files in SKILL_PAYLOADS:
-        for relative in files:
-            canonical = canonical_dir / relative
-            installed = installed_dir / relative
-            if not canonical.is_file() or not installed.is_file():
-                return False
-            if canonical.read_bytes() != installed.read_bytes():
-                return False
+    for relative in SKILL_FILES:
+        canonical = CANONICAL_SKILL_DIR / relative
+        installed = INSTALLED_SKILL_DIR / relative
+        if not canonical.is_file() or not installed.is_file():
+            return False
+        if canonical.read_bytes() != installed.read_bytes():
+            return False
     return True
 
 

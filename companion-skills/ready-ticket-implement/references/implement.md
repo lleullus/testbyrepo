@@ -72,28 +72,6 @@ Continuation은 특정 harness API를 제품 계약으로 요구하지 않는다
 - native Bash가 구조적으로 read-only임을 확인할 수 없으면 자유 shell string을 추측하지 않는다. 필요한 write-capable command는 explicit `ready_argv mutate`의 argv와 target paths로 실행한다.
 - terminal owner는 기존 `IMPLEMENT RESULT`를 내기 전에 runtime을 `complete` 또는 `block`으로 닫는다. runtime debug/state는 기존 result의 새 필수 field가 아니다.
 
-### Zero-Mock Delivery runtime invariant
-
-`ready-ticket-implement`의 implementation/self-check evidence는 mock-free여야 한다. basename이나 본문의 이름 언급을 provenance로 보지 않고, Python/JS/TS structural import closure와 JS/TS global/member/destructuring/alias flow를 따르는 mocking/interception API 정적 검사 및 actual execution provenance를 함께 사용한다.
-
-금지 대상:
-
-- mock/fake/stub implementation과 `unittest.mock`, pytest `monkeypatch`/`mocker`, Jest/Vitest mock/spy API, Sinon 등 dependency patching
-- HTTP/provider interception (`responses`, `requests_mock`, `respx`, `nock`, `msw`, MockAgent 등)
-- fake/in-memory repository/database/provider와 mock mode 환경변수
-- fake response, intercepted response 또는 mock-tainted test 결과를 authoritative evidence로 승격하는 행위
-
-허용 대상은 실제 production entrypoint, 실제 dependency/config/schema/persistence, 임시 디렉터리, 격리된 실제 DB/container와 단순 seed data다.
-
-Runtime enforcement:
-
-1. native/edit/write 및 structured mutation 전 prospective input에서 명시적 mock 도입/활성화를 차단한다.
-2. mutation result 후 실제 target의 Python/JS/TS structural local import closure를 재스캔하며 JS/TS runtime global·static member·destructuring·alias flow나 import/require alias/wrapper가 이름을 바꿔 mock API를 감싸도 taint를 기록한다. basename 또는 text mention만으로 dependency/provenance를 인정하지 않는다.
-3. acceptance test는 오직 `ready_argv acceptance`로 실행하고 `provenance_kind`를 정확히 `LOCAL_PATH`, `LOCAL_SQLITE`, `EXTERNAL_HTTP_PROVIDER` 중 하나로 지정한다. 지원되는 standard Python/JS test runner 또는 shell-control 없는 package script만 허용하며, resolved argv에서 계산한 selected test roots와 `evidence_paths`가 exact canonical set으로 일치하지 않거나 selector가 ambiguous/unsupported이면 fail-closed한다. package runner는 original/resolved argv와 `package.json`을 fingerprint하고 exact adjacent `pre<name>`/`post<name>` lifecycle hook이 configured이면 실행 전에 차단한다. unknown custom runner/MCP execution은 verifiable provenance가 없으면 fail-closed한다.
-4. clean local PASS provenance는 original/resolved 실행 argv, production/evidence structural import closure, actual dependency/config, authoritative readback, runner config와 current mutation revision의 전체 fingerprint 및 `mock_taint: false`를 기록한다.
-5. 현재 runtime은 `EXTERNAL_HTTP_PROVIDER` 실행과 readback correlation을 지원하지 않는다. 이 kind에서는 command/readback argv를 실행하지 않고 acceptance를 `INCONCLUSIVE`로 기록하며 implementation은 기존 `Completion: BLOCKED`로 닫는다.
-6. `ready_guard complete`는 non-empty acceptance provenance denominator의 모든 entry가 clean인지 요구하고 각각의 전체 fingerprint를 current selected-test-root/`evidence_paths` binding, production/evidence import closures, dependency/config, authoritative readback, runner config와 mutation revision에서 재계산한다. 일반 read-only observation은 이 denominator를 대체하지 않으며 mismatch·persistent violation·non-passing provenance가 있으면 COMPLETE를 차단한다.
-
 ## 3. Contract preflight
 
 첫 source-file 변경 전에:
