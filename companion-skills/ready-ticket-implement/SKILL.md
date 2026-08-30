@@ -54,10 +54,10 @@ Top-level 기본 실행 모드는 `DIRECT`다.
 
 구현, self-check와 completion evidence는 실제 production code path와 실제 dependency/readback만 사용한다. mock/fake/stub 구현, patching API, HTTP/database/provider interception, in-memory fake repository, mock-mode 환경변수와 가짜 응답을 acceptance evidence로 사용하지 않는다.
 
-- acceptance test는 `ready_argv acceptance`로 실행해 command, current mutation revision, production entrypoint, actual dependency/config, authoritative readback과 `mock_taint: false` provenance를 남긴다. 일반 Bash나 `ready_argv mutate`로 acceptance runner를 우회하지 않는다.
+- acceptance test는 `ready_argv acceptance`로 실행하며 `provenance_kind`를 정확히 `LOCAL_PATH`, `LOCAL_SQLITE`, `EXTERNAL_HTTP_PROVIDER` 중 하나로 지정한다. resolved argv에서 계산한 실제 selected test roots와 `evidence_paths`는 exact canonical set으로 일치해야 하며 ambiguous/unsupported selector는 fail-closed한다. package runner는 original/resolved argv와 `package.json`을 fingerprint하고 exact adjacent `pre<name>`/`post<name>` lifecycle hook이 configured이면 실행 전에 차단한다. clean local PASS는 command, production/evidence import closure, actual dependency/config, authoritative readback, runner config와 current mutation revision의 fingerprint 및 `mock_taint: false` provenance를 남기며, JS/TS taint 검사는 global/member/destructuring/alias flow를 따른다. 일반 Bash나 `ready_argv mutate`로 acceptance runner를 우회하지 않는다.
 - 임시 디렉터리, 격리된 실제 DB/container, 실제 schema/persistence와 입력용 seed data는 허용한다.
-- 실제 외부 dependency 또는 authoritative readback을 사용할 수 없으면 mock으로 대체하지 않고 `Completion: BLOCKED`로 닫는다.
-- runtime이 mock-taint violation을 기록했거나 acceptance provenance가 clean PASS가 아니면 `ready_guard complete`는 `Completion: COMPLETE` 진입을 허용하지 않는다.
+- 현재 runtime은 `EXTERNAL_HTTP_PROVIDER` 실행과 readback의 correlation을 지원하지 않으므로 command/readback argv를 실행하지 않고 acceptance를 `INCONCLUSIVE`로 기록한다. 구현은 mock으로 대체하지 않고 `Completion: BLOCKED`로 닫는다.
+- `Completion: COMPLETE`에는 non-empty acceptance provenance denominator가 필요하고 그 모든 entry가 clean/current여야 한다. 일반 read-only observation은 이를 대체하지 않으며, runtime이 mock-taint violation을 기록했거나 전체 fingerprint가 `ready_guard complete`에서 current 상태로 재검증되지 않으면 COMPLETE 진입을 허용하지 않는다.
 
 ## 제품 의미 해석
 

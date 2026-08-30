@@ -12,10 +12,13 @@ import { isReadOnlyArgv, parseSimpleReadOnlyCommand, runArgv, validateInspectReq
 import { inventoryAllowedForPhase, isBroadInventory } from "./inventory-policy.js";
 import { ReadyLifecycle } from "./lifecycle.js";
 import {
+  assertAcceptanceEvidenceBinding,
+  buildEvidenceFingerprint,
   dependencyProvenance,
   environmentTaint,
   fileDigest,
   productionPathProvenance,
+  revalidateEvidenceFingerprint,
   resolveAcceptanceRunner,
   resolveEvidencePath,
   scanFileGraph,
@@ -27,6 +30,8 @@ import { RuntimeStore, stableDigest } from "./state-store.js";
 import { buildExactToolMap, mappedPolicy } from "./tool-map.js";
 
 const INTERNAL_TOOLS = new Set(["ready_guard", "ready_argv", "ready_service", "ready_verify_guard"]);
+const ACCEPTANCE_PROVENANCE_KINDS = new Set(["LOCAL_PATH", "LOCAL_SQLITE", "EXTERNAL_HTTP_PROVIDER"]);
+const EXTERNAL_PROVIDER_CORRELATION_ERROR = "external provider execution correlation is unsupported by the ready runtime";
 
 function sessionId(ctx) {
   const id = ctx?.sessionManager?.getSessionId?.();
@@ -274,15 +279,37 @@ function recordInspectionEvidence(state, params) {
     ...environmentTaint(),
     ...productionResult.violations,
     ...scan.violations,
-    ...dependencyUsageViolations(scan.scanned_paths, dependencies),
+    ...dependencyUsageViolations(scan.referenced_paths, dependencies),
   ];
   recordZeroMockPaths(state, "self_check_paths", [production, readback, ...dependencies.map(item => item.path)]);
   recordZeroMockViolations(state, violations);
   if (violations.length > 0) {
     throw new Error(`Zero-Mock direct inspection is tainted or unproven: ${violations.map(item => item.code).join(", ")}`);
   }
+  const fingerprint = buildEvidenceFingerprint({
+    projectRoot: state.project_root,
+    mutationRevision: Number(state.mutation_revision ?? 0),
+    provenanceKind: "LOCAL_PATH",
+    productionEntrypoint: production,
+    evidenceRootPaths: [production, readback, ...dependencies.map(item => item.path)],
+    dependencyPaths: dependencies.map(item => item.path),
+    authoritativeReadback: {
+      available: true,
+      kind: "path",
+      path: readback,
+      sha256: observed.sha256,
+    },
+    resolvedRunner: {
+      runner: "direct-inspection",
+      command_argv: [],
+      resolved_argv: [],
+      package_script: null,
+      package_json: null,
+    },
+  });
   const provenance = {
     status: "PASSED",
+    provenance_kind: "LOCAL_PATH",
     production_entrypoint: production,
     dependencies,
     authoritative_readback: {
@@ -291,12 +318,30 @@ function recordInspectionEvidence(state, params) {
       path: readback,
       sha256: fileDigest(readback),
     },
+    fingerprint,
     mock_taint: false,
     mutation_revision: Number(state.mutation_revision ?? 0),
     recorded_at: new Date().toISOString(),
   };
   ensureZeroMockState(state).inspection_provenance.push(provenance);
   return provenance;
+}
+
+function isNominallyCleanProvenance(item) {
+  return item?.status === "PASSED"
+    && item.mock_taint === false
+    && item.authoritative_readback?.available === true;
+}
+
+async function revalidateCleanProvenance(state, records, signal) {
+  for (const provenance of records) {
+    await revalidateEvidenceFingerprint({
+      projectRoot: state.project_root,
+      mutationRevision: Number(state.mutation_revision ?? 0),
+      provenance,
+      signal,
+    });
+  }
 }
 
 function prospectiveZeroMockReason(event, target) {
@@ -321,19 +366,16 @@ function projectRootFromTicket(ticketPath) {
   return match[1].trim();
 }
 
-function dependencyUsageViolations(scannedPaths, dependencies) {
-  const texts = scannedPaths
-    .filter(file => fs.existsSync(file) && fs.statSync(file).isFile())
-    .map(file => fs.readFileSync(file, "utf8"));
+function dependencyUsageViolations(referencedPaths, dependencies) {
+  const referenced = new Set(referencedPaths);
   const implicitRunnerConfig = new Set(["package.json", "pyproject.toml", "setup.cfg", "tox.ini"]);
   return dependencies.flatMap(item => {
-    const basename = path.basename(item.path);
-    if (implicitRunnerConfig.has(basename)) return [];
-    if (texts.some(text => text.includes(basename))) return [];
+    if (implicitRunnerConfig.has(path.basename(item.path))) return [];
+    if (referenced.has(item.path)) return [];
     return [{
       code: "DEPENDENCY_PATH_UNPROVEN",
       path: item.path,
-      detail: `declared dependency/config is not referenced by the production/evidence closure: ${basename}`,
+      detail: `declared dependency/config is not structurally referenced by the production/evidence closure: ${item.path}`,
     }];
   });
 }
@@ -347,8 +389,12 @@ async function runAcceptanceEvidence({ lifecycle, store, state, params, signal }
   if (!["ACTIVE", "VERIFY_ACTIVE"].includes(state.phase)) {
     throw new Error(`ready_argv acceptance is unavailable in phase ${state.phase}`);
   }
+  if (!ACCEPTANCE_PROVENANCE_KINDS.has(params.provenance_kind)) {
+    throw new Error(`ready_argv acceptance requires provenance_kind to be exactly one of LOCAL_PATH, LOCAL_SQLITE, EXTERNAL_HTTP_PROVIDER; received ${String(params.provenance_kind)}`);
+  }
   const runner = resolveAcceptanceRunner(params.argv, state.project_root);
   const evidencePaths = acceptanceTestPaths(state.project_root, params.evidence_paths);
+  assertAcceptanceEvidenceBinding(state.project_root, runner, evidencePaths);
   const production = productionPathProvenance(state.project_root, evidencePaths, params.production_entrypoint);
   const dependencies = dependencyProvenance(state.project_root, params.dependency_paths);
   const dependencyPaths = dependencies.map(item => item.path);
@@ -357,13 +403,8 @@ async function runAcceptanceEvidence({ lifecycle, store, state, params, signal }
     ...environmentTaint(),
     ...production.violations,
     ...scan.violations,
-    ...dependencyUsageViolations(scan.scanned_paths, dependencies),
+    ...dependencyUsageViolations(scan.referenced_paths, dependencies),
   ];
-  const preExecutionDigests = new Map(
-    scan.scanned_paths
-      .filter(file => fs.existsSync(file) && fs.statSync(file).isFile())
-      .map(file => [file, fileDigest(file)]),
-  );
   recordZeroMockPaths(state, "self_check_paths", [...evidencePaths, production.production_entrypoint, ...dependencyPaths]);
   recordZeroMockViolations(state, violations);
   store.writeExecution(state);
@@ -386,8 +427,55 @@ async function runAcceptanceEvidence({ lifecycle, store, state, params, signal }
     if (!isInsideProject(state.project_root, absolute)) {
       throw new Error(`authoritative readback path is outside Project Root: ${absolute}`);
     }
-    if (fs.existsSync(absolute) && fs.statSync(absolute).isFile()) readbackBeforeDigest = fileDigest(absolute);
+    if (params.provenance_kind !== "EXTERNAL_HTTP_PROVIDER" && fs.existsSync(absolute) && fs.statSync(absolute).isFile()) {
+      readbackBeforeDigest = fileDigest(absolute);
+    }
   }
+  if (params.provenance_kind === "EXTERNAL_HTTP_PROVIDER") {
+    const current = lifecycle.status(state.execution_id);
+    const authoritativeReadback = {
+      available: false,
+      kind: "external_provider_execution_correlation_unsupported",
+      error: EXTERNAL_PROVIDER_CORRELATION_ERROR,
+    };
+    ensureZeroMockState(current).acceptance_provenance.push({
+      provenance_kind: params.provenance_kind,
+      command: params.argv,
+      runner,
+      mutation_revision: Number(current.mutation_revision ?? 0),
+      production_entrypoint: production.production_entrypoint,
+      dependencies,
+      evidence_paths: evidencePaths,
+      authoritative_readback: authoritativeReadback,
+      fingerprint: null,
+      mock_taint: false,
+      status: "INCONCLUSIVE",
+      exit_code: null,
+      timed_out: false,
+      recorded_at: new Date().toISOString(),
+    });
+    store.writeExecution(current);
+    return {
+      status: "INCONCLUSIVE",
+      provenance_kind: params.provenance_kind,
+      runner,
+      command: params.argv,
+      production_entrypoint: production.production_entrypoint,
+      dependencies,
+      authoritative_readback: authoritativeReadback,
+      fingerprint: null,
+      mock_taint: false,
+      exit_code: null,
+      timed_out: false,
+      stdout: "",
+      stderr: "",
+    };
+  }
+  const preExecutionDigests = new Map(
+    scan.scanned_paths
+      .filter(file => fs.existsSync(file) && fs.statSync(file).isFile())
+      .map(file => [file, fileDigest(file)]),
+  );
 
   const syntheticId = `ready-acceptance-${crypto.randomUUID()}`;
   lifecycle.beginOperation(state.execution_id, { toolCallId: syntheticId, kind: "observation" });
@@ -433,10 +521,7 @@ async function runAcceptanceEvidence({ lifecycle, store, state, params, signal }
         const reserved = new Set([...evidencePaths, ...dependencyPaths]);
         if (reserved.has(readbackPath)) throw new Error("authoritative readback must be distinct from test/config provenance inputs");
         const afterDigest = fileDigest(readbackPath);
-        const basename = path.basename(readbackPath);
-        const referenced = scan.scanned_paths
-          .filter(file => fs.existsSync(file) && fs.statSync(file).isFile())
-          .some(file => fs.readFileSync(file, "utf8").includes(basename));
+        const referenced = scan.referenced_paths.includes(readbackPath);
         const producedOrChanged = readbackBeforeDigest === null || readbackBeforeDigest !== afterDigest;
         if (!referenced && !producedOrChanged) {
           throw new Error("authoritative readback path is not attributable to the production/evidence execution");
@@ -460,6 +545,7 @@ async function runAcceptanceEvidence({ lifecycle, store, state, params, signal }
           argv: params.readback_argv,
           exit_code: readbackResult.exitCode,
           stdout_sha256: crypto.createHash("sha256").update(readbackResult.stdout).digest("hex"),
+          timed_out: readbackResult.timedOut,
         };
       } catch (error) {
         authoritativeReadback = {
@@ -476,7 +562,26 @@ async function runAcceptanceEvidence({ lifecycle, store, state, params, signal }
     : testResult.exitCode === 0 && !testResult.timedOut ? "INCONCLUSIVE"
       : "FAILED";
   const current = lifecycle.status(state.execution_id);
+  let fingerprint = null;
+  if (status === "PASSED") {
+    try {
+      fingerprint = buildEvidenceFingerprint({
+        projectRoot: current.project_root,
+        mutationRevision: Number(current.mutation_revision ?? 0),
+        provenanceKind: params.provenance_kind,
+        productionEntrypoint: production.production_entrypoint,
+        evidenceRootPaths: evidencePaths,
+        dependencyPaths,
+        authoritativeReadback,
+        resolvedRunner: runner,
+      });
+    } catch (error) {
+      lifecycle.finishOperation(state.execution_id, syntheticId, { mutationApplied: false });
+      throw new Error(`Zero-Mock acceptance fingerprint failed closed: ${error.message}`);
+    }
+  }
   ensureZeroMockState(current).acceptance_provenance.push({
+    provenance_kind: params.provenance_kind,
     command: params.argv,
     runner,
     mutation_revision: Number(current.mutation_revision ?? 0),
@@ -484,6 +589,7 @@ async function runAcceptanceEvidence({ lifecycle, store, state, params, signal }
     dependencies,
     evidence_paths: evidencePaths,
     authoritative_readback: authoritativeReadback,
+    fingerprint,
     mock_taint: false,
     status,
     exit_code: testResult.exitCode,
@@ -495,6 +601,7 @@ async function runAcceptanceEvidence({ lifecycle, store, state, params, signal }
   if (status === "PASSED") lifecycle.noteCurrentEvidence(state.execution_id, current.mutation_revision);
   return {
     status,
+    provenance_kind: params.provenance_kind,
     runner,
     command: params.argv,
     production_entrypoint: production.production_entrypoint,
@@ -923,11 +1030,15 @@ export function installReadyRuntime(pi, options = {}) {
           if (execution.managed_service) await services.stop(execution.execution_id, sid);
           const scan = currentZeroMockScan(execution);
           const provenance = execution.zero_mock?.acceptance_provenance || [];
-          const badProvenance = provenance.filter(item => item.mock_taint !== false || item.status !== "PASSED");
+          const badProvenance = provenance.filter(item => !isNominallyCleanProvenance(item));
           store.writeExecution(execution);
-          if (scan.mock_taint || badProvenance.length > 0) {
-            throw new Error("Zero-Mock Delivery blocks COMPLETE because current implementation/self-check evidence is mock-tainted or non-passing.");
+          if (provenance.length === 0) {
+            throw new Error("Zero-Mock Delivery blocks COMPLETE because clean Zero-Mock acceptance provenance is required.");
           }
+          if (scan.mock_taint || badProvenance.length > 0) {
+            throw new Error("Zero-Mock Delivery blocks COMPLETE because current implementation/self-check evidence is mock-tainted, non-passing, or lacks authoritative readback.");
+          }
+          await revalidateCleanProvenance(execution, provenance, _signal);
           value = await lifecycle.complete(params.execution_id, sid);
           return resultText(runtimeView(value));
         }
@@ -970,6 +1081,7 @@ export function installReadyRuntime(pi, options = {}) {
       production_entrypoint: z.string().optional(),
       dependency_paths: z.array(z.string()).optional(),
       authoritative_readback_path: z.string().optional(),
+      provenance_kind: z.enum(["LOCAL_PATH", "LOCAL_SQLITE", "EXTERNAL_HTTP_PROVIDER"]),
       readback_argv: z.array(z.string()).optional(),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
@@ -1141,7 +1253,7 @@ export function installReadyRuntime(pi, options = {}) {
       dependency_paths: z.array(z.string()).optional(),
       authoritative_readback_path: z.string().optional(),
     }),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const sid = sessionId(ctx);
       if (params.action === "begin") {
         if (!params.ticket_path) throw new Error("ready_verify_guard begin requires ticket_path");
@@ -1156,18 +1268,30 @@ export function installReadyRuntime(pi, options = {}) {
       if (params.action === "admit") {
         const state = lifecycle.status(executionId);
         const scan = currentZeroMockScan(state);
+        let currentEvidenceVerified = false;
         if (params.verdict === "VERIFIED" && scan.mock_taint) {
           store.writeExecution(state);
           throw new Error("mock-tainted verification evidence cannot be admitted for VERIFIED");
         }
-        const cleanAcceptance = (state.zero_mock?.acceptance_provenance || []).some(
-          item => item.status === "PASSED" && item.mock_taint === false && item.authoritative_readback?.available === true,
-        );
-        if (params.verdict === "VERIFIED" && !cleanAcceptance && params.authoritative_readback_path) {
-          recordInspectionEvidence(state, params);
+        if (params.verdict === "VERIFIED") {
+          const cleanAcceptance = (state.zero_mock?.acceptance_provenance || []).filter(isNominallyCleanProvenance);
+          if (cleanAcceptance.length > 0) {
+            await revalidateCleanProvenance(state, cleanAcceptance, signal);
+            currentEvidenceVerified = true;
+          } else if (params.authoritative_readback_path) {
+            const inspection = recordInspectionEvidence(state, params);
+            await revalidateCleanProvenance(state, [inspection], signal);
+            currentEvidenceVerified = true;
+          } else {
+            const cleanInspection = (state.zero_mock?.inspection_provenance || []).filter(isNominallyCleanProvenance);
+            if (cleanInspection.length > 0) {
+              await revalidateCleanProvenance(state, cleanInspection, signal);
+              currentEvidenceVerified = true;
+            }
+          }
         }
         store.writeExecution(state);
-        const value = await lifecycle.admitVerification(executionId, sid, params.verdict);
+        const value = await lifecycle.admitVerification(executionId, sid, params.verdict, { currentEvidenceVerified });
         return resultText(runtimeView(value));
       }
       if (params.action === "post_validate") {

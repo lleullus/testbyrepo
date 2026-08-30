@@ -90,6 +90,51 @@ async function arm(pi, sid, cwd) {
   }, context(sid, cwd));
 }
 
+function makeAcceptanceFixture(project, expectedContent) {
+  const tests = path.join(project, "tests");
+  const app = path.join(project, "app.py");
+  const acceptanceTest = path.join(tests, "test_acceptance.py");
+  const readback = path.join(project, "readback.txt");
+  fs.mkdirSync(tests, { recursive: true });
+  fs.writeFileSync(app, [
+    "from pathlib import Path",
+    "ROOT = Path(__file__).parent",
+    "SOURCE = ROOT / 'src' / 'a.txt'",
+    "def read_current():",
+    "    return SOURCE.read_text()",
+    "",
+  ].join("\n"));
+  fs.writeFileSync(acceptanceTest, [
+    "import unittest",
+    "from pathlib import Path",
+    "from app import read_current",
+    "PROJECT_ROOT = Path(__file__).resolve().parents[1]",
+    "READBACK = PROJECT_ROOT / 'readback.txt'",
+    `EXPECTED = ${JSON.stringify(expectedContent)}`,
+    "class AcceptanceTest(unittest.TestCase):",
+    "    def test_mutated_source_through_production(self):",
+    "        actual = read_current()",
+    "        READBACK.write_text(actual)",
+    "        self.assertEqual(actual, EXPECTED)",
+    "",
+  ].join("\n"));
+  return {
+    app,
+    acceptanceTest,
+    readback,
+    params: {
+      action: "acceptance",
+      version: 1,
+      provenance_kind: "LOCAL_PATH",
+      argv: ["python3", "-m", "unittest", "discover", "-s", "tests", "-p", "test_acceptance.py"],
+      evidence_paths: ["tests/test_acceptance.py"],
+      production_entrypoint: "app.py",
+      dependency_paths: ["src/a.txt"],
+      authoritative_readback_path: "readback.txt",
+    },
+  };
+}
+
 test("OMP adapter enforces DIRECT runtime gates, exact result attribution, path rewrite, stale evidence, and idle cleanup", async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-omp-direct-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -101,6 +146,7 @@ test("OMP adapter enforces DIRECT runtime gates, exact result attribution, path 
   fs.writeFileSync(ticket, "Status: ready\n");
   fs.writeFileSync(spec, "Status: approved\n");
   fs.writeFileSync(source, "old\n");
+  const fixture = makeAcceptanceFixture(project, "new\n");
 
   const pi = mockPi();
   const runtime = installReadyRuntime(pi, {
@@ -226,7 +272,7 @@ test("OMP adapter enforces DIRECT runtime gates, exact result attribution, path 
 
   await assert.rejects(
     guard.execute("g-complete-stale", { action: "complete", execution_id: executionId }, null, null, context("main", project)),
-    /current-revision self-check evidence/,
+    /clean Zero-Mock acceptance provenance is required/,
   );
 
   const currentRead = await pi.emit("tool_call", {
@@ -241,6 +287,26 @@ test("OMP adapter enforces DIRECT runtime gates, exact result attribution, path 
     content: [{ type: "text", text: "new" }],
     isError: false,
   }, context("main", project));
+
+  await assert.rejects(
+    guard.execute("g-complete-read-only", { action: "complete", execution_id: executionId }, null, null, context("main", project)),
+    /clean Zero-Mock acceptance provenance is required/,
+  );
+
+  const acceptance = parseToolResult(await pi.tools.get("ready_argv").execute("direct-acceptance", {
+    ...fixture.params,
+  }, null, null, context("main", project)));
+  assert.equal(acceptance.status, "PASSED");
+  assert.equal(acceptance.provenance_kind, "LOCAL_PATH");
+  assert.equal(fs.readFileSync(fixture.readback, "utf8"), "new\n");
+
+  const directProvenance = runtime.lifecycle.status(executionId).zero_mock.acceptance_provenance.at(-1);
+  assert.equal(directProvenance.mutation_revision, 1);
+  assert.equal(directProvenance.fingerprint.payload.mutation_revision, 1);
+  assert.equal(directProvenance.fingerprint.payload.production.entrypoint.path, fs.realpathSync(fixture.app));
+  assert.deepEqual(directProvenance.fingerprint.payload.evidence.roots, [fs.realpathSync(fixture.acceptanceTest)]);
+  assert.equal(directProvenance.fingerprint.payload.dependencies[0].path, fs.realpathSync(source));
+  assert.equal(directProvenance.fingerprint.payload.authoritative_readback.path, fs.realpathSync(fixture.readback));
 
   const completed = parseToolResult(await guard.execute("g-complete", {
     action: "complete",
@@ -268,6 +334,7 @@ test("OMP adapter keeps SUBAGENT one-worker PRE_ACTION gating and blocks parent 
   fs.writeFileSync(ticket, "Status: ready\n");
   fs.writeFileSync(spec, "Status: approved\n");
   fs.writeFileSync(source, "old\n");
+  const fixture = makeAcceptanceFixture(project, "child\n");
 
   const pi = mockPi();
   const runtime = installReadyRuntime(pi, {
@@ -347,6 +414,26 @@ test("OMP adapter keeps SUBAGENT one-worker PRE_ACTION gating and blocks parent 
     content: [{ type: "text", text: "child" }],
     isError: false,
   }, context("child", project));
+
+  await assert.rejects(
+    guard.execute("child-complete-read-only", { action: "complete", execution_id: delegated.execution_id }, null, null, context("child", project)),
+    /clean Zero-Mock acceptance provenance is required/,
+  );
+
+  const acceptance = parseToolResult(await pi.tools.get("ready_argv").execute("child-acceptance", {
+    ...fixture.params,
+  }, null, null, context("child", project)));
+  assert.equal(acceptance.status, "PASSED");
+  assert.equal(acceptance.provenance_kind, "LOCAL_PATH");
+  assert.equal(fs.readFileSync(fixture.readback, "utf8"), "child\n");
+
+  const childProvenance = runtime.lifecycle.status(delegated.execution_id).zero_mock.acceptance_provenance.at(-1);
+  assert.equal(childProvenance.mutation_revision, 1);
+  assert.equal(childProvenance.fingerprint.payload.mutation_revision, 1);
+  assert.equal(childProvenance.fingerprint.payload.production.entrypoint.path, fs.realpathSync(fixture.app));
+  assert.deepEqual(childProvenance.fingerprint.payload.evidence.roots, [fs.realpathSync(fixture.acceptanceTest)]);
+  assert.equal(childProvenance.fingerprint.payload.dependencies[0].path, fs.realpathSync(source));
+  assert.equal(childProvenance.fingerprint.payload.authoritative_readback.path, fs.realpathSync(fixture.readback));
 
   const complete = parseToolResult(await guard.execute("child-complete", {
     action: "complete",

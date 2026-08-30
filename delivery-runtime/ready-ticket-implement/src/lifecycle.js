@@ -9,6 +9,13 @@ function sameRequestedPath(left, right) {
   return path.resolve(left) === path.resolve(right);
 }
 
+function hasStoredEvidenceFingerprint(item) {
+  return item?.fingerprint?.payload
+    && typeof item.fingerprint.payload === "object"
+    && typeof item.fingerprint.sha256 === "string"
+    && /^[a-f0-9]{64}$/.test(item.fingerprint.sha256);
+}
+
 function executionFromBinding(binding, fields) {
   const createdAt = now();
   return {
@@ -544,7 +551,7 @@ export class ReadyLifecycle {
     });
   }
 
-  async admitVerification(executionId, ownerSessionId, verdict) {
+  async admitVerification(executionId, ownerSessionId, verdict, { currentEvidenceVerified = false } = {}) {
     if (!new Set(["VERIFIED", "FAILED", "INCONCLUSIVE"]).has(verdict)) {
       throw new Error(`invalid verification verdict: ${verdict}`);
     }
@@ -558,13 +565,19 @@ export class ReadyLifecycle {
         throw new Error("mock-tainted evidence cannot be admitted for VERIFIED");
       }
       const cleanAcceptance = (state.zero_mock?.acceptance_provenance || []).some(
-        item => item.status === "PASSED" && item.mock_taint === false && item.authoritative_readback?.available === true,
+        item => item.status === "PASSED"
+          && item.mock_taint === false
+          && item.authoritative_readback?.available === true
+          && hasStoredEvidenceFingerprint(item),
       );
       const cleanInspection = (state.zero_mock?.inspection_provenance || []).some(
-        item => item.status === "PASSED" && item.mock_taint === false && item.authoritative_readback?.available === true,
+        item => item.status === "PASSED"
+          && item.mock_taint === false
+          && item.authoritative_readback?.available === true
+          && hasStoredEvidenceFingerprint(item),
       );
-      if (!cleanAcceptance && !cleanInspection) {
-        throw new Error("VERIFIED requires current Zero-Mock acceptance or direct-inspection provenance with authoritative readback");
+      if (!currentEvidenceVerified || (!cleanAcceptance && !cleanInspection)) {
+        throw new Error("VERIFIED requires current Zero-Mock acceptance or direct-inspection provenance with authoritative readback and a gate-revalidated fingerprint");
       }
       await this.bindAuthority({ projectRoot: state.project_root, ticketPath: state.ticket_path });
       const currentness = await this.checkAuthorityCurrentness(state);
