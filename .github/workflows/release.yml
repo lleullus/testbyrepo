@@ -1,37 +1,55 @@
-name: release
+name: release-candidate
 
 on:
-  push:
-    tags: ["*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing or intended release tag (required only when publish=true)"
+        required: false
+        type: string
+      publish:
+        description: "Publish a draft GitHub Release after all validation jobs pass"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  frontend:
+    uses: ./.github/workflows/frontend.yml
+
+  backend:
     uses: ./.github/workflows/backend.yml
+
   publish:
-    needs: [build]
-    runs-on: ubuntu-22.04
+    name: Explicitly approved draft release
+    if: inputs.publish
+    needs: [frontend, backend]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Check version bump
+      - name: Require explicit tag and matching project version
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          TAG=$(git describe --tags --match "[0-9]*.[0-9]*.[0-9]*" --abbrev=8)
-          VERSION=$(grep project CMakeLists.txt| awk '{print $3}')
-          if [ "$TAG" != "$VERSION" ]; then
-            echo "=== Version in CMakeLists.txt and git tag does not match!"
-            echo "=== Git Tag: $TAG, Version: $VERSION"
-            exit 1
-          fi
+          set -euo pipefail
+          test -n "$RELEASE_TAG"
+          version=$(sed -n 's/^project(ttyd VERSION \([^ ]*\).*/\1/p' CMakeLists.txt)
+          normalized_tag=${RELEASE_TAG#v}
+          test "$normalized_tag" = "$version"
       - uses: actions/download-artifact@v4
-      - run: |
-          mkdir build
-          for file in ttyd.*/*; do
-            target=$(echo $file | awk -F/ '{print $1}')
-            [[ $file == *.exe ]] && target="$target.exe"
-            mv $file build/$target
-          done
-          pushd build; sha256sum ttyd.* > SHA256SUMS; popd
+        with:
+          name: ttyd.x86_64
+          path: build
+      - name: Create checksums
+        run: sha256sum build/ttyd > build/SHA256SUMS
       - uses: ncipollo/release-action@v1
         with:
-          artifacts: build/*
-          allowUpdates: true
+          tag: ${{ inputs.tag }}
+          artifacts: "build/ttyd,build/SHA256SUMS"
+          allowUpdates: false
           draft: true

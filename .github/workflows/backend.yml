@@ -3,37 +3,132 @@ name: backend
 on:
   push:
     paths:
-    - ".github/workflows/backend.yml"
-    - "CMakeLists.txt"
-    - "src/*"
-    - "scripts/*"
+      - ".github/workflows/backend.yml"
+      - "CMakeLists.txt"
+      - "src/**"
+      - "scripts/**"
+      - "staging/**"
+      - "html/**"
   pull_request:
     paths:
-    - ".github/workflows/backend.yml"
-    - "CMakeLists.txt"
-    - "src/*"
-    - "scripts/*"
+      - ".github/workflows/backend.yml"
+      - "CMakeLists.txt"
+      - "src/**"
+      - "scripts/**"
+      - "staging/**"
+      - "html/**"
+  workflow_dispatch:
+  schedule:
+    - cron: "23 3 * * 1"
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
-  cross:
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [i686, x86_64, arm, armhf, aarch64, mips, mipsel, mips64, mips64el, s390x, win32]
+  tier1-x86_64:
+    name: Tier 1 x86_64-musl build and regression
+    runs-on: ubuntu-24.04
+    env:
+      BUILD_TARGET: x86_64
     steps:
       - uses: actions/checkout@v4
-      - name: Install packages
+      - name: Configure disposable build roots
+        run: |
+          echo "CROSS_ROOT=$RUNNER_TEMP/ttyd-cross" >> "$GITHUB_ENV"
+          echo "STAGE_ROOT=$RUNNER_TEMP/ttyd-stage" >> "$GITHUB_ENV"
+          echo "BUILD_ROOT=$RUNNER_TEMP/ttyd-build" >> "$GITHUB_ENV"
+          echo "DOWNLOAD_ROOT=$RUNNER_TEMP/ttyd-downloads" >> "$GITHUB_ENV"
+      - name: Install native and test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake build-essential cmake curl file libtool python3-venv
+          python3 -m venv "$RUNNER_TEMP/ttyd-venv"
+          "$RUNNER_TEMP/ttyd-venv/bin/pip" install --disable-pip-version-check websocket-client
+          echo "$RUNNER_TEMP/ttyd-venv/bin" >> "$GITHUB_PATH"
+      - name: Build checksum-pinned Tier 1 candidate
+        run: ./scripts/cross-build.sh
+      - name: Record candidate path and identity
+        run: |
+          candidate="$STAGE_ROOT/x86_64-linux-musl/bin/ttyd"
+          test -x "$candidate"
+          file "$candidate"
+          sha256sum "$candidate"
+          echo "TTYD_BIN=$candidate" >> "$GITHUB_ENV"
+      - name: Protocol edge regressions
+        run: python3 staging/check_protocol_edges.py
+      - name: Server hardening regressions
+        run: python3 staging/check_server_hardening.py
+      - name: open_uri argument-safety regression
+        run: python3 staging/check_open_uri.py
+      - name: Process lifecycle regression
+        run: python3 staging/check_exit_lifecycle.py
+      - name: Fresh/resume session regression
+        run: python3 staging/check_fresh_session.py
+      - name: Browser reconnect regression
+        run: python3 staging/check_reconnect.py
+      - name: Browser, mobile, touch and xterm 6 regressions
+        env:
+          WEBTERM_URL: http://127.0.0.1:7684/
+        run: |
+          set -euo pipefail
+          "$TTYD_BIN" -W -i 127.0.0.1 -p 7684 -I "$GITHUB_WORKSPACE/staging/index.html" /bin/bash -l >"$RUNNER_TEMP/ttyd-browser.log" 2>&1 &
+          ttyd_pid=$!
+          cleanup() {
+            kill "$ttyd_pid" 2>/dev/null || true
+            wait "$ttyd_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:7684/token >/dev/null; then
+              break
+            fi
+            if ! kill -0 "$ttyd_pid" 2>/dev/null; then
+              cat "$RUNNER_TEMP/ttyd-browser.log"
+              exit 1
+            fi
+            sleep 0.25
+          done
+          curl --fail --silent http://127.0.0.1:7684/token >/dev/null
+          python3 staging/check_staging.py
+          python3 staging/check_touch_resize.py
+          python3 staging/check_xterm6_compat.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ttyd.x86_64
+          path: ${{ runner.temp }}/ttyd-stage/x86_64-linux-musl/bin/ttyd
+          if-no-files-found: error
+          retention-days: 14
+
+  reproducibility-x86_64:
+    name: Weekly/manual x86_64 reproducibility
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure shared verified downloads
+        run: echo "DOWNLOAD_ROOT=$RUNNER_TEMP/ttyd-repro-downloads" >> "$GITHUB_ENV"
+      - name: Install native prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install -y autoconf automake build-essential cmake curl file libtool
-      - name: Cross build (${{ matrix.target }})
+      - name: Build from independent root A
         env:
-          BUILD_TARGET: ${{ matrix.target }}
+          BUILD_TARGET: x86_64
+          CROSS_ROOT: ${{ runner.temp }}/ttyd-repro-a-cross
+          STAGE_ROOT: ${{ runner.temp }}/ttyd-repro-a-stage
+          BUILD_ROOT: ${{ runner.temp }}/ttyd-repro-a-build
         run: ./scripts/cross-build.sh
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ttyd.${{ matrix.target }}
-          path: build/ttyd*
-
+      - name: Build from independent root B
+        env:
+          BUILD_TARGET: x86_64
+          CROSS_ROOT: ${{ runner.temp }}/ttyd-repro-b-cross
+          STAGE_ROOT: ${{ runner.temp }}/ttyd-repro-b-stage
+          BUILD_ROOT: ${{ runner.temp }}/ttyd-repro-b-build
+        run: ./scripts/cross-build.sh
+      - name: Require byte-identical candidates
+        run: |
+          a="$RUNNER_TEMP/ttyd-repro-a-stage/x86_64-linux-musl/bin/ttyd"
+          b="$RUNNER_TEMP/ttyd-repro-b-stage/x86_64-linux-musl/bin/ttyd"
+          sha256sum "$a" "$b"
+          cmp "$a" "$b"

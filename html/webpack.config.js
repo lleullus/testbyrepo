@@ -66,7 +66,7 @@ const devConfig = {
     devServer: {
         static: path.join(__dirname, 'dist'),
         compress: true,
-        port: 9000,
+        port: Number(process.env.WEBPACK_DEV_SERVER_PORT || 9000),
         client: {
             overlay: {
                 errors: true,
@@ -80,12 +80,6 @@ const devConfig = {
                 ws: true,
             },
         ],
-        webSocketServer: {
-            type: 'sockjs',
-            options: {
-                path: '/sockjs-node',
-            },
-        },
     },
     devtool: 'inline-source-map',
 };

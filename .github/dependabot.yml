@@ -1,7 +1,31 @@
 version: 2
 updates:
-- package-ecosystem: npm
-  directory: "/html"
-  schedule:
-    interval: daily
-  open-pull-requests-limit: 10
+  - package-ecosystem: npm
+    directory: "/html"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:30"
+      timezone: "Asia/Seoul"
+    open-pull-requests-limit: 6
+    groups:
+      xterm-minor-patch:
+        patterns:
+          - "@xterm/*"
+        update-types:
+          - minor
+          - patch
+      frontend-dev-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: "Asia/Seoul"
+    open-pull-requests-limit: 4

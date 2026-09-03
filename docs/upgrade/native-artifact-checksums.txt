@@ -1,0 +1,35 @@
+# Phase 9 verified native source and artifact checksums
+# Captured: 2026-09-03 (Asia/Seoul)
+# Format: SHA256  identifier-or-URL
+
+# Frozen cross toolchain
+c5d410d9f82a4f24c549fe5d24f988f85b2679b452413a9f7e5f7b956f2fe7ea  https://github.com/tsl0922/musl-toolchains/releases/download/2021-11-23/x86_64-linux-musl-cross.tgz
+
+# Historical controls
+9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23  https://zlib.net/fossils/zlib-1.3.1.tar.gz
+7550914d58fb63b2c3546f3ccfbe11f1c094147bd31a69dcd23714d7956159e6  https://s3.amazonaws.com/json-c_releases/releases/json-c-0.17.tar.gz
+ccfcdc968c55673c6526d8270a9c8655a806ea92468afcbcabc2b16040f03cb4  https://dist.libuv.org/dist/v1.44.2/libuv-v1.44.2.tar.gz
+849e86b626e42ded6bf67197b64aa771daa54e2a7e2868dc67e1e4711959e5e3  https://github.com/Mbed-TLS/mbedtls/archive/refs/tags/v2.28.5.tar.gz
+6fd33527b410a37ebc91bb64ca51bdabab12b076bc99d153d7c5dd405e4bdf90  https://github.com/warmcat/libwebsockets/archive/refs/tags/v4.3.3.tar.gz
+
+# Selected source archives
+bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16  https://zlib.net/zlib-1.3.2.tar.gz
+37ad0249902e301bd9052bf712e511fcc6acff4ecaad4b5900aad9ce564e26de  https://s3.amazonaws.com/json-c_releases/releases/json-c-0.19.tar.gz
+66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7  https://dist.libuv.org/dist/v1.52.1/libuv-v1.52.1.tar.gz
+a7e8bcbec0e6f761b4af24f25677626b35f762f68eef79c08677a363212d11f6  https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.7/mbedtls-3.6.7.tar.bz2
+b6ade658f4af3a823d0dc806ae5ef0623f0f4f5e2aeb895a0f77c4783840c30e  https://github.com/warmcat/libwebsockets/archive/refs/tags/v4.5.8.tar.gz
+
+# Evaluated alternatives
+d08df7634da0a377a4e077400ed6b2d1d25cf0b239e89397cd39432c5eb437ac  https://github.com/warmcat/libwebsockets/archive/refs/tags/v4.5.7.tar.gz
+f853c6582101cfcee3a5a9e28ae92ab19d9735c5f31f0bb2e9794b5106123962  https://github.com/warmcat/libwebsockets/archive/refs/tags/v5.0.0.tar.gz
+2bed9d713b4668f76553b097e72b8aa30bc8f112a940d7ae228d524bbde6ffea  https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-4.2.0/mbedtls-4.2.0.tar.bz2
+b1bfedcd5b289ff22aee87c9d600f515767ebf45f77168cb6d64f231f518a82e  https://www.openssl.org/source/openssl-3.6.1.tar.gz
+736b467530f916737b7031310ccb21d8218c6229e61e8e160cd1d3458cd543a8  https://www.openssl.org/source/openssl-4.0.2.tar.gz
+
+# Final validated x86_64-musl candidate; all three builds were byte-identical
+2e34d0685f08d7b74235d7e656a6d40f008c39b1b77e80843fe5ac3a2c45d9d8  /tmp/ttyd-stage-phase9-repro-a/x86_64-linux-musl/bin/ttyd
+2e34d0685f08d7b74235d7e656a6d40f008c39b1b77e80843fe5ac3a2c45d9d8  /tmp/ttyd-stage-phase9-repro-b/x86_64-linux-musl/bin/ttyd
+2e34d0685f08d7b74235d7e656a6d40f008c39b1b77e80843fe5ac3a2c45d9d8  /tmp/ttyd-stage-phase9-default/x86_64-linux-musl/bin/ttyd
+
+# Production reference only; NOT replaced during Phase 9
+72ec5af3f3d830126c1105bf6f4ab0180b9b108a631abb7c7a29c3a23bd3359c  /home/user01/.local/bin/ttyd

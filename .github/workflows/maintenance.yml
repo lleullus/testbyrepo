@@ -1,0 +1,30 @@
+name: maintenance
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "11 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-drift:
+    name: Read-only dependency drift and high-severity audit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: html/.node-version
+      - name: Enable repository-pinned Yarn
+        working-directory: html
+        run: corepack enable
+      - name: Immutable frontend install
+        working-directory: html
+        run: yarn install --immutable
+      - name: High-severity npm audit
+        working-directory: html
+        run: yarn npm audit --all --severity high
+      - name: Report current official dependency drift without modifying the repository
+        run: node scripts/collect-upgrade-freeze.mjs --check

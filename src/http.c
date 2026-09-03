@@ -93,7 +93,6 @@ static void access_log(struct lws *wsi, const char *path) {
 int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len) {
   struct pss_http *pss = (struct pss_http *)user;
   unsigned char buffer[4096 + LWS_PRE], *p, *end;
-  char buf[256];
   bool done = false;
 
   switch (reason) {
@@ -115,16 +114,26 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
 
       if (strcmp(pss->path, endpoints.token) == 0) {
         const char *credential = server->credential != NULL ? server->credential : "";
-        size_t n = sprintf(buf, "{\"token\": \"%s\"}", credential);
+        int needed = snprintf(NULL, 0, "{\"token\": \"%s\"}", credential);
+        if (needed < 0) return 1;
+        size_t n = (size_t)needed;
+        char *token_json = xmalloc(n + 1);
+        int written = snprintf(token_json, n + 1, "{\"token\": \"%s\"}", credential);
+        if (written < 0 || (size_t)written != n) {
+          free(token_json);
+          return 1;
+        }
         if (lws_add_http_header_status(wsi, HTTP_STATUS_OK, &p, end) ||
             lws_add_http_header_by_token(wsi, WSI_TOKEN_HTTP_CONTENT_TYPE,
                                          (unsigned char *)"application/json;charset=utf-8", 30, &p, end) ||
             lws_add_http_header_content_length(wsi, (unsigned long)n, &p, end) ||
             lws_finalize_http_header(wsi, &p, end) ||
-            lws_write(wsi, buffer + LWS_PRE, p - (buffer + LWS_PRE), LWS_WRITE_HTTP_HEADERS) < 0)
+            lws_write(wsi, buffer + LWS_PRE, p - (buffer + LWS_PRE), LWS_WRITE_HTTP_HEADERS) < 0) {
+          free(token_json);
           return 1;
+        }
 
-        pss->buffer = pss->ptr = strdup(buf);
+        pss->buffer = pss->ptr = token_json;
         pss->len = n;
         lws_callback_on_writable(wsi);
         break;

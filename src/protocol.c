@@ -160,30 +160,59 @@ static void session_start_expiry(struct tty_session *session) {
 }
 
 static int send_initial_message(struct pss_tty *pss, int index) {
-  unsigned char message[LWS_PRE + 1 + 4096];
-  unsigned char *p = &message[LWS_PRE];
-  char buffer[128];
-  int n = 0;
+  char buffer[128] = "";
+  int n = -1;
 
   char cmd = initial_cmds[index];
   switch (cmd) {
     case SET_WINDOW_TITLE:
       gethostname(buffer, sizeof(buffer) - 1);
-      n = sprintf((char *)p, "%c%s (%s)", cmd, server->command, buffer);
+      buffer[sizeof(buffer) - 1] = '\0';
+      n = snprintf(NULL, 0, "%c%s (%s)", cmd, server->command, buffer);
       break;
     case SET_PREFERENCES:
-      n = sprintf((char *)p, "%c%s", cmd, server->prefs_json);
+      n = snprintf(NULL, 0, "%c%s", cmd, server->prefs_json);
       break;
     case SET_SESSION_STATE: {
       const char *state = pss->resumed ? (pss->resume_reset ? "resumed-reset" : "resumed") : "fresh";
-      n = sprintf((char *)p, "%c%s", cmd, state);
+      n = snprintf(NULL, 0, "%c%s", cmd, state);
+      break;
+    }
+    default:
+      return -1;
+  }
+
+  if (n < 0) return -1;
+
+  size_t capacity = (size_t)n + 1;
+  unsigned char *message = xmalloc(LWS_PRE + capacity);
+  unsigned char *p = &message[LWS_PRE];
+  int written = -1;
+
+  switch (cmd) {
+    case SET_WINDOW_TITLE:
+      written = snprintf((char *)p, capacity, "%c%s (%s)", cmd, server->command, buffer);
+      break;
+    case SET_PREFERENCES:
+      written = snprintf((char *)p, capacity, "%c%s", cmd, server->prefs_json);
+      break;
+    case SET_SESSION_STATE: {
+      const char *state = pss->resumed ? (pss->resume_reset ? "resumed-reset" : "resumed") : "fresh";
+      written = snprintf((char *)p, capacity, "%c%s", cmd, state);
       break;
     }
     default:
       break;
   }
 
-  return lws_write(pss->wsi, p, (size_t)n, LWS_WRITE_BINARY);
+  if (written < 0 || written != n || (size_t)written >= capacity) {
+    free(message);
+    return -1;
+  }
+
+  int rc = lws_write(pss->wsi, p, (size_t)written, LWS_WRITE_BINARY);
+  free(message);
+  return rc;
 }
 
 static json_object *parse_window_size(const char *buf, size_t len, uint16_t *cols, uint16_t *rows) {
@@ -221,17 +250,20 @@ static bool check_host_origin(struct lws *wsi) {
   const char *prot, *address, *path;
   int port;
   if (lws_parse_uri(buf, &prot, &address, &port, &path)) return false;
+  char origin_host[256];
+  int written;
   if (port == 80 || port == 443) {
-    sprintf(buf, "%s", address);
+    written = snprintf(origin_host, sizeof(origin_host), "%s", address);
   } else {
-    sprintf(buf, "%s:%d", address, port);
+    written = snprintf(origin_host, sizeof(origin_host), "%s:%d", address, port);
   }
+  if (written < 0 || (size_t)written >= sizeof(origin_host)) return false;
 
   char host_buf[256];
   memset(host_buf, 0, sizeof(host_buf));
   len = lws_hdr_copy(wsi, host_buf, (int)sizeof(host_buf), WSI_TOKEN_HOST);
 
-  return len > 0 && strcasecmp(buf, host_buf) == 0;
+  return len > 0 && strcasecmp(origin_host, host_buf) == 0;
 }
 
 static void process_read_cb(pty_process *process, pty_buf_t *buf, bool eof) {
@@ -534,6 +566,12 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
       break;
 
     case LWS_CALLBACK_RECEIVE:
+      if (len == 0 && pss->buffer == NULL) {
+        if (lws_remaining_packet_payload(wsi) > 0 || !lws_is_final_fragment(wsi)) return 0;
+        lwsl_warn("ignored empty WS message\n");
+        break;
+      }
+
       if (pss->buffer == NULL) {
         pss->buffer = xmalloc(len);
         pss->len = len;

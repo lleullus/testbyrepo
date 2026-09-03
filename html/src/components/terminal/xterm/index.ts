@@ -1,7 +1,6 @@
 import { bind } from 'decko';
 import type { IDisposable, ITerminalOptions } from '@xterm/xterm';
 import { Terminal } from '@xterm/xterm';
-import { CanvasAddon } from '@xterm/addon-canvas';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -89,7 +88,6 @@ export class Xterm {
     private fitAddon = new FitAddon();
     private overlayAddon = new OverlayAddon();
     private webglAddon?: WebglAddon;
-    private canvasAddon?: CanvasAddon;
     private zmodemAddon?: ZmodemAddon;
 
     private socket?: WebSocket;
@@ -220,6 +218,51 @@ export class Xterm {
         fitAddon.fit();
     }
 
+    private registerTouchScroll(element: HTMLElement): IDisposable {
+        let lastY: number | undefined;
+        let remainder = 0;
+        const reset = () => {
+            lastY = undefined;
+            remainder = 0;
+        };
+        const onTouchStart = (event: TouchEvent) => {
+            if (event.touches.length !== 1) {
+                reset();
+                return;
+            }
+            lastY = event.touches[0].clientY;
+            remainder = 0;
+        };
+        const onTouchMove = (event: TouchEvent) => {
+            if (event.touches.length !== 1 || lastY === undefined) return;
+            const currentY = event.touches[0].clientY;
+            const deltaY = currentY - lastY;
+            lastY = currentY;
+            if (this.terminal.buffer.active.baseY <= 0) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            const lineHeight = Math.max(element.clientHeight / Math.max(this.terminal.rows, 1), 1);
+            remainder += deltaY;
+            const lines = Math.trunc(remainder / lineHeight);
+            if (lines === 0) return;
+            remainder -= lines * lineHeight;
+            this.terminal.scrollLines(-lines);
+        };
+        const passive = { passive: true } as AddEventListenerOptions;
+        const active = { passive: false } as AddEventListenerOptions;
+        element.addEventListener('touchstart', onTouchStart, passive);
+        element.addEventListener('touchmove', onTouchMove, active);
+        element.addEventListener('touchend', reset, passive);
+        element.addEventListener('touchcancel', reset, passive);
+        return toDisposable(() => {
+            element.removeEventListener('touchstart', onTouchStart, passive);
+            element.removeEventListener('touchmove', onTouchMove, active);
+            element.removeEventListener('touchend', reset, passive);
+            element.removeEventListener('touchcancel', reset, passive);
+        });
+    }
+
     @bind
     private initListeners() {
         const { terminal, fitAddon, overlayAddon, register, sendData } = this;
@@ -244,12 +287,16 @@ export class Xterm {
                 if (this.terminal.getSelection() === '') return;
                 try {
                     document.execCommand('copy');
-                } catch (e) {
+                } catch {
                     return;
                 }
                 this.overlayAddon?.showOverlay('\u2702', 200);
             })
         );
+        const terminalElement = terminal.element;
+        const isTouchDevice =
+            (window.matchMedia?.('(pointer: coarse)').matches ?? false) || navigator.maxTouchPoints > 0;
+        if (terminalElement && isTouchDevice) register(this.registerTouchScroll(terminalElement));
         register(addEventListener(window, 'resize', () => fitAddon.fit()));
         register(addEventListener(window, 'beforeunload', this.onWindowUnload));
     }
@@ -390,7 +437,7 @@ export class Xterm {
         this.overlayAddon.showOverlay('Reconnecting...');
         this.reconnectTimer = window.setTimeout(() => {
             this.reconnectTimer = undefined;
-            this.refreshToken().then(this.connect);
+            void this.refreshToken().then(this.connect);
         }, delay);
     }
 
@@ -402,7 +449,7 @@ export class Xterm {
             this.reconnectStartedAt = 0;
             this.reconnectAttempts = 0;
             overlayAddon.showOverlay('Reconnecting...');
-            refreshToken().then(connect);
+            void refreshToken().then(connect);
         });
         overlayAddon.showOverlay('Press ⏎ to Reconnect');
     }
@@ -586,62 +633,44 @@ export class Xterm {
     @bind
     private setRendererType(value: RendererType) {
         const { terminal } = this;
-        const disposeCanvasRenderer = () => {
-            try {
-                this.canvasAddon?.dispose();
-            } catch {
-                // ignore
-            }
-            this.canvasAddon = undefined;
-        };
         const disposeWebglRenderer = () => {
+            const addon = this.webglAddon;
+            this.webglAddon = undefined;
             try {
-                this.webglAddon?.dispose();
+                addon?.dispose();
             } catch {
                 // ignore
-            }
-            this.webglAddon = undefined;
-        };
-        const enableCanvasRenderer = () => {
-            if (this.canvasAddon) return;
-            this.canvasAddon = new CanvasAddon();
-            disposeWebglRenderer();
-            try {
-                this.terminal.loadAddon(this.canvasAddon);
-                console.log('[ttyd] canvas renderer loaded');
-            } catch (e) {
-                console.log('[ttyd] canvas renderer could not be loaded, falling back to dom renderer', e);
-                disposeCanvasRenderer();
             }
         };
         const enableWebglRenderer = () => {
             if (this.webglAddon) return;
-            this.webglAddon = new WebglAddon();
-            disposeCanvasRenderer();
+            const addon = new WebglAddon();
+            this.webglAddon = addon;
             try {
-                this.webglAddon.onContextLoss(() => {
-                    this.webglAddon?.dispose();
+                addon.onContextLoss(() => {
+                    if (this.webglAddon !== addon) return;
+                    console.warn('[ttyd] WebGL context lost, falling back to default renderer');
+                    disposeWebglRenderer();
                 });
-                terminal.loadAddon(this.webglAddon);
+                terminal.loadAddon(addon);
                 console.log('[ttyd] WebGL renderer loaded');
             } catch (e) {
-                console.log('[ttyd] WebGL renderer could not be loaded, falling back to canvas renderer', e);
+                console.warn('[ttyd] WebGL renderer could not be loaded, falling back to default renderer', e);
                 disposeWebglRenderer();
-                enableCanvasRenderer();
             }
         };
 
         switch (value) {
             case 'canvas':
-                enableCanvasRenderer();
+                disposeWebglRenderer();
+                console.log('[ttyd] canvas renderer is unavailable with xterm 6; using default renderer');
                 break;
             case 'webgl':
                 enableWebglRenderer();
                 break;
             case 'dom':
                 disposeWebglRenderer();
-                disposeCanvasRenderer();
-                console.log('[ttyd] dom renderer loaded');
+                console.log('[ttyd] default renderer loaded');
                 break;
             default:
                 break;

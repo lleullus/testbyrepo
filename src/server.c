@@ -167,7 +167,7 @@ static struct server *server_new(int argc, char **argv, int start) {
   memset(ts, 0, sizeof(struct server));
   ts->client_count = 0;
   ts->sig_code = SIGHUP;
-  sprintf(ts->terminal_type, "%s", "xterm-256color");
+  snprintf(ts->terminal_type, sizeof(ts->terminal_type), "%s", "xterm-256color");
   get_sig_name(ts->sig_code, ts->sig_name, sizeof(ts->sig_name));
   if (start == argc) return ts;
 
@@ -425,8 +425,13 @@ int main(int argc, char **argv) {
       case 'I':
         if (!strncmp(optarg, "~/", 2)) {
           const char *home = getenv("HOME");
-          server->index = malloc(strlen(home) + strlen(optarg) - 1);
-          sprintf(server->index, "%s%s", home, optarg + 1);
+          size_t index_len = strlen(home) + strlen(optarg);
+          server->index = xmalloc(index_len);
+          int written = snprintf(server->index, index_len, "%s%s", home, optarg + 1);
+          if (written < 0 || (size_t)written >= index_len) {
+            fprintf(stderr, "Can not expand index.html path\n");
+            return -1;
+          }
         } else {
           server->index = strdup(optarg);
         }
@@ -523,7 +528,12 @@ int main(int argc, char **argv) {
   lws_set_log_level(debug_level, NULL);
 
   char server_hdr[128] = "";
-  sprintf(server_hdr, "ttyd/%s (libwebsockets/%s)", TTYD_VERSION, LWS_LIBRARY_VERSION);
+  int server_hdr_len = snprintf(server_hdr, sizeof(server_hdr), "ttyd/%s (libwebsockets/%s)", TTYD_VERSION,
+                                LWS_LIBRARY_VERSION);
+  if (server_hdr_len < 0 || (size_t)server_hdr_len >= sizeof(server_hdr)) {
+    fprintf(stderr, "ttyd: server header is too long\n");
+    return -1;
+  }
   info.server_string = server_hdr;
 
 #if LWS_LIBRARY_VERSION_NUMBER < 4000000
@@ -596,7 +606,11 @@ int main(int argc, char **argv) {
 
   if (browser) {
     char url[30];
-    sprintf(url, "%s://localhost:%d", ssl ? "https" : "http", port);
+    int url_len = snprintf(url, sizeof(url), "%s://localhost:%d", ssl ? "https" : "http", port);
+    if (url_len < 0 || (size_t)url_len >= sizeof(url)) {
+      lwsl_err("browser URL is too long\n");
+      return 1;
+    }
     open_uri(url);
   }
 

@@ -3,26 +3,43 @@ name: frontend
 on:
   push:
     paths:
-    - ".github/workflows/frontend.yml"
-    - "html/*"
+      - ".github/workflows/frontend.yml"
+      - "html/**"
+      - "src/html.h"
   pull_request:
     paths:
-    - ".github/workflows/frontend.yml"
-    - "html/*"
+      - ".github/workflows/frontend.yml"
+      - "html/**"
+      - "src/html.h"
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    name: Node 24 / Yarn 4 immutable frontend
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: html
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 18
-      - name: Run yarn install, check and build
-        run: |
-          corepack enable
-          corepack prepare yarn@stable --activate
-          yarn install
-          yarn run check
-          yarn run build
-        working-directory: html
+          node-version-file: html/.node-version
+      - name: Enable repository-pinned Yarn
+        run: corepack enable
+      - name: Immutable install
+        run: yarn install --immutable
+      - name: Lint and type-aware checks
+        run: yarn check
+      - name: Build embedded frontend
+        run: yarn build
+      - name: Verify generated header is committed
+        run: git -C .. diff --exit-code -- src/html.h
+      - name: Rebuild inline artifact
+        run: yarn inline
+      - name: Verify zmodem patch remains resolved
+        run: yarn why zmodem.js

@@ -2,14 +2,18 @@
   "extends": "./node_modules/gts/tsconfig-google.json",
   "compilerOptions": {
     "moduleResolution": "node",
+    "ignoreDeprecations": "6.0",
     "esModuleInterop": true,
     "jsx": "react",
     "jsxFactory": "h",
     "allowJs": true,
     "noImplicitAny": false,
+    "composite": false,
     "declaration": false,
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
+    "noUncheckedSideEffectImports": false,
+    "types": ["node"],
     "lib": ["es2019", "dom"],
   },
   "include": [

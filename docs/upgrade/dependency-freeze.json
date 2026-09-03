@@ -1,0 +1,1070 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-03T14:03:55.032Z",
+  "source": {
+    "head": "7708b79a39a90b188e51333018dbbc05a13e2934",
+    "packageManifestSha256": "63a511224d0572b26ae1bd7882c38a248478f30cb7ead2d6729f2a69b03e5fc2",
+    "registry": "https://registry.npmjs.org/",
+    "nodeReleaseIndex": "https://nodejs.org/dist/index.json",
+    "githubApi": "https://api.github.com/"
+  },
+  "current": {
+    "packageManager": "yarn@4.18.0",
+    "nodeEngine": ">=24.20.0 <25",
+    "nativePins": {
+      "zlib": "1.3.2",
+      "jsonC": "0.19",
+      "tlsBackend": "mbedtls",
+      "mbedTls": "3.6.7",
+      "libuv": "1.52.1",
+      "libwebsockets": "4.5.8",
+      "muslToolchainRelease": "2021-11-23"
+    },
+    "previousNativePins": {
+      "zlib": "1.3.1",
+      "jsonC": "0.17",
+      "tlsBackend": "mbedtls",
+      "mbedTls": "2.28.5",
+      "libuv": "1.44.2",
+      "libwebsockets": "4.3.3",
+      "muslToolchainRelease": "2021-11-23"
+    }
+  },
+  "toolchainCandidates": {
+    "nodeActiveLts": {
+      "version": "v24.20.0",
+      "date": "2026-08-26",
+      "files": [
+        "aix-ppc64",
+        "headers",
+        "linux-arm64",
+        "linux-ppc64le",
+        "linux-s390x",
+        "linux-x64",
+        "linux-x64-musl",
+        "osx-arm64-tar",
+        "osx-x64-pkg",
+        "osx-x64-tar",
+        "src",
+        "win-arm64-7z",
+        "win-arm64-zip",
+        "win-x64-7z",
+        "win-x64-exe",
+        "win-x64-msi",
+        "win-x64-zip"
+      ],
+      "npm": "11.19.0",
+      "v8": "13.6.233.17",
+      "uv": "1.52.1",
+      "zlib": "1.3.2.1-motley",
+      "openssl": "3.5.7",
+      "modules": "137",
+      "lts": "Krypton",
+      "security": false
+    },
+    "yarnLatest": {
+      "version": "4.18.0",
+      "engines": {
+        "node": ">=18.12.0"
+      },
+      "peerDependencies": null,
+      "deprecated": null,
+      "integrity": "sha512-WV9H+/O8BPElO7GKzrKipTtCNt8/gBCUJaNAEOw4U/x2k17aZjseYzll4QhpZE4xIsEvo8bK6KvjhsXuHrclPg==",
+      "shasum": "5f508685a3a4b84783972c25f392f75232b17f85",
+      "tarball": "https://registry.npmjs.org/@yarnpkg/cli-dist/-/cli-dist-4.18.0.tgz"
+    },
+    "typescriptLatest": {
+      "version": "7.0.2",
+      "engines": {
+        "node": ">=16.20.0"
+      },
+      "peerDependencies": null,
+      "deprecated": null,
+      "integrity": "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==",
+      "shasum": "9ec773d7954a8c182c17cc5bbd575aa28bc51582",
+      "tarball": "https://registry.npmjs.org/typescript/-/typescript-7.0.2.tgz"
+    },
+    "typescriptCompatibleCandidate": {
+      "version": "6.0.3",
+      "engines": {
+        "node": ">=14.17"
+      },
+      "peerDependencies": null,
+      "deprecated": null,
+      "integrity": "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==",
+      "shasum": "90251dc007916e972786cb94d74d15b185577d21",
+      "tarball": "https://registry.npmjs.org/typescript/-/typescript-6.0.3.tgz"
+    },
+    "typescriptEslintParserLatest": {
+      "version": "8.69.0",
+      "engines": {
+        "node": "^18.18.0 || ^20.9.0 || >=21.1.0"
+      },
+      "peerDependencies": {
+        "eslint": "^8.57.0 || ^9.0.0 || ^10.0.0",
+        "typescript": ">=4.8.4 <6.1.0"
+      },
+      "deprecated": null,
+      "integrity": "sha512-l4b0DhWioGg6Gt2ebGlvfkFMOjRsauxtsnDRwUSRX1qHq3HdTfQHV8wW9zEXeciai6HfeaKOedQn2Zoofx3WBw==",
+      "shasum": "de3ead2b35e5c71580eda40820adb4fd14834ca1",
+      "tarball": "https://registry.npmjs.org/@typescript-eslint/parser/-/parser-8.69.0.tgz"
+    },
+    "prettierLatest": {
+      "version": "3.9.6",
+      "engines": {
+        "node": ">=14"
+      },
+      "peerDependencies": null,
+      "deprecated": null,
+      "integrity": "sha512-OpN0zzVdiaiAhxpuuj5efpIS4sY9j7bY6uR5mnj5yPzGkdkjNKSJeUThPb60Jw29QuAZgA4o+/iB49kFiaBX6g==",
+      "shasum": "b3ea5146515d40fc53f18aa63f74dfab1e10dbf6",
+      "tarball": "https://registry.npmjs.org/prettier/-/prettier-3.9.6.tgz"
+    }
+  },
+  "xterm6": {
+    "core": {
+      "version": "6.0.0",
+      "engines": null,
+      "peerDependencies": null,
+      "deprecated": null,
+      "integrity": "sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==",
+      "shasum": "93637b0f2ee3a70718b5746a27c9c506af16745b",
+      "tarball": "https://registry.npmjs.org/@xterm/xterm/-/xterm-6.0.0.tgz"
+    },
+    "officialReleaseUrl": "https://github.com/xtermjs/xterm.js/releases/tag/6.0.0",
+    "releasePublishedAt": "2025-12-22T13:59:51Z",
+    "releaseBodySha256": "ef05bc9e27139c23ee7cf8286cc23777c8cc8274dd801173925cd83a142a4021",
+    "canvasRendererRemoved": true,
+    "viewportImplementationChanged": true,
+    "knownIssues": [
+      {
+        "number": 5489,
+        "title": "Regression - Touch scrolling not functioning in 6.0.0",
+        "state": "closed",
+        "stateReason": "completed",
+        "milestone": "7.0.0",
+        "url": "https://github.com/xtermjs/xterm.js/issues/5489",
+        "createdAt": "2025-12-24T17:21:09Z",
+        "updatedAt": "2025-12-31T14:33:38Z",
+        "closedAt": "2025-12-31T14:33:37Z"
+      },
+      {
+        "number": 6063,
+        "title": "`Buffer.resize` can leave viewport rows with no live `BufferLine` when growing rows with `ybase > 0` (6.0.0) — uncaught TypeErrors in `lineFeed` and `_eraseInBufferLine`",
+        "state": "open",
+        "stateReason": null,
+        "milestone": null,
+        "url": "https://github.com/xtermjs/xterm.js/issues/6063",
+        "createdAt": "2026-07-23T19:55:31Z",
+        "updatedAt": "2026-07-23T19:55:31Z",
+        "closedAt": null
+      },
+      {
+        "number": 6067,
+        "title": "Ctrl+<letter> and Escape are silently dropped under a CJK IME (keyCode 229)",
+        "state": "closed",
+        "stateReason": "not_planned",
+        "milestone": null,
+        "url": "https://github.com/xtermjs/xterm.js/issues/6067",
+        "createdAt": "2026-07-24T07:08:47Z",
+        "updatedAt": "2026-07-24T07:10:31Z",
+        "closedAt": "2026-07-24T07:10:31Z"
+      }
+    ],
+    "packageCandidates": {
+      "@xterm/addon-fit": {
+        "current": "0.11.0",
+        "latest": {
+          "version": "0.11.0",
+          "engines": null,
+          "peerDependencies": null,
+          "deprecated": null,
+          "integrity": "sha512-jYcgT6xtVYhnhgxh3QgYDnnNMYTcf8ElbxxFzX0IZo+vabQqSPAjC3c1wJrKB5E19VwQei89QCiZZP86DCPF7g==",
+          "shasum": "ba4778b69fcc9044a060c2176bbe077657d7b37e",
+          "tarball": "https://registry.npmjs.org/@xterm/addon-fit/-/addon-fit-0.11.0.tgz"
+        }
+      },
+      "@xterm/addon-image": {
+        "current": "0.9.0",
+        "latest": {
+          "version": "0.9.0",
+          "engines": null,
+          "peerDependencies": null,
+          "deprecated": null,
+          "integrity": "sha512-oYWA8/QAr5/Emwl1xL7WCoOqeG3IZfpzEz/OVq1j4Oi9934TQmHiyubClikRf0D/jL3JNiNuz/Lsqx0kXQ02BA==",
+          "shasum": "3a12c8fe5bdb05457b955f36d4ce8372d8cb3035",
+          "tarball": "https://registry.npmjs.org/@xterm/addon-image/-/addon-image-0.9.0.tgz"
+        }
+      },
+      "@xterm/addon-unicode11": {
+        "current": "0.9.0",
+        "latest": {
+          "version": "0.9.0",
+          "engines": null,
+          "peerDependencies": null,
+          "deprecated": null,
+          "integrity": "sha512-FxDnYcyuXhNl+XSqGZL/t0U9eiNb/q3EWT5rYkQT/zuig8Gz/VagnQANKHdDWFM2lTMk9ly0EFQxxxtZUoRetw==",
+          "shasum": "e1811bb75d9d783c36bd7126066d8084be70c799",
+          "tarball": "https://registry.npmjs.org/@xterm/addon-unicode11/-/addon-unicode11-0.9.0.tgz"
+        }
+      },
+      "@xterm/addon-web-links": {
+        "current": "0.12.0",
+        "latest": {
+          "version": "0.12.0",
+          "engines": null,
+          "peerDependencies": null,
+          "deprecated": null,
+          "integrity": "sha512-4Smom3RPyVp7ZMYOYDoC/9eGJJJqYhnPLGGqJ6wOBfB8VxPViJNSKdgRYb8NpaM6YSelEKbA2SStD7lGyqaobw==",
+          "shasum": "bc34ae46f4c12012256d451ac2b9be791c0b6bfa",
+          "tarball": "https://registry.npmjs.org/@xterm/addon-web-links/-/addon-web-links-0.12.0.tgz"
+        }
+      },
+      "@xterm/addon-webgl": {
+        "current": "0.19.0",
+        "latest": {
+          "version": "0.19.0",
+          "engines": null,
+          "peerDependencies": null,
+          "deprecated": null,
+          "integrity": "sha512-b3fMOsyLVuCeNJWxolACEUED0vm7qC0cy4wRvf3oURSzDTYVQiGPhTnhWZwIHdvC48Y+oLhvYXnY4XDXPoJo6A==",
+          "shasum": "02533c3f7c0af3ac9a44bbb095cbd47d48e90c25",
+          "tarball": "https://registry.npmjs.org/@xterm/addon-webgl/-/addon-webgl-0.19.0.tgz"
+        }
+      },
+      "@xterm/xterm": {
+        "current": "6.0.0",
+        "latest": {
+          "version": "6.0.0",
+          "engines": null,
+          "peerDependencies": null,
+          "deprecated": null,
+          "integrity": "sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==",
+          "shasum": "93637b0f2ee3a70718b5746a27c9c506af16745b",
+          "tarball": "https://registry.npmjs.org/@xterm/xterm/-/xterm-6.0.0.tgz"
+        }
+      }
+    }
+  },
+  "npmPackages": {
+    "@types/node": {
+      "current": "24.13.3",
+      "latest": {
+        "version": "26.4.1",
+        "engines": null,
+        "peerDependencies": {},
+        "deprecated": null,
+        "integrity": "sha512-k97ENvZWtvA6yqz5/FS6a7duDgOPEeOQOc2iKS/nY6mX6qJUKtLnWzQS+Xj6tXweyj6ZcTAK2Qecetnvi9nCLA==",
+        "shasum": "3d8dc80515894958448ee266cf5d6bc3e5205bd5",
+        "tarball": "https://registry.npmjs.org/@types/node/-/node-26.4.1.tgz"
+      }
+    },
+    "@typescript-eslint/eslint-plugin": {
+      "current": "8.69.0",
+      "latest": {
+        "version": "8.69.0",
+        "engines": {
+          "node": "^18.18.0 || ^20.9.0 || >=21.1.0"
+        },
+        "peerDependencies": {
+          "eslint": "^8.57.0 || ^9.0.0 || ^10.0.0",
+          "typescript": ">=4.8.4 <6.1.0",
+          "@typescript-eslint/parser": "^8.69.0"
+        },
+        "deprecated": null,
+        "integrity": "sha512-t5jQTKPIgVW1PE6dR6H6Qz5gm8zjMlX5/2gRaOGd9eO6V7J+tQc6iWKukEe7dY8u9HyYasQ0yfF0/FSSTEO2gA==",
+        "shasum": "bf74cc392ebcaaf096bc8b4c4d7bbeb0677687b8",
+        "tarball": "https://registry.npmjs.org/@typescript-eslint/eslint-plugin/-/eslint-plugin-8.69.0.tgz"
+      }
+    },
+    "@typescript-eslint/parser": {
+      "current": "8.69.0",
+      "latest": {
+        "version": "8.69.0",
+        "engines": {
+          "node": "^18.18.0 || ^20.9.0 || >=21.1.0"
+        },
+        "peerDependencies": {
+          "eslint": "^8.57.0 || ^9.0.0 || ^10.0.0",
+          "typescript": ">=4.8.4 <6.1.0"
+        },
+        "deprecated": null,
+        "integrity": "sha512-l4b0DhWioGg6Gt2ebGlvfkFMOjRsauxtsnDRwUSRX1qHq3HdTfQHV8wW9zEXeciai6HfeaKOedQn2Zoofx3WBw==",
+        "shasum": "de3ead2b35e5c71580eda40820adb4fd14834ca1",
+        "tarball": "https://registry.npmjs.org/@typescript-eslint/parser/-/parser-8.69.0.tgz"
+      }
+    },
+    "@xterm/addon-fit": {
+      "current": "0.11.0",
+      "latest": {
+        "version": "0.11.0",
+        "engines": null,
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-jYcgT6xtVYhnhgxh3QgYDnnNMYTcf8ElbxxFzX0IZo+vabQqSPAjC3c1wJrKB5E19VwQei89QCiZZP86DCPF7g==",
+        "shasum": "ba4778b69fcc9044a060c2176bbe077657d7b37e",
+        "tarball": "https://registry.npmjs.org/@xterm/addon-fit/-/addon-fit-0.11.0.tgz"
+      }
+    },
+    "@xterm/addon-image": {
+      "current": "0.9.0",
+      "latest": {
+        "version": "0.9.0",
+        "engines": null,
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-oYWA8/QAr5/Emwl1xL7WCoOqeG3IZfpzEz/OVq1j4Oi9934TQmHiyubClikRf0D/jL3JNiNuz/Lsqx0kXQ02BA==",
+        "shasum": "3a12c8fe5bdb05457b955f36d4ce8372d8cb3035",
+        "tarball": "https://registry.npmjs.org/@xterm/addon-image/-/addon-image-0.9.0.tgz"
+      }
+    },
+    "@xterm/addon-unicode11": {
+      "current": "0.9.0",
+      "latest": {
+        "version": "0.9.0",
+        "engines": null,
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-FxDnYcyuXhNl+XSqGZL/t0U9eiNb/q3EWT5rYkQT/zuig8Gz/VagnQANKHdDWFM2lTMk9ly0EFQxxxtZUoRetw==",
+        "shasum": "e1811bb75d9d783c36bd7126066d8084be70c799",
+        "tarball": "https://registry.npmjs.org/@xterm/addon-unicode11/-/addon-unicode11-0.9.0.tgz"
+      }
+    },
+    "@xterm/addon-web-links": {
+      "current": "0.12.0",
+      "latest": {
+        "version": "0.12.0",
+        "engines": null,
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-4Smom3RPyVp7ZMYOYDoC/9eGJJJqYhnPLGGqJ6wOBfB8VxPViJNSKdgRYb8NpaM6YSelEKbA2SStD7lGyqaobw==",
+        "shasum": "bc34ae46f4c12012256d451ac2b9be791c0b6bfa",
+        "tarball": "https://registry.npmjs.org/@xterm/addon-web-links/-/addon-web-links-0.12.0.tgz"
+      }
+    },
+    "@xterm/addon-webgl": {
+      "current": "0.19.0",
+      "latest": {
+        "version": "0.19.0",
+        "engines": null,
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-b3fMOsyLVuCeNJWxolACEUED0vm7qC0cy4wRvf3oURSzDTYVQiGPhTnhWZwIHdvC48Y+oLhvYXnY4XDXPoJo6A==",
+        "shasum": "02533c3f7c0af3ac9a44bbb095cbd47d48e90c25",
+        "tarball": "https://registry.npmjs.org/@xterm/addon-webgl/-/addon-webgl-0.19.0.tgz"
+      }
+    },
+    "@xterm/xterm": {
+      "current": "6.0.0",
+      "latest": {
+        "version": "6.0.0",
+        "engines": null,
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==",
+        "shasum": "93637b0f2ee3a70718b5746a27c9c506af16745b",
+        "tarball": "https://registry.npmjs.org/@xterm/xterm/-/xterm-6.0.0.tgz"
+      }
+    },
+    "copy-webpack-plugin": {
+      "current": "14.0.0",
+      "latest": {
+        "version": "14.0.0",
+        "engines": {
+          "node": ">= 20.9.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.1.0"
+        },
+        "deprecated": null,
+        "integrity": "sha512-3JLW90aBGeaTLpM7mYQKpnVdgsUZRExY55giiZgLuX/xTQRUs1dOCwbBnWnvY6Q6rfZoXMNwzOQJCSZPppfqXA==",
+        "shasum": "cd253b60e8e55bb41019dfe3ef2979ba705592c7",
+        "tarball": "https://registry.npmjs.org/copy-webpack-plugin/-/copy-webpack-plugin-14.0.0.tgz"
+      }
+    },
+    "css-loader": {
+      "current": "7.1.5",
+      "latest": {
+        "version": "7.1.5",
+        "engines": {
+          "node": ">= 18.12.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.27.0",
+          "@rspack/core": "0.x || ^1.0.0 || ^2.0.0-0"
+        },
+        "deprecated": null,
+        "integrity": "sha512-Q7iAfQkU2twNBryKX/vGAlE+GAmkF7quhSzAGNK8fBimxk3+tqg245rH52UPb9dioBolBc8rP0ihmHBaDTJQBA==",
+        "shasum": "5f6a61c1e528c2dfcc9cbfa1e044e9061c99efce",
+        "tarball": "https://registry.npmjs.org/css-loader/-/css-loader-7.1.5.tgz"
+      }
+    },
+    "css-minimizer-webpack-plugin": {
+      "current": "8.0.0",
+      "latest": {
+        "version": "8.0.0",
+        "engines": {
+          "node": ">= 20.9.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.0.0"
+        },
+        "deprecated": null,
+        "integrity": "sha512-9bEpzHs8gEq6/cbEj418jXL/YWjBUD2YTLLk905Npt2JODqnRITin0+So5Vx4Dp5vyi2Lpt9pp2QHzQ7fdxNrw==",
+        "shasum": "e8e881dd171ec586d2229124177349c8ca3b63c3",
+        "tarball": "https://registry.npmjs.org/css-minimizer-webpack-plugin/-/css-minimizer-webpack-plugin-8.0.0.tgz"
+      }
+    },
+    "decko": {
+      "current": "^1.2.0",
+      "latest": {
+        "version": "1.2.0",
+        "engines": null,
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-m8FnyHXV1QX+S1cl+KPFDIl6NMkxtKsy6+U/aYyjrOqWMuwAwYWu7ePqrsUHtDR5Y8Yk2pi/KIDSgF+vT4cPOQ==",
+        "shasum": "fd43c735e967b8013306884a56fbe665996b6817",
+        "tarball": "https://registry.npmjs.org/decko/-/decko-1.2.0.tgz"
+      }
+    },
+    "eslint": {
+      "current": "9.39.5",
+      "latest": {
+        "version": "10.9.1",
+        "engines": {
+          "node": "^20.19.0 || ^22.13.0 || >=24"
+        },
+        "peerDependencies": {
+          "jiti": "*"
+        },
+        "deprecated": null,
+        "integrity": "sha512-9VaAkDURekixUQJy0oJYl2DcN6oKMfxay7XzaGYAWQwsb6qfKf+x76R2k1L8kb1boc+FyCAaTA9GmiKaaiaF+A==",
+        "shasum": "409da5c41a5536d5a849f8555a18ca7ef1eb963b",
+        "tarball": "https://registry.npmjs.org/eslint/-/eslint-10.9.1.tgz"
+      }
+    },
+    "eslint-plugin-prettier": {
+      "current": "5.5.6",
+      "latest": {
+        "version": "5.5.6",
+        "engines": {
+          "node": "^14.18.0 || >=16.0.0"
+        },
+        "peerDependencies": {
+          "eslint": ">=8.0.0",
+          "prettier": ">=3.0.0",
+          "@types/eslint": ">=8.0.0",
+          "eslint-config-prettier": ">= 7.0.0 <10.0.0 || >=10.1.0"
+        },
+        "deprecated": null,
+        "integrity": "sha512-ifetmTcxWfz+4qRW3pH/ujdTq2jQIj59AxJMIN26K5avYgU8dxycUETQonWiW+wPrYXA0j3Try0l1CnwVQtDqQ==",
+        "shasum": "363ebe4d769bce157ccdd8129ce3efd91dc62564",
+        "tarball": "https://registry.npmjs.org/eslint-plugin-prettier/-/eslint-plugin-prettier-5.5.6.tgz"
+      }
+    },
+    "eslint-webpack-plugin": {
+      "current": "6.0.0",
+      "latest": {
+        "version": "6.0.0",
+        "engines": {
+          "node": ">= 20.9.0"
+        },
+        "peerDependencies": {
+          "eslint": "^9.0.0 || ^10.0.0",
+          "webpack": "^5.0.0"
+        },
+        "deprecated": null,
+        "integrity": "sha512-x9m9cH0Rw0RNJB/utP9AMGzmuXg/yLP/FCHSVSfsyjQUyetXN4g1BaIqxkj1i3mVX48aOys0bsVt63LLfh6oYg==",
+        "shasum": "d626269de2c38c7c12eaf202cd43f543ceb9153e",
+        "tarball": "https://registry.npmjs.org/eslint-webpack-plugin/-/eslint-webpack-plugin-6.0.0.tgz"
+      }
+    },
+    "file-saver": {
+      "current": "^2.0.5",
+      "latest": {
+        "version": "2.0.5",
+        "engines": null,
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-P9bmyZ3h/PRG+Nzga+rbdI4OEpNDzAVyy74uVO9ATgzLK6VtAsYybF/+TOCvrc0MO793d6+42lLyZTw7/ArVzA==",
+        "shasum": "d61cfe2ce059f414d899e9dd6d4107ee25670c38",
+        "tarball": "https://registry.npmjs.org/file-saver/-/file-saver-2.0.5.tgz"
+      }
+    },
+    "gts": {
+      "current": "7.0.0",
+      "latest": {
+        "version": "7.0.0",
+        "engines": {
+          "node": ">=18"
+        },
+        "peerDependencies": {
+          "typescript": ">=5"
+        },
+        "deprecated": null,
+        "integrity": "sha512-5Sb73zpklh7GyYRd14QUwa6+4n99b7JqECc+bS2fRYlSK40SXu7Po3//q4jBAP/CQwR+VbUPiOLxJf5zpp4Ajw==",
+        "shasum": "cd63bd452283b7f5c07210473022d856e55bd991",
+        "tarball": "https://registry.npmjs.org/gts/-/gts-7.0.0.tgz"
+      }
+    },
+    "gulp": {
+      "current": "5.0.1",
+      "latest": {
+        "version": "5.0.1",
+        "engines": {
+          "node": ">=10.13.0"
+        },
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-PErok3DZSA5WGMd6XXV3IRNO0mlB+wW3OzhFJLEec1jSERg2j1bxJ6e5Fh6N6fn3FH2T9AP4UYNb/pYlADB9sA==",
+        "shasum": "c43f37aa34569e101fb6da4e0b464677305acd36",
+        "tarball": "https://registry.npmjs.org/gulp/-/gulp-5.0.1.tgz"
+      }
+    },
+    "gulp-clean": {
+      "current": "0.4.0",
+      "latest": {
+        "version": "0.4.0",
+        "engines": {
+          "node": ">=0.9"
+        },
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-DARK8rNMo4lHOFLGTiHEJdf19GuoBDHqGUaypz+fOhrvOs3iFO7ntdYtdpNxv+AzSJBx/JfypF0yEj9ks1IStQ==",
+        "shasum": "3bc25e7084e641bbd7bde057cf90c01c50d95950",
+        "tarball": "https://registry.npmjs.org/gulp-clean/-/gulp-clean-0.4.0.tgz"
+      }
+    },
+    "gulp-gzip": {
+      "current": "1.4.2",
+      "latest": {
+        "version": "1.4.2",
+        "engines": {
+          "node": ">= 0.10.0"
+        },
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-ZIxfkUwk2XmZPTT9pPHrHUQlZMyp9nPhg2sfoeN27mBGpi7OaHnOD+WCN41NXjfJQ69lV1nQ9LLm1hYxx4h3UQ==",
+        "shasum": "0422a94014248655b5b1a9eea1c2abee1d4f4337",
+        "tarball": "https://registry.npmjs.org/gulp-gzip/-/gulp-gzip-1.4.2.tgz"
+      }
+    },
+    "gulp-inline-source": {
+      "current": "4.0.0",
+      "latest": {
+        "version": "4.0.0",
+        "engines": {
+          "node": ">=7.6"
+        },
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-LrqCom18aYkceV2YPqJyCrDpHNyLGrHHNYCmWQXFvJUMyYIpf+xxBzmvR45cokyoq2KW9H8oxijvnDjHn9s3Pw==",
+        "shasum": "e0958b631719fc6a91bee29905415fa825164c69",
+        "tarball": "https://registry.npmjs.org/gulp-inline-source/-/gulp-inline-source-4.0.0.tgz"
+      }
+    },
+    "gulp-rename": {
+      "current": "2.1.0",
+      "latest": {
+        "version": "2.1.0",
+        "engines": {
+          "node": ">=4"
+        },
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-dGuzuH8jQGqCMqC544IEPhs5+O2l+IkdoSZsgd4kY97M1CxQeI3qrmweQBIrxLBbjbe/8uEWK8HHcNBc3OCy4g==",
+        "shasum": "3a9900f81f3a8338409ea5ea542affc25080d9f4",
+        "tarball": "https://registry.npmjs.org/gulp-rename/-/gulp-rename-2.1.0.tgz"
+      }
+    },
+    "html-webpack-plugin": {
+      "current": "5.6.8",
+      "latest": {
+        "version": "5.6.8",
+        "engines": {
+          "node": ">=10.13.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.20.0",
+          "@rspack/core": "0.x || 1.x || 2.x"
+        },
+        "deprecated": null,
+        "integrity": "sha512-MZmKQcTnhEh1SPSyMiEytIeDZDUoBZVorNHivQGXMASHf/BSGGOrKa2xQ5bGx3TCe1n109ecCt+cpww7wwWhKA==",
+        "shasum": "5425dbc63eb533ffa59e92342be94894a125fc23",
+        "tarball": "https://registry.npmjs.org/html-webpack-plugin/-/html-webpack-plugin-5.6.8.tgz"
+      }
+    },
+    "mini-css-extract-plugin": {
+      "current": "2.10.2",
+      "latest": {
+        "version": "2.10.2",
+        "engines": {
+          "node": ">= 12.13.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.0.0"
+        },
+        "deprecated": null,
+        "integrity": "sha512-AOSS0IdEB95ayVkxn5oGzNQwqAi2J0Jb/kKm43t7H73s8+f5873g0yuj0PNvK4dO75mu5DHg4nlgp4k6Kga8eg==",
+        "shasum": "5c85ec9450c05d26e32531b465a15a08c3a57253",
+        "tarball": "https://registry.npmjs.org/mini-css-extract-plugin/-/mini-css-extract-plugin-2.10.2.tgz"
+      }
+    },
+    "preact": {
+      "current": "^10.19.6",
+      "latest": {
+        "version": "10.29.8",
+        "engines": null,
+        "peerDependencies": {
+          "preact-render-to-string": ">=5"
+        },
+        "deprecated": null,
+        "integrity": "sha512-ej2aVZ+vZ8WO7tvlQWRM9N63A0KzF9q4mWJfDUHgYaIofWY9hu74QdnQrjoPMmZi2/nZ5gN0bJCQF49xQqx09Q==",
+        "shasum": "fc85b82dc2474e245b1430b51781d417361f5fc3",
+        "tarball": "https://registry.npmjs.org/preact/-/preact-10.29.8.tgz"
+      }
+    },
+    "prettier": {
+      "current": "3.9.6",
+      "latest": {
+        "version": "3.9.6",
+        "engines": {
+          "node": ">=14"
+        },
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-OpN0zzVdiaiAhxpuuj5efpIS4sY9j7bY6uR5mnj5yPzGkdkjNKSJeUThPb60Jw29QuAZgA4o+/iB49kFiaBX6g==",
+        "shasum": "b3ea5146515d40fc53f18aa63f74dfab1e10dbf6",
+        "tarball": "https://registry.npmjs.org/prettier/-/prettier-3.9.6.tgz"
+      }
+    },
+    "sass": {
+      "current": "1.103.1",
+      "latest": {
+        "version": "1.103.1",
+        "engines": {
+          "node": ">=20.19.0"
+        },
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-9icZURbP51S6S0QGoyaeqk9uB06GNWxsFYWfH5RgpFgqK5FA8tJcM3AdVxrZEVJ7dz+L87nG95gBKf4VuaMHGw==",
+        "shasum": "13b70f5ff69288db956dc27d27c8fb79f3a27c61",
+        "tarball": "https://registry.npmjs.org/sass/-/sass-1.103.1.tgz"
+      }
+    },
+    "sass-loader": {
+      "current": "17.0.1",
+      "latest": {
+        "version": "17.0.1",
+        "engines": {
+          "node": ">= 22.11.0"
+        },
+        "peerDependencies": {
+          "sass": "^1.3.0",
+          "webpack": "^5.0.0",
+          "@rspack/core": "0.x || ^1.0.0 || ^2.0.0-0",
+          "sass-embedded": "*"
+        },
+        "deprecated": null,
+        "integrity": "sha512-pgJMwCuLjVTSIWsv/2luVRXKlCeaViUGcgSe8dx95zMG4hUwqIMFmjbhq29ypFLflJU0GyiJZeLM9iI1n3KYAA==",
+        "shasum": "4e89d8028b313d713584ac90f6f25fc1256449f7",
+        "tarball": "https://registry.npmjs.org/sass-loader/-/sass-loader-17.0.1.tgz"
+      }
+    },
+    "style-loader": {
+      "current": "4.0.0",
+      "latest": {
+        "version": "4.0.0",
+        "engines": {
+          "node": ">= 18.12.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.27.0"
+        },
+        "deprecated": null,
+        "integrity": "sha512-1V4WqhhZZgjVAVJyt7TdDPZoPBPNHbekX4fWnCJL1yQukhCeZhJySUL+gL9y6sNdN95uEOS83Y55SqHcP7MzLA==",
+        "shasum": "0ea96e468f43c69600011e0589cb05c44f3b17a5",
+        "tarball": "https://registry.npmjs.org/style-loader/-/style-loader-4.0.0.tgz"
+      }
+    },
+    "terser-webpack-plugin": {
+      "current": "5.6.1",
+      "latest": {
+        "version": "5.6.1",
+        "engines": {
+          "node": ">= 10.13.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.1.0"
+        },
+        "deprecated": null,
+        "integrity": "sha512-201R5j+sJpK8nFWwKVyNfZot8FaJbLZDq5evriVzbV1wDtSXDjRUDRfJzHpAaxFDMEhsZL1QkeqM61wgsS3KaQ==",
+        "shasum": "47bc41bd8b8fab8383b62ec763b7394829097e7b",
+        "tarball": "https://registry.npmjs.org/terser-webpack-plugin/-/terser-webpack-plugin-5.6.1.tgz"
+      }
+    },
+    "through2": {
+      "current": "5.0.11",
+      "latest": {
+        "version": "5.0.11",
+        "engines": null,
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-g3ACuADXGxvApYBg83YNLCSGeQUkKnXjH0FEBLmtap5vDN6pFfLr8uhVUqynb704X6Q3KpgLW2enSZ7WE+Vp5A==",
+        "shasum": "e2c9249f312429993b8f8ca03a9b11d4edda11b9",
+        "tarball": "https://registry.npmjs.org/through2/-/through2-5.0.11.tgz"
+      }
+    },
+    "trzsz": {
+      "current": "^1.1.5",
+      "latest": {
+        "version": "1.1.6",
+        "engines": null,
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-UkUk7xQ96ZNWhmkpqDJxAzi2Zk52siPdHlitI+JtxwpEpYTR98KK/j0CoVrk3DWoLXeFqxNutSeUIOVzP1Eosg==",
+        "shasum": "34ea3295f929561161309087593e27a2d8cd1a17",
+        "tarball": "https://registry.npmjs.org/trzsz/-/trzsz-1.1.6.tgz"
+      }
+    },
+    "ts-loader": {
+      "current": "9.6.2",
+      "latest": {
+        "version": "9.6.2",
+        "engines": {
+          "node": ">=12.0.0"
+        },
+        "peerDependencies": {
+          "webpack": "^4.0.0 || ^5.0.0",
+          "typescript": "*",
+          "loader-utils": "*"
+        },
+        "deprecated": null,
+        "integrity": "sha512-R4iuczmtgxvtuI556s+hTZ6/7Ee03VCAk/l/M8LY1OAsUgB7YydsCxkgq9D9pKRaD7GJqUi2u8fp9zZP/ufjKA==",
+        "shasum": "a08f4935ddb87edbd58ce33b7b2558c2a77fdd47",
+        "tarball": "https://registry.npmjs.org/ts-loader/-/ts-loader-9.6.2.tgz"
+      }
+    },
+    "typescript": {
+      "current": "6.0.3",
+      "latest": {
+        "version": "7.0.2",
+        "engines": {
+          "node": ">=16.20.0"
+        },
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==",
+        "shasum": "9ec773d7954a8c182c17cc5bbd575aa28bc51582",
+        "tarball": "https://registry.npmjs.org/typescript/-/typescript-7.0.2.tgz"
+      }
+    },
+    "util": {
+      "current": "0.12.5",
+      "latest": {
+        "version": "0.12.5",
+        "engines": null,
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-kZf/K6hEIrWHI6XqOFUiiMa+79wE/D8Q+NCNAWclkyg3b4d2k7s0QGepNjiABc+aR3N1PAyHL7p6UcLY6LmrnA==",
+        "shasum": "5f17a6059b73db61a875668781a1c2b136bd6fbc",
+        "tarball": "https://registry.npmjs.org/util/-/util-0.12.5.tgz"
+      }
+    },
+    "webpack": {
+      "current": "5.110.3",
+      "latest": {
+        "version": "5.110.3",
+        "engines": {
+          "node": ">=10.13.0"
+        },
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-GuizBzRvo9YPpyoNMf3ag7AzxbaW85qrRSqTha345KyJbAFPt3/cMzBM0h+RWg7SK/7DdzRLINP3LvQ0hvr4hg==",
+        "shasum": "e122b66f6226b7af8f209b6102cd13238c4813a8",
+        "tarball": "https://registry.npmjs.org/webpack/-/webpack-5.110.3.tgz"
+      }
+    },
+    "webpack-cli": {
+      "current": "7.2.3",
+      "latest": {
+        "version": "7.2.3",
+        "engines": {
+          "node": ">=20.9.0"
+        },
+        "peerDependencies": {
+          "toml": "^3.0.0 || ^4.0.0 || ^5.0.0",
+          "json5": "^2.2.3",
+          "js-yaml": "^4.0.0 || ^5.0.0",
+          "webpack": "^5.101.0",
+          "webpack-dev-server": "^5.0.0 || ^6.0.0",
+          "webpack-bundle-analyzer": "^4.0.0 || ^5.0.0"
+        },
+        "deprecated": null,
+        "integrity": "sha512-vDFU7jrfCctnN7jJQWPl+V26B51GLp11prVZXg50oeonsgeBzSTJEWmXkjHsOjTgMjlPOQM8GWLh33X9RN/0ow==",
+        "shasum": "becafbd777df5ff3e1a35ec398ad2ad54ec4d456",
+        "tarball": "https://registry.npmjs.org/webpack-cli/-/webpack-cli-7.2.3.tgz"
+      }
+    },
+    "webpack-dev-server": {
+      "current": "6.0.0",
+      "latest": {
+        "version": "6.0.0",
+        "engines": {
+          "node": ">= 22.15.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.101.0"
+        },
+        "deprecated": null,
+        "integrity": "sha512-q9SD4ItOGhZLeU6EGT10caDZdHjF50Pz1DtkRZZOPsfluMXOkacWKKOtSBSLVkPqKiF67eFUC0rI88U/tSFPEw==",
+        "shasum": "af30f80cd4bc1c5b2c6224e4c7903adcd9514dcd",
+        "tarball": "https://registry.npmjs.org/webpack-dev-server/-/webpack-dev-server-6.0.0.tgz"
+      }
+    },
+    "webpack-merge": {
+      "current": "6.0.1",
+      "latest": {
+        "version": "6.0.1",
+        "engines": {
+          "node": ">=18.0.0"
+        },
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-hXXvrjtx2PLYx4qruKl+kyRSLc52V+cCvMxRjmKwoA+CBbbF5GfIBtR6kCvl0fYGqTUPKB+1ktVmTHqMOzgCBg==",
+        "shasum": "50c776868e080574725abc5869bd6e4ef0a16c6a",
+        "tarball": "https://registry.npmjs.org/webpack-merge/-/webpack-merge-6.0.1.tgz"
+      }
+    },
+    "whatwg-fetch": {
+      "current": "^3.6.20",
+      "latest": {
+        "version": "3.6.20",
+        "engines": null,
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-EqhiFU6daOA8kpjOWTL0olhVOF3i7OrFzSYiGsEMB8GcXS+RrzauAERX65xMeNWVqxA6HXH2m69Z9LaKKdisfg==",
+        "shasum": "580ce6d791facec91d37c72890995a0b48d31c70",
+        "tarball": "https://registry.npmjs.org/whatwg-fetch/-/whatwg-fetch-3.6.20.tgz"
+      }
+    },
+    "zmodem.js": {
+      "current": "^0.1.10",
+      "latest": {
+        "version": "0.1.10",
+        "engines": null,
+        "peerDependencies": null,
+        "deprecated": null,
+        "integrity": "sha512-Z1DWngunZ/j3BmIzSJpFZVNV73iHkj89rxXX4IciJdU9ga3nZ7rJ5LkfjV/QDsKhc7bazDWTTJCLJ+iRXD82dw==",
+        "shasum": "848ae071ea0f2706e3decd24ec66fc009ed19c47",
+        "tarball": "https://registry.npmjs.org/zmodem.js/-/zmodem.js-0.1.10.tgz"
+      }
+    }
+  },
+  "nativeCandidates": {
+    "zlib": {
+      "tag": "v1.3.2",
+      "name": "zlib 1.3.2",
+      "publishedAt": "2026-02-17T15:12:43Z",
+      "url": "https://github.com/madler/zlib/releases/tag/v1.3.2"
+    },
+    "jsonC": {
+      "tag": "json-c-0.19-20260627",
+      "name": "json-c 0.19",
+      "publishedAt": "2026-06-27T14:04:39Z",
+      "url": "https://github.com/json-c/json-c/releases/tag/json-c-0.19-20260627"
+    },
+    "libuv": {
+      "tag": "v1.52.1",
+      "name": "v1.52.1: 2026.03.06, Version 1.52.1 (Stable)",
+      "publishedAt": "2026-03-06T20:36:40Z",
+      "url": "https://github.com/libuv/libuv/releases/tag/v1.52.1"
+    },
+    "mbedTls": {
+      "tag": "mbedtls-4.2.0",
+      "name": "Mbed TLS 4.2.0",
+      "publishedAt": "2026-07-07T14:44:10Z",
+      "url": "https://github.com/Mbed-TLS/mbedtls/releases/tag/mbedtls-4.2.0"
+    },
+    "openssl": {
+      "tag": "openssl-4.0.2",
+      "name": "OpenSSL 4.0.2",
+      "publishedAt": "2026-08-25T11:44:22Z",
+      "url": "https://github.com/openssl/openssl/releases/tag/openssl-4.0.2"
+    },
+    "libwebsockets": {
+      "latestReleaseApi": {
+        "error": "Error: 404 Not Found: https://api.github.com/repos/warmcat/libwebsockets/releases/latest"
+      },
+      "recentTags": [
+        {
+          "name": "valgrind-clean",
+          "sha": "3886ec7246396d5585aece2d9e31453cf62cbbfe"
+        },
+        {
+          "name": "v5.0.0",
+          "sha": "2491a1b101283cf7886d05033345b7e821825319"
+        },
+        {
+          "name": "v4.5.8",
+          "sha": "fbb0baf6af9c4324f0f1591734c78b0089b599d4"
+        },
+        {
+          "name": "v4.5.7",
+          "sha": "94b9bdbfec2a89464505fc8cc379f33d4e334018"
+        },
+        {
+          "name": "v4.5.6",
+          "sha": "de35c19c866029124001346f8397b09c86f88b36"
+        },
+        {
+          "name": "v4.5.5",
+          "sha": "87b0f239b23e8ba4c83ec003cf7aece17e2c3aa3"
+        },
+        {
+          "name": "v4.5.4",
+          "sha": "c56adc3c62ee2545c77e0ba4cce67441be6955db"
+        },
+        {
+          "name": "v4.5.3",
+          "sha": "abf0aefda099d2dc2b2d3c95905b6d7fd056b8b6"
+        },
+        {
+          "name": "v4.5.2",
+          "sha": "85c6f7959fd40d8aaf7a50be3c9b75f08389a01c"
+        },
+        {
+          "name": "v4.5.1",
+          "sha": "4ef3a53b9afaf2c1c376291a7a75f24e4cd5ca3e"
+        },
+        {
+          "name": "v4.5.0",
+          "sha": "1baa35eb9b821bc11aee5b55f7b1fa7893b97206"
+        },
+        {
+          "name": "v4.4.5",
+          "sha": "98fcfb5a3e24db7d7bfde2855e64d69a19382433"
+        },
+        {
+          "name": "v4.4.4",
+          "sha": "4926031623deb4aeb09c189e034da5f0d06b9bf9"
+        },
+        {
+          "name": "v4.4.3",
+          "sha": "6e09203d37167428c87e90ac65dff1bc5075b441"
+        },
+        {
+          "name": "v4.4.2",
+          "sha": "edc6a44ea2f779a7291b8b155a2152cfd05ba863"
+        },
+        {
+          "name": "v4.4.1",
+          "sha": "adc128ca082a3c6fb9d4abbadefc09e3bc736724"
+        },
+        {
+          "name": "v4.4.0",
+          "sha": "e636b7bd133c4c0bfbdbf0d77afebdb20e09a5a2"
+        },
+        {
+          "name": "v4.3.10",
+          "sha": "2288cf200bc1c28680765bd4f07e437356106c2d"
+        },
+        {
+          "name": "v4.3.9",
+          "sha": "fdd30f26fd9c093ae83787b9a529ec5dd53e91ab"
+        },
+        {
+          "name": "v4.3.8",
+          "sha": "8511aad97359632670e37d92deb9e7481a33dc3a"
+        }
+      ]
+    }
+  },
+  "verifiedNativeArchives": {
+    "zlib132": {
+      "url": "https://zlib.net/zlib-1.3.2.tar.gz",
+      "sha256": "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"
+    },
+    "jsonC019": {
+      "url": "https://s3.amazonaws.com/json-c_releases/releases/json-c-0.19.tar.gz",
+      "sha256": "37ad0249902e301bd9052bf712e511fcc6acff4ecaad4b5900aad9ce564e26de"
+    },
+    "libuv1521": {
+      "url": "https://dist.libuv.org/dist/v1.52.1/libuv-v1.52.1.tar.gz",
+      "sha256": "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7"
+    },
+    "mbedTls367": {
+      "url": "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.7/mbedtls-3.6.7.tar.bz2",
+      "sha256": "a7e8bcbec0e6f761b4af24f25677626b35f762f68eef79c08677a363212d11f6"
+    },
+    "mbedTls420": {
+      "url": "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-4.2.0/mbedtls-4.2.0.tar.bz2",
+      "sha256": "2bed9d713b4668f76553b097e72b8aa30bc8f112a940d7ae228d524bbde6ffea"
+    },
+    "openssl361": {
+      "url": "https://www.openssl.org/source/openssl-3.6.1.tar.gz",
+      "sha256": "b1bfedcd5b289ff22aee87c9d600f515767ebf45f77168cb6d64f231f518a82e"
+    },
+    "openssl402": {
+      "url": "https://www.openssl.org/source/openssl-4.0.2.tar.gz",
+      "sha256": "736b467530f916737b7031310ccb21d8218c6229e61e8e160cd1d3458cd543a8"
+    },
+    "libwebsockets457": {
+      "url": "https://github.com/warmcat/libwebsockets/archive/refs/tags/v4.5.7.tar.gz",
+      "sha256": "d08df7634da0a377a4e077400ed6b2d1d25cf0b239e89397cd39432c5eb437ac"
+    },
+    "libwebsockets458": {
+      "url": "https://github.com/warmcat/libwebsockets/archive/refs/tags/v4.5.8.tar.gz",
+      "sha256": "b6ade658f4af3a823d0dc806ae5ef0623f0f4f5e2aeb895a0f77c4783840c30e"
+    },
+    "libwebsockets500": {
+      "url": "https://github.com/warmcat/libwebsockets/archive/refs/tags/v5.0.0.tar.gz",
+      "sha256": "f853c6582101cfcee3a5a9e28ae92ab19d9735c5f31f0bb2e9794b5106123962"
+    }
+  },
+  "decisions": {
+    "node": {
+      "target": ">=24.20.0 <25",
+      "currentOfficialLts": "v24.20.0",
+      "status": "phase7-pinned-phase10-deployed",
+      "reason": "The maintained frontend is pinned to the Phase 7 Node 24.20 generation; CI must follow the repository pin rather than an unbounded latest alias."
+    },
+    "yarn": {
+      "target": "yarn@4.18.0",
+      "registryLatest": "4.18.0",
+      "status": "phase7-pinned-phase10-deployed",
+      "reason": "The repository packageManager field is authoritative and immutable installs must preserve the zmodem patch."
+    },
+    "typescript": {
+      "latest": "7.0.2",
+      "targetCandidate": "6.0.3",
+      "status": "latest-blocked-by-peer-range",
+      "reason": "@typescript-eslint/parser 8.69.0 declares TypeScript >=4.8.4 <6.1.0, so TypeScript 7.0.2 is not an admissible lint-stack target."
+    },
+    "xterm": {
+      "deployed": "6.0.0",
+      "registryLatest": "6.0.0",
+      "status": "phase8-validated-phase10-deployed",
+      "reason": "xterm 6.0.0 and its selected addons passed the strengthened browser/mobile/touch/renderer gates and were deployed in Phase 10; future upgrades remain separately gated."
+    },
+    "canvasAddon": {
+      "current": null,
+      "registryLatest": null,
+      "status": "removed-in-phase8",
+      "reason": "xterm.js 6.0.0 removed the legacy canvas renderer; the Phase 8 migration no longer declares @xterm/addon-canvas."
+    },
+    "native": {
+      "status": "phase9-validated-phase10-deployed",
+      "selected": {
+        "zlib": "1.3.2",
+        "jsonC": "0.19",
+        "libuv": "1.52.1",
+        "tlsBackend": "mbedtls",
+        "mbedTls": "3.6.7",
+        "libwebsockets": "4.5.8"
+      },
+      "reproducibleBinarySha256": "2e34d0685f08d7b74235d7e656a6d40f008c39b1b77e80843fe5ac3a2c45d9d8",
+      "reason": "The selected x86_64-musl combination passed the complete native and browser regression suite, reproduced byte-identically, and was deployed in Phase 10. New native versions are drift signals only until separately approved."
+    }
+  }
+}
