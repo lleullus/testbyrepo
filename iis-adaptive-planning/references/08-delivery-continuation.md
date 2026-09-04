@@ -43,6 +43,7 @@ Before each enabled delivery phase, discover and use the current installed skill
 - `ready-ticket-heuristic-probe` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT for that probe stage; otherwise current Main performs the Heuristic Probe Lead/executor role directly. Any internal parallel lanes belong to that skill's own SUBAGENT contract.
 - `ready-ticket-verify` defaults to `DIRECT`. It uses `SUBAGENT` only when the current user explicitly selects SUBAGENT for that exact verification stage; exactly one delegated verifier owns the whole verifier core and its mandatory scenario/material-turn/pre-progression checkpoint contract. Outer Main does not issue a second verifier verdict.
 - Do not pass `Delegated Worker: yes`, `Delegated Probe Worker: yes`, or `Delegated Verifier: yes` from Adaptive. Those markers belong only to each delivery skill's own internal child assignment.
+- Treat each currently discovered delivery skill's required input/handoff fields as the canonical owner interface. Adaptive owns routing, not a remembered copy of that interface: before invoking a downstream owner, forward every current required handoff field from the exact upstream owner result/context unchanged, and never synthesize a missing binding, verdict, target identity, or evidence field. If a required field is absent, stale, or malformed, preserve the downstream owner's exact admission/currentness result and correct only the owning condition.
 - Do not infer Ticket-set parallelism, worker scheduling, or a persistent queue from the existence of a Ready Ticket Set. Select only a currently admissible Ticket using canonical blockers, product dependencies, shared-workspace safety, and current repository evidence.
 
 Do not invoke a disabled stage merely to obtain stronger evidence. `Verification: yes` includes the required current heuristic-probe gate followed by final verification; `Verification: no` means no `ready-ticket-heuristic-probe` call, no `ready-ticket-verify` call, and no `done` claim.
@@ -127,12 +128,13 @@ Continue from heuristic probing to verification only when all of the following h
 
 - the exact probe result is `READY TICKET HEURISTIC PROBE RESULT` for the same Ticket;
 - `Probe Completion: COMPLETE`;
+- every current verifier-required normal-ready probe handoff field is present in the exact current probe result/context; for the current owner contract this includes `Heuristic Probe Result / Evidence` and the exact `Probe Machine Binding` path emitted by the terminal Probe;
 - the probe `Authority Snapshot` still matches current Ticket/Parent Spec/applicable Behavior/UI authority;
 - the probe target is the same current target the verifier will bind;
 - cleanup/terminal state is closed; and
 - the canonical Ticket remains exact `Status: ready`.
 
-A `COMPLETE` result with `Material Findings: None` is valid gate completion but is not PASS evidence. A `COMPLETE` result with material findings also proceeds to the verifier; Adaptive does not classify a finding as `IMPLEMENTATION_DEFECT`, planning defect, or Ticket failure before verifier adjudication. Preserve findings/minimal triggers as navigation/counterexample seeds for `ready-ticket-verify`.
+A `COMPLETE` result with `Material Findings: None` is valid gate completion but is not PASS evidence. A `COMPLETE` result with material findings also proceeds to the verifier; Adaptive does not classify a finding as `IMPLEMENTATION_DEFECT`, planning defect, or Ticket failure before verifier adjudication. Preserve findings/minimal triggers plus every current verifier-required probe handoff field unchanged as navigation/currentness input for `ready-ticket-verify`; do not reinterpret the machine binding as PASS/FAIL evidence.
 
 `Probe Completion: PARTIAL | BLOCKED`, `HEURISTIC PROBE NOT STARTED`, unavailable SUBAGENT capability after an explicit SUBAGENT request, stale target/authority, or incomplete cleanup does not enter verification. Correct only the exact probe-owned capability/mechanism/evidence/currentness condition when current authority permits; do not silently run another topology or skip the gate.
 
@@ -140,7 +142,7 @@ Any material implementation or planning-authority change makes the prior probe r
 
 ## Verification terminal routing
 
-Invoke verification only when `Verification: yes` and the current heuristic-probe gate above is `COMPLETE` for the same Ticket/authority/implementation target. Pass the exact current Probe Result as the verifier's required handoff. Route from the verifier's exact result fields, not from an inferred summary:
+Invoke verification only when `Verification: yes` and the current heuristic-probe gate above is `COMPLETE` for the same Ticket/authority/implementation target. Pass the exact current `Heuristic Probe Result / Evidence`, exact `Probe Machine Binding`, and every other current verifier-required handoff field unchanged from the owning result/context. Route from the verifier's exact result fields, not from an inferred summary:
 
 ```text
 Verification Verdict: VERIFIED

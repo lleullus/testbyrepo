@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -171,6 +172,31 @@ class DeliverySubagentContractTests(unittest.TestCase):
             "SUPERSEDED_BY_CURRENT_TARGET",
         ):
             self.assertIn(disposition, workflow)
+
+    def test_adaptive_forwards_current_verifier_required_probe_handoffs_without_copying_runtime_mechanics(self) -> None:
+        verify_skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
+        probe_skill = (PROBE / "SKILL.md").read_text(encoding="utf-8")
+        continuation = ADAPTIVE_CONTINUATION.read_text(encoding="utf-8")
+        artifact_contract = (
+            ROOT / "iis-adaptive-planning" / "references" / "05-artifact-contract.md"
+        ).read_text(encoding="utf-8")
+
+        section = re.search(
+            r"Required for normal delivery verification of `Status: ready`:\n\n(?P<body>(?:- .+\n)+)",
+            verify_skill,
+        )
+        self.assertIsNotNone(section)
+        required_handoffs = re.findall(r"^- ([^:]+):", section.group("body"), re.MULTILINE)
+        self.assertGreaterEqual(len(required_handoffs), 1)
+        for handoff in required_handoffs:
+            self.assertIn(handoff, continuation)
+
+        self.assertIn("Probe Machine Binding:", probe_skill)
+        self.assertIn("Probe Machine Binding", artifact_contract)
+        self.assertIn("canonical owner interface", continuation)
+        self.assertIn("forward every current required handoff field", continuation)
+        self.assertNotIn("ready_guard begin_verify", continuation)
+        self.assertNotIn("ready_argv execute", continuation)
 
     def test_verification_requires_semantic_contract_check_and_claim_sufficient_evidence(self) -> None:
         skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
