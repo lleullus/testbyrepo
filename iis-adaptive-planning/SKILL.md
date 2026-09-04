@@ -52,6 +52,7 @@ Read these references before the corresponding work:
 - a verification result used as planning evidence: [references/06-verification-triage.md](references/06-verification-triage.md)
 - terminal or user-return report: [references/07-terminal-report.md](references/07-terminal-report.md)
 - current-Increment delivery/corrective handoff and explicit stop overrides: [references/08-delivery-continuation.md](references/08-delivery-continuation.md)
+- when the current invocation supplies one exact repository-investigation artifact for evidence intake: [references/10-repository-evidence-intake.md](references/10-repository-evidence-intake.md)
 
 ## Activation
 
@@ -67,6 +68,12 @@ Installation, an old Adaptive artifact, a past Adaptive session, a general prefe
 If Adaptive activation is absent, do not ask whether the user wants Adaptive. Leave the request to Baseline IIS.
 
 A read-only status request remains read-only even when an Adaptive Mandate exists. Use the current Baseline state-check/Observatory contract and STOP.
+
+## Optional repository evidence intake
+
+When the current user/caller supplies one exact `repository-investigation` artifact path for this Adaptive invocation, apply [references/10-repository-evidence-intake.md](references/10-repository-evidence-intake.md) before treating any of its claims as inspectable current facts. Validate the exact artifact, require the same current Project Root, assess currentness at its load-bearing anchors, and directly re-establish the facts that matter to Run Contract closure or the current planning leaf.
+
+Do not search for or auto-select a repository-investigation artifact merely because one exists. Do not treat the artifact, its completion status, or its planning-relevance candidate labels as Scope/Run Contract/product authority, and do not use the artifact itself as a product authoritative readback. When no exact artifact is supplied, Adaptive behavior is unchanged.
 
 ## Adaptive Run Contract
 

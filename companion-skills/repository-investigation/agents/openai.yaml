@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repository Investigation"
+  short_description: "Build a reusable evidence baseline from a repository"
+  default_prompt: "Use $repository-investigation to investigate the exact current repository read-only, derive a bounded evidence frontier, trace execution/state/authority and counterpaths, separate facts from inference, and produce a reusable evidence artifact when appropriate without making IIS planning or implementation decisions."
