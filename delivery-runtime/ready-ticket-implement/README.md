@@ -1,15 +1,16 @@
 # Ready Ticket Implement Runtime
 
-OMP extension that enforces execution discipline for `ready-ticket-implement` without changing its caller-facing Ready contract.
+OMP extension that enforces execution discipline for Ready Ticket implementation and the integrity boundary of Ready Ticket verification without changing product meaning.
 
 ## Runtime boundary
 
-The runtime binds the exact ready Ticket, Parent Spec, applicable Behavior/UI authority, canonical validator, Project Root and Git/worktree identity. It guards native read/search/mutation calls, structured argv, joined SUBAGENT checkpoints, mutation revision/current evidence, and an execution-owned local service. It does not decide product meaning, run heuristic probing, adjudicate final verification, change Ticket status, or create background delivery workers.
+The runtime binds the exact Ticket, Parent Spec, applicable Behavior/UI authority, canonical validator, Project Root and Git/worktree identity. Implementation mode preserves the existing guarded mutation/evidence lifecycle. Verification mode binds one current Probe handoff and implementation target, blocks generic Project Root mutation, rechecks target identity around guarded observations, fails closed on target drift, and owns only the mechanical guarded `ready -> done` write after the verifier supplies final `VERIFIED`. It does not decide product meaning, run heuristic probing, choose flow/AC verdicts, or create background delivery workers.
 
 Internal tools:
 
-- `ready_guard`: DIRECT/SUBAGENT lifecycle, checkpoints, status, terminal close, mutation-uncertainty resolution
-- `ready_argv`: explicit structured inspect/mutate argv; shell interpreters are rejected
+- `ready_probe_binding`: write one current machine-checkable terminal Probe binding outside Project Root
+- `ready_guard`: DIRECT/SUBAGENT lifecycle, verification target binding, checkpoints, terminal verdict close, guarded `ready -> done`, mutation-uncertainty resolution
+- `ready_argv`: explicit structured inspect/verification-execute/implementation-mutate argv; shell interpreters are rejected
 - `ready_service`: execution-owned local service start/stop/status
 
 ## Test
@@ -22,7 +23,7 @@ The repository-level `tests/test_ready_ticket_runtime_contract.py` runs the same
 
 ## Install / check
 
-Use the repository script after the matching Ready Skill source is ready to be installed:
+Use the repository script after the matching Ready Implement, Heuristic Probe, and Verify Skill sources are ready to be installed together:
 
 ```text
 python3 scripts/sync_installed_ready_runtime.py --preflight

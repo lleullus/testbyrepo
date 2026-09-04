@@ -203,13 +203,16 @@ function worktreeFingerprint(projectRoot) {
   };
 }
 
-export async function bindAuthority({ ticketPath, projectRoot }) {
+export async function bindAuthority({ ticketPath, projectRoot, allowedStatuses = ["ready"] }) {
   const canonicalRoot = canonicalProjectRoot(projectRoot);
   const canonicalTicket = existingRealpath(ticketPath, "Ticket");
   requireInside(canonicalRoot, canonicalTicket, "Ticket");
   const ticketText = fs.readFileSync(canonicalTicket, "utf8");
   const status = metadataValue(ticketText, "Status");
-  if (status !== "ready") throw new Error(`Ticket status must be exact ready; found ${status ?? "missing"}`);
+  const admittedStatuses = new Set(allowedStatuses);
+  if (!admittedStatuses.has(status)) {
+    throw new Error(`Ticket status must be one of ${[...admittedStatuses].join(", ")}; found ${status ?? "missing"}`);
+  }
   const authoredProjectRoot = metadataValue(ticketText, "Project-Root");
   if (authoredProjectRoot !== canonicalRoot) {
     throw new Error(`Ticket Project-Root does not match requested Project Root: ${authoredProjectRoot ?? "missing"}`);

@@ -13,6 +13,7 @@ Before verification, bind the exact Ticket and optional navigation inputs, carry
 ```text
 Ticket:
 Heuristic Probe Result / Evidence:
+Probe Machine Binding:
 Candidate Verification Target:
 Implementation Report / Evidence:
 Additional User Instructions:
@@ -56,7 +57,7 @@ Before any runtime/product action:
 8. Preserve each flow's exact authored meaning. Do not infer a missing flow, remap ordinals from implementation shape, normalize a legacy flow or strengthen/relax a decision boundary.
 9. Bind the exact current verification target from the validated Ticket plus direct repository/runtime observation: source/config/build/artifact/runtime checkpoint, actual entrypoint or canonical inspection target, acceptance surface and authoritative readback.
 
-Caller-supplied candidate targets and implementation reports are navigation only. For normal `ready` verification, the Heuristic Probe Result is a required currentness/admission handoff, but its findings remain navigation/counterexample seeds and never establish flow/AC/Ticket verdicts. Structural `VALID` admits schema only; it never establishes semantic correctness, current target availability, runtime evidence or verdicts.
+Caller-supplied candidate targets and implementation reports are navigation only. For normal `ready` verification, the terminal Heuristic Probe Result plus its exact `Probe Machine Binding` path are a required currentness/admission handoff, but findings remain navigation/counterexample seeds and never establish flow/AC/Ticket verdicts. Structural `VALID` admits schema only; it never establishes semantic correctness, current target availability, runtime evidence or verdicts.
 
 Return without AC verdicts when canonical admission, current authority, Ticket-to-parent projection or current target binding cannot be established.
 
@@ -104,18 +105,26 @@ Normal delivery verification of exact `Status: ready` requires one terminal `REA
 
 Require all of the following against fresh current authority and target binding:
 
-1. the result names the same exact canonical Ticket;
-2. `Probe Completion: COMPLETE`;
-3. its `Authority Snapshot` matches the current Ticket, Parent Spec and applicable Behavior/UI authorities;
-4. its `Probe Target` matches the exact current verification target;
-5. its cleanup/terminal state is closed; and
-6. no material Ticket/authority/source/config/build/artifact/runtime drift makes the probe attribution stale.
+1. exactly one terminal Probe result names the same exact canonical Ticket and one exact `Probe Machine Binding` path;
+2. human-readable and machine `Probe Completion` are both `COMPLETE`;
+3. the human-readable `Authority Snapshot` remains consistent with the machine Ticket, Parent Spec and applicable Behavior/UI identities, and those identities match current authority;
+4. the machine authored Verification-flow denominator matches the current Ticket;
+5. the machine implementation target matches the exact target the verifier will bind;
+6. every machine-admitted lane is present exactly once with terminal `FINDING | NO_FINDING | EVIDENCE_LIMIT` status;
+7. cleanup is `CLOSED`; and
+8. the machine binding contains no verifier-owned verdict field or verdict value.
 
-When the required result is absent, return `VERIFICATION NOT STARTED: REQUIRED HEURISTIC PROBE RESULT MISSING`. When the result is `PARTIAL`, `BLOCKED`, malformed or otherwise non-complete, return `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`. When Ticket, authority, target or cleanup attribution is stale, return `VERIFICATION NOT STARTED: HEURISTIC PROBE RESULT STALE`. These returns issue no AC verdicts.
+When the required result or machine binding is absent, return `VERIFICATION NOT STARTED: REQUIRED HEURISTIC PROBE RESULT MISSING`. When the result/binding is `PARTIAL`, `BLOCKED`, malformed, verdict-contaminated, noncanonical-lane or otherwise non-complete, return `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`. When Ticket, authority, Verification denominator, target or cleanup attribution is stale, return `VERIFICATION NOT STARTED: HEURISTIC PROBE RESULT STALE`. These returns issue no AC verdicts.
 
 `Material Findings: None` is not evidence that any flow is satisfied. A probe finding is a counterexample/navigation seed, not a verifier result, implementation-defect classification or substitute for fresh verifier-owned evidence. A probe result never satisfies an authored `Independent verification required: yes` obligation by itself.
 
 Explicit diagnostic re-verification of an already `done` Ticket is outside this normal delivery gate unless the current user explicitly requests a fresh heuristic probe as part of that diagnostic.
+
+### Runtime enforcement boundary
+
+After semantic preflight and exact target resolution, but before the first product/runtime action, call Ready runtime `ready_guard begin_verify`. For normal `ready`, pass the exact `probe_binding_path`; for all verification pass the exact canonical Ticket, Project Root, implementation `target_paths`, and only declared generated-output paths that are permitted to change. A stale/malformed/noncanonical Probe is rejected before the verification execution is created. Continue only with a returned `purpose: verify` and bound target digest.
+
+During that execution, generic source/config/test/planning mutation and `ready_argv mutate` are forbidden. Use guarded read/inspection tools or `ready_argv execute` for structured ordinary runtime argv. The runtime checks the bound Project Root/target before and after guarded observations; detected protected change enters `TARGET_DRIFT` and makes `VERIFIED` unavailable. Do not replace this gate with verifier self-attestation.
 
 ## 6. Integrated scenario ownership
 
@@ -169,6 +178,9 @@ Derived Execution Plan:
   Runtime / canonical inspection actions:
   Positive case:
   Material counterexamples:
+  Nearest nonconforming state:
+  Discriminating observation:
+  Sensitivity activation:
   Evidence capture points:
   Cleanup / terminal condition:
   SATISFIED condition:
@@ -255,7 +267,7 @@ Evidence priority when applicable:
 4. deterministic fake/controlled-environment evidence when the contract permits it;
 5. source/diff/unit tests as supporting explanation and regression evidence.
 
-Passing implementation tests do not substitute for a Ticket-authored runtime/UI/provider/canonical readback. Conversely, do not invent runtime for a source/artifact/document/structure claim whose approved boundary is direct canonical inspection.
+Passing implementation tests do not substitute for a Ticket-authored runtime/UI/provider/canonical readback. Conversely, do not invent runtime for a source/artifact/document/structure claim whose approved boundary is direct canonical inspection. For a runtime claim, do not mark a flow `SATISFIED` unless the declared `Discriminating observation` was actually captured with its `Sensitivity activation` present; source-only mechanism shape remains support, not closure.
 
 ### Existence and current-state claims
 
@@ -421,20 +433,21 @@ Parent reviews only obvious closure errors: missing authored Flow/AC, `INCONCLUS
 
 On Parent `CONTINUE`, the delegated verifier rechecks currentness and performs the existing guarded progression. On `STEER`, it reopens only the bounded Flow/evidence/closure identified by Parent and resubmits `PRE_PROGRESSION` if the candidate remains `VERIFIED`. Parent may use `STOP` at `PRE_PROGRESSION` only when current authority, target currentness, current user instruction, evidence closure, or progression authority means candidate `VERIFIED` can no longer be finalized. On that `STOP`, the delegated verifier re-adjudicates the candidate under that exact evidence limit and emits the existing terminal `READY TICKET VERIFICATION RESULT` with `Verification Verdict: INCONCLUSIVE`, `Ticket Progression: NOT APPLICABLE`, and `Ticket status after verification: ready`; it performs no `done` mutation. Parent Main does not issue or substitute that verdict.
 
-Before `ready -> done`:
+Every terminal verdict closes the bound verification execution through `ready_guard finalize_verification`; do not leave the guard active after emitting a terminal result. `FAILED` and `INCONCLUSIVE` finalize with `Ticket Progression: NOT APPLICABLE` and perform no status mutation.
+
+Before candidate `VERIFIED` on normal `ready`:
 
 1. Re-read the exact Ticket and require the verification target/source/config/build identity used for the verdict is still current and attributable.
 2. Resolve the current canonical To Tickets validator through the same admission path and require exact `VALID`.
 3. Re-resolve current parent Spec and adopted Behavior/UI authorities and require the same projection/currentness checks still hold with no unresolved material semantic-contract defect.
 4. Require the Ticket is still the exact canonical `Status: ready` contract that was verified.
-5. Perform one guarded targeted replacement of only the top metadata `Status: ready` line with `Status: done`. Reject stale content, concurrent edit, path drift or ambiguous status matches.
-6. Immediately run the same validator and require exact `VALID`.
+5. Call `ready_guard finalize_verification` with the exact verification execution and `verdict: VERIFIED`. `Perform one guarded targeted replacement` remains the progression invariant: the runtime rechecks target/authority currentness, performs the only allowed top-metadata `Status: ready` -> `Status: done` replacement, and immediately requires exact `VALID` post-write validation. Do not perform this mutation through generic file tools.
 
-When all steps succeed, report `Ticket Progression: COMPLETED` and `Ticket status after verification: done`.
+When the runtime reports success, report `Ticket Progression: COMPLETED` and `Ticket status after verification: done`.
 
-If the status write or post-write validation fails, preserve `Verification Verdict: VERIFIED` but report `Ticket Progression: FAILED` and the exact observed status/failure. Do not rewrite ACs, Verification flows, Spec, Scope, Behavior/UI authority or other planning meaning.
+If the guarded write or post-write validation fails, preserve `Verification Verdict: VERIFIED` but report `Ticket Progression: FAILED` and the exact observed status/failure. Do not rewrite ACs, Verification flows, Spec, Scope, Behavior/UI authority or other planning meaning.
 
-Diagnostic re-verification of `done` never rewrites status and reports `Ticket Progression: NOT APPLICABLE`.
+Diagnostic re-verification of `done` still calls `finalize_verification`, never rewrites status, and reports `Ticket Progression: NOT APPLICABLE`.
 
 ## 15. No remediation loop
 

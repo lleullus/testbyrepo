@@ -82,6 +82,8 @@ Credential-bearing, shared/production, payment, messaging, deployment, destructi
 
 A transport/network failure during a mutation-capable probe action does not prove success or failure. Read current authoritative state before considering another action; do not blindly repeat a possibly applied effect.
 
+For a normal `ready` Probe that will report `COMPLETE`, create exactly one session-local machine binding with the Ready runtime `ready_probe_binding` tool after lane closure and cleanup. Write it outside Project Root, bind the exact Ticket/current authority, the same implementation `target_paths` the verifier will receive, any declared allowed output paths, and every admitted lane exactly once as `FINDING | NO_FINDING | EVIDENCE_LIMIT`. This binding is currentness/terminal-ownership metadata only; it contains no `PASS`, `FAIL`, `VERIFIED`, `FAILED`, flow verdict or AC verdict. If the binding cannot be created, do not report normal `Probe Completion: COMPLETE`.
+
 ## Result boundary
 
 The Probe Lead returns exactly one terminal result with:
@@ -104,6 +106,7 @@ Minimal Triggers: None | <finding -> trigger>
 Direct Evidence:
 Evidence Limits:
 Cleanup / Terminal State:
+Probe Machine Binding: <absolute session-local path outside Project Root> | diagnostic-not-required
 Ticket status after probe: ready (unchanged) | <unchanged diagnostic status>
 Verification status: NOT ADJUDICATED BY THIS SKILL
 Probe Completion: COMPLETE | PARTIAL | BLOCKED

@@ -8,15 +8,17 @@ import {
   prepareObservation,
   recordObservationResult,
 } from "./observation-ledger.js";
-import { parseSimpleReadOnlyCommand, runArgv, validateInspectRequest, validateMutationRequest } from "./argv-policy.js";
+import { parseSimpleReadOnlyCommand, runArgv, validateExecutionRequest, validateInspectRequest, validateMutationRequest } from "./argv-policy.js";
 import { inventoryAllowedForPhase, isBroadInventory } from "./inventory-policy.js";
 import { ReadyLifecycle } from "./lifecycle.js";
 import { classifyError } from "./retry-policy.js";
+import { buildProbeBinding, validateProbeHandoff } from "./probe-handoff.js";
 import { ManagedServiceRegistry } from "./service-supervisor.js";
 import { RuntimeStore, stableDigest } from "./state-store.js";
 import { buildExactToolMap, mappedPolicy } from "./tool-map.js";
+import { captureVerificationTarget, checkVerificationTarget } from "./verification-target.js";
 
-const INTERNAL_TOOLS = new Set(["ready_guard", "ready_argv", "ready_service"]);
+const INTERNAL_TOOLS = new Set(["ready_guard", "ready_argv", "ready_probe_binding", "ready_service"]);
 
 function sessionId(ctx) {
   const id = ctx?.sessionManager?.getSessionId?.();
@@ -36,6 +38,7 @@ function runtimeView(state) {
   return {
     execution_id: state.execution_id,
     execution_mode: state.execution_mode,
+    purpose: state.purpose ?? "implement",
     phase: state.phase,
     project_root: state.project_root,
     ticket_path: state.ticket_path,
@@ -43,6 +46,12 @@ function runtimeView(state) {
     latest_evidence_revision: state.latest_evidence_revision,
     checkpoint_state: state.checkpoint_state,
     authority_drift: state.authority_drift,
+    verification_target: state.verification_target ? {
+      digest: state.verification_target.digest,
+      target_paths: state.verification_target.target_paths,
+      allowed_output_paths: state.verification_target.allowed_output_paths,
+    } : null,
+    target_drift: state.target_drift ?? null,
     mutation_uncertainty: state.uncertainty
       ? { tool_call_id: state.uncertainty.tool_call_id, detail: state.uncertainty.detail, resolution: state.uncertainty.resolution ?? null }
       : null,
@@ -50,12 +59,15 @@ function runtimeView(state) {
   };
 }
 
-function isReadySkillRead(event) {
-  if (event?.toolName !== "read") return false;
+function readySkillPurpose(event) {
+  if (event?.toolName !== "read") return null;
   const raw = String(event?.input?.path ?? "");
-  if (/^skill:\/\/ready-ticket-implement(?=[:/]|$)/.test(raw)) return true;
+  if (/^skill:\/\/ready-ticket-implement(?=[:/]|$)/.test(raw)) return "implement";
+  if (/^skill:\/\/ready-ticket-verify(?=[:/]|$)/.test(raw)) return "verify";
   const normalized = raw.replace(/\\/g, "/").replace(/:[0-9]+(?:-[0-9]+)?$/, "");
-  return normalized.endsWith("/ready-ticket-implement/SKILL.md");
+  if (normalized.endsWith("/ready-ticket-implement/SKILL.md")) return "implement";
+  if (normalized.endsWith("/ready-ticket-verify/SKILL.md")) return "verify";
+  return null;
 }
 
 function nearestExistingCanonical(absolutePath) {
@@ -170,6 +182,36 @@ function repeatedMutationReason(state, mutationDigest) {
   return null;
 }
 
+function ticketReadyToDoneText(text) {
+  const matches = [...text.matchAll(/^Status: ([^\r\n]+)$/gm)];
+  if (matches.length !== 1 || matches[0][1] !== "ready") throw new Error("exact Ticket is no longer the same single Status: ready contract");
+  const match = matches[0];
+  return text.slice(0, match.index) + "Status: done" + text.slice(match.index + match[0].length);
+}
+
+async function progressReadyTicketToDone(state, signal) {
+  if (hashFileMaybe(state.ticket_path) !== state.ticket_sha256) throw new Error("Ticket changed before guarded ready -> done progression");
+  const before = fs.readFileSync(state.ticket_path, "utf8");
+  const after = ticketReadyToDoneText(before);
+  try {
+    fs.writeFileSync(state.ticket_path, after, "utf8");
+  } catch (error) {
+    return { progression: "FAILED", status_after: "ready", detail: String(error?.message ?? error) };
+  }
+  let validation;
+  try {
+    validation = await runArgv(["python3", state.validator_path, state.ticket_path], { cwd: state.project_root, signal });
+  } catch (error) {
+    return { progression: "FAILED", status_after: "done", detail: String(error?.message ?? error) };
+  }
+  const valid = validation.exitCode === 0 && !validation.timedOut && validation.stdout.trim() === "VALID";
+  return {
+    progression: valid ? "COMPLETED" : "FAILED",
+    status_after: "done",
+    detail: valid ? null : (validation.stderr || validation.stdout || `validator exit ${validation.exitCode}`).trim(),
+  };
+}
+
 function maybeRewritePath(event, target) {
   if (!target || /^[a-z][a-z0-9+.-]*:\/\//i.test(target)) return undefined;
   if (!["read", "write", "grep", "glob"].includes(event.toolName)) return undefined;
@@ -197,6 +239,15 @@ async function authorityGate(lifecycle, state, event, cwd) {
       ? "Ready authority changed. Re-read the changed authority and issue MATERIAL_TURN before further guarded work."
       : "Ready authority changed. Re-read the changed authority and call begin_direct again to rebind before further guarded work.",
   };
+}
+
+function verificationTargetGate(lifecycle, executionId) {
+  const state = lifecycle.status(executionId);
+  if (state.purpose !== "verify" || !state.verification_target) return { current: true, changed: [] };
+  if (state.phase === "TARGET_DRIFT") return { current: false, changed: state.target_drift?.changed ?? [] };
+  const currentness = checkVerificationTarget(state.verification_target);
+  if (!currentness.current) lifecycle.markTargetDrift(executionId, currentness.changed);
+  return currentness;
 }
 
 function requireWorkerExecution(lifecycle, sid) {
@@ -260,8 +311,9 @@ export function installReadyRuntime(pi, options = {}) {
   pi.on("tool_call", async (event, ctx) => {
     if (!toolMapInitialized) refreshToolMap();
     const sid = sessionId(ctx);
-    if (isReadySkillRead(event)) {
-      lifecycle.armSession(sid);
+    const skillPurpose = readySkillPurpose(event);
+    if (skillPurpose) {
+      lifecycle.armSession(sid, skillPurpose);
       return;
     }
     if (INTERNAL_TOOLS.has(event.toolName)) return;
@@ -269,7 +321,6 @@ export function installReadyRuntime(pi, options = {}) {
     const session = lifecycle.sessionState(sid);
     if (!session?.armed) return;
     const policy = mappedPolicy(toolMap, event.toolName);
-    if (!policy) return;
 
     let effectivePolicy = policy;
     let normalizedObservationInput = event.input;
@@ -287,12 +338,27 @@ export function installReadyRuntime(pi, options = {}) {
 
     if (!session.execution_id) {
       if (effectivePolicy === "mutation") {
-        return { block: true, reason: "ready-ticket-implement is ARMED but ready_guard begin has not bound the exact Ticket yet." };
+        const beginAction = session.purpose === "verify" ? "begin_verify" : "begin_direct";
+        return { block: true, reason: `Ready ${session.purpose ?? "implement"} is ARMED but ready_guard begin has not bound the exact Ticket yet; use ${beginAction}.` };
       }
       return;
     }
 
     const state = lifecycle.status(session.execution_id);
+    if (state.purpose === "verify") {
+      if (!state.verification_target) return { block: true, reason: "Ready verification target is not bound; call ready_guard begin_verify with target_paths before product/runtime work." };
+      const targetCurrentness = checkVerificationTarget(state.verification_target);
+      if (!targetCurrentness.current) {
+        lifecycle.markTargetDrift(state.execution_id, targetCurrentness.changed);
+        return { block: true, reason: `Ready verification target drifted: ${targetCurrentness.changed.join(", ")}` };
+      }
+      if (!policy) {
+        operationIndex.set(event.toolCallId, { executionId: state.execution_id, kind: "verification_external", sessionId: sid });
+        return;
+      }
+    } else if (!policy) {
+      return;
+    }
     if (session.role === "parent") {
       if (effectivePolicy === "mutation") return { block: true, reason: "SUBAGENT parent session may not mutate implementation source." };
       return;
@@ -318,6 +384,9 @@ export function installReadyRuntime(pi, options = {}) {
     }
 
     const current = lifecycle.status(state.execution_id);
+    if (current.purpose === "verify" && effectivePolicy === "mutation") {
+      return { block: true, reason: "Ready verification keeps Project Root source/config/tests/planning authority immutable; generic mutation tools are blocked." };
+    }
     if (effectivePolicy === "mutation" && current.phase !== "ACTIVE") {
       return { block: true, reason: `Ready runtime blocks source mutation in phase ${current.phase}.` };
     }
@@ -394,6 +463,11 @@ export function installReadyRuntime(pi, options = {}) {
       return;
     }
 
+    if (tracked.kind === "verification_external") {
+      verificationTargetGate(lifecycle, tracked.executionId);
+      return;
+    }
+
     if (tracked.kind === "observation") {
       const state = lifecycle.status(tracked.executionId);
       const bytes = contentBytes(event.content);
@@ -406,6 +480,7 @@ export function installReadyRuntime(pi, options = {}) {
       });
       store.writeExecution(state);
       lifecycle.finishOperation(tracked.executionId, event.toolCallId, { mutationApplied: false });
+      verificationTargetGate(lifecycle, tracked.executionId);
       return;
     }
 
@@ -465,18 +540,76 @@ export function installReadyRuntime(pi, options = {}) {
 
   const z = pi.zod;
   pi.registerTool({
+    name: "ready_probe_binding",
+    label: "Ready Probe Binding",
+    description: "Create one machine-checkable current heuristic-probe handoff outside Project Root. This does not issue verifier verdicts.",
+    parameters: z.object({
+      ticket_path: z.string(),
+      project_root: z.string(),
+      output_path: z.string(),
+      target_paths: z.array(z.string()).optional(),
+      allowed_output_paths: z.array(z.string()).optional(),
+      lanes: z.array(z.string()).optional(),
+    }),
+    async execute(_toolCallId, params) {
+      const root = fs.realpathSync(params.project_root);
+      const output = path.resolve(params.output_path);
+      if (isInsideProject(root, output)) throw new Error("Probe machine binding must be written outside Project Root");
+      if (fs.existsSync(output)) throw new Error(`Probe machine binding output already exists: ${output}`);
+      const laneTerminals = (params.lanes ?? []).map(raw => {
+        const separator = raw.lastIndexOf("=");
+        if (separator <= 0) throw new Error(`Probe lane must be NAME=FINDING|NO_FINDING|EVIDENCE_LIMIT: ${raw}`);
+        const lane = raw.slice(0, separator).trim();
+        const status = raw.slice(separator + 1).trim();
+        if (!lane || !new Set(["FINDING", "NO_FINDING", "EVIDENCE_LIMIT"]).has(status)) {
+          throw new Error(`invalid Probe lane terminal: ${raw}`);
+        }
+        return { lane, status };
+      });
+      const binding = await buildProbeBinding({
+        projectRoot: root,
+        ticketPath: params.ticket_path,
+        targetPaths: params.target_paths ?? [],
+        allowedOutputPaths: params.allowed_output_paths ?? [],
+        admittedLanes: laneTerminals.map(item => item.lane),
+        laneTerminals,
+        bindAuthorityFn: request => lifecycle.bindAuthority(request),
+        captureTargetFn: captureVerificationTarget,
+      });
+      fs.mkdirSync(path.dirname(output), { recursive: true });
+      const temporary = `${output}.${crypto.randomUUID()}.tmp`;
+      try {
+        fs.writeFileSync(temporary, JSON.stringify(binding, null, 2) + "\n", { flag: "wx" });
+        fs.renameSync(temporary, output);
+      } finally {
+        if (fs.existsSync(temporary)) fs.rmSync(temporary, { force: true });
+      }
+      return resultText({
+        probe_binding_path: output,
+        schema: binding.schema,
+        binding_digest: stableDigest(binding),
+        admitted_lanes: binding.admitted_lanes,
+      });
+    },
+  });
+
+  pi.registerTool({
     name: "ready_guard",
     label: "Ready Guard",
     description: "Bind and advance the internal ready-ticket-implement runtime without changing its external delivery contract.",
     parameters: z.object({
       action: z.enum([
-        "begin_direct", "assign_subagent", "begin_delegated", "checkpoint_pre_action", "checkpoint_material_turn",
-        "release_checkpoint", "complete", "block", "status",
+        "begin_direct", "begin_verify", "assign_subagent", "begin_delegated", "checkpoint_pre_action", "checkpoint_material_turn",
+        "release_checkpoint", "complete", "finalize_verification", "block", "status",
       ]),
       ticket_path: z.string().optional(),
       project_root: z.string().optional(),
       assignment_id: z.string().optional(),
       execution_id: z.string().optional(),
+      probe_binding_path: z.string().optional(),
+      target_paths: z.array(z.string()).optional(),
+      allowed_output_paths: z.array(z.string()).optional(),
+      verdict: z.enum(["VERIFIED", "FAILED", "INCONCLUSIVE"]).optional(),
       decision: z.enum(["CONTINUE", "STEER", "STOP"]).optional(),
       summary: z.string().optional(),
       reason: z.string().optional(),
@@ -486,8 +619,35 @@ export function installReadyRuntime(pi, options = {}) {
       let value;
       switch (params.action) {
         case "begin_direct":
-          value = await lifecycle.beginDirect({ sessionId: sid, projectRoot: params.project_root, ticketPath: params.ticket_path });
+          value = await lifecycle.beginDirect({ sessionId: sid, projectRoot: params.project_root, ticketPath: params.ticket_path, purpose: "implement" });
           return resultText(runtimeView(value));
+        case "begin_verify": {
+          const preflight = await lifecycle.bindAuthority({
+            projectRoot: params.project_root,
+            ticketPath: params.ticket_path,
+            allowedStatuses: ["ready", "done"],
+          });
+          if (preflight.ticket_status_at_start === "ready") {
+            if (!params.probe_binding_path) throw new Error("Ready verification requires one current canonical Probe machine binding before begin_verify");
+            await validateProbeHandoff({
+              probeBindingPath: params.probe_binding_path,
+              projectRoot: preflight.project_root,
+              ticketPath: preflight.ticket_path,
+              targetPaths: params.target_paths ?? [],
+              allowedOutputPaths: params.allowed_output_paths ?? [],
+              bindAuthorityFn: request => lifecycle.bindAuthority(request),
+              captureTargetFn: captureVerificationTarget,
+            });
+          }
+          value = await lifecycle.beginDirect({ sessionId: sid, projectRoot: params.project_root, ticketPath: params.ticket_path, purpose: "verify" });
+          const targetBinding = captureVerificationTarget({
+            projectRoot: value.project_root,
+            targetPaths: params.target_paths ?? [],
+            allowedOutputPaths: params.allowed_output_paths ?? [],
+          });
+          value = lifecycle.bindVerificationTarget(value.execution_id, sid, targetBinding);
+          return resultText(runtimeView(value));
+        }
         case "assign_subagent":
           value = await lifecycle.assignSubagent({ parentSessionId: sid, projectRoot: params.project_root, ticketPath: params.ticket_path });
           return resultText({
@@ -496,9 +656,39 @@ export function installReadyRuntime(pi, options = {}) {
             project_root: value.project_root,
             status: value.status,
           });
-        case "begin_delegated":
+        case "begin_delegated": {
+          const assignment = store.readAssignment(params.assignment_id);
+          if (!assignment) throw new Error(`unknown assignment: ${params.assignment_id}`);
+          if ((assignment.purpose ?? "implement") === "verify") {
+            const preflight = await lifecycle.bindAuthority({
+              projectRoot: assignment.project_root,
+              ticketPath: assignment.ticket_path,
+              allowedStatuses: ["ready", "done"],
+            });
+            if (preflight.ticket_status_at_start === "ready") {
+              if (!params.probe_binding_path) throw new Error("Ready delegated verification requires one current canonical Probe machine binding before begin_delegated");
+              await validateProbeHandoff({
+                probeBindingPath: params.probe_binding_path,
+                projectRoot: preflight.project_root,
+                ticketPath: preflight.ticket_path,
+                targetPaths: params.target_paths ?? [],
+                allowedOutputPaths: params.allowed_output_paths ?? [],
+                bindAuthorityFn: request => lifecycle.bindAuthority(request),
+                captureTargetFn: captureVerificationTarget,
+              });
+            }
+          }
           value = await lifecycle.beginDelegated({ childSessionId: sid, assignmentId: params.assignment_id });
+          if (value.purpose === "verify") {
+            const targetBinding = captureVerificationTarget({
+              projectRoot: value.project_root,
+              targetPaths: params.target_paths ?? [],
+              allowedOutputPaths: params.allowed_output_paths ?? [],
+            });
+            value = lifecycle.bindVerificationTarget(value.execution_id, sid, targetBinding);
+          }
           return resultText(runtimeView(value));
+        }
         case "checkpoint_pre_action":
           value = lifecycle.checkpointPreAction(params.execution_id, sid, params.summary ?? null);
           return resultText(runtimeView(value));
@@ -513,9 +703,43 @@ export function installReadyRuntime(pi, options = {}) {
           return resultText(runtimeView(value));
         case "complete": {
           const execution = lifecycle.status(params.execution_id);
+          if (execution.purpose === "verify") throw new Error("Ready verification must close through finalize_verification, not complete");
           if (execution.managed_service) await services.stop(execution.execution_id, sid);
           value = await lifecycle.complete(params.execution_id, sid);
           return resultText(runtimeView(value));
+        }
+        case "finalize_verification": {
+          const execution = lifecycle.status(params.execution_id);
+          if (execution.purpose !== "verify") throw new Error("finalize_verification requires a verify execution");
+          if (!params.verdict) throw new Error("finalize_verification requires verdict");
+          let progression = {
+            progression: "NOT APPLICABLE",
+            status_after: execution.ticket_status_at_start,
+            detail: null,
+          };
+          if (params.verdict === "VERIFIED") {
+            const targetCurrentness = verificationTargetGate(lifecycle, execution.execution_id);
+            if (!targetCurrentness.current) throw new Error(`VERIFIED blocked by target drift: ${targetCurrentness.changed.join(", ")}`);
+            const authority = await lifecycle.checkAuthorityCurrentness(lifecycle.status(execution.execution_id));
+            if (!authority.current) {
+              lifecycle.markAuthorityDrift(execution.execution_id, authority.changed);
+              throw new Error("VERIFIED blocked by authority drift");
+            }
+            if (execution.ticket_status_at_start === "ready") {
+              progression = await progressReadyTicketToDone(lifecycle.status(execution.execution_id), _signal);
+            }
+          }
+          value = lifecycle.finalizeVerification(execution.execution_id, sid, {
+            verdict: params.verdict,
+            progression: progression.progression,
+          });
+          return resultText({
+            execution: runtimeView(value),
+            verification_verdict: params.verdict,
+            ticket_progression: progression.progression,
+            ticket_status_after: progression.status_after,
+            progression_detail: progression.detail,
+          });
         }
         case "block": {
           if (!params.execution_id && params.assignment_id) {
@@ -531,7 +755,7 @@ export function installReadyRuntime(pi, options = {}) {
           const session = lifecycle.sessionState(sid);
           const executionId = params.execution_id ?? session?.execution_id;
           return resultText({
-            session: session ? { armed: session.armed, role: session.role, execution_id: session.execution_id, assignment_id: session.assignment_id } : null,
+            session: session ? { armed: session.armed, purpose: session.purpose ?? null, role: session.role, execution_id: session.execution_id, assignment_id: session.assignment_id } : null,
             execution: executionId ? runtimeView(lifecycle.status(executionId)) : null,
             tool_map: { mapped: toolMap.mapped, boundaries: toolMap.boundaries, custom_mutation_boundary: toolMap.customMutationBoundary },
           });
@@ -545,9 +769,9 @@ export function installReadyRuntime(pi, options = {}) {
   pi.registerTool({
     name: "ready_argv",
     label: "Ready Argv",
-    description: "Run explicit structured argv for Ready inspection or mutation. Shell strings are not accepted.",
+    description: "Run explicit structured argv for Ready inspection, verification execution, or implementation mutation. Shell strings are not accepted.",
     parameters: z.object({
-      action: z.enum(["inspect", "mutate"]),
+      action: z.enum(["inspect", "execute", "mutate"]),
       version: z.literal(1),
       commands: z.array(z.array(z.string())).optional(),
       argv: z.array(z.string()).optional(),
@@ -615,6 +839,62 @@ export function installReadyRuntime(pi, options = {}) {
         return resultText({ action: "inspect", results: outputs });
       }
 
+      if (params.action === "execute") {
+        state = lifecycle.status(state.execution_id);
+        if (state.purpose !== "verify") throw new Error("ready_argv execute is reserved for Ready verification");
+        if (state.phase !== "ACTIVE") throw new Error(`ready_argv execute requires ACTIVE verification; found ${state.phase}`);
+        const beforeTarget = verificationTargetGate(lifecycle, state.execution_id);
+        if (!beforeTarget.current) throw new Error(`ready_argv execute blocked by target drift: ${beforeTarget.changed.join(", ")}`);
+        const request = validateExecutionRequest({ version: params.version, argv: params.argv });
+        const confinement = argvConfinementReason(state, request.argv);
+        if (confinement) throw new Error(confinement);
+        const prepared = prepareObservation(state, "ready_argv.execute", { argv: request.argv }, false);
+        if (!prepared.allowed) throw new Error(prepared.reason);
+        store.writeExecution(state);
+        const syntheticId = `ready-argv-${crypto.randomUUID()}`;
+        lifecycle.beginOperation(state.execution_id, { toolCallId: syntheticId, kind: "observation", observationDigest: prepared.digest });
+        let result;
+        try {
+          result = await runArgv(request.argv, { cwd: state.project_root, signal });
+        } catch (error) {
+          const current = lifecycle.status(state.execution_id);
+          recordObservationResult(current, prepared.digest, {
+            success: false,
+            outputBytes: 0,
+            errorClassification: classifyError(error?.message ?? error),
+          });
+          store.writeExecution(current);
+          lifecycle.finishOperation(state.execution_id, syntheticId, { mutationApplied: false });
+          verificationTargetGate(lifecycle, state.execution_id);
+          throw error;
+        }
+        const combined = `${result.stdout}${result.stderr}`;
+        const bytes = Buffer.byteLength(combined, "utf8");
+        const success = result.exitCode === 0 && !result.timedOut;
+        const current = lifecycle.status(state.execution_id);
+        recordObservationResult(current, prepared.digest, {
+          success,
+          outputBytes: bytes,
+          errorClassification: success ? null : classifyError(result.timedOut ? "timeout" : result.stderr || `exit ${result.exitCode}`),
+          incomplete: bytes > MAX_OBSERVATION_OUTPUT_BYTES,
+        });
+        store.writeExecution(current);
+        lifecycle.finishOperation(state.execution_id, syntheticId, { mutationApplied: false });
+        const afterTarget = verificationTargetGate(lifecycle, state.execution_id);
+        return resultText({
+          action: "execute",
+          argv: request.argv,
+          exit_code: result.exitCode,
+          timed_out: result.timedOut,
+          stdout: result.stdout.slice(0, MAX_OBSERVATION_OUTPUT_BYTES),
+          stderr: result.stderr.slice(0, MAX_OBSERVATION_OUTPUT_BYTES),
+          target_current: afterTarget.current,
+          target_drift: afterTarget.changed,
+          execution: runtimeView(lifecycle.status(state.execution_id)),
+        });
+      }
+
+      if (state.purpose === "verify") throw new Error("ready_argv mutate is unavailable during Ready verification");
       if (state.phase !== "ACTIVE") throw new Error(`ready_argv mutate requires ACTIVE execution; found ${state.phase}`);
       const request = validateMutationRequest({ version: params.version, argv: params.argv });
       const targetPaths = validateExplicitTargets(state, params.target_paths);

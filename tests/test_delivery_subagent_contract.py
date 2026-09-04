@@ -149,8 +149,13 @@ class DeliverySubagentContractTests(unittest.TestCase):
 
         combined = skill + workflow
         self.assertIn("Heuristic Probe Result / Evidence", skill)
+        self.assertIn("Probe Machine Binding", combined)
         self.assertIn("Probe Completion: COMPLETE", combined)
         self.assertIn("Authority Snapshot", combined)
+        self.assertIn("ready_guard", combined)
+        self.assertIn("begin_verify", combined)
+        self.assertIn("ready_argv execute", combined)
+        self.assertIn("TARGET_DRIFT", combined)
         self.assertIn("REQUIRED HEURISTIC PROBE RESULT MISSING", combined)
         self.assertIn("HEURISTIC PROBE GATE INCOMPLETE", combined)
         self.assertIn("HEURISTIC PROBE RESULT STALE", combined)
@@ -174,6 +179,9 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("semantically compare every AC and mapped Verification flow", skill)
         self.assertIn("## 3. Semantic contract check", workflow)
         self.assertIn("false-positive or false-negative", workflow)
+        self.assertIn("Nearest nonconforming state", workflow)
+        self.assertIn("Discriminating observation", workflow)
+        self.assertIn("Sensitivity activation", workflow)
         self.assertIn("Bounded active-surface universe", workflow)
         self.assertIn("Semantic and qualitative claims", workflow)
         self.assertIn("Process/history claims", workflow)
@@ -207,6 +215,7 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("all ACs PASS          -> VERIFIED", workflow)
         self.assertIn("no unresolved material semantic-contract defect", skill)
         self.assertIn("Perform one guarded targeted replacement", workflow)
+        self.assertIn("finalize_verification", workflow)
         self.assertIn("Ticket Progression: COMPLETED | NOT APPLICABLE | FAILED", workflow)
         self.assertIn("Do not automatically edit source", workflow)
 

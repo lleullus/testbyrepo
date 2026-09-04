@@ -47,6 +47,9 @@ class ReadyTicketHeuristicProbeContractTests(unittest.TestCase):
         self.assertIn("Implementation reports, test output, logs", self.workflow)
         self.assertIn("navigation/support", self.workflow)
         self.assertIn("do not create product authority", self.workflow)
+        self.assertIn("ready_probe_binding", self.skill + self.workflow)
+        self.assertIn("Probe Machine Binding", self.skill + self.workflow)
+        self.assertIn("FINDING | NO_FINDING | EVIDENCE_LIMIT", self.skill + self.workflow)
 
     def test_execution_is_direct_first_and_subagent_is_explicit_only(self) -> None:
         self.assertIn("Top-level execution defaults to `DIRECT`", self.skill)

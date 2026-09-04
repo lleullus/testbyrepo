@@ -282,6 +282,8 @@ Use disposable/controlled targets where the approved contract permits them. Capt
 
 A finding does not make the probe itself fail. `COMPLETE` with one or more findings is normal.
 
+Before a normal `ready` result can report `COMPLETE`, call Ready runtime `ready_probe_binding` exactly once after target-stability and cleanup closure. Choose a unique session-local output path outside Project Root; pass the exact Ticket/Project Root, the implementation `target_paths` that the verifier will bind, any declared generated-output paths, and every admitted lane as exactly one `lane-name=FINDING|NO_FINDING|EVIDENCE_LIMIT`. The runtime records current Ticket/Spec/Behavior/UI identities, authored Verification-flow denominator, target digest, lane denominator/terminal statuses, `probe_completion=COMPLETE`, and `cleanup=CLOSED`. Do not edit or “rebind” that JSON afterward; if authority/flow/target changes, rerun the Probe and create a new binding.
+
 Return exactly one terminal result:
 
 ```text
@@ -311,6 +313,7 @@ Minimal Triggers:
 Direct Evidence:
 Evidence Limits:
 Cleanup / Terminal State:
+Probe Machine Binding: <absolute session-local path outside Project Root> | diagnostic-not-required
 Ticket status after probe: ready (unchanged) | <unchanged diagnostic status>
 Verification status: NOT ADJUDICATED BY THIS SKILL
 Probe Completion: COMPLETE | PARTIAL | BLOCKED

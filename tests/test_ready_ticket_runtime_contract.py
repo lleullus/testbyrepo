@@ -44,6 +44,8 @@ class ReadyTicketRuntimeContractTests(unittest.TestCase):
             env = os.environ.copy()
             env["IIS_READY_RUNTIME_INSTALL_DIR"] = str(target)
             env["IIS_READY_SKILL_INSTALL_DIR"] = str(ROOT / "companion-skills" / "ready-ticket-implement")
+            env["IIS_READY_VERIFY_SKILL_INSTALL_DIR"] = str(ROOT / "companion-skills" / "ready-ticket-verify")
+            env["IIS_READY_PROBE_SKILL_INSTALL_DIR"] = str(ROOT / "companion-skills" / "ready-ticket-heuristic-probe")
 
             preflight = subprocess.run(
                 [os.fspath(SYNC), "--preflight"], cwd=ROOT, env=env, text=True, capture_output=True, check=False

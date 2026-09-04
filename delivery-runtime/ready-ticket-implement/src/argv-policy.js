@@ -50,6 +50,11 @@ export function validateMutationRequest(request) {
   return { version: 1, argv: assertArgv(request.argv) };
 }
 
+export function validateExecutionRequest(request) {
+  if (request?.version !== 1) throw new Error("unsupported ready_argv execute version");
+  return { version: 1, argv: assertArgv(request.argv) };
+}
+
 export function tokenizeSimpleCommand(command) {
   const source = String(command ?? "").trim();
   if (!source) throw new Error("empty bash command");
@@ -104,12 +109,13 @@ export function parseSimpleReadOnlyCommand(command) {
 export async function runArgv(argv, { cwd, timeoutMs = 120_000, signal } = {}) {
   const normalized = assertArgv(argv);
   return new Promise((resolve, reject) => {
-    const child = spawn(normalized[0], normalized.slice(1), {
+    const options = {
       cwd,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
-      signal,
-    });
+    };
+    if (signal) options.signal = signal;
+    const child = spawn(normalized[0], normalized.slice(1), options);
     const stdout = [];
     const stderr = [];
     child.stdout.on("data", chunk => stdout.push(chunk));

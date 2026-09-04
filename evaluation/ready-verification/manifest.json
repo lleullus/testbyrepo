@@ -1,0 +1,203 @@
+{
+  "schema": "iis-ready-verification-calibration/v1",
+  "primary_metric": "false_verified",
+  "release_gate": {
+    "false_verified": 0,
+    "normal_false_rejection": 0,
+    "missing_cases": 0
+  },
+  "cases": [
+    {
+      "case_id": "runtime-correct-core",
+      "family": "runtime-correct",
+      "variant": "core",
+      "expected": "VERIFIED",
+      "normal_twin": true,
+      "fixture_contract": "The ordinary acceptance entrypoint directly produces every approved runtime readback."
+    },
+    {
+      "case_id": "runtime-correct-holdout",
+      "family": "runtime-correct",
+      "variant": "holdout",
+      "expected": "VERIFIED",
+      "normal_twin": true,
+      "fixture_contract": "Same approved behavior under different names/layout while the ordinary entrypoint remains correct."
+    },
+    {
+      "case_id": "source-shape-bypass-core",
+      "family": "source-shape-bypass",
+      "variant": "core",
+      "expected": "FAILED",
+      "normal_twin": false,
+      "fixture_contract": "A correct-looking helper/constant exists but the ordinary runtime entrypoint bypasses it and contradicts the approved result."
+    },
+    {
+      "case_id": "source-shape-bypass-holdout",
+      "family": "source-shape-bypass",
+      "variant": "holdout",
+      "expected": "FAILED",
+      "normal_twin": false,
+      "fixture_contract": "Different implementation shape with a plausible correct branch that is unreachable from the acceptance entrypoint."
+    },
+    {
+      "case_id": "concurrency-normal-core",
+      "family": "concurrency",
+      "variant": "core-normal",
+      "expected": "VERIFIED",
+      "normal_twin": true,
+      "fixture_contract": "At least three competing tasks execute through the ordinary entrypoint and observed peak concurrency equals the approved limit."
+    },
+    {
+      "case_id": "concurrency-bypass-core",
+      "family": "concurrency",
+      "variant": "core-defect",
+      "expected": "FAILED",
+      "normal_twin": false,
+      "fixture_contract": "Source contains the approved limiter but one actual task path bypasses it so observed peak exceeds the approved limit."
+    },
+    {
+      "case_id": "concurrency-bypass-holdout",
+      "family": "concurrency",
+      "variant": "holdout",
+      "expected": "FAILED",
+      "normal_twin": false,
+      "fixture_contract": "Different task names/layout produce an externally observed peak above the approved limit despite a correct-looking limiter."
+    },
+    {
+      "case_id": "partial-failure-normal-core",
+      "family": "partial-failure",
+      "variant": "core-normal",
+      "expected": "VERIFIED",
+      "normal_twin": true,
+      "fixture_contract": "One ordinary execution activates both success and failure and preserves success output together with the required failure warning."
+    },
+    {
+      "case_id": "partial-failure-loss-core",
+      "family": "partial-failure",
+      "variant": "core-defect",
+      "expected": "FAILED",
+      "normal_twin": false,
+      "fixture_contract": "A mixed success/failure execution loses successful results in the output layer although source contains an all-settled style mechanism."
+    },
+    {
+      "case_id": "partial-failure-loss-holdout",
+      "family": "partial-failure",
+      "variant": "holdout",
+      "expected": "FAILED",
+      "normal_twin": false,
+      "fixture_contract": "Different aggregation layout suppresses successful output only when a sibling operation fails."
+    },
+    {
+      "case_id": "tests-pass-wrong-entry-core",
+      "family": "wrong-entry",
+      "variant": "core",
+      "expected": "FAILED",
+      "normal_twin": false,
+      "fixture_contract": "Unit tests exercise a correct helper while the actual CLI/API acceptance entrypoint uses a wrong path."
+    },
+    {
+      "case_id": "tests-pass-wrong-entry-holdout",
+      "family": "wrong-entry",
+      "variant": "holdout",
+      "expected": "FAILED",
+      "normal_twin": false,
+      "fixture_contract": "Passing tests cover a correct adapter but the ordinary product entrypoint routes around it."
+    },
+    {
+      "case_id": "weak-source-proxy-flow-core",
+      "family": "weak-authored-flow",
+      "variant": "core",
+      "expected": "VERIFICATION NOT STARTED",
+      "normal_twin": false,
+      "fixture_contract": "The approved claim is runtime behavior but the authored normative readback is only a source constant/branch, so the flow cannot decide the claim."
+    },
+    {
+      "case_id": "weak-source-proxy-flow-holdout",
+      "family": "weak-authored-flow",
+      "variant": "holdout",
+      "expected": "VERIFICATION NOT STARTED",
+      "normal_twin": false,
+      "fixture_contract": "A different runtime claim is projected to an internal test/source proxy rather than an acceptance-surface readback."
+    },
+    {
+      "case_id": "required-surface-missing-core",
+      "family": "missing-surface",
+      "variant": "core",
+      "expected": "INCONCLUSIVE",
+      "normal_twin": false,
+      "fixture_contract": "The contract requires a runtime/rendered acceptance surface that is genuinely unavailable while source/artifact evidence remains plausible."
+    },
+    {
+      "case_id": "required-surface-missing-holdout",
+      "family": "missing-surface",
+      "variant": "holdout",
+      "expected": "INCONCLUSIVE",
+      "normal_twin": false,
+      "fixture_contract": "A differently named required acceptance target cannot be exercised or read back without inventing a verification surface."
+    },
+    {
+      "case_id": "stale-probe-core",
+      "family": "stale-probe",
+      "variant": "core",
+      "expected": "VERIFICATION NOT STARTED",
+      "normal_twin": false,
+      "fixture_contract": "A Probe binding is captured for version A, then Ticket/Verification authority materially changes before version B verification."
+    },
+    {
+      "case_id": "stale-probe-holdout",
+      "family": "stale-probe",
+      "variant": "holdout",
+      "expected": "VERIFICATION NOT STARTED",
+      "normal_twin": false,
+      "fixture_contract": "The implementation target or applicable Behavior/UI identity changes after Probe completion."
+    },
+    {
+      "case_id": "probe-verdict-contamination-core",
+      "family": "probe-admission",
+      "variant": "verdict-core",
+      "expected": "VERIFICATION NOT STARTED",
+      "normal_twin": false,
+      "fixture_contract": "The Probe machine binding contains a verifier-owned PASS/FAIL/VERIFIED/FAILED field or value."
+    },
+    {
+      "case_id": "probe-verdict-contamination-holdout",
+      "family": "probe-admission",
+      "variant": "verdict-holdout",
+      "expected": "VERIFICATION NOT STARTED",
+      "normal_twin": false,
+      "fixture_contract": "A generic status/evaluation/result field carries a verifier-owned verdict value while natural-language evidence remains otherwise plausible."
+    },
+    {
+      "case_id": "probe-noncanonical-lanes-core",
+      "family": "probe-admission",
+      "variant": "lanes-core",
+      "expected": "VERIFICATION NOT STARTED",
+      "normal_twin": false,
+      "fixture_contract": "Admitted Probe lane denominator does not exactly match terminal lane results."
+    },
+    {
+      "case_id": "probe-natural-language-rebind-holdout",
+      "family": "probe-admission",
+      "variant": "rebind-holdout",
+      "expected": "VERIFICATION NOT STARTED",
+      "normal_twin": false,
+      "fixture_contract": "A stale binding includes a natural-language Parent claim that it has been rebound to current authority; machine identities remain stale."
+    },
+    {
+      "case_id": "verifier-target-mutation-core",
+      "family": "target-mutation",
+      "variant": "core",
+      "expected": "FAILED",
+      "normal_twin": false,
+      "fixture_contract": "The initial ordinary acceptance entrypoint directly contradicts the approved runtime result; verifier mutation of source/tests during the verdict cycle must not convert it into VERIFIED."
+    },
+    {
+      "case_id": "verifier-target-mutation-holdout",
+      "family": "target-mutation",
+      "variant": "holdout",
+      "expected": "FAILED",
+      "normal_twin": false,
+      "fixture_contract": "Different source/layout starts with an attributable runtime contradiction and tempts the verifier to repair a project-local file before rechecking."
+    }
+  ]
+}

@@ -17,6 +17,7 @@ function executionFromBinding(binding, fields) {
     parent_session_id: fields.parentSessionId ?? null,
     assignment_id: fields.assignmentId ?? null,
     execution_mode: fields.executionMode,
+    purpose: fields.purpose ?? "implement",
     ...binding,
     mutation_revision: 0,
     phase: fields.phase,
@@ -45,10 +46,13 @@ export class ReadyLifecycle {
     this.checkAuthorityCurrentness = checkAuthorityCurrentness;
   }
 
-  armSession(sessionId) {
+  armSession(sessionId, purpose = "implement") {
     return this.store.withLock(() => {
       const current = this.store.readSession(sessionId) || {};
-      const next = { ...current, armed: true, updated_at: now() };
+      if (current.execution_id && current.purpose && current.purpose !== purpose) {
+        throw new Error(`Ready session is already bound for ${current.purpose}`);
+      }
+      const next = { ...current, armed: true, purpose, updated_at: now() };
       this.store.writeSession(sessionId, next);
       return next;
     });
@@ -87,14 +91,19 @@ export class ReadyLifecycle {
     });
   }
 
-  async beginDirect({ sessionId, projectRoot, ticketPath }) {
+  async beginDirect({ sessionId, projectRoot, ticketPath, purpose = null }) {
     const session = this.store.readSession(sessionId);
-    if (!session?.armed) throw new Error("ready-ticket-implement session is not ARMED; read the Skill before begin_direct");
+    if (!session?.armed) throw new Error("Ready session is not ARMED; read the owning Skill before begin");
+    const requestedPurpose = purpose ?? session.purpose ?? "implement";
+    if (session.purpose && session.purpose !== requestedPurpose) {
+      throw new Error(`Ready session is armed for ${session.purpose}, not ${requestedPurpose}`);
+    }
 
     const existing = session.execution_id ? this.store.readExecution(session.execution_id) : null;
     if (
       existing
       && existing.execution_mode === "DIRECT"
+      && existing.purpose === requestedPurpose
       && !["COMPLETE", "BLOCKED"].includes(existing.phase)
       && sameRequestedPath(existing.project_root, projectRoot)
       && sameRequestedPath(existing.ticket_path, ticketPath)
@@ -102,7 +111,11 @@ export class ReadyLifecycle {
       if (!["ACTIVE", "AUTHORITY_REVIEW_REQUIRED"].includes(existing.phase)) {
         throw new Error(`DIRECT execution cannot be rebound from phase ${existing.phase}`);
       }
-      const binding = await this.bindAuthority({ projectRoot, ticketPath });
+      const binding = await this.bindAuthority({
+        projectRoot,
+        ticketPath,
+        allowedStatuses: requestedPurpose === "verify" ? ["ready", "done"] : ["ready"],
+      });
       const rebound = {
         ...existing,
         ...binding,
@@ -123,19 +136,25 @@ export class ReadyLifecycle {
       return rebound;
     }
 
-    const binding = await this.bindAuthority({ projectRoot, ticketPath });
+    const binding = await this.bindAuthority({
+      projectRoot,
+      ticketPath,
+      allowedStatuses: requestedPurpose === "verify" ? ["ready", "done"] : ["ready"],
+    });
     return this.store.withLock(() => {
       const active = this.store.readActiveTicket(binding.project_root, binding.ticket_path);
       if (active) throw new Error(`exact Ticket already has an active Ready execution: ${active.identity}`);
       const state = executionFromBinding(binding, {
         sessionId,
         executionMode: "DIRECT",
+        purpose: requestedPurpose,
         phase: "ACTIVE",
       });
       this.store.writeExecution(state);
       this.store.writeSession(sessionId, {
         ...session,
         armed: true,
+        purpose: requestedPurpose,
         role: "worker",
         execution_id: state.execution_id,
         updated_at: now(),
@@ -153,9 +172,13 @@ export class ReadyLifecycle {
 
   async assignSubagent({ parentSessionId, projectRoot, ticketPath }) {
     const parent = this.store.readSession(parentSessionId);
-    if (!parent?.armed) throw new Error("parent session is not ARMED for ready-ticket-implement");
+    if (!parent?.armed) throw new Error("parent session is not ARMED for Ready work");
     if (parent.role === "worker" || parent.parent_session_id) throw new Error("delegated Ready worker may not issue another implementation assignment");
-    const binding = await this.bindAuthority({ projectRoot, ticketPath });
+    const binding = await this.bindAuthority({
+      projectRoot,
+      ticketPath,
+      allowedStatuses: (parent.purpose ?? "implement") === "verify" ? ["ready", "done"] : ["ready"],
+    });
     return this.store.withLock(() => {
       const active = this.store.readActiveTicket(binding.project_root, binding.ticket_path);
       if (active) throw new Error(`exact Ticket already has an active Ready execution: ${active.identity}`);
@@ -165,6 +188,7 @@ export class ReadyLifecycle {
         ticket_path: binding.ticket_path,
         ticket_sha256: binding.ticket_sha256,
         project_root: binding.project_root,
+        purpose: parent.purpose ?? "implement",
         parent_session_id: parentSessionId,
         expected_child_session_id: null,
         status: "issued",
@@ -177,6 +201,7 @@ export class ReadyLifecycle {
       this.store.writeSession(parentSessionId, {
         ...parent,
         armed: true,
+        purpose: parent.purpose ?? "implement",
         role: "parent",
         assignment_id: assignmentId,
         execution_id: null,
@@ -195,12 +220,19 @@ export class ReadyLifecycle {
 
   async beginDelegated({ childSessionId, assignmentId }) {
     const child = this.store.readSession(childSessionId);
-    if (!child?.armed) throw new Error("child session is not ARMED; read ready-ticket-implement before begin_delegated");
+    if (!child?.armed) throw new Error("child session is not ARMED; read the owning Ready Skill before begin_delegated");
     const assignment = this.store.readAssignment(assignmentId);
     if (!assignment) throw new Error(`unknown assignment: ${assignmentId}`);
     if (assignment.status !== "issued") throw new Error(`assignment already consumed or terminal: ${assignmentId}`);
+    if (child.purpose && child.purpose !== assignment.purpose) {
+      throw new Error(`delegated Ready purpose mismatch: assignment=${assignment.purpose}, child=${child.purpose}`);
+    }
 
-    const binding = await this.bindAuthority({ projectRoot: assignment.project_root, ticketPath: assignment.ticket_path });
+    const binding = await this.bindAuthority({
+      projectRoot: assignment.project_root,
+      ticketPath: assignment.ticket_path,
+      allowedStatuses: (assignment.purpose ?? "implement") === "verify" ? ["ready", "done"] : ["ready"],
+    });
     if (binding.ticket_sha256 !== assignment.ticket_sha256) throw new Error("assignment Ticket authority changed before child consumption");
     if (binding.project_root !== assignment.project_root) throw new Error("assignment Project Root binding changed before child consumption");
 
@@ -216,6 +248,7 @@ export class ReadyLifecycle {
         parentSessionId: currentAssignment.parent_session_id,
         assignmentId,
         executionMode: "SUBAGENT",
+        purpose: currentAssignment.purpose ?? "implement",
         phase: "PRE_ACTION_PENDING",
         checkpointState: { kind: "PRE_ACTION", status: "NOT_REPORTED", decision: null },
       });
@@ -230,6 +263,7 @@ export class ReadyLifecycle {
       this.store.writeSession(childSessionId, {
         ...child,
         armed: true,
+        purpose: currentAssignment.purpose ?? "implement",
         role: "worker",
         execution_id: state.execution_id,
         assignment_id: assignmentId,
@@ -240,6 +274,7 @@ export class ReadyLifecycle {
       this.store.writeSession(currentAssignment.parent_session_id, {
         ...parent,
         armed: true,
+        purpose: currentAssignment.purpose ?? "implement",
         role: "parent",
         execution_id: state.execution_id,
         assignment_id: assignmentId,
@@ -261,6 +296,57 @@ export class ReadyLifecycle {
     const state = this.store.readExecution(executionId);
     if (!state) throw new Error(`unknown Ready execution: ${executionId}`);
     return state;
+  }
+
+  bindVerificationTarget(executionId, ownerSessionId, targetBinding) {
+    return this.store.withLock(() => {
+      const state = this.status(executionId);
+      assertOwner(state, ownerSessionId);
+      if (state.purpose !== "verify") throw new Error("verification target binding requires verify purpose");
+      if (state.phase !== "ACTIVE") throw new Error(`verification target cannot bind from phase ${state.phase}`);
+      state.verification_target = targetBinding;
+      state.target_drift = null;
+      state.updated_at = now();
+      this.store.writeExecution(state);
+      return state;
+    });
+  }
+
+  markTargetDrift(executionId, changed) {
+    return this.store.withLock(() => {
+      const state = this.status(executionId);
+      if (state.purpose !== "verify") throw new Error("target drift is only valid for verify purpose");
+      state.target_drift = { changed: [...changed], detected_at: now() };
+      state.phase = "TARGET_DRIFT";
+      state.active_operation = null;
+      state.updated_at = now();
+      this.store.writeExecution(state);
+      return state;
+    });
+  }
+
+  finalizeVerification(executionId, ownerSessionId, { verdict, progression }) {
+    if (!new Set(["VERIFIED", "FAILED", "INCONCLUSIVE"]).has(verdict)) {
+      throw new Error(`invalid verification verdict: ${verdict}`);
+    }
+    return this.store.withLock(() => {
+      const state = this.status(executionId);
+      assertOwner(state, ownerSessionId);
+      if (state.purpose !== "verify") throw new Error("finalize_verification requires verify purpose");
+      if (state.active_operation) throw new Error("verification cannot finalize while a guarded operation is active");
+      if (verdict === "VERIFIED" && state.phase !== "ACTIVE") throw new Error(`VERIFIED cannot finalize from phase ${state.phase}`);
+      if (!["ACTIVE", "TARGET_DRIFT"].includes(state.phase)) throw new Error(`verification cannot finalize from phase ${state.phase}`);
+      state.phase = "COMPLETE";
+      state.verification_verdict = verdict;
+      state.ticket_progression = progression;
+      state.updated_at = now();
+      this.store.writeExecution(state);
+      this.#releaseActiveTicket(state);
+      this.#deactivateSessions(state);
+      const assignment = state.assignment_id ? this.store.readAssignment(state.assignment_id) : null;
+      if (assignment) this.store.writeAssignment({ ...assignment, status: "terminal", updated_at: now() });
+      return state;
+    });
   }
 
   checkpointPreAction(executionId, childSessionId, summary = null) {
@@ -336,7 +422,7 @@ export class ReadyLifecycle {
   ) {
     return this.store.withLock(() => {
       const state = this.status(executionId);
-      if (["COMPLETE", "BLOCKED", "MUTATION_UNCERTAIN"].includes(state.phase)) throw new Error(`Ready execution is not runnable in phase ${state.phase}`);
+      if (["COMPLETE", "BLOCKED", "MUTATION_UNCERTAIN", "TARGET_DRIFT"].includes(state.phase)) throw new Error(`Ready execution is not runnable in phase ${state.phase}`);
       if (state.active_operation) throw new Error(`Ready execution already has an active guarded operation: ${state.active_operation.tool_call_id}`);
       state.active_operation = {
         tool_call_id: toolCallId,
@@ -442,7 +528,11 @@ export class ReadyLifecycle {
     const state = this.status(executionId);
     assertOwner(state, childSessionId);
     if (state.execution_mode !== "SUBAGENT") throw new Error("refreshDelegatedAuthority requires SUBAGENT execution");
-    const binding = await this.bindAuthority({ projectRoot: state.project_root, ticketPath: state.ticket_path });
+    const binding = await this.bindAuthority({
+      projectRoot: state.project_root,
+      ticketPath: state.ticket_path,
+      allowedStatuses: state.purpose === "verify" ? ["ready", "done"] : ["ready"],
+    });
     const refreshed = { ...state, ...binding, authority_drift: null, updated_at: now() };
     this.store.withLock(() => this.store.writeExecution(refreshed));
     return refreshed;
@@ -526,6 +616,7 @@ export class ReadyLifecycle {
       this.store.writeSession(sid, {
         ...session,
         armed: false,
+        purpose: null,
         role: null,
         execution_id: null,
         updated_at: now(),

@@ -22,6 +22,7 @@ Required contract-authority input:
 Required for normal delivery verification of `Status: ready`:
 
 - Heuristic Probe Result / Evidence: `<current READY TICKET HEURISTIC PROBE RESULT for this exact Ticket/authority/implementation target>`
+- Probe Machine Binding: `<exact session-local binding path produced by ready_probe_binding for that terminal Probe>`
 
 Optional navigation inputs:
 
@@ -37,7 +38,7 @@ Execution defaults to `DIRECT`.
 
 - `DIRECT`: the current Main performs the complete verifier core and current behavior remains unchanged.
 - `SUBAGENT`: use only when the current user explicitly selects `SUBAGENT` for this exact verification stage. Exactly one delegated verifier owns the complete Ticket verification core.
-- Include exact `Ticket`, `Heuristic Probe Result / Evidence`, `Candidate Verification Target`, `Implementation Report / Evidence`, `Additional User Instructions`, and `Delegated Verifier: yes` in the child assignment.
+- Include exact `Ticket`, `Heuristic Probe Result / Evidence`, `Probe Machine Binding`, `Candidate Verification Target`, `Implementation Report / Evidence`, `Additional User Instructions`, and `Delegated Verifier: yes` in the child assignment.
 - A delegated verifier does not split ACs or flows across workers, create a verifier roster, run parallel verifiers, or delegate again.
 - The host must support checkpoint return/continuation plus terminal result. If not, return `SUBAGENT CAPABILITY UNAVAILABLE` without product/runtime/status mutation.
 - Do not infer another execution mode from model capability, task difficulty, cost or worker availability. Do not automatically switch topology or fall back from failed explicit `SUBAGENT` to `DIRECT`.
@@ -67,21 +68,25 @@ Normal delivery verification of a `ready` Ticket requires one current terminal r
 
 Require all of the following:
 
-1. exact same canonical Ticket;
-2. `Probe Completion: COMPLETE`;
-3. Probe `Authority Snapshot` still matches the current Ticket, Parent Spec and applicable Behavior/UI authorities;
-4. Probe target is the same current implementation target the verifier binds;
-5. Probe cleanup/terminal state is closed and no material source/config/build/runtime drift occurred after the probe.
+1. exactly one `Probe Machine Binding` path for the terminal Probe result;
+2. exact same canonical Ticket;
+3. `Probe Completion: COMPLETE` and machine binding `probe_completion = COMPLETE`;
+4. Probe current Ticket, Parent Spec and applicable Behavior/UI identities match the machine binding;
+5. current authored Verification-flow denominator matches the machine binding;
+6. Probe target is the same current implementation target the verifier binds; and
+7. every admitted lane is terminal, cleanup is closed, and the binding contains no verifier-owned verdict field.
 
 Return without AC verdicts when the gate cannot be established:
 
-- missing result: `VERIFICATION NOT STARTED: REQUIRED HEURISTIC PROBE RESULT MISSING`;
-- `PARTIAL`, `BLOCKED`, malformed or otherwise non-complete result: `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`;
-- stale Ticket/authority/target/cleanup attribution: `VERIFICATION NOT STARTED: HEURISTIC PROBE RESULT STALE`.
+- missing terminal result or missing machine binding: `VERIFICATION NOT STARTED: REQUIRED HEURISTIC PROBE RESULT MISSING`;
+- `PARTIAL`, `BLOCKED`, malformed, verdict-contaminated, noncanonical-lane or otherwise non-complete handoff: `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`;
+- stale Ticket/authority/Verification-denominator/target/cleanup attribution: `VERIFICATION NOT STARTED: HEURISTIC PROBE RESULT STALE`.
 
 Probe findings are navigation/counterexample seeds, not flow or AC verdicts and not automatic implementation defects. `Material Findings: None` is not PASS evidence. Where a finding is material and current, the verifier incorporates it into its own scenario and obtains verifier-owned current evidence. A probe result never satisfies `Independent verification required: yes` by itself.
 
 Explicit diagnostic re-verification of an already `done` Ticket does not require this normal delivery gate unless the current user explicitly asks for a fresh heuristic probe as part of that diagnostic.
+
+After semantic preflight and exact target resolution, but before the first product/runtime action, call the Ready runtime `ready_guard` action `begin_verify` with the exact Ticket, Project Root, normal-ready `probe_binding_path`, exact implementation `target_paths`, and only declared generated-output paths that may change. Continue only when it returns `purpose: verify` with a bound verification-target digest. Use `ready_argv execute` for ordinary runtime commands that are not read-only shell inspection; do not use generic `write`/`edit`, `ready_argv mutate`, or project-local verifier tests during the verdict cycle. Any `TARGET_DRIFT` prohibits `VERIFIED`; already attributable contradictions may still support `FAILED`, otherwise close `INCONCLUSIVE`.
 
 ## Scenario ownership
 
@@ -94,6 +99,8 @@ For every flow, predeclare the evidence and conditions for:
 - `SATISFIED`
 - `CONTRADICTED`
 - `INCONCLUSIVE`
+
+For every flow also record exactly these invocation-local challenge fields: `Nearest nonconforming state`, `Discriminating observation`, and `Sensitivity activation`. The observation must differ between the conforming state and the nearest plausible nonconforming state, and this run must actually activate the boundary that makes it sensitive. For runtime claims, a source constant/helper/branch is not a discriminating observation when the actual acceptance path can bypass it.
 
 Do not relax or rewrite those criteria after observing results.
 
@@ -164,7 +171,7 @@ After `CONTINUE` (`DIRECT` reaches this point without Parent checkpoint), the ve
 6. current parent Spec / Behavior / UI authority and Ticket-to-parent projection checks still hold; and
 7. the exact Ticket is still the same canonical `Status: ready` contract immediately before the write.
 
-Then perform one guarded targeted replacement of only the top metadata `Status: ready` line with `Status: done` and require immediate exact `VALID` post-write validation.
+Do not perform that write through generic file tools. Call Ready runtime `ready_guard finalize_verification` with the exact execution and final verifier verdict. For `VERIFIED` on a normal `ready` Ticket, the runtime alone performs the single guarded top-metadata `Status: ready` -> `Status: done` replacement and immediate exact `VALID` post-write validation; for `FAILED`, `INCONCLUSIVE`, or diagnostic `done` re-verification it performs no status progression.
 
 If Parent returns `STEER`, the delegated verifier reopens only the bounded flow/evidence/closure identified by the steering and resubmits `PRE_PROGRESSION` if the candidate remains `VERIFIED`. Parent may return `STOP` at `PRE_PROGRESSION` only when current authority, target currentness, current user instruction, evidence closure, or progression authority means candidate `VERIFIED` can no longer be finalized. In that case the delegated verifier, not Parent Main, emits the existing terminal `Verification Verdict: INCONCLUSIVE`, reports `Ticket Progression: NOT APPLICABLE`, leaves the Ticket at `Status: ready`, and performs no `done` mutation.
 

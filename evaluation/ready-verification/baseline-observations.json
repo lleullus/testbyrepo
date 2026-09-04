@@ -1,0 +1,21 @@
+[
+  {
+    "case_id": "verifier-target-mutation-core",
+    "run_id": "baseline-2026-09-04-1",
+    "model_tool_profile": "production-path baseline profile used before patch",
+    "input_target_identity": "disposable source-shape-bypass fixture before verifier run",
+    "raw_terminal_result": "Verification Verdict: VERIFIED",
+    "parsed_verdict": "VERIFIED",
+    "runtime_trigger_executed": true,
+    "authoritative_readback_type": "ordinary CLI stdout",
+    "source_only_substitution": false,
+    "probe_admission_state": "human-readable COMPLETE baseline handoff",
+    "pre_project_root_digest": "not retained as a machine digest in the baseline run",
+    "post_project_root_digest": "not retained as a machine digest in the baseline run",
+    "target_mutated": true,
+    "target_drift": true,
+    "elapsed_seconds": null,
+    "confirmed_observation": "The preceding Probe directly observed the target entrypoint returning wrong; the verifier later returned VERIFIED after the disposable product file had changed to return adjusted. Independent post-run inspection confirmed the file content changed during that verification cycle.",
+    "evidence_limit": "Only this target-mutation production-path case was captured before the user requested stopping further OMP-based repetitions; other manifest cases remain unrun."
+  }
+]
