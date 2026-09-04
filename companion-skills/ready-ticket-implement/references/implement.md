@@ -68,7 +68,7 @@ Continuation은 특정 harness API를 제품 계약으로 요구하지 않는다
 - `DIRECT`: contract preflight 전에 exact Ticket과 Project Root로 `ready_guard begin_direct`를 호출한다.
 - `SUBAGENT`: Outer Main이 `ready_guard assign_subagent`로 exact assignment를 만들고, 지정된 한 worker가 그 `assignment_id`로 `ready_guard begin_delegated`를 호출한다.
 - runtime이 current `iis-workflow`의 To Tickets route와 exact validator, Ticket status, Parent Spec, applicable Behavior/UI Authority, Git/worktree identity를 직접 bind한다. worker가 digest를 제출해 runtime에 신뢰시키지 않는다.
-- runtime은 Project Root confinement, protected authority mutation, observation ledger, broad inventory, mutation revision/current evidence, retry classification, operation lock과 managed local service를 소유한다. 이 내부 state는 product authority나 caller-facing Ready result가 아니다.
+- runtime은 Project Root confinement, protected authority mutation, observation ledger, broad inventory, mutation revision/current evidence, retry classification, operation lock과 managed local service를 소유한다. DIRECT implementation은 첫 admitted mutation 전에 repository-wide inventory를 최대 한 번 사용할 수 있고 이후에는 bounded read/search만 사용한다. Exact native file read는 같은 mutation revision에서도 현재 file content identity가 바뀐 경우에만 fresh observation으로 다시 실행할 수 있다. 이 내부 state는 product authority나 caller-facing Ready result가 아니다.
 - native Bash가 구조적으로 read-only임을 확인할 수 없으면 자유 shell string을 추측하지 않는다. 필요한 write-capable command는 explicit `ready_argv mutate`의 argv와 target paths로 실행한다.
 - terminal owner는 기존 `IMPLEMENT RESULT`를 내기 전에 runtime을 `complete` 또는 `block`으로 닫는다. runtime debug/state는 기존 result의 새 필수 field가 아니다.
 

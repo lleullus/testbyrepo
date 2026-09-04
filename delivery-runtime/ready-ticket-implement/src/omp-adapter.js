@@ -128,6 +128,17 @@ function hashFileMaybe(file) {
   }
 }
 
+function exactFileObservationToken(toolName, target) {
+  if (String(toolName).toLowerCase() !== "read" || !target || /^[a-z][a-z0-9+.-]*:\/\//i.test(target)) return null;
+  try {
+    if (!fs.statSync(target).isFile()) return null;
+    const digest = hashFileMaybe(target);
+    return digest ? `file-content:${digest}` : null;
+  } catch (error) {
+    return error?.code === "ENOENT" ? "file-missing" : null;
+  }
+}
+
 function mutationSnapshot(event, cwd) {
   const target = pathFromEvent(event, cwd);
   if (!target || /^[a-z][a-z0-9+.-]*:\/\//i.test(target)) return null;
@@ -412,7 +423,8 @@ export function installReadyRuntime(pi, options = {}) {
       const broad = isBroadInventory(event.toolName === "bash" ? "bash" : event.toolName, normalizedObservationInput);
       const inventory = inventoryAllowedForPhase(current, broad);
       if (!inventory.allowed) return { block: true, reason: inventory.reason };
-      const prepared = prepareObservation(current, event.toolName, normalizedObservationInput, broad);
+      const currentnessIdentity = exactFileObservationToken(event.toolName, target);
+      const prepared = prepareObservation(current, event.toolName, normalizedObservationInput, broad, currentnessIdentity);
       if (!prepared.allowed) return { block: true, reason: prepared.reason };
       store.writeExecution(current);
       lifecycle.beginOperation(current.execution_id, {

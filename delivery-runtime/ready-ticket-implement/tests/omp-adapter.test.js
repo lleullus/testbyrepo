@@ -180,6 +180,28 @@ test("OMP adapter enforces DIRECT runtime gates, exact result attribution, path 
   const executionId = begun.execution_id;
   assert.equal(begun.phase, "ACTIVE");
 
+  const preflightBroad = await pi.emit("tool_call", {
+    toolCallId: "broad-preflight",
+    toolName: "bash",
+    input: { command: "rg --files" },
+  }, context("main", project));
+  assert.equal(preflightBroad, undefined);
+  await pi.emit("tool_result", {
+    toolCallId: "broad-preflight",
+    toolName: "bash",
+    input: { command: "rg --files" },
+    content: [{ type: "text", text: "src/a.txt" }],
+    isError: false,
+  }, context("main", project));
+
+  const secondPreflightBroad = await pi.emit("tool_call", {
+    toolCallId: "broad-preflight-repeat",
+    toolName: "bash",
+    input: { command: "git ls-files" },
+  }, context("main", project));
+  assert.equal(secondPreflightBroad.block, true);
+  assert.match(secondPreflightBroad.reason, /at most one/);
+
   const firstRead = {
     toolCallId: "read-1",
     toolName: "read",
@@ -210,13 +232,20 @@ test("OMP adapter enforces DIRECT runtime gates, exact result attribution, path 
   assert.equal(duplicate.block, true);
   assert.match(duplicate.reason, /already succeeded/);
 
-  const broad = await pi.emit("tool_call", {
-    toolCallId: "broad",
-    toolName: "bash",
-    input: { command: "rg --files" },
+  fs.writeFileSync(source, "externally-changed\n");
+  const refreshedRead = await pi.emit("tool_call", { ...firstRead, toolCallId: "read-refreshed" }, context("main", project));
+  assert.equal(refreshedRead.input.path, fs.realpathSync(source));
+  await pi.emit("tool_result", {
+    toolCallId: "read-refreshed",
+    toolName: "read",
+    input: refreshedRead.input,
+    content: [{ type: "text", text: "externally-changed" }],
+    isError: false,
   }, context("main", project));
-  assert.equal(broad.block, true);
-  assert.match(broad.reason, /inventory rescans/);
+
+  const refreshedDuplicate = await pi.emit("tool_call", { ...firstRead, toolCallId: "read-refreshed-duplicate" }, context("main", project));
+  assert.equal(refreshedDuplicate.block, true);
+  assert.match(refreshedDuplicate.reason, /already succeeded/);
 
   const protectedWrite = await pi.emit("tool_call", {
     toolCallId: "ticket-write",
@@ -253,6 +282,14 @@ test("OMP adapter enforces DIRECT runtime gates, exact result attribution, path 
   }, context("main", project));
   assert.equal(repeatedFailedWrite.block, true);
   assert.match(repeatedFailedWrite.reason, /unchanged repeat/);
+
+  const broadAfterMutation = await pi.emit("tool_call", {
+    toolCallId: "broad-after-mutation",
+    toolName: "bash",
+    input: { command: "find ." },
+  }, context("main", project));
+  assert.equal(broadAfterMutation.block, true);
+  assert.match(broadAfterMutation.reason, /mutation begins/);
 
   const writeEvent = {
     toolCallId: "write-1",

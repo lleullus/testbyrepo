@@ -9,15 +9,17 @@ function normalize(value) {
   return Object.fromEntries(Object.keys(value).sort().map(key => [key, normalize(value[key])]));
 }
 
-export function observationDigest(toolName, input) {
-  return stableDigest({ tool: String(toolName).toLowerCase(), input: normalize(input) });
+export function observationDigest(toolName, input, currentnessToken = null) {
+  const payload = { tool: String(toolName).toLowerCase(), input: normalize(input) };
+  if (currentnessToken !== null) payload.currentness_token = String(currentnessToken);
+  return stableDigest(payload);
 }
 
-export function prepareObservation(state, toolName, input, broadInventory = false) {
+export function prepareObservation(state, toolName, input, broadInventory = false, currentnessToken = null) {
   state.observations ??= { entries: {} };
   state.observations.entries ??= {};
   const revision = Number(state.mutation_revision ?? 0);
-  const inputDigest = observationDigest(toolName, input);
+  const inputDigest = observationDigest(toolName, input, currentnessToken);
   const digest = `${revision}:${inputDigest}`;
   const existing = state.observations.entries[digest];
 
@@ -63,6 +65,7 @@ export function prepareObservation(state, toolName, input, broadInventory = fals
     unchanged_retries: Math.max(0, attempts - 1),
     output_bytes: 0,
     broad_inventory: Boolean(broadInventory),
+    currentness_token: currentnessToken,
     started_at: Date.now(),
     ended_at: null,
     error_classification: null,

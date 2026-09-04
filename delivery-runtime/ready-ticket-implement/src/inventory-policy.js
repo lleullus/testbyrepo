@@ -57,7 +57,14 @@ export function isBroadInventory(toolName, input) {
 export function inventoryAllowedForPhase(state, broadInventory) {
   if (!broadInventory) return { allowed: true };
   if (state.phase === "ACTIVE") {
-    return { allowed: false, reason: "Ready runtime blocks repository-wide inventory rescans after implementation becomes ACTIVE." };
+    const directImplementationPreflight = (
+      (state.purpose ?? "implement") === "implement"
+      && state.execution_mode === "DIRECT"
+      && state.implementation_mutation_started === false
+    );
+    if (!directImplementationPreflight) {
+      return { allowed: false, reason: "Ready runtime blocks repository-wide inventory rescans after implementation mutation begins." };
+    }
   }
   if (state.preflight_broad_inventory_used) {
     return { allowed: false, reason: "Ready runtime allows at most one repository-wide inventory during preflight; narrow the next read/search." };

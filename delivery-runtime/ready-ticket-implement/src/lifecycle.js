@@ -26,6 +26,7 @@ function executionFromBinding(binding, fields) {
     observations: { entries: {} },
     latest_evidence_revision: -1,
     preflight_broad_inventory_used: false,
+    implementation_mutation_started: false,
     managed_service: null,
     uncertainty: null,
     last_failed_mutation: null,
@@ -424,6 +425,9 @@ export class ReadyLifecycle {
       const state = this.status(executionId);
       if (["COMPLETE", "BLOCKED", "MUTATION_UNCERTAIN", "TARGET_DRIFT"].includes(state.phase)) throw new Error(`Ready execution is not runnable in phase ${state.phase}`);
       if (state.active_operation) throw new Error(`Ready execution already has an active guarded operation: ${state.active_operation.tool_call_id}`);
+      if (kind === "mutation" && (state.purpose ?? "implement") === "implement") {
+        state.implementation_mutation_started = true;
+      }
       state.active_operation = {
         tool_call_id: toolCallId,
         kind,

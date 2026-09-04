@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { validateInspectRequest, validateMutationRequest } from "../src/argv-policy.js";
-import { isBroadInventory } from "../src/inventory-policy.js";
+import { inventoryAllowedForPhase, isBroadInventory } from "../src/inventory-policy.js";
 import { ReadyLifecycle } from "../src/lifecycle.js";
 import { prepareObservation, recordObservationResult } from "../src/observation-ledger.js";
 import { classifyError, mayRetryRead } from "../src/retry-policy.js";
@@ -67,6 +67,7 @@ test("DIRECT lifecycle binds once, serializes operations, increments mutation re
     toolCallId: "call-1",
     kind: "mutation",
   });
+  assert.equal(lifecycle.status(execution.execution_id).implementation_mutation_started, true);
   assert.throws(
     () => lifecycle.beginOperation(execution.execution_id, { toolCallId: "call-2", kind: "observation" }),
     /active guarded operation/,
@@ -122,28 +123,63 @@ test("SUBAGENT is one-use, PRE_ACTION gated, MATERIAL_TURN gated, and never fall
   assert.equal(lifecycle.status(child.execution_id).phase, "ACTIVE");
 });
 
-test("observation ledger blocks identical success only in the same mutation revision", () => {
+test("observation ledger reopens an exact observation only when currentness or mutation revision changes", () => {
   const state = { mutation_revision: 0, observations: { entries: {} } };
-  const first = prepareObservation(state, "read", { path: "src/a.js" }, false);
+  const first = prepareObservation(state, "read", { path: "src/a.js" }, false, "content-a");
   assert.equal(first.allowed, true);
   recordObservationResult(state, first.digest, { success: true, outputBytes: 12 });
 
-  const duplicate = prepareObservation(state, "read", { path: "src/a.js" }, false);
+  const duplicate = prepareObservation(state, "read", { path: "src/a.js" }, false, "content-a");
   assert.equal(duplicate.allowed, false);
   assert.match(duplicate.reason, /already succeeded/);
 
+  const externallyChanged = prepareObservation(state, "read", { path: "src/a.js" }, false, "content-b");
+  assert.equal(externallyChanged.allowed, true);
+  recordObservationResult(state, externallyChanged.digest, { success: true, outputBytes: 12 });
+
+  const unchangedAgain = prepareObservation(state, "read", { path: "src/a.js" }, false, "content-b");
+  assert.equal(unchangedAgain.allowed, false);
+  assert.match(unchangedAgain.reason, /already succeeded/);
+
   state.mutation_revision = 1;
-  const afterMutation = prepareObservation(state, "read", { path: "src/a.js" }, false);
+  const afterMutation = prepareObservation(state, "read", { path: "src/a.js" }, false, "content-b");
   assert.equal(afterMutation.allowed, true);
 });
 
-test("broad inventory is exact and phase-sensitive at the policy boundary", () => {
+test("broad inventory is exact and limited to one DIRECT pre-mutation inventory", () => {
   assert.equal(isBroadInventory("bash", { argv: ["rg", "--files"] }), true);
   assert.equal(isBroadInventory("bash", { argv: ["rg", "--files", "src"] }), false);
   assert.equal(isBroadInventory("bash", { argv: ["git", "ls-files"] }), true);
   assert.equal(isBroadInventory("bash", { argv: ["git", "worktree", "list"] }), false);
   assert.equal(isBroadInventory("glob", { pattern: "**/*" }), true);
   assert.equal(isBroadInventory("glob", { pattern: "src/**/*.js" }), false);
+
+  const directPreflight = {
+    phase: "ACTIVE",
+    purpose: "implement",
+    execution_mode: "DIRECT",
+    implementation_mutation_started: false,
+    preflight_broad_inventory_used: false,
+  };
+  assert.equal(inventoryAllowedForPhase(directPreflight, true).allowed, true);
+  assert.equal(inventoryAllowedForPhase(directPreflight, true).allowed, false);
+
+  const afterMutation = {
+    ...directPreflight,
+    implementation_mutation_started: true,
+    preflight_broad_inventory_used: false,
+  };
+  const blockedAfterMutation = inventoryAllowedForPhase(afterMutation, true);
+  assert.equal(blockedAfterMutation.allowed, false);
+  assert.match(blockedAfterMutation.reason, /mutation begins/);
+
+  const legacyActive = {
+    phase: "ACTIVE",
+    purpose: "implement",
+    execution_mode: "DIRECT",
+    preflight_broad_inventory_used: false,
+  };
+  assert.equal(inventoryAllowedForPhase(legacyActive, true).allowed, false);
 });
 
 test("retry policy retries only identical read-only transport failures up to three attempts", () => {
