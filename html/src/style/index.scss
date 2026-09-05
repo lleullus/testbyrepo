@@ -4,7 +4,7 @@ body {
   min-height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #2b2b2b;
+  background: #ffffff;
 }
 
 .webterm-root {
@@ -21,8 +21,8 @@ body {
   order: 2;
   flex: 0 0 auto;
   padding: 0 max(3px, env(safe-area-inset-right)) 0 max(3px, env(safe-area-inset-left));
-  background: #1f1f1f;
-  border-top: 1px solid #3a3a3a;
+  background: #f3f3f3;
+  border-top: 1px solid #e5e5e5;
   box-sizing: border-box;
   user-select: none;
   touch-action: manipulation;
@@ -43,18 +43,18 @@ body {
   min-width: 29px;
   height: 30px;
   padding: 0 3px;
-  border: 1px solid #555;
+  border: 1px solid #d4d4d4;
   border-radius: 4px;
   box-sizing: border-box;
-  background: #303030;
-  color: #eee;
+  background: #ffffff;
+  color: #333333;
   font: 600 11px/1 system-ui, sans-serif;
   touch-action: manipulation;
 }
 
 .toolbar-button:active,
 .toolbar-button.active {
-  background: #555;
+  background: #e4e4e4;
 }
 
 .tab-button {
