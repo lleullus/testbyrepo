@@ -304,7 +304,10 @@ export class ReadyLifecycle {
       const state = this.status(executionId);
       assertOwner(state, ownerSessionId);
       if (state.purpose !== "verify") throw new Error("verification target binding requires verify purpose");
-      if (state.phase !== "ACTIVE") throw new Error(`verification target cannot bind from phase ${state.phase}`);
+      const targetBindingPhase = state.phase === "ACTIVE" || (
+        state.execution_mode === "SUBAGENT" && state.phase === "PRE_ACTION_PENDING"
+      );
+      if (!targetBindingPhase) throw new Error(`verification target cannot bind from phase ${state.phase}`);
       state.verification_target = targetBinding;
       state.target_drift = null;
       state.updated_at = now();
@@ -326,20 +329,91 @@ export class ReadyLifecycle {
     });
   }
 
-  finalizeVerification(executionId, ownerSessionId, { verdict, progression }) {
+  beginVerificationFinalization(executionId, ownerSessionId, verdict, finalizationId) {
     if (!new Set(["VERIFIED", "FAILED", "INCONCLUSIVE"]).has(verdict)) {
       throw new Error(`invalid verification verdict: ${verdict}`);
     }
+    if (!finalizationId) throw new Error("verification finalization requires an operation id");
     return this.store.withLock(() => {
       const state = this.status(executionId);
       assertOwner(state, ownerSessionId);
       if (state.purpose !== "verify") throw new Error("finalize_verification requires verify purpose");
       if (state.active_operation) throw new Error("verification cannot finalize while a guarded operation is active");
+      if (verdict === "VERIFIED" && state.phase === "TARGET_DRIFT") throw new Error("VERIFIED blocked by target drift");
       if (verdict === "VERIFIED" && state.phase !== "ACTIVE") throw new Error(`VERIFIED cannot finalize from phase ${state.phase}`);
       if (!["ACTIVE", "TARGET_DRIFT"].includes(state.phase)) throw new Error(`verification cannot finalize from phase ${state.phase}`);
+      state.active_operation = {
+        tool_call_id: finalizationId,
+        kind: "verification_finalize",
+        verdict,
+        started_at: now(),
+      };
+      state.updated_at = now();
+      this.store.writeExecution(state);
+      return state;
+    });
+  }
+
+  cancelVerificationFinalization(executionId, ownerSessionId, finalizationId) {
+    return this.store.withLock(() => {
+      const state = this.status(executionId);
+      assertOwner(state, ownerSessionId);
+      if (
+        state.active_operation?.kind === "verification_finalize"
+        && state.active_operation.tool_call_id === finalizationId
+      ) {
+        state.active_operation = null;
+        state.updated_at = now();
+        this.store.writeExecution(state);
+      }
+      return state;
+    });
+  }
+
+  verificationFinalizationState(executionId, ownerSessionId, verdict, finalizationId) {
+    return this.store.withLock(() => {
+      const state = this.status(executionId);
+      assertOwner(state, ownerSessionId);
+      if (state.purpose !== "verify") throw new Error("finalize_verification requires verify purpose");
+      if (
+        !finalizationId
+        || state.active_operation?.kind !== "verification_finalize"
+        || state.active_operation.tool_call_id !== finalizationId
+        || state.active_operation.verdict !== verdict
+      ) {
+        throw new Error("verification finalization reservation is not active");
+      }
+      if (verdict === "VERIFIED" && state.phase !== "ACTIVE") throw new Error(`VERIFIED cannot finalize from phase ${state.phase}`);
+      if (!["ACTIVE", "TARGET_DRIFT"].includes(state.phase)) throw new Error(`verification cannot finalize from phase ${state.phase}`);
+      return state;
+    });
+  }
+
+  finalizeVerification(executionId, ownerSessionId, { verdict, progression, finalizationId }) {
+    if (!new Set(["VERIFIED", "FAILED", "INCONCLUSIVE"]).has(verdict)) {
+      throw new Error(`invalid verification verdict: ${verdict}`);
+    }
+    if (!progression || typeof progression.progression !== "string") {
+      throw new Error("verification finalization requires a valid progression result");
+    }
+    return this.store.withLock(() => {
+      const state = this.status(executionId);
+      assertOwner(state, ownerSessionId);
+      if (state.purpose !== "verify") throw new Error("finalize_verification requires verify purpose");
+      if (
+        !finalizationId
+        || state.active_operation?.kind !== "verification_finalize"
+        || state.active_operation.tool_call_id !== finalizationId
+        || state.active_operation.verdict !== verdict
+      ) {
+        throw new Error("verification finalization reservation is not active");
+      }
+      if (verdict === "VERIFIED" && state.phase !== "ACTIVE") throw new Error(`VERIFIED cannot finalize from phase ${state.phase}`);
+      if (!["ACTIVE", "TARGET_DRIFT"].includes(state.phase)) throw new Error(`verification cannot finalize from phase ${state.phase}`);
+      state.active_operation = null;
       state.phase = "COMPLETE";
       state.verification_verdict = verdict;
-      state.ticket_progression = progression;
+      state.ticket_progression = progression.progression;
       state.updated_at = now();
       this.store.writeExecution(state);
       this.#releaseActiveTicket(state);

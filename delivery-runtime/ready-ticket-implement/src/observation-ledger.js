@@ -15,7 +15,17 @@ export function observationDigest(toolName, input, currentnessToken = null) {
   return stableDigest(payload);
 }
 
-export function prepareObservation(state, toolName, input, broadInventory = false, currentnessToken = null) {
+export function prepareObservation(
+  state,
+  toolName,
+  input,
+  broadInventory = false,
+  currentnessToken = null,
+  successfulReuse = "BLOCK",
+) {
+  if (!new Set(["BLOCK", "REFRESH"]).has(successfulReuse)) {
+    throw new Error(`unsupported successful observation policy: ${successfulReuse}`);
+  }
   state.observations ??= { entries: {} };
   state.observations.entries ??= {};
   const revision = Number(state.mutation_revision ?? 0);
@@ -23,7 +33,7 @@ export function prepareObservation(state, toolName, input, broadInventory = fals
   const digest = `${revision}:${inputDigest}`;
   const existing = state.observations.entries[digest];
 
-  if (existing?.status === "success") {
+  if (existing?.status === "success" && successfulReuse === "BLOCK") {
     return {
       allowed: false,
       digest,
@@ -55,7 +65,9 @@ export function prepareObservation(state, toolName, input, broadInventory = fals
     }
   }
 
-  const attempts = Number(existing?.attempts ?? 0) + 1;
+  const attempts = existing && ["failed", "incomplete"].includes(existing.status)
+    ? Number(existing.attempts ?? 0) + 1
+    : 1;
   state.observations.entries[digest] = {
     tool_name: String(toolName).toLowerCase(),
     input_digest: inputDigest,

@@ -11,6 +11,7 @@ export class ManagedServiceRegistry {
     const state = this.lifecycle.status(executionId);
     if (state.session_id !== ownerSessionId) throw new Error("only the Ready execution owner may start a managed service");
     if (state.phase !== "ACTIVE") throw new Error(`managed service requires ACTIVE execution; found ${state.phase}`);
+    if (state.active_operation) throw new Error(`Ready execution already has active guarded operation ${state.active_operation.tool_call_id}`);
     if (state.managed_service || this.children.has(executionId)) throw new Error("Ready execution already owns a managed service");
 
     const { argv } = validateMutationRequest({ version: request?.version, argv: request?.argv });

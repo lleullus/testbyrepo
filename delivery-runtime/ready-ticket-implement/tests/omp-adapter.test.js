@@ -704,3 +704,406 @@ test("diagnostic verification of done requires no Probe and never rewrites statu
   assert.equal(finalized.ticket_status_after, "done");
   assert.equal(fs.readFileSync(ticket, "utf8"), initialTicket);
 });
+
+test("verification finalization rejects a foreign session before mutating Ticket status", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-verify-finalize-owner-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project");
+  fs.mkdirSync(project, { recursive: true });
+  const ticket = path.join(project, "TICKET.md");
+  const spec = path.join(project, "SPEC.md");
+  const product = path.join(project, "product.js");
+  const validator = path.join(root, "validator.py");
+  fs.writeFileSync(ticket, "Status: ready\n\n## Verification\n\n- Parent outcome ordinal: 1\n");
+  fs.writeFileSync(spec, "Status: approved\n");
+  fs.writeFileSync(product, "console.log('adjusted');\n");
+  fs.writeFileSync(validator, "print('VALID')\n");
+  initGit(project);
+  const initialTicket = fs.readFileSync(ticket, "utf8");
+
+  const pi = mockPi();
+  const runtime = installReadyRuntime(pi, {
+    dataRoot: path.join(root, "state"),
+    bindAuthority: async ({ projectRoot, ticketPath }) => ({
+      ...binding(projectRoot, ticketPath),
+      ticket_sha256: hashFile(ticketPath),
+      validator_path: validator,
+    }),
+    checkAuthorityCurrentness: async () => ({ current: true, changed: [] }),
+  });
+  await armVerify(pi, "owner", project);
+  const probeBindingPath = parseToolResult(await pi.tools.get("ready_probe_binding").execute("probe-binding", {
+    ticket_path: ticket,
+    project_root: project,
+    output_path: path.join(root, "probe-binding.json"),
+    target_paths: [product],
+    lanes: [],
+  })).probe_binding_path;
+  const guard = pi.tools.get("ready_guard");
+  const begun = parseToolResult(await guard.execute("verify-begin", {
+    action: "begin_verify",
+    ticket_path: ticket,
+    project_root: project,
+    probe_binding_path: probeBindingPath,
+    target_paths: [product],
+  }, null, null, context("owner", project)));
+
+  await assert.rejects(
+    guard.execute("verify-foreign-finalize", {
+      action: "finalize_verification",
+      execution_id: begun.execution_id,
+      verdict: "VERIFIED",
+    }, null, null, context("foreign", project)),
+    /does not own Ready execution/,
+  );
+  assert.equal(fs.readFileSync(ticket, "utf8"), initialTicket);
+  assert.equal(runtime.lifecycle.status(begun.execution_id).phase, "ACTIVE");
+});
+
+test("verification finalization rejects an active guarded operation before mutating Ticket status", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-verify-finalize-operation-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project");
+  fs.mkdirSync(project, { recursive: true });
+  const ticket = path.join(project, "TICKET.md");
+  const spec = path.join(project, "SPEC.md");
+  const product = path.join(project, "product.js");
+  const validator = path.join(root, "validator.py");
+  fs.writeFileSync(ticket, "Status: ready\n\n## Verification\n\n- Parent outcome ordinal: 1\n");
+  fs.writeFileSync(spec, "Status: approved\n");
+  fs.writeFileSync(product, "console.log('adjusted');\n");
+  fs.writeFileSync(validator, "print('VALID')\n");
+  initGit(project);
+  const initialTicket = fs.readFileSync(ticket, "utf8");
+
+  const pi = mockPi();
+  const runtime = installReadyRuntime(pi, {
+    dataRoot: path.join(root, "state"),
+    bindAuthority: async ({ projectRoot, ticketPath }) => ({
+      ...binding(projectRoot, ticketPath),
+      ticket_sha256: hashFile(ticketPath),
+      validator_path: validator,
+    }),
+    checkAuthorityCurrentness: async () => ({ current: true, changed: [] }),
+  });
+  await armVerify(pi, "owner", project);
+  const probeBindingPath = parseToolResult(await pi.tools.get("ready_probe_binding").execute("probe-binding", {
+    ticket_path: ticket,
+    project_root: project,
+    output_path: path.join(root, "probe-binding.json"),
+    target_paths: [product],
+    lanes: [],
+  })).probe_binding_path;
+  const guard = pi.tools.get("ready_guard");
+  const begun = parseToolResult(await guard.execute("verify-begin", {
+    action: "begin_verify",
+    ticket_path: ticket,
+    project_root: project,
+    probe_binding_path: probeBindingPath,
+    target_paths: [product],
+  }, null, null, context("owner", project)));
+  runtime.lifecycle.beginOperation(begun.execution_id, {
+    toolCallId: "still-running-observation",
+    kind: "observation",
+  });
+
+  await assert.rejects(
+    guard.execute("verify-active-operation-finalize", {
+      action: "finalize_verification",
+      execution_id: begun.execution_id,
+      verdict: "VERIFIED",
+    }, null, null, context("owner", project)),
+    /operation is active/,
+  );
+  assert.equal(fs.readFileSync(ticket, "utf8"), initialTicket);
+  assert.equal(runtime.lifecycle.status(begun.execution_id).phase, "ACTIVE");
+});
+
+test("delegated verification binds its target before PRE_ACTION and waits for Parent CONTINUE before runtime execution", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-verify-subagent-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project");
+  fs.mkdirSync(project, { recursive: true });
+  const ticket = path.join(project, "TICKET.md");
+  const spec = path.join(project, "SPEC.md");
+  const product = path.join(project, "product.js");
+  const validator = path.join(root, "validator.py");
+  fs.writeFileSync(ticket, "Status: ready\n\n## Verification\n\n- Parent outcome ordinal: 1\n");
+  fs.writeFileSync(spec, "Status: approved\n");
+  fs.writeFileSync(product, "console.log('adjusted');\n");
+  fs.writeFileSync(validator, "print('VALID')\n");
+  initGit(project);
+
+  const pi = mockPi();
+  installReadyRuntime(pi, {
+    dataRoot: path.join(root, "state"),
+    bindAuthority: async ({ projectRoot, ticketPath }) => ({
+      ...binding(projectRoot, ticketPath),
+      ticket_sha256: hashFile(ticketPath),
+      validator_path: validator,
+    }),
+    checkAuthorityCurrentness: async () => ({ current: true, changed: [] }),
+  });
+  await armVerify(pi, "parent", project);
+  await armVerify(pi, "child", project);
+  const probeBindingPath = parseToolResult(await pi.tools.get("ready_probe_binding").execute("probe-binding", {
+    ticket_path: ticket,
+    project_root: project,
+    output_path: path.join(root, "probe-binding.json"),
+    target_paths: [product],
+    lanes: [],
+  })).probe_binding_path;
+  const guard = pi.tools.get("ready_guard");
+  const argv = pi.tools.get("ready_argv");
+  const assignment = parseToolResult(await guard.execute("verify-assign", {
+    action: "assign_subagent",
+    ticket_path: ticket,
+    project_root: project,
+  }, null, null, context("parent", project)));
+  const begun = parseToolResult(await guard.execute("verify-child-begin", {
+    action: "begin_delegated",
+    assignment_id: assignment.assignment_id,
+    probe_binding_path: probeBindingPath,
+    target_paths: [product],
+  }, null, null, context("child", project)));
+  assert.equal(begun.purpose, "verify");
+  assert.equal(begun.phase, "PRE_ACTION_PENDING");
+  assert.ok(begun.verification_target.digest);
+
+  await assert.rejects(
+    guard.execute("verify-child-finalize-too-early", {
+      action: "finalize_verification",
+      execution_id: begun.execution_id,
+      verdict: "VERIFIED",
+    }, null, null, context("child", project)),
+    /cannot finalize from phase PRE_ACTION_PENDING/,
+  );
+  assert.match(fs.readFileSync(ticket, "utf8"), /^Status: ready$/m);
+
+  await assert.rejects(
+    argv.execute("verify-child-too-early", {
+      action: "execute",
+      version: 1,
+      argv: [process.execPath, product],
+    }, null, null, context("child", project)),
+    /requires ACTIVE verification/,
+  );
+  const externalBeforeContinue = await pi.emit("tool_call", {
+    toolCallId: "verify-external-too-early",
+    toolName: "browser",
+    input: { action: "inspect" },
+  }, context("child", project));
+  assert.equal(externalBeforeContinue.block, true);
+  assert.match(externalBeforeContinue.reason, /Parent CONTINUE|ACTIVE/);
+
+  const checkpoint = parseToolResult(await guard.execute("verify-pre-action", {
+    action: "checkpoint_pre_action",
+    execution_id: begun.execution_id,
+    summary: "scenario ready",
+  }, null, null, context("child", project)));
+  assert.equal(checkpoint.phase, "PRE_ACTION_PENDING");
+  const released = parseToolResult(await guard.execute("verify-pre-action-continue", {
+    action: "release_checkpoint",
+    execution_id: begun.execution_id,
+    decision: "CONTINUE",
+  }, null, null, context("parent", project)));
+  assert.equal(released.phase, "ACTIVE");
+
+  const observed = parseToolResult(await argv.execute("verify-child-active", {
+    action: "execute",
+    version: 1,
+    argv: [process.execPath, product],
+  }, null, null, context("child", project)));
+  assert.equal(observed.stdout.trim(), "adjusted");
+});
+
+test("verification runtime refreshes the same runtime readback after an allowed runtime-state change", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-verify-runtime-refresh-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project");
+  fs.mkdirSync(project, { recursive: true });
+  const ticket = path.join(project, "TICKET.md");
+  const spec = path.join(project, "SPEC.md");
+  const product = path.join(project, "product.js");
+  const runtimeState = path.join(project, "runtime-state.txt");
+  const validator = path.join(root, "validator.py");
+  fs.writeFileSync(ticket, "Status: ready\n\n## Verification\n\n- Parent outcome ordinal: 1\n");
+  fs.writeFileSync(spec, "Status: approved\n");
+  fs.writeFileSync(runtimeState, "0\n");
+  fs.writeFileSync(product, [
+    "const fs = require('node:fs');",
+    "const statePath = process.argv[2];",
+    "if (process.argv[3] === 'set') fs.writeFileSync(statePath, '1\\n');",
+    "process.stdout.write(fs.readFileSync(statePath, 'utf8'));",
+    "",
+  ].join("\n"));
+  fs.writeFileSync(validator, "print('VALID')\n");
+  initGit(project);
+
+  const pi = mockPi();
+  installReadyRuntime(pi, {
+    dataRoot: path.join(root, "state"),
+    bindAuthority: async ({ projectRoot, ticketPath }) => ({
+      ...binding(projectRoot, ticketPath),
+      ticket_sha256: hashFile(ticketPath),
+      validator_path: validator,
+    }),
+    checkAuthorityCurrentness: async () => ({ current: true, changed: [] }),
+  });
+  await armVerify(pi, "verify", project);
+  const probeBindingPath = parseToolResult(await pi.tools.get("ready_probe_binding").execute("probe-binding", {
+    ticket_path: ticket,
+    project_root: project,
+    output_path: path.join(root, "probe-binding.json"),
+    target_paths: [product],
+    allowed_output_paths: [runtimeState],
+    lanes: [],
+  })).probe_binding_path;
+  const guard = pi.tools.get("ready_guard");
+  const argv = pi.tools.get("ready_argv");
+  parseToolResult(await guard.execute("verify-begin", {
+    action: "begin_verify",
+    ticket_path: ticket,
+    project_root: project,
+    probe_binding_path: probeBindingPath,
+    target_paths: [product],
+    allowed_output_paths: [runtimeState],
+  }, null, null, context("verify", project)));
+
+  const before = parseToolResult(await argv.execute("runtime-state-before", {
+    action: "execute",
+    version: 1,
+    argv: [process.execPath, product, runtimeState, "status"],
+  }, null, null, context("verify", project)));
+  assert.equal(before.stdout.trim(), "0");
+
+  const changed = parseToolResult(await argv.execute("runtime-state-change", {
+    action: "execute",
+    version: 1,
+    argv: [process.execPath, product, runtimeState, "set"],
+  }, null, null, context("verify", project)));
+  assert.equal(changed.stdout.trim(), "1");
+  assert.equal(changed.target_current, true);
+
+  const after = parseToolResult(await argv.execute("runtime-state-after", {
+    action: "execute",
+    version: 1,
+    argv: [process.execPath, product, runtimeState, "status"],
+  }, null, null, context("verify", project)));
+  assert.equal(after.stdout.trim(), "1");
+  assert.equal(after.target_current, true);
+});
+
+async function finalizationRaceFixture(t, {
+  validatorSource = "print('VALID')\n",
+  checkAuthorityCurrentnessFn = async () => ({ current: true, changed: [] }),
+} = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-verify-finalization-race-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project");
+  fs.mkdirSync(project, { recursive: true });
+  const ticket = path.join(project, "TICKET.md");
+  const spec = path.join(project, "SPEC.md");
+  const product = path.join(project, "product.js");
+  const validator = path.join(root, "validator.py");
+  fs.writeFileSync(ticket, "Status: ready\n\n## Verification\n\n- Parent outcome ordinal: 1\n");
+  fs.writeFileSync(spec, "Status: approved\n");
+  fs.writeFileSync(product, "console.log('adjusted');\n");
+  fs.writeFileSync(validator, validatorSource);
+  initGit(project);
+
+  const pi = mockPi();
+  const runtime = installReadyRuntime(pi, {
+    dataRoot: path.join(root, "state"),
+    bindAuthority: async ({ projectRoot, ticketPath }) => ({
+      ...binding(projectRoot, ticketPath),
+      ticket_sha256: hashFile(ticketPath),
+      validator_path: validator,
+    }),
+    checkAuthorityCurrentness: checkAuthorityCurrentnessFn,
+  });
+  const ctx = context("verify", project);
+  await armVerify(pi, "verify", project);
+  const probeBindingPath = parseToolResult(await pi.tools.get("ready_probe_binding").execute("probe-binding", {
+    ticket_path: ticket,
+    project_root: project,
+    output_path: path.join(root, "probe-binding.json"),
+    target_paths: [product],
+    lanes: [],
+  })).probe_binding_path;
+  const guard = pi.tools.get("ready_guard");
+  const begun = parseToolResult(await guard.execute("verify-begin", {
+    action: "begin_verify",
+    ticket_path: ticket,
+    project_root: project,
+    probe_binding_path: probeBindingPath,
+    target_paths: [product],
+  }, null, null, ctx));
+  return { pi, runtime, ctx, guard, begun, ticket };
+}
+
+test("verification finalization cancels before Ticket progression when session recovery clears the reservation during authority wait", async t => {
+  for (const eventName of ["session_shutdown", "session_switch", "session_branch", "session_start"]) {
+    await t.test(eventName, async st => {
+      let enteredAuthority;
+      let releaseAuthority;
+      const authorityEntered = new Promise(resolve => { enteredAuthority = resolve; });
+      const authorityRelease = new Promise(resolve => { releaseAuthority = resolve; });
+      const fixture = await finalizationRaceFixture(st, {
+        checkAuthorityCurrentnessFn: async () => {
+          enteredAuthority();
+          await authorityRelease;
+          return { current: true, changed: [] };
+        },
+      });
+      const finalizing = fixture.guard.execute("verify-finalize", {
+        action: "finalize_verification",
+        execution_id: fixture.begun.execution_id,
+        verdict: "VERIFIED",
+      }, null, null, fixture.ctx).then(
+        value => ({ ok: true, value }),
+        error => ({ ok: false, error: error.message }),
+      );
+
+      await authorityEntered;
+      await fixture.pi.emit(eventName, {}, fixture.ctx);
+      releaseAuthority();
+      const result = await finalizing;
+
+      assert.equal(result.ok, false);
+      assert.match(result.error, /finalization reservation is not active/);
+      assert.match(fs.readFileSync(fixture.ticket, "utf8"), /^Status: ready$/m);
+      assert.equal(fixture.runtime.lifecycle.status(fixture.begun.execution_id).phase, "ACTIVE");
+    });
+  }
+});
+
+test("verification finalization closes before session shutdown can interleave after Ticket progression begins", async t => {
+  const fixture = await finalizationRaceFixture(t, {
+    validatorSource: "import time\ntime.sleep(0.15)\nprint('VALID')\n",
+  });
+  const order = [];
+  const shutdown = new Promise((resolve, reject) => {
+    setTimeout(() => {
+      fixture.pi.emit("session_shutdown", {}, fixture.ctx).then(() => {
+        order.push("shutdown");
+        resolve();
+      }, reject);
+    }, 25);
+  });
+
+  const finalized = parseToolResult(await fixture.guard.execute("verify-finalize", {
+    action: "finalize_verification",
+    execution_id: fixture.begun.execution_id,
+    verdict: "VERIFIED",
+  }, null, null, fixture.ctx));
+  order.push("finalized");
+  await shutdown;
+
+  assert.equal(order[0], "finalized");
+  assert.equal(finalized.verification_verdict, "VERIFIED");
+  assert.equal(finalized.ticket_progression, "COMPLETED");
+  assert.equal(finalized.ticket_status_after, "done");
+  assert.match(fs.readFileSync(fixture.ticket, "utf8"), /^Status: done$/m);
+  assert.equal(fixture.runtime.lifecycle.status(fixture.begun.execution_id).phase, "COMPLETE");
+});

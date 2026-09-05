@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 import { bindAuthority, checkAuthorityCurrentness, isInsideProject } from "./authority-binding.js";
 import {
@@ -19,6 +20,7 @@ import { buildExactToolMap, mappedPolicy } from "./tool-map.js";
 import { captureVerificationTarget, checkVerificationTarget } from "./verification-target.js";
 
 const INTERNAL_TOOLS = new Set(["ready_guard", "ready_argv", "ready_probe_binding", "ready_service"]);
+const FINAL_VALIDATOR_TIMEOUT_MS = 10_000;
 
 function sessionId(ctx) {
   const id = ctx?.sessionManager?.getSessionId?.();
@@ -200,7 +202,26 @@ function ticketReadyToDoneText(text) {
   return text.slice(0, match.index) + "Status: done" + text.slice(match.index + match[0].length);
 }
 
-async function progressReadyTicketToDone(state, signal) {
+function runValidatorSync(state) {
+  const validation = spawnSync("python3", [state.validator_path, state.ticket_path], {
+    cwd: state.project_root,
+    shell: false,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: FINAL_VALIDATOR_TIMEOUT_MS,
+  });
+  const timedOut = validation.error?.code === "ETIMEDOUT";
+  if (validation.error && !timedOut) throw validation.error;
+  return {
+    exitCode: validation.status,
+    timedOut,
+    stdout: validation.stdout ?? "",
+    stderr: validation.stderr ?? "",
+  };
+}
+
+function progressReadyTicketToDone(state, signal) {
+  if (signal?.aborted) throw new Error("verification finalization was aborted before guarded progression");
   if (hashFileMaybe(state.ticket_path) !== state.ticket_sha256) throw new Error("Ticket changed before guarded ready -> done progression");
   const before = fs.readFileSync(state.ticket_path, "utf8");
   const after = ticketReadyToDoneText(before);
@@ -211,7 +232,7 @@ async function progressReadyTicketToDone(state, signal) {
   }
   let validation;
   try {
-    validation = await runArgv(["python3", state.validator_path, state.ticket_path], { cwd: state.project_root, signal });
+    validation = runValidatorSync(state);
   } catch (error) {
     return { progression: "FAILED", status_after: "done", detail: String(error?.message ?? error) };
   }
@@ -219,7 +240,7 @@ async function progressReadyTicketToDone(state, signal) {
   return {
     progression: valid ? "COMPLETED" : "FAILED",
     status_after: "done",
-    detail: valid ? null : (validation.stderr || validation.stdout || `validator exit ${validation.exitCode}`).trim(),
+    detail: valid ? null : (validation.stderr || validation.stdout || (validation.timedOut ? "validator timed out" : `validator exit ${validation.exitCode}`)).trim(),
   };
 }
 
@@ -363,7 +384,17 @@ export function installReadyRuntime(pi, options = {}) {
         lifecycle.markTargetDrift(state.execution_id, targetCurrentness.changed);
         return { block: true, reason: `Ready verification target drifted: ${targetCurrentness.changed.join(", ")}` };
       }
+      if (state.active_operation) {
+        return { block: true, reason: `Ready execution already has active guarded operation ${state.active_operation.tool_call_id}.` };
+      }
       if (!policy) {
+        if (session.role === "parent") {
+          return { block: true, reason: "SUBAGENT parent session may not perform verifier-owned product/runtime actions." };
+        }
+        if (state.session_id !== sid) return { block: true, reason: "Ready execution/session binding mismatch." };
+        if (state.phase !== "ACTIVE") {
+          return { block: true, reason: `Ready verification external product/runtime actions require ACTIVE verification; delegated verification waits for Parent CONTINUE. Found ${state.phase}.` };
+        }
         operationIndex.set(event.toolCallId, { executionId: state.execution_id, kind: "verification_external", sessionId: sid });
         return;
       }
@@ -724,34 +755,54 @@ export function installReadyRuntime(pi, options = {}) {
           const execution = lifecycle.status(params.execution_id);
           if (execution.purpose !== "verify") throw new Error("finalize_verification requires a verify execution");
           if (!params.verdict) throw new Error("finalize_verification requires verdict");
-          let progression = {
-            progression: "NOT APPLICABLE",
-            status_after: execution.ticket_status_at_start,
-            detail: null,
-          };
-          if (params.verdict === "VERIFIED") {
-            const targetCurrentness = verificationTargetGate(lifecycle, execution.execution_id);
-            if (!targetCurrentness.current) throw new Error(`VERIFIED blocked by target drift: ${targetCurrentness.changed.join(", ")}`);
-            const authority = await lifecycle.checkAuthorityCurrentness(lifecycle.status(execution.execution_id));
-            if (!authority.current) {
-              lifecycle.markAuthorityDrift(execution.execution_id, authority.changed);
-              throw new Error("VERIFIED blocked by authority drift");
+          const finalizationId = `ready-finalize-${crypto.randomUUID()}`;
+          let reservationActive = false;
+          try {
+            lifecycle.beginVerificationFinalization(execution.execution_id, sid, params.verdict, finalizationId);
+            reservationActive = true;
+            if (params.verdict === "VERIFIED") {
+              const targetCurrentness = verificationTargetGate(lifecycle, execution.execution_id);
+              if (!targetCurrentness.current) throw new Error(`VERIFIED blocked by target drift: ${targetCurrentness.changed.join(", ")}`);
+              const authority = await lifecycle.checkAuthorityCurrentness(lifecycle.status(execution.execution_id));
+              if (!authority.current) {
+                lifecycle.cancelVerificationFinalization(execution.execution_id, sid, finalizationId);
+                reservationActive = false;
+                lifecycle.markAuthorityDrift(execution.execution_id, authority.changed);
+                throw new Error("VERIFIED blocked by authority drift");
+              }
+              const finalTargetCurrentness = verificationTargetGate(lifecycle, execution.execution_id);
+              if (!finalTargetCurrentness.current) throw new Error(`VERIFIED blocked by target drift: ${finalTargetCurrentness.changed.join(", ")}`);
             }
-            if (execution.ticket_status_at_start === "ready") {
-              progression = await progressReadyTicketToDone(lifecycle.status(execution.execution_id), _signal);
-            }
+            const finalizationState = lifecycle.verificationFinalizationState(
+              execution.execution_id,
+              sid,
+              params.verdict,
+              finalizationId,
+            );
+            const progression = params.verdict === "VERIFIED" && finalizationState.ticket_status_at_start === "ready"
+              ? progressReadyTicketToDone(finalizationState, _signal)
+              : {
+                progression: "NOT APPLICABLE",
+                status_after: finalizationState.ticket_status_at_start,
+                detail: null,
+              };
+            value = lifecycle.finalizeVerification(execution.execution_id, sid, {
+              verdict: params.verdict,
+              progression,
+              finalizationId,
+            });
+            reservationActive = false;
+            return resultText({
+              execution: runtimeView(value),
+              verification_verdict: params.verdict,
+              ticket_progression: progression.progression,
+              ticket_status_after: progression.status_after,
+              progression_detail: progression.detail,
+            });
+          } catch (error) {
+            if (reservationActive) lifecycle.cancelVerificationFinalization(execution.execution_id, sid, finalizationId);
+            throw error;
           }
-          value = lifecycle.finalizeVerification(execution.execution_id, sid, {
-            verdict: params.verdict,
-            progression: progression.progression,
-          });
-          return resultText({
-            execution: runtimeView(value),
-            verification_verdict: params.verdict,
-            ticket_progression: progression.progression,
-            ticket_status_after: progression.status_after,
-            progression_detail: progression.detail,
-          });
         }
         case "block": {
           if (!params.execution_id && params.assignment_id) {
@@ -860,7 +911,7 @@ export function installReadyRuntime(pi, options = {}) {
         const request = validateExecutionRequest({ version: params.version, argv: params.argv });
         const confinement = argvConfinementReason(state, request.argv);
         if (confinement) throw new Error(confinement);
-        const prepared = prepareObservation(state, "ready_argv.execute", { argv: request.argv }, false);
+        const prepared = prepareObservation(state, "ready_argv.execute", { argv: request.argv }, false, null, "REFRESH");
         if (!prepared.allowed) throw new Error(prepared.reason);
         store.writeExecution(state);
         const syntheticId = `ready-argv-${crypto.randomUUID()}`;
