@@ -33,8 +33,9 @@ static const struct lws_protocols protocols[] = {{"http-only", callback_http, si
 #ifndef LWS_WITHOUT_EXTENSIONS
 // websocket extensions
 static const struct lws_extension extensions[] = {
-    {"permessage-deflate", lws_extension_callback_pm_deflate, "permessage-deflate"},
-    {"deflate-frame", lws_extension_callback_pm_deflate, "deflate_frame"},
+    // Disable WebSocket compression. With libwebsockets 4.5.8, compressed
+    // browser paste/input frames can fail in pm_deflate with "rx buffer
+    // underflow", which closes the socket and triggers ttyd reconnects.
     {NULL, NULL, NULL}};
 #endif
 
