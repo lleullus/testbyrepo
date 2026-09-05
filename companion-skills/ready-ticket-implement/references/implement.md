@@ -244,3 +244,17 @@ External conditions / limitations:
 Working-tree scope:
 Completion: COMPLETE | BLOCKED | PARTIAL
 ```
+
+### Non-continuation provenance
+
+`Completion: BLOCKED | PARTIAL`이 현재 owner가 권위·readback·target currentness·checkpoint 경계 때문에 계속할 수 없음을 나타낼 때, 또는 `SUBAGENT CAPABILITY UNAVAILABLE`로 반환할 때 기존 결과 뒤에 다음 다섯 필드를 붙인다. 기존 owner 결과를 유지하며 이 블록은 새 상태가 아니다. 실행 전 반환에 아직 얻지 않은 Completion/runtime evidence를 채워 넣지 않는다.
+
+```text
+Decision: <exact existing Completion result or SUBAGENT CAPABILITY UNAVAILABLE>
+Governing authority: ready-ticket-implement / <stable section or rule>
+Observed condition: <직접 확인된 blocker, capability boundary, unavailable/non-attributable readback, authority drift, or checkpoint STOP condition>
+Effect: <COMPLETE를 주장할 수 없는 이유와 보호되는 다음 mutation/phase>
+Next allowed action: <exact caller/owner action needed to resume, or None>
+```
+
+도구·transport·protocol 실패만 관찰된 경우 그 실패 자체만 `Observed condition`으로 기록하고 product/repository 상태 원인을 추측하지 않는다. 정상 `COMPLETE` 또는 단순 implementation finding에는 provenance 블록을 추가하지 않는다.

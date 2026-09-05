@@ -18,6 +18,10 @@ implementation steps, or starting implementation.
 - The unique project root for the work.
 - Any explicit current instruction requiring separate user or planning-owner approval of the completed Ticket Set after self-review. Absence means the default self-review readiness policy applies.
 
+## Non-Continuation Reporting
+
+When To Tickets cannot continue from the requested current parent Spec, cannot ready the Set because a current authority/readiness gate fails, or must return a material meaning change to an upstream planning owner, read and apply the current `iis-workflow` [Non-Continuation Decision Provenance](../../../iis-workflow/SKILL.md#non-continuation-decision-provenance) section to the caller-facing result. Preserve the current Spec/Ticket statuses and the owning defect/result; provenance must not invent a new Ticket status, retry state, approval record, or delivery state. Do not add the block to a successful validated Ready Ticket Set.
+
 Read the parent Spec first. Refuse to create Tickets from a missing or non-`approved` Spec. Preserve its scope and non-goals; a Ticket must not expand, reverse, or replace the parent Spec.
 
 The approved parent Spec is the product outcome, delivery scope, and Non-Goal

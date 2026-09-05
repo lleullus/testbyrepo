@@ -28,7 +28,7 @@ Top-level 기본 실행 모드는 `DIRECT`다.
 - 모델 capability, 작업 난도, 비용 또는 worker availability만으로 mode를 바꾸지 않는다. 실패를 `DIRECT`로 자동 대체하지 않는다.
 - Outer Main은 exact Ticket, Project Root, 추가 사용자 지시와 `Delegated Worker: yes`를 worker assignment에 포함한다. `Delegated Worker: yes`를 받은 worker는 이 스킬을 다시 위임하지 않고 implementation core를 직접 수행한다.
 - 한 Ticket을 여러 worker로 분할하지 않으며 detached worker, background delivery queue, polling controller 또는 persistent execution scheduler를 만들지 않는다.
-- 필요한 child/checkpoint/terminal capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 보고한다.
+- 필요한 child/checkpoint/terminal capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 보고하고 [Non-continuation provenance](references/implement.md#non-continuation-provenance)의 다섯 필드를 붙인다. `Decision`은 이 기존 결과를 유지하고, 아직 얻지 않은 admission 결과나 runtime evidence를 만들지 않는다.
 
 `SUBAGENT`에서 Outer Main은 assignment, checkpoint continuation (`CONTINUE | STEER | STOP`)과 terminal fan-in만 소유하며 source implementation을 중복 수행하지 않는다.
 
@@ -83,3 +83,5 @@ Verification flow를 임의의 1:1 파일 작업으로 바꾸지 않는다. 구�
 `IMPLEMENT` 완료에는 Ticket Scope/Non-Goals 보존, 모든 authored Verification-flow obligation에 연결된 current self-check evidence, unresolved authority conflict/material blocker 부재, authored independent-verification requirement evidence 보존, decision-critical source/diff/artifact/command/runtime behavior의 직접 확인이 필요하다.
 
 `Completion: COMPLETE`여도 exact Ticket의 `Status: ready`는 유지한다. 구현 target/checkpoint와 self-check evidence를 separate heuristic-probe authority와 separate verification authority에 넘길 navigation handoff로 보존하며 이후 probe, verification 또는 IIS planning continuation을 자동 실행하지 않는다.
+
+`Completion: BLOCKED | PARTIAL`이 admission, authority/readback, target currentness, 또는 checkpoint `STOP` 때문에 현재 구현 owner가 계속할 수 없음을 뜻할 때는 [references/implement.md](references/implement.md)의 **Non-continuation provenance**를 terminal caller-facing report에 포함한다. 정상 `Completion: COMPLETE`에는 이 설명 블록을 추가하지 않는다.

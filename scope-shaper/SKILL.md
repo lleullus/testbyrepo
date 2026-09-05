@@ -68,6 +68,8 @@ Scope Shaper may take an unrooted greenfield proposal through evidence analysis,
 
 IIS does not create the project root or bootstrap product source as part of planning. Creating an empty project root is host/caller preparation, not a product construction Increment and not permission to invent a technical scaffold as the first product outcome.
 
+Whenever the caller-facing result is `SCOPE SHAPING: WAITING FOR INPUT`, `SCOPE SHAPING: BLOCKED`, `SCOPE SHAPING: PROJECT ROOT REQUIRED FOR ARTIFACTS`, or another non-continuation that returns/redirects instead of completing the requested shaping pass, read and apply the current `iis-workflow` [Non-Continuation Decision Provenance](../iis-workflow/SKILL.md#non-continuation-decision-provenance) section. Preserve the existing Scope Shaper result label and report only the decision-triggering condition, governing rule, effect, and exact next allowed action. Do not add provenance ceremony to the normal proposal, confirmation, or successful Scope result.
+
 ## Legacy Scope Artifact Compatibility
 
 Older IIS Scope artifacts may predate `Scope-Revision` and `INC-NNN.md` and may contain `work-packages/WP-NNN.md` with `Status: ready-for-matt` plus `Next Planning Units`. Treat those files as **legacy planning context**, not as current Ask Matt admission and not as automatically valid construction Increments.

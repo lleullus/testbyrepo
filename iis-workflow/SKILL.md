@@ -23,6 +23,32 @@ Pass an explicit user instruction to run adversarial consensus to Ask Matt even 
 
 IIS carries no implementation-agent roster, verifier roster, scheduling order, concurrency setting, consumption ledger, delivery state, or product-completion state.
 
+## Non-Continuation Decision Provenance
+
+When IIS cannot continue on the user's requested or current planning leaf, redirects to another planning owner, waits or blocks on authority/evidence, or returns an owner-level STOP while a caller-managed invocation may remain incomplete, preserve the leaf's existing result/status and add a compact provenance block. This is an explanation contract, not a new lifecycle state, approval gate, receipt, or workflow record.
+
+Keep these field labels stable; write their values in the user's conversation language:
+
+```text
+Decision: <existing result/disposition or exact route>
+Governing authority: <skill name> / <stable section or rule>
+Observed condition: <smallest current fact, unknown, or unresolved item that triggered the rule>
+Effect: <what the current leaf may not do or why its ownership ends>
+Next allowed action: <exact next owner/action or None>
+```
+
+When an owner boundary is nonterminal for a caller-managed invocation, also report:
+
+```text
+Owner status: COMPLETE | BLOCKED | WAITING | <existing owner result>
+Invocation status: COMPLETE | INCOMPLETE | UNDETERMINED
+Returned to: <exact caller/owner>
+```
+
+`Observed condition` must be directly established from current user authority or inspectable evidence. A tool, transport, or protocol failure may be reported only as that failure; it is not evidence by itself that a file, permission, repository, service, or product state is missing. `Governing authority` names the explicit IIS rule that maps the observed condition to the decision; do not present a model preference, guessed cause, or hidden reasoning as IIS authority.
+
+Do not add this block to ordinary successful continuation or to a read-only state check whose requested task is complete. Do not replace an existing result/verdict/status label, invent a persistent decision ID, expose chain-of-thought or discarded alternatives, or add a second explanation layer when the same fields already appear in the owning result.
+
 ## Route By Planning Unit
 
 ### Next-Increment Admission

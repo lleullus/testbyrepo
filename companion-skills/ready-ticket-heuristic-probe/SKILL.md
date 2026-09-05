@@ -45,7 +45,7 @@ In `SUBAGENT` mode:
 4. A delegated probe worker does not delegate again and does not issue verifier verdicts.
 5. Parallelize only lanes whose observations and authorized effects are isolated from one another. Serialize lanes that share mutable product/runtime state or whose cleanup/initial state can affect another lane.
 6. Worker agreement, majority, voting and confidence averaging are never evidence. Lead fan-in preserves every current material finding supported by attributable evidence.
-7. If required child capability is unavailable, return `SUBAGENT CAPABILITY UNAVAILABLE`. Do not silently run DIRECT instead.
+7. If required child capability is unavailable, return `SUBAGENT CAPABILITY UNAVAILABLE` with the [provenance fields](#result-boundary), retaining this exact result and only the evidence actually obtained. Do not silently run DIRECT instead.
 
 ## Canonical Ready Ticket gate
 
@@ -111,6 +111,18 @@ Ticket status after probe: ready (unchanged) | <unchanged diagnostic status>
 Verification status: NOT ADJUDICATED BY THIS SKILL
 Probe Completion: COMPLETE | PARTIAL | BLOCKED
 ```
+
+For `Probe Completion: PARTIAL | BLOCKED` or `SUBAGENT CAPABILITY UNAVAILABLE`, append compact non-continuation provenance. A capability return retains its exact existing result and uses only these fields; do not fabricate a complete Probe handoff, admission, target binding, or findings:
+
+```text
+Decision: <exact existing Probe Completion result or SUBAGENT CAPABILITY UNAVAILABLE>
+Governing authority: ready-ticket-heuristic-probe / <stable gate, safety, or result-boundary rule>
+Observed condition: <smallest directly established admission, authority, target-attribution, evidence, safety, cleanup, or capability boundary>
+Effect: a normal COMPLETE probe handoff cannot be issued from this run
+Next allowed action: <exact caller/owner action that could make a fresh valid probe possible, or None>
+```
+
+Do not infer a repository/product cause from a transport/tool/protocol failure, and do not add this block to normal `Probe Completion: COMPLETE` or to material findings that the Probe Lead successfully bounded.
 
 `Probe Completion: COMPLETE` means every admitted lane reached a bounded investigation conclusion or explicit non-finding with required cleanup and target attribution. It does **not** mean the Ticket passes verification. Findings are counterexample/evidence inputs for the separate verifier, not automatic implementation defects or verification verdicts.
 

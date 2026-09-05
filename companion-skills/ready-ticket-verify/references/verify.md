@@ -65,8 +65,15 @@ Return without AC verdicts when canonical admission, current authority, Ticket-t
 VERIFICATION NOT STARTED
 Ticket:
 Reason:
+Decision: VERIFICATION NOT STARTED
+Governing authority: ready-ticket-verify / <stable admission, semantic, authority, probe, or target-binding rule>
+Observed condition: <smallest directly established condition that prevented verifier admission/adjudication>
+Effect: verifier-owned product/runtime execution and AC verdict issuance do not continue from this state
+Next allowed action: <exact owner/caller action needed for a fresh valid verification attempt, or None>
 AC verdicts: Not issued
 ```
+
+The provenance fields explain the existing owner result; they do not replace its specific suffix such as `CANONICAL TICKET INVALID`, `HEURISTIC PROBE GATE INCOMPLETE`, or `TICKET/PARENT PROJECTION MISMATCH`. If only a tool/transport/protocol failure is established, record that failure as the observed condition and do not infer a missing file, permission, runtime, or product state.
 
 ## 3. Semantic contract check
 
@@ -509,3 +516,5 @@ Verification Verdict: VERIFIED | FAILED | INCONCLUSIVE
 Ticket Progression: COMPLETED | NOT APPLICABLE | FAILED
 Ticket status after verification:
 ```
+
+When final `INCONCLUSIVE` is caused specifically by an authority/evidence-attribution/target-currentness boundary, or when a `VERIFIED` evidence verdict cannot complete guarded progression, append the same `Decision / Governing authority / Observed condition / Effect / Next allowed action` provenance fields. Do not append them to a normal evidence-complete `FAILED` verdict merely because the product contradicted the Ticket.

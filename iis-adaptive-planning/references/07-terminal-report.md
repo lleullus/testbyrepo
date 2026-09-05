@@ -1,5 +1,19 @@
 # Adaptive Terminal and User-Return Reports
 
+## Decision provenance
+
+For an Adaptive report that stops or redirects because of an authority/gate/evidence boundary, or for an owner-level STOP while the Adaptive invocation may still continue, preserve the owning result and include the same compact provenance semantics used by Baseline IIS:
+
+```text
+Decision: <existing result/disposition or exact route>
+Governing authority: <skill/owner> / <stable section or rule>
+Observed condition: <smallest current fact, unknown, or unresolved item that triggered the rule>
+Effect: <what cannot continue or which owner boundary has ended>
+Next allowed action: <exact owner/action or None>
+```
+
+When an owner result is not the whole-run result, also include `Owner status`, `Invocation status`, and `Returned to`. Do not infer a domain cause from a tool/transport/protocol failure, do not replace the exact owner result with an Adaptive wrapper, and do not expose hidden reasoning. Successful whole-run completion needs no extra provenance block beyond the facts already required by its terminal report.
+
 ## Run Contract input required
 
 Use before any planning or delivery mutation when [09-run-contract.md](09-run-contract.md) cannot close one material field from current authority and inspectable facts.
@@ -53,6 +67,13 @@ Reshaping:
 Unresolved user decisions: None
 Planning owner terminal: validated complete Ready Ticket Set
 Planning owner result: STOP — terminal IIS Planning output
+Decision: <RUN_COMPLETE | CONTINUE_TO_IMPLEMENTATION | CONTINUE_TO_HEURISTIC_PROBE | RETURN_AUTHORITY_GAP>
+Governing authority: iis-adaptive-planning / Terminal boundary + active Run Contract
+Observed condition: <validated complete Ready Ticket Set plus current Completion Predicate result>
+Effect: IIS Planning ownership ends here; the Adaptive invocation <completes | continues under Outer Main | returns an authority gap>
+Next allowed action: <Outer Main terminal report | implementation | heuristic probe | authority return>
+Owner status: COMPLETE
+Invocation status: COMPLETE | INCOMPLETE
 Whole-run predicate satisfied: yes | no
 Returned to: Outer Main
 Outer disposition: RUN_COMPLETE | CONTINUE_TO_IMPLEMENTATION | CONTINUE_TO_HEURISTIC_PROBE | RETURN_AUTHORITY_GAP
@@ -161,7 +182,7 @@ IIS ADAPTIVE PLANNING: USER DECISION REQUIRED
 Current planning unit: <Scope / INC / Ask Matt unit>
 Mandate Continuation Ceiling: <active ceiling>
 Run Completion Boundary: <active boundary>
-Decision: <smallest exact unresolved decision>
+Decision required: <smallest exact unresolved decision>
 Why current authority cannot select one answer: <reason>
 
 Recommended option: <option and concise basis, when one exists but authority still requires user choice>

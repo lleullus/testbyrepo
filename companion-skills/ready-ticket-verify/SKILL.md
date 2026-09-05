@@ -40,7 +40,7 @@ Execution defaults to `DIRECT`.
 - `SUBAGENT`: use only when the current user explicitly selects `SUBAGENT` for this exact verification stage. Exactly one delegated verifier owns the complete Ticket verification core.
 - Include exact `Ticket`, `Heuristic Probe Result / Evidence`, `Probe Machine Binding`, `Candidate Verification Target`, `Implementation Report / Evidence`, `Additional User Instructions`, and `Delegated Verifier: yes` in the child assignment.
 - A delegated verifier does not split ACs or flows across workers, create a verifier roster, run parallel verifiers, or delegate again.
-- The host must support checkpoint return/continuation plus terminal result. If not, return `SUBAGENT CAPABILITY UNAVAILABLE` without product/runtime/status mutation.
+- The host must support checkpoint return/continuation plus terminal result. If not, return `SUBAGENT CAPABILITY UNAVAILABLE` without product/runtime/status mutation. Include the five [provenance fields](references/verify.md#2-admission-and-current-authority), keeping `Decision: SUBAGENT CAPABILITY UNAVAILABLE` and naming this topology rule with the observed capability boundary; do not invent admission results or evidence.
 - Do not infer another execution mode from model capability, task difficulty, cost or worker availability. Do not automatically switch topology or fall back from failed explicit `SUBAGENT` to `DIRECT`.
 - Parent Main receives nonterminal checkpoint reports and returns `CONTINUE | STEER | STOP`; it does not execute all flows again or issue its own AC/whole-Ticket verdict.
 
@@ -81,6 +81,8 @@ Return without AC verdicts when the gate cannot be established:
 - missing terminal result or missing machine binding: `VERIFICATION NOT STARTED: REQUIRED HEURISTIC PROBE RESULT MISSING`;
 - `PARTIAL`, `BLOCKED`, malformed, verdict-contaminated, noncanonical-lane or otherwise non-complete handoff: `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`;
 - stale Ticket/authority/Verification-denominator/target/cleanup attribution: `VERIFICATION NOT STARTED: HEURISTIC PROBE RESULT STALE`.
+
+Every caller-facing `VERIFICATION NOT STARTED` result includes the non-continuation provenance fields defined in [references/verify.md](references/verify.md). If a final `INCONCLUSIVE` specifically results from an authority, evidence-attribution, target-currentness, or progression boundary that prevents authoritative completion, append the same provenance fields. An ordinary `FAILED` verdict based on verifier-owned contradictory product evidence is a completed verification verdict and does not require this explanation block.
 
 Probe findings are navigation/counterexample seeds, not flow or AC verdicts and not automatic implementation defects. `Material Findings: None` is not PASS evidence. Where a finding is material and current, the verifier incorporates it into its own scenario and obtains verifier-owned current evidence. A probe result never satisfies `Independent verification required: yes` by itself.
 

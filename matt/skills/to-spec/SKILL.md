@@ -21,6 +21,10 @@ without choosing or beginning the implementation.
 - The completed Behavior Design result and every approved scoped Behavior authority adopted by the confirmed shared understanding.
 - The current adversarial-consensus activation or explicit withdrawal fact for this planning unit when one exists in the current conversation or caller handoff.
 
+## Non-Continuation Reporting
+
+Whenever an admission, authority, source, or projection gate stops To Spec before the requested Spec can be faithfully drafted/written, or returns the work to another planning owner, read and apply the current `iis-workflow` [Non-Continuation Decision Provenance](../../../iis-workflow/SKILL.md#non-continuation-decision-provenance) section. Preserve the existing To Spec result/header and do not create a new lifecycle state. Normal successful Spec projection does not carry this block.
+
 ## Adversarial Consensus Admission
 
 A direct or explicit To Spec request is not withdrawal of an active adversarial-consensus instruction and does not itself satisfy that gate. When the current planning unit has an active adversarial-consensus instruction that the user has not explicitly withdrawn, do not draft or write `SPEC.md` until the current planning context establishes all of the following:
@@ -34,7 +38,11 @@ An approval given before the current consensus is not the post-consensus final i
 
 ```text
 TO SPEC: BLOCKED
-Reason: <missing Challenger binding | Intent Anchor confirmation | current latest-candidate consensus | post-consensus final integrated user approval>
+Decision: TO SPEC: BLOCKED
+Governing authority: to-spec / Adversarial Consensus Admission
+Observed condition: <missing Challenger binding | Intent Anchor confirmation | current latest-candidate consensus | post-consensus final integrated user approval>
+Effect: SPEC.md drafting and writing cannot start while the active adversarial-consensus admission gate is incomplete
+Next allowed action: complete the exact missing Ask Matt/adversarial-consensus gate or explicitly withdraw adversarial consensus
 ```
 
 If the user explicitly withdraws adversarial consensus for this planning unit, this additional admission gate no longer applies and ordinary To Spec admission continues. Do not create a receipt, flag file, sidecar, or persistent gate state; use only the current conversation/caller context.
@@ -51,8 +59,11 @@ When this gate fails, do not draft or write the Spec. Return:
 
 ```text
 TO SPEC: BLOCKED
-Reason: <missing Source Increment | stale or superseded Increment | project/work-slug mismatch | revision/Increment drift>
-Next action: return to the current Scope Shaper / Ask Matt boundary and establish one current admitted Increment
+Decision: TO SPEC: BLOCKED
+Governing authority: to-spec / Source Increment Admission
+Observed condition: <missing Source Increment | stale or superseded Increment | project/work-slug mismatch | revision/Increment drift>
+Effect: the current Spec cannot be bound to one valid admitted Increment
+Next allowed action: return to the current Scope Shaper / Ask Matt boundary and establish one current admitted Increment
 ```
 
 ## Terminal UI / UX Authority Gate
@@ -73,8 +84,11 @@ shared understanding. Do not write a draft Spec on that failure. Return:
 
 ```text
 BLOCKED: UI / UX authority required before SPEC.md
-Reason: <missing, incomplete, unapproved, inapplicable, or not-explicitly-adopted authority>
-Next action: return to Matt's UI authority flow and complete or adopt the missing rendered-design authority in shared understanding
+Decision: BLOCKED: UI / UX authority required before SPEC.md
+Governing authority: to-spec / Terminal UI / UX Authority Gate
+Observed condition: <missing, incomplete, unapproved, inapplicable, or not-explicitly-adopted authority>
+Effect: To Spec cannot serialize a material rendered contract without current adopted UI/UX authority
+Next allowed action: return to Matt's UI authority flow and complete or adopt the missing rendered-design authority in shared understanding
 ```
 
 For a new/material rendered UI, a qualifying authority has a non-empty owner,

@@ -252,9 +252,12 @@ For a direct request that fails next-increment admission, report:
 
 ```text
 ASK MATT: SCOPE SHAPING REQUIRED
-Reason: <missing current baseline, multiple maturity stages, foundation/order choice,
-         independent sibling outcomes, or other exact construction-boundary defect>
-Next action: run Scope Shaper to select one durable next Increment
+Decision: ASK MATT: SCOPE SHAPING REQUIRED
+Governing authority: ask-matt / Entry Routing And Scope Handoff Preflight
+Observed condition: <missing current baseline, multiple maturity stages, foundation/order choice,
+                    independent sibling outcomes, or other exact construction-boundary defect>
+Effect: the current unit is not admissible to Ask Matt as one next-increment-ready planning unit
+Next allowed action: run Scope Shaper to select one durable next Increment
 ```
 
 For an invalid Scope-shaped handoff, report:
@@ -262,10 +265,15 @@ For an invalid Scope-shaped handoff, report:
 ```text
 ASK MATT: BLOCKED
 Input: <exact Increment or rejected Scope/Work Package path>
-Reason: <invalid status, wrong project, path or slug drift, non-selected Increment,
-         source/Increment drift, or exact defect>
-Next action: return to Scope Shaper or select the exact current ready Increment
+Decision: ASK MATT: BLOCKED
+Governing authority: ask-matt / Entry Routing And Scope Handoff Preflight
+Observed condition: <invalid status, wrong project, path or slug drift, non-selected Increment,
+                    source/Increment drift, or exact defect>
+Effect: Ask Matt cannot admit or plan from this handoff
+Next allowed action: return to Scope Shaper or select the exact current ready Increment
 ```
+
+For these caller-facing admission returns and other exceptional non-continuations, read and apply the current `iis-workflow` [Non-Continuation Decision Provenance](../../../iis-workflow/SKILL.md#non-continuation-decision-provenance) section. Keep the existing Ask Matt result header as the owning result; the provenance fields explain that result and do not create another status or approval gate. Normal decision questions and successful continuation need no extra block.
 
 ## Main Flow
 
