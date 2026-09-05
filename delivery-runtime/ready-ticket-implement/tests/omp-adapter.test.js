@@ -137,6 +137,39 @@ test("extension registration defers action methods until the runtime is initiali
   assert.equal(actionCalls, 2);
 });
 
+test("plain filesystem inspection of Ready skill files does not arm execution", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-omp-review-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const pi = mockPi();
+  installReadyRuntime(pi, { dataRoot: path.join(root, "state") });
+
+  for (const [sid, skillName] of [
+    ["review-implement", "ready-ticket-implement"],
+    ["review-verify", "ready-ticket-verify"],
+  ]) {
+    await pi.emit("tool_call", {
+      toolCallId: `inspect-${sid}`,
+      toolName: "read",
+      input: { path: path.join(root, "review", skillName, "SKILL.md") },
+    }, context(sid, root));
+    const unrelatedMutation = await pi.emit("tool_call", {
+      toolCallId: `write-${sid}`,
+      toolName: "write",
+      input: { path: path.join(root, `${sid}.txt`), content: "review only\n" },
+    }, context(sid, root));
+    assert.equal(unrelatedMutation, undefined);
+  }
+
+  await armVerify(pi, "verify-execution", root);
+  const preBeginMutation = await pi.emit("tool_call", {
+    toolCallId: "verify-pre-begin-write",
+    toolName: "write",
+    input: { path: path.join(root, "verification-target.txt"), content: "blocked\n" },
+  }, context("verify-execution", root));
+  assert.equal(preBeginMutation.block, true);
+  assert.match(preBeginMutation.reason, /begin has not bound/);
+});
+
 test("OMP adapter enforces DIRECT runtime gates, exact result attribution, path rewrite, stale evidence, and idle cleanup", async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-omp-direct-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

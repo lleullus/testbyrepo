@@ -35,6 +35,8 @@ class ReadyVerificationCalibrationTests(unittest.TestCase):
         allowed = {"VERIFIED", "FAILED", "INCONCLUSIVE", "VERIFICATION NOT STARTED"}
         self.assertTrue(all(case["expected"] in allowed for case in cases))
         self.assertTrue(all(case["expected"] == "VERIFIED" for case in cases if case["normal_twin"]))
+        self.assertEqual(self.manifest["release_gate"]["malformed_terminal"], 0)
+        self.assertEqual(self.manifest["release_gate"]["target_mutation_runs"], 0)
 
         by_family: dict[str, list[dict[str, object]]] = {}
         for case in cases:
@@ -65,7 +67,41 @@ class ReadyVerificationCalibrationTests(unittest.TestCase):
         self.assertTrue(report["release_pass"])
         self.assertEqual(report["false_verified"], 0)
         self.assertEqual(report["normal_false_rejection"], 0)
+        self.assertEqual(report["malformed_terminal"], 0)
+        self.assertEqual(report["target_mutation_runs"], 0)
         self.assertEqual(report["missing_cases"], [])
+
+    def test_release_gate_rejects_target_mutation_even_when_verdicts_match(self) -> None:
+        records = [
+            {
+                "case_id": case["case_id"],
+                "parsed_verdict": case["expected"],
+                "target_mutated": index == 0,
+            }
+            for index, case in enumerate(self.manifest["cases"])
+        ]
+        report = self.scorer.score(self.manifest, records)
+        self.assertEqual(report["false_verified"], 0)
+        self.assertEqual(report["target_mutation_runs"], 1)
+        self.assertFalse(report["release_pass"])
+
+    def test_release_gate_rejects_malformed_terminal_without_false_verified(self) -> None:
+        defect_index = next(
+            index for index, case in enumerate(self.manifest["cases"])
+            if not case["normal_twin"]
+        )
+        records = [
+            {
+                "case_id": case["case_id"],
+                "parsed_verdict": "unexpected terminal" if index == defect_index else case["expected"],
+                "target_mutated": False,
+            }
+            for index, case in enumerate(self.manifest["cases"])
+        ]
+        report = self.scorer.score(self.manifest, records)
+        self.assertEqual(report["false_verified"], 0)
+        self.assertEqual(report["malformed_terminal"], 1)
+        self.assertFalse(report["release_pass"])
 
     def test_scorer_counts_false_verified_without_using_record_supplied_oracle(self) -> None:
         defect = next(case for case in self.manifest["cases"] if case["expected"] == "FAILED")

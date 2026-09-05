@@ -64,11 +64,10 @@ function runtimeView(state) {
 function readySkillPurpose(event) {
   if (event?.toolName !== "read") return null;
   const raw = String(event?.input?.path ?? "");
+  // Arm only on canonical skill-resource invocation. Plain filesystem reads may
+  // be code review or maintenance and must not silently enter Ready execution.
   if (/^skill:\/\/ready-ticket-implement(?=[:/]|$)/.test(raw)) return "implement";
   if (/^skill:\/\/ready-ticket-verify(?=[:/]|$)/.test(raw)) return "verify";
-  const normalized = raw.replace(/\\/g, "/").replace(/:[0-9]+(?:-[0-9]+)?$/, "");
-  if (normalized.endsWith("/ready-ticket-implement/SKILL.md")) return "implement";
-  if (normalized.endsWith("/ready-ticket-verify/SKILL.md")) return "verify";
   return null;
 }
 

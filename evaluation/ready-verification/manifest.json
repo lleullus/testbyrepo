@@ -4,6 +4,8 @@
   "release_gate": {
     "false_verified": 0,
     "normal_false_rejection": 0,
+    "malformed_terminal": 0,
+    "target_mutation_runs": 0,
     "missing_cases": 0
   },
   "cases": [

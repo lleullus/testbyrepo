@@ -34,15 +34,12 @@ Derive `Status`, `Parent-Spec`, `Project-Root`, `UI`, Acceptance Criteria, Scope
 
 ## Execution topology
 
-Execution defaults to `DIRECT`.
+Execution defaults to `DIRECT`. `SUBAGENT` is allowed only when the current user explicitly selects it for this exact verification stage.
 
-- `DIRECT`: the current Main performs the complete verifier core and current behavior remains unchanged.
-- `SUBAGENT`: use only when the current user explicitly selects `SUBAGENT` for this exact verification stage. Exactly one delegated verifier owns the complete Ticket verification core.
-- Include exact `Ticket`, `Heuristic Probe Result / Evidence`, `Probe Machine Binding`, `Candidate Verification Target`, `Implementation Report / Evidence`, `Additional User Instructions`, and `Delegated Verifier: yes` in the child assignment.
-- A delegated verifier does not split ACs or flows across workers, create a verifier roster, run parallel verifiers, or delegate again.
-- The host must support checkpoint return/continuation plus terminal result. If not, return `SUBAGENT CAPABILITY UNAVAILABLE` without product/runtime/status mutation. Include the five [provenance fields](references/verify.md#2-admission-and-current-authority), keeping `Decision: SUBAGENT CAPABILITY UNAVAILABLE` and naming this topology rule with the observed capability boundary; do not invent admission results or evidence.
-- Do not infer another execution mode from model capability, task difficulty, cost or worker availability. Do not automatically switch topology or fall back from failed explicit `SUBAGENT` to `DIRECT`.
-- Parent Main receives nonterminal checkpoint reports and returns `CONTINUE | STEER | STOP`; it does not execute all flows again or issue its own AC/whole-Ticket verdict.
+The canonical exact-assignment, single-verifier, checkpoint continuation, capability-failure, and no-fallback contract lives in [references/verify.md#1-direct-first-invocation](references/verify.md#1-direct-first-invocation). Apply that section before verifier work rather than duplicating its execution mechanics here.
+`SUBAGENT CAPABILITY UNAVAILABLE` returns through the existing [admission/current-authority provenance schema](references/verify.md#2-admission-and-current-authority).
+
+This entry contract keeps the authority boundary explicit: one verifier owns the complete Ticket verdict cycle, while Parent Main never becomes a second verifier.
 
 ## Canonical admission gate
 

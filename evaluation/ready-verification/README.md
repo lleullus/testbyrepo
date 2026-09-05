@@ -43,6 +43,6 @@ Run:
 python3 evaluation/ready-verification/score_result.py <results.json>
 ```
 
-The checked-in manifest requires zero false `VERIFIED`, zero rejection of normal twins, and no missing cases before it reports `release_pass: true`. Missing agent runs intentionally fail the gate rather than being replaced by deterministic mock verdicts.
+The checked-in manifest requires zero false `VERIFIED`, zero rejection of normal twins, zero malformed terminal results, zero reported target mutation, and no missing cases before it reports `release_pass: true`. Missing agent runs intentionally fail the gate rather than being replaced by deterministic mock verdicts.
 
 `baseline-observations.json` records only reproduction facts already directly observed. It is deliberately incomplete and must not be treated as a passing calibration set.

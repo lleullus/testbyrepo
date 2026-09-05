@@ -84,6 +84,8 @@ def score(manifest: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, 
     release_pass = (
         false_verified <= int(gate["false_verified"])
         and normal_false_rejection <= int(gate["normal_false_rejection"])
+        and malformed_terminal <= int(gate.get("malformed_terminal", 0))
+        and target_mutation <= int(gate.get("target_mutation_runs", 0))
         and len(missing_cases) <= int(gate["missing_cases"])
         and not unknown_records
     )

@@ -21,16 +21,12 @@ description: "Implement one existing IIS Ready Ticket and perform implementer se
 
 ## 실행 topology
 
-Top-level 기본 실행 모드는 `DIRECT`다.
+Top-level 기본 실행 모드는 `DIRECT`다. `SUBAGENT`는 현재 사용자가 이 exact implementation stage에 명시한 경우에만 허용한다.
 
-- `DIRECT`: 현재 Main이 implementation worker 역할을 직접 수행한다.
-- `SUBAGENT`: 현재 사용자가 이 exact implementation stage에 `SUBAGENT`를 명시한 경우에만 Outer Main이 exact Ticket 하나를 정확히 한 명의 implementation worker에게 할당한다.
-- 모델 capability, 작업 난도, 비용 또는 worker availability만으로 mode를 바꾸지 않는다. 실패를 `DIRECT`로 자동 대체하지 않는다.
-- Outer Main은 exact Ticket, Project Root, 추가 사용자 지시와 `Delegated Worker: yes`를 worker assignment에 포함한다. `Delegated Worker: yes`를 받은 worker는 이 스킬을 다시 위임하지 않고 implementation core를 직접 수행한다.
-- 한 Ticket을 여러 worker로 분할하지 않으며 detached worker, background delivery queue, polling controller 또는 persistent execution scheduler를 만들지 않는다.
-- 필요한 child/checkpoint/terminal capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 보고하고 [Non-continuation provenance](references/implement.md#non-continuation-provenance)의 다섯 필드를 붙인다. `Decision`은 이 기존 결과를 유지하고, 아직 얻지 않은 admission 결과나 runtime evidence를 만들지 않는다.
+Exact assignment, 단일 owner lane, checkpoint continuation, capability failure, no-fallback 규칙의 canonical 상세는 [references/implement.md#2-direct-first-execution-topology](references/implement.md#2-direct-first-execution-topology)에 있다. 실제 작업 전에 그 계약을 적용한다.
+`SUBAGENT CAPABILITY UNAVAILABLE`은 기존 [Non-continuation provenance](references/implement.md#non-continuation-provenance) schema로 반환한다.
 
-`SUBAGENT`에서 Outer Main은 assignment, checkpoint continuation (`CONTINUE | STEER | STOP`)과 terminal fan-in만 소유하며 source implementation을 중복 수행하지 않는다.
+이 entry contract가 별도로 유지하는 경계는 implementation worker가 구현과 self-check만 소유하고, separate heuristic-probe 또는 verification authority를 흡수하지 않는다는 점이다.
 
 ## Ready Ticket 상태 게이트
 
