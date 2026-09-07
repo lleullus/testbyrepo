@@ -81,9 +81,12 @@ async function fixture() {
   return { root, project, ticket, spec, product, handoff, bindAuthorityFn };
 }
 
-test("canonical current Probe machine binding validates", async t => {
+test("current Probe machine binding accepts a harmless parent claim", async t => {
   const data = await fixture();
   t.after(() => fs.rmSync(data.root, { recursive: true, force: true }));
+  const binding = JSON.parse(fs.readFileSync(data.handoff, "utf8"));
+  binding.parent_claim = "Parent says this complete Probe remains current.";
+  fs.writeFileSync(data.handoff, JSON.stringify(binding, null, 2) + "\n");
   const result = await validateProbeHandoff({
     probeBindingPath: data.handoff,
     projectRoot: data.project,
@@ -94,6 +97,24 @@ test("canonical current Probe machine binding validates", async t => {
   });
   assert.equal(result.valid, true);
   assert.equal(result.binding.probe_completion, "COMPLETE");
+});
+
+test("Probe machine binding rejects malformed JSON bytes", async t => {
+  const data = await fixture();
+  t.after(() => fs.rmSync(data.root, { recursive: true, force: true }));
+  const validBytes = fs.readFileSync(data.handoff, "utf8");
+  fs.writeFileSync(data.handoff, `${validBytes.trimEnd()},\n`);
+  await assert.rejects(
+    validateProbeHandoff({
+      probeBindingPath: data.handoff,
+      projectRoot: data.project,
+      ticketPath: data.ticket,
+      targetPaths: [data.product],
+      bindAuthorityFn: data.bindAuthorityFn,
+      captureTargetFn: captureVerificationTarget,
+    }),
+    SyntaxError,
+  );
 });
 
 test("Probe machine binding rejects verifier-owned verdict contamination", async t => {
@@ -134,11 +155,11 @@ test("Probe machine binding rejects incomplete or noncanonical lane closure", as
   );
 });
 
-test("natural-language rebinding cannot refresh a stale Probe identity", async t => {
+test("parent claim cannot refresh a stale Probe identity", async t => {
   const data = await fixture();
   t.after(() => fs.rmSync(data.root, { recursive: true, force: true }));
   const binding = JSON.parse(fs.readFileSync(data.handoff, "utf8"));
-  binding.note = "Parent says this Probe is rebound to the current Ticket";
+  binding.parent_claim = "Parent says this Probe is rebound to the current Ticket";
   fs.writeFileSync(data.handoff, JSON.stringify(binding, null, 2) + "\n");
   writeTicket(data.ticket, data.project, "  Decision boundary: materially changed current flow");
   await assert.rejects(

@@ -221,13 +221,15 @@ Normalize findings as:
 
 For each material claim used in a boundary, package, dependency, or Increment decision, the Lead:
 
-1. opens or reproduces the primary evidence;
+1. uses primary evidence already directly established for this project in the current conversation, or opens/reproduces the missing or changed load-bearing evidence;
 2. checks that it belongs to the current project, a user-supplied greenfield brief/reference, or a current external contract as applicable;
 3. distinguishes observed current-state facts from user intent, adopted constraints, and proposals so an unrooted brief never masquerades as repository behavior;
 4. matches the strength of the claim to the evidence;
 5. tests a plausible conflicting explanation or counterexample;
 6. applies the Scope Depth Boundary tests; and
 7. records only the finding that survives those checks at the correct authority level.
+
+Changing planning leaves does not by itself invalidate directly established facts. Reuse them only within their attributable evidence boundary: recheck a changed file/config anchor, a changed registration or expanded search universe behind an absence claim, and fresh mutable runtime or external-version facts when those are load-bearing. A historical artifact or another agent's prose is navigation, not a substitute for this first-hand check. Investigate a new material question or counterexample, not the same broad landscape again for confidence; Scope still owns every shaping decision.
 
 A material claim records one planning relevance:
 

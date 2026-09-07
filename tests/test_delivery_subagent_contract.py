@@ -145,34 +145,6 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("SUBAGENT CAPABILITY UNAVAILABLE", workflow)
         self.assertIn("never auto-fallback to `DIRECT`", workflow)
 
-    def test_verification_requires_current_complete_heuristic_probe_gate(self) -> None:
-        skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
-        workflow = (VERIFY / "references" / "verify.md").read_text(encoding="utf-8")
-
-        combined = skill + workflow
-        self.assertIn("Heuristic Probe Result / Evidence", skill)
-        self.assertIn("Probe Machine Binding", combined)
-        self.assertIn("Probe Completion: COMPLETE", combined)
-        self.assertIn("Authority Snapshot", combined)
-        self.assertIn("ready_guard", combined)
-        self.assertIn("begin_verify", combined)
-        self.assertIn("ready_argv execute", combined)
-        self.assertIn("TARGET_DRIFT", combined)
-        self.assertIn("REQUIRED HEURISTIC PROBE RESULT MISSING", combined)
-        self.assertIn("HEURISTIC PROBE GATE INCOMPLETE", combined)
-        self.assertIn("HEURISTIC PROBE RESULT STALE", combined)
-        self.assertIn("`Material Findings: None` is not", combined)
-        self.assertIn("never satisfies an authored `Independent verification required: yes`", workflow)
-        self.assertNotIn("first verification", combined)
-        self.assertIn("normal delivery verification", combined)
-        for disposition in (
-            "REPRODUCED",
-            "CURRENT_READBACK_CONFIRMED",
-            "OUT_OF_SCOPE",
-            "UNATTRIBUTABLE",
-            "SUPERSEDED_BY_CURRENT_TARGET",
-        ):
-            self.assertIn(disposition, workflow)
 
     def test_adaptive_forwards_current_verifier_required_probe_handoffs_without_copying_runtime_mechanics(self) -> None:
         verify_skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")

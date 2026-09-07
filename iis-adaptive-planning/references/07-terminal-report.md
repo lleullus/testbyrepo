@@ -14,6 +14,8 @@ Next allowed action: <exact owner/action or None>
 
 When an owner result is not the whole-run result, also include `Owner status`, `Invocation status`, and `Returned to`. Do not infer a domain cause from a tool/transport/protocol failure, do not replace the exact owner result with an Adaptive wrapper, and do not expose hidden reasoning. Successful whole-run completion needs no extra provenance block beyond the facts already required by its terminal report.
 
+When current attributable readback directly contradicts the Completion Predicate and the current user has disabled corrective continuation, use the existing provenance form above as the terminal: state the unsatisfied predicate, exact counterexample and existing owner, `Next allowed action: None`, `Whole-run completion: no`, then STOP. Do not call a known contradiction evidence insufficiency, ask the user to reconsider an already-settled read-only instruction, or use the Mandate-ceiling authority-gap report for a disabled stage. Recognizing that whole-run completion is false does not issue a new AC/Ticket verdict or authorize reopening `done`.
+
 ## Run Contract input required
 
 Use before any planning or delivery mutation when [09-run-contract.md](09-run-contract.md) cannot close one material field from current authority and inspectable facts.
@@ -114,7 +116,7 @@ An implementation-only terminal does not authorize success re-entry into another
 
 ## Adaptive run complete
 
-Use only when the active Run Contract's exact Completion Predicate is actually satisfied.
+Use only when the active Run Contract's exact Completion Predicate is actually satisfied. For `CURRENT_INCREMENT_DELIVERED`, this requires not just the complete exact `done` denominator but also an existing Ticket acceptance owner and current attributable evidence/readback for every approved parent obligation applicable to that Increment. For every boundary, preserve the claim limits of the owning evidence and exclude future, candidate, Non-Goal, and unrelated obligations that the active boundary does not make applicable.
 
 ```text
 IIS ADAPTIVE RUN COMPLETE
@@ -140,13 +142,15 @@ Remaining provisional horizon: non-authoritative; not a completion blocker
 STOP
 ```
 
+Populate the existing `Authoritative Readback` and `Final Ticket evidence` entries with the actual closure evidence used, including the effect of any owner-reported `Evidence limit` or `Remaining uncertainty`; do not add a second verdict or acceptance matrix. A limited PASS may support only the approved canonical fact or absence it actually establishes. It cannot support an unobserved runtime, operator, external, or integrated result. Canonical source/artifact/document/structure inspection is sufficient when that is the approved acceptance boundary.
+
 Do not emit this report for a planning leaf STOP, one completed Ticket, one delivered Increment when Required Named Items remain, an implementation-only result when the boundary requires delivery, a blocked/inconclusive return, or roadmap exhaustion.
 
 Candidate Named Items do not block this report unless the user revised them into Required Named Items.
 
 ## Current Increment delivered and broader completion assessment
 
-Use after every current canonical Ticket is exact `done` when the active boundary is `NAMED_REQUIRED_ITEMS_DELIVERED`, `BOUNDED_OUTCOME_SATISFIED`, or `MANDATE_OUTCOME_SATISFIED`. Fresh actual product state and attributable authoritative readback must produce exactly one disposition:
+Use only after the current Increment satisfies the full delivered boundary in [09-run-contract.md](09-run-contract.md)—complete exact `done` denominator, acceptance ownership for every applicable current parent obligation, and current attributable closure—when the active boundary is `NAMED_REQUIRED_ITEMS_DELIVERED`, `BOUNDED_OUTCOME_SATISFIED`, or `MANDATE_OUTCOME_SATISFIED`. Fresh actual product state and attributable authoritative readback must produce exactly one disposition:
 
 - `RUN_CONTRACT_SATISFIED` — use the single `IIS ADAPTIVE RUN COMPLETE` report above; do not emit a second Mandate-complete terminal.
 - `NEXT_INCREMENT_REQUIRED` — record the nonterminal transition below and continue through Outer Main to Scope Shaper in the same invocation.
@@ -201,13 +205,13 @@ Do not dump the entire planning analysis. Ask only for the branch that blocks au
 
 ## Completion evidence required
 
-Use when a fully delivered current Increment reaches broader completion assessment but current attributable evidence cannot determine whether the active Completion Predicate is satisfied or whether more product construction is required.
+Use when an existing acceptance owner is established but current attributable evidence cannot decide an obligation required by the active Completion Predicate. This includes a complete exact `done` denominator whose required current observation is missing, stale, `INCONCLUSIVE`, or limited beyond the claim, as well as a fully delivered current Increment whose broader outcome assessment cannot determine whether more product construction is required. A missing truthful acceptance owner is instead the exact To Tickets or upstream planning gap; do not disguise it as an evidence request.
 
 ```text
 IIS ADAPTIVE COMPLETION EVIDENCE REQUIRED
 
 Current Increment: <exact INC path>
-Run Completion Boundary: <active broader boundary>
+Run Completion Boundary: <active boundary>
 Completion Predicate: <exact predicate>
 Available readback: <what was established>
 Missing evidence: <smallest exact authoritative readback, operator evidence, or external condition>
@@ -219,6 +223,8 @@ STOP
 ```
 
 Do not classify missing completion evidence as product failure, Run Contract satisfaction, or a need for another Increment. Resume only when the missing attributable evidence or changed external condition can make one of the other dispositions valid.
+
+This report is unavailable when current attributable evidence already contradicts the predicate. In that case preserve the observed non-completion and the existing owner/authorized route; if continuation is disabled, use Decision provenance above instead of requesting evidence that is already present.
 
 ## Run Contract authority gap
 

@@ -118,7 +118,7 @@ Boundary meaning:
 
 - `READY_TICKET_SET` — one approved current Spec plus its validated complete Ready Ticket Set exists.
 - `CURRENT_INCREMENT_IMPLEMENTED` — every current canonical Ticket in the validated Ready Ticket Set has one exact implementation lifecycle result with `Completion: COMPLETE`; verification was not requested and Ticket status remains governed by the verifier.
-- `CURRENT_INCREMENT_DELIVERED` — every current canonical Ticket in the approved Ready Ticket Set has reached exact `Status: done` through the owning verification lifecycle.
+- `CURRENT_INCREMENT_DELIVERED` — every current canonical Ticket in the approved Ready Ticket Set has reached exact `Status: done` through the owning one-exact-Ticket verification lifecycle, every approved parent-Spec/Behavior/UI obligation applicable to this current Increment has an acceptance owner in the existing Ticket Set, and that owner's current attributable evidence/readback closes the obligation at its authored boundary. The complete `done` denominator is necessary but is not sufficient by itself. Future, Non-Goal, candidate, and unrelated preserved obligations that do not apply to the current Increment are outside this boundary.
 - `NAMED_REQUIRED_ITEMS_DELIVERED` — every Required Named Item is delivered and its applicable observable result is confirmed. Candidate Named Items do not block this boundary. This boundary may span more than one Increment.
 - `BOUNDED_OUTCOME_SATISFIED` — the exact bounded outcome assigned to this run is satisfied in fresh actual product state.
 - `MANDATE_OUTCOME_SATISFIED` — the Mandate's Desired Product Outcome is satisfied in fresh actual product state.
@@ -127,7 +127,7 @@ An implementation-only multi-Increment promise is not silently invented. If requ
 
 ### Completion Predicate
 
-Write one concise observable predicate that distinguishes successful whole-run completion from a planning phase, one Ticket, one Increment, or roadmap progress.
+Write one concise observable predicate that distinguishes successful whole-run completion from a planning phase, one Ticket, one Increment, or roadmap progress. For a delivered current-Increment predicate, name both the complete canonical `done` denominator and closure of every applicable parent obligation through its existing acceptance owner and current attributable readback; do not make status aggregation the whole predicate.
 
 Examples:
 
@@ -136,7 +136,7 @@ Every Ticket in the current validated Ready Ticket Set has an exact implementati
 ```
 
 ```text
-Every Ticket in the current validated Ready Ticket Set is exact Status: done.
+Every Ticket in the current validated Ready Ticket Set is exact Status: done, and every approved parent obligation applicable to this Increment is acceptance-owned in that Set and closed by the owning Ticket's current attributable evidence and authoritative readback.
 ```
 
 ```text
@@ -150,6 +150,10 @@ Do not use `all planned work is done`, WP exhaustion, provisional-horizon exhaus
 Identify the current product surface, canonical Ticket state, exact implementation result, operator evidence, or other authority that can prove the Completion Predicate.
 
 For `CURRENT_INCREMENT_IMPLEMENTED`, use the complete current Ticket denominator, each exact implementation result, and the unchanged canonical Ticket statuses. An implementation report proves implementation lifecycle completion only; it does not prove independent verification or `done`.
+
+For `CURRENT_INCREMENT_DELIVERED`, use the current approved parent and validated Ticket Set to determine which obligations apply, the exact existing Ticket acceptance boundary that owns each obligation, the complete canonical status denominator, and the current evidence/readback produced or directly inspected at those boundaries. An exact `done` status or historical owner report establishes only the scope it actually adjudicated. A required `INCONCLUSIVE`, unknown, `Evidence limit`, or `Remaining uncertainty` is not erased by aggregation; if it leaves an applicable obligation undecidable, whole-run success is unavailable. An approved limited result may close only the canonical fact or approved absence it actually establishes, never a direct runtime/operator/external result that it did not observe. Source, artifact, document, or structure obligations whose approved acceptance boundary is canonical inspection remain valid without invented runtime evidence.
+
+An attributable current contradiction establishes that the active predicate is not satisfied; it is not an unknown merely because an earlier owner report claimed acceptance. Outer Main may report that whole-run fact without issuing a new AC/Ticket verdict. Keep the exact counterexample and existing owner, then obey the current continuation authority; a user-imposed read-only stop needs no new product-choice prompt.
 
 Use `Not yet established` only when establishing the readback is itself legitimate planning work. The run cannot terminate successfully until an attributable readback exists.
 
@@ -183,8 +187,8 @@ Before marking the form `CLOSED`:
 - `NAMED_REQUIRED_ITEMS_DELIVERED` requires non-empty Required Named Items and `Verification: yes`;
 - Candidate Named Items never become completion obligations merely because they are listed;
 - an unsatisfied outcome-satisfaction boundary that requires new delivery needs sufficient implementation/verification authority; an outcome already satisfied in fresh actual state may close without starting those stages;
-- `CURRENT_INCREMENT_DELIVERED` always means the complete current canonical Ticket denominator, never one selected Ticket;
-- outcome-satisfaction boundaries require fresh actual product evidence and an authoritative readback;
+- `CURRENT_INCREMENT_DELIVERED` always defines success as the complete current canonical Ticket denominator plus current closure of every applicable parent obligation through an existing Ticket acceptance owner; it is never one selected Ticket or status aggregation alone;
+- the Authoritative Readback must identify how current attributable evidence will decide each applicable authored acceptance boundary; successful outcome or delivered-boundary assessment requires that evidence, but evidence legitimately created by the planned delivery may remain `Not yet established` at initial Run Contract closure;
 - the Run Completion Boundary must remain within current user authority and the Mandate's Continuation Authority ceiling;
 - `Run Contract Approval Gate` is `required` only from the affirmative exact invocation modifier above and otherwise is `not_required`; and
 - an active required gate preserves `Status: CLOSED` but forbids mutation until direct user approval of the rendered current form.
@@ -230,6 +234,8 @@ This form is not `CLOSED`. It requires an explicit Mandate revision or a user-ow
 | `DEFAULT_ADAPTIVE_CURRENT_INCREMENT` | explicit Adaptive activation supplies no narrower stop, broader named-item/outcome terminal, or unresolved required-item coverage | close `Implementation: yes`, `Verification: yes`, and `CURRENT_INCREMENT_DELIVERED` as the default current-Increment terminal. |
 | `REQUIRED_REMAINS_AFTER_DELIVERY` | the current Increment is delivered but broader Required Named Items or the broader outcome predicate remain unsatisfied | `RUN_COMPLETE` is forbidden; use fresh-state success re-entry and its existing next disposition. |
 | `POST_DELIVERY_EVIDENCE_GAP` | the current Increment is delivered under a broader boundary but attributable authoritative readback cannot determine satisfaction or the need for more construction | return `EVIDENCE_REQUIRED`; do not infer completion, product defect, or Scope Shaper re-entry. |
+| `CURRENT_INCREMENT_DONE_WITH_GAP` | every current Ticket is exact `done`, but an applicable parent obligation has no existing Ticket acceptance owner or its required current evidence/readback is absent, limited beyond the approved claim, stale, or inconclusive | `RUN_COMPLETE` is forbidden; return the exact Ticket-projection/upstream planning gap when ownership is missing, or `EVIDENCE_REQUIRED` when the owner exists but attributable evidence cannot decide the obligation. Do not create another verifier or reopen `done` history. |
+| `CURRENT_INCREMENT_FUTURE_ONLY` | every applicable current-Increment obligation is owned and currently closed, and only future, candidate, Non-Goal, or unrelated obligations remain | the current-Increment boundary may complete; do not enlarge it with non-applicable whole-Goal work. |
 
 ## Carry-forward and reshaping
 
@@ -262,7 +268,7 @@ Likewise:
 
 - one implementation result is not `CURRENT_INCREMENT_IMPLEMENTED`;
 - `CURRENT_INCREMENT_IMPLEMENTED` is not independent verification and does not mark Tickets `done`;
-- one Ticket `done` is not `CURRENT_INCREMENT_DELIVERED`;
+- a complete Ticket `done` denominator is not `CURRENT_INCREMENT_DELIVERED` while an applicable parent obligation lacks an existing acceptance owner or current attributable closure;
 - one delivered Increment is not `NAMED_REQUIRED_ITEMS_DELIVERED` when Required Named Items remain;
 - Candidate Named Items never block completion unless the user revises them into Required Named Items;
 - delivered Tickets are not proof of an outcome-satisfaction boundary without fresh authoritative readback; and

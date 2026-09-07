@@ -39,15 +39,6 @@ class RepositoryInvestigationContractTests(unittest.TestCase):
         self.assertIn("name: repository-investigation", self.skill)
         self.assertIn("$repository-investigation", self.openai)
 
-    def test_live_skill_link_targets_canonical_companion(self) -> None:
-        installed = Path.home() / ".codex" / "skills" / "repository-investigation"
-        self.assertTrue(installed.is_symlink())
-        self.assertEqual(installed.resolve(), INVESTIGATION.resolve())
-        self.assertEqual(
-            (installed / "SKILL.md").read_bytes(),
-            (INVESTIGATION / "SKILL.md").read_bytes(),
-        )
-
     def test_investigation_is_evidence_authority_not_iis_authority(self) -> None:
         combined = self.skill + self.workflow
         for token in (

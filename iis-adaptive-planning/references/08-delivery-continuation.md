@@ -10,7 +10,7 @@ Keep ownership separate while the current explicit Adaptive invocation continues
 4. Current instructions override those fields independently: `planning only` or `stop after Ready Tickets` selects `no`/`no`; `do not verify` preserves implementation authority as `yes`/`no`; `do not implement` never invents implementation authority.
 5. Before any planning or delivery mutation, Outer Main must carry one `CLOSED` Run Contract from [09-run-contract.md](09-run-contract.md). Planning ownership completion, one Ticket completion, and one Increment completion are not whole-run completion unless that contract's boundary says so.
 
-Outer Main is the thin invocation-local handoff owner defined by the top-level skill. It carries the Run Contract, invokes each exact owner only when enabled, receives exact terminal results, and performs fresh completion assessment; it does not become a second planning, implementation, or verification authority.
+Outer Main is the thin invocation-local handoff owner defined by the top-level skill. It carries the Run Contract, invokes each exact owner only when enabled, receives exact terminal results, and performs fresh completion assessment by comparing the active boundary's applicable parent obligations, their existing acceptance owners, and current attributable readback. It does not become a second planning, implementation, or verification authority and does not issue or revise an AC/whole-Ticket verdict.
 
 The delivery calls are not actions performed **by** IIS Planning. `ready-ticket-implement` and `ready-ticket-verify` retain their own exact authority, admission, evidence, execution topology, status, and terminal contracts. Adaptive activation never implies deployment, credentials, production/shared external mutation, destructive action, or another concrete authority not otherwise present.
 
@@ -34,6 +34,8 @@ A reshaped current Increment may create a new canonical Ready Ticket denominator
 ## Delivery skill discovery and execution defaults
 
 Before each enabled delivery phase, discover and use the current installed skill contract.
+
+Skill-contract discovery during planning, routing, or documentation review uses the installed skill's filesystem reference; it is not a canonical delivery invocation. Invoke canonical `skill://ready-ticket-implement` or `skill://ready-ticket-verify` only after the actual current `ready` Ticket and enabled delivery phase are established. If that resource is invoked accidentally while the current session is only armed and unbound, call `ready_guard cancel_admission` with no identifiers to disarm that session and return to planning. Once an execution, assignment, parent, or worker binding exists—including `ACTIVE` or `MUTATION_UNCERTAIN` execution—do not cancel admission; continue through the existing delivery owner's completion, block, or uncertainty-recovery path.
 
 - `ready-ticket-implement` owns one exact Ready Ticket implementation and implementer self-check.
 - `ready-ticket-heuristic-probe` owns one exact Ready Ticket's bounded heuristic exploration, Ticket-derived probe frontier, material findings/minimal triggers, target attribution and cleanup; it never owns verifier verdicts or `done`.
@@ -166,7 +168,7 @@ No final Verification Verdict
 
 Never reduce terminal completion to `VERIFIED -> done`; the canonical Ticket must actually be `done` after `Ticket Progression: COMPLETED`.
 
-After one Ticket reaches `done`, re-read the complete current canonical Ticket denominator. Do not emit `CURRENT_INCREMENT_DELIVERED` until every current canonical Ticket in the validated complete Ready Ticket Set is exact `done`.
+After one Ticket reaches `done`, re-read the complete current canonical Ticket denominator. The complete `done` denominator is a necessary progression fact, not automatic `CURRENT_INCREMENT_DELIVERED` success. Before emitting that terminal, Outer Main must also compare the approved current parent and validated Ticket Set, identify every parent-Spec/Behavior/UI obligation applicable to this Increment, confirm an existing Ticket acceptance boundary owns each one, and consume the owning result's actual current observation, authoritative readback, `Evidence limit`, and `Remaining uncertainty`. Do not include future, candidate, Non-Goal, or unrelated preserved obligations that do not apply to the current Increment.
 
 ## Corrective routing is the Adaptive default
 
@@ -206,6 +208,8 @@ INCONCLUSIVE
 
 Do not retroactively turn an earlier verifier failure into PASS after planning changes. New planning authority requires fresh applicable delivery evidence; when Verification is enabled, that includes a fresh current heuristic-probe gate before fresh verification.
 
+After a later Ticket or correction changes a product surface that can materially affect an earlier delivered obligation, current completion assessment uses new evidence only for the actually affected integration/preservation boundary. That boundary must be acceptance-owned and adjudicated through the relevant existing exact Ticket's authored verification and Scope/Non-Goals/cross-AC closure; Outer Main checks coverage and currentness but does not issue a second verdict. Keep unaffected evidence and prior `done` history intact; do not reset that history, infer permission for diagnostic re-verification of a `done` Ticket, or rerun unrelated flows. Explicit diagnostic authorization remains governed by the existing verifier contract. A historical PASS or `done` status cannot stand in for current readback at the affected boundary.
+
 ## Progress guard without retry machinery
 
 Before repeating a planning or delivery owner, identify at least one material change:
@@ -221,7 +225,7 @@ An explicit no-corrective-re-entry override stops cross-owner continuation after
 
 ## Completion assessment and success continuation by Run Completion Boundary
 
-Corrective re-entry above does not itself authorize another Increment. A current Increment is fully delivered only after every current canonical Ticket in its approved Ready Ticket Set has reached exact `done` through the owning verification lifecycle.
+A current Increment is fully delivered only after every current canonical Ticket in its approved Ready Ticket Set has reached exact `done` through the owning one-exact-Ticket verification lifecycle and every approved parent obligation applicable to that Increment is acceptance-owned in the existing Set and closed by that owner's current attributable evidence/readback. Do not pull future or otherwise non-applicable whole-Goal obligations into this boundary.
 
 Apply the active Run Completion Boundary and current Mandate ceiling:
 
@@ -238,8 +242,10 @@ CURRENT_INCREMENT_IMPLEMENTED
 
 CURRENT_INCREMENT_DELIVERED
   -> requires Verification yes
-  -> after the complete done denominator closes, Run Contract satisfied
-  -> emit IIS ADAPTIVE RUN COMPLETE
+  -> after the complete done denominator closes, assess applicable parent-obligation ownership and current evidence/readback
+  -> if every applicable obligation is owned and closed, Run Contract satisfied -> emit IIS ADAPTIVE RUN COMPLETE
+  -> missing truthful ownership -> return the exact To Tickets or upstream planning gap; do not create an umbrella Ticket or second verifier
+  -> existing owner but missing/stale/inconclusive evidence -> EVIDENCE_REQUIRED; do not infer success
 
 NAMED_REQUIRED_ITEMS_DELIVERED
 BOUNDED_OUTCOME_SATISFIED
@@ -247,6 +253,10 @@ MANDATE_OUTCOME_SATISFIED
   -> require fresh actual product state and attributable authoritative readback
   -> perform the completion assessment below
 ```
+
+The shared closure check above is claim-sensitive. Direct runtime, operator, or external obligations require the actual current observation and authoritative readback their approved boundary names. `Not independently verifiable` or another limited PASS closes only the approved canonical facts or absence/reason it actually establishes; its `Evidence limit` and `Remaining uncertainty` cannot be widened into an unobserved result. Conversely, source, artifact, document, or structure obligations close by current canonical inspection when that is their approved boundary; do not demand invented runtime. Outer Main consumes the existing owner reports and readbacks without re-adjudicating exact Ticket ACs.
+
+A current attributable readback that directly contradicts the Completion Predicate establishes that the predicate is **not satisfied**. It is not missing evidence, and acknowledging that fact is not a second AC/Ticket verdict. Do not require a fresh passing owner report merely to recognize non-completion, and do not relabel the observed contradiction as `EVIDENCE_REQUIRED`. Preserve the exact counterexample and existing acceptance owner; use only the corrective route current authority permits. If the user explicitly disabled that continuation, stop with the existing decision-provenance form, `Next allowed action: None`, and `Whole-run completion: no`. A settled no-mutation/no-re-entry instruction is not an unresolved material product choice; do not ask the user to choose it again or misreport it as a Mandate-ceiling gap.
 
 For any broader boundary, Outer Main chooses exactly one disposition from fresh actual product state:
 

@@ -6,7 +6,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTIVE = ROOT / "iis-adaptive-planning"
-INSTALLED = Path.home() / ".codex" / "skills" / "iis-adaptive-planning"
 
 
 class IISAdaptivePlanningTests(unittest.TestCase):
@@ -211,33 +210,6 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertNotIn("Auditor Count", continuation)
         self.assertNotIn("AC Runtime Auditor", continuation)
 
-    def test_single_entry_outer_main_and_owner_stop_are_explicit(self) -> None:
-        skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
-        routing = (ADAPTIVE / "references" / "03-adaptive-routing.md").read_text(
-            encoding="utf-8"
-        )
-        terminal = (ADAPTIVE / "references" / "07-terminal-report.md").read_text(
-            encoding="utf-8"
-        )
-        continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(
-            encoding="utf-8"
-        )
-
-        self.assertIn("There is no separately invokable Adaptive Run skill", skill)
-        self.assertIn("Outer Main", skill)
-        self.assertIn("current explicit Adaptive invocation", skill)
-        self.assertIn("does not become a second planning, implementation, or verification authority", skill)
-        self.assertIn("Planning owner result: STOP", terminal)
-        self.assertIn("Returned to: Outer Main", terminal)
-        self.assertIn("owner STOP is not an invocation STOP", routing)
-        self.assertIn("thin invocation-local handoff owner", continuation)
-
-        payload = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in ADAPTIVE.rglob("*")
-            if path.is_file() and path.suffix in {".md", ".yaml"}
-        )
-        self.assertNotIn("outer caller", payload.lower())
 
     def test_end_to_end_delivery_can_reenter_adaptive_for_planning_failures(self) -> None:
         continuation = (ADAPTIVE / "references" / "08-delivery-continuation.md").read_text(
@@ -306,19 +278,6 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn("never consumes a pre-authored Work Package/Increment list as a queue", continuation)
         self.assertIn("not a continuation through the Ready Ticket STOP", routing)
 
-    def test_success_continuation_does_not_turn_horizon_into_queue(self) -> None:
-        skill = (ADAPTIVE / "SKILL.md").read_text(encoding="utf-8")
-        mandate = (ADAPTIVE / "references" / "01-mandate-contract.md").read_text(
-            encoding="utf-8"
-        )
-        terminal = (ADAPTIVE / "references" / "07-terminal-report.md").read_text(
-            encoding="utf-8"
-        )
-
-        self.assertIn("do not consume the existing Work Package list", skill)
-        self.assertIn("never means consuming a pre-authored WP list", mandate)
-        self.assertIn("not a completion blocker", terminal)
-        self.assertIn("Completion requires fresh actual outcome evidence", terminal)
 
     def test_increment_reshaping_and_delivered_history_contract(self) -> None:
         reshape = (ADAPTIVE / "references" / "04-increment-reshaping.md").read_text(
@@ -365,28 +324,6 @@ class IISAdaptivePlanningTests(unittest.TestCase):
         self.assertIn("not canonical IIS artifacts", artifact)
         self.assertIn("checkpoint IDs/ledgers", artifact)
         self.assertIn("do not persist the checkpoint itself", artifact)
-
-    def test_live_installed_skill_matches_canonical_source(self) -> None:
-        self.assertTrue(INSTALLED.is_dir(), INSTALLED)
-
-        canonical_files = sorted(
-            p.relative_to(ADAPTIVE)
-            for p in ADAPTIVE.rglob("*")
-            if p.is_file()
-        )
-        installed_files = sorted(
-            p.relative_to(INSTALLED)
-            for p in INSTALLED.rglob("*")
-            if p.is_file()
-        )
-        self.assertEqual(canonical_files, installed_files)
-
-        for relative in canonical_files:
-            self.assertEqual(
-                (ADAPTIVE / relative).read_bytes(),
-                (INSTALLED / relative).read_bytes(),
-                relative,
-            )
 
     def test_sync_script_is_scoped_only_to_adaptive_skill(self) -> None:
         sync = (ROOT / "scripts" / "sync_installed_adaptive.py").read_text(

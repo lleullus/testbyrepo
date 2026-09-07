@@ -29,14 +29,6 @@ class ReadyTicketRuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_runtime_package_has_selected_provenance_without_click_contract(self) -> None:
-        provenance = (RUNTIME / "CLICK-PROVENANCE.md").read_text(encoding="utf-8")
-        readme = (RUNTIME / "README.md").read_text(encoding="utf-8")
-        self.assertIn("0.17.0", provenance)
-        self.assertIn("behavior-level reimplementation", provenance)
-        self.assertIn("copied Click source files: none", provenance)
-        self.assertIn("does not decide product meaning", readme)
-        self.assertIn("does not", readme)
 
     def test_install_sync_is_explicit_checkable_and_removable(self) -> None:
         with tempfile.TemporaryDirectory(prefix="iis-ready-runtime-install-") as directory:

@@ -61,31 +61,17 @@ Before deriving runtime execution, semantically compare every AC and mapped Veri
 
 ## Required heuristic probe gate
 
-Normal delivery verification of a `ready` Ticket requires one current terminal result from `ready-ticket-heuristic-probe` before verifier product/runtime execution.
+Normal delivery verification of a `ready` Ticket requires one terminal result from `ready-ticket-heuristic-probe` and its exact `Probe Machine Binding` path. The complete handoff order and outcome mapping live in [references/verify.md#5-verification-target-stability](references/verify.md#5-verification-target-stability).
 
-Require all of the following:
+An earlier `VERIFICATION NOT STARTED` remains correct when an independently established current canonical/status/permission, semantic, authority/projection, direct terminal Probe-result, or exact-target gate blocks admission. Missing result or binding still returns `VERIFICATION NOT STARTED: REQUIRED HEURISTIC PROBE RESULT MISSING`; a directly stated `PARTIAL` or `BLOCKED` terminal Probe result returns `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`. Do not manufacture an earlier machine-handoff diagnosis from a binding excerpt, prose, or a parent claim.
 
-1. exactly one `Probe Machine Binding` path for the terminal Probe result;
-2. exact same canonical Ticket;
-3. `Probe Completion: COMPLETE` and machine binding `probe_completion = COMPLETE`;
-4. Probe current Ticket, Parent Spec and applicable Behavior/UI identities match the machine binding;
-5. current authored Verification-flow denominator matches the machine binding;
-6. Probe target is the same current implementation target the verifier binds; and
-7. every admitted lane is terminal, cleanup is closed, and the binding contains no verifier-owned verdict field.
-
-Return without AC verdicts when the gate cannot be established:
-
-- missing terminal result or missing machine binding: `VERIFICATION NOT STARTED: REQUIRED HEURISTIC PROBE RESULT MISSING`;
-- `PARTIAL`, `BLOCKED`, malformed, verdict-contaminated, noncanonical-lane or otherwise non-complete handoff: `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`;
-- stale Ticket/authority/Verification-denominator/target/cleanup attribution: `VERIFICATION NOT STARTED: HEURISTIC PROBE RESULT STALE`.
+For normal `ready` verification once those gates pass, pass the unmodified `probe_binding_path`, exact Ticket/Project Root and exact `target_paths` to `ready_guard begin_verify` before asserting any machine-binding syntax, closure or currentness reason. `begin_verify` owns raw JSON parsing and machine identity/target admission; use its actual rejection to report `HEURISTIC PROBE GATE INCOMPLETE` or `HEURISTIC PROBE RESULT STALE`, without guessing punctuation or treating a claim as a rebind. Continue only when it returns `purpose: verify` with a bound verification-target digest. Use `ready_argv execute` for ordinary runtime commands that are not read-only shell inspection; do not use generic `write`/`edit`, `ready_argv mutate`, or project-local verifier tests during the verdict cycle. Any `TARGET_DRIFT` prohibits `VERIFIED`; already attributable contradictions may still support `FAILED`, otherwise close `INCONCLUSIVE`.
 
 Every caller-facing `VERIFICATION NOT STARTED` result includes the non-continuation provenance fields defined in [references/verify.md](references/verify.md). If a final `INCONCLUSIVE` specifically results from an authority, evidence-attribution, target-currentness, or progression boundary that prevents authoritative completion, append the same provenance fields. An ordinary `FAILED` verdict based on verifier-owned contradictory product evidence is a completed verification verdict and does not require this explanation block.
 
 Probe findings are navigation/counterexample seeds, not flow or AC verdicts and not automatic implementation defects. `Material Findings: None` is not PASS evidence. Where a finding is material and current, the verifier incorporates it into its own scenario and obtains verifier-owned current evidence. A probe result never satisfies `Independent verification required: yes` by itself.
 
 Explicit diagnostic re-verification of an already `done` Ticket does not require this normal delivery gate unless the current user explicitly asks for a fresh heuristic probe as part of that diagnostic.
-
-After semantic preflight and exact target resolution, but before the first product/runtime action, call the Ready runtime `ready_guard` action `begin_verify` with the exact Ticket, Project Root, normal-ready `probe_binding_path`, exact implementation `target_paths`, and only declared generated-output paths that may change. Continue only when it returns `purpose: verify` with a bound verification-target digest. Use `ready_argv execute` for ordinary runtime commands that are not read-only shell inspection; do not use generic `write`/`edit`, `ready_argv mutate`, or project-local verifier tests during the verdict cycle. Any `TARGET_DRIFT` prohibits `VERIFIED`; already attributable contradictions may still support `FAILED`, otherwise close `INCONCLUSIVE`.
 
 ## Scenario ownership
 

@@ -24,7 +24,7 @@ Do not turn IIS into a controller, delivery orchestrator, workflow database, app
 
 There is no separately invokable Adaptive Run skill. `Run` in **Adaptive Run Contract** means the lifetime of the current explicit Adaptive invocation initiated through this one `iis-adaptive-planning` skill.
 
-The **Outer Main** is the main agent handling that current explicit Adaptive invocation. It owns only Run Contract closure and carry-forward, phase routing from exact owner results, fresh completion assessment, and the final caller-facing result. It does not become a second planning, implementation, or verification authority, and it does not absorb heuristic-exploration authority: current IIS leaves retain product-planning authority, `ready-ticket-implement` retains implementation authority, `ready-ticket-heuristic-probe` retains bounded heuristic-exploration authority, and `ready-ticket-verify` retains verification verdict and guarded `done` authority. When Outer Main directly performs an enabled delivery stage, it enters that exact skill owner role for the phase and returns to Adaptive routing after the terminal result. When an explicitly selected delivery `SUBAGENT` returns a nonterminal checkpoint, Outer Main owns the bounded `CONTINUE | STEER | STOP` continuation decision and terminal fan-in only; that does not make it a second implementation or verification owner.
+The **Outer Main** is the main agent handling that current explicit Adaptive invocation. It owns only Run Contract closure and carry-forward, phase routing from exact owner results, fresh completion assessment, and the final caller-facing result. At a completion boundary it compares currently applicable parent obligations, their existing acceptance owners, and actual current evidence/readback, including owner-reported limits; it does not issue a second AC or whole-Ticket verdict. Current IIS leaves retain product-planning authority, `ready-ticket-implement` retains implementation authority, `ready-ticket-heuristic-probe` retains bounded heuristic-exploration authority, and `ready-ticket-verify` retains one-exact-Ticket verification verdict and guarded `done` authority. When Outer Main directly performs an enabled delivery stage, it enters that exact skill owner role for the duration of the call and still follows the same owner contract.
 
 This is a thin invocation-local handoff role, not a persistent controller, scheduler, queue, retry ledger, workflow database, or new product-authority layer.
 
@@ -105,7 +105,7 @@ Implementation and Verification are independent invocation fields. Preserve expl
 
 When explicit Adaptive activation supplies no narrower stop override and no broader named-item or outcome terminal, close the default current-Increment execution envelope as `Implementation: yes`, `Verification: yes`, and `Run Completion Boundary: CURRENT_INCREMENT_DELIVERED`, subject to the Required-item coverage invariant and Mandate Continuation Authority ceiling in `references/09-run-contract.md`. Do not force this current-Increment terminal when current authority already assigns a broader outcome or when required-item coverage is unknown or partial.
 
-Do not let a planning leaf STOP, one implementation report, one Ticket, or one current Increment stand in for whole-run completion unless the closed Run Completion Boundary and Completion Predicate say so.
+Do not let a planning leaf STOP, one implementation report, one Ticket, one current Increment, or a complete `done` denominator stand in for whole-run completion unless the closed Run Completion Boundary and Completion Predicate are satisfied by the applicable parent obligations, their existing acceptance owners, and actual current evidence/readback.
 
 The Run Contract is invocation-local authority, not a third durable companion artifact or workflow state. Carry its decision-critical fields through planning, delivery, corrective re-entry, and success re-entry. Record only a material closure/revision in the Adaptive trace when later interpretation requires it.
 
@@ -228,7 +228,7 @@ A successful current Increment may trigger a new Adaptive planning cycle only af
 
 `CURRENT_INCREMENT_IMPLEMENTED` is an implementation-only terminal and never triggers success re-entry.
 
-Before selecting anything next, inspect fresh actual product state and compare the active Completion Predicate against current authoritative readback. Do not infer success continuation from `done` status alone, and do not consume the existing Work Package list or Provisional Construction Horizon as an execution queue.
+Before selecting anything next, inspect fresh actual product state and compare the active Completion Predicate against current authoritative readback. For `CURRENT_INCREMENT_DELIVERED`, first compare the approved current parent and validated Ticket Set, limit the denominator to obligations actually applicable to this Increment, confirm each has an existing Ticket acceptance owner, and consume that owner's current observation/readback plus any `Evidence limit` and `Remaining uncertainty`. Do not infer completion or success continuation from `done` status alone, widen a limited result beyond what it observed, pull future/unrelated whole-Goal obligations into the current boundary, or consume the existing Work Package list or Provisional Construction Horizon as an execution queue.
 
 Choose exactly one completion-assessment disposition:
 
@@ -236,6 +236,8 @@ Choose exactly one completion-assessment disposition:
 - `NEXT_INCREMENT_REQUIRED` — the active predicate is not yet satisfied and current authority can determine that more construction is required; re-enter Scope Shaper against fresh actual state so it selects exactly one new current Increment.
 - `USER_DECISION_REQUIRED` — the active predicate is not yet satisfied but a material user-owned trade-off remains after applying current authority and priorities; return only that decision to the user.
 - `EVIDENCE_REQUIRED` — current attributable evidence cannot determine whether the active predicate is satisfied or whether more construction is required; obtain only the missing authoritative readback or operator/external evidence and do not infer completion, product defect, or Scope Shaper re-entry.
+
+When an applicable obligation has no truthful existing Ticket acceptance owner, return the exact To Tickets or upstream planning gap; Outer Main does not invent an umbrella Ticket, acceptance matrix, or verdict. When the owner exists but required current evidence is absent, stale, inconclusive, or limited beyond the approved claim, use `EVIDENCE_REQUIRED`. Preserve canonical artifact/source-only completion when direct inspection is the approved boundary, and preserve implementation-only completion when `Verification: no` and the active boundary is `CURRENT_INCREMENT_IMPLEMENTED`.
 
 `NEXT_INCREMENT_REQUIRED` never names the next WP/INC from a prior plan by default. Scope Shaper may preserve, split, merge, reorder, replace, or discard provisional structure under its current rules. Completion is judged against the active observable predicate, not by exhausting a roadmap or provisional horizon.
 
@@ -266,6 +268,7 @@ Do not:
 - invoke implementation when Implementation is `no`;
 - invoke verification or claim `done` when Verification is `no`;
 - claim whole-run completion before the active Completion Predicate is satisfied;
+- claim `CURRENT_INCREMENT_DELIVERED` from `done` aggregation while an applicable parent obligation lacks an existing acceptance owner or current attributable closure;
 - close a Run Completion Boundary broader than the Mandate ceiling without explicit current authority;
 - edit Baseline skills, templates, or validators as part of Adaptive operation;
 - auto-enable adversarial consensus or choose its Challenger;

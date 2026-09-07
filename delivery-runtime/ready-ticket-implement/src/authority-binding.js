@@ -159,7 +159,7 @@ export function resolveCanonicalValidator() {
   const workflowPath = resolveIisWorkflowSkill();
   const workflowText = fs.readFileSync(workflowPath, "utf8");
   const route = workflowText.match(/^###\s+To Tickets\s*$([\s\S]*?)(?=^###\s+|^##\s+|(?![\s\S]))/mi)?.[1] || "";
-  const skillPath = route.match(/(^|\s)(\/[^\s`]+\/SKILL\.md)(?=\s|$|`)/m)?.[2];
+  const skillPath = route.match(/(^|\s|`)(\/[^\s`]+\/SKILL\.md)(?=\s|$|`)/m)?.[2];
   if (!skillPath) throw new Error(`current iis-workflow To Tickets route has no absolute SKILL.md target: ${workflowPath}`);
   const toTicketsSkill = existingRealpath(skillPath, "To Tickets Skill");
   const validator = existingRealpath(path.join(path.dirname(toTicketsSkill), "validate_ticket.py"), "Ticket validator");
@@ -218,7 +218,7 @@ export async function bindAuthority({ ticketPath, projectRoot, allowedStatuses =
     throw new Error(`Ticket Project-Root does not match requested Project Root: ${authoredProjectRoot ?? "missing"}`);
   }
 
-  const { validator } = resolveCanonicalValidator();
+  const { workflowPath, toTicketsSkill, validator } = resolveCanonicalValidator();
   validateTicket(validator, canonicalTicket, canonicalRoot);
 
   const parentValue = metadataValue(ticketText, "Parent-Spec");
@@ -234,6 +234,8 @@ export async function bindAuthority({ ticketPath, projectRoot, allowedStatuses =
     ...behaviorAuthorities.map(item => ({ path: item.path, sha256: item.sha256, kind: "behavior" })),
     ...(uiAuthority ? [{ path: uiAuthority.path, sha256: uiAuthority.sha256, kind: "ui" }] : []),
     { path: validator, sha256: sha256File(validator), kind: "validator" },
+    { path: workflowPath, sha256: sha256File(workflowPath), kind: "workflow" },
+    { path: toTicketsSkill, sha256: sha256File(toTicketsSkill), kind: "to_tickets" },
   ];
 
   return {

@@ -47,6 +47,9 @@ The verifier ends with one `READY TICKET VERIFICATION RESULT`. Checkpoint report
 
 Before any runtime/product action:
 
+Canonical `skill://ready-ticket-verify` invocation is verifier execution admission and occurs only after one actual current Ticket is selected under this verifier's status and invocation rules; planning or documentation review uses this contract's filesystem reference. If the current session was accidentally armed before any execution/assignment/delegation binding, call `ready_guard cancel_admission` without identifiers to disarm only that session and return to planning. Bound `ACTIVE`, delegated, or uncertain execution stays with its existing verifier-owner close/recovery path and is not cancellable admission.
+
+
 1. Resolve the currently discovered `iis-workflow` skill only as the canonical planning-authority locator. Follow its current `### To Tickets` route target and require the adjacent `validate_ticket.py`.
 2. Run that validator against the exact absolute Ticket path. Continue only when it returns exact `VALID`.
 3. If the route/validator is unavailable, return `VERIFICATION NOT STARTED: CANONICAL VALIDATOR UNAVAILABLE`. If validation fails, return `VERIFICATION NOT STARTED: CANONICAL TICKET INVALID`. Do not issue AC verdicts or start product/runtime work.
@@ -57,7 +60,7 @@ Before any runtime/product action:
 8. Preserve each flow's exact authored meaning. Do not infer a missing flow, remap ordinals from implementation shape, normalize a legacy flow or strengthen/relax a decision boundary.
 9. Bind the exact current verification target from the validated Ticket plus direct repository/runtime observation: source/config/build/artifact/runtime checkpoint, actual entrypoint or canonical inspection target, acceptance surface and authoritative readback.
 
-Caller-supplied candidate targets and implementation reports are navigation only. For normal `ready` verification, the terminal Heuristic Probe Result plus its exact `Probe Machine Binding` path are a required currentness/admission handoff, but findings remain navigation/counterexample seeds and never establish flow/AC/Ticket verdicts. Structural `VALID` admits schema only; it never establishes semantic correctness, current target availability, runtime evidence or verdicts.
+Caller-supplied candidate targets and implementation reports are navigation only. For normal `ready` verification, the terminal Heuristic Probe Result plus its exact `Probe Machine Binding` path are required provenance inputs. Only the `ready_guard begin_verify` call in §5 admits or rejects raw machine-binding syntax, closure, attribution and currentness; a verifier must not replace that call with visual JSON inspection or prose. Probe findings remain navigation/counterexample seeds and never establish flow/AC/Ticket verdicts. Structural `VALID` admits schema only; it never establishes semantic correctness, current target availability, runtime evidence or verdicts.
 
 Return without AC verdicts when canonical admission, current authority, Ticket-to-parent projection or current target binding cannot be established.
 
@@ -108,30 +111,17 @@ If target drift occurs:
 
 ### Required heuristic probe gate
 
-Normal delivery verification of exact `Status: ready` requires one terminal `READY TICKET HEURISTIC PROBE RESULT` before any verifier-owned product/runtime action.
+Normal delivery verification of exact `Status: ready` requires one terminal `READY TICKET HEURISTIC PROBE RESULT` before any verifier-owned product/runtime action. Its human-readable result must name the same exact canonical Ticket and one exact `Probe Machine Binding` path. A missing result or binding returns `VERIFICATION NOT STARTED: REQUIRED HEURISTIC PROBE RESULT MISSING`; a directly established `PARTIAL` or `BLOCKED` terminal result returns `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`. These returns issue no AC verdicts.
 
-Require all of the following against fresh current authority and target binding:
-
-1. exactly one terminal Probe result names the same exact canonical Ticket and one exact `Probe Machine Binding` path;
-2. human-readable and machine `Probe Completion` are both `COMPLETE`;
-3. the human-readable `Authority Snapshot` remains consistent with the machine Ticket, Parent Spec and applicable Behavior/UI identities, and those identities match current authority;
-4. the machine authored Verification-flow denominator matches the current Ticket;
-5. the machine implementation target matches the exact target the verifier will bind;
-6. every machine-admitted lane is present exactly once with terminal `FINDING | NO_FINDING | EVIDENCE_LIMIT` status;
-7. cleanup is `CLOSED`; and
-8. the machine binding contains no verifier-owned verdict field or verdict value.
-
-When the required result or machine binding is absent, return `VERIFICATION NOT STARTED: REQUIRED HEURISTIC PROBE RESULT MISSING`. When the result/binding is `PARTIAL`, `BLOCKED`, malformed, verdict-contaminated, noncanonical-lane or otherwise non-complete, return `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`. When Ticket, authority, Verification denominator, target or cleanup attribution is stale, return `VERIFICATION NOT STARTED: HEURISTIC PROBE RESULT STALE`. These returns issue no AC verdicts.
-
-`Material Findings: None` is not evidence that any flow is satisfied. A probe finding is a counterexample/navigation seed, not a verifier result, implementation-defect classification or substitute for fresh verifier-owned evidence. A probe result never satisfies an authored `Independent verification required: yes` obligation by itself.
-
-Explicit diagnostic re-verification of an already `done` Ticket is outside this normal delivery gate unless the current user explicitly requests a fresh heuristic probe as part of that diagnostic.
+The result and path are provenance inputs, not a license to visually parse, repair, recreate, or narratively rebind the machine binding. A direct semantic-contract, status/permission, authority/projection, exact-target, or terminal-result contradiction remains a legitimate earlier stop and does not require `begin_verify`; do not route every rejected Ticket through the runtime solely to obtain a Probe reason.
 
 ### Runtime enforcement boundary
 
-After semantic preflight and exact target resolution, but before the first product/runtime action, call Ready runtime `ready_guard begin_verify`. For normal `ready`, pass the exact `probe_binding_path`; for all verification pass the exact canonical Ticket, Project Root, implementation `target_paths`, and only declared generated-output paths that are permitted to change. A stale/malformed/noncanonical Probe is rejected before the verification execution is created. Continue only with a returned `purpose: verify` and bound target digest.
+For normal `ready` verification, after canonical admission, status/permission, semantic preflight, current authority/projection, and exact target resolution all succeed, call `ready_guard begin_verify` before making any machine-handoff syntax, completion, or currentness assertion. Pass the exact canonical Ticket, Project Root, unmodified `probe_binding_path`, exact implementation `target_paths`, and only declared generated-output paths that may change. The existing runtime handoff parser/currentness validation is the machine-admission owner: it parses the actual binding bytes, requires the canonical schema, COMPLETE/closed exact lane denominator, no verifier-owned verdict field/value, and identity/Verification-flow denominator/target equality with current authority.
 
-During that execution, generic source/config/test/planning mutation and `ready_argv mutate` are forbidden. Use guarded read/inspection tools or `ready_argv execute` for structured ordinary runtime argv. The runtime checks the bound Project Root/target before and after guarded observations; detected protected change enters `TARGET_DRIFT` and makes `VERIFIED` unavailable. Do not replace this gate with verifier self-attestation.
+Record the actual `begin_verify` outcome as the causal admission evidence. Its parser, schema, completion, cleanup, lane, or verdict-contamination rejection returns `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`; its actual Ticket, authority, Verification-denominator, or target stale rejection returns `VERIFICATION NOT STARTED: HEURISTIC PROBE RESULT STALE`. Do not call a binding malformed from a visual punctuation guess, and do not let an unstructured claim refresh or substitute for machine identity. After successful machine admission, cross-check the human-readable `Probe Completion` and `Authority Snapshot` against the admitted binding/current authority; a contradiction remains non-admitting and issues no AC verdicts.
+
+Continue only with a returned `purpose: verify` and bound target digest. During that execution, generic source/config/test/planning mutation and `ready_argv mutate` are forbidden. Use guarded read/inspection tools or `ready_argv execute` for structured ordinary runtime argv. The runtime checks the bound Project Root/target before and after guarded observations; detected protected change enters `TARGET_DRIFT` and makes `VERIFIED` unavailable. Do not replace this gate with verifier self-attestation.
 
 ## 6. Integrated scenario ownership
 

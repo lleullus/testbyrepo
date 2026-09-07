@@ -15,7 +15,7 @@ The user's goal, relevant codebase context, and existing domain documentation wh
 
 ## Process
 
-Run `grilling` as the sole owner of the interaction policy. Before its first response, and after a material delta when needed, inspect the minimum sufficient code, documentation, approved authorities, external contracts, and runtime evidence needed to keep the current recommendation contractually coherent. Supply those facts and constraints to `grilling`; do not duplicate its recommendation, gate, approval, delta, or explicit batch-mode rules. Do not turn an inspectable fact or an implementation-owned choice into a user decision. Clarify terminology or architectural decisions within this review when they need attention. Write in the user's conversation language.
+Run `grilling` as the sole owner of the interaction policy. Before its first response, use relevant facts already directly established in the current conversation at their attributable currentness boundary; inspect the minimum sufficient missing or changed code, documentation, approved authorities, external contracts, and runtime evidence. A new leaf is not a new evidence question. Refresh a load-bearing changed anchor, expanded absence-search boundary, mutable state, or external version rather than repeating a broad investigation. Supply facts and constraints to `grilling`; do not duplicate its recommendation, gate, approval, delta, or explicit batch-mode rules. Do not turn an inspectable fact or an implementation-owned choice into a user decision. Clarify terminology or architectural decisions within this review when they need attention. Write in the user's conversation language.
 
 ## Planning boundary
 

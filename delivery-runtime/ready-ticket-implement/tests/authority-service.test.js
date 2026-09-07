@@ -48,7 +48,7 @@ test("authority binding computes its own canonical validator and detects protect
   fs.mkdirSync(path.dirname(workflow), { recursive: true });
   fs.mkdirSync(path.dirname(toTickets), { recursive: true });
 
-  fs.writeFileSync(workflow, `# IIS\n\n### To Tickets\n\nAn explicit request routes to:\n\n${toTickets}\n`);
+  fs.writeFileSync(workflow, `# IIS\n\n### To Tickets\n\nAn explicit request routes to:\n\n\`${toTickets}\`\n`);
   fs.writeFileSync(toTickets, "# To Tickets\n");
   fs.writeFileSync(validator, "import sys\nprint('VALID')\n");
   fs.writeFileSync(path.join(project, "SPEC.md"), "# Spec\n\nStatus: approved\n\n## UI / UX\n\n- ./UI-UX.md | Scope: exact rendered surface\n");
@@ -87,12 +87,15 @@ test("authority binding computes its own canonical validator and detects protect
   });
 
   const binding = await bindAuthority({ projectRoot: project, ticketPath: ticket });
-  assert.equal(binding.ticket_status_at_start, "ready");
-  assert.equal(binding.validator_path, fs.realpathSync(validator));
-  assert.equal(binding.behavior_authorities.length, 1);
-  assert.equal(binding.ui_authority.path, fs.realpathSync(path.join(project, "UI-UX.md")));
-  assert.deepEqual(binding.protected_artifacts.map(item => item.kind), ["ticket", "parent_spec", "behavior", "ui", "validator"]);
   assert.equal((await checkAuthorityCurrentness(binding)).current, true);
+  for (const authority of [workflow, toTickets]) {
+    const original = fs.readFileSync(authority);
+    fs.appendFileSync(authority, "changed authority\n");
+    const changed = await checkAuthorityCurrentness(binding);
+    assert.equal(changed.current, false);
+    assert.equal(changed.changed[0].path, authority);
+    fs.writeFileSync(authority, original);
+  }
 
   fs.appendFileSync(path.join(project, "behavior.md"), "changed\n");
   const drift = await checkAuthorityCurrentness(binding);

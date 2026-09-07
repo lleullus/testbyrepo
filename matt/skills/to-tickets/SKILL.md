@@ -394,19 +394,31 @@ linked by current `Behavior authority ordinals` from at least one of that
 Ticket's Verification flows.
 
 Do not add an unrelated global or preserved Behavior authority merely to make
-the Ticket set appear to cover every Behavior item. Parent-Spec Behavior
-obligations that are not acceptance-owned by one Ticket remain whole-Goal
-obligations and are checked by fresh completion verification. Fix the decomposition or
-reopen the Spec when a Ticket omits an applicable Behavior guardrail or conflicts
-with another Ticket. Do not add rule IDs, persistent projection indexes, trace
-artifacts, or copied Behavior prose; the ordinals are only current positional
-locators inside the authored Ticket.
+the Ticket set appear to cover every Behavior item. Every approved parent-Spec,
+Behavior, or UI obligation that applies to this current Increment must instead
+be acceptance-owned by at least one existing outcome Ticket and represented in
+that Ticket's existing execution-authority/Behavior/UI sections so its authored
+Verification flows and existing Scope/Non-Goals/cross-AC closure can decide the
+obligation. For an integration or preservation obligation spanning Ticket
+effects, place it in the relevant existing Ticket or Tickets—normally the Ticket
+whose change can affect the obligation—so each owning one-exact-Ticket verifier
+can adjudicate its authored boundary with current product/canonical readback. Do
+not invent an umbrella/fake Ticket, whole-Goal verifier, or separate acceptance
+matrix.
+
+Future, candidate, Non-Goal, and unrelated preserved obligations that do not
+apply to this Increment remain outside its Ticket acceptance denominator. If an
+applicable obligation cannot truthfully be owned under the current decomposition,
+fix the decomposition inside this lifecycle. If ownership would require new or
+changed product meaning, return the exact gap to the owning upstream planning
+authority. Do not leave it as ownerless whole-Goal work for Outer Main to judge.
+The ordinals remain only current positional locators inside the authored Ticket.
 
 ## Readiness Rules
 
 Draft the complete Ticket Set first. Self-review is a leaf-local transition guard, not a new artifact lifecycle. Do not create review-progress statuses, receipts, counters, approval records, or workflow state.
 
-Before changing any Ticket to `ready`, review the exact draft Set as a whole and require faithful parent-Spec/Behavior/UI projection, complete parent-outcome coverage, independently deliverable Ticket boundaries without hidden conflicting ownership, and executable verification/readback contracts. Correct local decomposition or serialization defects inside this To Tickets lifecycle and rerun the full review; if correction requires new or changed product meaning, return to the owning upstream planning authority.
+Before changing any Ticket to `ready`, review the exact draft Set as a whole and require faithful parent-Spec/Behavior/UI projection, complete parent-outcome coverage, acceptance ownership for every obligation applicable to this current Increment including affected integration/preservation boundaries, independently deliverable Ticket boundaries without hidden conflicting ownership, and executable verification/readback contracts. Correct local decomposition or serialization defects inside this To Tickets lifecycle and rerun the full review; if correction requires new or changed product meaning, return to the owning upstream planning authority.
 
 If the current user explicitly requires separate user or planning-owner approval of the completed Ticket Set, run the full self-review first and then obtain approval of that exact draft Set. A material Set delta requires fresh self-review and, when this optional gate is active, fresh approval. Explicit approval never overrides a failed readiness guard.
 
@@ -436,11 +448,11 @@ A Ticket may be `ready` only when all of these are true:
 - The Ticket is not merely an anticipated internal preparatory step.
 - Its Goal and Acceptance Criteria do not depend on a provisional technical
   explanation being true.
-- `Goal` is only a non-normative summary; it has no conflict or implementation
-  obligation absent from the execution-authority sections.
-- Every normative Ticket clause has identifiable authority in the approved
-  parent Spec or one of its applicable adopted Behavior/UI authorities.
-- The Ticket does not increase solution specificity beyond the parent Spec.
+- The complete Parent-Spec traceability audit passes, including non-normative
+  `Goal`, identifiable clause authority, and no increased solution specificity.
+- The complete Behavior authority rules pass, including acceptance ownership
+  of every applicable current-Increment obligation and integration/preservation
+  boundary without importing unrelated obligations or deferring ownerless work.
 - When the Ticket scope may require first product/package/application artifacts,
   its Scope, Acceptance Criteria, Non-Goals, and Verification trace the parent
   Spec's initialization scope authority, applicable external decisions, and
@@ -483,7 +495,9 @@ ready and collectively cover every current parent-Spec Verification Expectation.
 Per-Ticket validation still requires every Behavior authority declared by a
 Ticket to match a parent-adopted authority and close to at least one authored
 Verification flow. The set validator does not require unrelated global or
-preserved Behavior authorities to be copied into a Ticket. It is a
+preserved Behavior authorities to be copied into a Ticket and does not replace
+To Tickets' semantic whole-Set review of current applicability, truthful
+acceptance ownership, or integration/preservation coverage. It is a
 planning-closure check, not a runtime state file, execution plan, evidence store,
 or semantic verifier.
 

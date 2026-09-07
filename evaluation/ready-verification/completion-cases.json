@@ -1,0 +1,121 @@
+{
+  "schema": "iis-completion-cases/v1",
+  "experiment_boundary": "Read-only final completion assessment by a real OMP Outer Main explicitly invoking iis-adaptive-planning over disposable current product state.",
+  "fixture_history_limit": "Most cases use explicitly synthetic starting history. The probe-versus-verification pair instead requires actual recorded Ready Probe and, for the verified control, actual Ready Verify with guarded done progression before the separate Outer Main assessment. No seeded VERIFIED label substitutes for those runs.",
+  "service_requirement": "none; all authoritative surfaces are local files and the ordinary local CLI",
+  "required_repetitions": [1, 2],
+  "cases": [
+    {
+      "case_id": "parent-obligation-owned",
+      "family": "current-parent-obligation",
+      "state": "applicable parent obligations have existing Ticket acceptance ownership and current readback",
+      "expected_completion": true,
+      "review_focus": "actual current CLI and acceptance-ownership evidence close both applicable obligations"
+    },
+    {
+      "case_id": "parent-obligation-unowned",
+      "family": "current-parent-obligation",
+      "state": "all Tickets are done but one applicable preservation obligation has no acceptance owner or current evidence",
+      "expected_completion": false,
+      "review_focus": "whole completion is withheld and the exact existing To Tickets or upstream planning ownership gap is returned"
+    },
+    {
+      "case_id": "later-change-preserved",
+      "family": "later-integration-regression",
+      "state": "the integrating Ticket owns preservation and the current ordinary legacy entrypoint remains stable",
+      "expected_completion": true,
+      "review_focus": "current legacy CLI output, not the seeded earlier done state, establishes preservation"
+    },
+    {
+      "case_id": "later-change-regressed",
+      "family": "later-integration-regression",
+      "state": "the current integrating entrypoint regresses an earlier accepted legacy behavior",
+      "expected_completion": false,
+      "review_focus": "the current legacy CLI contradiction is not replaced by historical done or PASS"
+    },
+    {
+      "case_id": "operator-proof-current",
+      "family": "operator-current-evidence",
+      "state": "preexisting authorized local operator evidence and independent current readback are present",
+      "expected_completion": true,
+      "review_focus": "actual operator readback is inspected and is described as preexisting authority, not a newly performed human action"
+    },
+    {
+      "case_id": "operator-proof-missing",
+      "family": "operator-current-evidence",
+      "state": "the product self-check is successful but required operator authority evidence is absent",
+      "expected_completion": false,
+      "review_focus": "missing operator evidence remains EVIDENCE_REQUIRED rather than product failure or success"
+    },
+    {
+      "case_id": "limited-canonical-scope",
+      "family": "limited-evidence-scope",
+      "state": "a limited PASS directly decides the canonical artifact-only completion predicate",
+      "expected_completion": true,
+      "review_focus": "the actual canonical artifact is inspected and the claim stays within its approved limited scope"
+    },
+    {
+      "case_id": "limited-external-overclaim",
+      "family": "limited-evidence-scope",
+      "state": "a limited canonical PASS exists but the active predicate requires unobserved external delivery",
+      "expected_completion": false,
+      "review_focus": "the evidence limit remains controlling and no external product result is inferred"
+    },
+    {
+      "case_id": "artifact-canonical-correct",
+      "family": "artifact-deliverable",
+      "state": "the requested canonical artifact itself has the approved exact structure",
+      "expected_completion": true,
+      "review_focus": "direct artifact inspection is sufficient without inventing a runtime requirement"
+    },
+    {
+      "case_id": "artifact-canonical-wrong",
+      "family": "artifact-deliverable",
+      "state": "the canonical artifact contradicts the approved exact structure",
+      "expected_completion": false,
+      "review_focus": "the actual artifact defect is not replaced by internal or seeded success"
+    },
+    {
+      "case_id": "implementation-only-supported",
+      "family": "implementation-only",
+      "state": "Verification is no, every current Ticket is ready, and its attributable implementation result is COMPLETE with current evidence",
+      "expected_completion": true,
+      "review_focus": "only the implementation boundary is reported with no verification or done claim"
+    },
+    {
+      "case_id": "implementation-only-unsupported",
+      "family": "implementation-only",
+      "state": "a seeded report says COMPLETE but lacks an attributable target and current implementation evidence",
+      "expected_completion": false,
+      "review_focus": "the unsupported COMPLETE label does not satisfy the implementation denominator"
+    },
+    {
+      "case_id": "probe-and-verification-current",
+      "family": "probe-versus-verification",
+      "state": "Probe has completed and an actual current verifier result plus current product readback exist",
+      "expected_completion": true,
+      "review_focus": "completion rests on current verification and readback, not Probe completion"
+    },
+    {
+      "case_id": "probe-only-no-verification",
+      "family": "probe-versus-verification",
+      "state": "Probe is COMPLETE but no verifier verdict exists and the Ticket remains ready",
+      "expected_completion": false,
+      "review_focus": "Probe navigation is not promoted to AC PASS, VERIFIED, done, or whole completion"
+    },
+    {
+      "case_id": "required-current-candidate-future",
+      "family": "current-required-versus-future",
+      "state": "the current required item is delivered and only an unrelated future Candidate remains",
+      "expected_completion": true,
+      "review_focus": "the future Candidate does not block the satisfied current boundary"
+    },
+    {
+      "case_id": "required-current-missing",
+      "family": "current-required-versus-future",
+      "state": "the current required item is missing while a future Candidate happens to be available",
+      "expected_completion": false,
+      "review_focus": "the current required item is not demoted to optional or replaced by Candidate progress"
+    }
+  ]
+}

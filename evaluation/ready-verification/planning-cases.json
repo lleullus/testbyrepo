@@ -1,0 +1,168 @@
+{
+  "cases": [
+    {
+      "case_id": "current-evidence--current",
+      "decisive_readback": "실제 파일/설정, 기존 handoff, 도구 접근 범위와 최종 Scope/Matt 계약. 관측 구현값은 자동 새 정책이 되지 않음.",
+      "entry": "scope",
+      "expected_behavior": "같은 프로젝트/동일 load-bearing 근거가 이미 직접 확인됨. 재조사 없이 Scope/Matt의 서로 다른 결정에 이용.",
+      "family": "current-evidence",
+      "group": 1,
+      "state": "current"
+    },
+    {
+      "case_id": "current-evidence--changed",
+      "decisive_readback": "실제 파일/설정, 기존 handoff, 도구 접근 범위와 최종 Scope/Matt 계약. 관측 구현값은 자동 새 정책이 되지 않음.",
+      "entry": "scope",
+      "expected_behavior": "핵심 anchor/설정만 변경됨. 해당 사실과 영향을 받는 결정은 새 근거로 갱신, 무관한 영역 재조사 금지.",
+      "family": "current-evidence",
+      "group": 1,
+      "state": "changed"
+    },
+    {
+      "case_id": "absence-and-search-universe--stable",
+      "decisive_readback": "등록/진입점 실제 파일과 bounded search 결과. 동일 Git HEAD 여부만으로 현재성 판정 금지.",
+      "entry": "scope",
+      "expected_behavior": "승인된 좁은 검색 경계에 새 등록/진입점 변화 없음. 부재 주장의 범위를 확대하지 않고 재사용.",
+      "family": "absence-and-search-universe",
+      "group": 1,
+      "state": "stable"
+    },
+    {
+      "case_id": "absence-and-search-universe--expanded",
+      "decisive_readback": "등록/진입점 실제 파일과 bounded search 결과. 동일 Git HEAD 여부만으로 현재성 판정 금지.",
+      "entry": "scope",
+      "expected_behavior": "새 등록/대체 진입점 존재. 옛 부재 보고로 capability 없음 판정 금지; 변경된 검색 경계를 직접 확인.",
+      "family": "absence-and-search-universe",
+      "group": 1,
+      "state": "expanded"
+    },
+    {
+      "case_id": "durable-product-boundary--external-outcome",
+      "decisive_readback": "사용자 요청과 실제 현재 baseline, Scope Current/Target/Observable Outcome/Verification Boundary, Spec/Ticket의 대응.",
+      "entry": "scope",
+      "expected_behavior": "요청은 외부 상태 반영과 readback. 응답/helper 납품을 현재 Increment로 위장하지 않음.",
+      "family": "durable-product-boundary",
+      "group": 1,
+      "state": "external-outcome"
+    },
+    {
+      "case_id": "durable-product-boundary--canonical-deliverable",
+      "decisive_readback": "사용자 요청과 실제 현재 baseline, Scope Current/Target/Observable Outcome/Verification Boundary, Spec/Ticket의 대응.",
+      "entry": "scope",
+      "expected_behavior": "요청 자체가 canonical 문서/라이브러리 계약. 무관한 외부 runtime 또는 제품 maturity를 요구하지 않음.",
+      "family": "durable-product-boundary",
+      "group": 1,
+      "state": "canonical-deliverable"
+    },
+    {
+      "case_id": "approved-behavior-reuse--unchanged",
+      "decisive_readback": "기존 authority exact bytes/scope/status와 실제 생성/수정 artifact 및 approval frontier.",
+      "entry": "matt",
+      "expected_behavior": "현재 적용 가능한 approved authority, 행동 의미 변화 없음. 기존 경계 그대로 채택하며 중복 권위와 재승인 없음.",
+      "family": "approved-behavior-reuse",
+      "group": 2,
+      "state": "unchanged"
+    },
+    {
+      "case_id": "approved-behavior-reuse--authority-conflict",
+      "decisive_readback": "기존 authority exact bytes/scope/status와 실제 생성/수정 artifact 및 approval frontier.",
+      "entry": "matt",
+      "expected_behavior": "이름/경로는 같지만 scope 또는 권한/보존 정책 충돌. 과거 승인으로 통과 금지; 실제 delta 및 승인 경계 반환.",
+      "family": "approved-behavior-reuse",
+      "group": 2,
+      "state": "authority-conflict"
+    },
+    {
+      "case_id": "behavior-impact-not-code-size--local-delta",
+      "decisive_readback": "입력 변경의 관측 영향과 기존 canonical authorities; 결과 정책·금지 결과·counterexample의 닫힘.",
+      "entry": "matt",
+      "expected_behavior": "한 bounded context의 확인된 국소 행동 delta. 관련 축만 충분히 분석하고 무관한 승인 권위 유지.",
+      "family": "behavior-impact-not-code-size",
+      "group": 2,
+      "state": "local-delta"
+    },
+    {
+      "case_id": "behavior-impact-not-code-size--cross-lifecycle-delta",
+      "decisive_readback": "입력 변경의 관측 영향과 기존 canonical authorities; 결과 정책·금지 결과·counterexample의 닫힘.",
+      "entry": "matt",
+      "expected_behavior": "코드 변경은 작아도 ownership/권한/전이/다른 capability invariant에 영향. 영향 분석이 넓어지고 누락된 user-owned policy가 노출되어야 함.",
+      "family": "behavior-impact-not-code-size",
+      "group": 2,
+      "state": "cross-lifecycle-delta"
+    },
+    {
+      "case_id": "lifecycle-counterexamples--closed-policy",
+      "decisive_readback": "두 합리적 구현이 낼 수 있는 실제 observable traces와 owner/transition/terminal 결과. 첫 결정 frontier에 필요한 선택이 있어야 함.",
+      "entry": "matt",
+      "expected_behavior": "retry/lost response/expiration/concurrent claim의 허용·금지 결과가 승인 권위로 닫힘. 불필요한 새 제품 선택 없이 투영.",
+      "family": "lifecycle-counterexamples",
+      "group": 2,
+      "state": "closed-policy"
+    },
+    {
+      "case_id": "lifecycle-counterexamples--open-policy",
+      "decisive_readback": "두 합리적 구현이 낼 수 있는 실제 observable traces와 owner/transition/terminal 결과. 첫 결정 frontier에 필요한 선택이 있어야 함.",
+      "entry": "matt",
+      "expected_behavior": "중복 확정, 만료 뒤 late success, 소유권 경합 중 하나의 결과가 실제 미정. 구현 세부로 숨기거나 임의 정책 승인 금지.",
+      "family": "lifecycle-counterexamples",
+      "group": 2,
+      "state": "open-policy"
+    },
+    {
+      "case_id": "projection-external-effect--faithful",
+      "decisive_readback": "현재 user-confirmed 계약, approved Behavior, 실제 초안/최종 Spec/Ticket과 raw leaf 동작. 단순 label match 불충분.",
+      "entry": "spec",
+      "expected_behavior": "확정된 외부 effect 및 authoritative readback을 Spec과 Ticket에 그대로 투영.",
+      "family": "projection-external-effect",
+      "group": 3,
+      "state": "faithful"
+    },
+    {
+      "case_id": "projection-external-effect--weakened-draft",
+      "decisive_readback": "현재 user-confirmed 계약, approved Behavior, 실제 초안/최종 Spec/Ticket과 raw leaf 동작. 단순 label match 불충분.",
+      "entry": "spec",
+      "expected_behavior": "초안은 성공 응답/내부 helper만 검사. self-review가 승인 의미를 유지하며 초안을 고치거나 정확한 upstream gap 반환; 잘못된 ready 금지.",
+      "family": "projection-external-effect",
+      "group": 3,
+      "state": "weakened-draft"
+    },
+    {
+      "case_id": "projection-surface-currentness--observed",
+      "decisive_readback": "승인된 disposable 로컬 상태/서비스의 실제 관측, planning actor가 받은 정확한 evidence limit, outcome-local surface/condition/disposition.",
+      "entry": "spec",
+      "expected_behavior": "필수 surface가 직접 관찰되어 현재 Existing을 정당화. 같은 근거를 불필요한 추가 외부 조건으로 바꾸지 않음.",
+      "family": "projection-surface-currentness",
+      "group": 3,
+      "state": "observed"
+    },
+    {
+      "case_id": "projection-surface-currentness--unknown",
+      "decisive_readback": "승인된 disposable 로컬 상태/서비스의 실제 관측, planning actor가 받은 정확한 evidence limit, outcome-local surface/condition/disposition.",
+      "entry": "spec",
+      "expected_behavior": "같은 필요 surface가 미관찰/접근 불가. 사전조사 Unknown과 External condition 유지; user approval 또는 mock으로 Existing으로 승격 금지.",
+      "family": "projection-surface-currentness",
+      "group": 3,
+      "state": "unknown"
+    },
+    {
+      "case_id": "ticket-set-integration--owned-compatible",
+      "decisive_readback": "현재 Spec outcome/Behavior scopes, 모든 Ticket AC/flow/Scope/Non-Goals, 실제 whole-Set review 및 structural validator 결과.",
+      "entry": "tickets",
+      "expected_behavior": "현재 의무와 후속 변경의 preservation이 기존 Ticket에 소유되고 Scope가 결합 가능. 미래 Candidate/무관 권위 때문에 dummy Ticket 추가 금지.",
+      "family": "ticket-set-integration",
+      "group": 3,
+      "state": "owned-compatible"
+    },
+    {
+      "case_id": "ticket-set-integration--unowned-or-conflicting",
+      "decisive_readback": "현재 Spec outcome/Behavior scopes, 모든 Ticket AC/flow/Scope/Non-Goals, 실제 whole-Set review 및 structural validator 결과.",
+      "entry": "tickets",
+      "expected_behavior": "현재 부모 의무가 ownerless이거나 Ticket Scope/Non-Goals가 함께 요구 결과를 막음. 잘못된 Set ready 금지; 현행 의미 내 재분해 또는 exact upstream 반환.",
+      "family": "ticket-set-integration",
+      "group": 3,
+      "state": "unowned-or-conflicting"
+    }
+  ],
+  "role": "Oracle-only; never place case IDs/expected behavior in actor prompts or product roots",
+  "schema": "iis-planning-cases/v1"
+}

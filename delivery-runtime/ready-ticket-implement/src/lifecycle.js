@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
+import { MAX_OBSERVATION_OUTPUT_BYTES } from "./observation-ledger.js";
 
 function now() {
   return new Date().toISOString();
@@ -7,6 +8,15 @@ function now() {
 
 function sameRequestedPath(left, right) {
   return path.resolve(left) === path.resolve(right);
+}
+
+function hasAdmissionBinding(session) {
+  return Boolean(
+    session?.execution_id
+    || session?.assignment_id
+    || session?.parent_session_id
+    || session?.role,
+  );
 }
 
 function executionFromBinding(binding, fields) {
@@ -53,9 +63,45 @@ export class ReadyLifecycle {
       if (current.execution_id && current.purpose && current.purpose !== purpose) {
         throw new Error(`Ready session is already bound for ${current.purpose}`);
       }
-      const next = { ...current, armed: true, purpose, updated_at: now() };
+      const next = {
+        ...current,
+        armed: true,
+        purpose,
+        admission_token: hasAdmissionBinding(current) ? current.admission_token ?? null : crypto.randomUUID(),
+        updated_at: now(),
+      };
       this.store.writeSession(sessionId, next);
       return next;
+    });
+  }
+
+  captureAdmission(sessionId, purpose = null) {
+    const session = this.store.readSession(sessionId);
+    if (!session?.armed) throw new Error("Ready session is not ARMED; read the owning Skill before begin");
+    if (purpose && session.purpose && session.purpose !== purpose) {
+      throw new Error(`Ready session is armed for ${session.purpose}, not ${purpose}`);
+    }
+    if (hasAdmissionBinding(session)) return null;
+    if (!session.admission_token) throw new Error("Ready session has no current admission identity; read the owning Skill again");
+    return session.admission_token;
+  }
+
+  cancelAdmission(sessionId) {
+    return this.store.withLock(() => {
+      const session = this.store.readSession(sessionId);
+      if (!session?.armed) throw new Error("Ready admission cancellation requires the current session to be ARMED");
+      if (hasAdmissionBinding(session)) {
+        throw new Error("Ready admission cancellation is unavailable after execution, assignment, parent, or worker binding");
+      }
+      const cancelled = {
+        ...session,
+        armed: false,
+        purpose: null,
+        admission_token: null,
+        updated_at: now(),
+      };
+      this.store.writeSession(sessionId, cancelled);
+      return cancelled;
     });
   }
 
@@ -92,10 +138,11 @@ export class ReadyLifecycle {
     });
   }
 
-  async beginDirect({ sessionId, projectRoot, ticketPath, purpose = null }) {
+  async beginDirect({ sessionId, projectRoot, ticketPath, purpose = null, admissionToken = undefined }) {
     const session = this.store.readSession(sessionId);
     if (!session?.armed) throw new Error("Ready session is not ARMED; read the owning Skill before begin");
     const requestedPurpose = purpose ?? session.purpose ?? "implement";
+    const expectedAdmissionToken = admissionToken === undefined ? session.admission_token : admissionToken;
     if (session.purpose && session.purpose !== requestedPurpose) {
       throw new Error(`Ready session is armed for ${session.purpose}, not ${requestedPurpose}`);
     }
@@ -143,6 +190,7 @@ export class ReadyLifecycle {
       allowedStatuses: requestedPurpose === "verify" ? ["ready", "done"] : ["ready"],
     });
     return this.store.withLock(() => {
+      const currentSession = this.#assertAdmissionCurrent(sessionId, requestedPurpose, expectedAdmissionToken);
       const active = this.store.readActiveTicket(binding.project_root, binding.ticket_path);
       if (active) throw new Error(`exact Ticket already has an active Ready execution: ${active.identity}`);
       const state = executionFromBinding(binding, {
@@ -153,7 +201,7 @@ export class ReadyLifecycle {
       });
       this.store.writeExecution(state);
       this.store.writeSession(sessionId, {
-        ...session,
+        ...currentSession,
         armed: true,
         purpose: requestedPurpose,
         role: "worker",
@@ -175,12 +223,14 @@ export class ReadyLifecycle {
     const parent = this.store.readSession(parentSessionId);
     if (!parent?.armed) throw new Error("parent session is not ARMED for Ready work");
     if (parent.role === "worker" || parent.parent_session_id) throw new Error("delegated Ready worker may not issue another implementation assignment");
+    const expectedAdmissionToken = parent.admission_token;
     const binding = await this.bindAuthority({
       projectRoot,
       ticketPath,
       allowedStatuses: (parent.purpose ?? "implement") === "verify" ? ["ready", "done"] : ["ready"],
     });
     return this.store.withLock(() => {
+      const currentParent = this.#assertAdmissionCurrent(parentSessionId, parent.purpose ?? "implement", expectedAdmissionToken);
       const active = this.store.readActiveTicket(binding.project_root, binding.ticket_path);
       if (active) throw new Error(`exact Ticket already has an active Ready execution: ${active.identity}`);
       const assignmentId = crypto.randomUUID();
@@ -189,7 +239,7 @@ export class ReadyLifecycle {
         ticket_path: binding.ticket_path,
         ticket_sha256: binding.ticket_sha256,
         project_root: binding.project_root,
-        purpose: parent.purpose ?? "implement",
+        purpose: currentParent.purpose ?? "implement",
         parent_session_id: parentSessionId,
         expected_child_session_id: null,
         status: "issued",
@@ -200,9 +250,9 @@ export class ReadyLifecycle {
       };
       this.store.writeAssignment(assignment);
       this.store.writeSession(parentSessionId, {
-        ...parent,
+        ...currentParent,
         armed: true,
-        purpose: parent.purpose ?? "implement",
+        purpose: currentParent.purpose ?? "implement",
         role: "parent",
         assignment_id: assignmentId,
         execution_id: null,
@@ -219,9 +269,10 @@ export class ReadyLifecycle {
     });
   }
 
-  async beginDelegated({ childSessionId, assignmentId }) {
+  async beginDelegated({ childSessionId, assignmentId, admissionToken = undefined }) {
     const child = this.store.readSession(childSessionId);
     if (!child?.armed) throw new Error("child session is not ARMED; read the owning Ready Skill before begin_delegated");
+    const expectedAdmissionToken = admissionToken === undefined ? child.admission_token : admissionToken;
     const assignment = this.store.readAssignment(assignmentId);
     if (!assignment) throw new Error(`unknown assignment: ${assignmentId}`);
     if (assignment.status !== "issued") throw new Error(`assignment already consumed or terminal: ${assignmentId}`);
@@ -239,6 +290,7 @@ export class ReadyLifecycle {
 
     return this.store.withLock(() => {
       const currentAssignment = this.store.readAssignment(assignmentId);
+      const currentChild = this.#assertAdmissionCurrent(childSessionId, currentAssignment?.purpose ?? child.purpose ?? "implement", expectedAdmissionToken);
       if (!currentAssignment || currentAssignment.status !== "issued") throw new Error(`assignment already consumed or terminal: ${assignmentId}`);
       const active = this.store.readActiveTicket(binding.project_root, binding.ticket_path);
       if (!active || active.identity !== `assignment:${assignmentId}`) {
@@ -262,7 +314,7 @@ export class ReadyLifecycle {
         updated_at: now(),
       });
       this.store.writeSession(childSessionId, {
-        ...child,
+        ...currentChild,
         armed: true,
         purpose: currentAssignment.purpose ?? "implement",
         role: "worker",
@@ -519,7 +571,7 @@ export class ReadyLifecycle {
   finishOperation(
     executionId,
     toolCallId,
-    { mutationApplied = false, failureClassification = null, failureDetail = null } = {},
+    { mutationApplied = false, commandOutputBytes = null, failureClassification = null, failureDetail = null } = {},
   ) {
     return this.store.withLock(() => {
       const state = this.status(executionId);
@@ -530,6 +582,9 @@ export class ReadyLifecycle {
       if (mutationApplied) {
         state.mutation_revision = Number(state.mutation_revision ?? 0) + 1;
         state.last_failed_mutation = null;
+        if (Number.isSafeInteger(commandOutputBytes) && commandOutputBytes >= 0 && commandOutputBytes <= MAX_OBSERVATION_OUTPUT_BYTES) {
+          state.latest_evidence_revision = state.mutation_revision;
+        }
       } else if (operation.kind === "mutation" && failureClassification) {
         state.last_failed_mutation = {
           mutation_revision: Number(state.mutation_revision ?? 0),
@@ -622,7 +677,7 @@ export class ReadyLifecycle {
     if (state.phase !== "ACTIVE") throw new Error(`Ready execution cannot complete from phase ${state.phase}`);
     if (state.active_operation) throw new Error("Ready execution cannot complete while a guarded operation is active");
     if (Number(state.latest_evidence_revision ?? -1) !== Number(state.mutation_revision ?? 0)) {
-      throw new Error("Ready execution requires successful current-revision self-check evidence before COMPLETE");
+      throw new Error("Ready runtime COMPLETE requires a successful observation in the current mutation revision; this gate does not establish product self-check sufficiency");
     }
     const currentness = await this.checkAuthorityCurrentness(state);
     if (!currentness.current) {
@@ -687,6 +742,20 @@ export class ReadyLifecycle {
     });
   }
 
+  #assertAdmissionCurrent(sessionId, purpose, expectedToken) {
+    const session = this.store.readSession(sessionId);
+    if (
+      !session?.armed
+      || hasAdmissionBinding(session)
+      || !expectedToken
+      || session.admission_token !== expectedToken
+      || (session.purpose && session.purpose !== purpose)
+    ) {
+      throw new Error("Ready admission is no longer current; read the owning Skill again before begin");
+    }
+    return session;
+  }
+
   #deactivateSessions(state) {
     for (const sid of new Set([state.session_id, state.parent_session_id].filter(Boolean))) {
       const session = this.store.readSession(sid);
@@ -697,6 +766,9 @@ export class ReadyLifecycle {
         purpose: null,
         role: null,
         execution_id: null,
+        assignment_id: null,
+        parent_session_id: null,
+        admission_token: null,
         updated_at: now(),
       });
     }

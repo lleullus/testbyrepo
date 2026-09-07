@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 import { installReadyRuntime } from "../src/omp-adapter.js";
+import { checkAuthorityCurrentness } from "../src/authority-binding.js";
+import { MAX_OBSERVATION_OUTPUT_BYTES } from "../src/observation-ledger.js";
 
 function schema() {
   return {
@@ -115,6 +117,220 @@ function initGit(project) {
   }
 }
 
+async function canonicalVerificationFixture(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-canonical-revalidation-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project");
+  const canonical = path.join(root, "canonical");
+  fs.mkdirSync(project);
+  fs.mkdirSync(canonical);
+  const ticket = path.join(project, "TICKET.md");
+  const spec = path.join(project, "SPEC.md");
+  const product = path.join(project, "product.js");
+  const workflow = path.join(canonical, "workflow.md");
+  const toTickets = path.join(canonical, "SKILL.md");
+  const validator = path.join(canonical, "validate_ticket.py");
+  fs.writeFileSync(ticket, "Status: ready\n\n## Verification\n\n- Parent outcome ordinal: 1\n");
+  fs.writeFileSync(spec, "Status: approved\n");
+  fs.writeFileSync(product, "console.log('adjusted');\n");
+  fs.writeFileSync(workflow, `### To Tickets\n\n${toTickets}\n`);
+  fs.writeFileSync(toTickets, "# To Tickets\n");
+  fs.writeFileSync(validator, "import pathlib, sys\ntext = pathlib.Path(sys.argv[1]).read_text()\nprint('VALID' if text.startswith(('Status: ready\\n', 'Status: done\\n')) else 'INVALID')\n");
+  initGit(project);
+  const pi = mockPi();
+  const runtime = installReadyRuntime(pi, {
+    dataRoot: path.join(root, "state"),
+    bindAuthority: async ({ projectRoot, ticketPath }) => ({
+      ...binding(projectRoot, ticketPath),
+      ticket_sha256: hashFile(ticketPath),
+      validator_path: validator,
+      validator_sha256: hashFile(validator),
+      protected_artifacts: [[ticket, "ticket"], [spec, "parent_spec"], [validator, "validator"], [workflow, "workflow"], [toTickets, "to_tickets"]]
+        .map(([file, kind]) => ({ path: file, kind, sha256: hashFile(file) })),
+    }),
+    checkAuthorityCurrentness,
+  });
+  const ctx = context("verify", project);
+  await armVerify(pi, "verify", project);
+  const probe = parseToolResult(await pi.tools.get("ready_probe_binding").execute("probe", {
+    ticket_path: ticket, project_root: project, output_path: path.join(root, "probe.json"), target_paths: [product], lanes: [],
+  }));
+  const guard = pi.tools.get("ready_guard");
+  const begun = parseToolResult(await guard.execute("begin", {
+    action: "begin_verify", ticket_path: ticket, project_root: project, target_paths: [product], probe_binding_path: probe.probe_binding_path,
+  }, null, null, ctx));
+  const argv = pi.tools.get("ready_argv");
+  const inspect = () => argv.execute("revalidate", { action: "inspect", version: 1, commands: [["python3", validator, ticket]] }, null, null, ctx);
+  return { root, project, ticket, spec, product, workflow, toTickets, validator, pi, runtime, ctx, guard, begun, argv, inspect };
+}
+
+test("bound canonical revalidation refreshes exact authority and closes VERIFIED", async t => {
+  const f = await canonicalVerificationFixture(t);
+  const observed = parseToolResult(await f.argv.execute("product", {
+    action: "execute", version: 1, argv: [process.execPath, f.product],
+  }, null, null, f.ctx));
+  assert.equal(observed.stdout, "adjusted\n");
+  for (const inputPath of ["skill://iis-workflow:1-3", `${f.workflow}:raw`, f.toTickets, f.validator, f.ticket, f.ticket, f.spec]) {
+    const gate = await f.pi.emit("tool_call", { toolName: "read", toolCallId: "authority", input: { path: inputPath } }, f.ctx);
+    assert.notEqual(gate?.block, true, gate?.reason);
+    const canonicalPath = gate?.input?.path ?? inputPath;
+    const content = fs.readFileSync(canonicalPath.replace(/:(?:raw|\d+-\d+)$/, ""), "utf8");
+    await f.pi.emit("tool_result", { toolName: "read", toolCallId: "authority", content: [{ type: "text", text: content }], isError: false }, f.ctx);
+  }
+  assert.equal(parseToolResult(await f.inspect()).results[0].stdout, "VALID\n");
+  assert.equal(parseToolResult(await f.inspect()).results[0].stdout, "VALID\n");
+  const finalized = parseToolResult(await f.guard.execute("finalize", {
+    action: "finalize_verification", execution_id: f.begun.execution_id, verdict: "VERIFIED",
+  }, null, null, f.ctx));
+  assert.equal(finalized.ticket_progression, "COMPLETED");
+  assert.match(fs.readFileSync(f.ticket, "utf8"), /^Status: done$/m);
+});
+
+test("rejected overlapping verification readback remains executable after release", async t => {
+  const f = await canonicalVerificationFixture(t);
+  const input = { path: f.product };
+  const gate = await f.pi.emit("tool_call", { toolName: "read", toolCallId: "held-read", input }, f.ctx);
+  assert.notEqual(gate?.block, true);
+  const command = { action: "execute", version: 1, argv: [process.execPath, f.product] };
+  await assert.rejects(f.argv.execute("overlapping-execute", command, null, null, f.ctx));
+  await f.pi.emit("tool_result", {
+    toolName: "read", toolCallId: "held-read", input,
+    content: [{ type: "text", text: fs.readFileSync(f.product, "utf8") }], isError: false,
+  }, f.ctx);
+  const observed = parseToolResult(await f.argv.execute("released-execute", command, null, null, f.ctx));
+  assert.equal(observed.stdout, "adjusted\n");
+});
+
+test("implementation command output permits closure only after a complete successful observation", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-command-observation-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const ticket = path.join(root, "TICKET.md");
+  const product = path.join(root, "product.js");
+  fs.writeFileSync(ticket, "Status: ready\n");
+  fs.writeFileSync(path.join(root, "SPEC.md"), "Status: approved\n");
+  fs.writeFileSync(product, `if (process.argv[2] === 'fail') process.exit(1);\nprocess.stdout.write(process.argv[2] === 'large' ? 'x'.repeat(${MAX_OBSERVATION_OUTPUT_BYTES + 1}) : 'observed\\n');\n`);
+  const pi = mockPi();
+  installReadyRuntime(pi, {
+    dataRoot: path.join(root, "runtime"),
+    bindAuthority: async ({ projectRoot, ticketPath }) => binding(projectRoot, ticketPath),
+    checkAuthorityCurrentness: async () => ({ current: true, changed: [] }),
+  });
+  const ctx = context("command-observation", root);
+  await arm(pi, "command-observation", root);
+  const guard = pi.tools.get("ready_guard");
+  const begun = parseToolResult(await guard.execute("begin", {
+    action: "begin_direct", ticket_path: ticket, project_root: root,
+  }, null, null, ctx));
+  const execute = mode => pi.tools.get("ready_argv").execute(mode, {
+    action: "mutate", version: 1, argv: [process.execPath, product, mode], target_paths: [product],
+  }, null, null, ctx);
+  const complete = () => guard.execute("complete", { action: "complete", execution_id: begun.execution_id }, null, null, ctx);
+  assert.equal(parseToolResult(await execute("fail")).exit_code, 1);
+  await assert.rejects(complete());
+  await execute("large");
+  await assert.rejects(complete());
+  assert.equal(parseToolResult(await execute("normal")).stdout, "observed\n");
+  assert.equal(parseToolResult(await complete()).phase, "COMPLETE");
+});
+
+test("cancelling an applied mutation preserves uncertainty and blocks a different mutation", { timeout: 10_000 }, async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-aborted-mutation-"));
+  const ticket = path.join(root, "TICKET.md");
+  const effects = path.join(root, "effects.txt");
+  const product = path.join(root, "mutation.cjs");
+  const controller = new AbortController();
+  let watcher;
+  let outcome;
+  t.after(async () => {
+    controller.abort();
+    watcher?.close();
+    await outcome;
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  fs.writeFileSync(ticket, "Status: ready\n");
+  fs.writeFileSync(path.join(root, "SPEC.md"), "Status: approved\n");
+  fs.writeFileSync(effects, "");
+  fs.writeFileSync(product, `require('node:fs').appendFileSync(${JSON.stringify(effects)}, 'applied\\n');\nif (process.argv[2] !== 'again') setTimeout(() => {}, 60_000);\n`);
+  const pi = mockPi();
+  installReadyRuntime(pi, {
+    dataRoot: path.join(root, "runtime"),
+    bindAuthority: async ({ projectRoot, ticketPath }) => binding(projectRoot, ticketPath),
+    checkAuthorityCurrentness: async () => ({ current: true, changed: [] }),
+  });
+  const ctx = context("aborted-mutation", root);
+  await arm(pi, "aborted-mutation", root);
+  const guard = pi.tools.get("ready_guard");
+  const begun = parseToolResult(await guard.execute("begin", {
+    action: "begin_direct", ticket_path: ticket, project_root: root,
+  }, null, null, ctx));
+  const applied = new Promise(resolve => {
+    watcher = fs.watch(root, (_event, name) => {
+      if (String(name) === "effects.txt" && fs.readFileSync(effects, "utf8") === "applied\n") resolve();
+    });
+  });
+  outcome = pi.tools.get("ready_argv").execute("interrupted", {
+    action: "mutate", version: 1, argv: [process.execPath, product, "first"], target_paths: [effects],
+  }, controller.signal, null, ctx).then(value => ({ value }), error => ({ error }));
+  await Promise.race([applied, outcome.then(result => { throw result.error ?? new Error("mutation ended before the visible effect"); })]);
+  controller.abort();
+  assert.equal((await outcome).error?.name, "AbortError");
+  const status = parseToolResult(await guard.execute("status", { action: "status", execution_id: begun.execution_id }, null, null, ctx));
+  assert.equal(status.execution.phase, "MUTATION_UNCERTAIN");
+  assert.equal(status.execution.mutation_revision, 0);
+  await assert.rejects(() => pi.tools.get("ready_argv").execute("different-mutation", {
+    action: "mutate", version: 1, argv: [process.execPath, product, "again"], target_paths: [effects],
+  }, null, null, ctx));
+  assert.equal(fs.readFileSync(effects, "utf8"), "applied\n");
+});
+
+test("bound canonical access does not authorize foreign paths, commands, or source refresh", async t => {
+  const f = await canonicalVerificationFixture(t);
+  const foreign = path.join(f.root, "foreign");
+  fs.mkdirSync(foreign);
+  const wrongTicket = path.join(foreign, "OTHER.md");
+  fs.writeFileSync(wrongTicket, "Status: ready\n");
+  const wrongValidator = path.join(foreign, "validate_ticket.py");
+  const sentinel = path.join(f.root, "unauthorized-effect");
+  fs.writeFileSync(wrongValidator, `from pathlib import Path\nPath(${JSON.stringify(sentinel)}).write_text('effect')\n`);
+  for (const command of [["python3", f.validator, wrongTicket], ["python3", wrongValidator, f.ticket], ["python3", f.validator, f.ticket, "--extra"]]) {
+    await assert.rejects(() => f.argv.execute("foreign", { action: "inspect", version: 1, commands: [command] }, null, null, f.ctx), /outside the read-only allowlist/);
+  }
+  assert.equal(fs.existsSync(sentinel), false);
+  await assert.rejects(() => f.argv.execute("external-execute", { action: "execute", version: 1, argv: ["python3", f.validator, f.ticket] }, null, null, f.ctx), /outside Project Root/);
+  for (const inputPath of [foreign, `${f.workflow}/../foreign`, `${f.workflow}:raw/../foreign`, "skill://iis-workflow/../../foreign", "skill://unknown"]) {
+    const gate = await f.pi.emit("tool_call", { toolName: "read", toolCallId: "foreign-read", input: { path: inputPath } }, f.ctx);
+    assert.equal(gate?.block, true);
+  }
+  const mutation = await f.pi.emit("tool_call", { toolName: "write", toolCallId: "write-authority", input: { path: f.workflow, content: "changed" } }, f.ctx);
+  assert.equal(mutation.block, true);
+  await f.pi.emit("tool_call", { toolName: "read", toolCallId: "source", input: { path: f.product } }, f.ctx);
+  await f.pi.emit("tool_result", { toolName: "read", toolCallId: "source", content: [{ type: "text", text: fs.readFileSync(f.product, "utf8") }], isError: false }, f.ctx);
+  const duplicate = await f.pi.emit("tool_call", { toolName: "read", toolCallId: "source-again", input: { path: f.product } }, f.ctx);
+  assert.equal(duplicate.block, true);
+});
+
+test("bound canonical revalidation preserves operation and drift gates", async t => {
+  await t.test("active operation", async st => {
+    const f = await canonicalVerificationFixture(st);
+    await f.pi.emit("tool_call", { toolName: "read", toolCallId: "pending", input: { path: f.product } }, f.ctx);
+    await assert.rejects(f.inspect, /active guarded operation/);
+  });
+  await t.test("target drift", async st => {
+    const f = await canonicalVerificationFixture(st);
+    fs.appendFileSync(f.product, "// drift\n");
+    await assert.rejects(f.inspect, /target drift/);
+    await assert.rejects(() => f.guard.execute("finalize", { action: "finalize_verification", execution_id: f.begun.execution_id, verdict: "VERIFIED" }, null, null, f.ctx));
+    assert.match(fs.readFileSync(f.ticket, "utf8"), /^Status: ready$/m);
+  });
+  await t.test("canonical route drift", async st => {
+    const f = await canonicalVerificationFixture(st);
+    fs.appendFileSync(f.workflow, "changed route\n");
+    await assert.rejects(f.inspect, /authority changed/);
+    await assert.rejects(() => f.guard.execute("finalize", { action: "finalize_verification", execution_id: f.begun.execution_id, verdict: "VERIFIED" }, null, null, f.ctx));
+    assert.match(fs.readFileSync(f.ticket, "utf8"), /^Status: ready$/m);
+  });
+});
+
 test("extension registration defers action methods until the runtime is initialized", async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-omp-load-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -168,6 +384,170 @@ test("plain filesystem inspection of Ready skill files does not arm execution", 
   }, context("verify-execution", root));
   assert.equal(preBeginMutation.block, true);
   assert.match(preBeginMutation.reason, /begin has not bound/);
+});
+
+test("cancel_admission restores same-session planning and a fresh Ready admission remains guarded", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-cancel-admission-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project");
+  const source = path.join(project, "src", "product.txt");
+  const ticket = path.join(project, "TICKET.md");
+  fs.mkdirSync(path.dirname(source), { recursive: true });
+  fs.writeFileSync(source, "current\n");
+  fs.writeFileSync(ticket, "Status: ready\n");
+  fs.writeFileSync(path.join(project, "SPEC.md"), "Status: approved\n");
+  const pi = mockPi();
+  installReadyRuntime(pi, {
+    dataRoot: path.join(root, "state"),
+    bindAuthority: async ({ projectRoot, ticketPath }) => binding(projectRoot, ticketPath),
+    checkAuthorityCurrentness: async () => ({ current: true, changed: [] }),
+  });
+  const ctx = context("planning-recovery", project);
+  const mutation = toolCallId => pi.emit("tool_call", {
+    toolCallId,
+    toolName: "write",
+    input: { path: source, content: "next\n" },
+  }, ctx);
+  const guard = pi.tools.get("ready_guard");
+
+  await arm(pi, "planning-recovery", project);
+  assert.equal((await mutation("premature-write")).block, true);
+  await assert.rejects(
+    guard.execute("foreign-cancel", { action: "cancel_admission", execution_id: "foreign-execution" }, null, null, ctx),
+    /targets only the current session/,
+  );
+  assert.equal((await mutation("still-armed-write")).block, true);
+
+  const cancelled = parseToolResult(await guard.execute("cancel", {
+    action: "cancel_admission", ticket_path: "", project_root: undefined,
+    execution_id: "", assignment_id: "", probe_binding_path: "",
+    target_paths: [], allowed_output_paths: [], verdict: "INCONCLUSIVE", decision: "STOP",
+  }, null, null, ctx));
+  assert.equal(cancelled.session.armed, false);
+  assert.equal(await mutation("planning-write"), undefined);
+
+  await arm(pi, "planning-recovery", project);
+  assert.equal((await mutation("fresh-pre-begin-write")).block, true);
+  const begun = parseToolResult(await guard.execute("begin", {
+    action: "begin_direct",
+    ticket_path: ticket,
+    project_root: project,
+  }, null, null, ctx));
+  assert.equal(begun.phase, "ACTIVE");
+  await assert.rejects(
+    guard.execute("active-cancel", { action: "cancel_admission" }, null, null, ctx),
+    /unavailable after execution, assignment, parent, or worker binding/,
+  );
+  const status = parseToolResult(await guard.execute("status", { action: "status" }, null, null, ctx));
+  assert.equal(status.session.execution_id, begun.execution_id);
+  assert.equal(status.execution.phase, "ACTIVE");
+});
+
+test("cancel and rearm reject a stale begin_verify commit after asynchronous preflight", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-cancel-verify-race-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project");
+  const ticket = path.join(project, "TICKET.md");
+  const product = path.join(project, "product.txt");
+  fs.mkdirSync(project, { recursive: true });
+  fs.writeFileSync(ticket, "Status: done\n");
+  fs.writeFileSync(path.join(project, "SPEC.md"), "Status: approved\n");
+  fs.writeFileSync(product, "stable\n");
+  initGit(project);
+  let signalEntered;
+  let releaseBinding;
+  const bindingEntered = new Promise(resolve => { signalEntered = resolve; });
+  const bindingRelease = new Promise(resolve => { releaseBinding = resolve; });
+  let bindingCalls = 0;
+  const pi = mockPi();
+  installReadyRuntime(pi, {
+    dataRoot: path.join(root, "state"),
+    bindAuthority: async ({ projectRoot, ticketPath }) => {
+      bindingCalls += 1;
+      if (bindingCalls === 1) {
+        signalEntered();
+        await bindingRelease;
+      }
+      return { ...binding(projectRoot, ticketPath), ticket_status_at_start: "done" };
+    },
+    checkAuthorityCurrentness: async () => ({ current: true, changed: [] }),
+  });
+  const ctx = context("verify-race", project);
+  const guard = pi.tools.get("ready_guard");
+  await armVerify(pi, "verify-race", project);
+  const pending = guard.execute("stale-begin", {
+    action: "begin_verify",
+    ticket_path: ticket,
+    project_root: project,
+    target_paths: [product],
+  }, null, null, ctx);
+  await bindingEntered;
+  await guard.execute("cancel", { action: "cancel_admission" }, null, null, ctx);
+  await armVerify(pi, "verify-race", project);
+  releaseBinding();
+  await assert.rejects(pending, /admission is no longer current/);
+  const afterStale = parseToolResult(await guard.execute("after-stale", { action: "status" }, null, null, ctx));
+  assert.equal(afterStale.session.armed, true);
+  assert.equal(afterStale.execution, null);
+
+  const fresh = parseToolResult(await guard.execute("fresh-begin", {
+    action: "begin_verify",
+    ticket_path: ticket,
+    project_root: project,
+    target_paths: [product],
+  }, null, null, ctx));
+  assert.equal(fresh.purpose, "verify");
+  assert.equal(fresh.phase, "ACTIVE");
+});
+
+test("armed admission executes only the discovered canonical validator before binding", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-admission-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const workflow = path.join(root, "workflow", "SKILL.md");
+  const toTickets = path.join(root, "to-tickets", "SKILL.md");
+  const validator = path.join(root, "to-tickets", "validate_ticket.py");
+  const ticket = path.join(root, "TICKET-001.md");
+  const malicious = path.join(root, "validate_ticket.py");
+  const sentinel = path.join(root, "unauthorized-effect");
+  fs.mkdirSync(path.dirname(workflow), { recursive: true });
+  fs.mkdirSync(path.dirname(toTickets), { recursive: true });
+  fs.writeFileSync(workflow, `### To Tickets\n\n\`${toTickets}\`\n`);
+  fs.writeFileSync(toTickets, "# To Tickets\n");
+  fs.writeFileSync(validator, "import pathlib, sys\nprint('VALID' if pathlib.Path(sys.argv[1]).read_text() == 'valid input' else 'INVALID')\n");
+  fs.writeFileSync(ticket, "valid input");
+  fs.writeFileSync(malicious, `from pathlib import Path\nPath(${JSON.stringify(sentinel)}).write_text('effect')\n`);
+  const previous = process.env.IIS_READY_IIS_WORKFLOW_SKILL;
+  process.env.IIS_READY_IIS_WORKFLOW_SKILL = workflow;
+  t.after(() => {
+    if (previous === undefined) delete process.env.IIS_READY_IIS_WORKFLOW_SKILL;
+    else process.env.IIS_READY_IIS_WORKFLOW_SKILL = previous;
+  });
+  const pi = mockPi();
+  installReadyRuntime(pi, { dataRoot: path.join(root, "state") });
+  const ctx = context("admission", root);
+  await armVerify(pi, "admission", root);
+  const tool = pi.tools.get("ready_argv");
+  const result = parseToolResult(await tool.execute("validate", {
+    action: "inspect", version: 1, commands: [["python3", validator, ticket]],
+  }, undefined, undefined, ctx));
+  assert.equal(result.results[0].exit_code, 0);
+  assert.equal(result.results[0].stdout, "VALID\n");
+  fs.writeFileSync(ticket, "invalid input");
+  fs.writeFileSync(workflow, `### To Tickets\n\n${toTickets}\n`);
+  const invalid = parseToolResult(await tool.execute("invalid", {
+    action: "inspect", version: 1, commands: [["python3", "-B", validator, ticket]],
+  }, undefined, undefined, ctx));
+  assert.equal(invalid.results[0].stdout, "INVALID\n");
+  await assert.rejects(() => tool.execute("wrong-script", {
+    action: "inspect", version: 1, commands: [["python3", malicious, ticket]],
+  }, undefined, undefined, ctx), /no bound Ready execution/);
+  await assert.rejects(() => tool.execute("product-execute", {
+    action: "execute", version: 1, argv: ["python3", malicious],
+  }, undefined, undefined, ctx), /no bound Ready execution/);
+  assert.equal(fs.existsSync(sentinel), false);
+  const status = parseToolResult(await pi.tools.get("ready_guard").execute("status", { action: "status" }, undefined, undefined, ctx));
+  assert.equal(status.session.armed, true);
+  assert.equal(status.execution, null);
 });
 
 test("OMP adapter enforces DIRECT runtime gates, exact result attribution, path rewrite, stale evidence, and idle cleanup", async t => {
@@ -243,6 +623,10 @@ test("OMP adapter enforces DIRECT runtime gates, exact result attribution, path 
   const readGate = await pi.emit("tool_call", firstRead, context("main", project));
   assert.equal(readGate.input.path, fs.realpathSync(source));
 
+  const inspectTool = pi.tools.get("ready_argv");
+  const inspectSource = { action: "inspect", version: 1, commands: [["cat", "src/a.txt"]] };
+  await assert.rejects(inspectTool.execute("overlapping-inspect", inspectSource, null, null, context("main", project)));
+
   await pi.emit("tool_result", {
     toolCallId: "read-1",
     toolName: "read",
@@ -260,6 +644,9 @@ test("OMP adapter enforces DIRECT runtime gates, exact result attribution, path 
     isError: false,
   }, context("main", project));
   assert.equal(runtime.lifecycle.status(executionId).active_operation, null);
+
+  const inspected = parseToolResult(await inspectTool.execute("released-inspect", inspectSource, null, null, context("main", project)));
+  assert.equal(inspected.results[0].stdout, "old\n");
 
   const duplicate = await pi.emit("tool_call", { ...firstRead, toolCallId: "read-duplicate" }, context("main", project));
   assert.equal(duplicate.block, true);
@@ -343,7 +730,6 @@ test("OMP adapter enforces DIRECT runtime gates, exact result attribution, path 
 
   await assert.rejects(
     guard.execute("g-complete-stale", { action: "complete", execution_id: executionId }, null, null, context("main", project)),
-    /current-revision self-check evidence/,
   );
 
   const currentRead = await pi.emit("tool_call", {

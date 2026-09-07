@@ -65,10 +65,13 @@ Continuation은 특정 harness API를 제품 계약으로 요구하지 않는다
 
 `ready-ticket-implement`를 읽으면 current session은 runtime에서 ARMED된다. 외부 invocation 입력은 바꾸지 않는다.
 
+Canonical `skill://ready-ticket-implement` invocation is an execution admission and occurs only after one actual current `ready` Ticket is selected for implementation. Planning or documentation review reads this contract through its filesystem reference instead. If the current session was accidentally armed before any execution/assignment/delegation binding, call `ready_guard cancel_admission` without identifiers to disarm only that session and return to planning; after a binding exists, including `ACTIVE` or `MUTATION_UNCERTAIN`, use the existing owner completion, block, or uncertainty-recovery path rather than cancelling admission.
+
 - `DIRECT`: contract preflight 전에 exact Ticket과 Project Root로 `ready_guard begin_direct`를 호출한다.
 - `SUBAGENT`: Outer Main이 `ready_guard assign_subagent`로 exact assignment를 만들고, 지정된 한 worker가 그 `assignment_id`로 `ready_guard begin_delegated`를 호출한다.
 - runtime이 current `iis-workflow`의 To Tickets route와 exact validator, Ticket status, Parent Spec, applicable Behavior/UI Authority, Git/worktree identity를 직접 bind한다. worker가 digest를 제출해 runtime에 신뢰시키지 않는다.
 - runtime은 Project Root confinement, protected authority mutation, observation ledger, broad inventory, mutation revision/current evidence, retry classification, operation lock과 managed local service를 소유한다. DIRECT implementation은 첫 admitted mutation 전에 repository-wide inventory를 최대 한 번 사용할 수 있고 이후에는 bounded read/search만 사용한다. Exact native file read는 같은 mutation revision에서도 현재 file content identity가 바뀐 경우에만 fresh observation으로 다시 실행할 수 있다. 이 내부 state는 product authority나 caller-facing Ready result가 아니다.
+- 내부 `latest_evidence_revision`은 일반 조회를 포함한 성공 observation의 최신 수정 revision이다. 성공한 `ready_argv mutate` 명령의 완전한 출력도 그 명령이 끝난 revision의 관찰로 기록한다. 파일 저장만으로는 관찰이 생기지 않으며 실패·timeout·불완전한 출력은 이 경계를 닫지 않는다. revision 일치나 runtime `COMPLETE`는 제품 의무의 충분성 증명이 아니다. 구현자는 실제 제품 경로의 현재 결과로 기존 Completion self-check를 닫고, runtime에 별도 제품 판정 field를 제출하지 않는다.
 - native Bash가 구조적으로 read-only임을 확인할 수 없으면 자유 shell string을 추측하지 않는다. 필요한 write-capable command는 explicit `ready_argv mutate`의 argv와 target paths로 실행한다.
 - terminal owner는 기존 `IMPLEMENT RESULT`를 내기 전에 runtime을 `complete` 또는 `block`으로 닫는다. runtime debug/state는 기존 result의 새 필수 field가 아니다.
 
@@ -81,11 +84,13 @@ Continuation은 특정 harness API를 제품 계약으로 요구하지 않는다
 3. 각 authored Verification flow의 initial state, trigger, acceptance boundary, expected result, authoritative readback, decision boundary와 disposition을 정리한다.
 4. Scope와 Non-Goals에서 생겨야 하는 것과 생기면 안 되는 것을 분리한다.
 5. Authored independent-verification requirement가 있으면 그 존재와 원문 의미를 기록하고, separate verification authority에 넘길 implementation/self-check evidence를 식별한다. 이 단계에서 충족 여부를 판정하지 않는다.
-6. Repository/runtime에서 현재 behavior, entry point, test surface와 직접 readback을 확인한다.
+6. 현재 제품 진입점부터 필요한 결과까지 경로를 추적해 이번 구현 소유 부분, 이미 존재하는 부분, 외부 소유 부분과 authoritative readback을 구분한다. 뒤늦게 틀리면 뒤따르는 구현을 무효화하는 전제는 그 전제에 의존한 확장 전에 가능한 가장 작은 실제 정상 경로로 확인한다. 확인 순서는 현재 제품 상태와 비용·권한·부작용에 따른다. 아직 없는 소유 경로는 먼저 만들 수 있으며, 모든 작업에 외부 호출을 선행시키지 않는다.
 7. Pre-existing working-tree change가 있으면 이번 Ticket delta와 분리 가능한 baseline을 기록한다.
 8. 첫 source change가 observable product outcome 또는 승인된 invariant와 직접 연결되는지 확인한다.
 
 실질적 authority 충돌이나 canonical source 부재로 faithful implementation direction을 확정할 수 없으면 임의 선택하지 않고 `Completion: BLOCKED`로 종료한다.
+
+자격증명·운영자 동작은 승인된 기존 경로만 사용한다. 필수 외부 조건이 없으면 정확한 미확인 경계와 허용된 다음 행동을 기존 preflight record에 남긴다. 그 조건에 의존하지 않는 안전한 내부 구현은 계속할 수 있지만, Mock·권한 우회·내부 성공으로 미확인을 닫거나 최종 제품 성공을 주장하지 않는다.
 
 ## 4. Implementation handoff report
 

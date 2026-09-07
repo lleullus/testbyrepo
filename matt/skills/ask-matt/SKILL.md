@@ -285,8 +285,10 @@ For these caller-facing admission returns and other exceptional non-continuation
    `grill-with-docs`. Route to `grill-me` when the product root or repository
    context itself is not yet available. Do not classify from words such as
    greenfield, initialize, or bootstrap.
-2. Before the first decision response, perform the selected Grill analysis and
-   complete Existing Authority First, Lead-First Investigation, Behavioral
+2. Before the first decision response, perform the selected Grill analysis on
+   the current directly established factual base, filling only missing or changed
+   load-bearing evidence rather than restarting broad Scope investigation.
+   Complete Existing Authority First, Lead-First Investigation, Behavioral
    Design, and Counterexample Stress Test. When material UI lacks an applicable
    approved authority, also complete Matt's direct UI judgment far enough to
    identify its currently determinable user-owned rendered decisions.

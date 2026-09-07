@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-import { bindAuthority, checkAuthorityCurrentness, isInsideProject } from "./authority-binding.js";
+import { bindAuthority, checkAuthorityCurrentness, isInsideProject, resolveCanonicalValidator } from "./authority-binding.js";
 import {
   MAX_OBSERVATION_OUTPUT_BYTES,
   prepareObservation,
@@ -302,6 +302,37 @@ function validateExplicitTargets(state, targets) {
   return resolved;
 }
 
+function boundAuthorityRead(state, event, cwd) {
+  if (state.purpose !== "verify" || event.toolName !== "read" || typeof event.input?.path !== "string") return null;
+  const raw = event.input.path;
+  const selector = raw.match(/(?::(?:raw|-?\d+(?:[-+]\d*)?(?:,\d+(?:[-+]\d*)?)*))+$/)?.[0] ?? "";
+  const base = selector ? raw.slice(0, -selector.length) : raw;
+  const resolved = resolveToolPath(base, cwd);
+  for (const artifact of state.protected_artifacts ?? []) {
+    const workflow = artifact.kind === "workflow" && /^(?:skill:\/\/iis-workflow)(?:\/SKILL\.md)?$/.test(base);
+    const toTickets = artifact.kind === "to_tickets" && /^(?:skill:\/\/to-tickets)(?:\/SKILL\.md)?$/.test(base);
+    if (resolved === artifact.path || workflow || toTickets) {
+      return { target: artifact.path, input: { ...event.input, path: artifact.path + selector } };
+    }
+  }
+  return null;
+}
+
+function canonicalValidatorInspection(params, cwd, state = null) {
+  if (params.action !== "inspect" || params.version !== 1 || !Array.isArray(params.commands) || params.commands.length !== 1) return null;
+  const argv = params.commands[0];
+  if (!Array.isArray(argv) || argv.some(value => typeof value !== "string" || !value) || argv[0] !== "python3") return null;
+  const scriptIndex = argv[1] === "-B" ? 2 : 1;
+  if (argv.length !== scriptIndex + 2 || path.basename(argv[scriptIndex]) !== "validate_ticket.py") return null;
+  const validator = state ? state.protected_artifacts?.find(artifact => artifact.kind === "validator")?.path : resolveCanonicalValidator().validator;
+  if (!validator || (state && validator !== state.validator_path)) return null;
+  if (fs.realpathSync(path.resolve(cwd, argv[scriptIndex])) !== validator) return null;
+  const ticket = fs.realpathSync(path.resolve(cwd, argv[scriptIndex + 1]));
+  if (!fs.statSync(ticket).isFile()) return null;
+  if (state && ticket !== state.ticket_path) return null;
+  return ["python3", "-B", validator, ticket];
+}
+
 export function installReadyRuntime(pi, options = {}) {
   const store = options.store ?? new RuntimeStore(options.dataRoot);
   const lifecycle = options.lifecycle ?? new ReadyLifecycle({
@@ -416,15 +447,18 @@ export function installReadyRuntime(pi, options = {}) {
       return { block: true, reason: "Ready mutation outcome is uncertain; only exact target readback or terminal BLOCKED is allowed." };
     }
 
-    const authority = await authorityGate(lifecycle, state, event, ctx.cwd);
+    const authorityRead = boundAuthorityRead(state, event, ctx.cwd);
+    const authorityEvent = authorityRead ? { ...event, input: { ...event.input, path: authorityRead.target } } : event;
+    const authority = await authorityGate(lifecycle, state, authorityEvent, ctx.cwd);
     if (!authority.allowed) return { block: true, reason: authority.reason };
     if (authority.reviewRead) {
-      const target = pathFromEvent(event, ctx.cwd);
-      const rewritten = maybeRewritePath(event, target);
+      const target = pathFromEvent(authorityEvent, ctx.cwd);
+      const rewritten = authorityRead?.input ?? maybeRewritePath(event, target);
       return rewritten ? { input: rewritten } : undefined;
     }
 
     const current = lifecycle.status(state.execution_id);
+    if (authorityRead && current.phase !== "ACTIVE") return { block: true, reason: `Ready authority revalidation requires ACTIVE verification; found ${current.phase}.` };
     if (current.purpose === "verify" && effectivePolicy === "mutation") {
       return { block: true, reason: "Ready verification keeps Project Root source/config/tests/planning authority immutable; generic mutation tools are blocked." };
     }
@@ -435,9 +469,9 @@ export function installReadyRuntime(pi, options = {}) {
       return { block: true, reason: `Ready execution already has active guarded operation ${current.active_operation.tool_call_id}.` };
     }
 
-    const target = pathFromEvent(event, ctx.cwd);
+    const target = authorityRead?.target ?? pathFromEvent(event, ctx.cwd);
     if (target) {
-      const confinement = projectConfinementReason(current, target);
+      const confinement = authorityRead ? null : projectConfinementReason(current, target);
       if (confinement) return { block: true, reason: confinement };
       if (effectivePolicy === "mutation") {
         const protectedReason = protectedMutationReason(current, target);
@@ -454,7 +488,7 @@ export function installReadyRuntime(pi, options = {}) {
       const inventory = inventoryAllowedForPhase(current, broad);
       if (!inventory.allowed) return { block: true, reason: inventory.reason };
       const currentnessIdentity = exactFileObservationToken(event.toolName, target);
-      const prepared = prepareObservation(current, event.toolName, normalizedObservationInput, broad, currentnessIdentity);
+      const prepared = prepareObservation(current, event.toolName, authorityRead?.input ?? normalizedObservationInput, broad, currentnessIdentity, authorityRead ? "REFRESH" : "BLOCK");
       if (!prepared.allowed) return { block: true, reason: prepared.reason };
       store.writeExecution(current);
       lifecycle.beginOperation(current.execution_id, {
@@ -487,7 +521,7 @@ export function installReadyRuntime(pi, options = {}) {
       });
     }
 
-    const rewritten = maybeRewritePath(event, target);
+    const rewritten = authorityRead?.input ?? maybeRewritePath(event, target);
     return rewritten ? { input: rewritten } : undefined;
   });
 
@@ -641,7 +675,7 @@ export function installReadyRuntime(pi, options = {}) {
     description: "Bind and advance the internal ready-ticket-implement runtime without changing its external delivery contract.",
     parameters: z.object({
       action: z.enum([
-        "begin_direct", "begin_verify", "assign_subagent", "begin_delegated", "checkpoint_pre_action", "checkpoint_material_turn",
+        "cancel_admission", "begin_direct", "begin_verify", "assign_subagent", "begin_delegated", "checkpoint_pre_action", "checkpoint_material_turn",
         "release_checkpoint", "complete", "finalize_verification", "block", "status",
       ]),
       ticket_path: z.string().optional(),
@@ -660,10 +694,28 @@ export function installReadyRuntime(pi, options = {}) {
       const sid = sessionId(ctx);
       let value;
       switch (params.action) {
+        case "cancel_admission": {
+          if ([params.ticket_path, params.project_root, params.execution_id, params.assignment_id, params.probe_binding_path].some(Boolean)
+            || params.target_paths?.length || params.allowed_output_paths?.length) {
+            throw new Error("cancel_admission accepts no Ticket, execution, assignment, or other identifier; it targets only the current session");
+          }
+          const session = lifecycle.cancelAdmission(sid);
+          return resultText({
+            session: {
+              armed: session.armed,
+              purpose: session.purpose ?? null,
+              role: session.role ?? null,
+              execution_id: session.execution_id ?? null,
+              assignment_id: session.assignment_id ?? null,
+            },
+            execution: null,
+          });
+        }
         case "begin_direct":
           value = await lifecycle.beginDirect({ sessionId: sid, projectRoot: params.project_root, ticketPath: params.ticket_path, purpose: "implement" });
           return resultText(runtimeView(value));
         case "begin_verify": {
+          const admissionToken = lifecycle.captureAdmission(sid, "verify");
           const preflight = await lifecycle.bindAuthority({
             projectRoot: params.project_root,
             ticketPath: params.ticket_path,
@@ -681,7 +733,7 @@ export function installReadyRuntime(pi, options = {}) {
               captureTargetFn: captureVerificationTarget,
             });
           }
-          value = await lifecycle.beginDirect({ sessionId: sid, projectRoot: params.project_root, ticketPath: params.ticket_path, purpose: "verify" });
+          value = await lifecycle.beginDirect({ sessionId: sid, projectRoot: params.project_root, ticketPath: params.ticket_path, purpose: "verify", admissionToken });
           const targetBinding = captureVerificationTarget({
             projectRoot: value.project_root,
             targetPaths: params.target_paths ?? [],
@@ -699,6 +751,7 @@ export function installReadyRuntime(pi, options = {}) {
             status: value.status,
           });
         case "begin_delegated": {
+          const admissionToken = lifecycle.captureAdmission(sid);
           const assignment = store.readAssignment(params.assignment_id);
           if (!assignment) throw new Error(`unknown assignment: ${params.assignment_id}`);
           if ((assignment.purpose ?? "implement") === "verify") {
@@ -720,7 +773,7 @@ export function installReadyRuntime(pi, options = {}) {
               });
             }
           }
-          value = await lifecycle.beginDelegated({ childSessionId: sid, assignmentId: params.assignment_id });
+          value = await lifecycle.beginDelegated({ childSessionId: sid, assignmentId: params.assignment_id, admissionToken });
           if (value.purpose === "verify") {
             const targetBinding = captureVerificationTarget({
               projectRoot: value.project_root,
@@ -831,7 +884,7 @@ export function installReadyRuntime(pi, options = {}) {
   pi.registerTool({
     name: "ready_argv",
     label: "Ready Argv",
-    description: "Run explicit structured argv for Ready inspection, verification execution, or implementation mutation. Shell strings are not accepted.",
+    description: "Run explicit structured argv. inspect uses commands: [[executable, ...args]]; the canonical python3 validate_ticket.py command is allowed for admission and exact bound ACTIVE verification revalidation. execute/mutate use argv. Shell strings are not accepted.",
     parameters: z.object({
       action: z.enum(["inspect", "execute", "mutate"]),
       version: z.literal(1),
@@ -841,6 +894,16 @@ export function installReadyRuntime(pi, options = {}) {
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const sid = sessionId(ctx);
+      const session = lifecycle.sessionState(sid);
+      const admissionArgv = session?.armed && !session.execution_id ? canonicalValidatorInspection(params, ctx.cwd) : null;
+      if (session?.armed && !session.execution_id && admissionArgv) {
+        const result = await runArgv(admissionArgv, { cwd: ctx.cwd, timeoutMs: FINAL_VALIDATOR_TIMEOUT_MS, signal });
+        return resultText({ action: "inspect", phase: "PRE_ADMISSION", results: [{
+          argv: admissionArgv, exit_code: result.exitCode, timed_out: result.timedOut,
+          stdout: result.stdout.slice(0, MAX_OBSERVATION_OUTPUT_BYTES),
+          stderr: result.stderr.slice(0, MAX_OBSERVATION_OUTPUT_BYTES),
+        }] });
+      }
       let state = requireWorkerExecution(lifecycle, sid);
       const authority = await lifecycle.checkAuthorityCurrentness(state);
       if (!authority.current) {
@@ -849,24 +912,32 @@ export function installReadyRuntime(pi, options = {}) {
       }
 
       if (params.action === "inspect") {
-        const request = validateInspectRequest({ version: params.version, commands: params.commands });
+        const canonicalArgv = state.purpose === "verify" ? canonicalValidatorInspection(params, state.project_root, state) : null;
+        if (canonicalArgv) {
+          if (state.active_operation) throw new Error(`Ready execution already has active guarded operation ${state.active_operation.tool_call_id}.`);
+          if (state.phase !== "ACTIVE") throw new Error(`Canonical revalidation requires ACTIVE verification; found ${state.phase}`);
+          const target = verificationTargetGate(lifecycle, state.execution_id);
+          if (!target.current) throw new Error(`Canonical revalidation blocked by target drift: ${target.changed.join(", ")}`);
+        }
+        const request = canonicalArgv ? { commands: [canonicalArgv] } : validateInspectRequest({ version: params.version, commands: params.commands });
         const outputs = [];
         for (const argv of request.commands) {
           state = lifecycle.status(state.execution_id);
+          if (state.active_operation) throw new Error(`Ready execution already has active guarded operation ${state.active_operation.tool_call_id}.`);
           if (["COMPLETE", "BLOCKED", "MUTATION_UNCERTAIN"].includes(state.phase)) throw new Error(`ready_argv inspect is unavailable in phase ${state.phase}`);
-          const confinement = argvConfinementReason(state, argv);
+          const confinement = canonicalArgv ? null : argvConfinementReason(state, argv);
           if (confinement) throw new Error(confinement);
           const broad = isBroadInventory("bash", { argv });
           const inventory = inventoryAllowedForPhase(state, broad);
           if (!inventory.allowed) throw new Error(inventory.reason);
-          const prepared = prepareObservation(state, "ready_argv.inspect", { argv }, broad);
+          const prepared = prepareObservation(state, "ready_argv.inspect", { argv }, broad, null, canonicalArgv ? "REFRESH" : "BLOCK");
           if (!prepared.allowed) throw new Error(prepared.reason);
           store.writeExecution(state);
           const syntheticId = `ready-argv-${crypto.randomUUID()}`;
           lifecycle.beginOperation(state.execution_id, { toolCallId: syntheticId, kind: "observation", observationDigest: prepared.digest });
           let result;
           try {
-            result = await runArgv(argv, { cwd: state.project_root, signal });
+            result = await runArgv(argv, { cwd: state.project_root, signal, timeoutMs: canonicalArgv ? FINAL_VALIDATOR_TIMEOUT_MS : undefined });
           } catch (error) {
             const current = lifecycle.status(state.execution_id);
             recordObservationResult(current, prepared.digest, {
@@ -876,6 +947,7 @@ export function installReadyRuntime(pi, options = {}) {
             });
             store.writeExecution(current);
             lifecycle.finishOperation(state.execution_id, syntheticId, { mutationApplied: false });
+            if (canonicalArgv) verificationTargetGate(lifecycle, state.execution_id);
             throw error;
           }
           const combined = `${result.stdout}${result.stderr}`;
@@ -890,6 +962,15 @@ export function installReadyRuntime(pi, options = {}) {
           });
           store.writeExecution(current);
           lifecycle.finishOperation(state.execution_id, syntheticId, { mutationApplied: false });
+          if (canonicalArgv) {
+            const target = verificationTargetGate(lifecycle, state.execution_id);
+            if (!target.current) throw new Error(`Canonical revalidation detected target drift: ${target.changed.join(", ")}`);
+            const currentAuthority = await lifecycle.checkAuthorityCurrentness(lifecycle.status(state.execution_id));
+            if (!currentAuthority.current) {
+              lifecycle.markAuthorityDrift(state.execution_id, currentAuthority.changed);
+              throw new Error("Ready authority changed during canonical revalidation");
+            }
+          }
           outputs.push({
             argv,
             exit_code: result.exitCode,
@@ -905,6 +986,7 @@ export function installReadyRuntime(pi, options = {}) {
         state = lifecycle.status(state.execution_id);
         if (state.purpose !== "verify") throw new Error("ready_argv execute is reserved for Ready verification");
         if (state.phase !== "ACTIVE") throw new Error(`ready_argv execute requires ACTIVE verification; found ${state.phase}`);
+        if (state.active_operation) throw new Error(`Ready execution already has active guarded operation ${state.active_operation.tool_call_id}.`);
         const beforeTarget = verificationTargetGate(lifecycle, state.execution_id);
         if (!beforeTarget.current) throw new Error(`ready_argv execute blocked by target drift: ${beforeTarget.changed.join(", ")}`);
         const request = validateExecutionRequest({ version: params.version, argv: params.argv });
@@ -978,12 +1060,15 @@ export function installReadyRuntime(pi, options = {}) {
       try {
         result = await runArgv(request.argv, { cwd: state.project_root, signal });
       } catch (error) {
-        const classification = classifyError(error?.message ?? error);
-        if (classification === "TRANSPORT_NETWORK") {
+        const interrupted = signal?.aborted === true;
+        const classification = interrupted ? null : classifyError(error?.message ?? error);
+        if (interrupted || classification === "TRANSPORT_NETWORK") {
           lifecycle.markMutationUncertain(
             state.execution_id,
             syntheticId,
-            "structured mutation argv ended with transport/network uncertainty; automatic replay is forbidden",
+            interrupted
+              ? "structured mutation argv was interrupted after admission; automatic replay is forbidden"
+              : "structured mutation argv ended with transport/network uncertainty; automatic replay is forbidden",
           );
         } else {
           lifecycle.finishOperation(state.execution_id, syntheticId, {
@@ -997,7 +1082,10 @@ export function installReadyRuntime(pi, options = {}) {
       if (result.timedOut) {
         lifecycle.markMutationUncertain(state.execution_id, syntheticId, "structured mutation argv timed out; automatic replay is forbidden");
       } else if (result.exitCode === 0) {
-        lifecycle.finishOperation(state.execution_id, syntheticId, { mutationApplied: true });
+        lifecycle.finishOperation(state.execution_id, syntheticId, {
+          mutationApplied: true,
+          commandOutputBytes: Buffer.byteLength(result.stdout, "utf8") + Buffer.byteLength(result.stderr, "utf8"),
+        });
       } else {
         const classification = classifyError(result.stderr || `exit ${result.exitCode}`);
         if (classification === "TRANSPORT_NETWORK") {

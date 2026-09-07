@@ -166,6 +166,8 @@ Truth is not authority. A verified fact about the repository, runtime, API,
 deployment, or previous implementation does not become a requirement merely
 because it is true. It is normative only when it is already part of the
 confirmed planning baseline or an unavoidable verified external contract.
+User approval authorizes product decisions and explicit constraints; it does
+not make an empirical technical explanation true.
 
 If writing an accurate Spec appears to require a new product requirement,
 boundary, Non-Goal, or externally imposed constraint, stop and obtain explicit
@@ -372,10 +374,6 @@ A feasibility Open Question must name the exact conflicting contract clauses or
 external capability fact. It must not ask which endpoint, request shape,
 interface, algorithm, or implementation approach should be used.
 
-Do not block adoption merely because the exact files, modules, endpoint,
-abstraction, task sequence, or focused test seam are not yet known. Later Ticket
-delivery owns those decisions.
-
 Explicit bootstrap delegation permits private implementation choices only. It
 does not authorize network access, package publication, global installation,
 credential use, external resource creation, or Git metadata changes. An
@@ -459,18 +457,6 @@ approved constraint:
 - an implementation sequence;
 - preparatory or prerequisite work predicted by the planner; or
 - an internal test seam, mock, collaborator, or test-file layout.
-
-Use this replaceability test:
-
-> If a different internal implementation could satisfy every Requirement,
-> Constraint, Non-Goal, and Verification Expectation, the Spec must not reject
-> that implementation.
-
-A factual claim about the current codebase or runtime may be used normatively
-only when it is already part of the confirmed planning baseline or an
-unavoidable verified external contract. User approval authorizes product
-decisions and explicit constraints; it does not make an empirical technical
-explanation true.
 
 Prior Specs, Tickets, tests, and current implementations are not imported as
 normative authority by reference. When the user asks to preserve existing
