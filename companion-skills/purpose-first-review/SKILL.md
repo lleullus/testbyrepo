@@ -125,7 +125,7 @@ Use when no material defect or purpose failure is established. State it plainly.
 
 ### NO PROBLEM — OPTIONAL IMPROVEMENT
 
-Use only when the current change is acceptable and a concrete non-blocking improvement has meaningful benefit greater than its added complexity. Make clear that the improvement is not required.
+If no material defect or purpose failure is established, conclude **NO PROBLEM** and stop. Use **NO PROBLEM — OPTIONAL IMPROVEMENT** only when the user explicitly requests improvement exploration and evidence shows that a concrete non-blocking improvement has meaningful benefit greater than its added complexity; make clear that it is not required. Otherwise, do not append unsolicited suggestions, including conditional suggestions framed as "if I were to change anything" or "if we had to improve it".
 
 ### REQUIRED CHANGE
 
