@@ -1,6 +1,6 @@
 ---
 name: ready-ticket-verify
-description: "Verify one existing IIS Ready Ticket against a stable current implementation target, require a current COMPLETE Ready Ticket heuristic-probe handoff for normal ready verification, semantically check that its authored AC/Verification flow can meaningfully decide the approved product claims, adjudicate every authored Verification flow and AC from fresh verifier-owned evidence, and own the guarded terminal done transition. Execution defaults to DIRECT; SUBAGENT verification is supported only when the current user explicitly selects it for this exact stage and uses mandatory checkpoint continuation."
+description: "Verify one existing IIS Ready Ticket against a stable current implementation target, require a current COMPLETE Ready Ticket heuristic-probe handoff for normal ready verification, semantically check that its authored AC/Verification flow can meaningfully decide the approved product claims, adjudicate every authored Verification flow and AC from fresh verifier-owned evidence, and own the guarded terminal done transition. Top-level execution defaults to SUBAGENT with exactly one checkpointed verifier; use DIRECT only when the current user explicitly selects it for this exact stage."
 ---
 
 # Ready Ticket Verify
@@ -9,7 +9,7 @@ description: "Verify one existing IIS Ready Ticket against a stable current impl
 
 Verify one exact IIS Ready Ticket directly from fresh current product/canonical evidence.
 
-In `DIRECT`, the current Main owns the complete verifier core. In explicit `SUBAGENT`, exactly one delegated verifier owns semantic preflight, the complete authored Verification-flow denominator, scenario authorship, verifier-owned evidence, every flow/AC verdict, cross-AC reconciliation, Scope/Non-Goals verification, the whole-Ticket verdict and guarded `ready -> done` progression. Parent Main owns only bounded checkpoint continuation and terminal fan-in; it does not repeat the verifier core or issue a second verdict.
+In `DIRECT`, the current Main owns the complete verifier core. In `SUBAGENT`, exactly one delegated verifier owns semantic preflight, the complete authored Verification-flow denominator, scenario authorship, verifier-owned evidence, every flow/AC verdict, cross-AC reconciliation, Scope/Non-Goals verification, the whole-Ticket verdict and guarded `ready -> done` progression. Parent Main owns only bounded checkpoint continuation and terminal fan-in; it does not repeat the verifier core or issue a second verdict.
 
 Before work, read [references/verify.md](references/verify.md) in full.
 
@@ -34,9 +34,9 @@ Derive `Status`, `Parent-Spec`, `Project-Root`, `UI`, Acceptance Criteria, Scope
 
 ## Execution topology
 
-Execution defaults to `DIRECT`. `SUBAGENT` is allowed only when the current user explicitly selects it for this exact verification stage.
+Top-level execution defaults to `SUBAGENT`. Use `DIRECT` only when the current user explicitly selects it for this exact verification stage. Do not require a separate SUBAGENT opt-in.
 
-The canonical exact-assignment, single-verifier, checkpoint continuation, capability-failure, and no-fallback contract lives in [references/verify.md#1-direct-first-invocation](references/verify.md#1-direct-first-invocation). Apply that section before verifier work rather than duplicating its execution mechanics here.
+The canonical exact-assignment, single-verifier, checkpoint continuation, capability-failure, and no-fallback contract lives in [references/verify.md#1-subagent-first-invocation](references/verify.md#1-subagent-first-invocation). Apply that section before verifier work rather than duplicating its execution mechanics here.
 `SUBAGENT CAPABILITY UNAVAILABLE` returns through the existing [admission/current-authority provenance schema](references/verify.md#2-admission-and-current-authority).
 
 This entry contract keeps the authority boundary explicit: one verifier owns the complete Ticket verdict cycle, while Parent Main never becomes a second verifier.

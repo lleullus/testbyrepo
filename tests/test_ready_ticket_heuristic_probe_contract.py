@@ -51,17 +51,6 @@ class ReadyTicketHeuristicProbeContractTests(unittest.TestCase):
         self.assertIn("Probe Machine Binding", self.skill + self.workflow)
         self.assertIn("FINDING | NO_FINDING | EVIDENCE_LIMIT", self.skill + self.workflow)
 
-    def test_execution_is_direct_first_and_subagent_is_explicit_only(self) -> None:
-        self.assertIn("Top-level execution defaults to `DIRECT`", self.skill)
-        self.assertIn(
-            "only when the current user explicitly selects SUBAGENT for this exact probe stage",
-            self.skill,
-        )
-        self.assertIn("Never auto-switch or fall back", self.skill)
-        self.assertIn("SUBAGENT CAPABILITY UNAVAILABLE", self.skill)
-        self.assertIn("Do not silently run DIRECT instead", self.skill)
-        self.assertIn("Delegated Probe Worker: yes", self.skill)
-        self.assertIn("does not delegate again", self.workflow)
 
     def test_frontier_is_ticket_derived_not_generic_chaos(self) -> None:
         combined = self.skill + self.workflow

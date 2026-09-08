@@ -5,7 +5,7 @@
 `ready-ticket-implement` keeps its current caller-facing contract:
 
 - inputs: exact Ticket path, Project Root, additional user instructions
-- topology: DIRECT by default; exactly one SUBAGENT only when the current user explicitly selects it for that implementation stage
+- topology: SUBAGENT by default with exactly one implementation worker; DIRECT only when the current user explicitly selects it for that implementation stage
 - checkpoints: SUBAGENT PRE_ACTION before first source mutation and MATERIAL_TURN only for material direction/authority/change-surface/evidence changes
 - terminal result: existing `IMPLEMENT RESULT` fields and `Completion: COMPLETE | BLOCKED | PARTIAL`
 - Ticket status: exact `ready` remains `ready` after implementation
@@ -25,8 +25,6 @@ Direct compatibility surfaces:
 - `iis-adaptive-planning/references/08-delivery-continuation.md`
 - `iis-adaptive-planning/references/09-run-contract.md`
 - `tests/test_delivery_subagent_contract.py`
-- `tests/test_iis_adaptive_planning.py`
-- `tests/test_iis_adaptive_run_contract.py`
 
 Canonical planning locator and validator:
 

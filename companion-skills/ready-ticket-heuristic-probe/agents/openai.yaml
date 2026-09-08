@@ -1,4 +1,4 @@
 interface:
   display_name: "Ready Ticket Heuristic Probe"
   short_description: "Probe one Ready Ticket for hidden failure paths"
-  default_prompt: "Use $ready-ticket-heuristic-probe to probe the exact implemented Ready Ticket before final verification, derive only material Ticket-anchored heuristic lanes, run DIRECT by default, use SUBAGENT only when I explicitly select it for this stage, minimize any discovered trigger, and return evidence without issuing verification verdicts."
+  default_prompt: "Use $ready-ticket-heuristic-probe to probe the exact implemented Ready Ticket before final verification, derive only material Ticket-anchored heuristic lanes, use SUBAGENT by default with Main as Probe Lead and a dynamic set of delegated lane workers, use DIRECT only when I explicitly select it for this stage, never silently fall back between modes, create no workers merely to fill a roster when no distinct lane is admitted, minimize any discovered trigger, and return evidence without issuing verification verdicts."

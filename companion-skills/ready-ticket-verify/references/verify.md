@@ -1,12 +1,13 @@
 # Ready Ticket Verification Workflow
 
-## 1. Direct-first invocation
+## 1. Subagent-first invocation
 
-Execution defaults to `DIRECT`.
+Top-level execution defaults to `SUBAGENT`. Use `DIRECT` only when the current user explicitly selects it for this exact verification stage. Do not require a separate SUBAGENT opt-in.
 
-- `DIRECT`: the current Main owns the complete verifier core for one exact Ticket and current direct behavior remains unchanged.
-- `SUBAGENT`: use only when the current user explicitly selects it for this exact verification stage. Exactly one delegated verifier owns the whole verifier core; do not split ACs/flows, create a verifier roster, run parallel verifiers or delegate again.
-- No automatic topology selection or fallback. Explicit `SUBAGENT` capability failure returns `SUBAGENT CAPABILITY UNAVAILABLE` with no product/runtime/status mutation.
+- `DIRECT`: under that explicit stage override, the current Main owns the complete verifier core for one exact Ticket.
+- `SUBAGENT`: exactly one delegated verifier owns the whole verifier core; do not split ACs/flows, create a verifier roster, run parallel verifiers or delegate again.
+- Apply the default or explicit user override without capability-based topology changes or automatic fallback. Required `SUBAGENT` capability failure returns `SUBAGENT CAPABILITY UNAVAILABLE` with no product/runtime/status mutation.
+- The default applies only to top-level invocations. A worker assigned `Delegated Verifier: yes` performs the verifier core itself and never delegates it again.
 
 Before verification, bind the exact Ticket and optional navigation inputs, carry current Additional User Instructions without silently rewriting authority, and confirm access to the required Project Root/product/canonical surfaces. A `SUBAGENT` assignment includes:
 

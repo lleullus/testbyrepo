@@ -30,16 +30,18 @@ Resolved fields:
 - <field: value>
 
 Decision required: <smallest exact unresolved field>
-Why different answers change the run: <required scope | candidate freedom | delivery stage | continuation authority | completion meaning>
+Why different answers change the run: <required scope | candidate freedom | delivery stage | model/effort selection | continuation authority | completion meaning>
 Options:
 - <option and consequence>
 
 Mutation started: no
-Next action after resolution: close Run Contract and enter <Scope Shaper | Ask Matt | To Spec | To Tickets>
+Next action after resolution: re-evaluate remaining fields; only if all are resolved, close the Run Contract, then request direct approval of the rendered CLOSED contract if its Approval Gate is required, otherwise enter the current owning planning leaf
 STOP
 ```
 
-Do not ask the user to restate settled fields or approve a fully derived form.
+Do not ask the user to restate settled fields. Do not ask approval of a fully derived form unless the current Run Contract Approval Gate is `required`; when it is required, resolving the missing input does not release that separate gate. If other material fields remain unresolved, keep `USER_INPUT_REQUIRED` instead of promising planning entry.
+
+For unresolved delivery models, preserve settled stage choices and present one combined recommendation for only the missing selections, with the guide path/version, workload reason and meaningful alternatives. Ask the user to accept or revise that configuration. Do not describe recommended models as selected, start their dispatch, or turn this input question into a full Run Contract approval gate.
 
 ## Current-Increment planning phase complete
 

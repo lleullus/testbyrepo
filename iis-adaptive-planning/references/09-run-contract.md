@@ -4,14 +4,15 @@
 
 Close the meaning of one explicit Adaptive invocation before planning mutation so that current invocation cannot stop at a smaller result than the user assigned, silently treat required work as disposable, or collapse a mixed required/candidate assignment into one inaccurate list-wide label.
 
-The Run Contract answers six questions:
+The Run Contract answers seven questions:
 
 1. what result this invocation must produce;
 2. which user-named items are required obligations and which are candidate means;
 3. which delivery stages the user authorized for this invocation;
 4. which execution boundary counts as whole-run completion;
-5. what observable evidence proves that boundary is satisfied; and
-6. whether this exact closed contract requires direct user release before the first mutation.
+5. what observable evidence proves that boundary is satisfied;
+6. whether this exact closed contract requires direct user release before the first mutation; and
+7. which user-selected model and effort each enabled SUBAGENT delivery stage will use.
 
 It is a compact invocation contract, not a second Mandate, approval ceremony, workflow database, execution ledger, or roadmap.
 
@@ -20,10 +21,10 @@ It is a compact invocation contract, not a second Mandate, approval ceremony, wo
 Before the first Adaptive planning mutation:
 
 1. inspect the current user instruction, applicable Mandate, canonical planning authority, and inspectable current facts;
-2. normalize them into the form in [../templates/ADAPTIVE-RUN-CONTRACT.template.md](../templates/ADAPTIVE-RUN-CONTRACT.template.md);
+2. normalize them into the form in [../templates/ADAPTIVE-RUN-CONTRACT.template.md](../templates/ADAPTIVE-RUN-CONTRACT.template.md), including the guide-backed delivery model selection below;
 3. set `Run Contract Approval Gate: required` only when the current user uses exact `/승인게이트` as an affirmative directive/modifier on the current explicitly active Adaptive invocation; otherwise set `not_required`. Quoted, explanatory, hypothetical, or negated mentions do not activate the gate, and `/승인게이트` does not activate Adaptive by itself;
-4. mark the form `CLOSED` only when every material field is determined by current authority;
-5. when one or more material fields remain unresolved, mark it `USER_INPUT_REQUIRED` and ask only for the smallest unresolved field whose different answers would change required scope, candidate freedom, delivery stages, success continuation, or completion meaning;
+4. mark the form `CLOSED` only when every material field is determined by current authority and each applicable delivery model selection is user-specified or user-confirmed, not merely recommended;
+5. when one or more material fields remain unresolved, mark it `USER_INPUT_REQUIRED` and ask only for the smallest unresolved field whose different answers would change required scope, candidate freedom, delivery stages, delivery model/effort selection, success continuation, or completion meaning;
 6. when the form is `CLOSED` and `Run Contract Approval Gate: required`, render the exact current form and STOP before mutation until the user directly approves that rendered contract; and
 7. do not begin Scope, Behavior/UI, Spec, Ticket, implementation, or verification mutation until the contract is `CLOSED` and any required Run Contract Approval Gate has been directly satisfied.
 
@@ -102,6 +103,30 @@ Apply exact overrides independently:
 The fields express the outer invocation envelope only. They do not change the exact authority, admission, or result ownership of `ready-ticket-implement`, `ready-ticket-heuristic-probe`, or `ready-ticket-verify`.
 
 Delegated implementation/verification checkpoints and Parent continuation decisions are invocation-local delivery messages only. They do not add a Run Contract field, do not modify `Implementation` or `Verification`, do not activate or satisfy the `/승인게이트` Run Contract Approval Gate, and do not require a template change. Their phase-release authority comes from the already closed Run Contract, current user instructions, and the exact delivery skill contract.
+
+### Delivery Model Selection
+
+Use the repository-level guide at `~/project/iis-skills/model-selection-guide.md` as the single replaceable recommendation source; expand `~` against the current user's home directory, not the working directory or Skill directory. Its initial contents are the user-supplied IIS Model Selection Guide v4.3. Both the repository Skill and its installed copy read this file directly from the repository root; do not bundle a copy or symlink in the Skill payload. Update or replace that file at the same path to change future recommendations; guide-only edits require no Skill synchronization. Do not copy its rankings, prices, named-model defaults or escalation ladders into Skill prompts, templates or code. A current user-supplied alternative guide path overrides this default path for this invocation only. Record the resolved guide path and authored version actually read, without introducing a guide registry or digest gate.
+
+The guide supplies operational recommendations, not product authority, capability proof, model-selection consent, actual per-Ticket cost, or evidence that a model can satisfy an IIS role. Read its applicable role/effort sections and its score-interpretation limits before recommending a configuration. Do not select the highest score or effort automatically.
+
+For each enabled delivery stage, first apply the execution-mode contract. A stage explicitly set to `DIRECT` uses the current Main and needs no child-model question. A disabled stage has no model selection. `Verification: no` excludes both the probe and verifier rows from selection; this table adds no third delivery-stage switch. For `SUBAGENT`, bind the model and effort from an explicit current user instruction or an already user-confirmed selection applicable to this invocation. Reuse an unambiguous instruction covering all delivery stages, and let an exact stage override affect only that stage. Preserve any already specified model or effort when completing a partial choice; ask only for its missing or ambiguous components. Check the exact currently available executable configuration for every selected choice, including fully supplied choices. Do not ask the user to repeat a settled choice.
+
+When a required selection is missing:
+
+1. Inspect the currently available model/agent configurations exposed by the active harness. Resolve guide labels and effort to an exact available configuration; do not invent identifiers, aliases or availability. An exposed host default is not user consent to use it.
+2. Read the current guide and recommend one coherent configuration for the missing stages from the present Goal/constraints: routine versus broad execution/debugging, reasoning/authority ambiguity, failure cost, and any user budget/latency preference. Explain the recommendation with the applicable guide section and the workload fact, plus a meaningful cost/quality alternative when useful. Recommend under current known scope; do not demand future Ticket implementation details merely to choose models.
+3. Show the recommendation separately from selected values. Ask once for all missing selections, allowing acceptance of the recommendation, one model/effort for all applicable stages, or stage-specific choices. Keep settled choices unchanged. Until the user confirms, keep `Status: USER_INPUT_REQUIRED` and include those exact missing model/effort choices in `Unresolved Field` without dropping unrelated unresolved fields; do not start mutation or dispatch the recommendation.
+4. On confirmation, record the selected model/effort and its current user-instruction/confirmation basis, then close the form if all other fields are resolved. Model selection is input resolution, not a new approval gate and not satisfaction of an active `/승인게이트` release. Standing delegated planning confirmation cannot turn a recommendation into model-selection consent.
+
+If the guide is missing or unreadable, say so and request an accessible replacement or direct model choices; do not recommend from a remembered table. If a user-selected model/effort is unavailable or ambiguous, retain that choice as unresolved, explain the exact mismatch and ask for a confirmed available alternative or clarification. Never silently substitute another model, effort or execution mode. A model that is already fully user-specified needs no guide-based recommendation or extra confirmation merely because the guide is unavailable.
+
+The probe row chooses its delegated lane-executor model, not a new Probe Lead: Main remains Lead and worker count remains derived from admitted lanes. One selected configuration covers that stage's lanes unless the user explicitly selects a bounded lane-specific configuration. Only an applicable current owner result establishing zero delegated lanes makes the enabled probe's model `Not applicable`; do not predict this from task simplicity or start early delivery admission to decide it. Otherwise select the stage's model configuration without inventing lanes, workers or a fixed worker count.
+
+Outer Main remains the current main session; a guide recommendation does not switch its model. The guide's Challenger advice never activates adversarial consensus or designates a Challenger. Only when the user separately requests an Outer Main recommendation or explicitly activates the Challenger gate may its relevant guide section inform a recommendation, subject to the existing user-owned model change/designation boundary. Do not add either role to the mandatory delivery-model questions.
+
+Carry confirmed choices across Tickets and re-entry within this invocation. Guide updates, a failed attempt, or a newly attractive ranking do not change them. If a different model/effort would now be appropriate, recommend only the affected revision and obtain user confirmation before dependent dispatch. This does not revise Goal, Scope, delivery-stage authority or the Completion Predicate. Keep these choices in the invocation-local Run Contract and delivery assignments, not canonical Spec/Ticket metadata or a persistent worker roster.
+
 
 ### Run Completion Boundary
 
@@ -190,6 +215,8 @@ Before marking the form `CLOSED`:
 - `CURRENT_INCREMENT_DELIVERED` always defines success as the complete current canonical Ticket denominator plus current closure of every applicable parent obligation through an existing Ticket acceptance owner; it is never one selected Ticket or status aggregation alone;
 - the Authoritative Readback must identify how current attributable evidence will decide each applicable authored acceptance boundary; successful outcome or delivered-boundary assessment requires that evidence, but evidence legitimately created by the planned delivery may remain `Not yet established` at initial Run Contract closure;
 - the Run Completion Boundary must remain within current user authority and the Mandate's Continuation Authority ceiling;
+- each enabled SUBAGENT stage that needs a child configuration has an exact user-specified or user-confirmed model/effort; recommendations and host defaults alone cannot close that field;
+- disabled or explicit DIRECT stages do not require child-model selection, and model/effort choices neither enable a stage nor change its mode;
 - `Run Contract Approval Gate` is `required` only from the affirmative exact invocation modifier above and otherwise is `not_required`; and
 - an active required gate preserves `Status: CLOSED` but forbids mutation until direct user approval of the rendered current form.
 
@@ -251,6 +278,8 @@ Pass only its decision-critical fields to another owner:
 - Run Completion Boundary;
 - Completion Predicate; and
 - Authoritative Readback.
+
+Outer Main also carries the selected Delivery Model Selection and user-confirmation basis to the relevant delivery owner only. Pass that stage's resolved model/effort through its existing assignment path; do not ask planning leaves to select models or write them into canonical artifacts. If current exposed capability cannot execute the selection, return that exact selection/capability issue rather than substituting a guide recommendation.
 
 Approval or confirmation of Scope, an Intent Anchor, Behavior/UI authority, a Spec, a Ticket, or the current Increment is leaf-local and is not by itself an outer Run Contract revision. Goal Outcome, required/candidate classification, Required Item Policy, Implementation, Verification, Run Completion Boundary, and Completion Predicate change only when current user authority actually changes or already clearly determines that outer-run meaning. Natural-language user authority is sufficient; do not require the user to name Run Contract fields explicitly, but do not treat a leaf approval as withdrawal or narrowing of broader authority.
 

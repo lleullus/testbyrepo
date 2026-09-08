@@ -1,6 +1,6 @@
 ---
 name: ready-ticket-heuristic-probe
-description: "Heuristically probe one implemented IIS Ready Ticket before final verification. Use the exact validated Ticket and current implementation target to discover plausible black-box false-completion paths, minimize material triggers, and hand fresh evidence to the separate verifier. Execution defaults to DIRECT; SUBAGENT probing is supported only when the current user explicitly selects it. This skill never issues AC/Ticket verdicts or marks the Ticket done."
+description: "Heuristically probe one implemented IIS Ready Ticket before final verification. Use the exact validated Ticket and current implementation target to discover plausible black-box false-completion paths, minimize material triggers, and hand fresh evidence to the separate verifier. Top-level execution defaults to SUBAGENT with Main as Probe Lead and delegated lane workers; use DIRECT only when the current user explicitly selects it for this stage. This skill never issues AC/Ticket verdicts or marks the Ticket done."
 ---
 
 # Ready Ticket Heuristic Probe
@@ -31,11 +31,11 @@ Derive `Status`, `Parent-Spec`, `Project-Root`, Acceptance Criteria, Scope, Non-
 
 ## Execution topology
 
-Top-level execution defaults to `DIRECT`.
+Top-level execution defaults to `SUBAGENT`. Use `DIRECT` only when the current user explicitly selects it for this exact probe stage. Do not require a separate SUBAGENT opt-in.
 
-- `DIRECT`: current Main acts as Heuristic Probe Lead and performs the admitted probing itself.
-- `SUBAGENT`: only when the current user explicitly selects SUBAGENT for this exact probe stage, Main remains Heuristic Probe Lead and may assign admitted probe lanes to delegated workers.
-- Never infer or change topology from model capability, task difficulty, cost, lane count or worker availability. Never auto-switch or fall back between `DIRECT` and `SUBAGENT`.
+- `DIRECT`: under that explicit stage override, current Main acts as Heuristic Probe Lead and performs the admitted probing itself.
+- `SUBAGENT`: Main remains Heuristic Probe Lead and may assign admitted probe lanes to delegated workers. The default does not introduce a fixed worker count or require workers when no distinct lane is admitted.
+- Apply the default or explicit user override, not model capability, task difficulty, cost, lane count or worker availability. Never auto-switch or fall back between `DIRECT` and `SUBAGENT`.
 
 In `SUBAGENT` mode:
 

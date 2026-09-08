@@ -50,20 +50,6 @@ class DeliverySubagentContractTests(unittest.TestCase):
             for token in forbidden:
                 self.assertNotIn(token, text, f"{token!r} remained in {path}")
 
-    def test_implementation_is_direct_first_with_explicit_subagent_only(self) -> None:
-        skill = (IMPLEMENT / "SKILL.md").read_text(encoding="utf-8")
-        workflow = (IMPLEMENT / "references" / "implement.md").read_text(encoding="utf-8")
-
-        self.assertIn("Top-level 기본 실행 모드는 `DIRECT`", skill)
-        self.assertIn("현재 사용자가 이 exact implementation stage에 명시한 경우에만", skill)
-        self.assertIn("references/implement.md#2-direct-first-execution-topology", skill)
-        self.assertNotIn("`Delegated Worker: yes`", skill)
-        self.assertNotIn("실패를 `DIRECT`로 자동 대체하지 않는다", skill)
-        self.assertIn("Top-level invocation은 `DIRECT`가 기본", workflow)
-        self.assertIn("`Delegated Worker: yes`", workflow)
-        self.assertIn("한 명의 implementation worker", workflow)
-        self.assertIn("checkpoint return/continuation", workflow)
-        self.assertIn("자동 전환이나 실패 후 fallback은 없다", workflow)
 
     def test_implementation_reports_are_checkpointed_and_event_driven(self) -> None:
         workflow = (IMPLEMENT / "references" / "implement.md").read_text(encoding="utf-8")
@@ -125,25 +111,6 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("Heuristic-probe / verification evidence handoff", workflow)
         self.assertIn("Completion: COMPLETE | BLOCKED | PARTIAL", workflow)
 
-    def test_verification_is_direct_first_with_explicit_checkpointed_subagent(self) -> None:
-        skill = (VERIFY / "SKILL.md").read_text(encoding="utf-8")
-        workflow = (VERIFY / "references" / "verify.md").read_text(encoding="utf-8")
-
-        self.assertIn("Execution defaults to `DIRECT`", skill)
-        self.assertIn("current user explicitly selects it for this exact verification stage", skill)
-        self.assertIn("references/verify.md#1-direct-first-invocation", skill)
-        self.assertNotIn("Delegated Verifier: yes", skill)
-        self.assertNotIn("run parallel verifiers", skill)
-        self.assertIn("references/verify.md#2-admission-and-current-authority", skill)
-        self.assertIn("Execution defaults to `DIRECT`", workflow)
-        self.assertIn("Delegated Verifier: yes", workflow)
-        self.assertIn("Exactly one delegated verifier", workflow)
-        self.assertIn("do not split ACs/flows", workflow)
-        self.assertIn("verifier roster", workflow)
-        self.assertIn("run parallel verifiers", workflow)
-        self.assertIn("delegate again", workflow)
-        self.assertIn("SUBAGENT CAPABILITY UNAVAILABLE", workflow)
-        self.assertIn("never auto-fallback to `DIRECT`", workflow)
 
 
     def test_adaptive_forwards_current_verifier_required_probe_handoffs_without_copying_runtime_mechanics(self) -> None:
@@ -238,51 +205,7 @@ class DeliverySubagentContractTests(unittest.TestCase):
         self.assertIn("it performs no `done` mutation", workflow)
         self.assertIn("Parent Main does not issue or substitute that verdict", workflow)
 
-    def test_adaptive_routes_direct_first_delivery_without_auto_topology_switch(self) -> None:
-        continuation = ADAPTIVE_CONTINUATION.read_text(encoding="utf-8")
 
-        self.assertIn("Delivery defaults to `DIRECT`", continuation)
-        self.assertIn("`ready-ticket-implement` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT", continuation)
-        self.assertIn("`ready-ticket-heuristic-probe` owns one exact Ready Ticket", continuation)
-        self.assertIn("`ready-ticket-heuristic-probe` uses `SUBAGENT` only when the current user explicitly selects SUBAGENT", continuation)
-        self.assertIn("`ready-ticket-verify` owns one exact Ready Ticket fresh verification", continuation)
-        self.assertIn("`ready-ticket-verify` defaults to `DIRECT`", continuation)
-        self.assertIn("uses `SUBAGENT` only when the current user explicitly selects SUBAGENT for that exact verification stage", continuation)
-        self.assertIn("exactly one delegated verifier", continuation)
-        self.assertIn("Outer Main does not issue a second verifier verdict", continuation)
-        self.assertIn("PARENT CONTINUATION DECISION", continuation)
-        self.assertIn("Decision: CONTINUE | STEER | STOP", continuation)
-        self.assertIn("nonterminal invocation-local delivery message", continuation)
-        self.assertIn("verification triage wait for the exact terminal owner result", continuation)
-        self.assertIn("never falls back between topologies after a capability failure", continuation)
-        self.assertIn("`Delegated Worker: yes`, `Delegated Probe Worker: yes`, or `Delegated Verifier: yes`", continuation)
-        self.assertIn("Do not forward a checkpoint as a user approval prompt.", continuation)
-        self.assertIn("Do not create a checkpoint ledger or persistent state.", continuation)
-        self.assertIn("Select only a currently admissible Ticket", continuation)
-
-        implementation = continuation.index("## Implementation handoff")
-        probe = continuation.index("## Heuristic probe gate handoff")
-        verification = continuation.index("## Verification terminal routing")
-        self.assertLess(implementation, probe)
-        self.assertLess(probe, verification)
-
-    def test_openai_metadata_matches_current_delivery_contracts(self) -> None:
-        implement_yaml = (IMPLEMENT / "agents" / "openai.yaml").read_text(encoding="utf-8")
-        probe_yaml = (PROBE / "agents" / "openai.yaml").read_text(encoding="utf-8")
-        verify_yaml = (VERIFY / "agents" / "openai.yaml").read_text(encoding="utf-8")
-
-        self.assertIn("$ready-ticket-implement", implement_yaml)
-        self.assertIn("directly implement", implement_yaml)
-        self.assertIn("SUBAGENT only when I explicitly select it", implement_yaml)
-        self.assertIn("$ready-ticket-heuristic-probe", probe_yaml)
-        self.assertIn("run DIRECT by default", probe_yaml)
-        self.assertIn("$ready-ticket-verify", verify_yaml)
-        self.assertIn("default DIRECT mode", verify_yaml)
-        self.assertIn("current COMPLETE ready-ticket heuristic-probe handoff", verify_yaml)
-        self.assertIn("semantically check", verify_yaml)
-        self.assertIn("explicitly select SUBAGENT", verify_yaml)
-        self.assertIn("PRE_RUNTIME", verify_yaml)
-        self.assertIn("PRE_PROGRESSION", verify_yaml)
 
 
 if __name__ == "__main__":

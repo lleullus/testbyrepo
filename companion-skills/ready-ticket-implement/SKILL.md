@@ -1,6 +1,6 @@
 ---
 name: ready-ticket-implement
-description: "Implement one existing IIS Ready Ticket and perform implementer self-check. Use for exact Ready Ticket delivery. Execution defaults to DIRECT; SUBAGENT execution is supported only when the current user explicitly selects it and is mandatory checkpointed execution. This skill never performs or adjudicates the separate verification authority."
+description: "Implement one existing IIS Ready Ticket and perform implementer self-check. Use for exact Ready Ticket delivery. Top-level execution defaults to SUBAGENT with one checkpointed implementation worker; use DIRECT only when the current user explicitly selects it for this stage. This skill never performs or adjudicates the separate verification authority."
 ---
 
 # Ready Ticket Implement
@@ -21,9 +21,9 @@ description: "Implement one existing IIS Ready Ticket and perform implementer se
 
 ## 실행 topology
 
-Top-level 기본 실행 모드는 `DIRECT`다. `SUBAGENT`는 현재 사용자가 이 exact implementation stage에 명시한 경우에만 허용한다.
+Top-level 기본 실행 모드는 `SUBAGENT`다. 현재 사용자가 이 exact implementation stage에 `DIRECT`를 명시한 경우에만 `DIRECT`를 사용한다. 기본 모드 사용을 위한 별도 SUBAGENT 승인을 요구하지 않는다.
 
-Exact assignment, 단일 owner lane, checkpoint continuation, capability failure, no-fallback 규칙의 canonical 상세는 [references/implement.md#2-direct-first-execution-topology](references/implement.md#2-direct-first-execution-topology)에 있다. 실제 작업 전에 그 계약을 적용한다.
+Exact assignment, 단일 owner lane, checkpoint continuation, capability failure, no-fallback 규칙의 canonical 상세는 [references/implement.md#2-subagent-first-execution-topology](references/implement.md#2-subagent-first-execution-topology)에 있다. 실제 작업 전에 그 계약을 적용한다.
 `SUBAGENT CAPABILITY UNAVAILABLE`은 기존 [Non-continuation provenance](references/implement.md#non-continuation-provenance) schema로 반환한다.
 
 이 entry contract가 별도로 유지하는 경계는 implementation worker가 구현과 self-check만 소유하고, separate heuristic-probe 또는 verification authority를 흡수하지 않는다는 점이다.

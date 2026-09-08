@@ -122,6 +122,7 @@ Unless the current Baseline later changes them, do not use standing delegation f
 - activating adversarial planning consensus;
 - selecting/designating the exact Adversarial Planning Challenger;
 - the invocation-local Run Contract Approval Gate explicitly activated by the affirmative `/승인게이트` modifier;
+- accepting an unconfirmed delivery model/effort recommendation or changing an applicable user-selected delivery configuration; the model guide may inform recommendations but cannot supply consent;
 - authority owned by an external operator/credential holder rather than IIS planning;
 - concrete destructive/production/external-effect authorization.
 

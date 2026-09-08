@@ -7,16 +7,17 @@ Bind:
 - exact absolute Ticket path;
 - current user instructions;
 - optional implementation/candidate-target navigation;
-- whether the current user explicitly selected `SUBAGENT` for this exact probe stage.
+- any explicit execution-mode instruction for this exact probe stage.
 
 Execution mode rules:
 
 ```text
-No explicit SUBAGENT selection -> DIRECT
-Explicit SUBAGENT selection    -> SUBAGENT
+No explicit mode selection -> SUBAGENT
+Explicit DIRECT selection -> DIRECT
+Explicit SUBAGENT selection -> SUBAGENT
 ```
 
-Do not infer SUBAGENT from task complexity, expected value, model capability, cost, lane count or available worker capacity. Do not silently convert an unavailable SUBAGENT request into DIRECT, and do not convert a DIRECT failure into SUBAGENT.
+The top-level default requires no separate SUBAGENT opt-in. Apply the default or explicit user override, not task complexity, expected value, model capability, cost, lane count or available worker capacity. If required child capability is unavailable, return `SUBAGENT CAPABILITY UNAVAILABLE`; do not silently run DIRECT instead, and do not convert a DIRECT failure into SUBAGENT. The default applies only to top-level invocations, not delegated lane workers.
 
 A delegated worker receives `Delegated Probe Worker: yes` and performs only its assigned lane. It does not delegate again.
 

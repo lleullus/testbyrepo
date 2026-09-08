@@ -12,9 +12,9 @@
 
 정상 Ticket 상태는 exact `ready`다. `done`이면 재구현하지 않고 현재 terminal marker를 보고한다. `draft` 또는 `blocked`이면 delivery를 시작하지 않는다.
 
-## 2. Direct-first execution topology
+## 2. Subagent-first execution topology
 
-Top-level invocation은 `DIRECT`가 기본이다. 현재 사용자가 이 exact implementation stage에 `SUBAGENT`를 명시한 경우에만 `SUBAGENT`를 사용한다. 모델 capability, 작업 난도, 비용 또는 worker availability만으로 mode를 바꾸지 않으며 `DIRECT`와 `SUBAGENT` 사이의 자동 전환이나 실패 후 fallback은 없다.
+Top-level invocation은 `SUBAGENT`가 기본이다. 현재 사용자가 이 exact implementation stage에 `DIRECT`를 명시한 경우에만 `DIRECT`를 사용하며, 기본 모드 사용을 위한 별도 SUBAGENT 승인을 요구하지 않는다. 모델 capability, 작업 난도, 비용 또는 worker availability만으로 mode를 바꾸지 않으며 `DIRECT`와 `SUBAGENT` 사이의 자동 전환이나 실패 후 fallback은 없다. 이 기본값은 top-level invocation에만 적용한다. `Delegated Worker: yes`를 받은 worker는 이미 할당된 implementation core를 직접 수행하고 다시 위임하지 않는다.
 
 `DIRECT`에서는 현재 Main이 아래 implementation core를 직접 수행하고 다시 위임하지 않는다.
 
