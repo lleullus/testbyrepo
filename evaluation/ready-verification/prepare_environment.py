@@ -70,7 +70,7 @@ def prepare(source: Path, revision: str, arena: Path, models: Path, method: Path
               "enableCodexUser": False, "enableClaudeUser": False, "enableClaudeProject": False,
               "enablePiUser": False, "enablePiProject": False, "enableAgentsUser": False, "enableAgentsProject": False,
               "customDirectories": [str(payload), str(payload / "matt/skills"), str(payload / "companion-skills"), str(payload / "evaluation-methods")]},
-              "tools": {"xdev": False}, "advisor": {"enabled": False}, "autoResume": False,
+              "tools": {"xdev": True}, "advisor": {"enabled": False}, "autoResume": False,
               "providers": {"fallbackChains": {}}, "extensions": []}
     (host / "config.yml").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     os.chmod(host / "config.yml", 0o600)
@@ -78,7 +78,7 @@ def prepare(source: Path, revision: str, arena: Path, models: Path, method: Path
               "arena": str(arena), "payload": str(payload), "agent_dir": str(host),
               "runtime_data": str(arena / "runtime-data"), "workflow": str(payload / "iis-workflow/SKILL.md"),
               "extension": str(payload / "delivery-runtime/ready-ticket-implement/index.js"),
-              "rebased_files": rebased, "tool_exposure": "native; tools.xdev=false",
+              "rebased_files": rebased, "tool_exposure": "Ready essential native plus exact Ready device transport; tools.xdev=true",
               "runtime_source": str(runtime_source) if runtime_source is not None else None, "runtime_overlays": runtime_overlays,
               "verify_skill_source": str(verify_skill_source) if verify_skill_source is not None else None,
               "verify_skill_overlays": verify_skill_overlays,

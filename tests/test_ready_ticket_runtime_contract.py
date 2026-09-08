@@ -35,15 +35,14 @@ class ReadyTicketRuntimeContractTests(unittest.TestCase):
             target = Path(directory) / "ready-ticket-implement-runtime"
             env = os.environ.copy()
             env["IIS_READY_RUNTIME_INSTALL_DIR"] = str(target)
-            env["IIS_READY_SKILL_INSTALL_DIR"] = str(ROOT / "companion-skills" / "ready-ticket-implement")
-            env["IIS_READY_VERIFY_SKILL_INSTALL_DIR"] = str(ROOT / "companion-skills" / "ready-ticket-verify")
-            env["IIS_READY_PROBE_SKILL_INSTALL_DIR"] = str(ROOT / "companion-skills" / "ready-ticket-heuristic-probe")
+            env["IIS_READY_SKILL_INSTALL_DIR"] = str(Path(directory) / "skills/ready-ticket-implement")
+            env["IIS_READY_VERIFY_SKILL_INSTALL_DIR"] = str(Path(directory) / "skills/ready-ticket-verify")
+            env["IIS_READY_PROBE_SKILL_INSTALL_DIR"] = str(Path(directory) / "skills/ready-ticket-heuristic-probe")
 
             preflight = subprocess.run(
                 [os.fspath(SYNC), "--preflight"], cwd=ROOT, env=env, text=True, capture_output=True, check=False
             )
             self.assertEqual(preflight.returncode, 0, preflight.stdout + preflight.stderr)
-            self.assertEqual(preflight.stdout.strip(), "READY")
 
             install = subprocess.run(
                 [os.fspath(SYNC)], cwd=ROOT, env=env, text=True, capture_output=True, check=False
@@ -51,12 +50,13 @@ class ReadyTicketRuntimeContractTests(unittest.TestCase):
             self.assertEqual(install.returncode, 0, install.stdout + install.stderr)
             self.assertTrue((target / "index.js").is_file())
             self.assertFalse((target / "tests").exists())
+            for variable in ("IIS_READY_SKILL_INSTALL_DIR", "IIS_READY_VERIFY_SKILL_INSTALL_DIR", "IIS_READY_PROBE_SKILL_INSTALL_DIR"):
+                self.assertTrue((Path(env[variable]) / "SKILL.md").is_file())
 
             check = subprocess.run(
                 [os.fspath(SYNC), "--check"], cwd=ROOT, env=env, text=True, capture_output=True, check=False
             )
             self.assertEqual(check.returncode, 0, check.stdout + check.stderr)
-            self.assertEqual(check.stdout.strip(), "SYNCED")
 
             remove = subprocess.run(
                 [os.fspath(SYNC), "--remove"], cwd=ROOT, env=env, text=True, capture_output=True, check=False

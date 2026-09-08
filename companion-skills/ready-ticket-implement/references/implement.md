@@ -63,9 +63,9 @@ Continuation은 특정 harness API를 제품 계약으로 요구하지 않는다
 
 ### Ready runtime binding
 
-`ready-ticket-implement`를 읽으면 current session은 runtime에서 ARMED된다. 외부 invocation 입력은 바꾸지 않는다.
+Skill 조회는 설명만 반환하며 실행 상태를 만들지 않는다. 외부 invocation 입력은 바꾸지 않고, exact Ticket을 받은 명시적 `begin_direct | assign_subagent | begin_delegated` 요청만 admission을 시작한다.
 
-Canonical `skill://ready-ticket-implement` invocation is an execution admission and occurs only after one actual current `ready` Ticket is selected for implementation. Planning or documentation review reads this contract through its filesystem reference instead. If the current session was accidentally armed before any execution/assignment/delegation binding, call `ready_guard cancel_admission` without identifiers to disarm only that session and return to planning; after a binding exists, including `ACTIVE` or `MUTATION_UNCERTAIN`, use the existing owner completion, block, or uncertainty-recovery path rather than cancelling admission.
+Canonical `skill://ready-ticket-implement`와 filesystem reference 모두 planning/review 중 안전하게 읽을 수 있다. runtime은 authority 검증 뒤에만 execution/assignment를 저장하고, 실패한 unbound admission은 자동 해제한다. `cancel_admission`은 아직 진행 중인 unbound admission만 취소한다. 이미 bound된 `ACTIVE | MUTATION_UNCERTAIN` 실행은 기존 owner completion/block/recovery 경로로 닫으며 admission 취소로 지우지 않는다.
 
 - `DIRECT`: contract preflight 전에 exact Ticket과 Project Root로 `ready_guard begin_direct`를 호출한다.
 - `SUBAGENT`: Outer Main이 `ready_guard assign_subagent`로 exact assignment를 만들고, 지정된 한 worker가 그 `assignment_id`로 `ready_guard begin_delegated`를 호출한다.
@@ -74,6 +74,8 @@ Canonical `skill://ready-ticket-implement` invocation is an execution admission 
 - 내부 `latest_evidence_revision`은 일반 조회를 포함한 성공 observation의 최신 수정 revision이다. 성공한 `ready_argv mutate` 명령의 완전한 출력도 그 명령이 끝난 revision의 관찰로 기록한다. 파일 저장만으로는 관찰이 생기지 않으며 실패·timeout·불완전한 출력은 이 경계를 닫지 않는다. revision 일치나 runtime `COMPLETE`는 제품 의무의 충분성 증명이 아니다. 구현자는 실제 제품 경로의 현재 결과로 기존 Completion self-check를 닫고, runtime에 별도 제품 판정 field를 제출하지 않는다.
 - native Bash가 구조적으로 read-only임을 확인할 수 없으면 자유 shell string을 추측하지 않는다. 필요한 write-capable command는 explicit `ready_argv mutate`의 argv와 target paths로 실행한다.
 - terminal owner는 기존 `IMPLEMENT RESULT`를 내기 전에 runtime을 `complete` 또는 `block`으로 닫는다. runtime debug/state는 기존 result의 새 필수 field가 아니다.
+- 부분 변경 뒤 실패한 명령/편집도 실제 target 변화가 있으면 mutation revision을 올리고 이전 증거로 완료하지 못하게 한다. 불확실한 변경은 새 변경 전에 exact target readback 또는 owner의 `ready_guard resolve_mutation`으로 runtime이 저장한 before identity와 현재 target을 비교한다. owner가 임의 outcome을 제출하지 않으며, 결과가 불명확하면 `MUTATION_UNCERTAIN`을 유지한다.
+- 같은 worker의 live continuation은 기존 checkpoint를 유지한다. worker를 교체할 때는 이전 worker가 작업·service를 멈추고 `suspend_worker`를 호출한 뒤 terminal handoff를 반환한다. Parent는 이전 worker가 실제 inactive임을 확인하고 `replace_worker`로 one-use assignment를 발행한다. 새 worker의 `begin_delegated`는 기존 execution/evidence provenance를 유지하되 authority/working-tree identity를 재검사하고 새 `PRE_ACTION` 및 Parent release를 요구한다. 새 child 생성 자체는 skill/module registry refresh가 아니다.
 
 ## 3. Contract preflight
 

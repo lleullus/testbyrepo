@@ -138,7 +138,7 @@ test("managed service is execution-owned and mutation uncertainty is explicit ra
     () => lifecycle.beginOperation(execution.execution_id, { toolCallId: "mut-1-retry", kind: "mutation" }),
     /not runnable/,
   );
-  lifecycle.resolveMutationUncertainty(execution.execution_id, "not_applied");
+  lifecycle.resolveMutationUncertainty(execution.execution_id, "main", "not_applied");
   assert.equal(lifecycle.status(execution.execution_id).mutation_revision, 0);
   assert.equal(lifecycle.status(execution.execution_id).phase, "ACTIVE");
 });

@@ -6,10 +6,15 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { installReadyRuntime } from "../src/omp-adapter.js";
+import { installReadyRuntime as installRuntime } from "../src/omp-adapter.js";
 import { checkAuthorityCurrentness } from "../src/authority-binding.js";
 import { MAX_OBSERVATION_OUTPUT_BYTES } from "../src/observation-ledger.js";
 
+function installReadyRuntime(pi, options) {
+  const runtime = installRuntime(pi, options);
+  pi.runtime = runtime;
+  return runtime;
+}
 function schema() {
   return {
     optional() { return this; },
@@ -86,20 +91,12 @@ function binding(projectRoot, ticketPath) {
   };
 }
 
-async function arm(pi, sid, cwd) {
-  await pi.emit("tool_call", {
-    toolCallId: `skill-${sid}`,
-    toolName: "read",
-    input: { path: "skill://ready-ticket-implement" },
-  }, context(sid, cwd));
+async function arm(pi, sid) {
+  pi.runtime.lifecycle.armSession(sid, "implement");
 }
 
-async function armVerify(pi, sid, cwd) {
-  await pi.emit("tool_call", {
-    toolCallId: `verify-skill-${sid}`,
-    toolName: "read",
-    input: { path: "skill://ready-ticket-verify" },
-  }, context(sid, cwd));
+async function armVerify(pi, sid) {
+  pi.runtime.lifecycle.armSession(sid, "verify");
 }
 
 function hashFile(file) {
@@ -281,6 +278,12 @@ test("cancelling an applied mutation preserves uncertainty and blocks a differen
     action: "mutate", version: 1, argv: [process.execPath, product, "again"], target_paths: [effects],
   }, null, null, ctx));
   assert.equal(fs.readFileSync(effects, "utf8"), "applied\n");
+  await assert.rejects(guard.execute("foreign-recovery", { action: "resolve_mutation", execution_id: begun.execution_id }, null, null, context("foreign", root)));
+  const recovered = parseToolResult(await guard.execute("owner-recovery", { action: "resolve_mutation", execution_id: begun.execution_id }, null, null, ctx));
+  assert.equal(recovered.phase, "ACTIVE");
+  assert.equal(recovered.mutation_revision, 1);
+  assert.equal(recovered.latest_evidence_revision, -1);
+  await assert.rejects(guard.execute("stale-complete", { action: "complete", execution_id: begun.execution_id }, null, null, ctx));
 });
 
 test("bound canonical access does not authorize foreign paths, commands, or source refresh", async t => {
@@ -1276,6 +1279,7 @@ test("delegated verification binds its target before PRE_ACTION and waits for Pa
   const argv = pi.tools.get("ready_argv");
   const assignment = parseToolResult(await guard.execute("verify-assign", {
     action: "assign_subagent",
+    purpose: "verify",
     ticket_path: ticket,
     project_root: project,
   }, null, null, context("parent", project)));
@@ -1461,7 +1465,7 @@ async function finalizationRaceFixture(t, {
   return { pi, runtime, ctx, guard, begun, ticket };
 }
 
-test("verification finalization cancels before Ticket progression when session recovery clears the reservation during authority wait", async t => {
+test("live verification finalization survives refresh but shutdown cancels progression", async t => {
   for (const eventName of ["session_shutdown", "session_switch", "session_branch", "session_start"]) {
     await t.test(eventName, async st => {
       let enteredAuthority;
@@ -1489,10 +1493,16 @@ test("verification finalization cancels before Ticket progression when session r
       releaseAuthority();
       const result = await finalizing;
 
-      assert.equal(result.ok, false);
-      assert.match(result.error, /finalization reservation is not active/);
-      assert.match(fs.readFileSync(fixture.ticket, "utf8"), /^Status: ready$/m);
-      assert.equal(fixture.runtime.lifecycle.status(fixture.begun.execution_id).phase, "ACTIVE");
+      if (eventName === "session_shutdown") {
+        assert.equal(result.ok, false);
+        assert.match(result.error, /finalization reservation is not active/);
+        assert.match(fs.readFileSync(fixture.ticket, "utf8"), /^Status: ready$/m);
+        assert.equal(fixture.runtime.lifecycle.status(fixture.begun.execution_id).phase, "ACTIVE");
+      } else {
+        assert.equal(result.ok, true, result.error);
+        assert.match(fs.readFileSync(fixture.ticket, "utf8"), /^Status: done$/m);
+        assert.equal(fixture.runtime.lifecycle.status(fixture.begun.execution_id).phase, "COMPLETE");
+      }
     });
   }
 });
@@ -1525,4 +1535,143 @@ test("verification finalization closes before session shutdown can interleave af
   assert.equal(finalized.ticket_status_after, "done");
   assert.match(fs.readFileSync(fixture.ticket, "utf8"), /^Status: done$/m);
   assert.equal(fixture.runtime.lifecycle.status(fixture.begun.execution_id).phase, "COMPLETE");
+});
+
+async function implementationFixture(t, mode = "DIRECT") {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-boundary-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project");
+  fs.mkdirSync(project);
+  const ticket = path.join(project, "TICKET.md");
+  const product = path.join(project, "product.txt");
+  fs.writeFileSync(ticket, "Status: ready\n");
+  fs.writeFileSync(path.join(project, "SPEC.md"), "Status: approved\n");
+  fs.writeFileSync(product, "before\n");
+  initGit(project);
+  const pi = mockPi();
+  const runtime = installReadyRuntime(pi, {
+    dataRoot: path.join(root, "state"),
+    bindAuthority: async ({ projectRoot, ticketPath }) => binding(projectRoot, ticketPath),
+    checkAuthorityCurrentness: async () => ({ current: true, changed: [] }),
+  });
+  const guard = pi.tools.get("ready_guard");
+  const ctx = context("worker", project);
+  const parent = context("parent", project);
+  let begun;
+  if (mode === "DIRECT") begun = parseToolResult(await guard.execute("begin", { action: "begin_direct", project_root: project, ticket_path: ticket }, null, null, ctx));
+  else {
+    const assignment = parseToolResult(await guard.execute("assign", { action: "assign_subagent", project_root: project, ticket_path: ticket }, null, null, parent));
+    begun = parseToolResult(await guard.execute("begin-child", { action: "begin_delegated", assignment_id: assignment.assignment_id }, null, null, ctx));
+    await guard.execute("checkpoint", { action: "checkpoint_pre_action", execution_id: begun.execution_id }, null, null, ctx);
+    await guard.execute("continue", { action: "release_checkpoint", execution_id: begun.execution_id, decision: "CONTINUE" }, null, null, parent);
+  }
+  return { root, project, ticket, product, pi, runtime, guard, ctx, parent, begun };
+}
+
+test("canonical skill reads do not arm and owned device transport reaches explicit admission", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iis-ready-read-admission-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const pi = mockPi();
+  const runtime = installReadyRuntime(pi, { dataRoot: path.join(root, "state"), bindAuthority: async () => { throw new Error("invalid authority"); } });
+  const ctx = context("reader", root);
+  for (const purpose of ["implement", "verify"]) {
+    await pi.emit("tool_call", { toolName: "read", toolCallId: purpose, input: { path: `skill://ready-ticket-${purpose}` } }, ctx);
+    assert.equal(runtime.lifecycle.sessionState("reader"), null);
+  }
+  const guard = pi.tools.get("ready_guard");
+  const params = { action: "begin_direct", project_root: root, ticket_path: path.join(root, "missing") };
+  assert.notEqual((await pi.emit("tool_call", { toolName: "write", toolCallId: "outer", input: { path: "xd://ready_guard", content: JSON.stringify(params) } }, ctx))?.block, true);
+  await assert.rejects(guard.execute("inner", params, null, null, ctx), /invalid authority/);
+  assert.equal(runtime.lifecycle.sessionState("reader").armed, false);
+  assert.equal(runtime.lifecycle.sessionState("reader").execution_id ?? null, null);
+  assert.notEqual((await pi.emit("tool_call", { toolName: "write", toolCallId: "planning", input: { path: path.join(root, "planning.txt"), content: "allowed" } }, ctx))?.block, true);
+});
+
+test("partial command and native edit failure invalidate old evidence and preserve protected boundaries", async t => {
+  const f = await implementationFixture(t);
+  const id = f.begun.execution_id;
+  f.runtime.lifecycle.noteCurrentEvidence(id, 0);
+  const program = path.join(f.project, "partial.cjs");
+  fs.writeFileSync(program, `require('node:fs').writeFileSync(${JSON.stringify(f.product)}, 'partial\\n'); process.exit(1);`);
+  const result = parseToolResult(await f.pi.tools.get("ready_argv").execute("partial", { action: "mutate", version: 1, argv: [process.execPath, program], target_paths: [f.product] }, null, null, f.ctx));
+  assert.equal(result.exit_code, 1);
+  assert.equal(result.execution.mutation_revision, 1);
+  await assert.rejects(f.guard.execute("complete", { action: "complete", execution_id: id }, null, null, f.ctx));
+  const protectedEdit = { toolName: "edit", toolCallId: "authority-edit", input: { input: `[${f.ticket}#ABCD]\nPUT 1.=1:\n+Status: done` } };
+  assert.equal((await f.pi.emit("tool_call", protectedEdit, f.ctx)).block, true);
+  const edit = { toolName: "edit", toolCallId: "partial-edit", input: { input: `[${f.product}#ABCD]\nPUT 1.=1:\n+changed` } };
+  assert.notEqual((await f.pi.emit("tool_call", edit, f.ctx))?.block, true);
+  fs.writeFileSync(f.product, "changed\n");
+  await f.pi.emit("tool_result", { ...edit, isError: true, content: [{ type: "text", text: "later edit failed" }] }, f.ctx);
+  assert.equal(f.runtime.lifecycle.status(id).mutation_revision, 2);
+  await assert.rejects(f.guard.execute("complete-again", { action: "complete", execution_id: id }, null, null, f.ctx));
+});
+
+test("parent refresh and live worker refresh do not recover another running operation", async t => {
+  const f = await implementationFixture(t, "SUBAGENT");
+  const event = { toolName: "write", toolCallId: "live", input: { path: f.product, content: "after\n" } };
+  assert.notEqual((await f.pi.emit("tool_call", event, f.ctx))?.block, true);
+  await f.pi.emit("session_switch", {}, f.parent);
+  await f.pi.emit("session_switch", {}, f.ctx);
+  assert.equal(f.runtime.lifecycle.status(f.begun.execution_id).active_operation.tool_call_id, "live");
+  fs.writeFileSync(f.product, "after\n");
+  await f.pi.emit("tool_result", { ...event, isError: false, content: [] }, f.ctx);
+  assert.equal(f.runtime.lifecycle.status(f.begun.execution_id).mutation_revision, 1);
+});
+
+test("replacement continuation fences the old worker and requires fresh parent release", async t => {
+  const f = await implementationFixture(t, "SUBAGENT");
+  const id = f.begun.execution_id;
+  await assert.rejects(f.guard.execute("too-early", { action: "replace_worker", execution_id: id }, null, null, f.parent));
+  await f.guard.execute("suspend", { action: "suspend_worker", execution_id: id }, null, null, f.ctx);
+  const assignment = parseToolResult(await f.guard.execute("replace", { action: "replace_worker", execution_id: id }, null, null, f.parent));
+  const replacement = context("replacement", f.project);
+  const resumed = parseToolResult(await f.guard.execute("resume", { action: "begin_delegated", assignment_id: assignment.assignment_id }, null, null, replacement));
+  assert.equal(resumed.execution_id, id);
+  assert.equal(resumed.phase, "PRE_ACTION_PENDING");
+  assert.equal((await f.pi.emit("tool_call", { toolName: "write", toolCallId: "stale-write", input: { path: f.product, content: "stale" } }, f.ctx)).block, true);
+  await assert.rejects(f.guard.execute("stale-complete", { action: "complete", execution_id: id }, null, null, f.ctx));
+  await f.guard.execute("checkpoint-new", { action: "checkpoint_pre_action", execution_id: id }, null, null, replacement);
+  await f.guard.execute("continue-new", { action: "release_checkpoint", execution_id: id, decision: "CONTINUE" }, null, null, f.parent);
+  assert.equal(f.runtime.lifecycle.status(id).phase, "ACTIVE");
+  await f.guard.execute("close-new", { action: "block", execution_id: id }, null, null, replacement);
+  assert.equal(f.runtime.lifecycle.sessionState("worker").armed, false);
+  assert.equal(f.runtime.store.readActiveTicket(f.project, f.ticket), null);
+});
+
+test("delegated verifier STOP preserves verifier-owned INCONCLUSIVE closure", async t => {
+  const f = await finalizationRaceFixture(t);
+  const state = f.runtime.lifecycle.status(f.begun.execution_id);
+  state.execution_mode = "SUBAGENT";
+  state.parent_session_id = "parent";
+  f.runtime.store.writeExecution(state);
+  f.runtime.lifecycle.checkpointMaterialTurn(state.execution_id, "verify", "cannot continue");
+  await f.guard.execute("stop", { action: "release_checkpoint", execution_id: state.execution_id, decision: "STOP" }, null, null, context("parent", f.ctx.cwd));
+  const result = parseToolResult(await f.guard.execute("inconclusive", { action: "finalize_verification", execution_id: state.execution_id, verdict: "INCONCLUSIVE" }, null, null, f.ctx));
+  assert.equal(result.verification_verdict, "INCONCLUSIVE");
+  assert.equal(result.ticket_progression, "NOT APPLICABLE");
+  assert.match(fs.readFileSync(f.ticket, "utf8"), /^Status: ready$/m);
+});
+
+test("Parent STOP joins the owned service before releasing the Ticket", async t => {
+  const f = await implementationFixture(t, "SUBAGENT");
+  const id = f.begun.execution_id;
+  const service = f.runtime.services.start(id, "worker", { version: 1, argv: [process.execPath, "-e", "setInterval(() => {}, 1000)"] });
+  try {
+    await f.pi.emit("session_switch", {}, f.parent);
+    assert.equal(f.runtime.services.status(id).pid, service.pid);
+    await f.guard.execute("turn", { action: "checkpoint_material_turn", execution_id: id, summary: "stop" }, null, null, f.ctx);
+    await f.guard.execute("stop", { action: "release_checkpoint", execution_id: id, decision: "STOP" }, null, null, f.parent);
+    assert.throws(() => process.kill(service.pid, 0), { code: "ESRCH" });
+    assert.equal(f.runtime.store.readActiveTicket(f.project, f.ticket), null);
+    assert.equal(f.runtime.lifecycle.sessionState("worker").armed, false);
+  } finally { await f.runtime.services.stop(id, "parent"); }
+});
+
+test("bounded native read preserves its line selector and cannot turn into full-file observation", async t => {
+  const f = await implementationFixture(t);
+  const event = { toolName: "read", toolCallId: "bounded", input: { path: "product.txt:1-1" } };
+  const gate = await f.pi.emit("tool_call", event, f.ctx);
+  assert.equal(gate.input.path, `${f.product}:1-1`);
+  await f.pi.emit("tool_result", { ...event, isError: false, content: [{ type: "text", text: "before\n" }] }, f.ctx);
 });

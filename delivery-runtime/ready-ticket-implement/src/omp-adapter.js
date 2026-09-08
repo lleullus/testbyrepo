@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { spawnSync } from "node:child_process";
 
 import { bindAuthority, checkAuthorityCurrentness, isInsideProject, resolveCanonicalValidator } from "./authority-binding.js";
@@ -61,15 +62,6 @@ function runtimeView(state) {
   };
 }
 
-function readySkillPurpose(event) {
-  if (event?.toolName !== "read") return null;
-  const raw = String(event?.input?.path ?? "");
-  // Arm only on canonical skill-resource invocation. Plain filesystem reads may
-  // be code review or maintenance and must not silently enter Ready execution.
-  if (/^skill:\/\/ready-ticket-implement(?=[:/]|$)/.test(raw)) return "implement";
-  if (/^skill:\/\/ready-ticket-verify(?=[:/]|$)/.test(raw)) return "verify";
-  return null;
-}
 
 function nearestExistingCanonical(absolutePath) {
   let cursor = absolutePath;
@@ -87,13 +79,16 @@ function nearestExistingCanonical(absolutePath) {
 function resolveToolPath(rawPath, cwd) {
   if (typeof rawPath !== "string" || rawPath.length === 0) return null;
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(rawPath)) return rawPath;
+  if (rawPath.startsWith("~/")) rawPath = path.join(os.homedir(), rawPath.slice(2));
   const absolute = path.isAbsolute(rawPath) ? path.resolve(rawPath) : path.resolve(cwd, rawPath);
   return nearestExistingCanonical(absolute);
 }
 
 function pathFromEvent(event, cwd) {
   const raw = event?.input?.path;
-  return resolveToolPath(raw, cwd);
+  const base = event.toolName === "read" && typeof raw === "string"
+    ? raw.replace(/(?::(?:raw|-?\d+(?:[-+]\d*)?(?:,\d+(?:[-+]\d*)?)*))+$/, "") : raw;
+  return resolveToolPath(base, cwd);
 }
 
 function protectedMutationReason(state, target) {
@@ -140,28 +135,50 @@ function exactFileObservationToken(toolName, target) {
   }
 }
 
-function mutationSnapshot(event, cwd) {
-  const target = pathFromEvent(event, cwd);
-  if (!target || /^[a-z][a-z0-9+.-]*:\/\//i.test(target)) return null;
-  const beforeHash = hashFileMaybe(target);
-  let expectedHash = null;
-  if (event.toolName === "write" && typeof event?.input?.content === "string") {
-    expectedHash = crypto.createHash("sha256").update(event.input.content).digest("hex");
+function pathIdentity(target) {
+  let stat;
+  try { stat = fs.lstatSync(target); } catch (error) {
+    if (error.code === "ENOENT") return "missing";
+    throw error;
   }
-  return {
-    target_path: target,
-    before_hash: beforeHash,
-    expected_hash: expectedHash,
-    tool_name: event.toolName,
-  };
+  if (stat.isSymbolicLink()) return `link:${fs.readlinkSync(target)}`;
+  if (stat.isFile()) return `file:${stat.mode}:${crypto.createHash("sha256").update(fs.readFileSync(target)).digest("hex")}`;
+  if (stat.isDirectory()) return `dir:${stableDigest(fs.readdirSync(target).sort().map(name => [name, pathIdentity(path.join(target, name))]))}`;
+  throw new Error(`cannot attribute mutation effects for special file: ${target}`);
 }
 
+function snapshotPaths(targets) {
+  return { targets: targets.map(target => ({ path: target, before: pathIdentity(target) })) };
+}
+
+function mutationTargets(event, cwd) {
+  if (event.toolName !== "edit" || typeof event.input?.input !== "string") {
+    const target = pathFromEvent(event, cwd);
+    if (!target) throw new Error("mutation tool requires attributable target paths");
+    return [target];
+  }
+  const targets = [];
+  for (const line of event.input.input.split(/\r?\n/)) {
+    if (!line.trim() || line.startsWith("+")) continue;
+    const header = /^\[(.+)#[a-fA-F0-9]{4}\]$/.exec(line);
+    if (header) targets.push(resolveToolPath(header[1], cwd));
+    else if (line.startsWith("MV ")) {
+      const destination = line.slice(3).trim();
+      targets.push(resolveToolPath(destination.startsWith('"') ? JSON.parse(destination) : destination, cwd));
+    } else if (!/^(?:PUT |CUT |REM$)/.test(line)) throw new Error("Ready supports attributable hashline edit input only");
+  }
+  if (!targets.length || targets.some(target => !target)) throw new Error("edit has no attributable target paths");
+  return [...new Set(targets)];
+}
+
+
 function resolveSnapshotOutcome(snapshot) {
-  if (!snapshot?.target_path) return "inconclusive";
-  const currentHash = hashFileMaybe(snapshot.target_path);
-  if (snapshot.expected_hash && currentHash === snapshot.expected_hash) return "applied";
-  if (currentHash === snapshot.before_hash) return "not_applied";
-  return "inconclusive";
+  if (!snapshot?.targets?.length) return "inconclusive";
+  try {
+    let changed = false;
+    for (const target of snapshot.targets) if (pathIdentity(target.path) !== target.before) changed = true;
+    return changed ? "applied" : "not_applied";
+  } catch { return "inconclusive"; }
 }
 
 function contentBytes(content) {
@@ -174,9 +191,8 @@ function contentBytes(content) {
   );
 }
 
-function mutationDigestFor(state, toolName, input) {
+function mutationDigestFor(toolName, input) {
   return stableDigest({
-    mutation_revision: Number(state.mutation_revision ?? 0),
     tool_name: String(toolName).toLowerCase(),
     input,
   });
@@ -247,7 +263,8 @@ function maybeRewritePath(event, target) {
   if (!target || /^[a-z][a-z0-9+.-]*:\/\//i.test(target)) return undefined;
   if (!["read", "write", "grep", "glob"].includes(event.toolName)) return undefined;
   if (typeof event?.input?.path !== "string" || event.input.path === target) return undefined;
-  return { ...event.input, path: target };
+  const selector = event.toolName === "read" ? event.input.path.match(/(?::(?:raw|-?\d+(?:[-+]\d*)?(?:,\d+(?:[-+]\d*)?)*))+$/)?.[0] ?? "" : "";
+  return { ...event.input, path: target + selector };
 }
 
 function targetMatchesDrift(state, event, cwd) {
@@ -287,6 +304,7 @@ function requireWorkerExecution(lifecycle, sid) {
   if (session.role !== "worker") throw new Error("current session is the SUBAGENT parent and may not perform implementation work");
   const state = lifecycle.status(session.execution_id);
   if (state.session_id !== sid) throw new Error("current session does not own the bound Ready execution");
+  if (state.worker_inactive) throw new Error("Ready worker is suspended");
   return state;
 }
 
@@ -343,7 +361,24 @@ export function installReadyRuntime(pi, options = {}) {
   const services = options.services ?? new ManagedServiceRegistry({ lifecycle });
   const readySkillDir = options.readySkillDir;
   const operationIndex = new Map();
+  const liveOperations = new Set();
   let toolMap = { mapped: {}, boundaries: [], customMutationBoundary: [] };
+  const runningCommands = new Map();
+  const runOwnedArgv = async (executionId, argv, options) => {
+    const id = lifecycle.status(executionId).active_operation.tool_call_id;
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    options.signal?.addEventListener("abort", abort, { once: true });
+    if (options.signal?.aborted) abort();
+    const promise = runArgv(argv, { ...options, signal: controller.signal });
+    liveOperations.add(id);
+    runningCommands.set(id, { executionId, controller, promise });
+    try { return await promise; } finally {
+      options.signal?.removeEventListener("abort", abort);
+      liveOperations.delete(id);
+      runningCommands.delete(id);
+    }
+  };
   let toolMapInitialized = false;
 
   const refreshToolMap = () => {
@@ -352,13 +387,34 @@ export function installReadyRuntime(pi, options = {}) {
     return toolMap;
   };
 
+  const prepareVerification = params => async binding => {
+    const target = captureVerificationTarget({
+      projectRoot: binding.project_root,
+      targetPaths: params.target_paths ?? [],
+      allowedOutputPaths: params.allowed_output_paths ?? [],
+    });
+    if (binding.ticket_status_at_start === "ready") {
+      if (!params.probe_binding_path) throw new Error("Ready verification requires one current canonical Probe machine binding before begin_verify");
+      await validateProbeHandoff({
+        probeBindingPath: params.probe_binding_path,
+        projectRoot: binding.project_root,
+        ticketPath: binding.ticket_path,
+        targetPaths: params.target_paths ?? [],
+        allowedOutputPaths: params.allowed_output_paths ?? [],
+        bindAuthorityFn: async () => binding,
+        captureTargetFn: () => target,
+      });
+    }
+    return { ...binding, verification_target: target, target_drift: null };
+  };
+
   pi.on("resources_discover", async () => {
     refreshToolMap();
     return readySkillDir ? { skillPaths: [readySkillDir] } : {};
   });
   const refreshSessionRuntime = ctx => {
     refreshToolMap();
-    lifecycle.recoverInterruptedOperation(sessionId(ctx));
+    lifecycle.recoverInterruptedOperation(sessionId(ctx), new Set([...operationIndex.keys(), ...liveOperations]));
   };
   pi.on("session_start", async (_event, ctx) => {
     refreshSessionRuntime(ctx);
@@ -373,12 +429,13 @@ export function installReadyRuntime(pi, options = {}) {
   pi.on("tool_call", async (event, ctx) => {
     if (!toolMapInitialized) refreshToolMap();
     const sid = sessionId(ctx);
-    const skillPurpose = readySkillPurpose(event);
-    if (skillPurpose) {
-      lifecycle.armSession(sid, skillPurpose);
-      return;
-    }
+    // OMP's device transport emits an outer write and then the registered inner
+    // tool event. Only these owned control tools defer to their inner validation.
     if (INTERNAL_TOOLS.has(event.toolName)) return;
+    if (event.toolName === "write" && typeof event.input?.path === "string") {
+      const device = /^xd:\/\/([^/:?#]+)$/.exec(event.input.path)?.[1];
+      if (INTERNAL_TOOLS.has(device) || device === "report_issue") return;
+    }
 
     const session = lifecycle.sessionState(sid);
     if (!session?.armed) return;
@@ -436,13 +493,14 @@ export function installReadyRuntime(pi, options = {}) {
       return;
     }
     if (state.session_id !== sid) return { block: true, reason: "Ready execution/session binding mismatch." };
+    if (state.worker_inactive) return { block: true, reason: "Ready worker is suspended; only the parent may issue replacement continuation." };
 
     if (state.phase === "MUTATION_UNCERTAIN") {
       const snapshot = state.uncertainty?.operation?.mutation_snapshot;
       const target = pathFromEvent(event, ctx.cwd);
-      if (event.toolName === "read" && snapshot?.target_path === target) {
+      if (event.toolName === "read" && snapshot?.targets?.some(item => item.path === target)) {
         operationIndex.set(event.toolCallId, { executionId: state.execution_id, kind: "uncertainty_readback", sessionId: sid });
-        return maybeRewritePath(event, target) ? { input: maybeRewritePath(event, target) } : undefined;
+        return;
       }
       return { block: true, reason: "Ready mutation outcome is uncertain; only exact target readback or terminal BLOCKED is allowed." };
     }
@@ -503,10 +561,16 @@ export function installReadyRuntime(pi, options = {}) {
         sessionId: sid,
       });
     } else {
-      const mutationDigest = mutationDigestFor(current, event.toolName, event.input);
+      let targets;
+      try { targets = mutationTargets(event, ctx.cwd); } catch (error) { return { block: true, reason: error.message }; }
+      for (const mutationTarget of targets) {
+        const reason = projectConfinementReason(current, mutationTarget) || protectedMutationReason(current, mutationTarget);
+        if (reason) return { block: true, reason };
+      }
+      const mutationDigest = mutationDigestFor(event.toolName, event.input);
       const repeatedReason = repeatedMutationReason(current, mutationDigest);
       if (repeatedReason) return { block: true, reason: repeatedReason };
-      const snapshot = mutationSnapshot(event, ctx.cwd);
+      const snapshot = snapshotPaths(targets);
       lifecycle.beginOperation(current.execution_id, {
         toolCallId: event.toolCallId,
         kind: "mutation",
@@ -535,7 +599,7 @@ export function installReadyRuntime(pi, options = {}) {
       const state = lifecycle.status(tracked.executionId);
       const snapshot = state.uncertainty?.operation?.mutation_snapshot;
       const outcome = event.isError ? "inconclusive" : resolveSnapshotOutcome(snapshot);
-      lifecycle.resolveMutationUncertainty(tracked.executionId, outcome);
+      lifecycle.resolveMutationUncertainty(tracked.executionId, tracked.sessionId, outcome);
       return;
     }
 
@@ -561,28 +625,24 @@ export function installReadyRuntime(pi, options = {}) {
     }
 
     const state = lifecycle.status(tracked.executionId);
-    if (!event.isError) {
-      lifecycle.finishOperation(tracked.executionId, event.toolCallId, { mutationApplied: true });
-      return;
-    }
-    const classification = classifyError(event.content);
-    if (classification === "TRANSPORT_NETWORK") {
-      const uncertain = lifecycle.markMutationUncertain(tracked.executionId, event.toolCallId, "mutation-capable tool returned transport/network failure");
-      const snapshot = uncertain.uncertainty?.operation?.mutation_snapshot;
-      const outcome = resolveSnapshotOutcome(snapshot);
-      if (outcome !== "inconclusive") lifecycle.resolveMutationUncertainty(tracked.executionId, outcome);
+    const outcome = resolveSnapshotOutcome(state.active_operation?.mutation_snapshot);
+    if (event.isError && outcome === "inconclusive") {
+      lifecycle.markMutationUncertain(tracked.executionId, event.toolCallId, "mutation tool failed without attributable target readback");
       return;
     }
     lifecycle.finishOperation(tracked.executionId, event.toolCallId, {
-      mutationApplied: false,
-      failureClassification: classification,
-      failureDetail: JSON.stringify(event.content),
+      mutationApplied: !event.isError || outcome === "applied",
+      failureClassification: event.isError ? classifyError(event.content) : null,
+      failureDetail: event.isError ? JSON.stringify(event.content) : null,
     });
   });
 
   pi.on("session_shutdown", async (_event, ctx) => {
     const sid = sessionId(ctx);
     await services.cleanupSession(sid);
+    const ownedCommands = [...runningCommands.values()].filter(item => lifecycle.status(item.executionId).session_id === sid);
+    for (const command of ownedCommands) command.controller.abort();
+    await Promise.allSettled(ownedCommands.map(command => command.promise));
     const session = lifecycle.sessionState(sid);
     if (session?.assignment_id && !session.execution_id) {
       const assignment = store.readAssignment(session.assignment_id);
@@ -594,6 +654,7 @@ export function installReadyRuntime(pi, options = {}) {
     if (!session?.execution_id) return;
     const state = store.readExecution(session.execution_id);
     if (!state?.active_operation || state.session_id !== sid) return;
+    for (const [id, operation] of operationIndex) if (operation.sessionId === sid) operationIndex.delete(id);
     if (state.active_operation.kind === "mutation") {
       lifecycle.markMutationUncertain(
         state.execution_id,
@@ -617,6 +678,7 @@ export function installReadyRuntime(pi, options = {}) {
   const z = pi.zod;
   pi.registerTool({
     name: "ready_probe_binding",
+    loadMode: "essential",
     label: "Ready Probe Binding",
     description: "Create one machine-checkable current heuristic-probe handoff outside Project Root. This does not issue verifier verdicts.",
     parameters: z.object({
@@ -671,15 +733,17 @@ export function installReadyRuntime(pi, options = {}) {
 
   pi.registerTool({
     name: "ready_guard",
+    loadMode: "essential",
     label: "Ready Guard",
     description: "Bind and advance the internal ready-ticket-implement runtime without changing its external delivery contract.",
     parameters: z.object({
       action: z.enum([
         "cancel_admission", "begin_direct", "begin_verify", "assign_subagent", "begin_delegated", "checkpoint_pre_action", "checkpoint_material_turn",
-        "release_checkpoint", "complete", "finalize_verification", "block", "status",
+        "release_checkpoint", "complete", "finalize_verification", "block", "status", "resolve_mutation", "suspend_worker", "replace_worker",
       ]),
       ticket_path: z.string().optional(),
       project_root: z.string().optional(),
+      purpose: z.enum(["implement", "verify"]).optional(),
       assignment_id: z.string().optional(),
       execution_id: z.string().optional(),
       probe_binding_path: z.string().optional(),
@@ -712,38 +776,18 @@ export function installReadyRuntime(pi, options = {}) {
           });
         }
         case "begin_direct":
-          value = await lifecycle.beginDirect({ sessionId: sid, projectRoot: params.project_root, ticketPath: params.ticket_path, purpose: "implement" });
+          value = await lifecycle.admit(sid, "implement", admissionToken => lifecycle.beginDirect({
+            sessionId: sid, projectRoot: params.project_root, ticketPath: params.ticket_path, purpose: "implement", admissionToken,
+          }));
           return resultText(runtimeView(value));
-        case "begin_verify": {
-          const admissionToken = lifecycle.captureAdmission(sid, "verify");
-          const preflight = await lifecycle.bindAuthority({
-            projectRoot: params.project_root,
-            ticketPath: params.ticket_path,
-            allowedStatuses: ["ready", "done"],
-          });
-          if (preflight.ticket_status_at_start === "ready") {
-            if (!params.probe_binding_path) throw new Error("Ready verification requires one current canonical Probe machine binding before begin_verify");
-            await validateProbeHandoff({
-              probeBindingPath: params.probe_binding_path,
-              projectRoot: preflight.project_root,
-              ticketPath: preflight.ticket_path,
-              targetPaths: params.target_paths ?? [],
-              allowedOutputPaths: params.allowed_output_paths ?? [],
-              bindAuthorityFn: request => lifecycle.bindAuthority(request),
-              captureTargetFn: captureVerificationTarget,
-            });
-          }
-          value = await lifecycle.beginDirect({ sessionId: sid, projectRoot: params.project_root, ticketPath: params.ticket_path, purpose: "verify", admissionToken });
-          const targetBinding = captureVerificationTarget({
-            projectRoot: value.project_root,
-            targetPaths: params.target_paths ?? [],
-            allowedOutputPaths: params.allowed_output_paths ?? [],
-          });
-          value = lifecycle.bindVerificationTarget(value.execution_id, sid, targetBinding);
+        case "begin_verify":
+          value = await lifecycle.admit(sid, "verify", admissionToken => lifecycle.beginDirect({
+            sessionId: sid, projectRoot: params.project_root, ticketPath: params.ticket_path, purpose: "verify", admissionToken,
+            prepareBinding: prepareVerification(params),
+          }));
           return resultText(runtimeView(value));
-        }
         case "assign_subagent":
-          value = await lifecycle.assignSubagent({ parentSessionId: sid, projectRoot: params.project_root, ticketPath: params.ticket_path });
+          value = await lifecycle.admit(sid, params.purpose ?? "implement", () => lifecycle.assignSubagent({ parentSessionId: sid, projectRoot: params.project_root, ticketPath: params.ticket_path }));
           return resultText({
             assignment_id: value.assignment_id,
             ticket_path: value.ticket_path,
@@ -751,39 +795,37 @@ export function installReadyRuntime(pi, options = {}) {
             status: value.status,
           });
         case "begin_delegated": {
-          const admissionToken = lifecycle.captureAdmission(sid);
           const assignment = store.readAssignment(params.assignment_id);
           if (!assignment) throw new Error(`unknown assignment: ${params.assignment_id}`);
-          if ((assignment.purpose ?? "implement") === "verify") {
-            const preflight = await lifecycle.bindAuthority({
-              projectRoot: assignment.project_root,
-              ticketPath: assignment.ticket_path,
-              allowedStatuses: ["ready", "done"],
-            });
-            if (preflight.ticket_status_at_start === "ready") {
-              if (!params.probe_binding_path) throw new Error("Ready delegated verification requires one current canonical Probe machine binding before begin_delegated");
-              await validateProbeHandoff({
-                probeBindingPath: params.probe_binding_path,
-                projectRoot: preflight.project_root,
-                ticketPath: preflight.ticket_path,
-                targetPaths: params.target_paths ?? [],
-                allowedOutputPaths: params.allowed_output_paths ?? [],
-                bindAuthorityFn: request => lifecycle.bindAuthority(request),
-                captureTargetFn: captureVerificationTarget,
-              });
-            }
-          }
-          value = await lifecycle.beginDelegated({ childSessionId: sid, assignmentId: params.assignment_id, admissionToken });
-          if (value.purpose === "verify") {
-            const targetBinding = captureVerificationTarget({
-              projectRoot: value.project_root,
-              targetPaths: params.target_paths ?? [],
-              allowedOutputPaths: params.allowed_output_paths ?? [],
-            });
-            value = lifecycle.bindVerificationTarget(value.execution_id, sid, targetBinding);
-          }
+          value = await lifecycle.admit(sid, assignment.purpose ?? "implement", admissionToken => lifecycle.beginDelegated({
+            childSessionId: sid, assignmentId: params.assignment_id, admissionToken,
+            prepareBinding: async binding => {
+              if (assignment.resume_execution_id) {
+                const previous = lifecycle.status(assignment.resume_execution_id);
+                if (!previous.continuation_target || !checkVerificationTarget(previous.continuation_target).current) throw new Error("replacement continuation working-tree target changed or was not bound");
+              }
+              return assignment.purpose === "verify" ? prepareVerification(params)(binding) : binding;
+            },
+          }));
           return resultText(runtimeView(value));
         }
+        case "resolve_mutation": {
+          const execution = requireWorkerExecution(lifecycle, sid);
+          if (execution.execution_id !== params.execution_id) throw new Error("Ready recovery execution binding mismatch");
+          const outcome = resolveSnapshotOutcome(execution.uncertainty?.operation?.mutation_snapshot);
+          value = lifecycle.resolveMutationUncertainty(execution.execution_id, sid, outcome);
+          return resultText(runtimeView(value));
+        }
+        case "suspend_worker": {
+          const execution = requireWorkerExecution(lifecycle, sid);
+          if (execution.execution_id !== params.execution_id) throw new Error("Ready suspension execution binding mismatch");
+          if (execution.managed_service) await services.stop(execution.execution_id, sid);
+          const target = captureVerificationTarget({ projectRoot: execution.project_root });
+          value = lifecycle.suspendWorker(execution.execution_id, sid, target);
+          return resultText(runtimeView(value));
+        }
+        case "replace_worker":
+          return resultText(lifecycle.replaceWorker(params.execution_id, sid));
         case "checkpoint_pre_action":
           value = lifecycle.checkpointPreAction(params.execution_id, sid, params.summary ?? null);
           return resultText(runtimeView(value));
@@ -793,9 +835,13 @@ export function installReadyRuntime(pi, options = {}) {
           value = lifecycle.checkpointMaterialTurn(params.execution_id, sid, params.summary ?? null);
           return resultText(runtimeView(value));
         }
-        case "release_checkpoint":
+        case "release_checkpoint": {
+          const execution = lifecycle.status(params.execution_id);
+          if (execution.parent_session_id !== sid) throw new Error("only the bound parent may release a checkpoint");
+          if (params.decision === "STOP" && execution.managed_service) await services.stop(execution.execution_id, sid);
           value = lifecycle.releaseCheckpoint(params.execution_id, sid, params.decision);
           return resultText(runtimeView(value));
+        }
         case "complete": {
           const execution = lifecycle.status(params.execution_id);
           if (execution.purpose === "verify") throw new Error("Ready verification must close through finalize_verification, not complete");
@@ -812,6 +858,8 @@ export function installReadyRuntime(pi, options = {}) {
           try {
             lifecycle.beginVerificationFinalization(execution.execution_id, sid, params.verdict, finalizationId);
             reservationActive = true;
+            liveOperations.add(finalizationId);
+            if (execution.managed_service) await services.stop(execution.execution_id, sid);
             if (params.verdict === "VERIFIED") {
               const targetCurrentness = verificationTargetGate(lifecycle, execution.execution_id);
               if (!targetCurrentness.current) throw new Error(`VERIFIED blocked by target drift: ${targetCurrentness.changed.join(", ")}`);
@@ -854,6 +902,8 @@ export function installReadyRuntime(pi, options = {}) {
           } catch (error) {
             if (reservationActive) lifecycle.cancelVerificationFinalization(execution.execution_id, sid, finalizationId);
             throw error;
+          } finally {
+            liveOperations.delete(finalizationId);
           }
         }
         case "block": {
@@ -883,6 +933,7 @@ export function installReadyRuntime(pi, options = {}) {
 
   pi.registerTool({
     name: "ready_argv",
+    loadMode: "essential",
     label: "Ready Argv",
     description: "Run explicit structured argv. inspect uses commands: [[executable, ...args]]; the canonical python3 validate_ticket.py command is allowed for admission and exact bound ACTIVE verification revalidation. execute/mutate use argv. Shell strings are not accepted.",
     parameters: z.object({
@@ -895,8 +946,8 @@ export function installReadyRuntime(pi, options = {}) {
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const sid = sessionId(ctx);
       const session = lifecycle.sessionState(sid);
-      const admissionArgv = session?.armed && !session.execution_id ? canonicalValidatorInspection(params, ctx.cwd) : null;
-      if (session?.armed && !session.execution_id && admissionArgv) {
+      const admissionArgv = !session?.execution_id ? canonicalValidatorInspection(params, ctx.cwd) : null;
+      if (!session?.execution_id && admissionArgv) {
         const result = await runArgv(admissionArgv, { cwd: ctx.cwd, timeoutMs: FINAL_VALIDATOR_TIMEOUT_MS, signal });
         return resultText({ action: "inspect", phase: "PRE_ADMISSION", results: [{
           argv: admissionArgv, exit_code: result.exitCode, timed_out: result.timedOut,
@@ -937,7 +988,7 @@ export function installReadyRuntime(pi, options = {}) {
           lifecycle.beginOperation(state.execution_id, { toolCallId: syntheticId, kind: "observation", observationDigest: prepared.digest });
           let result;
           try {
-            result = await runArgv(argv, { cwd: state.project_root, signal, timeoutMs: canonicalArgv ? FINAL_VALIDATOR_TIMEOUT_MS : undefined });
+            result = await runOwnedArgv(state.execution_id, argv, { cwd: state.project_root, signal, timeoutMs: canonicalArgv ? FINAL_VALIDATOR_TIMEOUT_MS : undefined });
           } catch (error) {
             const current = lifecycle.status(state.execution_id);
             recordObservationResult(current, prepared.digest, {
@@ -999,7 +1050,7 @@ export function installReadyRuntime(pi, options = {}) {
         lifecycle.beginOperation(state.execution_id, { toolCallId: syntheticId, kind: "observation", observationDigest: prepared.digest });
         let result;
         try {
-          result = await runArgv(request.argv, { cwd: state.project_root, signal });
+          result = await runOwnedArgv(state.execution_id, request.argv, { cwd: state.project_root, signal });
         } catch (error) {
           const current = lifecycle.status(state.execution_id);
           recordObservationResult(current, prepared.digest, {
@@ -1044,7 +1095,7 @@ export function installReadyRuntime(pi, options = {}) {
       const targetPaths = validateExplicitTargets(state, params.target_paths);
       const confinement = argvConfinementReason(state, request.argv);
       if (confinement) throw new Error(confinement);
-      const mutationDigest = mutationDigestFor(state, "ready_argv.mutate", {
+      const mutationDigest = mutationDigestFor("ready_argv.mutate", {
         argv: request.argv,
         target_paths: targetPaths,
       });
@@ -1055,29 +1106,21 @@ export function installReadyRuntime(pi, options = {}) {
         toolCallId: syntheticId,
         kind: "mutation",
         mutationDigest,
+        mutationSnapshot: snapshotPaths(targetPaths),
       });
+      liveOperations.add(syntheticId);
       let result;
       try {
-        result = await runArgv(request.argv, { cwd: state.project_root, signal });
+        result = await runOwnedArgv(state.execution_id, request.argv, { cwd: state.project_root, signal });
       } catch (error) {
-        const interrupted = signal?.aborted === true;
-        const classification = interrupted ? null : classifyError(error?.message ?? error);
-        if (interrupted || classification === "TRANSPORT_NETWORK") {
-          lifecycle.markMutationUncertain(
-            state.execution_id,
-            syntheticId,
-            interrupted
-              ? "structured mutation argv was interrupted after admission; automatic replay is forbidden"
-              : "structured mutation argv ended with transport/network uncertainty; automatic replay is forbidden",
-          );
-        } else {
-          lifecycle.finishOperation(state.execution_id, syntheticId, {
-            mutationApplied: false,
-            failureClassification: classification,
-            failureDetail: String(error?.message ?? error),
-          });
-        }
+        const outcome = signal?.aborted ? "inconclusive" : resolveSnapshotOutcome(lifecycle.status(state.execution_id).active_operation?.mutation_snapshot);
+        if (outcome === "inconclusive") lifecycle.markMutationUncertain(state.execution_id, syntheticId, "structured mutation interrupted or failed without attributable target readback; automatic replay is forbidden");
+        else lifecycle.finishOperation(state.execution_id, syntheticId, {
+          mutationApplied: outcome === "applied", failureClassification: classifyError(error?.message ?? error), failureDetail: String(error?.message ?? error),
+        });
         throw error;
+      } finally {
+        liveOperations.delete(syntheticId);
       }
       if (result.timedOut) {
         lifecycle.markMutationUncertain(state.execution_id, syntheticId, "structured mutation argv timed out; automatic replay is forbidden");
@@ -1087,20 +1130,13 @@ export function installReadyRuntime(pi, options = {}) {
           commandOutputBytes: Buffer.byteLength(result.stdout, "utf8") + Buffer.byteLength(result.stderr, "utf8"),
         });
       } else {
-        const classification = classifyError(result.stderr || `exit ${result.exitCode}`);
-        if (classification === "TRANSPORT_NETWORK") {
-          lifecycle.markMutationUncertain(
-            state.execution_id,
-            syntheticId,
-            "structured mutation argv returned a transport/network failure; automatic replay is forbidden",
-          );
-        } else {
-          lifecycle.finishOperation(state.execution_id, syntheticId, {
-            mutationApplied: false,
-            failureClassification: classification,
-            failureDetail: result.stderr || `exit ${result.exitCode}`,
-          });
-        }
+        const outcome = resolveSnapshotOutcome(lifecycle.status(state.execution_id).active_operation?.mutation_snapshot);
+        if (outcome === "inconclusive") lifecycle.markMutationUncertain(state.execution_id, syntheticId, "structured mutation failed without attributable target readback");
+        else lifecycle.finishOperation(state.execution_id, syntheticId, {
+          mutationApplied: outcome === "applied",
+          failureClassification: classifyError(result.stderr || `exit ${result.exitCode}`),
+          failureDetail: result.stderr || `exit ${result.exitCode}`,
+        });
       }
       return resultText({
         action: "mutate",
@@ -1116,6 +1152,7 @@ export function installReadyRuntime(pi, options = {}) {
 
   pi.registerTool({
     name: "ready_service",
+    loadMode: "essential",
     label: "Ready Service",
     description: "Start, stop, or inspect one execution-owned local service required for implementation self-checks.",
     parameters: z.object({

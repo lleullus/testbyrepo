@@ -311,37 +311,47 @@ export function parseSimpleReadOnlyCommand(command) {
 
 export async function runArgv(argv, { cwd, timeoutMs = 120_000, signal } = {}) {
   const normalized = assertArgv(argv);
+  signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
-    const options = {
-      cwd,
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
-    };
-    if (signal) options.signal = signal;
-    const child = spawn(normalized[0], normalized.slice(1), options);
+    const grouped = process.platform !== "win32";
+    const child = spawn(normalized[0], normalized.slice(1), {
+      cwd, shell: false, detached: grouped, stdio: ["ignore", "pipe", "pipe"],
+    });
     const stdout = [];
     const stderr = [];
     child.stdout.on("data", chunk => stdout.push(chunk));
     child.stderr.on("data", chunk => stderr.push(chunk));
     let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGTERM");
-    }, timeoutMs);
+    let failure = null;
+    let escalation;
+    const kill = kind => {
+      if (!child.pid) return;
+      try { if (grouped) process.kill(-child.pid, kind); else child.kill(kind); }
+      catch (error) { if (error.code !== "ESRCH") failure ??= error; }
+    };
+    const terminate = () => {
+      kill("SIGTERM");
+      escalation ??= setTimeout(() => kill("SIGKILL"), 2_000);
+      escalation.unref?.();
+    };
+    const abort = () => {
+      failure = new Error("The operation was aborted");
+      failure.name = "AbortError";
+      terminate();
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
+    const timer = setTimeout(() => { timedOut = true; terminate(); }, timeoutMs);
     timer.unref?.();
-    child.once("error", error => {
-      clearTimeout(timer);
-      reject(error);
-    });
+    child.once("error", error => { failure = error; });
     child.once("close", (code, childSignal) => {
       clearTimeout(timer);
-      resolve({
-        argv: normalized,
-        exitCode: code,
-        signal: childSignal,
-        timedOut,
-        stdout: Buffer.concat(stdout).toString("utf8"),
-        stderr: Buffer.concat(stderr).toString("utf8"),
+      clearTimeout(escalation);
+      signal?.removeEventListener("abort", abort);
+      if (failure) reject(failure);
+      else resolve({
+        argv: normalized, exitCode: code, signal: childSignal, timedOut,
+        stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8"),
       });
     });
   });

@@ -18,19 +18,19 @@ CANONICAL_PROBE_SKILL_DIR = ROOT / "companion-skills" / "ready-ticket-heuristic-
 INSTALLED_SKILL_DIR = Path(
     os.environ.get(
         "IIS_READY_SKILL_INSTALL_DIR",
-        str(Path.home() / ".codex" / "skills" / "ready-ticket-implement"),
+        str(Path.home() / ".omp" / "agent" / "skills" / "ready-ticket-implement"),
     )
 ).expanduser()
 INSTALLED_VERIFY_SKILL_DIR = Path(
     os.environ.get(
         "IIS_READY_VERIFY_SKILL_INSTALL_DIR",
-        str(Path.home() / ".codex" / "skills" / "ready-ticket-verify"),
+        str(Path.home() / ".omp" / "agent" / "skills" / "ready-ticket-verify"),
     )
 ).expanduser()
 INSTALLED_PROBE_SKILL_DIR = Path(
     os.environ.get(
         "IIS_READY_PROBE_SKILL_INSTALL_DIR",
-        str(Path.home() / ".codex" / "skills" / "ready-ticket-heuristic-probe"),
+        str(Path.home() / ".omp" / "agent" / "skills" / "ready-ticket-heuristic-probe"),
     )
 ).expanduser()
 INSTALLED_DIR = Path(
@@ -69,6 +69,19 @@ def _skill_same() -> bool:
                 return False
             if canonical.read_bytes() != installed.read_bytes():
                 return False
+    return True
+
+
+def _skill_installable() -> bool:
+    for canonical_dir, installed_dir, files in SKILL_INSTALLS:
+        for relative in files:
+            canonical = canonical_dir / relative
+            if not canonical.is_file():
+                return False
+            if installed_dir.exists() or installed_dir.is_symlink():
+                installed = installed_dir / relative
+                if not installed.is_file() or installed.read_bytes() != canonical.read_bytes():
+                    return False
     return True
 
 
@@ -121,10 +134,12 @@ def _atomic_copy(source: Path, target: Path) -> None:
 
 
 def sync() -> None:
-    if not _skill_same():
-        raise RuntimeError(
-            f"installed Ready Skill does not match this runtime source: {INSTALLED_SKILL_DIR}"
-        )
+    if not _skill_installable():
+        raise RuntimeError("Ready skill source is missing or an existing installation differs; refusing to overwrite user skills")
+    for canonical_dir, installed_dir, _files in SKILL_INSTALLS:
+        if not installed_dir.exists():
+            installed_dir.parent.mkdir(parents=True, exist_ok=True)
+            installed_dir.symlink_to(canonical_dir, target_is_directory=True)
     canonical = _canonical_files()
     if INSTALLED_DIR.exists() and INSTALLED_DIR.is_symlink():
         raise RuntimeError(f"refusing to synchronize through symlink: {INSTALLED_DIR}")
@@ -161,14 +176,14 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.preflight:
-        if _skill_same():
-            print("READY")
+        if _skill_installable():
+            print("INSTALLABLE; LIVE_SESSION_NOT_CHECKED")
             return 0
         print("SKILL_DRIFT")
         return 1
     if args.check:
         if _skill_same() and _same():
-            print("SYNCED")
+            print("SYNCED; LIVE_SESSION_NOT_CHECKED")
             return 0
         print("DRIFT")
         return 1
@@ -180,7 +195,7 @@ def main() -> int:
     sync()
     if not _same():
         raise RuntimeError("installed Ready runtime does not match canonical source after sync")
-    print(f"SYNCED: {INSTALLED_DIR}")
+    print(f"SYNCED; LIVE_SESSION_NOT_CHECKED: {INSTALLED_DIR}")
     return 0
 
 
