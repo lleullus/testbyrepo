@@ -35,7 +35,7 @@ An unbound session may use `ready_argv inspect` with `commands: [["python3", "-B
 
 During `ACTIVE` verification, the same one-command inspection is allowed only for the bound validator and exact bound Ticket. It uses the existing guarded observation lifecycle, permits a fresh successful revalidation, and checks authority/target currentness before and after execution. Generic `execute` does not gain external-path access. The workflow and To Tickets files join the existing hash-bound protected authority artifacts; exact protected-authority `read` calls may be refreshed, including canonical skill locators and line selectors. Other external paths, mutations, ordinary source rereads and concurrent guarded operations retain their existing restrictions.
 
-OMP Ready tools are `loadMode: essential`, available natively even with default `tools.xdev=true`. Exact `write xd://ready_guard|ready_argv|ready_probe_binding|ready_service` envelopes defer to the inner registered tool's schema and lifecycle checks; other device writes are not exempt. Native and device routes require separate live smoke evidence. No global xdev setting change or unguarded fallback is needed.
+OMP Ready tools are `loadMode: essential`, available natively even with default `tools.xdev=true`. Exact `write xd://ready_guard|ready_argv|ready_probe_binding|ready_service` envelopes defer to the inner registered tool's schema and lifecycle checks; other device writes are not exempt. Exact bare `read xd://<name>` for those same four tools returns control documentation, not a product observation: it remains repeatable during execution without changing evidence or execution state. Other URI reads retain their existing boundaries. Native and device routes require separate live smoke evidence. No global xdev setting change or unguarded fallback is needed.
 
 ## Test
 
@@ -55,7 +55,7 @@ python3 scripts/sync_installed_ready_runtime.py
 python3 scripts/sync_installed_ready_runtime.py --check
 ```
 
-`--preflight` reports installability, not live readiness. Sync installs the runtime under `~/.omp/agent/extensions/ready-ticket-implement-runtime` and links missing Ready Implement/Probe/Verify skills under OMP's own `~/.omp/agent/skills`; existing differing skill content is never overwritten. `--check` proves installed byte equality only. Both outputs explicitly say `LIVE_SESSION_NOT_CHECKED`. Verify discovery and begin/action/terminal in a fresh top-level OMP session with the actual configured transport. Existing parent/child skill and module snapshots are not refreshed by disk installation or worker replacement.
+`--preflight` reports installability, not live readiness. Sync installs the runtime under `~/.omp/agent/extensions/ready-ticket-implement-runtime` and links missing Ready Implement/Probe/Verify skills under OMP's own `~/.omp/agent/skills`; existing differing skill content is never overwritten. `--check` proves installed byte equality only. Both outputs explicitly say `LIVE_SESSION_NOT_CHECKED`. Verify the loaded extension path, current tool schemas and begin/action/terminal in a new top-level OMP process with the actual configured transport and installation path. A session-file reload or child spawned from the existing parent is not proof that updated modules were loaded. Existing parent/child skill and module snapshots are not refreshed by disk installation or worker replacement.
 
 ## Rollback
 

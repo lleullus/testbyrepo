@@ -1587,6 +1587,50 @@ test("canonical skill reads do not arm and owned device transport reaches explic
   assert.notEqual((await pi.emit("tool_call", { toolName: "write", toolCallId: "planning", input: { path: path.join(root, "planning.txt"), content: "allowed" } }, ctx))?.block, true);
 });
 
+test("Ready tool documentation stays repeatable without creating product evidence", async t => {
+  for (const [purpose, fixture] of [["implement", implementationFixture], ["verify", canonicalVerificationFixture]]) {
+    await t.test(purpose, async st => {
+      const f = await fixture(st);
+      const id = f.begun.execution_id;
+      const before = f.runtime.lifecycle.status(id);
+      for (const name of ["ready_guard", "ready_argv", "ready_probe_binding", "ready_service", "ready_guard"]) {
+        const event = { toolName: "read", toolCallId: `docs-${name}`, input: { path: `xd://${name}` } };
+        const gate = await f.pi.emit("tool_call", event, f.ctx);
+        assert.notEqual(gate?.block, true, gate?.reason);
+        await f.pi.emit("tool_result", { ...event, isError: false, content: [{ type: "text", text: "Registered tool documentation" }] }, f.ctx);
+      }
+      assert.deepEqual(f.runtime.lifecycle.status(id), before);
+      if (purpose === "implement") {
+        await assert.rejects(f.guard.execute("docs-not-evidence", { action: "complete", execution_id: id }, null, null, f.ctx));
+      }
+      const foreign = { toolName: "read", toolCallId: "other-device", input: { path: "xd://ready_guard/other" } };
+      assert.equal((await f.pi.emit("tool_call", foreign, f.ctx)).block, true);
+    });
+  }
+});
+
+test("Ready tool documentation leaves guarded operations and pending checkpoints unchanged", async t => {
+  const f = await implementationFixture(t, "SUBAGENT");
+  const id = f.begun.execution_id;
+  const productRead = { toolName: "read", toolCallId: "product-observation", input: { path: f.product } };
+  assert.notEqual((await f.pi.emit("tool_call", productRead, f.ctx))?.block, true);
+  const duringRead = f.runtime.lifecycle.status(id);
+  const docsRead = { toolName: "read", toolCallId: "docs-during-product", input: { path: "xd://ready_argv" } };
+  assert.notEqual((await f.pi.emit("tool_call", docsRead, f.ctx))?.block, true);
+  await f.pi.emit("tool_result", { ...docsRead, isError: false, content: [{ type: "text", text: "Registered tool documentation" }] }, f.ctx);
+  assert.deepEqual(f.runtime.lifecycle.status(id), duringRead);
+  await f.pi.emit("tool_result", { ...productRead, isError: false, content: [{ type: "text", text: "before\n" }] }, f.ctx);
+
+  await f.guard.execute("checkpoint", { action: "checkpoint_material_turn", execution_id: id }, null, null, f.ctx);
+  const pending = f.runtime.lifecycle.status(id);
+  const checkpointDocs = { ...docsRead, toolCallId: "docs-at-checkpoint" };
+  assert.notEqual((await f.pi.emit("tool_call", checkpointDocs, f.ctx))?.block, true);
+  await f.pi.emit("tool_result", { ...checkpointDocs, isError: false, content: [{ type: "text", text: "Registered tool documentation" }] }, f.ctx);
+  assert.deepEqual(f.runtime.lifecycle.status(id), pending);
+  const blockedWrite = { toolName: "write", toolCallId: "still-pending", input: { path: f.product, content: "not released\n" } };
+  assert.equal((await f.pi.emit("tool_call", blockedWrite, f.ctx)).block, true);
+});
+
 test("partial command and native edit failure invalidate old evidence and preserve protected boundaries", async t => {
   const f = await implementationFixture(t);
   const id = f.begun.execution_id;

@@ -429,12 +429,12 @@ export function installReadyRuntime(pi, options = {}) {
   pi.on("tool_call", async (event, ctx) => {
     if (!toolMapInitialized) refreshToolMap();
     const sid = sessionId(ctx);
-    // OMP's device transport emits an outer write and then the registered inner
-    // tool event. Only these owned control tools defer to their inner validation.
+    // Device docs are control metadata, not product observations. Internal writes
+    // still defer to their registered tool's validation.
     if (INTERNAL_TOOLS.has(event.toolName)) return;
-    if (event.toolName === "write" && typeof event.input?.path === "string") {
+    if ((event.toolName === "read" || event.toolName === "write") && typeof event.input?.path === "string") {
       const device = /^xd:\/\/([^/:?#]+)$/.exec(event.input.path)?.[1];
-      if (INTERNAL_TOOLS.has(device) || device === "report_issue") return;
+      if (INTERNAL_TOOLS.has(device) || (event.toolName === "write" && device === "report_issue")) return;
     }
 
     const session = lifecycle.sessionState(sid);
