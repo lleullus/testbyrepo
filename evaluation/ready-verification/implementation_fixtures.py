@@ -363,7 +363,7 @@ Create or modify only the handed-off product paths needed for these acceptance s
 
 - Changes to approved planning authority
 - Changes to external service source, state, credentials, or operator approval
-- Probe, verifier, deployment, or unrelated product work
+- Final verification, deployment, or unrelated product work
 
 ## Blockers
 
@@ -900,10 +900,11 @@ def materialize(case_key: str, project_root: Path, support_root: Path, *, port: 
     implementation_prompt = (
         f"Implement only the exact ready Ticket {ticket}. "
         "Approved planning files and the separate support root are read-only. "
-        "Product writes are limited to the handed-off target paths. Do not start Probe or Verify."
+        "Product writes are limited to the handed-off target paths. Do not start final verification."
     )
 
     return {
+        "authority_state": str(support / "state.json") if service_path is not None else None,
         "project_root": str(project),
         "ticket_path": str(ticket),
         "target_paths": [str(path) for path in blueprint["targets"]],

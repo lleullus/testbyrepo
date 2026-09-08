@@ -1,38 +1,29 @@
-# Ready Runtime Verification
+# Ready runtime v2 verification boundary
 
-## Scope result
+This is the candidate verification plan and evidence boundary. The prior runtime's historical pass counts do not validate this redesign. Runtime tests were rewritten during parallel implementation; no formatter/linter/build/test was run by the runtime worker in that phase. Integration Main owns execution and final acceptance.
 
-The implementation keeps `ready-ticket-implement` caller-facing inputs, DIRECT/SUBAGENT selection, PRE_ACTION/MATERIAL_TURN semantics, terminal `IMPLEMENT RESULT`, and Ticket `ready` status ownership unchanged. Heuristic probing, final verification, Adaptive Run Contract semantics, and Ticket validator semantics remain separate.
+## Deterministic behavior
 
-## Runtime verification
+From `delivery-runtime/ready-ticket-implement`, run `node --test tests/*.test.js`.
 
-- Ready runtime Node suite: 11/11 passed.
-- Repository Ready runtime contract: 3/3 passed.
-- Existing delivery/subagent contract: 14/14 passed.
-- Adaptive planning contract: 18/18 passed.
-- Adaptive run contract: 12/12 passed.
-- Full repository suite after implementation: 227 tests run, 226 passed, 1 failed.
-- The single full-suite failure is the same worktree-local baseline failure captured before implementation: `test_global_cli_link_targets_canonical_observatory`. The global observatory CLI still resolves to `/home/user01/project/iis-skills/observatory/bin/iis-observatory`, while a test executed from this worktree expects the worktree-local path. No Ready runtime change touches that installation.
+- `runtime-core.test.js`: missing plan rejection before reservation, actual first file/CLI change, one-use assignment, old-owner late operations, plan drift/resume fence, uncertain effect retention, reservation interruption→attributed cleanup→new admission with late commit rejection, v1 rejection and no old-live-lock theft.
+- `plan-binding.test.js`: wrong Ticket, REVISE, stale actual plan/review bytes, inside-root review rejection, recheck at assignment consumption. Fixture ADMIT JSON is byte-pairing input, never independent semantic review proof.
+- `authority-service.test.js`: product authority versus ordinary code, product/context manifest separation and undeclared file drift, plan-free verification and delegated PRE_RUNTIME.
+- `omp-adapter.test.js`: real host initialization order and host-provided schema boundary; reading/inspection does not arm; guarded file change; unknown native/device and paused effect denial; current-owner checklist closure without late product dispatch; real loopback timeout, report-only recovery and replay exclusion; native/device nested service callbacks with one exact reservation. Synthetic daemon events establish policy behavior only, not host settlement equivalence.
+- `finalization.test.js` and `finalization-storage.test.js`: real canonical validator/status-only transition, DIRECT without parent checkpoint versus delegated release, unrelated bytes/mode preservation, post-validator failure with conditional restoration, external-write preservation, persisted candidate recovery, source-drift failure and durable terminal/index cleanup interruptions.
 
-Runtime tests cover DIRECT and SUBAGENT binding, PRE_ACTION and MATERIAL_TURN gating, parent mutation exclusion, exact tool-result attribution, authority binding/currentness, protected authority writes, Project Root confinement, duplicate observation blocking, mutation revision/current evidence, broad inventory blocking, bounded read retry, deterministic mutation repeat blocking, mutation uncertainty, interrupted-operation recovery, structured argv, and managed local-service ownership/cleanup.
+A direct Node consumer must import the core with no OMP environment/config/module, supply structured execution, inspect authority, and exercise admission/actual output/closure. No complete alternate-client adapter is claimed by that smoke.
 
-## Async boundary
+## Real host checks required
 
-A source-scoped search found no queue, polling loop, scheduler, or interval-based delivery runtime. The only `detached` occurrence is `detached: false` on the managed local service child process.
+Use a fresh isolated top-level OMP loaded from the coherent candidate bundle, not a child of an already cached old host. Inspect registered schemas and loaded module/bundle identity. Exercise native and supported device action paths, exact parent versus worker, superseded late dispatch, structured argv literal arguments, normal/nonzero/killed/abort/timeout/full output and loopback external readback. Code 0 plus killed is interrupted, not success. Local file hash equality is never evidence of absent external effect.
 
-## Click provenance
+For services, observe native hub start readiness timeout retaining a live handle, explicit logs/wait/stop, owner and id/startedAt/restartCount generation, and wrong same-name generation rejection. Explicit cleanup must precede terminal/suspend/replacement. Root process exit or cancellation receipt is not broad escaped-descendant/external-effect settlement. Hub's name-only stop and host result fidelity remain capability limits; do not reinstate a Ready raw supervisor to hide them.
 
-The inspected Click source identifies version `0.17.0`; no local `v0.20*` tag was present. This runtime therefore records Click v0.17.0 as the actual provenance point and uses behavior-level reimplementation only. Click approval contracts, modes, Fix/review/planning UX, and verification budgets were not imported.
+Inject finalization failures before write, during replacement/postvalidate/durable terminal/index cleanup, and across restart. No failure may fabricate COMPLETED from done bytes. Current foreign bytes/authority must prevent rollback. An orphan reservation is released only by the current designated owner's exact attributed evidence, absence of execution/assignment, and locked identity match. No age-based orphan auto-expiry or blind admission replay is allowed.
 
-## Installation / rollback state
+## Integration and historical evidence
 
-The runtime install script supports:
+The integrating owner runs `python3 run_tests.py` once after fan-in and owns candidate installer/evaluation smoke. Actual author/reviewer and final-verifier traces must adjudicate semantic V1–V6/V10–V13 separately from structural JSON tests. Product planning-only, preparation-only, implementation-only, verification-only and full delivery retain distinct terminals and obligation denominators.
 
-- `--preflight`: read-only Ready Skill/source compatibility check.
-- normal sync: installs only the OMP runtime extension after preflight compatibility.
-- `--check`: byte-level source/runtime drift check.
-- `--remove`: removes the runtime extension without deleting runtime data.
-
-Current live preflight result: `SKILL_DRIFT`.
-
-The live Ready Skill is a symlink resolving to `/home/user01/project/iis-skills/companion-skills/ready-ticket-implement`, while this implementation lives in `/home/user01/project/iis-skills-wt-ready-click-runtime`. Their current Skill payloads differ. The runtime extension is therefore intentionally not installed live yet; installing it alone would arm the old Skill without the required runtime begin procedure. Once the matching Ready Skill source is live, `--preflight` must return `READY` before runtime sync.
+Earlier v1 reports and Click selection documents remain historical. They do not imply v2 test success, production installation, an active host migration, or support for every custom/MCP/browser/program effect surface.

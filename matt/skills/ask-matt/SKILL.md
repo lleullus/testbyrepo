@@ -408,12 +408,9 @@ For these caller-facing admission returns and other exceptional non-continuation
    independently observable desired-state Tickets, not an anticipated internal
    implementation sequence.
 
-Planning artifacts may become more observable and testable as they progress
-from shared understanding to Spec to Ticket, but they must not become more
-solution-specific. A downstream artifact may restate, split, or clarify an
-approved contract; it must not introduce a more specific protocol, interface,
-format, transport, storage model, component, algorithm, or implementation
-sequence than its normative source.
+Product-authority artifacts may become more observable/testable from shared understanding to Spec to Ticket, but not more solution-specific. They may faithfully restate/split/clarify approved meaning, not introduce a more specific protocol, interface, format, transport, storage, component, algorithm or sequence than the normative source.
+
+This restriction governs product norms, not a separate derived execution-method plan. After Ready Tickets, ready-ticket-plan may choose methods and future paths without adding product obligations; Matt does not write or approve that method in place of its preparation owner. Preserve exact current repository/Scope/Matt evidence as non-normative navigation for that owner, including direct Matt work with no Source-Increment. Revalidate load-bearing anchors/search/runtime premises rather than rerunning unchanged broad investigation; evidence never supplies missing product authority.
 
 Planning stops at a ready Ticket. Do not invoke or orchestrate delivery from Ask Matt.
 

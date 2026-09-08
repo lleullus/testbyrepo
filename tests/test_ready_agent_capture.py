@@ -40,13 +40,13 @@ class ReadyAgentCaptureTests(unittest.TestCase):
         for reason in ("error", "aborted", "length"):
             with self.subTest(reason=reason):
                 summary = self.capture.summarize([
-                    message(reason, "Verification Verdict: VERIFIED\nProbe Completion: COMPLETE\nIMPLEMENT RESULT\nCompletion: COMPLETE"),
+                    message(reason, "READY TICKET VERIFICATION RESULT\nVerification Verdict: VERIFIED\nREADY TICKET PLAN RESULT\nCompletion: COMPLETE\nIMPLEMENT RESULT\nCompletion: COMPLETE"),
                     {"type": "agent_end", "isTerminal": True},
                 ])
                 self.assertTrue(summary["agent_ended"])
                 self.assertFalse(summary["model_completed"])
                 self.assertIsNone(summary["parsed_verdict"])
-                self.assertIsNone(summary["probe_completion"])
+                self.assertIsNone(summary["preparation_completion"])
                 self.assertIsNone(summary["implementation_completion"])
 
     def test_terminal_error_detail_and_empty_response_are_preserved(self) -> None:
@@ -98,35 +98,49 @@ class ReadyAgentCaptureTests(unittest.TestCase):
         ])
         self.assertIsNone(summary["implementation_completion"])
 
-    def test_current_probe_terminal_preserves_completion_state(self) -> None:
-        for completion in ("COMPLETE", "PARTIAL", "BLOCKED"):
-            with self.subTest(completion=completion):
-                terminal = f"## READY TICKET HEURISTIC PROBE RESULT\n- **Probe Completion:** {completion}"
-                summary = self.capture.summarize([message("stop", terminal), {"type": "agent_end"}])
-                self.assertEqual(summary["probe_completion"], completion)
-                self.assertIsNone(summary["parsed_verdict"])
-
-    def test_probe_admission_rejects_quoted_conflicting_and_superseded_completion(self) -> None:
+    def test_preparation_terminal_rejects_intermediate_conflicting_and_quoted_results(self) -> None:
         for terminal in (
-            "> READY TICKET HEURISTIC PROBE RESULT\n> Probe Completion: COMPLETE",
-            "Previous result:\n```text\nREADY TICKET HEURISTIC PROBE RESULT\nProbe Completion: COMPLETE\n```",
-            "READY TICKET HEURISTIC PROBE RESULT\nProbe Completion: COMPLETE\nProbe Completion: BLOCKED",
-            "READY TICKET HEURISTIC PROBE RESULT\nProbe Completion: COMPLETE\nREADY TICKET HEURISTIC PROBE RESULT\nProbe Completion: PARTIAL",
+            "> READY TICKET PLAN RESULT\n> Completion: COMPLETE",
+            "Previous result:\n```text\nREADY TICKET PLAN RESULT\nCompletion: COMPLETE\n```",
+            "READY TICKET PLAN RESULT\nCompletion: COMPLETE\nCompletion: BLOCKED",
+            "Planner result\nCompletion: COMPLETE",
+            "Heuristic result\nCompletion: COMPLETE",
         ):
             with self.subTest(terminal=terminal):
                 summary = self.capture.summarize([message("stop", terminal), {"type": "agent_end"}])
-                self.assertIsNone(summary["probe_completion"])
-        summary = self.capture.summarize([
-            message("stop", "READY TICKET HEURISTIC PROBE RESULT\nProbe Completion: COMPLETE"),
-            message("stop", "The earlier Probe result is no longer current."),
-            {"type": "agent_end"},
-        ])
-        self.assertIsNone(summary["probe_completion"])
+                self.assertIsNone(summary["preparation_completion"])
+        terminal = "READY TICKET PLAN RESULT\nPlan Review: /outside/plan-review.json\nCompletion: COMPLETE"
+        summary = self.capture.summarize([message("stop", terminal), {"type": "agent_end"}])
+        self.assertEqual(summary["preparation_completion"], "COMPLETE")
+        self.assertEqual(summary["plan_review_path"], "/outside/plan-review.json")
+
+    def test_wrapped_scalar_preserves_unambiguous_value_but_not_quoted_evidence(self) -> None:
+        terminal = "READY TICKET PLAN RESULT\n**Plan Review:**\n/outside/plan-review.json\nCompletion: COMPLETE"
+        summary = self.capture.summarize([message("stop", terminal), {"type": "agent_end"}])
+        self.assertEqual(summary["plan_review_path"], "/outside/plan-review.json")
+        for inserted in ("> /quoted.json\n", "```text\n/quoted.json\n```\n"):
+            altered = terminal.replace("/outside/plan-review.json", inserted + "/outside/plan-review.json")
+            with self.subTest(inserted=inserted):
+                self.assertIsNone(self.capture.summarize([message("stop", altered), {"type": "agent_end"}])["plan_review_path"])
+        duplicate = terminal + "\nPlan Review: /different/review.json"
+        self.assertIsNone(self.capture.summarize([message("stop", duplicate), {"type": "agent_end"}])["plan_review_path"])
+
+    def test_verdict_rejects_quotes_conflicts_and_progression_is_distinct(self) -> None:
+        for terminal in (
+            "> READY TICKET VERIFICATION RESULT\n> Verification Verdict: VERIFIED",
+            "```text\nREADY TICKET VERIFICATION RESULT\nVerification Verdict: VERIFIED\n```",
+            "READY TICKET VERIFICATION RESULT\nVerification Verdict: VERIFIED\nVerification Verdict: FAILED",
+            "VERIFICATION NOT STARTED\nREADY TICKET VERIFICATION RESULT\nVerification Verdict: VERIFIED",
+        ):
+            self.assertIsNone(self.capture.summarize([message("stop", terminal), {"type": "agent_end"}])["parsed_verdict"])
+        summary = self.capture.summarize([message("stop", "READY TICKET VERIFICATION RESULT\nVerification Verdict: VERIFIED\nTicket Progression: FAILED"), {"type": "agent_end"}])
+        self.assertEqual(summary["parsed_verdict"], "VERIFIED")
+        self.assertEqual(summary["ticket_progression"], "FAILED")
 
     def test_normal_domain_failure_is_not_a_transport_failure(self) -> None:
         summary = self.capture.summarize([
             {"type": "tool_execution_end", "isError": True},
-            message("stop", "Verification Verdict: INCONCLUSIVE"),
+            message("stop", "READY TICKET VERIFICATION RESULT\nVerification Verdict: INCONCLUSIVE"),
             {"type": "agent_end"},
         ])
         self.assertTrue(summary["model_completed"])

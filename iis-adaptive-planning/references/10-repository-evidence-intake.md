@@ -122,6 +122,10 @@ When the artifact identifies an actual current acceptance/readback surface or a 
 
 Do not let the artifact strengthen a product promise, turn a current implementation into required future design, or bypass Behavior/UI/product decisions. To Spec and To Tickets continue to project only approved planning authority.
 
+Carry the exact evidence navigation through direct Ask Matt work even when no Source-Increment exists. The direct-Matt absence of Scope lineage is not evidence loss and does not justify a duplicate broad investigation. To Spec/To Tickets may pass this evidence as non-normative context, without adding schema fields or authority.
+
+For execution preparation, hand the exact artifact and re-established load-bearing facts to ready-ticket-plan. Planner independently tests method-relevant anchors/search universe/runtime premises, reusing current evidence instead of repeating the entire investigation. Current ADMIT does not prove future source/runtime currentness; the implementation worker checks important premises before dependent work. Material method changes return to affected preparation, product changes to original planning authority. Final verifier uses its own fresh acceptance/readback evidence; an investigation or reviewed plan is navigation, not PASS.
+
 ## Artifact immutability and lineage
 
 Adaptive never edits, supersedes, or annotates a repository-investigation artifact. A new independent investigation creates the next `INV-NNN.md` under its investigation slug.

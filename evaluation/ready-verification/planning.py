@@ -413,7 +413,7 @@ def run_turn(metadata_path: Path, message: str, *, agent_dir: Path, payload: Pat
     observation = invoke(project_root=project, prompt=message, output_dir=output,
                          agent_dir=agent_dir, payload=payload, runtime_data=runtime_data,
                          model=model, thinking=thinking, timeout=timeout, session_dir=root / "sessions",
-                         resume_session=Path(turns[-1]["session_file"]) if turns else None)
+                         resume_session=Path(turns[-1]["session_file"]) if turns else None, stage="plan")
     after = snapshot(project)
     clean = observation["clean_transport"] and bool(observation.get("session_file"))
     record = {"turn": len(turns) + 1, "raw_events": observation["raw_events"],

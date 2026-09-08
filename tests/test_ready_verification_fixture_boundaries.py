@@ -25,7 +25,7 @@ def load_catalog():
 def load_calibrate():
     sys.path.insert(0, str(CATALOG.parent))
     try:
-        spec = importlib.util.spec_from_file_location("calibration_probe_challenges", CALIBRATE)
+        spec = importlib.util.spec_from_file_location("calibration_verification_challenges", CALIBRATE)
         if spec is None or spec.loader is None:
             raise RuntimeError("unable to load calibration challenge dispatcher")
         module = importlib.util.module_from_spec(spec)
@@ -44,29 +44,6 @@ class FixtureBoundaryTests(unittest.TestCase):
         self.environment = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
         self.calibrate = load_calibrate()
 
-    def probe_metadata(self, case_id: str, variant: str) -> dict[str, object]:
-        case_root = Path(tempfile.mkdtemp(dir=self.root))
-        metadata = self.catalog.materialize(
-            {"case_id": case_id, "family": "probe-admission", "variant": variant},
-            case_root / "product", case_root / "support", port=12345,
-        )
-        metadata["case_id"] = case_id
-        return metadata
-
-    @staticmethod
-    def probe_binding(metadata: dict[str, object]) -> dict[str, object]:
-        return {
-            "schema": "iis-ready-probe-handoff/v1",
-            "implementation_target": {
-                "digest": "bound-target-identity",
-                "target_paths": metadata["target_paths"],
-                "allowed_output_paths": metadata["allowed_output_paths"],
-            },
-            "probe_completion": "COMPLETE",
-            "cleanup": "CLOSED",
-            "admitted_lanes": [],
-            "lane_terminals": [],
-        }
 
     def test_materialized_source_change_is_not_exempted_as_generated_output(self):
         metadata = self.catalog.materialize(
@@ -82,12 +59,18 @@ class FixtureBoundaryTests(unittest.TestCase):
             subprocess.run(argv, cwd=project, env=self.environment, check=True, capture_output=True)
         program = """
 import fs from 'node:fs';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
 const module = await import(process.argv[1]);
 const metadata = JSON.parse(process.argv[2]);
-const binding = module.captureVerificationTarget({projectRoot: metadata.project_root,
-    targetPaths: metadata.target_paths, allowedOutputPaths: metadata.allowed_output_paths});
+const executeArgv = async (argv, options) => {
+  const result = await promisify(execFile)(argv[0], argv.slice(1), {cwd: options.cwd});
+  return {...result, exitCode: 0, interrupted: false, terminationState: 'settled'};
+};
+const binding = await module.captureVerificationTarget({projectRoot: metadata.project_root,
+    targetPaths: metadata.target_paths, allowedOutputPaths: metadata.allowed_output_paths, executeArgv});
 fs.appendFileSync(metadata.target_paths.at(-1), '\\n# Changed product source.\\n');
-console.log(JSON.stringify(module.checkVerificationTarget(binding)));
+console.log(JSON.stringify(await module.checkVerificationTarget(binding, {executeArgv})));
 """
         result = subprocess.run(
             ["node", "--input-type=module", "-e", program, TARGET_MODULE.as_uri(), json.dumps(metadata)],
@@ -110,93 +93,28 @@ console.log(JSON.stringify(module.checkVerificationTarget(binding)));
         self.assertEqual(helper.returncode, 0, helper.stderr)
         self.assertEqual(json.loads(actual.stdout), {"value": "original-value", "input": "sample"})
 
-    def test_current_claim_challenge_preserves_target_identity_and_product_source(self):
-        metadata = self.probe_metadata("probe-current-claim-core", "current-claim-core")
-        run_root = self.root / "current-claim-run"
-        prompt = self.calibrate.stage_prompt("probe", metadata, run_root)
-        self.assertNotIn("expected", metadata)
-        self.assertNotIn("fixture_contract", metadata)
-        self.assertNotIn("probe-current-claim-core", prompt)
-        self.assertNotIn("VERIFIED", prompt)
-        binding_path = run_root / "probe-binding.json"
-        binding_path.parent.mkdir()
-        binding = self.probe_binding(metadata)
-        before = json.dumps(binding, indent=2).encode("utf-8")
-        binding_path.write_bytes(before)
-        probe_observation = run_root / "probe" / "observation.json"
-        probe_observation.parent.mkdir()
-        probe_observation.write_text(json.dumps({"probe_completion": "COMPLETE"}), encoding="utf-8")
-        target_path = Path(metadata["target_paths"][-1])
-        source_before = target_path.read_bytes()
-
-        applied = self.calibrate.apply_challenge(metadata, run_root)
-
-        after = json.loads(binding_path.read_text(encoding="utf-8"))
-        challenge = json.loads((run_root / "challenge.json").read_text(encoding="utf-8"))
-        self.assertTrue(applied["applied"])
-        self.assertEqual(after["implementation_target"], binding["implementation_target"])
-        self.assertEqual(target_path.read_bytes(), source_before)
-        self.assertEqual((run_root / "probe-binding.before-challenge.json").read_bytes(), before)
-        self.assertEqual(challenge["binding_before_sha256"], hashlib.sha256(before).hexdigest())
-        self.assertNotEqual(challenge["binding_before_sha256"], challenge["binding_after_sha256"])
-
-    def test_malformed_json_challenge_retains_original_and_records_actual_byte_change(self):
-        metadata = self.probe_metadata("probe-malformed-json-core", "malformed-json-core")
-        run_root = self.root / "malformed-json-run"
-        binding_path = run_root / "probe-binding.json"
-        binding_path.parent.mkdir()
-        binding = self.probe_binding(metadata)
-        before = json.dumps(binding, indent=2).encode("utf-8")
-        binding_path.write_bytes(before)
-        probe_observation = run_root / "probe" / "observation.json"
-        probe_observation.parent.mkdir()
-        probe_observation.write_text(json.dumps({"probe_completion": "COMPLETE"}), encoding="utf-8")
-        target_path = Path(metadata["target_paths"][-1])
-        source_before = target_path.read_bytes()
-
-        applied = self.calibrate.apply_challenge(metadata, run_root)
-
-        after = binding_path.read_bytes()
-        challenge = json.loads((run_root / "challenge.json").read_text(encoding="utf-8"))
-        with self.assertRaises(json.JSONDecodeError):
-            json.loads(after)
-        self.assertTrue(after.endswith(b",\n}\n"))
-        self.assertEqual((run_root / "probe-binding.before-challenge.json").read_bytes(), before)
-        self.assertEqual(challenge["binding_before_sha256"], hashlib.sha256(before).hexdigest())
-        self.assertEqual(challenge["binding_after_sha256"], hashlib.sha256(after).hexdigest())
-        self.assertNotEqual(challenge["binding_before_sha256"], challenge["binding_after_sha256"])
-        self.assertTrue(applied["applied"])
-        self.assertEqual(target_path.read_bytes(), source_before)
-
-    def test_probe_controls_do_not_apply_without_an_actual_completed_probe(self):
-        for case_id, variant in (("probe-current-claim-core", "current-claim-core"),
-                                 ("probe-malformed-json-core", "malformed-json-core")):
-            with self.subTest(case_id=case_id):
-                metadata = self.probe_metadata(case_id, variant)
-                run_root = self.root / f"{case_id}-incomplete"
-                binding_path = run_root / "probe-binding.json"
-                binding_path.parent.mkdir()
-                before = json.dumps(self.probe_binding(metadata), indent=2).encode("utf-8")
-                binding_path.write_bytes(before)
-
-                applied = self.calibrate.apply_challenge(metadata, run_root)
-
-                self.assertFalse(applied["applied"])
-                self.assertEqual(binding_path.read_bytes(), before)
-
-    def test_natural_language_rebind_remains_a_stale_target_challenge(self):
-        metadata = self.probe_metadata("probe-natural-language-rebind-holdout", "rebind-holdout")
-        run_root = self.root / "natural-language-rebind-run"
-        binding_path = run_root / "probe-binding.json"
-        binding_path.parent.mkdir()
-        binding_path.write_text(json.dumps(self.probe_binding(metadata)), encoding="utf-8")
-        target_path = Path(metadata["target_paths"][-1])
-        self.assertIn("revised-value", target_path.read_text(encoding="utf-8"))
-
-        applied = self.calibrate.apply_challenge(metadata, run_root)
-
-        self.assertTrue(applied["applied"])
-        self.assertIn("next-value", target_path.read_text(encoding="utf-8"))
+    def test_external_drift_requires_successful_bound_event_and_preserves_attribution(self):
+        metadata = self.catalog.materialize(
+            {"family": "verification-drift", "variant": "target", "case_id": "verification-target-drift-core"},
+            self.root / "product", self.root / "support", port=12345)
+        metadata["case_id"] = "verification-target-drift-core"
+        run_root = self.root / "run"
+        run_root.mkdir()
+        prompt = self.calibrate.stage_prompt("verify", metadata, run_root)
+        self.assertNotIn("verification-target-drift-core", prompt)
+        self.assertNotIn("next-value", prompt)
+        target = Path(metadata["target_paths"][-1])
+        before = target.read_bytes()
+        call = {"type": "tool_execution_start", "toolCallId": "bind", "toolName": "ready_guard", "args": {"action": "begin_verify"}}
+        rejected = {"type": "tool_execution_end", "toolCallId": "bind", "isError": True, "result": {"details": {"execution_id": "x", "phase": "ACTIVE"}}}
+        self.assertIsNone(self.calibrate.apply_challenge(metadata, run_root, [call, rejected]))
+        self.assertEqual(target.read_bytes(), before)
+        accepted = {**rejected, "isError": False}
+        result = self.calibrate.apply_challenge(metadata, run_root, [call, accepted])
+        self.assertTrue(result["applied"])
+        self.assertIn("next-value", target.read_text())
+        self.assertEqual(result["before"][str(target)], hashlib.sha256(before).hexdigest())
+        self.assertIsNone(self.calibrate.apply_challenge(metadata, run_root, [call, accepted]))
 
 
 

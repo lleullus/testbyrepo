@@ -18,8 +18,6 @@ def load_json(path: Path) -> Any:
 
 def normalize_verdict(value: object) -> str:
     raw = str(value or "").strip().upper()
-    if raw.startswith("VERIFICATION NOT STARTED"):
-        return "VERIFICATION NOT STARTED"
     if raw in VALID_VERDICTS:
         return raw
     return "INVALID"
@@ -100,7 +98,7 @@ def score(manifest: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, 
         mutation_runs = 0
         unexpected_runs = 0
         for record in case_records:
-            actual = normalize_verdict(record.get("parsed_verdict"))
+            actual = normalize_verdict(record.get("parsed_verdict")) if record.get("clean_transport") is not False else "INVALID"
             actuals.append(actual)
             confusion[f"{expected} -> {actual}"] += 1
             if actual not in allowed_verdicts:

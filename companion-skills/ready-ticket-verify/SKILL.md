@@ -1,6 +1,6 @@
 ---
 name: ready-ticket-verify
-description: "Verify one existing IIS Ready Ticket against a stable current implementation target, require a current COMPLETE Ready Ticket heuristic-probe handoff for normal ready verification, semantically check that its authored AC/Verification flow can meaningfully decide the approved product claims, adjudicate every authored Verification flow and AC from fresh verifier-owned evidence, and own the guarded terminal done transition. Top-level execution defaults to SUBAGENT with exactly one checkpointed verifier; use DIRECT only when the current user explicitly selects it for this exact stage."
+description: "Verify one existing IIS Ready Ticket against a stable current implementation target, independently discover material false-completion paths, semantically check every authored AC/Verification flow, adjudicate all obligations from fresh verifier-owned evidence, and own guarded terminal done progression. Top-level execution defaults to SUBAGENT with exactly one checkpointed verifier; use DIRECT only when the current user explicitly selects it for this exact stage."
 ---
 
 # Ready Ticket Verify
@@ -19,15 +19,11 @@ Required contract-authority input:
 
 - Ticket: `<exact absolute canonical TICKET-NNN.md path>`
 
-Required for normal delivery verification of `Status: ready`:
-
-- Heuristic Probe Result / Evidence: `<current READY TICKET HEURISTIC PROBE RESULT for this exact Ticket/authority/implementation target>`
-- Probe Machine Binding: `<exact session-local binding path produced by ready_probe_binding for that terminal Probe>`
-
 Optional navigation inputs:
 
 - Candidate Verification Target: `None | <current source/config/build/artifact/runtime hint>`
 - Implementation Report / Evidence: `None | <navigation/reference only>`
+- Execution Plan / Review: `None | <exact optional outside-root plan_review_path>`; runtime derives checked method-context plans from this single input. No plan ADMIT is required to verify an already implemented ready target.
 - Additional User Instructions: `<instructions>`
 
 Derive `Status`, `Parent-Spec`, `Project-Root`, `UI`, Acceptance Criteria, Scope, Non-Goals, Blockers, Verification flows, Behavior Authorities and References from the validated Ticket itself. Optional target/report inputs never override the Ticket or current repository/runtime observation.
@@ -43,7 +39,7 @@ This entry contract keeps the authority boundary explicit: one verifier owns the
 
 ## Canonical admission gate
 
-Before any product/runtime action, resolve the currently discovered `iis-workflow` skill only as the canonical planning-authority locator, follow its current `### To Tickets` route target and require the adjacent `validate_ticket.py`. Run that validator against the exact Ticket.
+Before any product/runtime action, resolve the current canonical `validate_ticket.py` adjacent to To Tickets in the same pinned IIS bundle used by the runtime, and validate the exact Ticket. The discovered `iis-workflow` routes are planning navigation, not permission to mix validators from another release or a historical source path.
 
 - Unavailable route/validator: `VERIFICATION NOT STARTED: CANONICAL VALIDATOR UNAVAILABLE`.
 - Validator result other than exact `VALID`: `VERIFICATION NOT STARTED: CANONICAL TICKET INVALID`.
@@ -59,19 +55,17 @@ Before deriving runtime execution, semantically compare every AC and mapped Veri
 - `FAILED` or `INCONCLUSIVE` leaves a normal `ready` Ticket at `ready`.
 - A normal `ready` Ticket changes to `done` only after final `VERIFIED` on a stable target and the guarded progression succeeds.
 
-## Required heuristic probe gate
+## Current target admission and integrated discovery
 
-Normal delivery verification of a `ready` Ticket requires one terminal result from `ready-ticket-heuristic-probe` and its exact `Probe Machine Binding` path. The complete handoff order and outcome mapping live in [references/verify.md#5-verification-target-stability](references/verify.md#5-verification-target-stability).
+After canonical/status/semantic/authority/projection gates and actual target resolution pass, call `ready_guard begin_verify` with exact Ticket/Project Root and `target_paths`. This directly binds current product authority and the actual target; no prior exploration result/binding or implementation-plan ADMIT is required. Preserve the actual admission outcome, not a guessed diagnosis. Continue only with `purpose: verify` and a bound target digest.
 
-An earlier `VERIFICATION NOT STARTED` remains correct when an independently established current canonical/status/permission, semantic, authority/projection, direct terminal Probe-result, or exact-target gate blocks admission. Missing result or binding still returns `VERIFICATION NOT STARTED: REQUIRED HEURISTIC PROBE RESULT MISSING`; a directly stated `PARTIAL` or `BLOCKED` terminal Probe result returns `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`. Do not manufacture an earlier machine-handoff diagnosis from a binding excerpt, prose, or a parent claim.
+Use supported guarded inspection and structured `ready_argv execute` for runtime commands. Generic product source/config/test/planning mutation and `ready_argv mutate` are forbidden. Any declared output must stay outside Project Root and cannot cover protected authority/target/method files. Runtime drift and unknown effects are not resolved by a prose claim.
 
-For normal `ready` verification once those gates pass, pass the unmodified `probe_binding_path`, exact Ticket/Project Root and exact `target_paths` to `ready_guard begin_verify` before asserting any machine-binding syntax, closure or currentness reason. `begin_verify` owns raw JSON parsing and machine identity/target admission; use its actual rejection to report `HEURISTIC PROBE GATE INCOMPLETE` or `HEURISTIC PROBE RESULT STALE`, without guessing punctuation or treating a claim as a rebind. Continue only when it returns `purpose: verify` with a bound verification-target digest. Use `ready_argv execute` for ordinary runtime commands that are not read-only shell inspection; do not use generic `write`/`edit`, `ready_argv mutate`, or project-local verifier tests during the verdict cycle. Any `TARGET_DRIFT` prohibits `VERIFIED`; already attributable contradictions may still support `FAILED`, otherwise close `INCONCLUSIVE`.
+The final verifier derives a bounded frontier from original purpose, every authored flow/conditional boundary and current implementation, in addition to the mandatory scenario. Admit extra discovery only with a current contract anchor, reachable plausible false-completion/attribution path, material impact and decisive observable readback. Safely minimize triggers and preserve fresh attributable evidence. No distinct lane/no finding is not PASS; all authored Flow/AC and cleanup obligations still close independently. This method is self-contained and has no external Skill dependency.
 
-Every caller-facing `VERIFICATION NOT STARTED` result includes the non-continuation provenance fields defined in [references/verify.md](references/verify.md). If a final `INCONCLUSIVE` specifically results from an authority, evidence-attribution, target-currentness, or progression boundary that prevents authoritative completion, append the same provenance fields. An ordinary `FAILED` verdict based on verifier-owned contradictory product evidence is a completed verification verdict and does not require this explanation block.
+The verifier owns each finding's disposition and final adjudication. Existing plan/implementation reports or permitted exploration assistance are navigation, not final evidence. Current Main in explicit DIRECT may verify, but cannot elevate its prior implementation self-check into final PASS. Same-cycle verifier-owned discovery evidence may serve adjudication without ritual repetition of risky triggers. Do not add hidden exploration fan-out or change the selected verification mode.
 
-Probe findings are navigation/counterexample seeds, not flow or AC verdicts and not automatic implementation defects. `Material Findings: None` is not PASS evidence. Where a finding is material and current, the verifier incorporates it into its own scenario and obtains verifier-owned current evidence. A probe result never satisfies `Independent verification required: yes` by itself.
-
-Explicit diagnostic re-verification of an already `done` Ticket does not require this normal delivery gate unless the current user explicitly asks for a fresh heuristic probe as part of that diagnostic.
+Every `VERIFICATION NOT STARTED` and authority/evidence-attribution/currentness/progression-limited terminal follows the existing provenance schema in [references/verify.md](references/verify.md). An evidence-complete product `FAILED` remains a completed verdict, not a missing-evidence return.
 
 ## Scenario ownership
 
@@ -95,6 +89,7 @@ Before the first product/runtime action, produce `VERIFICATION SCENARIO REPORT` 
 
 - `DIRECT`: the report remains informational with `Checkpoint: NOT_APPLICABLE`; continue under the existing direct verifier authority.
 - `SUBAGENT`: return the report as `Checkpoint: PRE_RUNTIME`, `Protected next phase: FIRST_PRODUCT_OR_RUNTIME_ACTION`, `Checkpoint state: PARENT_CONTINUATION_REQUIRED`. Do not perform the protected product/runtime action before Parent `CONTINUE`.
+- Public guard calls use `checkpoint` with `kind: PRE_RUNTIME | MATERIAL_TURN | PRE_PROGRESSION`, then exact owner/Parent `release_checkpoint`. Source mutation while PAUSED remains forbidden; parent continuation does not bypass currentness or effect uncertainty.
 
 Produce `VERIFICATION TURN REPORT` only when target identity, authority mapping, scenario execution, evidence attribution or an expected authoritative readback changes materially enough to affect flow adjudication or safe terminal progression. Routine progress, normal command output and confidence-only updates are not report events. In `SUBAGENT`, a material turn is a `MATERIAL_TURN` checkpoint and work depending on the changed direction does not continue before Parent continuation.
 
@@ -127,6 +122,8 @@ Match evidence to the actual claim:
 - **Process/history claim:** require process/history evidence only when the approved acceptance contract makes it load-bearing; do not invent a ledger or retained evidence surface to make verification easier.
 
 The source/config/build target must remain stable throughout the authoritative cycle. Unrelated target drift makes affected PASS evidence stale or unattributable and requires fresh applicable observation.
+
+Exact declared method-context plan/review navigation changes only stale that navigation; they do not automatically invalidate product PASS. Actual product source/config/authority or runtime/readback drift still affects attribution. Undeclared new files remain conservatively product-target candidates, and a file required as a product deliverable stays product authority even if called a plan.
 
 The verifier assigns exactly one result to every authored flow and one verdict to every current top-level AC in authored order.
 
@@ -161,6 +158,8 @@ Do not perform that write through generic file tools. Call Ready runtime `ready_
 If Parent returns `STEER`, the delegated verifier reopens only the bounded flow/evidence/closure identified by the steering and resubmits `PRE_PROGRESSION` if the candidate remains `VERIFIED`. Parent may return `STOP` at `PRE_PROGRESSION` only when current authority, target currentness, current user instruction, evidence closure, or progression authority means candidate `VERIFIED` can no longer be finalized. In that case the delegated verifier, not Parent Main, emits the existing terminal `Verification Verdict: INCONCLUSIVE`, reports `Ticket Progression: NOT APPLICABLE`, leaves the Ticket at `Status: ready`, and performs no `done` mutation.
 
 Keep `Verification Verdict` separate from `Ticket Progression`. A `VERIFIED` verdict remains the evidence verdict if the guarded write or post-write validation fails; report `Ticket Progression: FAILED` without pretending delivery progression completed.
+
+Report actual status even if it is `done` while progression is FAILED. The finalizer conditionally restores only its exact status-only candidate under unchanged ownership/authority; external changes and unresolved intent/effects must not be overwritten or silently declared complete.
 
 ## Safety and non-goals
 

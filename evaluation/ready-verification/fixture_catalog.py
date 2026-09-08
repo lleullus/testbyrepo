@@ -184,7 +184,7 @@ def ordinary(command, value):
 '''
 
 
-def _engine(family: str, variant: str, endpoint: str) -> tuple[str, str | None, str | None]:
+def _engine(family: str, variant: str, endpoint: str, runtime_state: Path) -> tuple[str, str | None, str | None]:
     if family in {'auth-boundary', 'external-effect', 'operator-assisted', 'missing-surface', 'unknown-preservation'}:
         kind = {'auth-boundary': 'authorization', 'external-effect': 'effect', 'operator-assisted': 'operator'}.get(family, 'surface')
         trigger = {'authorization': '/authorize', 'effect': '/effect', 'operator': '/operator/request', 'surface': '/surface'}[kind]
@@ -250,13 +250,12 @@ def ordinary(command, value):
     return {{'value': 'revised-value' if canonical == 'sample' else 'original-value', 'input': canonical}}
 ''', None, None
     if family == 'finding-retention':
-        root = 'Path(__file__).resolve().parents[1]' if 'holdout' in variant else 'Path(__file__).resolve().parent'
         return f'''
 import json, urllib.error, urllib.request
 from pathlib import Path
 
 BASE = {endpoint!r}
-STATE = {root} / '.runtime' / 'operation-results.json'
+STATE = Path({str(runtime_state)!r})
 
 def request(operation):
     data = json.dumps({{'operation': operation}}).encode()
@@ -374,7 +373,7 @@ def _documents(project: Path, flows: list[dict[str, str]], *, app: Path, engine:
     spec += '\n\n## Requirements\n\n- Use the ordinary user entrypoint and the required current readback.\n- Preserve all specified earlier outcomes.\n\n## Non-Goals\n\n- UI changes\n- Changes to the external authority or other products\n\n## Implementation Constraints\n\nProduct writes stay within the entrypoint and its direct support code.\n\n## Verification Expectations\n\n'
     ticket = f'# TICKET-001: Runtime boundary change\n\nStatus: ready\nParent-Spec: ../SPEC.md\nProject-Root: {project}\nWorker:\nUI: no\n\n## Goal\n\n' + ' '.join(flow['outcome'] for flow in flows)
     ticket += '\n\n## Acceptance Criteria\n\n' + '\n'.join(f'- {flow["outcome"]}' for flow in flows)
-    ticket += '\n\n## Scope\n\nThe ordinary CLI request and authoritative result, including preservation of the specified legacy input.\n\n## Non-Goals\n\n- UI changes\n- Changes to the external authority or other products\n\n## Blockers\n\nNone\n\n## Verification\n\n'
+    ticket += '\n\n## Scope\n\nThe ordinary CLI request and authoritative result for every outcome listed in Acceptance Criteria.\n\n## Non-Goals\n\n- UI changes\n- Changes to the external authority or other products\n\n## Blockers\n\nNone\n\n## Verification\n\n'
     for ordinal, flow in enumerate(flows, 1):
         fields = f'  Trigger or inspection target: {flow["trigger"]}\n  Acceptance boundary: ordinary product CLI and required current result\n  Expected observable result: {flow["outcome"]}\n  Authoritative readback: {flow["readback"]}\n  Disposition: {disposition}\n  Independent verification required: {independent}\n  Acceptance surface: {surface}\n  External condition: {condition}\n'
         spec += f'- Outcome: {flow["outcome"]}\n  Acceptance boundary: ordinary product CLI and required current result\n' + fields.replace('  Acceptance boundary: ordinary product CLI and required current result\n', '')
@@ -415,7 +414,8 @@ def materialize(case: dict, project_root: Path, support_root: Path, *, port: int
         raise KeyError('variant')
     holdout = 'holdout' in variant
     endpoint = f'http://127.0.0.1:{port}'
-    body, mode, kind = _engine(family, variant, endpoint)
+    runtime_state = project.parent / 'runtime-output' / 'operation-results.json'
+    body, mode, kind = _engine(family, variant, endpoint, runtime_state)
     engine = _put(project, 'domain/operations.py' if holdout else 'engine.py', body)
     import_line = 'from domain.operations import ordinary' if holdout else 'from engine import ordinary'
     root_expr = 'Path(__file__).resolve().parents[1]' if holdout else 'Path(__file__).resolve().parent'
@@ -442,7 +442,7 @@ assert {assertion}
     service_argv = reset_argv = observer_argv = None
     product_state = authority_state = request_log = implementation_report = None
     if family == 'finding-retention':
-        product_state = project / '.runtime' / 'operation-results.json'
+        product_state = runtime_state
         authority_state = support / 'state.json'
         request_log = authority_state.with_suffix('.requests.jsonl')
         service = _put(support, 'authority.py', RETENTION_SERVICE)
@@ -453,6 +453,8 @@ assert {assertion}
     elif kind:
         service = _put(support, 'authority.py', SERVICE)
         state = support / 'state.json'
+        authority_state = state
+        request_log = state.with_suffix('.requests.jsonl')
         service_argv = [sys.executable, str(service), '--state', str(state), '--mode', mode, '--port', str(port)]
         reset_argv = [sys.executable, str(service), '--state', str(state), '--mode', mode, '--reset']
         if family == 'operator-assisted' and variant == 'core':
@@ -467,10 +469,10 @@ assert {assertion}
 
         The approved runtime change is complete. The ordinary entrypoint was checked with the approved sample request and returned `value=revised-value` with `input=sample`. The focused helper check also passed. No remaining implementation issues were found.
         ''')
-    after_probe = {
-        'probe-current-claim-core': {'kind': 'current-claim', 'requires_completed_probe': True},
-        'probe-malformed-json-core': {'kind': 'malformed-json', 'requires_completed_probe': True},
-    }.get(case.get('case_id'), {'kind': family} if family in {'stale-probe', 'probe-admission'} else None)
+    challenge = None
+    if family == 'verification-drift':
+        paths = [str(ticket), str(spec), str(project / 'docs/planning/behavior/contexts/runtime-boundary.md')] if variant == 'authority' else [str(engine)]
+        challenge = {'paths': paths, 'before': 'revised-value', 'after': 'next-value'}
     planning_prompt = '사용자 요구: ' + ' '.join(flow['outcome'] for flow in flows) + f'\n현재 사용자 진입점: {app}. 제공된 investigation.txt가 있으면 현재 사실과 미확인의 근거로 사용한다. 승인된 결과를 내부 helper나 성공 응답으로 축소하지 않는다.'
     if kind:
         planning_prompt += f' 외부 경계는 이미 제공된 loopback authority {endpoint}이며 제품 소유가 아니다. 실제 readback과 사용할 수 없는 증거를 구분한다.'
@@ -488,7 +490,7 @@ assert {assertion}
     metadata = {'project_root': str(project), 'ticket_path': str(ticket), 'target_paths': [str(app), str(engine)],
                 'allowed_output_paths': allowed_output_paths, 'trigger_argv': trigger_argv,
                 'readback_argv': readback_argv, 'additional_trigger_argv': additional_trigger_argv,
-                'observer_argv': observer_argv, 'service_argv': service_argv, 'reset_argv': reset_argv, 'after_probe': after_probe,
+                'observer_argv': observer_argv, 'service_argv': service_argv, 'reset_argv': reset_argv, 'verification_challenge': challenge,
                 'planning_prompt': planning_prompt, 'implementation_prompt': f'Implement only the exact ready Ticket {ticket}. Preserve its outcome and actual readback, and self-check the ordinary entrypoint.',
                 'service_port': port if kind else None}
     if implementation_report:

@@ -33,44 +33,75 @@ def text_content(message: dict[str, Any]) -> str:
     return "\n".join(part.get("text", "") for part in content if part.get("type") == "text")
 
 
-def _probe_completion(terminal: str) -> str | None:
-    """Parse exactly one unquoted canonical Probe result, never a narrated predecessor."""
-    lines: list[str] = []
+def terminal_lines(terminal: str) -> list[str]:
+    """Ignore quoted examples and fenced/intermediate reports."""
+    lines = []
     in_fence = False
     for raw in terminal.splitlines():
         if re.match(r"^\s*(?:```|~~~)", raw):
             in_fence = not in_fence
+            lines.append("")
             continue
         if in_fence or raw.lstrip().startswith(">") or raw.startswith(("    ", "\t")):
+            lines.append("")
             continue
         lines.append(raw.strip().replace("**", "").replace("`", ""))
+    return lines
+
+
+def canonical_field(terminal: str, heading: str, field: str, values: str) -> str | None:
+    lines = terminal_lines(terminal)
     headings = [index for index, line in enumerate(lines)
-                if re.fullmatch(r"(?:#{1,6}\s*)?READY TICKET HEURISTIC PROBE RESULT", line, re.IGNORECASE)]
+                if re.fullmatch(r"(?:#{1,6}\s*)?" + re.escape(heading), line, re.IGNORECASE)]
     if len(headings) != 1:
         return None
-    completions = [match.group(1).upper() for line in lines[headings[0] + 1:]
-                   if (match := re.fullmatch(
-                       r"(?:[-*+]\s+)?Probe Completion\s*:\s*(COMPLETE|PARTIAL|BLOCKED)(?:\s+[—–-]\s+.*)?",
-                       line, re.IGNORECASE))]
-    return completions[0] if len(completions) == 1 else None
-
-
-def _implementation_completion(terminal: str) -> str | None:
-    lines = []
-    in_fence = False
-    for line in terminal.splitlines():
-        if re.match(r"^\s*(?:```|~~~)", line):
-            in_fence = not in_fence
-            continue
-        if not in_fence:
-            lines.append(line.strip().replace("**", "").replace("`", ""))
-    headers = [index for index, line in enumerate(lines)
-               if re.fullmatch(r"(?:#{1,6}\s*)?IMPLEMENT RESULT", line, re.IGNORECASE)]
-    if len(headers) != 1:
+    fields = [(index, match.group(1)) for index, line in enumerate(lines) if index > headings[0]
+              and (match := re.fullmatch(r"(?:[-*+]\s+)?" + re.escape(field) + r"\s*:\s*(.*)", line, re.IGNORECASE))]
+    if len(fields) != 1:
         return None
-    completions = [match.group(1).upper() for line in lines[headers[0] + 1:]
-                   if (match := re.fullmatch(r"(?:[-*+]\s+)?Completion\s*:\s*(COMPLETE|BLOCKED|PARTIAL)(?:\s+[—–-]\s+.*)?", line, re.IGNORECASE))]
-    return completions[0] if len(completions) == 1 else None
+    index, value = fields[0]
+    if not value and index + 1 < len(lines):
+        value = lines[index + 1]
+    match = re.fullmatch(r"(" + values + r")(?:\s+[—–-]\s+.*)?", value, re.IGNORECASE)
+    return match.group(1) if match else None
+
+
+def _verification_verdict(terminal: str) -> str | None:
+    lines = terminal_lines(terminal)
+    not_started = [line for line in lines if re.fullmatch(r"(?:#{1,6}\s*)?VERIFICATION NOT STARTED", line, re.IGNORECASE)]
+    verdict = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verification Verdict", "VERIFIED|FAILED|INCONCLUSIVE")
+    if not_started:
+        return "VERIFICATION NOT STARTED" if len(not_started) == 1 and not any("READY TICKET VERIFICATION RESULT" in line.upper() for line in lines) else None
+    return verdict.upper() if verdict else None
+
+
+def guard_results(events: list[dict[str, Any]], action: str) -> list[dict[str, Any]]:
+    calls = {event.get("toolCallId"): event for event in events if event.get("type") == "tool_execution_start"}
+    results = []
+    for event in events:
+        call = calls.get(event.get("toolCallId"), {})
+        args = call.get("args", {})
+        name = call.get("toolName")
+        if name == "write" and args.get("path") == "xd://ready_guard":
+            try:
+                args = json.loads(args.get("content", ""))
+                name = "ready_guard"
+            except (TypeError, json.JSONDecodeError):
+                continue
+        if event.get("type") != "tool_execution_end" or event.get("isError") or name != "ready_guard" or args.get("action") != action:
+            continue
+        result = event.get("result", {})
+        if not isinstance(result, dict):
+            continue
+        details = result.get("details")
+        if not isinstance(details, dict):
+            try:
+                details = json.loads(text_content(result))
+            except (TypeError, json.JSONDecodeError):
+                continue
+        if isinstance(details, dict):
+            results.append({"args": args, "result": details, "tool_call_id": event.get("toolCallId")})
+    return results
 
 
 def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -81,19 +112,19 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
     ) else ""
     agent_ended = any(event.get("type") == "agent_end" for event in events)
     model_completed = agent_ended and last.get("stopReason") == "stop" and bool(terminal.strip()) and not last.get("errorMessage")
-    plain = terminal.replace("**", "").replace("`", "")
-    admission = re.search(r"(?im)^\s*(?:[-#]+\s*)?VERIFICATION NOT STARTED\b[^\n]*", plain)
-    verdicts = re.findall(r"(?im)^\s*(?:[-#]+\s*)?(?:Verification Verdict|Whole[- ]Ticket(?: verdict)?|Verdict)\s*:\s*(VERIFIED|FAILED|INCONCLUSIVE)\b", plain)
-    parsed = "VERIFICATION NOT STARTED" if admission else verdicts[-1].upper() if verdicts else None
-    probe = _probe_completion(terminal)
-    implementation = _implementation_completion(terminal)
+    parsed = _verification_verdict(terminal)
+    preparation = canonical_field(terminal, "READY TICKET PLAN RESULT", "Completion", "COMPLETE|BLOCKED|PARTIAL")
+    review = canonical_field(terminal, "READY TICKET PLAN RESULT", "Plan Review", r"/[^\n]+")
+    implementation = canonical_field(terminal, "IMPLEMENT RESULT", "Completion", "COMPLETE|BLOCKED|PARTIAL")
     calls = [event for event in events if event.get("type") == "tool_execution_start"]
     results = [event for event in events if event.get("type") == "tool_execution_end"]
     tool_errors = [event for event in results if event.get("isError") is True]
     usage = {key: sum(message.get("usage", {}).get(key, 0) for message in messages) for key in ("input", "output", "cacheRead", "cacheWrite", "totalTokens")}
     models = sorted({f"{message.get('provider')}/{message.get('model')}" for message in messages})
     return {"terminal_text": terminal, "parsed_verdict": parsed if model_completed else None,
-            "probe_completion": probe if model_completed else None,
+            "preparation_completion": preparation.upper() if model_completed and preparation else None,
+            "plan_review_path": review if model_completed else None,
+            "ticket_progression": canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Ticket Progression", "COMPLETED|FAILED|NOT APPLICABLE") if model_completed else None,
             "implementation_completion": implementation if model_completed else None,
             "tool_calls": calls, "tool_results": results, "tool_errors": tool_errors,
             "usage": usage, "actual_models": models,
@@ -104,7 +135,8 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
 def invoke(*, project_root: Path, prompt: str, output_dir: Path, agent_dir: Path,
            payload: Path, runtime_data: Path, model: str, thinking: str = "medium",
            timeout: int = 600, session_dir: Path | None = None,
-           resume_session: Path | None = None, wall_timeout_seconds: float | None = None) -> dict[str, Any]:
+           resume_session: Path | None = None, wall_timeout_seconds: float | None = None,
+           stage: str, boundary_callback=None) -> dict[str, Any]:
     project_root = project_root.resolve(strict=True)
     payload = payload.resolve(strict=True)
     agent_dir = agent_dir.resolve(strict=True)
@@ -136,20 +168,45 @@ def invoke(*, project_root: Path, prompt: str, output_dir: Path, agent_dir: Path
     prompt_path.write_text(prompt, encoding="utf-8")
     environment = dict(os.environ)
     environment.pop("OMP_PROFILE", None)
-    environment.update(PI_CODING_AGENT_DIR=str(agent_dir), IIS_READY_RUNTIME_DATA=str(runtime_data.resolve()),
-                       IIS_READY_IIS_WORKFLOW_SKILL=str(payload / "iis-workflow/SKILL.md"), PYTHONDONTWRITEBYTECODE="1")
+    bundle = json.loads((payload / "bundle.json").read_text(encoding="utf-8"))
+    if bundle.get("schema") != "iis-bundle/v2" or bundle.get("protocol") != 2:
+        raise ValueError("a complete current protocol-2 bundle is required")
+    for key in ("IIS_READY_RUNTIME_DATA", "IIS_READY_VALIDATOR_PATH", "IIS_READY_BUNDLE_ID", "IIS_READY_IIS_WORKFLOW_SKILL"):
+        environment.pop(key, None)
+    environment.update(PI_CODING_AGENT_DIR=str(agent_dir), PYTHONDONTWRITEBYTECODE="1")
+    runtime_required = stage in {"prepare", "implement", "verify"}
+    if runtime_required:
+        environment.update(IIS_READY_RUNTIME_DATA=str(runtime_data.resolve()),
+                           IIS_READY_VALIDATOR_PATH=str(payload / "matt/skills/to-tickets/validate_ticket.py"),
+                           IIS_READY_BUNDLE_ID=bundle["bundle_id"])
     session_args = ["--no-session"] if session_dir is None else ["--session-dir", str(session_dir), "--no-title"]
     if resume_session is not None:
         session_args.extend(["--resume", str(resume_session)])
+    extensions = ["--extension", str(payload / "delivery-runtime/ready-ticket-implement/index.js")] if runtime_required else []
     argv = ["omp", "--cwd", str(project_root), "--mode", "json", "--print", *session_args, "--no-rules",
-            "--no-extensions", "--extension", str(payload / "delivery-runtime/ready-ticket-implement/index.js"),
-            "--model", model, "--thinking", thinking, "--max-time", f"{timeout}s", "--approval-mode", "yolo", prompt]
+            "--no-extensions", *extensions, "--model", model, "--thinking", thinking,
+            "--max-time", f"{timeout}s", "--approval-mode", "yolo", prompt]
     started = time.monotonic()
     timed_out = False
     with (output_dir / "events.jsonl").open("w", encoding="utf-8") as stdout, (output_dir / "stderr.txt").open("w", encoding="utf-8") as stderr:
         process = subprocess.Popen(argv, cwd=project_root, env=environment, stdout=stdout, stderr=stderr, start_new_session=True)
         try:
-            exit_code = process.wait(timeout=timeout + 20 if wall_timeout_seconds is None else wall_timeout_seconds)
+            allowance = timeout + 20 if wall_timeout_seconds is None else wall_timeout_seconds
+            if boundary_callback is None:
+                exit_code = process.wait(timeout=allowance)
+            else:
+                deadline = time.monotonic() + allowance
+                while True:
+                    boundary_callback(load_events(output_dir / "events.jsonl"))
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise subprocess.TimeoutExpired(argv, allowance)
+                    try:
+                        exit_code = process.wait(timeout=min(0.05, remaining))
+                        boundary_callback(load_events(output_dir / "events.jsonl"))
+                        break
+                    except subprocess.TimeoutExpired:
+                        continue
         except subprocess.TimeoutExpired:
             timed_out = True
             os.killpg(process.pid, signal.SIGTERM)
@@ -158,14 +215,27 @@ def invoke(*, project_root: Path, prompt: str, output_dir: Path, agent_dir: Path
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
                 exit_code = process.wait()
+        except BaseException:
+            # Callback/setup failures must not leave a live side-effect-capable actor.
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGTERM)
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.wait()
+            raise
     result = summarize(load_events(output_dir / "events.jsonl"))
-    result.update(schema="iis-agent-observation/v1", model_requested=model, thinking=thinking,
+    result.update(schema="iis-agent-observation/v2", stage=stage, bundle_id=bundle["bundle_id"],
+                  extension_requested=extensions, loaded_identity="REQUIRES_RAW_HOST_EVIDENCE",
+                  model_requested=model, thinking=thinking,
                   project_root=str(project_root), runtime_data=str(runtime_data.resolve()), payload=str(payload),
                   raw_events=str(output_dir / "events.jsonl"), prompt_sha256=hashlib.sha256(prompt.encode()).hexdigest(),
                   elapsed_seconds=time.monotonic() - started, exit_code=exit_code, timed_out=timed_out)
     result["clean_transport"] = exit_code == 0 and not timed_out and result["model_completed"] and result["actual_models"] == [model]
     if not result["clean_transport"]:
-        result["implementation_completion"] = None
+        for field in ("implementation_completion", "preparation_completion", "plan_review_path", "parsed_verdict", "ticket_progression"):
+            result[field] = None
     if session_dir is not None:
         sessions = list(session_dir.glob("*.jsonl"))
         result["session_file"] = str(sessions[0]) if len(sessions) == 1 else None
@@ -180,6 +250,7 @@ def invoke(*, project_root: Path, prompt: str, output_dir: Path, agent_dir: Path
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-root", required=True, type=Path)
+    parser.add_argument("--stage", required=True, choices=("plan", "prepare", "implement", "verify", "completion"))
     parser.add_argument("--prompt", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--agent-dir", required=True, type=Path)
@@ -194,8 +265,8 @@ def main() -> int:
     result = invoke(project_root=args.project_root, prompt=args.prompt.read_text(encoding="utf-8"), output_dir=args.output,
                     agent_dir=args.agent_dir, payload=args.payload, runtime_data=args.runtime_data,
                     model=args.model, thinking=args.thinking, timeout=args.timeout,
-                    session_dir=args.session_dir, resume_session=args.resume_session)
-    print(json.dumps({key: result[key] for key in ("exit_code", "timed_out", "agent_ended", "clean_transport", "stop_reason", "error_message", "parsed_verdict", "probe_completion", "implementation_completion", "actual_models", "elapsed_seconds", "raw_events")}, indent=2))
+                    session_dir=args.session_dir, resume_session=args.resume_session, stage=args.stage)
+    print(json.dumps({key: result[key] for key in ("exit_code", "timed_out", "agent_ended", "clean_transport", "stop_reason", "error_message", "parsed_verdict", "preparation_completion", "implementation_completion", "actual_models", "elapsed_seconds", "raw_events")}, indent=2))
     return 0 if result["clean_transport"] else 1
 
 

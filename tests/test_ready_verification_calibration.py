@@ -102,7 +102,7 @@ class ReadyVerificationCalibrationTests(unittest.TestCase):
             "type": "message_end", "message": {
                 "role": "assistant", "stopReason": "stop",
                 "provider": "opencodex", "model": "gpt-6-astra",
-                "content": [{"type": "text", "text": "Verification Verdict: VERIFIED"}],
+                "content": [{"type": "text", "text": "READY TICKET VERIFICATION RESULT\nVerification Verdict: VERIFIED"}],
             },
         }) + '\n{"type":"agent_end"}\n', encoding="utf-8")
         metadata_path = root / "metadata.json"

@@ -65,6 +65,8 @@ Route to Scope Shaper when any of those conditions is not established. New-produ
 
 This is a read-only status inspection over existing IIS artifacts. It does not create a workflow ledger, inspect product runtime, re-run Scope Shaper reasoning, or execute the next planning leaf.
 
+This board reports recorded done history for navigation, not a fresh runtime-verification or current-run progression verdict. Do not reopen history or consult a new runtime completion database. Current delivery completion still requires its exact owner result, successful progression and applicable current evidence; done with progression FAILED cannot be inferred complete by a delivery caller.
+
 When this check applies:
 
 1. Inspect the relevant project-local `docs/planning/scope-shaping/**` and `docs/planning/work/**` artifacts broadly enough to reconstruct the current planning board: Work Packages, Increments, each Increment's work slug/Spec, and Ticket statuses.
@@ -96,7 +98,7 @@ STOP
 
 An explicit Scope Shaper request or any IIS request that is not yet next-increment-ready routes to:
 
-`/home/user01/project/iis-skills/scope-shaper/SKILL.md`
+[Scope Shaper](../scope-shaper/SKILL.md)
 
 Scope Shaper has entry precedence whenever the next durable construction increment still has to be selected. Respect its confirmed planning landscape and exact selected Increment before entering Matt planning.
 
@@ -104,13 +106,13 @@ Scope Shaper has entry precedence whenever the next durable construction increme
 
 An explicit Ask Matt request or an ordinary IIS request that already passes next-increment admission routes to:
 
-`/home/user01/project/iis-skills/matt/skills/ask-matt/SKILL.md`
+[Ask Matt](../matt/skills/ask-matt/SKILL.md)
 
 Ask Matt owns product, Behavior, UI, completion-contract, and verification-feasibility planning for one admitted increment. Ask Matt must return to Scope Shaper when its preflight finds that the requested unit still contains unresolved construction-stage, foundation, split/merge, or product-capability-ordering decisions. Planning remains declarative: current repository facts inform the contract but do not become implementation authority by themselves.
 
 When adversarial consensus is explicitly active, Ask Matt uses:
 
-`/home/user01/project/iis-skills/matt/skills/adversarial-consensus/SKILL.md`
+[Adversarial Consensus](../matt/skills/adversarial-consensus/SKILL.md)
 
 Ordinary planning never suggests, infers, defaults to, or auto-enables that gate.
 
@@ -118,7 +120,7 @@ Ordinary planning never suggests, infers, defaults to, or auto-enables that gate
 
 An explicit To Spec request routes to:
 
-`/home/user01/project/iis-skills/matt/skills/to-spec/SKILL.md`
+[To Spec](../matt/skills/to-spec/SKILL.md)
 
 An explicit To Spec request does not withdraw, satisfy, or bypass an active adversarial-consensus instruction. When routing, pass the current adversarial-consensus activation or withdrawal fact to To Spec together with the exact current Challenger binding for To Spec's direct admission gate.
 
@@ -128,7 +130,7 @@ To Spec serializes the approved shared understanding for the current increment i
 
 An explicit To Tickets request routes to:
 
-`/home/user01/project/iis-skills/matt/skills/to-tickets/SKILL.md`
+[To Tickets](../matt/skills/to-tickets/SKILL.md)
 
 To Tickets projects the approved Spec into the smallest implementation Tickets, performs individual and whole-Set defect-first review, validates the guarded `draft -> ready` transition, and stops when the complete Ready Ticket Set for the current increment is available. Separate user/planning-owner approval is required only when the current user explicitly requests it.
 
@@ -155,6 +157,10 @@ Implementation and verification are outside IIS. A Ready Ticket may later be con
 If the current request is explicitly to implement or verify an already-existing exact Ready Ticket rather than to plan it, classify the request as outside IIS Planning instead of silently converting it into a planning or whole-Spec workflow.
 
 If the user requests whole-Spec delivery after planning, the caller may deliver Ready Tickets using a separate delivery mechanism. That caller is not IIS, and IIS does not define its scheduling, retries, completion state, or final orchestration.
+
+Detailed execution preparation for existing Ready Tickets belongs to the separate [ready-ticket-plan](../companion-skills/ready-ticket-plan/SKILL.md) companion. A caller may request plans, Heuristic and independent start review without implementation; this does not extend IIS Planning's READY_TICKET_SET terminal or change product ready. A later implementation owner consumes current review; an already implemented ready target requested only for verification goes directly to its verifier without a new plan. IIS itself neither runs nor supervises these owners.
+
+Resolve these relative routes within the same loaded immutable bundle. Do not follow historical source absolute paths or mix another release's validator into the current contract.
 
 ## Planning Decision Boundary
 

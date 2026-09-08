@@ -5,8 +5,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 REPO_ROUTER = ROOT / "iis-workflow/SKILL.md"
-CANONICAL_ROUTER = Path("/home/user01/project/iis-skills/iis-workflow/SKILL.md")
-INSTALLED_ROUTER = Path("/home/user01/.codex/skills/iis-workflow/SKILL.md")
 
 
 class IISEntryRoutingContractTests(unittest.TestCase):
@@ -115,10 +113,6 @@ class IISEntryRoutingContractTests(unittest.TestCase):
         self.assertIn("Do not reinterpret a request naming one exact Ticket as permission to complete sibling Tickets or the whole Spec", body)
         self.assertIn("IIS does not route or supervise that layer", body)
 
-    def test_live_installed_router_matches_current_canonical_installation(self) -> None:
-        self.assertTrue(INSTALLED_ROUTER.is_file())
-        self.assertTrue(CANONICAL_ROUTER.is_file())
-        self.assertEqual(INSTALLED_ROUTER.read_bytes(), CANONICAL_ROUTER.read_bytes())
 
 
 if __name__ == "__main__":

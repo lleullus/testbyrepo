@@ -19,7 +19,8 @@ import uuid
 from typing import Any
 
 from fixture_catalog import _put
-from run_agent import invoke, load_events, summarize
+from run_agent import invoke, load_events, summarize, terminal_lines, guard_results
+from calibrate import current_review
 
 ROOT = Path(__file__).resolve().parent
 ORACLE = ROOT / "completion-cases.json"
@@ -29,7 +30,7 @@ FIXTURE_NOTICE = """
 EVALUATION FIXTURE NOTICE
 
 This disposable tree is synthetic setup state. Ticket statuses, earlier owner
-reports, Probe records, and implementation or verification reports in this tree
+reports, preparation records, and implementation or verification reports in this tree
 were seeded to define the starting state. They are not evidence that this
 current evaluation invocation implemented or verified anything. Assess the
 current Run Contract from the actual files, ordinary local CLI, canonical
@@ -190,25 +191,35 @@ BLUEPRINTS: dict[str, dict[str, Any]] = {
         "command": "status",
         "implementation": {"Completion": "COMPLETE", "target": "not recorded", "current_evidence": [], "independent_verification_claimed": False},
     },
-    "probe-and-verification-current": {
-        "boundary": "CURRENT_INCREMENT_DELIVERED",
-        "predicate": "Every current Ticket is done through an actual current verifier result; Probe completion is navigation only.",
+    "preparation-current": {
+        "boundary": "READY_EXECUTION_PLANS",
+        "predicate": "Every required exact Ready Ticket has an actual independent current ADMIT review; product implementation and final verification are not requested.",
         "product_outcome": "The ordinary current result returns value=revised-value.",
         "state": {"value": "revised-value"},
         "tickets": [("TICKET-001", "ready")],
         "obligations": [("ordinary current result returns value=revised-value", "TICKET-001", ["state/current.json"])],
         "command": "status",
-        "setup_stages": ["probe", "verify"],
+        "setup_stages": ["prepare"],
     },
-    "probe-only-no-verification": {
+    "verification-current": {
         "boundary": "CURRENT_INCREMENT_DELIVERED",
-        "predicate": "Every current Ticket is done through an actual current verifier result; Probe completion is navigation only.",
+        "predicate": "Every current Ticket is done through an actual current integrated verifier result and guarded progression.",
         "product_outcome": "The ordinary current result returns value=revised-value.",
         "state": {"value": "revised-value"},
         "tickets": [("TICKET-001", "ready")],
         "obligations": [("ordinary current result returns value=revised-value", "TICKET-001", ["state/current.json"])],
         "command": "status",
-        "setup_stages": ["probe"],
+        "setup_stages": ["verify"],
+    },
+    "implementation-ready-no-verification": {
+        "boundary": "CURRENT_INCREMENT_DELIVERED",
+        "predicate": "Every current Ticket is done through an actual current integrated verifier result and guarded progression.",
+        "product_outcome": "The ordinary current result returns value=revised-value.",
+        "state": {"value": "revised-value"},
+        "tickets": [("TICKET-001", "ready")],
+        "obligations": [("ordinary current result returns value=revised-value", "TICKET-001", ["state/current.json"])],
+        "command": "status",
+        "setup_stages": [],
     },
     "required-current-candidate-future": {
         "boundary": "NAMED_REQUIRED_ITEMS_DELIVERED",
@@ -363,8 +374,8 @@ def materialize(case_id: str, project: Path, support: Path) -> dict[str, Any]:
     support.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     setup_stages = blueprint.get("setup_stages", [])
-    history_limit = ("Product and approved authority are fixture setup. Probe/verifier evidence must come from actual recorded Ready invocations; no verdict or done state is seeded. The later Outer Main assessment does not itself perform delivery."
-                     if setup_stages else "All Ticket/report/probe/verifier states are synthetic fixture setup history, not execution evidence from this evaluation run.")
+    history_limit = ("Product and approved authority are fixture setup. Verifier evidence must come from actual recorded Ready invocations; no verdict or done state is seeded. The later Outer Main assessment does not itself perform delivery."
+                     if setup_stages else "All Ticket/report/preparation/verifier states are synthetic fixture setup history, not execution evidence from this evaluation run.")
     _put(project, "EVALUATION-FIXTURE-NOTICE.txt", history_limit if setup_stages else FIXTURE_NOTICE)
     app = _put(project, "app.py", APP)
     state = _put(project, "state/current.json", json.dumps(blueprint["state"], indent=2) + "\n")
@@ -407,7 +418,7 @@ Applicability: this disposable current product
         "Candidate Named Items": candidate or "None named",
         "Required Item Policy": "EXACT_REQUIRED_SET" if required else "NONE_REQUIRED",
         "Implementation": "yes" if implementation_enabled else "no",
-        "Verification": "no" if implementation_enabled else "yes",
+        "Verification": "no" if implementation_enabled or boundary == "READY_EXECUTION_PLANS" else "yes",
         "Run Completion Boundary": boundary,
         "Completion Predicate": predicate,
         "Authoritative Readback": "Inspect the ordinary local command, current state, canonical artifact, canonical Spec/Ticket ownership, and attributable evidence paths in this product.",
@@ -572,8 +583,7 @@ def prepare(case_id: str, arena: Path, variant: str, repetition: int) -> tuple[P
                      ["git", "-c", "user.name=Calibration", "-c", "user.email=calibration@localhost", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "-m", "Initial product state"]):
             subprocess.run(argv, cwd=project, check=True, capture_output=True)
         for stage in metadata["setup_stages"]:
-            metadata["current_readback_paths"].extend(str(run_root / stage / name) for name in ("terminal.txt", "record.json"))
-        metadata["current_readback_paths"].append(str(run_root / "probe-binding.json"))
+            metadata["current_readback_paths"].extend(str(run_root / stage / name) for name in (("lead/terminal.txt", "record.json", "plan-review.json") if stage == "prepare" else ("terminal.txt", "record.json")))
     expected = product_snapshot(project)
     metadata["setup_initial_product_digest"] = snapshot_digest(expected)
     if "verify" in metadata["setup_stages"]:
@@ -629,10 +639,13 @@ def _plain_line(line: str) -> str:
 def parse_completion(terminal: str, *, transport_valid: bool = True) -> bool | None:
     if not transport_valid:
         return None
-    lines = {_plain_line(line) for line in terminal.splitlines() if _plain_line(line)}
+    normalized = [_plain_line(line) for line in terminal_lines(terminal) if _plain_line(line)]
+    if sum(line in SUCCESS_HEADERS | NONCOMPLETION_HEADERS for line in normalized) > 1:
+        return None
+    lines = set(normalized)
     success = bool(lines & SUCCESS_HEADERS)
     incomplete = bool(lines & NONCOMPLETION_HEADERS) or bool(
-        re.search(r"(?im)^\s*(?:[-*]\s*)?Whole-run (?:completion|predicate satisfied)\s*:\s*no\s*$", terminal.replace("**", "").replace("`", ""))
+        re.search(r"(?im)^\s*(?:[-*]\s*)?Whole-run (?:completion|predicate satisfied)\s*:\s*no\s*$", "\n".join(terminal_lines(terminal)))
     )
     if success == incomplete:
         return None
@@ -648,6 +661,24 @@ def run(metadata_path: Path, *, agent_dir: Path, payload: Path, runtime_data: Pa
         raise ValueError("metadata must be the canonical run_root/metadata.json")
     project = Path(metadata["project_root"]).resolve(strict=True)
     for stage in metadata.get("setup_stages", []):
+        if stage == "prepare":
+            try:
+                setup = json.loads((run_root / "prepare/record.json").read_text())
+                roles = setup["roles"]
+                if {role["role"] for role in roles} != {"planner", "heuristic", "revision", "reviewer", "lead"}:
+                    raise ValueError("missing actual independent preparation roles")
+                for role in roles:
+                    native = summarize(load_events(Path(role["raw_events"])))
+                    if not role["clean_transport"] or not native["model_completed"] or not _model_matches(model, native["actual_models"]):
+                        raise ValueError("unclean preparation role")
+                if setup.get("parsed_completion") != "COMPLETE" or setup.get("protected_changes") or not current_review(metadata, Path(setup["plan_review_path"]), payload)["current"]:
+                    raise ValueError("current full ADMIT preparation is required")
+                metadata["initial_product_digest"] = setup["completion_input_digest"]
+                metadata["plan_review_path"] = setup["plan_review_path"]
+                write_json(metadata_path, metadata)
+            except (OSError, KeyError, ValueError) as error:
+                raise ValueError("actual current preparation setup is required") from error
+            continue
         try:
             setup = json.loads((run_root / stage / "record.json").read_text(encoding="utf-8"))
             observed = json.loads((run_root / stage / "observation.json").read_text(encoding="utf-8"))
@@ -660,10 +691,14 @@ def run(metadata_path: Path, *, agent_dir: Path, payload: Path, runtime_data: Pa
             raise ValueError(f"actual {stage} setup did not terminate cleanly on its unchanged target")
         if not _model_matches(model, observed.get("actual_models")):
             raise ValueError(f"actual {stage} setup used a different model")
-        if stage == "probe" and (observed.get("probe_completion") != "COMPLETE" or not (run_root / "probe-binding.json").is_file()):
-            raise ValueError("actual COMPLETE probe and machine handoff are required")
-        if stage == "verify" and setup.get("parsed_verdict") != "VERIFIED":
-            raise ValueError("actual VERIFIED setup is required")
+        if stage == "verify" and (native_setup.get("parsed_verdict") != "VERIFIED" or setup.get("parsed_verdict") != "VERIFIED"
+                                  or setup.get("ticket_progression") != "COMPLETED" or setup.get("ticket_status_after") != "done"):
+            raise ValueError("actual VERIFIED/COMPLETED/done setup is required")
+        finalized = guard_results(load_events(run_root / stage / "events.jsonl"), "finalize_verification")
+        if stage == "verify" and (not finalized or finalized[-1]["result"].get("ticket_progression") != "COMPLETED"
+                                  or finalized[-1]["result"].get("verification_verdict") != "VERIFIED"
+                                  or finalized[-1]["result"].get("ticket_status_after") != "done"):
+            raise ValueError("actual guarded progression evidence is required")
     before = product_snapshot(project)
     if snapshot_digest(before) != metadata.get("initial_product_digest"):
         raise ValueError("prepared product changed before the completion observation")
@@ -677,6 +712,7 @@ def run(metadata_path: Path, *, agent_dir: Path, payload: Path, runtime_data: Pa
         model=model,
         thinking=thinking,
         timeout=timeout,
+        stage="completion",
     )
     after = product_snapshot(project)
     changed = sorted(path for path in before.keys() | after.keys() if before.get(path) != after.get(path))

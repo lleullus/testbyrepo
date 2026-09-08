@@ -1,7 +1,5 @@
-import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -138,72 +136,19 @@ function repoRootFromModule() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 }
 
-export function resolveIisWorkflowSkill() {
-  const candidates = [
-    process.env.IIS_READY_IIS_WORKFLOW_SKILL,
-    path.join(os.homedir(), ".omp", "agent", "skills", "iis-workflow", "SKILL.md"),
-    path.join(os.homedir(), ".codex", "skills", "iis-workflow", "SKILL.md"),
-    path.join(repoRootFromModule(), "iis-workflow", "SKILL.md"),
-  ].filter(Boolean);
-  for (const candidate of candidates) {
-    try {
-      return existingRealpath(candidate, "iis-workflow Skill");
-    } catch {
-      continue;
-    }
-  }
-  throw new Error("current iis-workflow Skill could not be resolved");
+export function resolveCanonicalValidator(validatorPath) {
+  return existingRealpath(validatorPath ?? path.join(repoRootFromModule(), "matt/skills/to-tickets/validate_ticket.py"), "Ticket validator");
 }
 
-export function resolveCanonicalValidator() {
-  const workflowPath = resolveIisWorkflowSkill();
-  const workflowText = fs.readFileSync(workflowPath, "utf8");
-  const route = workflowText.match(/^###\s+To Tickets\s*$([\s\S]*?)(?=^###\s+|^##\s+|(?![\s\S]))/mi)?.[1] || "";
-  const skillPath = route.match(/(^|\s|`)(\/[^\s`]+\/SKILL\.md)(?=\s|$|`)/m)?.[2];
-  if (!skillPath) throw new Error(`current iis-workflow To Tickets route has no absolute SKILL.md target: ${workflowPath}`);
-  const toTicketsSkill = existingRealpath(skillPath, "To Tickets Skill");
-  const validator = existingRealpath(path.join(path.dirname(toTicketsSkill), "validate_ticket.py"), "Ticket validator");
-  return { workflowPath, toTicketsSkill, validator };
-}
-
-function validateTicket(validator, ticketPath, projectRoot) {
-  const result = spawnSync("python3", [validator, ticketPath], {
-    cwd: projectRoot,
-    encoding: "utf8",
-    shell: false,
-    timeout: 30_000,
-  });
-  if (result.error) throw result.error;
-  const stdout = String(result.stdout ?? "").trim();
-  if (result.status !== 0 || stdout !== "VALID") {
-    const detail = String(result.stderr ?? stdout ?? "").trim();
-    throw new Error(`canonical Ticket validator did not return exact VALID${detail ? `: ${detail}` : ""}`);
+export async function validateTicket(validator, ticketPath, projectRoot, executeArgv) {
+  if (!executeArgv) throw new Error("CAPABILITY_UNAVAILABLE: canonical validator requires structured executeArgv");
+  const result = await executeArgv(["python3", "-B", validator, ticketPath], { cwd: projectRoot, timeout: 30000 });
+  if (result.interrupted || result.terminationState !== "settled" || result.exitCode !== 0 || String(result.stdout ?? "").trim() !== "VALID") {
+    throw new Error(`canonical Ticket validator did not return exact VALID: ${result.stderr ?? result.stdout ?? result.outputRef ?? "no output"}`);
   }
 }
 
-function git(projectRoot, args) {
-  const result = spawnSync("git", ["-C", projectRoot, ...args], { encoding: "utf8", shell: false, timeout: 30_000 });
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed: ${String(result.stderr ?? "").trim()}`);
-  return String(result.stdout ?? "");
-}
-
-function worktreeFingerprint(projectRoot) {
-  const status = git(projectRoot, ["status", "--porcelain=v2", "--untracked-files=normal"]);
-  const tracked = [];
-  const untracked = [];
-  for (const line of status.split(/\r?\n/).filter(Boolean)) {
-    if (line.startsWith("? ")) untracked.push(line.slice(2));
-    else if (/^[12u] /.test(line)) tracked.push(line);
-  }
-  return {
-    status_digest: crypto.createHash("sha256").update(status).digest("hex"),
-    tracked_changed_paths: tracked,
-    preexisting_untracked_paths: untracked,
-  };
-}
-
-export async function bindAuthority({ ticketPath, projectRoot, allowedStatuses = ["ready"] }) {
+export async function bindAuthority({ ticketPath, projectRoot, allowedStatuses = ["ready"], validatorPath, executeArgv, runtimeProtocol = "iis-ready/v2", bundleIdentity = "source" }) {
   const canonicalRoot = canonicalProjectRoot(projectRoot);
   const canonicalTicket = existingRealpath(ticketPath, "Ticket");
   requireInside(canonicalRoot, canonicalTicket, "Ticket");
@@ -218,8 +163,8 @@ export async function bindAuthority({ ticketPath, projectRoot, allowedStatuses =
     throw new Error(`Ticket Project-Root does not match requested Project Root: ${authoredProjectRoot ?? "missing"}`);
   }
 
-  const { workflowPath, toTicketsSkill, validator } = resolveCanonicalValidator();
-  validateTicket(validator, canonicalTicket, canonicalRoot);
+  const validator = resolveCanonicalValidator(validatorPath);
+  await validateTicket(validator, canonicalTicket, canonicalRoot, executeArgv);
 
   const parentValue = metadataValue(ticketText, "Parent-Spec");
   if (!parentValue) throw new Error("Ticket Parent-Spec metadata is missing");
@@ -234,10 +179,9 @@ export async function bindAuthority({ ticketPath, projectRoot, allowedStatuses =
     ...behaviorAuthorities.map(item => ({ path: item.path, sha256: item.sha256, kind: "behavior" })),
     ...(uiAuthority ? [{ path: uiAuthority.path, sha256: uiAuthority.sha256, kind: "ui" }] : []),
     { path: validator, sha256: sha256File(validator), kind: "validator" },
-    { path: workflowPath, sha256: sha256File(workflowPath), kind: "workflow" },
-    { path: toTicketsSkill, sha256: sha256File(toTicketsSkill), kind: "to_tickets" },
   ];
 
+  const authorityDigest = crypto.createHash("sha256").update(JSON.stringify({ protectedArtifacts, runtimeProtocol, bundleIdentity })).digest("hex");
   return {
     project_root: canonicalRoot,
     ticket_path: canonicalTicket,
@@ -249,8 +193,9 @@ export async function bindAuthority({ ticketPath, projectRoot, allowedStatuses =
     ui_authority: uiAuthority,
     validator_path: validator,
     validator_sha256: sha256File(validator),
-    git_head: git(canonicalRoot, ["rev-parse", "HEAD"]).trim(),
-    baseline_worktree_fingerprint: worktreeFingerprint(canonicalRoot),
+    runtime_protocol: runtimeProtocol,
+    bundle_identity: bundleIdentity,
+    authority_digest: authorityDigest,
     protected_artifacts: protectedArtifacts,
   };
 }

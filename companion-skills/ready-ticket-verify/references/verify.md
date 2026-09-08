@@ -13,10 +13,9 @@ Before verification, bind the exact Ticket and optional navigation inputs, carry
 
 ```text
 Ticket:
-Heuristic Probe Result / Evidence:
-Probe Machine Binding:
 Candidate Verification Target:
 Implementation Report / Evidence:
+Execution Plan / Review: None | <exact optional outside-root plan_review_path>
 Additional User Instructions:
 Delegated Verifier: yes
 ```
@@ -48,10 +47,10 @@ The verifier ends with one `READY TICKET VERIFICATION RESULT`. Checkpoint report
 
 Before any runtime/product action:
 
-Skill reads, whether canonical `skill://ready-ticket-verify` or filesystem references, do not enter execution. Explicit `begin_verify` or delegated assignment/begin starts admission only after one actual Ticket is selected under these rules. Authority, target and required Probe validation all precede execution commit. A failed unbound admission automatically disarms; `cancel_admission` only fences an in-flight unbound admission. Bound or uncertain execution stays with its existing verifier-owner close/recovery path.
+Skill reads and preparation artifact writing do not arm or enter execution. Explicit `begin_verify` or delegated assignment/begin starts admission only after one actual Ticket is selected. Current authority and actual target validation precede execution commit; a method plan/review is optional navigation, never a verification ADMIT prerequisite. `cancel_admission` fences only an in-flight unbound admission. Bound/uncertain execution stays with its current owner's closure/recovery path; orphan reservations require verified withdrawal/termination and no live work/uncertain effects before exact-identity recovery.
 
 
-1. Resolve the currently discovered `iis-workflow` skill only as the canonical planning-authority locator. Follow its current `### To Tickets` route target and require the adjacent `validate_ticket.py`.
+1. Resolve the current pinned bundle's canonical To Tickets `validate_ticket.py`, the same validator identity used by Ready runtime. The discovered `iis-workflow` route is navigation within that bundle; never probe historical source or another client home for a substitute validator.
 2. Run that validator against the exact absolute Ticket path. Continue only when it returns exact `VALID`.
 3. If the route/validator is unavailable, return `VERIFICATION NOT STARTED: CANONICAL VALIDATOR UNAVAILABLE`. If validation fails, return `VERIFICATION NOT STARTED: CANONICAL TICKET INVALID`. Do not issue AC verdicts or start product/runtime work.
 4. After `VALID`, derive `Status`, `Parent-Spec`, `Project-Root`, `UI`, Acceptance Criteria, Scope, Non-Goals, Blockers, Verification flows, Behavior Authorities and References from the Ticket itself.
@@ -61,7 +60,7 @@ Skill reads, whether canonical `skill://ready-ticket-verify` or filesystem refer
 8. Preserve each flow's exact authored meaning. Do not infer a missing flow, remap ordinals from implementation shape, normalize a legacy flow or strengthen/relax a decision boundary.
 9. Bind the exact current verification target from the validated Ticket plus direct repository/runtime observation: source/config/build/artifact/runtime checkpoint, actual entrypoint or canonical inspection target, acceptance surface and authoritative readback.
 
-Caller-supplied candidate targets and implementation reports are navigation only. For normal `ready` verification, the terminal Heuristic Probe Result plus its exact `Probe Machine Binding` path are required provenance inputs. Only the `ready_guard begin_verify` call in §5 admits or rejects raw machine-binding syntax, closure, attribution and currentness; a verifier must not replace that call with visual JSON inspection or prose. Probe findings remain navigation/counterexample seeds and never establish flow/AC/Ticket verdicts. Structural `VALID` admits schema only; it never establishes semantic correctness, current target availability, runtime evidence or verdicts.
+Caller-supplied targets, execution plans/reviews, implementation reports and exploration assistance are navigation only. Bind the actual current target directly. Structural `VALID` admits schema only; it never establishes semantic correctness, current target availability, runtime evidence or verdicts. Existing implemented ready targets need no new implementation plan.
 
 Return without AC verdicts when canonical admission, current authority, Ticket-to-parent projection or current target binding cannot be established.
 
@@ -70,14 +69,14 @@ VERIFICATION NOT STARTED
 Ticket:
 Reason:
 Decision: VERIFICATION NOT STARTED
-Governing authority: ready-ticket-verify / <stable admission, semantic, authority, probe, or target-binding rule>
+Governing authority: ready-ticket-verify / <stable admission, semantic, authority, or target-binding rule>
 Observed condition: <smallest directly established condition that prevented verifier admission/adjudication>
 Effect: verifier-owned product/runtime execution and AC verdict issuance do not continue from this state
 Next allowed action: <exact owner/caller action needed for a fresh valid verification attempt, or None>
 AC verdicts: Not issued
 ```
 
-The provenance fields explain the existing owner result; they do not replace its specific suffix such as `CANONICAL TICKET INVALID`, `HEURISTIC PROBE GATE INCOMPLETE`, or `TICKET/PARENT PROJECTION MISMATCH`. If only a tool/transport/protocol failure is established, record that failure as the observed condition and do not infer a missing file, permission, runtime, or product state.
+The provenance fields explain the exact owner result, such as `CANONICAL TICKET INVALID` or `TICKET/PARENT PROJECTION MISMATCH`, rather than replacing it. If only a tool/transport/protocol failure is established, report that failure without inferring a missing file, permission or product condition.
 
 ## 3. Semantic contract check
 
@@ -110,21 +109,28 @@ If target drift occurs:
 - do not carry a prior PASS across the drift;
 - re-establish a stable target and obtain fresh required observations before `VERIFIED`.
 
-### Required heuristic probe gate
-
-Normal delivery verification of exact `Status: ready` requires one terminal `READY TICKET HEURISTIC PROBE RESULT` before any verifier-owned product/runtime action. Its human-readable result must name the same exact canonical Ticket and one exact `Probe Machine Binding` path. A missing result or binding returns `VERIFICATION NOT STARTED: REQUIRED HEURISTIC PROBE RESULT MISSING`; a directly established `PARTIAL` or `BLOCKED` terminal result returns `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`. These returns issue no AC verdicts.
-
-The result and path are provenance inputs, not a license to visually parse, repair, recreate, or narratively rebind the machine binding. A direct semantic-contract, status/permission, authority/projection, exact-target, or terminal-result contradiction remains a legitimate earlier stop and does not require `begin_verify`; do not route every rejected Ticket through the runtime solely to obtain a Probe reason.
-
 ### Runtime enforcement boundary
 
-For normal `ready` verification, after canonical admission, status/permission, semantic preflight, current authority/projection, and exact target resolution all succeed, call `ready_guard begin_verify` before making any machine-handoff syntax, completion, or currentness assertion. Pass the exact canonical Ticket, Project Root, unmodified `probe_binding_path`, exact implementation `target_paths`, and only declared generated-output paths that may change. The existing runtime handoff parser/currentness validation is the machine-admission owner: it parses the actual binding bytes, requires the canonical schema, COMPLETE/closed exact lane denominator, no verifier-owned verdict field/value, and identity/Verification-flow denominator/target equality with current authority.
+After canonical/status/semantic/authority/projection gates and exact target resolution succeed, call `ready_guard begin_verify` with exact Ticket/Project Root, exact actual implementation `target_paths`, and only exact declared outside-root evidence outputs. No earlier exploration artifact/binding is required. Preserve the actual admission rejection; do not invent a machine-currentness diagnosis from prose.
 
-Record the actual `begin_verify` outcome as the causal admission evidence. Its parser, schema, completion, cleanup, lane, or verdict-contamination rejection returns `VERIFICATION NOT STARTED: HEURISTIC PROBE GATE INCOMPLETE`; its actual Ticket, authority, Verification-denominator, or target stale rejection returns `VERIFICATION NOT STARTED: HEURISTIC PROBE RESULT STALE`. Do not call a binding malformed from a visual punctuation guess, and do not let an unstructured claim refresh or substitute for machine identity. After successful machine admission, cross-check the human-readable `Probe Completion` and `Authority Snapshot` against the admitted binding/current authority; a contradiction remains non-admitting and issues no AC verdicts.
+Optional method navigation uses only `plan_review_path`; runtime resolves actually checked review/plans from that artifact, not arbitrary separately supplied plan paths. Product-required paths take precedence over method context. Do not require ADMIT to verify an already implemented target or synthesize a review merely for classification.
 
-Continue only with a returned `purpose: verify` and bound target digest. During that execution, generic source/config/test/planning mutation and `ready_argv mutate` are forbidden. Use guarded read/inspection tools or `ready_argv execute` for structured ordinary runtime argv. The runtime checks the bound Project Root/target before and after guarded observations; detected protected change enters `TARGET_DRIFT` and makes `VERIFIED` unavailable. Do not replace this gate with verifier self-attestation.
+Continue only with returned `purpose: verify` and a bound target digest. Generic source/config/test/planning mutation and `ready_argv mutate` are forbidden. Use supported guarded inspection or structured `ready_argv execute` for ordinary runtime argv. Protected product drift enters PAUSED with reason TARGET_DRIFT and prevents stale VERIFIED. Authority drift, target drift and EFFECT_UNCERTAIN are distinct, and a parent CONTINUE cannot erase them.
 
-For delegated verification, Parent uses `assign_subagent` with `purpose: verify`; the worker uses `begin_delegated` with the same Probe/target inputs. Replacement continuation requires the prior worker's `suspend_worker` after owned activity stops, Parent confirmation that the prior worker is inactive, and Parent `replace_worker`. The new one-use assignment preserves execution/checkpoint provenance, rechecks authority and target/current working tree, and requires a fresh `PRE_ACTION` release. Parent `STOP` does not invent a verdict or preempt verifier closure: the verifier calls `finalize_verification` with the applicable existing terminal verdict, normally `INCONCLUSIVE`. Every terminal close stops owned services first.
+Separate product-target identity from exact declared method-context navigation. Plan/review-only drift stales that navigation, not product evidence automatically; no write permission follows. A plan required by the approved product contract remains a product target. Undeclared new files are conservatively product changes until narrowly classified. File hashes do not prove runtime/DB/provider/permission currentness; obtain actual authoritative readback and required observation windows.
+
+For delegated verification, Parent uses `assign_subagent` with `purpose: verify`; the worker uses `begin_delegated` with the same target inputs. Before actual scenario work use `checkpoint`, `kind: PRE_RUNTIME`; material and candidate VERIFIED closure use the same action with MATERIAL_TURN/PRE_PROGRESSION. Parent releases the exact pause through `release_checkpoint`; DIRECT current owner has no Parent ceremony but observes the same currentness/effect fence. PAUSED permits safe read/analysis, not source mutation or protected runtime action.
+
+Replacement requires old dispatch revocation, actual work/service settlement, prior `suspend_worker`, Parent inactive confirmation and `replace_worker` one-use assignment. The new owner rechecks current authority/target and its scenario PRE_RUNTIME before dependent runtime work. Cancel receipt alone is not settlement; do not equate agent/job/session/assignment IDs. Parent STOP does not invent a verdict: the verifier owns its applicable terminal and `finalize_verification` closure.
+
+Use native `hub start/logs/wait/stop` for one execution-owned ephemeral service with exact handle/generation, persist:false, detached:false and no automatic restart. Never adopt/stop shared existing services. Observe readiness and actual settlement; timeout can leave a live service. Stop/reap before terminal/suspend/replacement. Root exit/cancel receipt does not prove escaped descendants or external effects ended. Unsupported host surfaces remain explicit capability limitations.
+
+The supported adapter uses an execution-UUID-unique service name and actual host resource `id`, `startedAt`, `restartCount` generation; preserve its returned handle and inspect stop/wait settlement. Names alone cannot adopt a later generation.
+
+Mutation-capable scenario timeout/abort/transport loss can leave an applied effect even when local files are unchanged. Preserve EFFECT_UNCERTAIN and ownership; do not blind replay or claim rollback. `resolve_mutation` needs exact operation/effect surface and actual authoritative readback reference, with an authorized owner decision where local identity cannot decide. Unresolved effects remain protected after a blocked report.
+
+The recovery request fields are `operation_id`, `effect_surface`, `evidence_reference`, `outcome`; exact current recovery-owner judgment and actual readback are required, not an arbitrary outcome string. Orphan admission recovery uses `recover_admission(project_root, ticket_path, reservation_id, recovery_evidence_reference)` only after the designated recovery owner establishes that exact admission ended/was withdrawn and no related live work/uncertain effects remain. Runtime compares the same reservation under lock; a handoff is not automatic host proof.
+
 
 ## 6. Integrated scenario ownership
 
@@ -144,7 +150,7 @@ Add a derived positive variation, counterexample, boundary exercise or observati
 
 Reject expansion that invents a new trigger, precondition, Scope, acceptance surface or stricter/weaker result; requires unrelated product mutation; or obscures the core verification. Prefer the smallest sufficient scenario.
 
-For every material finding in the current heuristic-probe handoff, reopen its exact current contract anchor before using it. Assign one verifier-owned disposition:
+For every material finding from this verifier's current discovery cycle or optional navigation, reopen its current contract anchor and assign one verifier-owned disposition:
 
 ```text
 Heuristic Finding Disposition:
@@ -161,7 +167,17 @@ Heuristic Finding Disposition:
 - `UNATTRIBUTABLE`: the finding cannot be tied decisively to the current target/authority; it is not a FAIL. If the missing attribution is required to decide an authored flow, that flow remains `INCONCLUSIVE`.
 - `SUPERSEDED_BY_CURRENT_TARGET`: current target/authority changed so the old finding no longer describes the object being verified; do not carry it forward.
 
-A probe finding never substitutes for verifier execution when the authored disposition requires independent verification. Prefer the minimized trigger when it is safe and material, but the verifier still owns the fresh action/readback and final adjudication.
+Navigation never substitutes for fresh verifier-owned evidence. Prefer the safely minimized trigger; same-cycle evidence directly obtained by this verifier can support both discovery and adjudication without repeating a risky effect. Current Main in DIRECT keeps its final judgment independent from prior implementation narration/self-check.
+
+### Bounded post-implementation frontier
+
+Review every authored flow and applicable conditional boundary for realistic false-completion/attribution paths in the actual implementation, separately from the mandatory scenario. Start from original purpose/current entrypoints and alternate owners, order/partial effects and weak readbacks, not just the reviewed plan's diagnosis. A lane requires a current contract anchor, reachable concrete path, material consequence and executable/inspectable discriminating readback. Dismiss unreachable, out-of-scope or already-handled hypotheses with exact evidence; the original unfixed symptom is a purpose failure even if pre-existing.
+
+For admitted exploration, preserve initial state and target identity, make the smallest authorized trigger, minimize one irrelevant dimension at a time where safe, and capture primary output/readback before cleanup. Keep observed facts separate from inference; transport failure does not decide mutation outcome. Preserve each lane's material finding, attributable no-finding or exact evidence limit without forcing a finding count. No distinct lane/no finding is not PASS and never removes any authored obligation. A same-cycle finding becomes CONTRADICTED only through its actual affected flow/AC decision boundary.
+
+Stop minimization when further reduction loses reproducibility, crosses authority, becomes unsafe or stops answering the contract question. Keep a compact finding record: exact contract/flow anchor, minimal trigger/actions, observed result, authoritative comparison/readback, primary evidence, current target identity, cleanup/terminal state and remaining uncertainty. Where assistance is explicitly permitted, isolate read/effect/cleanup state; serialize shared records, idempotency keys, service lifecycles or dependency-sensitive observations. Agreement is not evidence and one attributable contradiction is not discarded by majority.
+
+Required risky/external/one-shot actions retain current Ticket/user authority; do not bypass protection to make a trigger. A verifier may use bounded assistance only when the current stage explicitly permits delegation; the default one-verifier/no-redelegation contract does not secretly create a worker roster. Assistance is navigation and the final verifier owns fresh decisive evidence. These principles are self-contained; no external methodology installation is required.
 
 For each block keep authored contract and derived execution separate:
 
@@ -225,7 +241,7 @@ Target-stability check:
 Environment:
 External/operator conditions:
 Semantic contract check: <no material gap found | exact blocking defect already returned before execution>
-Heuristic probe gate: CURRENT | diagnostic-not-required
+Heuristic frontier: <material lanes or no distinct lane, with bounded rationale>
 Heuristic findings / proposed verifier dispositions: None | <finding -> disposition>
 
 Scenario Blocks:
@@ -254,6 +270,8 @@ Checkpoint state: NOT_APPLICABLE | PARENT_CONTINUATION_REQUIRED
 ```
 
 In `DIRECT`, the report is informational and has no Parent continuation. In `SUBAGENT`, `PRE_RUNTIME` is mandatory after semantic/scenario closure and before the first product/runtime action; the delegated verifier does not cross `FIRST_PRODUCT_OR_RUNTIME_ACTION` before Parent `CONTINUE`. Parent reviews authored Flow/AC denominator completeness, heuristic-finding coverage, authoritative readback strength, Scope and obvious target/authority mismatch only; Parent does not execute the flows or issue AC verdicts.
+
+Call `ready_guard checkpoint` with `kind: PRE_RUNTIME` for the delegated report and wait for exact Parent `release_checkpoint`. Use the same public action with MATERIAL_TURN and PRE_PROGRESSION at their defined boundaries; no normal implementation-first-change checkpoint is implied.
 
 ## 9. Evidence sufficiency and execution
 
@@ -334,7 +352,7 @@ Proposed continuation direction:
 Checkpoint: NOT_APPLICABLE | MATERIAL_TURN
 Protected next phase: NOT_APPLICABLE | <exact protected phase>
 Checkpoint state: NOT_APPLICABLE | PARENT_CONTINUATION_REQUIRED
-Work permitted before continuation: NONE when SUBAGENT
+Work permitted before continuation: safe read/analysis only while PAUSED; no protected runtime action
 ```
 
 A bounded observation already inside the authored flow may be recorded as `SCENARIO AMENDMENT`. Do not use a turn report to invent a trigger, initial state, decision boundary, Scope or authority.
@@ -447,6 +465,8 @@ When the runtime reports success, report `Ticket Progression: COMPLETED` and `Ti
 
 If the guarded write or post-write validation fails, preserve `Verification Verdict: VERIFIED` but report `Ticket Progression: FAILED` and the exact observed status/failure. Do not rewrite ACs, Verification flows, Spec, Scope, Behavior/UI authority or other planning meaning.
 
+The finalizer preserves bytes/mode except the one top-metadata status, records exact before/candidate intent, uses status-only compare-and-swap atomic replacement and validates the actual canonical Ticket path after writing. Only its exact expected candidate is exempted as the intended authority transition; other authority/source drift still blocks. On failure it conditionally restores ready only if candidate bytes, owner and authority still match. Do not overwrite an external edit, infer success from a done string, or drop a reservation before durable progression/intent recovery closes. Report actual status and exact recovery limit even when verdict is VERIFIED, progression FAILED and bytes remain done.
+
 Diagnostic re-verification of `done` still calls `finalize_verification`, never rewrites status, and reports `Ticket Progression: NOT APPLICABLE`.
 
 ## 15. No remediation loop
@@ -464,7 +484,6 @@ Verifier: Main / DIRECT | <delegated verifier identity>
 Ticket status before verification:
 Verification target:
 Target stability:
-Heuristic probe result: <exact current result / diagnostic-not-required>
 Heuristic finding dispositions: None | <finding -> disposition>
 Material turn reports: None | <concise list>
 Checkpoint decisions:

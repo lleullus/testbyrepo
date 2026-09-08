@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 
 const SHELL_INTERPRETERS = new Set([
   "bash", "cmd", "cmd.exe", "dash", "fish", "ksh", "powershell", "powershell.exe", "pwsh", "sh", "zsh",
@@ -86,7 +85,7 @@ function assertArgv(argv) {
   if (!Array.isArray(argv) || argv.length === 0 || argv.some(item => typeof item !== "string") || argv[0].length === 0) {
     throw new Error("structured argv must be a non-empty array of strings with a non-empty executable");
   }
-  if (SHELL_INTERPRETERS.has(argv[0].toLowerCase())) {
+  if (SHELL_INTERPRETERS.has(argv[0].split(/[\\/]/).pop().toLowerCase())) {
     throw new Error("structured argv cannot invoke a shell interpreter");
   }
   return argv.slice();
@@ -258,101 +257,3 @@ export function validateExecutionRequest(request) {
   return { version: 1, argv: assertArgv(request.argv) };
 }
 
-export function tokenizeSimpleCommand(command) {
-  const source = String(command ?? "").trim();
-  if (!source) throw new Error("empty bash command");
-  if (/[|&;<>()$`\n\r]/.test(source)) throw new Error("bash command contains shell control syntax");
-
-  const argv = [];
-  let current = "";
-  let quote = null;
-  let escaped = false;
-  for (const character of source) {
-    if (escaped) {
-      current += character;
-      escaped = false;
-      continue;
-    }
-    if (character === "\\" && quote !== "'") {
-      escaped = true;
-      continue;
-    }
-    if (quote) {
-      if (character === quote) quote = null;
-      else current += character;
-      continue;
-    }
-    if (character === "'" || character === '"') {
-      quote = character;
-      continue;
-    }
-    if (/\s/.test(character)) {
-      if (current) {
-        argv.push(current);
-        current = "";
-      }
-      continue;
-    }
-    current += character;
-  }
-  if (escaped || quote) throw new Error("bash command has incomplete quoting or escaping");
-  if (current) argv.push(current);
-  return assertArgv(argv);
-}
-
-export function parseSimpleReadOnlyCommand(command) {
-  try {
-    const argv = tokenizeSimpleCommand(command);
-    return isReadOnlyArgv(argv) ? argv : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function runArgv(argv, { cwd, timeoutMs = 120_000, signal } = {}) {
-  const normalized = assertArgv(argv);
-  signal?.throwIfAborted();
-  return new Promise((resolve, reject) => {
-    const grouped = process.platform !== "win32";
-    const child = spawn(normalized[0], normalized.slice(1), {
-      cwd, shell: false, detached: grouped, stdio: ["ignore", "pipe", "pipe"],
-    });
-    const stdout = [];
-    const stderr = [];
-    child.stdout.on("data", chunk => stdout.push(chunk));
-    child.stderr.on("data", chunk => stderr.push(chunk));
-    let timedOut = false;
-    let failure = null;
-    let escalation;
-    const kill = kind => {
-      if (!child.pid) return;
-      try { if (grouped) process.kill(-child.pid, kind); else child.kill(kind); }
-      catch (error) { if (error.code !== "ESRCH") failure ??= error; }
-    };
-    const terminate = () => {
-      kill("SIGTERM");
-      escalation ??= setTimeout(() => kill("SIGKILL"), 2_000);
-      escalation.unref?.();
-    };
-    const abort = () => {
-      failure = new Error("The operation was aborted");
-      failure.name = "AbortError";
-      terminate();
-    };
-    signal?.addEventListener("abort", abort, { once: true });
-    if (signal?.aborted) abort();
-    const timer = setTimeout(() => { timedOut = true; terminate(); }, timeoutMs);
-    timer.unref?.();
-    child.once("error", error => { failure = error; });
-    child.once("close", (code, childSignal) => {
-      clearTimeout(timer);
-      clearTimeout(escalation);
-      signal?.removeEventListener("abort", abort);
-      if (failure) reject(failure);
-      else resolve({
-        argv: normalized, exitCode: code, signal: childSignal, timedOut,
-        stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8"),
-      });
-    });
-  });
-}

@@ -41,16 +41,17 @@ Guide consulted: <resolved guide path and authored version | Not needed — no r
 | Stage | Execution mode | Selected model / effort | User-selection basis |
 | --- | --- | --- | --- |
 | Implementation | SUBAGENT / DIRECT / disabled | <exact configuration / Not selected / Not applicable> | <current user instruction or confirmation / unresolved / Not applicable> |
-| Heuristic Probe | SUBAGENT / DIRECT / disabled | <lane-worker configuration / Not selected / Not applicable> | <current user instruction or confirmation / unresolved / Not applicable> |
 | Verification | SUBAGENT / DIRECT / disabled | <exact configuration / Not selected / Not applicable> | <current user instruction or confirmation / unresolved / Not applicable> |
 
 Recommendations awaiting confirmation: None | <missing stage -> proposed model/effort, workload reason, guide section, meaningful alternative>
 
-These are invocation-local execution choices, not another delivery-stage switch or a worker roster. Apply [Delivery Model Selection](../references/09-run-contract.md#delivery-model-selection): preserve supplied choices, leave recommendations unselected until confirmed, and use the existing `USER_INPUT_REQUIRED` status for missing selections. DIRECT, disabled, and currently established no-worker stages use `Not applicable` and require no child-model question.
+Preparation selections: None needed | <actual delegated Planner/Heuristic/Plan Review invocation -> current selected model/effort and user-selection basis>. Reuse an applicable selection; do not require three models or add a preparation switch. DIRECT writing still cannot self-approve as independent review; report an unavailable independent invocation without ADMIT.
+
+These are invocation-local execution choices, not a worker roster or another stage switch. Apply [Delivery Model Selection](../references/09-run-contract.md#delivery-model-selection): preserve supplied choices, leave recommendations unselected until confirmed, and use USER_INPUT_REQUIRED only for actual missing selections. DIRECT and disabled stages need no child-model question. Verification no does not disable pre-implementation review for Implementation yes.
 
 ## Run Completion Boundary
 
-READY_TICKET_SET | CURRENT_INCREMENT_IMPLEMENTED | CURRENT_INCREMENT_DELIVERED | NAMED_REQUIRED_ITEMS_DELIVERED | BOUNDED_OUTCOME_SATISFIED | MANDATE_OUTCOME_SATISFIED
+READY_TICKET_SET | READY_EXECUTION_PLANS | CURRENT_INCREMENT_IMPLEMENTED | CURRENT_INCREMENT_DELIVERED | NAMED_REQUIRED_ITEMS_DELIVERED | BOUNDED_OUTCOME_SATISFIED | MANDATE_OUTCOME_SATISFIED
 
 ## Completion Predicate
 
@@ -59,6 +60,8 @@ READY_TICKET_SET | CURRENT_INCREMENT_IMPLEMENTED | CURRENT_INCREMENT_DELIVERED |
 ## Authoritative Readback
 
 <exact product surface, canonical Ticket state, implementation result, operator evidence, or Not yet established>
+
+For READY_EXECUTION_PLANS: <exact required preparation Tickets, actual READY TICKET PLAN RESULT, outside-root current independent ADMIT review/evidence for every required Ticket>. Both delivery switches are no; this is not product planning, implementation or delivery completion.
 
 ## Source Authority
 

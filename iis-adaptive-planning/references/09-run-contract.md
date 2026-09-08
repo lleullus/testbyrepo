@@ -88,19 +88,20 @@ Implementation: yes | no
 Verification: yes | no
 ```
 
-Preserve the current Adaptive default: explicit Adaptive activation selects `Implementation: yes` and `Verification: yes` unless current user authority overrides either stage. `Verification: yes` means the current Ticket must pass the required `ready-ticket-heuristic-probe` gate before final `ready-ticket-verify`; heuristic probing is an internal verification-enabled delivery gate, not a third Run Contract field or separate whole-run terminal.
+Explicit Adaptive activation preserves Implementation yes and Verification yes unless current authority overrides either independently. Implementation yes first needs current execution-method review. Verification yes invokes the integrated final verifier directly on a stable actual target; discovery is inside that cycle, not a third switch or separate whole-run terminal.
 
 When current authority supplies no planning-only, implementation-only, no-verification, named-required-item, bounded-outcome, or Mandate-outcome terminal, the default current-Increment terminal is `CURRENT_INCREMENT_DELIVERED`. Close that default only when the Required-item coverage invariant permits a current-Increment boundary; do not use it to shrink broader Required Named Items, replace a broader outcome already assigned by the user, or bypass an unresolved coverage or Mandate-ceiling decision.
 
 Apply exact overrides independently:
 
 - planning-only, stop-at-Ready-Tickets, no implementation and no verification -> `no` / `no`;
+- execution-preparation-only -> no / no with READY_EXECUTION_PLANS and exact required preparation Tickets, not READY_TICKET_SET;
 - implement but do not verify -> `yes` / `no`;
-- verify an already implemented current target without implementation -> `no` / `yes` when current evidence can bind one stable current target and the separate heuristic-probe/verifier admissions permit it;
-- do not implement -> never infer implementation authority merely because verification or a broader outcome was requested;
-- do not verify -> never run the heuristic-probe gate or verifier and never claim `done`.
+- verify an already implemented current target without implementation -> no / yes when actual stable target and verifier admission are established; no new execution plan ADMIT is required;
+- do not implement -> never infer implementation authority from verification or a broader outcome;
+- do not verify -> no final discovery/verdict/done, but pre-implementation Heuristic/review still applies when Implementation is yes.
 
-The fields express the outer invocation envelope only. They do not change the exact authority, admission, or result ownership of `ready-ticket-implement`, `ready-ticket-heuristic-probe`, or `ready-ticket-verify`.
+These two fields express the invocation envelope, not exact owner authority or admission. Preparation belongs to ready-ticket-plan, implementation to ready-ticket-implement, and integrated final adjudication to ready-ticket-verify.
 
 Delegated implementation/verification checkpoints and Parent continuation decisions are invocation-local delivery messages only. They do not add a Run Contract field, do not modify `Implementation` or `Verification`, do not activate or satisfy the `/승인게이트` Run Contract Approval Gate, and do not require a template change. Their phase-release authority comes from the already closed Run Contract, current user instructions, and the exact delivery skill contract.
 
@@ -110,7 +111,7 @@ Use the repository-level guide at `~/project/iis-skills/model-selection-guide.md
 
 The guide supplies operational recommendations, not product authority, capability proof, model-selection consent, actual per-Ticket cost, or evidence that a model can satisfy an IIS role. Read its applicable role/effort sections and its score-interpretation limits before recommending a configuration. Do not select the highest score or effort automatically.
 
-For each enabled delivery stage, first apply the execution-mode contract. A stage explicitly set to `DIRECT` uses the current Main and needs no child-model question. A disabled stage has no model selection. `Verification: no` excludes both the probe and verifier rows from selection; this table adds no third delivery-stage switch. For `SUBAGENT`, bind the model and effort from an explicit current user instruction or an already user-confirmed selection applicable to this invocation. Reuse an unambiguous instruction covering all delivery stages, and let an exact stage override affect only that stage. Preserve any already specified model or effort when completing a partial choice; ask only for its missing or ambiguous components. Check the exact currently available executable configuration for every selected choice, including fully supplied choices. Do not ask the user to repeat a settled choice.
+Apply each role/stage's current execution-mode contract before model selection. Explicit DIRECT uses current Main and needs no child-model question. Disabled implementation/verification has no model row selection. For actual delegated preparation roles or enabled SUBAGENT stages, preserve explicit current model/effort and any unambiguous confirmed selection covering those roles. Reuse a broad applicable user choice, let exact overrides affect only their scope, and check actual exposed configuration availability without inventing identifiers. Verification no excludes the final verifier, not the pre-implementation Heuristic/review needed by Implementation yes.
 
 When a required selection is missing:
 
@@ -121,7 +122,7 @@ When a required selection is missing:
 
 If the guide is missing or unreadable, say so and request an accessible replacement or direct model choices; do not recommend from a remembered table. If a user-selected model/effort is unavailable or ambiguous, retain that choice as unresolved, explain the exact mismatch and ask for a confirmed available alternative or clarification. Never silently substitute another model, effort or execution mode. A model that is already fully user-specified needs no guide-based recommendation or extra confirmation merely because the guide is unavailable.
 
-The probe row chooses its delegated lane-executor model, not a new Probe Lead: Main remains Lead and worker count remains derived from admitted lanes. One selected configuration covers that stage's lanes unless the user explicitly selects a bounded lane-specific configuration. Only an applicable current owner result establishing zero delegated lanes makes the enabled probe's model `Not applicable`; do not predict this from task simplicity or start early delivery admission to decide it. Otherwise select the stage's model configuration without inventing lanes, workers or a fixed worker count.
+Include preparation selections only for actual delegated Planner, Heuristic and Plan Review invocations. One current user choice may cover all applicable roles; three different models or three mandatory child rows are not required. DIRECT preparation does not permit writer self-approval in its writing invocation: an actual separate reviewer invocation must be available under current authority, otherwise return the preparation limit without ADMIT. Reuse an attributable current independent review where valid; do not create hidden delegation or a model-selection ceremony for work not being dispatched. Final discovery assistance is permitted only by the current verification-stage delegation contract, never a hidden separate model row.
 
 Outer Main remains the current main session; a guide recommendation does not switch its model. The guide's Challenger advice never activates adversarial consensus or designates a Challenger. Only when the user separately requests an Outer Main recommendation or explicitly activates the Challenger gate may its relevant guide section inform a recommendation, subject to the existing user-owned model change/designation boundary. Do not add either role to the mandatory delivery-model questions.
 
@@ -133,6 +134,7 @@ Carry confirmed choices across Tickets and re-entry within this invocation. Guid
 Use exactly one value:
 
 - `READY_TICKET_SET`
+- `READY_EXECUTION_PLANS`
 - `CURRENT_INCREMENT_IMPLEMENTED`
 - `CURRENT_INCREMENT_DELIVERED`
 - `NAMED_REQUIRED_ITEMS_DELIVERED`
@@ -142,6 +144,7 @@ Use exactly one value:
 Boundary meaning:
 
 - `READY_TICKET_SET` — one approved current Spec plus its validated complete Ready Ticket Set exists.
+- `READY_EXECUTION_PLANS` — the exact requested preparation Ticket set has actual current independent ADMIT in the outside-root review artifact(s) returned by READY TICKET PLAN RESULT; no implementation or final verification is claimed.
 - `CURRENT_INCREMENT_IMPLEMENTED` — every current canonical Ticket in the validated Ready Ticket Set has one exact implementation lifecycle result with `Completion: COMPLETE`; verification was not requested and Ticket status remains governed by the verifier.
 - `CURRENT_INCREMENT_DELIVERED` — every current canonical Ticket in the approved Ready Ticket Set has reached exact `Status: done` through the owning one-exact-Ticket verification lifecycle, every approved parent-Spec/Behavior/UI obligation applicable to this current Increment has an acceptance owner in the existing Ticket Set, and that owner's current attributable evidence/readback closes the obligation at its authored boundary. The complete `done` denominator is necessary but is not sufficient by itself. Future, Non-Goal, candidate, and unrelated preserved obligations that do not apply to the current Increment are outside this boundary.
 - `NAMED_REQUIRED_ITEMS_DELIVERED` — every Required Named Item is delivered and its applicable observable result is confirmed. Candidate Named Items do not block this boundary. This boundary may span more than one Increment.
@@ -155,6 +158,8 @@ An implementation-only multi-Increment promise is not silently invented. If requ
 Write one concise observable predicate that distinguishes successful whole-run completion from a planning phase, one Ticket, one Increment, or roadmap progress. For a delivered current-Increment predicate, name both the complete canonical `done` denominator and closure of every applicable parent obligation through its existing acceptance owner and current attributable readback; do not make status aggregation the whole predicate.
 
 Examples:
+
+For preparation-only: every explicitly required preparation Ticket has actual current independent ADMIT, with current plan/review/product-authority identities and attributable review evidence; no smaller subset closes the request.
 
 ```text
 Every Ticket in the current validated Ready Ticket Set has an exact implementation report with Completion: COMPLETE, and Verification is no.
@@ -173,6 +178,8 @@ Do not use `all planned work is done`, WP exhaustion, provisional-horizon exhaus
 ### Authoritative Readback
 
 Identify the current product surface, canonical Ticket state, exact implementation result, operator evidence, or other authority that can prove the Completion Predicate.
+
+For READY_EXECUTION_PLANS use the exact required Ticket denominator, actual preparation terminal and current independent review artifact/evidence. A plan file, Heuristic no-finding, JSON structure or historical ADMIT label is not sufficient. This method-readiness boundary neither satisfies product-delivery obligations nor changes named-item meaning.
 
 For `CURRENT_INCREMENT_IMPLEMENTED`, use the complete current Ticket denominator, each exact implementation result, and the unchanged canonical Ticket statuses. An implementation report proves implementation lifecycle completion only; it does not prove independent verification or `done`.
 
@@ -207,6 +214,7 @@ Before marking the form `CLOSED`:
 - `EXACT_REQUIRED_SET` and `REQUIRED_FLOOR` require non-empty Required Named Items;
 - `NONE_REQUIRED` requires exact `None required`;
 - `READY_TICKET_SET` requires `Implementation: no` and `Verification: no`;
+- `READY_EXECUTION_PLANS` requires both switches no, explicit execution-preparation scope and an exact required Ticket denominator whose eventual terminal requires all current independent ADMIT. Initial CLOSED authorizes preparation; it does not require reviews already to exist or silently replace requested product delivery.
 - `CURRENT_INCREMENT_IMPLEMENTED` requires `Implementation: yes` and `Verification: no`;
 - `CURRENT_INCREMENT_DELIVERED` requires `Verification: yes`; Implementation may be `yes` or `no` according to current authority and actual state;
 - `NAMED_REQUIRED_ITEMS_DELIVERED` requires non-empty Required Named Items and `Verification: yes`;
@@ -226,6 +234,8 @@ A form is `CLOSED` only when satisfying its Run Completion Boundary and Completi
 
 `READY_TICKET_SET`, `CURRENT_INCREMENT_IMPLEMENTED`, and `CURRENT_INCREMENT_DELIVERED` are current-Increment terminals. When Required Named Items exist, one of those boundaries may close only when every currently unsatisfied Required Named Item is either already satisfied by fresh authoritative readback or current authority establishes that the selected current Increment covers it in its approved Includes and completion contract.
 
+READY_EXECUTION_PLANS is bounded by the exact preparation Tickets named in this invocation, not automatically by the whole current Set. It may close only the preparation meaning explicitly requested for every required item; it cannot satisfy an outstanding promise to implement/deliver them or silently authorize a later Increment.
+
 If the current Increment is not yet shaped, or required-item coverage is unknown or partial, do not infer that the broader Required Named Items are covered by a current-Increment terminal. This does not prohibit a current-Increment boundary when there are no Required Named Items or current authority independently establishes that the required scope is exactly the selected current Increment.
 
 `NAMED_REQUIRED_ITEMS_DELIVERED`, `BOUNDED_OUTCOME_SATISFIED`, and `MANDATE_OUTCOME_SATISFIED` may span multiple Increments when the enabled delivery stages and Mandate ceiling permit that continuation. Do not force those outer obligations into one selected Increment merely to make coverage look complete.
@@ -233,6 +243,7 @@ If the current Increment is not yet shaped, or required-item coverage is unknown
 Ceiling checks use actual continuation requirements, not the boundary label alone:
 
 - `CURRENT_INCREMENT` permits `READY_TICKET_SET`, `CURRENT_INCREMENT_IMPLEMENTED`, and `CURRENT_INCREMENT_DELIVERED`. It permits `NAMED_REQUIRED_ITEMS_DELIVERED` only when current authority establishes every Required Named Item is covered by the current Increment.
+- READY_EXECUTION_PLANS creates no success-continuation authority beyond its exact approved preparation scope; it never uses a planning-only terminal to shrink required product delivery.
 - a named-item or bounded predicate that requires another Increment needs at least `BOUNDED_OUTCOME`;
 - `MANDATE_OUTCOME_SATISFIED` requires `MANDATE_OUTCOME`.
 

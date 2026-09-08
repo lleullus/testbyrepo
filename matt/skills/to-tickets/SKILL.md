@@ -152,8 +152,7 @@ be separated without changing product meaning, prefer separate Tickets so an
 Independent delivery unit can use the thin verification checkpoint without
 pulling an operator-owned effect into it. Do not split an atomic product outcome
 or invent a boundary merely to optimize verification choreography.
-later Ticket delivery performs the internal task decomposition one current task at
-a time.
+Later execution preparation may cover the impact of important shared producer/consumer decisions before dependent implementation; the implementation worker chooses local decomposition under that reviewed method. This does not prescribe sequence or internal layers in product Tickets.
 
 ## Acceptance Criteria rules
 
@@ -175,6 +174,8 @@ only to Acceptance Criteria:
 > design was chosen, even though the parent Spec's outcome and boundaries are
 > satisfied, the statement is too prescriptive unless that design is itself an
 > explicit parent-Spec constraint.
+
+These are product-norm rules. A separate derived method plan from ready-ticket-plan may be solution-specific without changing Scope/AC/Verification obligations. Plan/review is not a required Ticket section, status, Blocker or ready-validator field; product ready still means the same faithful minimal observable outcome. Pass useful exact repository/Matt evidence as non-normative navigation, including direct Matt without Source-Increment, instead of copying method choices into authority. To Tickets never performs execution preparation or treats a method review as its readiness approval.
 
 For bug work, describe the original observable symptom and corrected behavior,
 not a presumed cause.

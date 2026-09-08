@@ -16,6 +16,8 @@ Do not change the verifier's exact verdict. Add a separate Adaptive root-cause c
 
 Classification begins only from the exact terminal `ready-ticket-verify` result plus applicable current authority/evidence. A scenario checkpoint, material-turn checkpoint, pre-progression checkpoint, candidate verdict, Parent steering decision, or partial observation is nonterminal and cannot by itself receive `IMPLEMENTATION_DEFECT`, `VERIFICATION_MECHANISM_DEFECT`, `CONTRACT_OVERREACH`, `CURRENT_INCREMENT_MISMATCH`, or `INCONCLUSIVE` Adaptive classification.
 
+Preparation `REVISE | EVIDENCE_NEEDED` and `PLAN_REVIEW_REQUIRED | PLAN_REVIEW_STALE | PLAN_NOT_ADMITTED` are not final product verdicts or Adaptive defect enums. Preserve their actual owner result and return to the affected Planner/reviewer/evidence owner before implementation. Internal final-discovery no-finding/no-lane is likewise not PASS.
+
 ## Required authority/evidence
 
 Before classifying, reopen enough current authority to compare the failing claim precisely:
@@ -25,7 +27,6 @@ Before classifying, reopen enough current authority to compare the failing claim
 - Parent Spec;
 - adopted Behavior/UI authority relevant to the claim;
 - exact Ticket and authored Verification flow(s);
-- exact current `ready-ticket-heuristic-probe` result/evidence as available;
 - exact fresh `ready-ticket-verify` result/evidence as available;
 - current runtime/repository evidence needed to attribute the observed behavior.
 
@@ -51,9 +52,9 @@ This includes a contract that is coherent in isolation but bundles later maturit
 
 ### 3. Verification mechanism check
 
-If the contract is valid and correctly placed, ask whether the required heuristic-probe gate and final verification mechanism each operated on the correct current target/authority and whether the final verifier measured the authored acceptance boundary/readback under attributable conditions.
+If the contract is valid and correctly placed, ask whether the integrated verifier bound the actual current authority/target, performed its material frontier and all authored flows, and measured the approved acceptance boundary/readback under attributable conditions.
 
-If **no**, classify `VERIFICATION_MECHANISM_DEFECT` or `INCONCLUSIVE` depending on whether the probe/verifier mechanism itself is wrong versus merely unavailable. A heuristic finding is not itself a product contradiction until the verifier adjudicates it against current authority.
+If not, classify `VERIFICATION_MECHANISM_DEFECT` when the mechanism is wrong, or `INCONCLUSIVE` when required evidence/capability is unavailable. A discovery finding is not a product contradiction until the verifier adjudicates it against current authority.
 
 ### 4. Runtime contradiction check
 
@@ -85,12 +86,14 @@ Fresh verification after implementation correction: Required
 
 Do not shrink the contract merely because the correct implementation is difficult.
 
+An implementation-local repair stays with the worker under current ADMIT. Important cause/owner/interface/persistence/readback changes require affected Planner → Heuristic → independent review before dependent implementation. A new product promise returns to original planning authority, not method review.
+
 ## `VERIFICATION_MECHANISM_DEFECT`
 
-Use when the product contract is valid but the concrete heuristic-probe or final-verification apparatus does not measure/currently attribute it correctly, for example:
+Use when the product contract is valid but the integrated verification apparatus does not measure or attribute it correctly, for example:
 
-- probe or verifier binds the wrong implementation target/authority snapshot;
-- probe workers interfere through shared mutable state and corrupt attribution;
+- verifier binds the wrong implementation target/authority;
+- authorized exploratory actions interfere through shared state and corrupt attribution;
 - wrong fixture or initial state;
 - harness invokes a different flow than the authored trigger;
 - observation uses a private/internal state instead of the authoritative readback;
@@ -101,14 +104,13 @@ Use when the product contract is valid but the concrete heuristic-probe or final
 Route:
 
 ```text
-Primary owner: separate heuristic-probe and/or verification lifecycle / harness owner
+Primary owner: separate verification lifecycle / harness owner
 Product implementation change: Do not infer
 Planning re-entry: None unless the failure exposes an actual product-observability contract defect
-Fresh heuristic probe: Required when probe mechanism/currentness was affected; otherwise reuse only after currentness is re-established
 Fresh verification: Required
 ```
 
-Do not add product APIs, debug hooks, persistence, ledgers, probe state, or test-only product behavior merely to satisfy an invalid probe/verifier harness.
+Do not add product APIs, debug hooks, persistence, ledgers or test-only behavior merely to satisfy an invalid verifier harness. Correct the mechanism and obtain fresh verifier-owned evidence, not a separate exploration gate.
 
 ## `CONTRACT_OVERREACH`
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capture one fixed A Probe→Verify or B integrated-verifier cohort without scoring."""
+"""Capture a fixed integrated-verifier cohort without adjudicating product meaning."""
 from __future__ import annotations
 
 import argparse
@@ -16,7 +16,7 @@ from typing import Any
 from calibrate import product_snapshot, run_stage
 
 
-SCHEMA = "iis-r5-topology-capture/v1"
+SCHEMA = "iis-verification-capture/v2"
 _USAGE_KEYS = ("input", "output", "cacheRead", "cacheWrite", "totalTokens")
 
 
@@ -68,8 +68,8 @@ def _validate_item(item: object, source_hashes: dict[str, str]) -> tuple[dict[st
     for key in ("metadata", "metadata_sha256", "environment", "profile", "initial_snapshot", "profile_hashes", "protected_hashes"):
         if key not in item:
             raise ValueError(f"protocol run is missing {key}")
-    if item["profile"] not in ("A", "B"):
-        raise ValueError("run profile must be A or B")
+    if not isinstance(item["profile"], str) or not item["profile"]:
+        raise ValueError("profile must name the immutable payload, not select a lifecycle")
     metadata_path = Path(item["metadata"]).resolve(strict=True)
     if not metadata_path.is_file() or _sha256(metadata_path) != item["metadata_sha256"]:
         raise ValueError(f"prepared metadata changed: {metadata_path}")
@@ -92,16 +92,16 @@ def _validate_item(item: object, source_hashes: dict[str, str]) -> tuple[dict[st
             raise ValueError(f"metadata {key} must be a path array")
         for value in metadata[key]:
             path = Path(value).resolve(strict=key == "target_paths")
-            if not path.is_relative_to(root):
-                raise ValueError(f"metadata {key} path is outside Project Root: {value}")
+            if key == "target_paths" and not path.is_relative_to(root):
+                raise ValueError(f"metadata target is outside Project Root: {value}")
+            if key == "allowed_output_paths" and (path == root or path.is_relative_to(root) or root.is_relative_to(path)):
+                raise ValueError("allowed output must be an exact outside-root evidence path")
     _validate_argv(metadata["trigger_argv"], "metadata trigger_argv")
     _validate_argv(metadata["readback_argv"], "metadata readback_argv")
     for index, argv in enumerate(metadata.get("additional_trigger_argv", [])):
         _validate_argv(argv, f"metadata additional_trigger_argv[{index}]")
     if metadata.get("observer_argv") is not None:
         _validate_argv(metadata["observer_argv"], "metadata observer_argv")
-    if item["profile"] == "B" and metadata.get("after_probe"):
-        raise ValueError("after_probe is an A-only diagnostic control")
 
     environment_path = Path(item["environment"]).resolve(strict=True)
     profile_hashes = _checked_hashes(item["profile_hashes"], "profile_hashes")
@@ -159,7 +159,7 @@ def _runtime_states(runtime_data: Path) -> list[dict[str, Any]]:
             if isinstance(value, dict) and value.get("kind") == "execution":
                 entry.update({key: value.get(key) for key in (
                     "execution_id", "purpose", "phase", "final_verdict", "completion",
-                    "mutation_revision", "latest_evidence_revision", "project_root", "ticket_path")})
+                    "pause", "active_operation", "uncertain_effect", "project_root", "ticket_path")})
             else:
                 entry["kind"] = value.get("kind") if isinstance(value, dict) else None
         except (OSError, json.JSONDecodeError) as error:
@@ -220,7 +220,7 @@ def _remaining(deadline: float) -> tuple[int, float] | None:
 
 def _stage_summary(record: dict[str, Any]) -> dict[str, Any]:
     return {key: record.get(key) for key in (
-        "stage", "topology", "parsed_verdict", "probe_completion", "clean_transport", "exit_code",
+        "stage", "parsed_verdict", "ticket_progression", "ticket_status_after", "clean_transport", "exit_code",
         "timed_out", "agent_ended", "stop_reason", "error_message", "elapsed_seconds", "usage",
         "tool_events", "target_mutated", "changed_paths", "all_changed_paths", "runtime_progression_paths",
         "raw_terminal_result", "raw_events")}
@@ -248,7 +248,7 @@ def run_one(item: dict[str, Any], protocol: dict[str, Any], source_hashes: dict[
     stop = "NOT_STARTED"
     challenge: dict[str, Any] | None = None
 
-    def invoke_stage(stage: str, apply_challenge: bool = False) -> dict[str, Any] | None:
+    def invoke_stage(stage: str) -> dict[str, Any] | None:
         allowance = _remaining(deadline)
         if allowance is None:
             stage_errors.append({"stage": stage, "error": "episode timeout exhausted before invocation"})
@@ -258,7 +258,6 @@ def run_one(item: dict[str, Any], protocol: dict[str, Any], source_hashes: dict[
             record = run_stage(stage, metadata, agent_dir=Path(environment["agent_dir"]),
                                payload=Path(environment["payload"]), runtime_data=runtime_data,
                                model=protocol["model"], thinking=protocol["thinking"], timeout=timeout,
-                               topology=item["profile"], apply_post_probe_challenge=apply_challenge,
                                episode_deadline=deadline)
             records.append(record)
             return record
@@ -266,40 +265,19 @@ def run_one(item: dict[str, Any], protocol: dict[str, Any], source_hashes: dict[
             stage_errors.append({"stage": stage, "error": f"{type(error).__name__}: {error}"})
             return None
 
-    if item["profile"] == "A":
-        probe = invoke_stage("probe")
-        if probe is None:
-            stop = "PROBE_CAPTURE_ERROR"
-        elif not probe["clean_transport"]:
-            stop = "PROBE_TRANSPORT_STOP"
-        elif probe["probe_completion"] != "COMPLETE":
-            stop = "PROBE_NOT_COMPLETE"
-        elif not (run_root / "probe-binding.json").is_file():
-            stop = "PROBE_BINDING_MISSING"
-        elif _remaining(deadline) is None:
-            stop = "EPISODE_TIMEOUT_AFTER_PROBE"
-        else:
-            diagnostic = bool(metadata.get("after_probe"))
-            verify = invoke_stage("verify", apply_challenge=diagnostic)
-            challenge_path = run_root / "challenge.json"
-            if challenge_path.is_file():
-                try:
-                    challenge = json.loads(challenge_path.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError) as error:
-                    challenge = {"capture_error": f"{type(error).__name__}: {error}"}
-            stop = ("VERIFY_CAPTURE_ERROR" if verify is None else
-                    "VERIFY_COMPLETE" if verify["clean_transport"] else "VERIFY_TRANSPORT_STOP")
-    else:
-        verify = invoke_stage("verify")
-        stop = ("VERIFY_CAPTURE_ERROR" if verify is None else
-                "VERIFY_COMPLETE" if verify["clean_transport"] else "VERIFY_TRANSPORT_STOP")
+    verify = invoke_stage("verify")
+    stop = ("VERIFY_CAPTURE_ERROR" if verify is None else
+            "VERIFY_COMPLETE" if verify["clean_transport"] else "VERIFY_TRANSPORT_STOP")
+    challenge_path = run_root / "challenge.json"
+    if challenge_path.is_file():
+        challenge = json.loads(challenge_path.read_text(encoding="utf-8"))
 
     after_actor = _capture_boundary("after-actor", metadata, protected, runtime_data, capture_root)
     observations = _parent_observations(metadata, capture_root)
     after_parent = _capture_boundary("after-parent-observation", metadata, protected, runtime_data, capture_root)
     usage, tool_events = _aggregate_stages(records)
     verify_records = [record for record in records if record["stage"] == "verify"]
-    route = "A_DIAGNOSTIC_CONTROL" if item["profile"] == "A" and metadata.get("after_probe") else f"{item['profile']}_NORMAL"
+    route = "INTEGRATED_VERIFY"
     result = {
         "schema": SCHEMA,
         "metadata": item["metadata"],
@@ -320,9 +298,6 @@ def run_one(item: dict[str, Any], protocol: dict[str, Any], source_hashes: dict[
         "stages": [_stage_summary(record) for record in records],
         "stage_capture_errors": stage_errors,
         "parsed_verdict": verify_records[-1]["parsed_verdict"] if verify_records else None,
-        "probe_admission": ({"completion": records[0].get("probe_completion") if records else None,
-                             "binding_exists": (run_root / "probe-binding.json").is_file()}
-                            if item["profile"] == "A" else None),
         "diagnostic_challenge": challenge,
         "usage": usage,
         "tool_events": tool_events,

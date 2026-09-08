@@ -54,7 +54,7 @@ Mandate: <exact companion path/revision or current-conversation authority>
 Mandate Continuation Ceiling: CURRENT_INCREMENT | BOUNDED_OUTCOME | MANDATE_OUTCOME
 Implementation: yes | no
 Verification: yes | no
-Run Completion Boundary: READY_TICKET_SET | CURRENT_INCREMENT_IMPLEMENTED | CURRENT_INCREMENT_DELIVERED | NAMED_REQUIRED_ITEMS_DELIVERED | BOUNDED_OUTCOME_SATISFIED | MANDATE_OUTCOME_SATISFIED
+Run Completion Boundary: READY_TICKET_SET | READY_EXECUTION_PLANS | CURRENT_INCREMENT_IMPLEMENTED | CURRENT_INCREMENT_DELIVERED | NAMED_REQUIRED_ITEMS_DELIVERED | BOUNDED_OUTCOME_SATISFIED | MANDATE_OUTCOME_SATISFIED
 Current Scope: <exact current Scope result or None for direct next-increment-ready work>
 Current Increment: <exact current INC or None for direct next-increment-ready work>
 Spec: <exact approved Spec>
@@ -71,16 +71,16 @@ Reshaping:
 Unresolved user decisions: None
 Planning owner terminal: validated complete Ready Ticket Set
 Planning owner result: STOP — terminal IIS Planning output
-Decision: <RUN_COMPLETE | CONTINUE_TO_IMPLEMENTATION | CONTINUE_TO_HEURISTIC_PROBE | RETURN_AUTHORITY_GAP>
+Decision: RUN_COMPLETE | CONTINUE_TO_PREPARATION | CONTINUE_TO_IMPLEMENTATION | CONTINUE_TO_VERIFICATION | RETURN_AUTHORITY_GAP
 Governing authority: iis-adaptive-planning / Terminal boundary + active Run Contract
 Observed condition: <validated complete Ready Ticket Set plus current Completion Predicate result>
 Effect: IIS Planning ownership ends here; the Adaptive invocation <completes | continues under Outer Main | returns an authority gap>
-Next allowed action: <Outer Main terminal report | implementation | heuristic probe | authority return>
+Next allowed action: <Outer Main terminal report | preparation | implementation | verification | authority return>
 Owner status: COMPLETE
 Invocation status: COMPLETE | INCOMPLETE
 Whole-run predicate satisfied: yes | no
 Returned to: Outer Main
-Outer disposition: RUN_COMPLETE | CONTINUE_TO_IMPLEMENTATION | CONTINUE_TO_HEURISTIC_PROBE | RETURN_AUTHORITY_GAP
+Outer disposition: RUN_COMPLETE | CONTINUE_TO_PREPARATION | CONTINUE_TO_IMPLEMENTATION | CONTINUE_TO_VERIFICATION | RETURN_AUTHORITY_GAP
 ```
 
 Do not append an offer to implement, verify, or plan the next provisional Increment as though those actions are part of IIS Planning.
@@ -88,6 +88,12 @@ Do not append an offer to implement, verify, or plan the next provisional Increm
 Return the Ready Ticket Set and the closed Run Contract to Outer Main. Under explicit Adaptive activation, Outer Main continues the current Increment through exactly the enabled delivery stages without another approval merely because ownership changes. The planning owner STOP is not an invocation STOP.
 
 When the active Run Completion Boundary is `READY_TICKET_SET`, the planning phase also satisfies whole-run completion and Outer Main emits the Run Complete report below. For every broader boundary, planning phase completion alone is not whole-run success.
+
+## Execution preparation complete or limited
+
+Preserve the actual READY TICKET PLAN RESULT, Completion, exact Tickets/Plans, outside-root Plan Review, per-Ticket decisions and raw evidence/limits. Emit whole-run completion at READY_EXECUTION_PLANS only when every explicitly required preparation Ticket has current independent ADMIT. Both Implementation/Verification are no. REVISE/EVIDENCE_NEEDED, missing/stale review or unavailable independence preserves the exact preparation owner result and Whole-run completion no; it is not final FAILED/INCONCLUSIVE or an Adaptive defect classification. Planner/Heuristic intermediate output and structurally valid JSON never substitute for an actual independent reviewer result.
+
+Do not create another preparation terminal label: the lead's READY TICKET PLAN RESULT is the producer consumed by Outer Main and the Run Complete form. Plan files alone do not satisfy product obligations, and preparation-only authorizes no source implementation, final discovery/verdict or done progression.
 
 ## Current Increment implemented
 
@@ -101,7 +107,6 @@ Implementation denominator: <complete>/<total>
 Implementation results:
 - <Ticket path — exact implementation report/checkpoint>
 Verification requested: no
-Heuristic probe claimed: no
 Final Ticket states:
 - <Ticket path — exact current status>
 Run Completion Boundary: CURRENT_INCREMENT_IMPLEMENTED
@@ -125,7 +130,7 @@ IIS ADAPTIVE RUN COMPLETE
 
 Mandate: <exact companion path/revision or current-conversation authority>
 Mandate Continuation Ceiling: CURRENT_INCREMENT | BOUNDED_OUTCOME | MANDATE_OUTCOME
-Run Completion Boundary: READY_TICKET_SET | CURRENT_INCREMENT_IMPLEMENTED | CURRENT_INCREMENT_DELIVERED | NAMED_REQUIRED_ITEMS_DELIVERED | BOUNDED_OUTCOME_SATISFIED | MANDATE_OUTCOME_SATISFIED
+Run Completion Boundary: READY_TICKET_SET | READY_EXECUTION_PLANS | CURRENT_INCREMENT_IMPLEMENTED | CURRENT_INCREMENT_DELIVERED | NAMED_REQUIRED_ITEMS_DELIVERED | BOUNDED_OUTCOME_SATISFIED | MANDATE_OUTCOME_SATISFIED
 Goal Outcome: <exact Run Contract outcome>
 Required Named Items:
 - <item or None required>
@@ -138,7 +143,7 @@ Completion Predicate: <exact predicate>
 Authoritative Readback: <fresh attributable evidence>
 Final Current Increment: <exact INC path or None>
 Final Ticket evidence:
-- <exact Ticket path — implementation result | heuristic-probe result when Verification is yes | final canonical status>
+- <exact Ticket path — current preparation review if preparation-only | implementation result | final verifier result/progression/actual canonical status>
 Disposition: RUN_CONTRACT_SATISFIED
 Remaining provisional horizon: non-authoritative; not a completion blocker
 STOP
@@ -147,6 +152,8 @@ STOP
 Populate the existing `Authoritative Readback` and `Final Ticket evidence` entries with the actual closure evidence used, including the effect of any owner-reported `Evidence limit` or `Remaining uncertainty`; do not add a second verdict or acceptance matrix. A limited PASS may support only the approved canonical fact or absence it actually establishes. It cannot support an unobserved runtime, operator, external, or integrated result. Canonical source/artifact/document/structure inspection is sufficient when that is the approved acceptance boundary.
 
 Do not emit this report for a planning leaf STOP, one completed Ticket, one delivered Increment when Required Named Items remain, an implementation-only result when the boundary requires delivery, a blocked/inconclusive return, or roadmap exhaustion.
+
+VERIFIED with Ticket Progression FAILED is not completed delivery even if actual Ticket bytes say done. Preserve verdict, exact progression failure, actual status and owning recovery evidence; the caller must not infer COMPLETED from the status string or repair authority itself.
 
 Candidate Named Items do not block this report unless the user revised them into Required Named Items.
 

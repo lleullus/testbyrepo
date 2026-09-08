@@ -63,42 +63,6 @@ class DecisionProvenanceContractTests(unittest.TestCase):
         ):
             self.assertIn(required, terminal)
 
-    def test_delivery_owners_explain_only_non_continuation_boundaries(self) -> None:
-        implement_skill = (
-            ROOT / "companion-skills" / "ready-ticket-implement" / "SKILL.md"
-        ).read_text(encoding="utf-8")
-        implement_ref = (
-            ROOT
-            / "companion-skills"
-            / "ready-ticket-implement"
-            / "references"
-            / "implement.md"
-        ).read_text(encoding="utf-8")
-        probe = (
-            ROOT / "companion-skills" / "ready-ticket-heuristic-probe" / "SKILL.md"
-        ).read_text(encoding="utf-8")
-        verify_skill = (
-            ROOT / "companion-skills" / "ready-ticket-verify" / "SKILL.md"
-        ).read_text(encoding="utf-8")
-        verify_ref = (
-            ROOT
-            / "companion-skills"
-            / "ready-ticket-verify"
-            / "references"
-            / "verify.md"
-        ).read_text(encoding="utf-8")
-
-        self.assertIn("`Completion: BLOCKED | PARTIAL`", implement_skill)
-        self.assertIn("### Non-continuation provenance", implement_ref)
-        self.assertIn("정상 `COMPLETE`", implement_ref)
-        self.assertIn("For `Probe Completion: PARTIAL | BLOCKED` or `SUBAGENT CAPABILITY UNAVAILABLE`", probe)
-        self.assertIn("normal `Probe Completion: COMPLETE`", probe)
-        self.assertIn("Every caller-facing `VERIFICATION NOT STARTED` result", verify_skill)
-        self.assertIn("Decision: VERIFICATION NOT STARTED", verify_ref)
-        self.assertIn(
-            "Do not append them to a normal evidence-complete `FAILED` verdict",
-            verify_ref,
-        )
 
 
 # Static authoring checks: these validate real reference/template structure, not
@@ -172,36 +136,6 @@ class DecisionProvenanceStructureTests(unittest.TestCase):
                     self.assertEqual(owner, skill.parent.name)
                     self.assertIn(f"\n## {section}\n", source)
 
-    def test_delivery_capability_returns_link_to_provenance_fields(self) -> None:
-        for owner, reference, heading in (
-            ("ready-ticket-implement", "references/implement.md", "Non-continuation provenance"),
-            ("ready-ticket-heuristic-probe", "SKILL.md", "Result boundary"),
-            ("ready-ticket-verify", "references/verify.md", "2. Admission and current authority"),
-        ):
-            with self.subTest(owner=owner):
-                skill = ROOT / "companion-skills" / owner / "SKILL.md"
-                returns = [
-                    line for line in skill.read_text(encoding="utf-8").splitlines()
-                    if "`SUBAGENT CAPABILITY UNAVAILABLE`" in line
-                ]
-                links = [
-                    link for line in returns
-                    for link in re.findall(r"\[[^\]]+\]\(([^)\s]*#[^)\s]+)\)", line)
-                ]
-                self.assertTrue(links, "Capability return must route to the existing provenance schema")
-                expected = skill.parent / reference
-                fragment = re.sub(r"[^a-z0-9 -]", "", heading.lower()).replace(" ", "-")
-                for link in links:
-                    filename, anchor = link.split("#", 1)
-                    target = (skill.parent / filename) if filename else skill
-                    self.assertEqual(target.resolve(), expected.resolve())
-                    self.assertEqual(anchor, fragment)
-                    source = target.read_text(encoding="utf-8")
-                    self.assertRegex(source, rf"(?m)^##?#+ {re.escape(heading)}$")
-                    self.assertTrue(any(
-                        all(field_counts(block)[key] == 1 for key in PROVENANCE_FIELDS)
-                        for block in text_blocks(target)
-                    ))
 
     def test_adaptive_return_templates_do_not_shadow_provenance_fields(self) -> None:
         terminal = ROOT / "iis-adaptive-planning" / "references" / "07-terminal-report.md"

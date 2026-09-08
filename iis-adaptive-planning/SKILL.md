@@ -24,7 +24,7 @@ Do not turn IIS into a controller, delivery orchestrator, workflow database, app
 
 There is no separately invokable Adaptive Run skill. `Run` in **Adaptive Run Contract** means the lifetime of the current explicit Adaptive invocation initiated through this one `iis-adaptive-planning` skill.
 
-The **Outer Main** is the main agent handling that current explicit Adaptive invocation. It owns only Run Contract closure and carry-forward, phase routing from exact owner results, fresh completion assessment, and the final caller-facing result. At a completion boundary it compares currently applicable parent obligations, their existing acceptance owners, and actual current evidence/readback, including owner-reported limits; it does not issue a second AC or whole-Ticket verdict. Current IIS leaves retain product-planning authority, `ready-ticket-implement` retains implementation authority, `ready-ticket-heuristic-probe` retains bounded heuristic-exploration authority, and `ready-ticket-verify` retains one-exact-Ticket verification verdict and guarded `done` authority. When Outer Main directly performs an enabled delivery stage, it enters that exact skill owner role for the duration of the call and still follows the same owner contract.
+The **Outer Main** owns invocation-local Run Contract closure/carry-forward, routing from exact owner results, fresh completion assessment and final caller result. It compares applicable obligations, existing acceptance owners and current evidence/limits without issuing a second AC/Ticket verdict. IIS leaves own product planning; `ready-ticket-plan` owns execution-method preparation and independent start review; `ready-ticket-implement` owns implementation/self-check; `ready-ticket-verify` owns integrated discovery, exact-Ticket adjudication and guarded done progression.
 
 This is a thin invocation-local handoff role, not a persistent controller, scheduler, queue, retry ledger, workflow database, or new product-authority layer.
 
@@ -87,8 +87,8 @@ The Run Contract establishes:
 - Required Item Policy: `EXACT_REQUIRED_SET` | `REQUIRED_FLOOR` | `NONE_REQUIRED`;
 - Implementation: `yes` | `no`;
 - Verification: `yes` | `no`;
-- Delivery Model Selection: user-selected model/effort for each enabled SUBAGENT stage, with its selection basis;
-- Run Completion Boundary: `READY_TICKET_SET` | `CURRENT_INCREMENT_IMPLEMENTED` | `CURRENT_INCREMENT_DELIVERED` | `NAMED_REQUIRED_ITEMS_DELIVERED` | `BOUNDED_OUTCOME_SATISFIED` | `MANDATE_OUTCOME_SATISFIED`;
+- Delivery Model Selection: user-selected model/effort and basis for actual delegated preparation roles and enabled SUBAGENT delivery stages;
+- Run Completion Boundary: `READY_TICKET_SET` | `READY_EXECUTION_PLANS` | `CURRENT_INCREMENT_IMPLEMENTED` | `CURRENT_INCREMENT_DELIVERED` | `NAMED_REQUIRED_ITEMS_DELIVERED` | `BOUNDED_OUTCOME_SATISFIED` | `MANDATE_OUTCOME_SATISFIED`;
 - one observable Completion Predicate;
 - Authoritative Readback;
 - Run Contract Approval Gate: `required` | `not_required`; and
@@ -105,6 +105,8 @@ If a material field remains unresolved, mark the form `USER_INPUT_REQUIRED`, ask
 Required Named Items and Candidate Named Items may coexist. Do not collapse a mixed assignment into one list-wide label, move a Required Named Item into the Candidate list, or treat a Candidate Named Item as a completion obligation without current user authority.
 
 Implementation and Verification are independent invocation fields. Preserve explicit `do not implement` and `do not verify` overrides. `Verification: no` never permits a verifier call, a `done` claim, or a delivered/outcome boundary that still requires verification.
+
+An explicit execution-preparation-only request selects `READY_EXECUTION_PLANS` with Implementation/Verification both no and exact required Tickets; it stops only after every required Ticket has current independent ADMIT. Product-planning-only stays `READY_TICKET_SET`. No third stage switch is added. Implementation yes always consumes current plan review, even with Verification no; verification-only of an implemented ready target binds actual target directly without a new plan.
 
 When explicit Adaptive activation supplies no narrower stop override and no broader named-item or outcome terminal, close the default current-Increment execution envelope as `Implementation: yes`, `Verification: yes`, and `Run Completion Boundary: CURRENT_INCREMENT_DELIVERED`, subject to the Required-item coverage invariant and Mandate Continuation Authority ceiling in `references/09-run-contract.md`. Do not force this current-Increment terminal when current authority already assigns a broader outcome or when required-item coverage is unknown or partial.
 
@@ -202,7 +204,7 @@ To Spec and To Tickets remain projection stages, not places to invent product me
 
 ## Verification evidence and re-entry
 
-Adaptive Planning may consume fresh exact results from the separate `ready-ticket-heuristic-probe` and `ready-ticket-verify` lifecycles as evidence. A heuristic finding is pre-verification exploration evidence only: Adaptive never converts it directly into an implementation/planning defect or verifier verdict. A verification scenario checkpoint, material-turn checkpoint, pre-progression checkpoint, candidate verdict, or Parent steering decision is nonterminal and cannot start Adaptive defect classification. Triage begins only after the exact terminal `ready-ticket-verify` result is available. The current terminal verifier result remains the adjudicated delivery evidence and Adaptive does not replace or rewrite that verdict.
+Adaptive triage consumes the exact terminal `ready-ticket-verify` result and current evidence. Its internal discovery findings, scenario/material/pre-progression checkpoints, candidate verdict and Parent steering are nonterminal navigation, not automatic defects. A preparation REVISE/EVIDENCE_NEEDED or PLAN_REVIEW_REQUIRED/PLAN_REVIEW_STALE/PLAN_NOT_ADMITTED is an affected preparation/admission return, not a final FAILED/INCONCLUSIVE or Adaptive defect enum. Preserve the actual owner result.
 
 Classify the underlying problem using [references/06-verification-triage.md](references/06-verification-triage.md):
 
@@ -214,11 +216,11 @@ Classify the underlying problem using [references/06-verification-triage.md](ref
 
 Never infer `CONTRACT_OVERREACH` merely because a requirement is difficult or expensive. Trace the requirement to current product authority.
 
-If planning authority changes a contract, do not turn an earlier failed result into PASS. Validate the new planning artifacts and, when Verification remains enabled, require a fresh applicable heuristic probe before fresh verification.
+If planning authority changes, preserve the old verdict and validate new artifacts. If implementation is enabled, refresh only affected method review before dependent work; if verification is enabled, run a fresh integrated verification cycle on the stable changed target.
 
-Adaptive Planning itself does not implement or verify Tickets and does not heuristically probe Tickets. Outer Main invokes the separately discovered `ready-ticket-implement` only when `Implementation: yes`; when `Verification: yes`, it routes the current stable `ready` Ticket through `ready-ticket-heuristic-probe` and only after `Probe Completion: COMPLETE` into `ready-ticket-verify`, following each skill's current execution-mode contract. Each enabled delivery stage defaults to SUBAGENT without a separate opt-in; use DIRECT only when the current user explicitly selects it for that stage. A stage-specific override does not change the other stages or enable a disabled stage. Adaptive never changes topology from model capability, task difficulty, cost or worker availability and never falls back between modes. Implementation/verification SUBAGENT execution is checkpointed: Outer Main returns bounded `CONTINUE | STEER | STOP` decisions for nonterminal owner checkpoints and waits for the exact terminal owner result before delivery routing or verification triage. Probe SUBAGENT keeps Main as Heuristic Probe Lead with dynamic lane workers. `Verification: yes` therefore includes the required heuristic-probe gate plus final verification and does not create a third Run Contract field. Use [references/08-delivery-continuation.md](references/08-delivery-continuation.md); checkpoint continuation is internal phase release under already established authority, not a new user approval prompt.
+Outer Main invokes `ready-ticket-plan` for requested preparation or before implementation lacking current ADMIT, forwards the actual outside-root `plan_review_path`, and invokes implement only when Implementation is yes. Verification yes routes a stable current ready target directly to `ready-ticket-verify`; Verification no runs neither final discovery nor verdict, but does not disable pre-implementation Heuristic/review. Preserve each stage's current user mode/model contract: implementation/verification default SUBAGENT unless explicitly DIRECT, with no hidden fallback or exploration fan-out. Preparation roles follow their own independence/current-selection contract.
 
-If an enabled delivery lifecycle produces a material implementation, heuristic-probe/verification-mechanism, contract, or current-Increment defect, corrective routing/re-entry is the Adaptive default after an actual correction or new evidence, unless the user explicitly requested no corrective re-entry/fail-and-report. Adaptive owns only planning correction/reshaping; implementation, heuristic exploration, and verification remain owned by the separate delivery skills. A disabled stage is an authority boundary, not a failure to be bypassed.
+After an actual correction/new evidence, corrective re-entry is the Adaptive default unless explicitly disabled. Local implementation repair stays with the worker/current plan; material cause/owner/interface/readback changes return to affected preparation; product meaning returns to its original planning owner. Missing authority or a disabled stage is not bypassed.
 
 ## Post-delivery completion assessment and success re-entry
 
@@ -293,6 +295,8 @@ Report the result as `IIS ADAPTIVE PLANNING PHASE COMPLETE` using [references/07
 
 `STOP` here is the **IIS Planning owner boundary**, not necessarily the end of the current Adaptive invocation. Do not implement or verify **as IIS Planning** merely because current Increment planning completed. Return the Ready Ticket Set and closed Run Contract to Outer Main; this owner STOP is not an invocation STOP.
 
+
+For `READY_EXECUTION_PLANS`, Outer Main consumes the actual `READY TICKET PLAN RESULT`, exact outside-root review and every required current ADMIT; useful plans or a subset cannot close the run. This is preparation completion, not product implementation, final verification or done.
 Outer Main applies Implementation and Verification independently and emits `IIS ADAPTIVE RUN COMPLETE` only when the active Run Completion Boundary and Completion Predicate are actually satisfied. `CURRENT_INCREMENT_IMPLEMENTED` stops after the complete implementation denominator without verifier progression. Broader delivery or outcome boundaries require the exact enabled stages and current Mandate ceiling.
 
 Do not plan the next provisional Increment or declare the whole product complete merely because current Increment planning completed. A broader success continuation begins only after the current Increment is actually delivered, the active Run Contract requires it, and the Mandate ceiling permits it; even then Scope Shaper selects the next current Increment from actual state rather than consuming a provisional plan.

@@ -1,5 +1,7 @@
 # Click provenance
 
+Historical provenance for the original runtime. Version 2 removes the observation anti-loop, inventory quota and mutation-revision policies below; this is not the current execution contract. See README.md for the active host-neutral owner/effect boundary.
+
 This runtime is a behavior-level reimplementation of selected execution-control ideas inspected in the local Click reference checkout at `/home/user01/project/click-upstream`.
 
 - inspected plugin metadata version: `0.17.0`

@@ -3,8 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export const STATE_SCHEMA_VERSION = 1;
-const LOCK_STALE_MS = 30_000;
+export const STATE_SCHEMA_VERSION = 2;
 
 function normalize(value) {
   if (Array.isArray(value)) return value.map(normalize);
@@ -20,7 +19,7 @@ export function stableDigest(value) {
 
 function defaultRoot() {
   if (process.env.IIS_READY_RUNTIME_DATA) return path.resolve(process.env.IIS_READY_RUNTIME_DATA);
-  return path.join(os.homedir(), ".omp", "agent", "data", "iis-ready-runtime");
+  return path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local", "state"), "iis", "ready-runtime");
 }
 
 export class RuntimeStore {
@@ -42,7 +41,12 @@ export class RuntimeStore {
   #readJson(file) {
     try {
       const value = JSON.parse(fs.readFileSync(file, "utf8"));
-      return value && typeof value === "object" ? value : null;
+      if (!value || typeof value !== "object" || value.schema_version !== STATE_SCHEMA_VERSION) throw new Error("STATE_SCHEMA_UNSUPPORTED: close legacy records with their original release; automatic migration is forbidden");
+      if (!["execution", "assignment", "session", "active_ticket"].includes(value.kind)) throw new Error("STATE_RECORD_INVALID: unknown record kind");
+      if (value.kind === "execution" && (!value.execution_id || !value.session_id || !value.reservation_id || !["ACTIVE", "PAUSED", "EFFECT_UNCERTAIN", "COMPLETE", "BLOCKED"].includes(value.phase))) throw new Error("STATE_RECORD_INVALID: malformed execution");
+      if (value.kind === "assignment" && (!value.assignment_id || !["issued", "consumed", "superseded", "terminal"].includes(value.status))) throw new Error("STATE_RECORD_INVALID: malformed assignment");
+      if (value.kind === "active_ticket" && (!value.identity || !value.project_root || !value.ticket_path)) throw new Error("STATE_RECORD_INVALID: malformed reservation");
+      return value;
     } catch (error) {
       if (error?.code === "ENOENT") return null;
       throw error;
@@ -57,9 +61,12 @@ export class RuntimeStore {
       updated_at: payload.updated_at ?? new Date().toISOString(),
     };
     const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`);
-    fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-    fs.chmodSync(temporary, 0o600);
+    const fd = fs.openSync(temporary, "wx", 0o600);
+    try { fs.writeFileSync(fd, `${JSON.stringify(value, null, 2)}\n`); fs.fsyncSync(fd); }
+    finally { fs.closeSync(fd); }
     fs.renameSync(temporary, file);
+    const directory = fs.openSync(path.dirname(file), "r");
+    try { fs.fsyncSync(directory); } finally { fs.closeSync(directory); }
     return value;
   }
 
@@ -68,10 +75,12 @@ export class RuntimeStore {
   }
 
   #executionPath(executionId) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(executionId)) throw new Error("invalid execution id");
     return path.join(this.executions, `${executionId}.json`);
   }
 
   #assignmentPath(assignmentId) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(assignmentId)) throw new Error("invalid assignment id");
     return path.join(this.assignments, `${assignmentId}.json`);
   }
 
@@ -138,22 +147,18 @@ export class RuntimeStore {
     let descriptor;
     try {
       descriptor = fs.openSync(lockPath, "wx", 0o600);
-      fs.writeFileSync(descriptor, JSON.stringify({ pid: process.pid, created_at: Date.now() }));
+      fs.writeFileSync(descriptor, JSON.stringify({ pid: process.pid, host: os.hostname(), created_at: Date.now() }));
     } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-      let stale = false;
-      try { stale = Date.now() - fs.statSync(lockPath).mtimeMs > LOCK_STALE_MS; } catch {}
-      if (!stale) throw new Error("Ready runtime state lock is busy");
-      try { fs.unlinkSync(lockPath); } catch {}
-      descriptor = fs.openSync(lockPath, "wx", 0o600);
-      fs.writeFileSync(descriptor, JSON.stringify({ pid: process.pid, created_at: Date.now() }));
+      if (error?.code === "EEXIST") throw new Error("STATE_LOCK_BUSY: never steal a lock based on age; recovery must establish owner termination");
+      throw error;
     }
     try {
-      return callback();
+      const result = callback();
+      if (result && typeof result.then === "function") throw new Error("state lock callback must be synchronous");
+      return result;
     } finally {
-      try { fs.closeSync(descriptor); } finally {
-        try { fs.unlinkSync(lockPath); } catch (error) { if (error?.code !== "ENOENT") throw error; }
-      }
+      fs.closeSync(descriptor);
+      fs.unlinkSync(lockPath);
     }
   }
 }

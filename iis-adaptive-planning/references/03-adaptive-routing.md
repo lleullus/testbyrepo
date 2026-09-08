@@ -36,6 +36,9 @@ Use current `iis-workflow` admission unchanged.
 - ordinary Adaptive request already next-increment-ready -> Ask Matt
 - ordinary Adaptive request not next-increment-ready -> Scope Shaper
 - status-only request -> current read-only state check / Observatory and hard STOP
+- exact existing Ready Ticket preparation -> Outer Main routes to `ready-ticket-plan`, not another product-planning leaf;
+- exact existing implementation request -> current preparation/review as needed, then implementation;
+- verification-only of an implemented ready target -> `ready-ticket-verify` directly; no new execution plan prerequisite.
 
 Adaptive never makes a broad request next-increment-ready by assertion.
 
@@ -159,6 +162,12 @@ Adaptive delta:
 
 Do not use Adaptive to create preparatory Tickets, implementation sequences, extra verification mechanisms, or Tickets for Required Named Items that do not belong to the current Increment.
 
+### Execution preparation outside IIS Planning
+
+The Ready Ticket Set boundary remains unchanged. Outer Main follows `08-delivery-continuation.md`: requested preparation or Implementation yes requires `ready-ticket-plan` and current per-Ticket independent ADMIT before common implementation admission. Shared plans cover only important coupled decisions; unrelated Tickets do not wait for a global Set-plan gate. Preparation-only uses READY_EXECUTION_PLANS and both delivery switches no. No new canonical status, Ticket section or validator requirement follows.
+
+Preparation REVISE/EVIDENCE_NEEDED and plan-admission rejection return to affected preparation/evidence owners, not final defect triage. Final verifier discovery is internal to its single current cycle and may verify an already implemented target without plan ADMIT. Local correction uses the current reviewed method; material method changes require affected review; product changes return upstream.
+
 ## STOP semantics
 
 Adaptive changes only **manual intra-planning continuation stops** for the same current planning unit.
@@ -201,6 +210,8 @@ A later success re-entry after every current Ticket is actually `done` is a **ne
 | current canonical Spec/Ticket projection is complete and valid | normal forward route | continue / planning terminal |
 | current Increment is delivered but Required Named Items or an outcome predicate remain unsatisfied | outer run incomplete | fresh actual-state Scope Shaper re-entry when authorized |
 | current Increment is implemented with Verification `no` | implementation-only terminal | report exact Run Contract result; no success re-entry |
+| preparation review is missing/stale or REVISE/EVIDENCE_NEEDED | start sufficiency/currentness unresolved, not final product defect | affected ready-ticket-plan owner; no implementation admission |
+| every required preparation Ticket has current independent ADMIT and boundary is READY_EXECUTION_PLANS | preparation-only complete | return exact review; do not implement or verify |
 
 ## Re-entry discipline
 

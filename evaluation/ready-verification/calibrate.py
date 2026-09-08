@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare disposable cases and capture real DIRECT Probe/Verify observations.
+"""Prepare disposable cases and capture real DIRECT preparation and integrated verification.
 
 Services are caller-owned: start service_argv before an invocation and stop it
 when the case is closed. Oracle data is never placed in the product directory.
@@ -19,7 +19,7 @@ import time
 from typing import Any
 
 import score_result
-from run_agent import invoke, load_events, summarize
+from run_agent import invoke, load_events, summarize, guard_results
 
 ROOT = Path(__file__).resolve().parent
 
@@ -41,14 +41,32 @@ def digest(snapshot: dict[str, str]) -> str:
     return hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()
 
 
-def prepare(case_id: str, arena: Path, port: int) -> tuple[Path, dict[str, Any]]:
+def prepare(case_id: str, arena: Path, port: int, kind: str = "verification") -> tuple[Path, dict[str, Any]]:
     from fixture_catalog import materialize
     manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
-    case = next(case for case in manifest["cases"] if case["case_id"] == case_id)
+    preparation_case = None
+    if kind == "preparation":
+        preparation_case = next(case for case in json.loads((ROOT / "planning-cases.json").read_text())["preparation_cases"] if case["case_id"] == case_id)
     run_root = arena.resolve() / uuid.uuid4().hex[:16]
     run_root.mkdir(parents=True, exist_ok=False, mode=0o700)
     project_root, support_root = run_root / "product", run_root / "support"
-    metadata = materialize(case, project_root, support_root, port=port)
+    if kind == "implementation":
+        from implementation_fixtures import materialize as materialize_implementation
+        metadata = materialize_implementation(case_id, project_root, support_root, port=port)
+    else:
+        base_case = preparation_case["base_case"] if preparation_case else case_id
+        case = next(case for case in manifest["cases"] if case["case_id"] == base_case)
+        metadata = materialize(case, project_root, support_root, port=port)
+    if preparation_case:
+        plan = Path(metadata["ticket_path"]).parent.parent / "plans/PLAN-001.md"
+        plan.parent.mkdir()
+        plan.write_text("# Initial execution method\n\nThis is an unreviewed starting proposal, not admission.\n\n" + preparation_case["method"] + "\n")
+        metadata["plan_navigation_paths"] = [str(plan)]
+        if case_id == "prepare-evidence-reuse":
+            evidence = run_root / "investigation.json"
+            write_json(evidence, {"source_observations": [{"path": filename, "sha256": hashlib.sha256(Path(filename).read_bytes()).hexdigest(), "content": Path(filename).read_text()} for filename in metadata["target_paths"]],
+                                  "limit": "Source inspection only, not a runtime observation or product verdict"})
+            metadata["preparation_evidence_paths"] = [str(evidence)]
     metadata.update(case_id=case_id, run_id=run_root.name, run_root=str(run_root))
     for argv in (["git", "-c", "core.hooksPath=/dev/null", "init", "--quiet"],
                  ["git", "add", "--all"],
@@ -58,11 +76,7 @@ def prepare(case_id: str, arena: Path, port: int) -> tuple[Path, dict[str, Any]]
     return run_root, metadata
 
 
-def stage_prompt(stage: str, metadata: dict[str, Any], run_root: Path, topology: str | None = None) -> str:
-    if topology not in (None, "A", "B"):
-        raise ValueError(f"unknown topology: {topology}")
-    if topology == "B" and stage != "verify":
-        raise ValueError("topology B has one integrated verify stage")
+def stage_prompt(stage: str, metadata: dict[str, Any], run_root: Path) -> str:
     root = metadata["project_root"]
     common = (f"Project Root: {root}\n이 호출은 승인된 disposable 로컬 제품 작업이다. DIRECT로 수행하고 subagent를 만들지 않는다. "
               "운영 파일·다른 프로젝트·다른 세션·평가 정답을 읽거나 변경하지 않는다. 부모 디렉터리를 탐색하지 않는다. "
@@ -72,113 +86,161 @@ def stage_prompt(stage: str, metadata: dict[str, Any], run_root: Path, topology:
     target = (f"Ticket: {metadata['ticket_path']}\nCandidate Target Paths: {json.dumps(metadata['target_paths'])}\n"
               f"Declared Allowed Output Paths: {json.dumps(metadata['allowed_output_paths'])}\n")
     implementation_report: Path | None = None
-    if topology is not None and metadata.get("implementation_report_path"):
+    if metadata.get("implementation_report_path"):
         implementation_report = Path(metadata["implementation_report_path"])
     elif (run_root / "implement/terminal.txt").exists():
         implementation_report = run_root / "implement/terminal.txt"
-    if stage in ("probe", "verify") and implementation_report is not None:
+    if stage == "verify" and implementation_report is not None:
         target += f"Implementation Report / Evidence: {implementation_report}\n구현 보고는 navigation일 뿐이며 완료·판정 근거가 아니다. 보고의 제한과 실제 현재 제품을 각각 확인한다.\n"
-    if stage == "probe":
-        return common + target + ("read로 skill://ready-ticket-heuristic-probe 를 호출하여 정확히 이 Ticket을 탐색하라. "
-            "필수 reference와 production-heuristic-probing 방법을 읽고 실제 authored flow를 따르라. "
-            f"정상 COMPLETE일 때 ready_probe_binding으로 {run_root / 'probe-binding.json'} 에 machine binding을 만들어라. "
-            "위 target_paths와 allowed_output_paths를 정확히 사용한다. 제품·Ticket을 수정하거나 verdict를 내리지 말고 terminal Probe result에서 종료하라. "
-            "검증은 다음 별도 호출이 담당한다.\n")
-    if stage == "verify" and topology == "B":
-        return common + target + ("read로 skill://ready-ticket-verify 를 호출하고 이 Ticket의 통합된 단일-cycle 최종 검증을 수행하라. "
-            "canonical verifier가 소유한 현재 authority/target/scope binding과 heuristic discovery를 실제 제품 판정 전에 성립시키고, "
-            "발견한 반례는 verifier-owned current evidence와 finding disposition으로 닫아라. "
-            "별도 Probe 결과나 Probe machine binding을 요구·생성·가정하지 않는다. "
-            "현재 판정에 필요한 실제 실행은 ready_guard가 허용한 뒤 ready_argv로 수행하고, 위 target_paths와 allowed_output_paths를 그대로 bind한다. "
-            "원래 source/authority를 수정해 합격시키지 말고 규정의 terminal result와 가능한 guarded progression까지 끝내라.\n")
     if stage == "verify":
-        return common + target + ("read로 skill://ready-ticket-verify 를 호출하고 이 Ticket의 최종 검증을 수행하라. "
-            f"Heuristic Probe Result / Evidence: {run_root / 'probe/terminal.txt'}\n"
-            f"Probe Machine Binding: {run_root / 'probe-binding.json'}\n"
-            "Probe 자료는 navigation이지 verdict가 아니다. 원래 source/authority를 수정해서 합격시키지 말고 "
-            "현재 target과 handoff의 적격성부터 확인하라. 현재 판정에 필요한 실제 실행은 ready_guard begin_verify 뒤 ready_argv로 수행한다. "
-            "위 target_paths와 allowed_output_paths를 그대로 bind한다. 규정의 terminal result와 가능한 guarded progression까지 끝내라.\n")
+        if metadata.get("plan_review_path"):
+            target += f"Optional method navigation (not product admission): {metadata['plan_review_path']}\n"
+        return common + target + ("read로 skill://ready-ticket-verify 를 호출하고 이 Ticket의 통합 최종 검증을 수행하라. "
+            "현재 authority/actual target을 직접 bind하고 원계약의 모든 authored flow와 실제 실패 가능 frontier를 확인하라. "
+            "발견한 반례는 verifier-owned current evidence와 finding disposition으로 닫아라. "
+            "필요 실제 실행은 ready_guard begin_verify 뒤 허용된 ready_argv/native host 경로로 수행한다. "
+            "원래 source/authority를 고쳐 합격시키지 말고 규정의 terminal result와 가능한 guarded progression까지 끝내라.\n")
     if stage == "plan":
         return common + metadata["planning_prompt"] + ("\n이번 요청은 이 한 결과의 기획부터 approved Spec과 reviewed Ready Ticket Set까지다. "
             "read로 skill://ask-matt 를 호출하고 현재 권위를 확인하라. 제품 의미가 완전히 정해져 있으면 To Spec과 To Tickets까지 진행한다. "
             "별도 문서별 사용자 승인을 요구하지 않는다. 명시된 외부 미확인은 숨기지 않는다. "
             "추가 제품 결정이 정말 필요하면 정확히 무엇인지 보고하고, 구현·검증은 시작하지 않는다.\n")
     if stage == "implement":
+        review = metadata.get("plan_review_path")
+        if not review:
+            raise ValueError("implementation requires actual current preparation handoff")
+        target += f"Plan Review: {review}\n"
         return common + target + metadata["implementation_prompt"] + ("\nread로 skill://ready-ticket-implement 를 호출하여 이 exact Ticket만 구현하라. "
             "승인된 authority를 바꾸지 말고 실제 제품 진입점과 readback으로 self-check를 수행하라. "
-            "loopback 서비스의 내부/설정은 수정하지 않는다. 정확한 구현 결과와 남은 한계를 보고하고 Probe/Verify는 시작하지 않는다.\n")
+            "loopback 서비스의 내부/설정은 수정하지 않는다. 정확한 구현 결과와 남은 한계를 보고하고 최종 검증은 시작하지 않는다.\n")
     raise ValueError(f"unknown stage: {stage}")
 
 
-def _probe_completed(run_root: Path) -> bool:
-    observation_path = run_root / "probe" / "observation.json"
+def current_review(metadata: dict[str, Any], review_path: Path, payload: Path) -> dict[str, Any]:
+    """Ask the candidate's own current binding code; never synthesize admission."""
+    tickets = metadata.get("ticket_paths", [metadata["ticket_path"]])
+    script = """
+import {pathToFileURL} from 'node:url';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import fs from 'node:fs';
+const [payload, root, reviewPath, ticketsJson] = process.argv.slice(1);
+const {bindAuthority} = await import(pathToFileURL(payload + '/delivery-runtime/ready-ticket-implement/src/core.js'));
+const {bindPlanReview} = await import(pathToFileURL(payload + '/delivery-runtime/ready-ticket-implement/src/plan-binding.js'));
+const bundle = JSON.parse(fs.readFileSync(payload + '/bundle.json', 'utf8'));
+const executeArgv = async (argv, options) => {
+  try { const result = await promisify(execFile)(argv[0], argv.slice(1), {cwd:options.cwd, timeout:options.timeout});
+    return {exitCode:0, interrupted:false, terminationState:'settled', ...result};
+  } catch (error) { return {exitCode:error.code, interrupted:!!error.killed, terminationState:error.killed?'unknown':'settled', stdout:error.stdout, stderr:error.stderr}; }
+};
+const bindings = [];
+for (const ticketPath of JSON.parse(ticketsJson)) {
+  const authority = await bindAuthority({ticketPath, projectRoot:root, validatorPath:payload + '/matt/skills/to-tickets/validate_ticket.py', bundleIdentity:bundle.bundle_id, executeArgv});
+  bindings.push(bindPlanReview({planReviewPath:reviewPath, authority}));
+}
+console.log(JSON.stringify(bindings));
+"""
+    result = subprocess.run(["node", "--input-type=module", "-e", script, str(payload.resolve()), metadata["project_root"], str(review_path), json.dumps(tickets)], capture_output=True, text=True, timeout=60)
+    return {"current": result.returncode == 0, "exit_code": result.returncode, "stdout": result.stdout, "stderr": result.stderr,
+            "meaning": "current binding only; raw independent review remains required"}
+
+
+def run_preparation(metadata: dict[str, Any], *, agent_dir: Path, payload: Path, runtime_data: Path,
+                    model: str, thinking: str, timeout: int) -> dict[str, Any]:
+    root, run_root = Path(metadata["project_root"]), Path(metadata["run_root"])
+    output = run_root / "prepare"
+    output.mkdir(mode=0o700, exist_ok=False)
+    review = output / "plan-review.json"
+    tickets = metadata.get("ticket_paths", [metadata["ticket_path"]])
+    before = product_snapshot(root, [])
+    common = (f"Project Root: {root}\nTickets: {json.dumps(tickets)}\nPlan Review Output: {review}\n"
+              f"현재 선택 모델은 {model}, thinking={thinking}; 이 역할은 DIRECT이며 subagent를 생성하지 않는다. "
+              "read로 skill://ready-ticket-plan 및 그 세 reference를 읽는다. 제품/승인 authority/Ticket status는 수정하지 않는다. "
+              "프로젝트와 명시된 evidence/reference 밖을 탐색하지 않는다. evaluator oracle/다른 run/운영 자격증명은 읽지 않는다. "
+              "이번 호출의 역할만 수행하며 이후 독립 역할은 외부 caller가 별도 invocation으로 실행한다.\n")
+    common += f"Existing method navigation: {json.dumps(metadata.get('plan_navigation_paths', []))}\nExisting investigation evidence: {json.dumps(metadata.get('preparation_evidence_paths', []))}\n"
+    observations = []
+    def role(name: str, instructions: str, resume: Path | None = None):
+        result = invoke(project_root=root, prompt=common + instructions, output_dir=output / name,
+                        agent_dir=agent_dir, payload=payload, runtime_data=runtime_data, model=model,
+                        thinking=thinking, timeout=timeout, stage="prepare",
+                        session_dir=output / "writer-sessions" if name in {"planner", "revision", "lead"} else None,
+                        resume_session=resume)
+        observations.append({"role": name, **result})
+        return result
+    planner = role("planner", "Planner로 현재 근거를 조사하고 필요한 project-local 실행계획을 작성한다. 계획 exact 경로와 근거를 반환한다. 자기 ADMIT/review JSON이나 lead 완료 terminal은 작성하지 않는다.")
+    lead = None
+    if planner["clean_transport"] and planner.get("session_file"):
+        heuristic = role("heuristic", f"독립 Heuristic이다. 원계약에서 먼저 독립 pass 후 {output / 'planner/terminal.txt'}의 계획과 근거를 검토한다. 현실적 반례/미확인/기각 anchor를 반환한다. 계획·제품·review JSON은 수정하지 않으며 lead 완료 terminal을 내지 않는다.")
+        if heuristic["clean_transport"]:
+            revision = role("revision", f"동일 Planner로 {output / 'heuristic/terminal.txt'}와 raw evidence의 finding disposition만 수행한다. 실질 수정이 필요할 때만 영향 방법을 수정하거나 근거로 기각한다. 정상·무발견이면 계획 bytes를 그대로 유지하며 재설계/추가 승인/reviewer를 만들지 않는다. 독립 검토 판단은 만들지 않는다.", Path(planner["session_file"]))
+            if revision["clean_transport"] and not review.exists():
+                reviewed_snapshot = product_snapshot(root, [])
+                review_before_lead = None
+                reviewer = role("reviewer", f"작성자와 별도 독립 Plan Review다. 원계약 전체와 현재 계획을 직접 읽는다. Planner evidence: {output / 'revision/terminal.txt'}; Heuristic evidence: {output / 'heuristic/events.jsonl'}. 현재 bytes와 ready_guard inspect_authority를 사용하여 실제 판단의 iis-plan-review/v1 JSON을 {review}에 작성한다. review_origin.evidence_reference는 이 invocation의 {output / 'reviewer/events.jsonl'}이다. 계획/제품을 고쳐 허가하지 말고 정확한 ADMIT/REVISE/EVIDENCE_NEEDED와 근거를 반환한다. lead terminal은 내지 않는다.")
+                if reviewer["clean_transport"] and review.is_file() and product_snapshot(root, []) == reviewed_snapshot:
+                    review_before_lead = hashlib.sha256(review.read_bytes()).hexdigest()
+                    lead = role("lead", f"원래 준비 lead의 handoff fan-in이다. 실제 별도 reviewer 결과 {review}, raw {output / 'reviewer/events.jsonl'}와 Heuristic/Planner evidence의 귀속·currentness·원래 requested Tickets 전체 ADMIT 분모만 대조한다. 두 번째 의미 검토/승인 단계가 아니다. 어느 계획/review/제품 파일도 수정하지 말고 READY TICKET PLAN RESULT terminal을 반환한다. 구현/최종 검증은 시작하지 않는다.", Path(revision["session_file"]))
+    current = current_review(metadata, review, payload) if review.is_file() else {"current": False, "reason": "no actual review artifact"}
+    after = product_snapshot(root, [])
+    plan_paths = set()
     try:
-        observation = json.loads(observation_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return False
-    return isinstance(observation, dict) and observation.get("probe_completion") == "COMPLETE"
+        authored_review = json.loads(review.read_text())
+        plan_paths = {str(Path(item["path"]).relative_to(root)) for item in authored_review.get("plans", [])}
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    changed = sorted(path for path in before.keys() | after.keys() if before.get(path) != after.get(path))
+    protected_changes = [path for path in changed if path not in plan_paths or "/plans/" not in path]
+    completion = lead.get("preparation_completion") if lead else None
+    clean = bool(lead) and all(item["clean_transport"] for item in observations)
+    review_unchanged = bool(lead) and review.is_file() and review_before_lead == hashlib.sha256(review.read_bytes()).hexdigest() and product_snapshot(root, []) == reviewed_snapshot
+    if completion == "COMPLETE" and (not clean or not current["current"] or protected_changes or not review_unchanged or lead.get("plan_review_path") != str(review)):
+        completion = None
+    result = {"case_id": metadata["case_id"], "run_id": metadata["run_id"], "stage": "prepare",
+              "parsed_completion": completion, "plan_review_path": str(review) if review.is_file() else None,
+              "clean_transport": clean, "current_review": current, "changed_paths": changed,
+              "post_project_snapshot": after,
+              "protected_changes": protected_changes, "roles": [{"role": item["role"], "raw_events": item["raw_events"], "clean_transport": item["clean_transport"]} for item in observations],
+              "elapsed_seconds": sum(item["elapsed_seconds"] for item in observations),
+              "raw_terminal_result": str(output / "lead/terminal.txt") if lead else None,
+              "semantic_review": "REQUIRED; independent invocation and binding are not semantic scoring"}
+    if metadata.get("setup_stages") == ["prepare"]:
+        from completion import product_snapshot as completion_snapshot, snapshot_digest
+        result["completion_input_digest"] = snapshot_digest(completion_snapshot(root))
+    write_json(output / "record.json", result)
+    return result
 
 
-def apply_challenge(metadata: dict[str, Any], run_root: Path) -> dict[str, Any] | None:
-    challenge = metadata.get("after_probe")
-    if not challenge:
+def apply_challenge(metadata: dict[str, Any], run_root: Path, events: list[dict[str, Any]]) -> dict[str, Any] | None:
+    challenge = metadata.get("verification_challenge")
+    if not challenge or (run_root / "challenge.json").exists() or any(event.get("type") == "agent_end" for event in events) or guard_results(events, "finalize_verification"):
         return None
-    case_id = metadata["case_id"]
-    requires_completed_probe = isinstance(challenge, dict) and challenge.get("requires_completed_probe") is True
-    if requires_completed_probe and not _probe_completed(run_root):
-        declined = {"applied": False, "kind": challenge, "reason": "actual Probe did not complete"}
-        write_json(run_root / "challenge.json", declined)
-        return declined
-    binding_path = run_root / "probe-binding.json"
-    if not binding_path.exists():
-        return {"applied": False, "reason": "actual Probe did not produce a binding"}
-    before = binding_path.read_bytes()
-    binding = json.loads(before)
-    after: bytes | None = None
-    if case_id == "stale-probe-core":
-        root = Path(metadata["project_root"])
-        ticket = Path(metadata["ticket_path"])
-        behavior = root / "docs/planning/behavior/contexts/runtime-boundary.md"
-        for authority in (ticket, ticket.parent.parent / "SPEC.md", behavior):
-            authority.write_text(authority.read_text(encoding="utf-8").replace("revised-value", "next-value"), encoding="utf-8")
-    elif case_id.startswith("stale-probe") or case_id.startswith("probe-natural-language-rebind"):
-        target = Path(metadata["target_paths"][-1])
-        content = target.read_text(encoding="utf-8")
-        target.write_text(content.replace("revised-value", "next-value"), encoding="utf-8")
-        if case_id.startswith("probe-natural-language-rebind"):
-            binding["parent_claim"] = "The parent says this handoff was rebound to the current target."
-    elif case_id == "probe-current-claim-core":
-        binding["parent_claim"] = "This parent claim is informational only."
-    elif case_id == "probe-malformed-json-core":
-        encoded = json.dumps(binding, indent=2, ensure_ascii=False)
-        if not encoded.endswith("}"):
-            raise ValueError("Probe machine binding must serialize as an object")
-        after = f"{encoded[:-1].rstrip()},\n}}\n".encode("utf-8")
-    elif case_id.startswith("probe-verdict-contamination"):
-        binding["result" if "holdout" in case_id else "verification_verdict"] = "VERIFIED"
-    elif case_id.startswith("probe-noncanonical-lanes"):
-        binding["admitted_lanes"].append("unclosed-current-lane")
-    else:
-        raise ValueError(f"unsupported post-Probe challenge: {challenge}")
-    (run_root / "probe-binding.before-challenge.json").write_bytes(before)
-    if after is None:
-        write_json(binding_path, binding)
-    else:
-        binding_path.write_bytes(after)
-    applied = {"applied": True, "kind": challenge, "binding_before_sha256": hashlib.sha256(before).hexdigest(),
-               "binding_after_sha256": hashlib.sha256(binding_path.read_bytes()).hexdigest()}
+    binding = next((entry["result"] for entry in guard_results(events, "begin_verify")
+                    if entry["result"].get("execution_id") and entry["result"].get("phase") in {"ACTIVE", "PAUSED"}), None)
+    if binding is None:
+        return None
+    paths = [Path(value) for value in challenge["paths"]]
+    before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+    for path in paths:
+        content = path.read_text(encoding="utf-8")
+        if challenge["before"] not in content:
+            raise ValueError("challenge precondition changed")
+    for path in paths:
+        path.write_text(path.read_text(encoding="utf-8").replace(challenge["before"], challenge["after"]), encoding="utf-8")
+    applied = {"applied": True, "boundary": "successful_begin_verify_result", "execution_id": binding["execution_id"],
+               "before": before, "after": {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths},
+               "attribution": "external evaluator, not actor mutation or actor evidence"}
     write_json(run_root / "challenge.json", applied)
     return applied
 
 
 def run_stage(stage: str, metadata: dict[str, Any], *, agent_dir: Path, payload: Path,
               runtime_data: Path, model: str, thinking: str, timeout: int,
-              topology: str | None = None, apply_post_probe_challenge: bool | None = None,
               wall_timeout_seconds: float | None = None, episode_deadline: float | None = None) -> dict[str, Any]:
     run_root = Path(metadata["run_root"])
-    should_challenge = stage == "verify" and (topology is None if apply_post_probe_challenge is None else apply_post_probe_challenge)
-    if should_challenge:
-        apply_challenge(metadata, run_root)
+    if stage == "prepare":
+        return run_preparation(metadata, agent_dir=agent_dir, payload=payload, runtime_data=runtime_data,
+                               model=model, thinking=thinking, timeout=timeout)
     root = Path(metadata["project_root"])
     before = product_snapshot(root, metadata["allowed_output_paths"])
     ticket = Path(metadata["ticket_path"])
@@ -187,26 +249,46 @@ def run_stage(stage: str, metadata: dict[str, Any], *, agent_dir: Path, payload:
         wall_timeout_seconds = episode_deadline - time.monotonic()
         if wall_timeout_seconds <= 0:
             raise TimeoutError("episode timeout exhausted before invocation")
-    observation = invoke(project_root=root, prompt=stage_prompt(stage, metadata, run_root, topology), output_dir=run_root / stage,
+    observation = invoke(project_root=root, prompt=stage_prompt(stage, metadata, run_root), output_dir=run_root / stage,
                          agent_dir=agent_dir, payload=payload, runtime_data=runtime_data, model=model, thinking=thinking, timeout=timeout,
-                         wall_timeout_seconds=wall_timeout_seconds)
+                         stage=stage, wall_timeout_seconds=wall_timeout_seconds,
+                         boundary_callback=(lambda events: apply_challenge(metadata, run_root, events)) if stage == "verify" and metadata.get("verification_challenge") else None)
     after = product_snapshot(root, metadata["allowed_output_paths"])
+    events = load_events(Path(observation["raw_events"]))
+    finalizations = guard_results(events, "finalize_verification") if stage == "verify" else []
+    finalization = finalizations[-1]["result"] if finalizations else {}
     changed = sorted(path for path in before.keys() | after.keys() if before.get(path) != after.get(path))
     runtime_progression_paths: list[str] = []
     if stage == "verify" and ticket_before is not None and ticket.exists():
         ticket_after = ticket.read_text(encoding="utf-8")
-        if ticket_after == re.sub(r"(?m)^Status: ready$", "Status: done", ticket_before):
+        if (ticket_after == re.sub(r"(?m)^Status: ready$", "Status: done", ticket_before)
+                and finalization.get("verification_verdict") == "VERIFIED"
+                and finalization.get("ticket_progression") == "COMPLETED"
+                and finalization.get("ticket_status_after") == "done"):
             runtime_progression_paths.append(str(ticket.relative_to(root)))
-    unexpected_changed = [path for path in changed if path not in runtime_progression_paths]
+    external_changes = []
+    challenge_path = run_root / "challenge.json"
+    if stage == "verify" and challenge_path.is_file():
+        challenge = json.loads(challenge_path.read_text())
+        for filename, expected in challenge.get("after", {}).items():
+            path = Path(filename)
+            relative = str(path.relative_to(root))
+            if after.get(relative) == expected and before.get(relative) == challenge["before"].get(filename):
+                external_changes.append(relative)
+    unexpected_changed = [path for path in changed if path not in runtime_progression_paths and path not in external_changes]
     record = {"case_id": metadata["case_id"], "run_id": metadata["run_id"], "stage": stage,
-              "topology": topology or "historical", "model_tool_profile": {"model": model, "thinking": thinking, "actual_models": observation["actual_models"]},
+              "model_tool_profile": {"model": model, "thinking": thinking, "actual_models": observation["actual_models"]},
               "input_target_identity": digest(before), "raw_terminal_result": str(run_root / stage / "terminal.txt"),
               "raw_events": observation["raw_events"], "parsed_verdict": observation["parsed_verdict"],
-              "probe_completion": observation["probe_completion"],
+              "ticket_progression": observation["ticket_progression"],
+              "ticket_status_after": (re.search(r"(?m)^Status: (\w+)$", ticket.read_text()).group(1) if ticket.exists() and re.search(r"(?m)^Status: (\w+)$", ticket.read_text()) else None),
               "pre_project_root_digest": digest(before), "post_project_root_digest": digest(after),
-              "target_mutated": bool(unexpected_changed) if stage in ("probe", "verify") else False,
+              "target_mutated": bool(unexpected_changed) if stage == "verify" else False,
               "changed_paths": unexpected_changed, "all_changed_paths": changed,
               "runtime_progression_paths": runtime_progression_paths,
+              "external_challenge_paths": external_changes,
+              "challenge_applied": challenge_path.is_file() if metadata.get("verification_challenge") else None,
+              "runtime_finalization": finalization,
               "elapsed_seconds": observation["elapsed_seconds"],
               "exit_code": observation["exit_code"], "timed_out": observation["timed_out"], "agent_ended": observation["agent_ended"],
               "clean_transport": observation["clean_transport"], "stop_reason": observation["stop_reason"], "error_message": observation["error_message"],
@@ -228,14 +310,14 @@ def run_cohort(args) -> int:
     if args.workers < 1:
         raise ValueError("workers must be positive")
     def run_one(metadata_path):
-        argv = [sys.executable, "-B", str(Path(__file__).resolve()), "run", "pair", "--metadata", str(metadata_path),
+        argv = [sys.executable, "-B", str(Path(__file__).resolve()), "run", "verify", "--metadata", str(metadata_path),
                 "--agent-dir", str(args.agent_dir), "--payload", str(args.payload), "--runtime-data", str(args.runtime_data),
                 "--model", args.model, "--thinking", args.thinking, "--timeout", str(args.timeout)]
         result = subprocess.run(argv, capture_output=True, text=True)
         (metadata_path.parent / "invocation.stdout.txt").write_text(result.stdout, encoding="utf-8")
         (metadata_path.parent / "invocation.stderr.txt").write_text(result.stderr, encoding="utf-8")
         return {"metadata": str(metadata_path), "exit_code": result.returncode,
-                "probe_record": str(metadata_path.parent / "probe/record.json"), "verify_record": str(metadata_path.parent / "verify/record.json")}
+                "verify_record": str(metadata_path.parent / "verify/record.json")}
     results = []
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = [pool.submit(run_one, metadata_path) for metadata_path in metadata_paths]
@@ -354,6 +436,17 @@ def build_report(metadata_paths: list[Path], records: list[dict[str, Any]], revi
                        path=str(expected_path) if expected_path is not None else None)
         elif not summarize(load_events(expected_path))["model_completed"]:
             _add_error(errors, "model_not_cleanly_terminated", **_pair_value(pair))
+        if expected_exists:
+            native = summarize(load_events(expected_path))
+            supplied = [record for record in records if _run_pair(record) == pair]
+            for record in supplied:
+                if record.get("parsed_verdict") != native.get("parsed_verdict"):
+                    _add_error(errors, "terminal_verdict_mismatch", **_pair_value(pair))
+                if expected[pair][0].get("verification_challenge") and record.get("challenge_applied") is not True:
+                    _add_error(errors, "required_challenge_not_applied", **_pair_value(pair))
+                if native.get("parsed_verdict") == "VERIFIED" and record.get("stage") == "verify":
+                    if record.get("ticket_progression") != "COMPLETED" or record.get("ticket_status_after") != "done" or record.get("runtime_finalization", {}).get("ticket_progression") != "COMPLETED":
+                        _add_error(errors, "verified_progression_not_completed", **_pair_value(pair))
 
     result_pairs: list[tuple[str, str]] = []
     seen_results: set[tuple[str, str]] = set()
@@ -438,7 +531,8 @@ def main() -> int:
     setup.add_argument("--arena", required=True, type=Path)
     setup.add_argument("--port", required=True, type=int)
     run = commands.add_parser("run")
-    run.add_argument("stage", choices=("plan", "implement", "probe", "verify", "pair"))
+    run.add_argument("stage", choices=("plan", "prepare", "implement", "verify", "delivery"))
+    setup.add_argument("--kind", choices=("verification", "implementation", "preparation"), default="verification")
     run.add_argument("--metadata", required=True, type=Path)
     run.add_argument("--agent-dir", required=True, type=Path)
     run.add_argument("--payload", required=True, type=Path)
@@ -467,13 +561,13 @@ def main() -> int:
     if args.command == "report":
         return run_report(args)
     if args.command == "prepare":
-        root, metadata = prepare(args.case_id, args.arena, args.port)
+        root, metadata = prepare(args.case_id, args.arena, args.port, args.kind)
         print(json.dumps({"metadata": str(root / "metadata.json"), "service_argv": metadata["service_argv"]}, indent=2))
         return 0
     metadata = json.loads(args.metadata.read_text(encoding="utf-8"))
     records = []
-    for stage in (("probe", "verify") if args.stage == "pair" else (args.stage,)):
-        if stage in ("probe", "verify") and metadata.get("reset_argv"):
+    for stage in (("prepare", "implement", "verify") if args.stage == "delivery" else (args.stage,)):
+        if stage == "verify" and metadata.get("reset_argv"):
             reset = subprocess.run(metadata["reset_argv"], cwd=metadata["project_root"], capture_output=True, text=True)
             write_json(Path(metadata["run_root"]) / f"reset-before-{stage}.json", {"argv": metadata["reset_argv"], "exit_code": reset.returncode, "stdout": reset.stdout, "stderr": reset.stderr})
             if reset.returncode:
@@ -481,10 +575,17 @@ def main() -> int:
         record = run_stage(stage, metadata, agent_dir=args.agent_dir, payload=args.payload, runtime_data=args.runtime_data,
                            model=args.model, thinking=args.thinking, timeout=args.timeout)
         records.append(record)
+        if stage == "prepare":
+            if record.get("parsed_completion") != "COMPLETE":
+                break
+            metadata["plan_review_path"] = record["plan_review_path"]
+            write_json(args.metadata, metadata)
+        if stage == "implement" and record.get("parsed_completion") != "COMPLETE":
+            break
         if not record["clean_transport"]:
             break
-    print(json.dumps([{key: record[key] for key in ("case_id", "run_id", "stage", "parsed_verdict", "target_mutated", "elapsed_seconds", "exit_code", "raw_terminal_result")} for record in records], indent=2))
-    return 0 if all(record["clean_transport"] for record in records) else 1
+    print(json.dumps(records, indent=2))
+    return 0 if all(record["clean_transport"] and (record.get("parsed_completion") == "COMPLETE" if record["stage"] in {"prepare", "implement"} else record.get("parsed_verdict") is not None if record["stage"] == "verify" else True) for record in records) else 1
 
 
 if __name__ == "__main__":

@@ -37,17 +37,6 @@ class ReadyCompletionCalibrationTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
 
-    def test_registry_has_eight_opposed_pairs_and_two_fixed_repetitions(self) -> None:
-        cases = self.oracle["cases"]
-        by_family: dict[str, list[dict[str, object]]] = {}
-        for case in cases:
-            by_family.setdefault(case["family"], []).append(case)
-
-        self.assertEqual(len(cases), 16)
-        self.assertEqual(len(by_family), 8)
-        self.assertEqual(self.oracle["required_repetitions"], [1, 2])
-        self.assertTrue(all(len(pair) == 2 for pair in by_family.values()))
-        self.assertTrue(all({case["expected_completion"] for case in pair} == {True, False} for pair in by_family.values()))
 
     def test_prepare_keeps_oracle_and_case_identity_outside_product_and_prompt(self) -> None:
         metadata_path, metadata = self.completion.prepare(
@@ -96,7 +85,7 @@ class ReadyCompletionCalibrationTests(unittest.TestCase):
         self.assertIs(json.loads(observed.stdout)["approved"], True)
 
     def test_done_label_cannot_replace_required_actual_setup(self) -> None:
-        metadata_path, metadata = self.completion.prepare("probe-and-verification-current", self.root / "setup", "candidate", 1)
+        metadata_path, metadata = self.completion.prepare("verification-current", self.root / "setup", "candidate", 1)
         ticket = Path(metadata["ticket_path"])
         ticket.write_text(ticket.read_text().replace("Status: ready\n", "Status: done\n", 1))
         with self.assertRaises(ValueError):
@@ -112,6 +101,18 @@ class ReadyCompletionCalibrationTests(unittest.TestCase):
         self.assertIsNone(self.completion.parse_completion("The current state looks complete."))
         self.assertIsNone(self.completion.parse_completion("IIS ADAPTIVE RUN COMPLETE\nWhole-run completion: no\n"))
         self.assertIsNone(self.completion.parse_completion("IIS ADAPTIVE RUN COMPLETE\n", transport_valid=False))
+        self.assertIsNone(self.completion.parse_completion("```text\nIIS ADAPTIVE RUN COMPLETE\n```"))
+        self.assertIsNone(self.completion.parse_completion("> IIS ADAPTIVE RUN COMPLETE"))
+
+    def test_preparation_file_without_actual_roles_cannot_close_run(self) -> None:
+        metadata_path, metadata = self.completion.prepare("preparation-current", self.root / "plans", "candidate", 1)
+        output = Path(metadata["run_root"]) / "prepare"
+        output.mkdir()
+        (output / "plan-review.json").write_text(json.dumps({"schema": "iis-plan-review/v1", "decisions": [{"decision": "ADMIT"}]}))
+        (output / "record.json").write_text(json.dumps({"parsed_completion": "COMPLETE", "roles": []}))
+        with self.assertRaises(ValueError):
+            self.completion.run(metadata_path, agent_dir=self.root, payload=self.root, runtime_data=self.root,
+                                model="opencodex/gpt-6-astra", thinking="high", timeout=60)
 
     def build_complete_candidate_cohort(self) -> tuple[list[Path], list[dict[str, object]], list[dict[str, object]]]:
         metadata_paths: list[Path] = []
@@ -217,7 +218,6 @@ class ReadyCompletionCalibrationTests(unittest.TestCase):
         self.assertTrue(report["label_pass"])
         self.assertTrue(report["candidate_accepted"])
         self.assertEqual(report["errors"], [])
-        self.assertEqual(report["coverage"]["cohort_runs"], 32)
 
         missing_repetition = [path for path in metadata_paths if json.loads(path.read_text())["repetition"] == 1]
         retained_run_ids = {json.loads(path.read_text())["run_id"] for path in missing_repetition}

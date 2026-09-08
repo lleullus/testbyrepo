@@ -4,7 +4,9 @@ export const NATIVE_TOOL_POLICY = Object.freeze({
   glob: "observation",
   edit: "mutation",
   write: "mutation",
-  bash: "dynamic",
+  hub: "hub",
+  todo: "session_control",
+  bash: "unsupported"
 });
 
 export function buildExactToolMap(pi) {

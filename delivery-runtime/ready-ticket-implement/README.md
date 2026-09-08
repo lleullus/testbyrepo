@@ -1,62 +1,53 @@
-# Ready Ticket Implement Runtime
+# IIS Ready runtime v2
 
-OMP extension that enforces execution discipline for Ready Ticket implementation and the integrity boundary of Ready Ticket verification without changing product meaning.
+A small host-neutral owner/admission/effect/finalization kernel. `src/core.js` (package export `.`) has no OMP import, configuration lookup or session API. `index.js` (export `./omp`) installs the OMP adapter. This is not a universal sandbox or a semantic AC/review judge.
 
-## Runtime boundary
+## Public core
 
-The runtime binds the exact Ticket, Parent Spec, applicable Behavior/UI authority, canonical validator, Project Root and Git/worktree identity. Skill reads never arm execution. Only explicit begin/assignment requests admit work, and authority plus required Probe/target validation precede execution commit. Implementation preserves the guarded mutation/evidence lifecycle and bounded observation policy. Verification keeps the target immutable, fails closed on drift, and owns only the mechanical guarded `ready -> done` write after the verifier supplies `VERIFIED`. Product meaning, heuristic findings and flow/AC verdicts remain with their existing owners.
+- `bindAuthority({ticketPath, projectRoot, validatorPath?, executeArgv, runtimeProtocol?, bundleIdentity?})` runs the canonical validator and returns flat canonical product identity including `authority_digest`.
+- `checkAuthorityCurrentness(binding)` compares protected product and validator bytes, not Git HEAD or ordinary implementation edits.
+- `RuntimeStore(stateRoot?)` uses schema v2 and `IIS_READY_RUNTIME_DATA`, otherwise `${XDG_STATE_HOME:-~/.local/state}/iis/ready-runtime`. Legacy records are rejected, never silently migrated or ignored.
+- `ReadyLifecycle({store, executeArgv, validatorPath?, bundleIdentity?, recoveryOwner?})` owns exact admission, one-use assignment, dispatch fences, pauses, one active effect, one ephemeral host service and terminal closure.
+- `captureVerificationTarget(...)` and `checkVerificationTarget(binding,{executeArgv})` are async. Inventory includes Git tracked/untracked plus explicit targets. Exact supplied method paths have a separate context manifest; explicit targets/product paths win. Dynamic runtime/provider claims still need authoritative readback.
+- `bindPlanReview`, `checkPlanCurrentness` check actual bytes and Ticket pairing, not reviewer independence or semantic sufficiency.
+- `finalizeVerification(lifecycle,id,actor,verdict)` owns status-only progression and recovery, not the semantic verdict.
 
-`ready_guard cancel_admission` fences an in-flight unbound admission in the current session. Failed unbound admission automatically disarms. Cancellation cannot erase execution, assignment, parent, worker or uncertain state; those bindings close through owner recovery/terminal actions.
+The host supplies opaque actor identity and `executeArgv(argv,{cwd,signal,timeout}) -> {exitCode,interrupted,terminationState,stdout,stderr}`. Validator calls require complete stdout and exact `VALID`. The default validator is relative to the same source/immutable bundle. There is no workflow-Markdown regex or OMP/Codex home fallback.
 
-Same-worker continuation preserves its binding. Replacement requires the old worker to stop owned activity and call `suspend_worker`, then Parent to confirm inactivity and call `replace_worker`. The replacement consumes a one-use assignment, rechecks authority and suspended working-tree identity, retains prior execution/checkpoint provenance, and waits for a fresh Parent release. Old worker calls remain fenced. This runtime fence is not proof that a harness job exited; Parent still owns actual job containment.
+## Guard actions
 
-`latest_evidence_revision` is the latest successful **observation** revision. Ordinary reads and inspections count; complete output from a successfully executed `ready_argv mutate` command also binds to its resulting revision. Native file writes alone, failed/timed-out commands, and incomplete output do not provide that observation. Revision equality permits runtime closure but does not prove product obligations or self-check sufficiency; the implementation owner must establish the current result through the authored acceptance path and existing handoff. The persisted field and revision-equality gate are retained.
+`inspect_authority` is read-only and returns flat authority identity. Reading Skills, references, device docs, or preparation artifacts does not arm or bind a session.
 
-An `inspect` or verification `execute` request rejected because another guarded operation is active does not reserve an observation. Once that operation finishes, the rejected request remains executable. Actual running duplicates and unchanged successful observations retain their existing restrictions.
+Implementation `begin_direct`, `assign_subagent`, and `begin_delegated` all consume current `plan_review_path` (`iis-plan-review/v1`, exact outside-root reviewer JSON). Missing/stale/unadmitted are `PLAN_REVIEW_REQUIRED`, `PLAN_REVIEW_STALE`, and `PLAN_NOT_ADMITTED`. Correct direct/delegated implementation starts `ACTIVE` without a pre-edit checkpoint. Assignment consumption rechecks current bytes and one-use ownership.
 
-Mutation snapshots cover every declared target, including directory contents. Partial failure with attributable changes advances `mutation_revision` without producing successful evidence. Interruption invalidates evidence and preserves `MUTATION_UNCERTAIN`; only owner exact target readback or `ready_guard resolve_mutation` can compare saved before identities against current targets. Missing/unattributable readback stays uncertain. No caller-supplied outcome is accepted. Structured commands join termination before recovery; services stop before terminal closure. Parent session refresh never recovers the child's active operation, and same-process live operations survive session refresh.
+`begin_verify` directly binds approved authority and actual product target, without implementation preparation. Optional `plan_review_path` supplies confirmed navigation context only. If a plan is itself a required product output, include its exact path in `target_paths`; do not hide a product obligation as method context.
 
-The inventory quota is an efficiency policy, not the authority/path boundary. Its glob detector currently reads `pattern`; native glob events carrying `path` are not recognized by that branch. Such calls do not prove that the quota was enforced. The policy remains unchanged rather than claiming an unmeasured reduction benefit.
+`checkpoint` takes `kind: PRE_RUNTIME | MATERIAL_TURN | PRE_PROGRESSION`. Delegated verifier starts paused at `PRE_RUNTIME`. `release_checkpoint` is the exact parent (or DIRECT owner) operation; material method/plan drift requires current reviewer evidence, not a bare CONTINUE. Delegated VERIFIED progression requires PRE_PROGRESSION release; DIRECT does not invent a parent checkpoint. Phases are `ACTIVE`, `PAUSED`, `EFFECT_UNCERTAIN`, `COMPLETE`, `BLOCKED`. Pause reasons are fixed; paused executions permit safe reads, not source mutation.
 
-Structured `inspect` and simple native bash inspections share the same argv classification. `sed` inspection is limited to quiet addressed line printing. Known file-output, external-execution, and mutating `git worktree` options are rejected, including attached/clustered short options and long-option forms. `git grep -O` is rejected as an external pager, not treated as a read. `sha256sum` remains outside the inspect allowlist. This is not a process sandbox: ambient executable resolution, Git configuration, and environment remain trust prerequisites. Commands outside inspection still need the existing guarded execute/mutate authority.
+`suspend_worker` requires owned operations, service and uncertainty already settled and revokes old dispatch. `replace_worker` rechecks current authority/method/target, supersedes old ownership, and issues a new one-use assignment. Late old results cannot alter the replacement. Host agent/job/session IDs are not interchangeable.
 
-Internal tools:
+`complete` checks current ownership, authority/method and work/service/effect closure. It does not manufacture self-check evidence from read counts. `block` cannot release an uncertain-effect slot. `cancel_admission` closes only an unconsumed assignment; no implicit armed state exists.
 
-- `ready_probe_binding`: write one current machine-checkable terminal Probe binding outside Project Root
-- `ready_guard`: explicit admission, bounded cancellation/recovery, DIRECT/SUBAGENT continuation/checkpoints, terminal verdict close and guarded `ready -> done`
-- `ready_argv`: explicit structured inspect/verification-execute/implementation-mutate argv; shell interpreters are rejected
-- `ready_service`: execution-owned local service start/stop/status
+## Effect and recovery boundary
 
-## Canonical admission inspection
+`ready_argv` uses native `pi.exec(command,args,options)`, never a Ready raw process executor. `inspect` uses a restricted read-only argv grammar (plus exact bound canonical validator); normal reads have no durable ledger, quota or repeat latch. `execute` and `mutate` reserve an opaque program effect. A nonzero/interrupted/lost result is not proof of non-application even when source hashes are unchanged. Full raw result is stored in an execution-owned outside-root output file; inline command stdout/stderr are limited.
 
-The `iis-workflow` To Tickets locator accepts the existing absolute `SKILL.md` route either bare or enclosed in Markdown backticks.
+The adapter fences builtin file mutation and exact outside-root output files, protects authority and bound plans/review, and rejects unknown native/device effect surfaces with `CAPABILITY_UNAVAILABLE`. Structured argv and declared paths are a reviewed operation contract, not an OS sandbox for arbitrary executable code. Use only the approved operation; remote/dynamic claims need actual readback. Generic evaluator/browser scripting cannot bypass the fence by calling itself read-only.
 
-An unbound session may use `ready_argv inspect` with `commands: [["python3", "-B", "<discovered-validate_ticket.py>", "<exact-ticket>"]]` (`-B` optional). The runtime checks the canonical route and disables bytecode writes. Actual exit code/stdout/stderr are returned; this creates no execution and grants no arbitrary Python or product-command authority.
+Exact declared outside-root report files remain writable by the current owner/controller while paused or effect-uncertain so recovery evidence can be authored. Such a report does not clear uncertainty or permit product replay. Do not use report permission to modify product runtime state or manufacture an outcome. Builtin `todo` is host-session bookkeeping: a non-revoked terminal owner (`COMPLETE` or `BLOCKED`) may close its checklist, while source/effect dispatch and superseded workers stay fenced.
 
-During `ACTIVE` verification, the same one-command inspection is allowed only for the bound validator and exact bound Ticket. It uses the existing guarded observation lifecycle, permits a fresh successful revalidation, and checks authority/target currentness before and after execution. Generic `execute` does not gain external-path access. The workflow and To Tickets files join the existing hash-bound protected authority artifacts; exact protected-authority `read` calls may be refreshed, including canonical skill locators and line selectors. Other external paths, mutations, ordinary source rereads and concurrent guarded operations retain their existing restrictions.
+`resolve_mutation` requires `operation_id`, `effect_surface`, `evidence_reference`, `outcome`. The exact evidence JSON contains `execution_id`, `operation_id`, `effect_surface`, current controlling `owner`, matching `outcome`, and `readback_reference`. This records an explicit authorized recovery-owner judgment. It is not automatic external-effect proof or a signed approval system. Inconclusive evidence preserves uncertainty.
 
-OMP Ready tools are `loadMode: essential`, available natively even with default `tools.xdev=true`. Exact `write xd://ready_guard|ready_argv|ready_probe_binding|ready_service` envelopes defer to the inner registered tool's schema and lifecycle checks; other device writes are not exempt. Exact bare `read xd://<name>` for those same four tools returns control documentation, not a product observation: it remains repeatable during execution without changing evidence or execution state. Other URI reads retain their existing boundaries. Native and device routes require separate live smoke evidence. No global xdev setting change or unguarded fallback is needed.
+`recover_admission` takes exact `project_root`, `ticket_path`, `reservation_id`, `recovery_evidence_reference`. The designated owner (creator or host-configured recovery owner) supplies a JSON with those root/Ticket/reservation identities, `owner`, `admission_disposition: terminated_or_withdrawn`, `live_work: absent`, `uncertain_effects: absent`, and `readback_reference`. Meaningful absence/termination is the owner's judgment of actual evidence, not caller boolean automation. The locked implementation also requires the same reservation and no execution/assignment record. Otherwise it preserves exclusion. A delayed old admission cannot commit after recovery because it must compare the same reservation identity. Host-configured recovery ownership supports designated recovery after creator termination without introducing another lifecycle database.
 
-## Test
+## Native services
 
-```text
-node --test tests/*.test.js
-```
+Use builtin `hub start/logs/wait/stop`, not a Ready service tool. One ephemeral service is supported with name `ready-<execution_id>`, exact Project Root cwd, explicit log/port readiness, `persist:false`, `detached:false`, `restart:no`. Readiness timeout retains its returned live handle. The adapter consumes `details.daemon` id, owner, startedAt/restartCount generation, readiness and terminal state; same-name different-generation results cannot settle the old handle. Explicit stop/wait and attributable host settlement precede terminal/suspension. The host has name-based stop: concurrent noncooperating replacement and escaped descendants/external effects are not guaranteed by this adapter. Unsupported/missing handle results remain uncertain; no raw supervisor fallback is installed.
 
-The repository-level `tests/test_ready_ticket_runtime_contract.py` runs the same runtime test suite from `run_tests.py`.
+## Finalization
 
-## Install / check
+VERIFIED, Ticket progression and actual status are separate. The finalizer requires current product authority/target and, for delegated verification, released progression. It validates the canonical Ticket, persists exact before/candidate intent, fsyncs a same-directory status-only replacement, and runs post-validation at the actual canonical path. Only its exact ready→done bytes are exempted from ordinary drift. Other source/authority changes remain failures. Candidate rollback is conditional on current bytes/authority/owner; external edits are preserved. Crash intent is retained for the same finalization owner to retry postcheck or recover. Durable terminal state is written before slot cleanup. Failed progression never becomes COMPLETED just because the file says done.
 
-Use the repository script after the matching Ready Implement, Heuristic Probe, and Verify Skill sources are ready to be installed together:
+## Candidate verification
 
-```text
-python3 scripts/sync_installed_ready_runtime.py --preflight
-python3 scripts/sync_installed_ready_runtime.py
-python3 scripts/sync_installed_ready_runtime.py --check
-```
-
-`--preflight` reports installability, not live readiness. Sync installs the runtime under `~/.omp/agent/extensions/ready-ticket-implement-runtime` and links missing Ready Implement/Probe/Verify skills under OMP's own `~/.omp/agent/skills`; existing differing skill content is never overwritten. `--check` proves installed byte equality only. Both outputs explicitly say `LIVE_SESSION_NOT_CHECKED`. Verify the loaded extension path, current tool schemas and begin/action/terminal in a new top-level OMP process with the actual configured transport and installation path. A session-file reload or child spawned from the existing parent is not proof that updated modules were loaded. Existing parent/child skill and module snapshots are not refreshed by disk installation or worker replacement.
-
-## Rollback
-
-Remove or rename `~/.omp/agent/extensions/ready-ticket-implement-runtime` and restore the prior Ready Skill content through its normal skill synchronization path. Runtime data under `~/.omp/agent/data/iis-ready-runtime` is not deleted by rollback; it becomes inactive historical state.
+Run from this directory after integration: `node --test tests/*.test.js` (or `npm test`). Permanent cases cover wrong/stale review admission, first actual edit/CLI output, one-use/replacement/late owner, orphan reservation recovery, opaque loopback timeout, context/product drift, and status-only/validator/crash recovery. Adapter doubles defend policy boundaries, not actual host equivalence. Fresh OMP structured execution, service readiness/generation/settlement, device transport, and installer-loaded identity require separate real-host smoke. This document records the candidate contract, not a claim that those checks have already passed. Repository suite is owned by the integrating Main.

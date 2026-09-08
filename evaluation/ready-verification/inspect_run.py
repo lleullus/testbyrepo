@@ -18,7 +18,7 @@ def inspect(run_root: Path, stage: str) -> dict:
     entry = Path(metadata["trigger_argv"][1])
     for ordinal, call in enumerate(summary["tool_calls"], 1):
         name = call["toolName"]
-        if name not in {"bash", "ready_argv", "ready_guard", "ready_probe_binding"}:
+        if name not in {"bash", "ready_argv", "ready_guard", "hub", "write"}:
             continue
         result = results.get(call["toolCallId"])
         if result is None:
@@ -54,7 +54,7 @@ def inspect(run_root: Path, stage: str) -> dict:
                          "ordinary_entrypoint_invoked": actual_entry_invocation})
     return {"case_id": metadata["case_id"], "run_id": metadata["run_id"], "stage": stage,
             "terminal_text": summary["terminal_text"], "parsed_verdict": summary["parsed_verdict"],
-            "probe_completion": summary["probe_completion"], "actual_models": summary["actual_models"],
+            "preparation_completion": summary["preparation_completion"], "actual_models": summary["actual_models"],
             "first_entrypoint_tool_ordinal": first_trigger, "raw_tool_evidence": evidence,
             "interpretation": "Command execution is evidence of a boundary attempt, not proof of its success or sufficiency."}
 
@@ -62,7 +62,7 @@ def inspect(run_root: Path, stage: str) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_root", type=Path)
-    parser.add_argument("stage", choices=("plan", "implement", "probe", "verify"))
+    parser.add_argument("stage", choices=("plan", "prepare/planner", "prepare/heuristic", "prepare/reviewer", "prepare/lead", "implement", "verify"))
     args = parser.parse_args()
     print(json.dumps(inspect(args.run_root, args.stage), indent=2, ensure_ascii=False))
     return 0

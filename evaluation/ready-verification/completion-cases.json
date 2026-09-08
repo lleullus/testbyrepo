@@ -1,10 +1,17 @@
 {
   "schema": "iis-completion-cases/v1",
   "experiment_boundary": "Read-only final completion assessment by a real OMP Outer Main explicitly invoking iis-adaptive-planning over disposable current product state.",
-  "fixture_history_limit": "Most cases use explicitly synthetic starting history. The probe-versus-verification pair instead requires actual recorded Ready Probe and, for the verified control, actual Ready Verify with guarded done progression before the separate Outer Main assessment. No seeded VERIFIED label substitutes for those runs.",
+  "fixture_history_limit": "Most cases use explicitly synthetic starting history. The current verification control requires actual integrated Ready Verify with guarded progression before separate Outer Main assessment; no seeded verdict substitutes for that run.",
   "service_requirement": "none; all authoritative surfaces are local files and the ordinary local CLI",
   "required_repetitions": [1, 2],
   "cases": [
+    {
+      "case_id": "preparation-current",
+      "family": "preparation-only",
+      "state": "Actual independent current ADMIT review covers every required Ticket; product remains ready",
+      "expected_completion": true,
+      "review_focus": "READY_EXECUTION_PLANS closes preparation only, without implementation or verification claims"
+    },
     {
       "case_id": "parent-obligation-owned",
       "family": "current-parent-obligation",
@@ -90,18 +97,18 @@
       "review_focus": "the unsupported COMPLETE label does not satisfy the implementation denominator"
     },
     {
-      "case_id": "probe-and-verification-current",
-      "family": "probe-versus-verification",
-      "state": "Probe has completed and an actual current verifier result plus current product readback exist",
+      "case_id": "verification-current",
+      "family": "verification-versus-ready",
+      "state": "Actual current integrated verifier result and current product readback exist",
       "expected_completion": true,
-      "review_focus": "completion rests on current verification and readback, not Probe completion"
+      "review_focus": "completion requires current verification, guarded progression, and actual done"
     },
     {
-      "case_id": "probe-only-no-verification",
-      "family": "probe-versus-verification",
-      "state": "Probe is COMPLETE but no verifier verdict exists and the Ticket remains ready",
+      "case_id": "implementation-ready-no-verification",
+      "family": "verification-versus-ready",
+      "state": "Current product returns the requested result but no verifier verdict exists and Ticket remains ready",
       "expected_completion": false,
-      "review_focus": "Probe navigation is not promoted to AC PASS, VERIFIED, done, or whole completion"
+      "review_focus": "a working implementation is not promoted to VERIFIED, done, or whole delivery"
     },
     {
       "case_id": "required-current-candidate-future",
