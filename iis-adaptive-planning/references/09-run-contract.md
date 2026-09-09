@@ -218,6 +218,10 @@ If the user's approval response materially changes Goal Outcome, Required Named 
 
 Before marking the form `CLOSED`:
 
+At closure and when these structural fields materially change, pass the rendered current form to `../tools/check_run_contract.py` through stdin or exact `--file`. Do not rerun it on owner returns or ordinary product changes that leave the structure unchanged.
+
+`STRUCTURE_VALID` confirms only deterministic field, list, stage, and boundary consistency below. It is not Goal/Source Authority fidelity, user approval, delivery admission, verification, finalization, or run-completion evidence; those existing owners and checks remain authoritative.
+
 - apply the Goal and required-item coverage invariant below against relevant Source Authority, including on a supplied preclosed form; matching derived Goal/Predicate text or a `CLOSED` label is not proof of fidelity;
 
 - no item may appear in both Required Named Items and Candidate Named Items;
