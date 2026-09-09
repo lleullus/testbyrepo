@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import {
+  BOUNDARY_PROTOCOL,
   captureVerification,
   checkPlanAdmission,
   executeArgvNode,
   finalizeVerification,
   inspectAuthority,
+  sealVerificationVerdict,
 } from "./src/core.js";
 
 function readPayload(argument) {
@@ -18,6 +20,14 @@ async function main() {
   const [surface, payloadArgument] = process.argv.slice(2);
   const input = readPayload(payloadArgument);
   if (surface === "ready_contract") {
+    if (input.action === "seal_verdict") {
+      return sealVerificationVerdict({
+        bindingPath: input.binding_path,
+        bindingSha256: input.binding_sha256,
+        verdict: input.verdict,
+        verdictPath: input.verdict_path,
+      });
+    }
     const common = {
       projectRoot: input.project_root,
       ticketPath: input.ticket_path,
@@ -40,10 +50,11 @@ async function main() {
   }
   if (surface === "ready_finalize") {
     return finalizeVerification({
-      bindingPath: input.binding_path,
-      bindingSha256: input.binding_sha256,
-      verdict: input.verdict,
+      verdictPath: input.verdict_path,
+      verdictSha256: input.verdict_sha256,
       executeArgv: executeArgvNode,
+      bundleIdentity: input.bundle_identity ?? process.env.IIS_READY_BUNDLE_ID ?? "source",
+      boundaryProtocol: BOUNDARY_PROTOCOL,
     });
   }
   throw new Error("surface must be ready_contract or ready_finalize");

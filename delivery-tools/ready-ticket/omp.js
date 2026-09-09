@@ -2,10 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  BOUNDARY_PROTOCOL,
   captureVerification,
   checkPlanAdmission,
   finalizeVerification,
   inspectAuthority,
+  sealVerificationVerdict,
 } from "./src/core.js";
 
 const resultText = value => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }], details: value });
@@ -20,6 +22,12 @@ function bundleIdentityFromModule(options) {
     catch { return "source"; }
   }
   return "source";
+}
+
+function requiredString(params, name, action) {
+  const value = params[name];
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${name} is required for ${action}`);
+  return value;
 }
 
 export function installReadyBoundaryTools(pi, options = {}) {
@@ -48,20 +56,31 @@ export function installReadyBoundaryTools(pi, options = {}) {
     name: "ready_contract",
     loadMode: "essential",
     label: "Ready Contract",
-    description: "Stateless Ready authority/admission checks and immutable verification binding capture. Does not intercept ordinary host tools.",
+    description: "Stateless Ready authority/admission checks plus immutable verification binding and verdict evidence capture. Does not intercept ordinary host tools.",
     parameters: z.object({
-      action: z.enum(["inspect_authority", "check_plan_admission", "capture_verification"]),
-      project_root: z.string(),
-      ticket_path: z.string(),
+      action: z.enum(["inspect_authority", "check_plan_admission", "capture_verification", "seal_verdict"]),
+      project_root: z.string().optional(),
+      ticket_path: z.string().optional(),
       plan_review_path: z.string().optional(),
       stable_target_paths: z.array(z.string()).optional(),
       scenario_effect_paths: z.array(z.string()).optional(),
       binding_path: z.string().optional(),
+      binding_sha256: z.string().optional(),
+      verdict: z.enum(["VERIFIED", "FAILED", "INCONCLUSIVE"]).optional(),
+      verdict_path: z.string().optional(),
     }),
     async execute(_callId, params, signal) {
+      if (params.action === "seal_verdict") {
+        return resultText(sealVerificationVerdict({
+          bindingPath: requiredString(params, "binding_path", params.action),
+          bindingSha256: requiredString(params, "binding_sha256", params.action),
+          verdict: requiredString(params, "verdict", params.action),
+          verdictPath: params.verdict_path,
+        }));
+      }
       const common = {
-        projectRoot: params.project_root,
-        ticketPath: params.ticket_path,
+        projectRoot: requiredString(params, "project_root", params.action),
+        ticketPath: requiredString(params, "ticket_path", params.action),
         validatorPath,
         executeArgv: (argv, request = {}) => executeArgv(argv, { ...request, signal: request.signal ?? signal }),
         bundleIdentity,
@@ -88,22 +107,22 @@ export function installReadyBoundaryTools(pi, options = {}) {
     name: "ready_finalize",
     loadMode: "essential",
     label: "Ready Finalize",
-    description: "Consume an immutable verification binding and verifier verdict; only this tool may perform the exact ready-to-done Ticket progression.",
+    description: "Consume an immutable verifier-owned verdict record; only this tool may perform the exact ready-to-done Ticket progression.",
     parameters: z.object({
-      binding_path: z.string(),
-      binding_sha256: z.string(),
-      verdict: z.enum(["VERIFIED", "FAILED", "INCONCLUSIVE"]),
+      verdict_path: z.string(),
+      verdict_sha256: z.string(),
     }),
     async execute(_callId, params, signal) {
       const value = await finalizeVerification({
-        bindingPath: params.binding_path,
-        bindingSha256: params.binding_sha256,
-        verdict: params.verdict,
+        verdictPath: params.verdict_path,
+        verdictSha256: params.verdict_sha256,
         executeArgv: (argv, request = {}) => executeArgv(argv, { ...request, signal: request.signal ?? signal }),
         provenance,
+        bundleIdentity,
+        boundaryProtocol: BOUNDARY_PROTOCOL,
       });
       if (value.ticket_progression === "COMPLETED" && value.progression_basis === "WRITE_PERFORMED_THIS_CALL") {
-        provenance.set(`${params.binding_path}:${params.binding_sha256}`, value);
+        provenance.set(`${params.verdict_path}:${params.verdict_sha256}`, value);
       }
       return resultText(value);
     },

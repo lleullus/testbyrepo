@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { hashBytes, validateTicket } from "./authority-binding.js";
-import { checkVerificationCurrentness, readVerificationBinding } from "./verification-binding.js";
+import { BOUNDARY_PROTOCOL, hashBytes, validateTicket } from "./authority-binding.js";
+import { checkVerificationCurrentness, readVerificationVerdict } from "./verification-binding.js";
 
 export function ticketStatus(bytes) {
   const header = bytes.toString("utf8").split(/^##\s/m)[0];
@@ -44,11 +44,13 @@ function replaceExact(file, expectedHash, bytes, mode) {
   }
 }
 
-function baseResult(binding, bindingPath, bindingSha256, verdict) {
+function baseResult(binding, bindingPath, bindingSha256, verdictRecord, verdictRecordSha256, verdict) {
   return {
     ticket_path: binding.ticket_path,
     verification_binding: bindingPath,
     verification_binding_sha256: bindingSha256,
+    verification_verdict_record: verdictRecord,
+    verification_verdict_record_sha256: verdictRecordSha256,
     verification_verdict: verdict,
   };
 }
@@ -65,25 +67,43 @@ async function requireCurrent(binding, expectedTicketSha256) {
   return current;
 }
 
-function provenanceKey(bindingPath, bindingSha256) {
-  return `${bindingPath}:${bindingSha256}`;
+function provenanceKey(verdictPath, verdictSha256) {
+  return `${verdictPath}:${verdictSha256}`;
 }
 
 // Semantic VERIFIED belongs to the verifier. This function owns only the narrow
 // binding-current status progression and has no execution/session lifecycle state.
 export async function finalizeVerification({
-  bindingPath,
-  bindingSha256,
-  verdict,
+  verdictPath,
+  verdictSha256,
   executeArgv,
   provenance,
+  bundleIdentity = "source",
+  boundaryProtocol = BOUNDARY_PROTOCOL,
   hooks = {},
+  ...unsupported
 }) {
-  if (!["VERIFIED", "FAILED", "INCONCLUSIVE"].includes(verdict)) throw new Error("invalid verification verdict");
-  const loaded = readVerificationBinding(bindingPath, bindingSha256);
+  if (Object.keys(unsupported).length) throw new Error("ready_finalize accepts only verdict record identity");
+  const loadedVerdict = readVerificationVerdict(verdictPath, verdictSha256);
+  const verdictRecord = loadedVerdict.verdict;
+  const loaded = loadedVerdict.binding;
   const binding = loaded.binding;
-  const base = baseResult(binding, loaded.binding_path, loaded.binding_sha256, verdict);
+  const verdict = verdictRecord.verification_verdict;
+  const base = baseResult(binding, loaded.binding_path, loaded.binding_sha256, loadedVerdict.verdict_path, loadedVerdict.verdict_sha256, verdict);
   const actualStatus = () => ticketStatus(fs.readFileSync(binding.ticket_path));
+
+  if (binding.bundle_identity !== bundleIdentity
+      || binding.boundary_protocol !== boundaryProtocol
+      || verdictRecord.bundle_identity !== binding.bundle_identity
+      || verdictRecord.boundary_protocol !== binding.boundary_protocol) {
+    return {
+      ...base,
+      ticket_progression: "FAILED",
+      progression_basis: "NONE",
+      ticket_status_after: actualStatus(),
+      progression_detail: "verification binding belongs to a different boundary bundle/protocol",
+    };
+  }
 
   if (binding.ticket_status_at_capture === "done") {
     let detail;
@@ -138,7 +158,7 @@ export async function finalizeVerification({
       candidateSha256 = hashBytes(currentBytes);
       await requireCurrent(binding, candidateSha256);
       await validateTicket(binding.validator_path, binding.ticket_path, binding.project_root, executeArgv);
-      const previous = provenance?.get?.(provenanceKey(loaded.binding_path, loaded.binding_sha256));
+      const previous = provenance?.get?.(provenanceKey(loadedVerdict.verdict_path, loadedVerdict.verdict_sha256));
       if (previous?.ticket_progression === "COMPLETED" && previous?.progression_basis === "WRITE_PERFORMED_THIS_CALL") {
         return {
           ...base,

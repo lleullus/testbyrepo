@@ -6,18 +6,18 @@ Product Scope/Behavior/Spec/Ticket remain the approved authority. `ready-ticket-
 
 The actual implementing actor calls `ready_contract check_plan_admission` before the first source mutation and immediately before COMPLETE. Between those checks it uses ordinary host-native tools. No IIS execution/session/assignment state is created.
 
-`ready-ticket-verify` captures one immutable outside-root verification binding over current product authority, stable implementation targets, declared scenario-effect paths and optional method navigation. It owns full Flow/AC semantic judgment and returns one terminal verdict with the exact binding path/SHA. The verifier does not write Ticket status. The caller separately invokes `ready_finalize` with the unchanged verdict.
+`ready-ticket-verify` captures one immutable outside-root verification binding over current product authority, stable implementation targets, declared scenario-effect paths and optional method navigation. It owns full Flow/AC semantic judgment, then seals the terminal verdict through `ready_contract seal_verdict` into an immutable record tied to that binding. The verifier returns both path/SHA identities and does not write Ticket status. The caller separately invokes `ready_finalize` with only the exact verdict-record path/SHA.
 
-Adaptive/caller consumers keep preparation COMPLETE, implementation COMPLETE, semantic verdict, status progression/basis and actual Ticket status separate. A current `done` string without attributable caller finalization is not completion proof.
+Adaptive/caller consumers keep preparation COMPLETE, implementation COMPLETE, verifier-owned semantic verdict/record, status progression/basis and actual Ticket status separate. A current `done` string without attributable caller finalization is not completion proof.
 
 ## Modules
 
 - `delivery-tools/ready-ticket/src/core.js`: host-neutral public boundary API plus the ordinary Node argv executor used by CLI/tests.
 - `authority-binding.js`: canonical Ticket/product/validator bytes and authority digest.
 - `plan-binding.js`: exact outside-root independent review, Plan/current-product byte pairing and per-Ticket ADMIT decision.
-- `verification-binding.js`: immutable stable-target snapshot, separate scenario-effect paths, optional method navigation and outside-root binding creation/currentness.
-- `finalization.js`: semantic-verdict consumer, exact status-only compare-and-swap, canonical post-validation and conditional restoration of this call's exact candidate.
-- `omp.js`: registers exactly `ready_contract` and `ready_finalize`; it does not install global dispatch hooks.
+- `verification-binding.js`: immutable stable-target snapshot, separate scenario-effect paths, optional method navigation, outside-root binding creation/currentness, and immutable verdict-record sealing/reading.
+- `finalization.js`: verifier-owned verdict-record consumer, binding/current bundle/protocol gate, exact status-only compare-and-swap, canonical post-validation and conditional restoration of this call's exact candidate.
+- `omp.js`: registers exactly `ready_contract` and `ready_finalize`, threads current bundle/protocol identity into finalization, and installs no global dispatch hooks.
 - `cli.js`: optional direct host integration using the same boundary functions.
 - `index.js`: package exports.
 

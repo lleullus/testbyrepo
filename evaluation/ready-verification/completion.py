@@ -672,22 +672,55 @@ def _binding_matches_current_done(ticket_path: Path, binding_path: str, binding_
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
         return False
 
+def _verdict_record_matches(binding_path: str, binding_sha256: str, verdict_path: str,
+                            verdict_sha256: str, expected_verdict: str) -> bool:
+    try:
+        binding_file = Path(binding_path).resolve(strict=True)
+        verdict_file = Path(verdict_path).resolve(strict=True)
+        binding_raw = binding_file.read_bytes()
+        verdict_raw = verdict_file.read_bytes()
+        if (str(binding_file) != binding_path or str(verdict_file) != verdict_path
+                or hashlib.sha256(binding_raw).hexdigest() != binding_sha256
+                or hashlib.sha256(verdict_raw).hexdigest() != verdict_sha256):
+            return False
+        binding = json.loads(binding_raw)
+        verdict = json.loads(verdict_raw)
+        return (verdict.get("schema") == "iis-verification-verdict/v1"
+                and verdict.get("binding_path") == binding_path
+                and verdict.get("binding_sha256") == binding_sha256
+                and verdict.get("ticket_path") == binding.get("ticket_path")
+                and verdict.get("bundle_identity") == binding.get("bundle_identity")
+                and verdict.get("boundary_protocol") == binding.get("boundary_protocol")
+                and verdict.get("verification_verdict") == expected_verdict)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return False
+
 
 def _verified_delivery(summary: dict[str, Any], events: list[dict[str, Any]], ticket_path: Path) -> bool:
     if (summary.get("parsed_verdict") != "VERIFIED"
             or summary.get("verifier_ticket_progression") != "PENDING CALLER FINALIZATION"
             or not summary.get("verification_binding_path")
-            or not summary.get("verification_binding_sha256")):
+            or not summary.get("verification_binding_sha256")
+            or not summary.get("verification_verdict_record_path")
+            or not summary.get("verification_verdict_record_sha256")
+            or not _verdict_record_matches(
+                summary["verification_binding_path"], summary["verification_binding_sha256"],
+                summary["verification_verdict_record_path"], summary["verification_verdict_record_sha256"],
+                summary["parsed_verdict"])):
         return False
     for row in reversed(boundary_results(events, "ready_finalize")):
         result = row["result"]
-        if (row["args"].get("binding_path") == summary["verification_binding_path"]
-                and row["args"].get("binding_sha256") == summary["verification_binding_sha256"]
-                and row["args"].get("verdict") == "VERIFIED"
+        if (row["args"].get("verdict_path") == summary["verification_verdict_record_path"]
+                and row["args"].get("verdict_sha256") == summary["verification_verdict_record_sha256"]
+                and "verdict" not in row["args"]
+                and "binding_path" not in row["args"]
+                and "binding_sha256" not in row["args"]
                 and result.get("ticket_path") == str(ticket_path.resolve())
                 and result.get("verification_binding") == summary["verification_binding_path"]
                 and result.get("verification_binding_sha256") == summary["verification_binding_sha256"]
-                and result.get("verification_verdict") == "VERIFIED"
+                and result.get("verification_verdict_record") == summary["verification_verdict_record_path"]
+                and result.get("verification_verdict_record_sha256") == summary["verification_verdict_record_sha256"]
+                and result.get("verification_verdict") == summary["parsed_verdict"]
                 and result.get("ticket_progression") == "COMPLETED"
                 and result.get("progression_basis") in {"WRITE_PERFORMED_THIS_CALL", "RECOVERED_CAPTURED_FINALIZER_RESULT"}
                 and result.get("ticket_status_after") == "done"
@@ -740,6 +773,9 @@ def run(metadata_path: Path, *, agent_dir: Path, payload: Path,
             if (native_setup.get("parsed_verdict") != "VERIFIED" or setup.get("parsed_verdict") != "VERIFIED"
                     or setup.get("verification_binding_path") != native_setup.get("verification_binding_path")
                     or setup.get("verification_binding_sha256") != native_setup.get("verification_binding_sha256")
+                    or setup.get("verification_verdict_record_path") != native_setup.get("verification_verdict_record_path")
+                    or setup.get("verification_verdict_record_sha256") != native_setup.get("verification_verdict_record_sha256")
+                    or setup.get("caller_finalization_args") != (native_setup.get("caller_finalization_args") or {})
                     or setup.get("ticket_progression") != "COMPLETED" or setup.get("ticket_status_after") != "done"
                     or not _verified_delivery(native_setup, stage_events, Path(metadata["ticket_path"]))):
                 raise ValueError("actual verifier-terminal/caller-finalization/done setup is required")

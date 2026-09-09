@@ -33,7 +33,7 @@ test("OMP extension registers exactly ready_contract and ready_finalize with zer
   assert.deepEqual(pi.tools.map(tool => tool.name), ["ready_contract", "ready_finalize"]);
 });
 
-test("registered tool surface performs admission, capture, and caller-owned finalization", async t => {
+test("registered tool surface performs admission, capture, verifier sealing, and caller finalization", async t => {
   const f = await fixture(t);
   const pi = fakePi();
   installReadyBoundaryTools(pi, { executeArgv: executeArgvNode, validatorPath: f.validatorPath, bundleIdentity: "source" });
@@ -43,11 +43,39 @@ test("registered tool surface performs admission, capture, and caller-owned fina
   assert.equal(admission.details.decision, "ADMIT");
   const bindingPath = path.join(f.base, "omp-binding.json");
   const captured = await contract.execute("b", { action: "capture_verification", project_root: f.root, ticket_path: f.ticket, plan_review_path: f.review, stable_target_paths: [f.stable], scenario_effect_paths: [f.effect], binding_path: bindingPath });
-  const finalized = await finalizer.execute("c", { binding_path: captured.details.binding_path, binding_sha256: captured.details.binding_sha256, verdict: "VERIFIED" });
+  const verdictPath = path.join(f.base, "omp-verdict.json");
+  const sealed = await contract.execute("seal", { action: "seal_verdict", binding_path: captured.details.binding_path, binding_sha256: captured.details.binding_sha256, verdict: "VERIFIED", verdict_path: verdictPath });
+  const finalized = await finalizer.execute("c", { verdict_path: sealed.details.verdict_path, verdict_sha256: sealed.details.verdict_sha256 });
   assert.equal(finalized.details.ticket_progression, "COMPLETED");
   assert.equal(finalized.details.progression_basis, "WRITE_PERFORMED_THIS_CALL");
-  const recovered = await finalizer.execute("d", { binding_path: captured.details.binding_path, binding_sha256: captured.details.binding_sha256, verdict: "VERIFIED" });
+  assert.equal(finalized.details.verification_verdict_record, sealed.details.verdict_path);
+  const recovered = await finalizer.execute("d", { verdict_path: sealed.details.verdict_path, verdict_sha256: sealed.details.verdict_sha256 });
   assert.equal(recovered.details.progression_basis, "RECOVERED_CAPTURED_FINALIZER_RESULT");
+});
+
+test("ready_finalize public surface cannot upgrade a sealed FAILED verdict", async t => {
+  const f = await fixture(t);
+  const pi = fakePi();
+  installReadyBoundaryTools(pi, { executeArgv: executeArgvNode, validatorPath: f.validatorPath, bundleIdentity: "source" });
+  const contract = pi.tools.find(tool => tool.name === "ready_contract");
+  const finalizer = pi.tools.find(tool => tool.name === "ready_finalize");
+  const captured = await contract.execute("capture", {
+    action: "capture_verification", project_root: f.root, ticket_path: f.ticket,
+    stable_target_paths: [f.stable], binding_path: path.join(f.base, "failed-binding.json"),
+  });
+  const sealed = await contract.execute("seal", {
+    action: "seal_verdict", binding_path: captured.details.binding_path,
+    binding_sha256: captured.details.binding_sha256, verdict: "FAILED",
+    verdict_path: path.join(f.base, "failed-verdict.json"),
+  });
+  const result = await finalizer.execute("finalize", {
+    verdict_path: sealed.details.verdict_path,
+    verdict_sha256: sealed.details.verdict_sha256,
+    verdict: "VERIFIED",
+  });
+  assert.equal(result.details.verification_verdict, "FAILED");
+  assert.equal(result.details.ticket_progression, "NOT APPLICABLE");
+  assert.match(fs.readFileSync(f.ticket, "utf8"), /^Status: ready$/m);
 });
 
 test("settled exit 1 is an ordinary command result and does not prevent immediate edit/retry", async t => {
@@ -148,12 +176,18 @@ test("fresh host-contract smoke covers admission, fail/fix/retry, binding, verdi
   const verifierReadback = await executeArgvNode([process.execPath, f.stable], { cwd: f.root });
   assert.equal(verifierReadback.stdout.trim(), "expected product output");
   const semanticVerdict = "VERIFIED";
+  const sealed = await contract.execute("seal", {
+    action: "seal_verdict", binding_path: captured.details.binding_path,
+    binding_sha256: captured.details.binding_sha256, verdict: semanticVerdict,
+    verdict_path: path.join(f.base, "fresh-host-verdict.json"),
+  });
   const finalized = await finalizer.execute("finalize", {
-    binding_path: captured.details.binding_path,
-    binding_sha256: captured.details.binding_sha256,
-    verdict: semanticVerdict,
+    verdict_path: sealed.details.verdict_path,
+    verdict_sha256: sealed.details.verdict_sha256,
   });
   assert.equal(finalized.details.verification_verdict, semanticVerdict);
+  assert.equal(finalized.details.verification_verdict_record, sealed.details.verdict_path);
+  assert.equal(finalized.details.verification_verdict_record_sha256, sealed.details.verdict_sha256);
   assert.equal(finalized.details.ticket_progression, "COMPLETED");
   assert.equal(finalized.details.progression_basis, "WRITE_PERFORMED_THIS_CALL");
   assert.equal(finalized.details.ticket_status_after, "done");

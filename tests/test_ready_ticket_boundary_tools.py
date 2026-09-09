@@ -37,6 +37,38 @@ class ReadyTicketBoundaryContractTests(unittest.TestCase):
         self.assertNotIn("ready_guard", text)
 
 
+class PassiveFanInContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.implementation = (ROOT / "companion-skills/ready-ticket-implement/references/implement.md").read_text()
+        self.verification = (ROOT / "companion-skills/ready-ticket-verify/references/verify.md").read_text()
+        self.adaptive = (ROOT / "iis-adaptive-planning/references/08-delivery-continuation.md").read_text()
+
+    def test_background_implementation_uses_passive_terminal_fanin(self) -> None:
+        self.assertIn("After one background implementation owner is successfully dispatched", self.implementation)
+        self.assertIn("does not call `hub wait`, `hub jobs`, `hub list` or `hub inbox`", self.implementation)
+        self.assertIn("host-delivered async terminal result wake the parent", self.implementation)
+        self.assertIn("does not poll normal progress or completion", self.implementation)
+
+    def test_background_verification_uses_passive_terminal_fanin(self) -> None:
+        self.assertIn("After successful background verifier dispatch", self.verification)
+        self.assertIn("does not call `hub wait`, `hub jobs`, `hub list` or `hub inbox`", self.verification)
+        self.assertIn("host-delivered async terminal result wake it", self.verification)
+        self.assertIn("routing and `ready_finalize` begin only from that exact terminal result", self.verification)
+
+    def test_explicit_status_allows_one_bounded_snapshot_then_passive_fanin(self) -> None:
+        self.assertIn("current user explicitly requests status", self.adaptive)
+        self.assertIn("One bounded diagnostic snapshot", self.adaptive)
+        self.assertIn("If the owner is normally running", self.adaptive)
+        self.assertIn("do not begin periodic monitoring", self.adaptive)
+
+    def test_abnormal_delivery_allows_only_failure_driven_diagnostics(self) -> None:
+        for condition in ("host reports timeout/failure", "expected terminal delivery is malformed or missing",
+                          "actual worker replacement/settlement must be established"):
+            with self.subTest(condition=condition):
+                self.assertIn(condition, self.adaptive)
+        self.assertIn("does not transfer the owner's local failure/fix/retry", self.adaptive)
+
+
 class BundleInstallTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

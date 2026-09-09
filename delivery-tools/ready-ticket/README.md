@@ -10,10 +10,11 @@ The OMP extension registers exactly two IIS tools and does not install global to
   - `inspect_authority`: validate and bind the current Ticket/product authority bytes.
   - `check_plan_admission`: require an exact current independent `iis-plan-review/v1` ADMIT before implementation work.
   - `capture_verification`: create one immutable verifier binding outside Project Root.
+  - `seal_verdict`: bind the verifier's terminal semantic verdict to that exact binding in a new immutable outside-root record.
 - `ready_finalize`
-  - consume an immutable verification binding plus the verifier's unchanged semantic verdict;
-  - perform at most the narrow canonical Ticket `ready -> done` status progression;
-  - never reinterpret or manufacture semantic verification.
+  - consume only an immutable verifier-owned verdict-record path/SHA;
+  - verify its binding and current loaded bundle/protocol identities before mutation;
+  - perform at most the narrow canonical Ticket `ready -> done` status progression without interpreting semantic verification.
 
 The optional CLI exposes the same two surfaces for host integration without creating persistent IIS execution state.
 
@@ -40,18 +41,21 @@ A material implementation method change ends the current implementation invocati
 
 The binding is created as a mode-0600 outside-root file and is never overwritten. Scenario-effect paths may change during the authored verification scenario; stable targets may not. Stable-target or authority drift makes later status progression fail rather than silently reusing stale evidence.
 
-The verifier returns one terminal semantic result with the exact binding path/SHA. It does not write Ticket status. The caller then invokes `ready_finalize` with that exact binding identity and unchanged verdict.
+After closing the semantic cycle, the verifier calls `ready_contract seal_verdict` and returns both binding and verdict-record path/SHA. It does not write Ticket status. The caller passes only that exact verdict-record identity to `ready_finalize`; it cannot supply or rewrite the semantic verdict.
+
+The verdict record is a mode-0600, non-overwritable outside-root evidence file. It copies Ticket, binding, bundle and protocol identity from the verified binding. It is not execution/session/workflow state.
 
 ## Finalization and provenance
 
-For a binding captured from `Status: ready`:
+For a verdict record referencing a binding captured from `Status: ready`:
 
 - `FAILED` and `INCONCLUSIVE` never mutate the Ticket.
-- `VERIFIED` may perform only the exact top-metadata status replacement after currentness and canonical validation checks.
+- `VERIFIED` may perform only the exact top-metadata status replacement after verdict-record/binding/current-bundle/current-protocol, currentness and canonical validation checks.
+- any record/binding/current bundle or protocol mismatch performs no Ticket mutation.
 - post-write validation failure conditionally restores only this finalizer call's exact candidate when protected state is still unchanged.
 - an already-`done` Ticket matching the binding is current-state confirmation, not proof that the current call performed completion.
 
-A completion result is attributable only when the finalizer actually performed the write in the current call or when the same host process has captured provenance for that prior finalizer result. Semantic verdict, progression result, progression basis and observed Ticket status remain separate fields.
+A completion result is attributable only when the finalizer actually performed the write in the current call or when the same host process has captured provenance for that exact verdict record's prior finalizer result. Semantic verdict, verdict provenance, progression result, progression basis and observed Ticket status remain separate fields.
 
 A binding captured from an already-`done` Ticket is diagnostic only and never reopens status.
 
@@ -71,4 +75,4 @@ Run:
 npm test
 ```
 
-The suite covers authority/admission currentness, immutable verification binding, stable/effect separation, exact finalization/rollback semantics, ordinary settled command failure followed by edit/retry, and zero global interception hooks.
+The suite covers authority/admission currentness, immutable verification binding and verdict records, bundle/protocol identity gates, stable/effect separation, exact finalization/rollback semantics, ordinary settled command failure followed by edit/retry, and zero global interception hooks.

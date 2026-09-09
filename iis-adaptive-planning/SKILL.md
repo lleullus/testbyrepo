@@ -28,6 +28,8 @@ The **Outer Main** owns invocation-local Run Contract closure/carry-forward, rou
 
 This is a thin invocation-local handoff role, not a persistent controller, scheduler, queue, retry ledger, workflow database, or new product-authority layer.
 
+For a successfully dispatched background implementation or verification owner, Outer Main uses passive terminal fan-in: no progress/completion polling, status DM, or duplicate repository/runtime inspection during normal execution. It yields/stands by and resumes routing only when the host delivers the exact terminal owner result. A bounded snapshot is allowed only for an explicit user status or cancellation request, host-reported timeout/failure, malformed or missing terminal delivery, or real replacement/settlement diagnosis; a normally running owner returns immediately to passive fan-in without periodic monitoring.
+
 ## Required current authority
 
 At the start of every Adaptive planning run:
@@ -204,7 +206,7 @@ To Spec and To Tickets remain projection stages, not places to invent product me
 
 ## Verification evidence and re-entry
 
-Adaptive triage consumes the exact terminal `ready-ticket-verify` semantic result plus the exact caller `ready_finalize` result and current evidence. Scenario reports, material observations and other in-cycle evidence are verifier-owned navigation, not automatic defects. A preparation REVISE/EVIDENCE_NEEDED or PLAN_REVIEW_REQUIRED/PLAN_REVIEW_STALE/PLAN_NOT_ADMITTED is an affected preparation/admission return, not a final FAILED/INCONCLUSIVE or Adaptive defect enum. Preserve the actual owner result.
+Adaptive triage consumes the exact terminal `ready-ticket-verify` semantic result with its binding/verdict-record identities plus the exact caller `ready_finalize` result and current evidence. Scenario reports, material observations and other in-cycle evidence are verifier-owned navigation, not automatic defects. A preparation REVISE/EVIDENCE_NEEDED or PLAN_REVIEW_REQUIRED/PLAN_REVIEW_STALE/PLAN_NOT_ADMITTED is an affected preparation/admission return, not a final FAILED/INCONCLUSIVE or Adaptive defect enum. Preserve the actual owner result.
 
 Classify the underlying problem using [references/06-verification-triage.md](references/06-verification-triage.md):
 
@@ -218,7 +220,7 @@ Never infer `CONTRACT_OVERREACH` merely because a requirement is difficult or ex
 
 If planning authority changes, preserve the old verdict and validate new artifacts. If implementation is enabled, refresh only affected method review before dependent work; if verification is enabled, run a fresh integrated verification cycle on the stable changed target.
 
-Outer Main invokes `ready-ticket-plan` for requested preparation or before implementation lacking current ADMIT, forwards the actual outside-root `plan_review_path` to the actual implementing actor, and invokes implement only when Implementation is yes. That actor must pass stateless start/end admission. Verification yes routes a stable current ready target directly to `ready-ticket-verify`; after the verifier returns its terminal binding/verdict, Outer Main calls `ready_finalize` with the exact binding path/SHA and unchanged verdict. Verification no runs neither final discovery nor verdict/finalization, but does not disable pre-implementation Heuristic/review. Preserve each stage's current user mode/model contract: implementation/verification default SUBAGENT unless explicitly DIRECT, with no hidden fallback or exploration fan-out. Preparation roles follow their own independence/current-selection contract.
+Outer Main invokes `ready-ticket-plan` for requested preparation or before implementation lacking current ADMIT, forwards the actual outside-root `plan_review_path` to the actual implementing actor, and invokes implement only when Implementation is yes. That actor must pass stateless start/end admission. Verification yes routes a stable current ready target directly to `ready-ticket-verify`; after the verifier returns its terminal binding and verifier-owned verdict-record identities, Outer Main calls `ready_finalize` with the exact verdict-record path/SHA only. It supplies no semantic verdict and does not recreate or reinterpret one. Verification no runs neither final discovery nor verdict/finalization, but does not disable pre-implementation Heuristic/review. Preserve each stage's current user mode/model contract: implementation/verification default SUBAGENT unless explicitly overridden to DIRECT for that exact stage, and preparation follows its current selected modes/models.
 
 After an actual correction/new evidence, corrective re-entry is the Adaptive default unless explicitly disabled. Local implementation repair stays with the worker/current plan; material cause/owner/interface/readback changes return to affected preparation; product meaning returns to its original planning owner. Missing authority or a disabled stage is not bypassed.
 

@@ -383,6 +383,29 @@ def _binding_matches_current_done(ticket_path: Path, binding_path: str, binding_
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
         return False
 
+def _verdict_record_matches(binding_path: str, binding_sha256: str, verdict_path: str,
+                            verdict_sha256: str, expected_verdict: str) -> bool:
+    try:
+        binding_file = Path(binding_path).resolve(strict=True)
+        verdict_file = Path(verdict_path).resolve(strict=True)
+        binding_raw = binding_file.read_bytes()
+        verdict_raw = verdict_file.read_bytes()
+        if (str(binding_file) != binding_path or str(verdict_file) != verdict_path
+                or hashlib.sha256(binding_raw).hexdigest() != binding_sha256
+                or hashlib.sha256(verdict_raw).hexdigest() != verdict_sha256):
+            return False
+        binding = json.loads(binding_raw)
+        verdict = json.loads(verdict_raw)
+        return (verdict.get("schema") == "iis-verification-verdict/v1"
+                and verdict.get("binding_path") == binding_path
+                and verdict.get("binding_sha256") == binding_sha256
+                and verdict.get("ticket_path") == binding.get("ticket_path")
+                and verdict.get("bundle_identity") == binding.get("bundle_identity")
+                and verdict.get("boundary_protocol") == binding.get("boundary_protocol")
+                and verdict.get("verification_verdict") == expected_verdict)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return False
+
 
 def guarded_delivery(events: list, sessions: Path, ticket_path: Path) -> dict | None:
     captures = [("outer-events", events)]
@@ -408,24 +431,36 @@ def guarded_delivery(events: list, sessions: Path, ticket_path: Path) -> dict | 
         if (summary.get("parsed_verdict") != "VERIFIED"
                 or summary.get("verifier_ticket_progression") != "PENDING CALLER FINALIZATION"
                 or not summary.get("verification_binding_path")
-                or not summary.get("verification_binding_sha256")):
+                or not summary.get("verification_binding_sha256")
+                or not summary.get("verification_verdict_record_path")
+                or not summary.get("verification_verdict_record_sha256")
+                or not _verdict_record_matches(
+                    summary["verification_binding_path"], summary["verification_binding_sha256"],
+                    summary["verification_verdict_record_path"], summary["verification_verdict_record_sha256"],
+                    summary["parsed_verdict"])):
             continue
         for row in boundary_results(capture, "ready_finalize"):
             result = row["result"]
             if (result.get("ticket_path") == exact_ticket
-                    and row["args"].get("binding_path") == summary["verification_binding_path"]
-                    and row["args"].get("binding_sha256") == summary["verification_binding_sha256"]
-                    and row["args"].get("verdict") == "VERIFIED"
+                    and row["args"].get("verdict_path") == summary["verification_verdict_record_path"]
+                    and row["args"].get("verdict_sha256") == summary["verification_verdict_record_sha256"]
+                    and "verdict" not in row["args"]
+                    and "binding_path" not in row["args"]
+                    and "binding_sha256" not in row["args"]
                     and result.get("verification_binding") == summary["verification_binding_path"]
                     and result.get("verification_binding_sha256") == summary["verification_binding_sha256"]
+                    and result.get("verification_verdict_record") == summary["verification_verdict_record_path"]
+                    and result.get("verification_verdict_record_sha256") == summary["verification_verdict_record_sha256"]
                     and result.get("ticket_progression") == "COMPLETED"
                     and result.get("progression_basis") in {"WRITE_PERFORMED_THIS_CALL", "RECOVERED_CAPTURED_FINALIZER_RESULT"}
-                    and result.get("verification_verdict") == "VERIFIED"
+                    and result.get("verification_verdict") == summary["parsed_verdict"]
                     and result.get("ticket_status_after") == "done"
                     and _binding_matches_current_done(ticket_path, summary["verification_binding_path"], summary["verification_binding_sha256"])):
                 return {"origin": origin, "tool_call_id": row["tool_call_id"], "result": result,
                         "verification_binding": summary["verification_binding_path"],
-                        "verification_binding_sha256": summary["verification_binding_sha256"]}
+                        "verification_binding_sha256": summary["verification_binding_sha256"],
+                        "verification_verdict_record": summary["verification_verdict_record_path"],
+                        "verification_verdict_record_sha256": summary["verification_verdict_record_sha256"]}
     return None
 
 

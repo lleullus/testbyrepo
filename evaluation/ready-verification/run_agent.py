@@ -117,8 +117,11 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         verifier_progression = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Ticket Progression", "PENDING CALLER FINALIZATION|NOT APPLICABLE")
     verification_binding = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verification Binding", r"/[^\n]+")
     verification_binding_sha256 = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verification Binding SHA256", r"[0-9a-fA-F]{64}")
+    verification_verdict_record = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verification Verdict Record", r"/[^\n]+")
+    verification_verdict_record_sha256 = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verification Verdict Record SHA256", r"[0-9a-fA-F]{64}")
     finalizations = boundary_results(events, "ready_finalize")
     finalization = finalizations[-1]["result"] if finalizations else None
+    finalization_args = finalizations[-1]["args"] if finalizations else None
     calls = [event for event in events if event.get("type") == "tool_execution_start"]
     results = [event for event in events if event.get("type") == "tool_execution_end"]
     tool_errors = [event for event in results if event.get("isError") is True]
@@ -130,7 +133,10 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
             "verifier_ticket_progression": verifier_progression.upper() if model_completed and verifier_progression else None,
             "verification_binding_path": verification_binding if model_completed else None,
             "verification_binding_sha256": verification_binding_sha256.lower() if model_completed and verification_binding_sha256 else None,
+            "verification_verdict_record_path": verification_verdict_record if model_completed else None,
+            "verification_verdict_record_sha256": verification_verdict_record_sha256.lower() if model_completed and verification_verdict_record_sha256 else None,
             "caller_finalization": finalization,
+            "caller_finalization_args": finalization_args,
             "ticket_progression": finalization.get("ticket_progression") if finalization else None,
             "progression_basis": finalization.get("progression_basis") if finalization else None,
             "ticket_status_after": finalization.get("ticket_status_after") if finalization else None,
@@ -244,7 +250,8 @@ def invoke(*, project_root: Path, prompt: str, output_dir: Path, agent_dir: Path
     if not result["clean_transport"]:
         for field in ("implementation_completion", "preparation_completion", "plan_review_path", "parsed_verdict",
                       "verifier_ticket_progression", "verification_binding_path", "verification_binding_sha256",
-                      "caller_finalization", "ticket_progression", "progression_basis", "ticket_status_after"):
+                      "verification_verdict_record_path", "verification_verdict_record_sha256",
+                      "caller_finalization", "caller_finalization_args", "ticket_progression", "progression_basis", "ticket_status_after"):
             result[field] = None
     if session_dir is not None:
         sessions = list(session_dir.glob("*.jsonl"))

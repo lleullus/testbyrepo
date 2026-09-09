@@ -143,7 +143,7 @@ Completion Predicate: <exact sufficient predicate for the assigned Goal and Requ
 Authoritative Readback: <fresh attributable evidence at the actual approved boundary, within its claim limits>
 Final Current Increment: <exact INC path or None>
 Final Ticket evidence:
-- <exact Ticket path — current preparation review if preparation-only | implementation terminal result | verifier semantic result with binding identity | caller ready_finalize progression result/basis | actual canonical status>
+- <exact Ticket path — current preparation review if preparation-only | implementation terminal result | verifier semantic result with binding and immutable verdict-record identities | caller ready_finalize verdict-record/progression result/basis | actual canonical status>
 Disposition: RUN_CONTRACT_SATISFIED
 Remaining provisional horizon: non-authoritative; not a completion blocker
 STOP

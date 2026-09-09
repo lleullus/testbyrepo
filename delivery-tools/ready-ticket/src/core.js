@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { bindAuthority, hashBytes } from "./authority-binding.js";
 import { bindPlanReview } from "./plan-binding.js";
-import { captureVerification as captureVerificationCore } from "./verification-binding.js";
+import { captureVerification as captureVerificationCore, sealVerificationVerdict as sealVerificationVerdictCore } from "./verification-binding.js";
 import { finalizeVerification as finalizeVerificationCore } from "./finalization.js";
 
 const execFileAsync = promisify(execFile);
@@ -89,11 +89,15 @@ export async function captureVerification(options) {
   return captureVerificationCore({ ...options, executeArgv: options.executeArgv ?? executeArgvNode });
 }
 
+export function sealVerificationVerdict(options) {
+  return sealVerificationVerdictCore(options);
+}
+
 export async function finalizeVerification(options) {
   return finalizeVerificationCore({ ...options, executeArgv: options.executeArgv ?? executeArgvNode });
 }
 
-export { bindAuthority, checkAuthorityCurrentness, hashBytes, validateTicket } from "./authority-binding.js";
+export { BOUNDARY_PROTOCOL, bindAuthority, checkAuthorityCurrentness, hashBytes, validateTicket } from "./authority-binding.js";
 export { bindPlanReview, checkPlanCurrentness } from "./plan-binding.js";
-export { checkVerificationCurrentness, readVerificationBinding, snapshotStableTargets } from "./verification-binding.js";
+export { checkVerificationCurrentness, readVerificationBinding, readVerificationVerdict, snapshotStableTargets } from "./verification-binding.js";
 export { ticketStatus, readyCandidate, doneReadyCandidate } from "./finalization.js";

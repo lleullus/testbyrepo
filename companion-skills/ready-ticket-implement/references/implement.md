@@ -54,6 +54,12 @@ Top-level invocation은 `SUBAGENT`가 기본이다. 현재 사용자가 이 exac
 6. settlement를 증명할 수 없으면 current owner/caller가 `PARTIAL | BLOCKED`로 반환한다. 병렬 작업이 필요하면 caller가 별도 isolated worktree를 사용한다.
 7. fresh replacement는 current `plan_review_path`로 admission부터 다시 수행한다. `DIRECT`와 `SUBAGENT` 사이의 자동 fallback은 없다.
 
+### Passive terminal fan-in
+
+After one background implementation owner is successfully dispatched, Outer Main does not poll normal progress or completion. It does not call `hub wait`, `hub jobs`, `hub list` or `hub inbox`, send a status request, or duplicate repository inspection solely to observe that owner. It yields/stands by once and lets the host-delivered async terminal result wake the parent; only then does it validate and route the exact `IMPLEMENT RESULT`.
+
+A single bounded diagnostic snapshot is allowed only for an explicit current user status request, cancellation/stop request, host-reported timeout/failure, malformed or missing expected terminal delivery, or a real need to establish worker replacement/settlement. If the snapshot shows normal execution, do not start periodic monitoring; return to passive terminal fan-in. This changes no worker ownership: local test failure/fix/retry and ordinary progress remain inside the implementation invocation.
+
 Detached child, background delivery queue, polling controller 또는 persistent IIS execution scheduler로 ownership을 넘기지 않는다. IIS boundary tools는 worker/session/assignment state를 생성하거나 소비하지 않는다.
 
 ### Ready contract admission과 host-native execution

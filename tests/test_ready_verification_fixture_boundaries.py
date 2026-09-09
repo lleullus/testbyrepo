@@ -142,13 +142,16 @@ const executeArgv = async (argv, options) => {
 const captured = await module.captureVerification({projectRoot: metadata.project_root,
     ticketPath: metadata.ticket_path, stableTargetPaths: metadata.target_paths,
     bindingPath: process.argv[3], executeArgv});
+const sealed = module.sealVerificationVerdict({bindingPath: captured.binding_path,
+    bindingSha256: captured.binding_sha256, verdict: 'VERIFIED', verdictPath: process.argv[4]});
 fs.appendFileSync(metadata.target_paths.at(-1), '\\n# evaluator drift after immutable capture\\n');
-const result = await module.finalizeVerification({bindingPath: captured.binding_path,
-    bindingSha256: captured.binding_sha256, verdict: 'VERIFIED', executeArgv});
+const result = await module.finalizeVerification({verdictPath: sealed.verdict_path,
+    verdictSha256: sealed.verdict_sha256, executeArgv});
 console.log(JSON.stringify(result));
 """
         result = subprocess.run(
-            ["node", "--input-type=module", "-e", program, BOUNDARY_MODULE.as_uri(), json.dumps(metadata), str(self.root / "drift-binding.json")],
+            ["node", "--input-type=module", "-e", program, BOUNDARY_MODULE.as_uri(), json.dumps(metadata),
+             str(self.root / "drift-binding.json"), str(self.root / "drift-verdict.json")],
             cwd=metadata["project_root"], env=self.environment, check=True, text=True, capture_output=True,
         )
         observed = json.loads(result.stdout)

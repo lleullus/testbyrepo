@@ -27,8 +27,8 @@ Before classifying, reopen enough current authority to compare the failing claim
 - Parent Spec;
 - adopted Behavior/UI authority relevant to the claim;
 - exact Ticket and authored Verification flow(s);
-- exact fresh `ready-ticket-verify` semantic result/evidence, including verification binding identity;
-- exact `ready_finalize` progression result when caller finalization was applicable;
+- exact fresh `ready-ticket-verify` semantic result/evidence, including verification binding and immutable verdict-record identities;
+- exact `ready_finalize` progression result, including the consumed verdict-record identity, when caller finalization was applicable;
 - current runtime/repository evidence needed to attribute the observed behavior.
 
 Apply `09-run-contract.md`'s actual-boundary evidence rule. Implementation reports, test names, logs, and mocks are navigation/support; a substitute cannot prove the boundary it replaces. Direct inspection may close the actual approved artifact-only result, and real authorized disposable execution may close its observed boundary, but neither a Ticket-authored fake nor limited evidence can override the user's promised runtime/external result.
@@ -59,7 +59,7 @@ If the contract is valid and correctly placed, ask whether the integrated verifi
 
 If not, classify `VERIFICATION_MECHANISM_DEFECT` when the mechanism is wrong, or `INCONCLUSIVE` when required evidence/capability is unavailable. A discovery finding is not a product contradiction until the verifier adjudicates it against current authority.
 
-A caller finalization failure is not automatically a verification-mechanism defect and never rewrites the semantic verdict. For example, `Verification Verdict: VERIFIED` with `Ticket Progression: FAILED` because stable target or authority changed is a progression/currentness failure under the changed target/authority owner. Preserve VERIFIED, resolve the owning drift or validation condition, and require fresh verification when the target/authority correction makes prior evidence stale. `ALREADY_DONE_MATCHING_BINDING` is current-state confirmation, not new completion proof.
+A caller finalization failure is not automatically a verification-mechanism defect and never rewrites the semantic verdict sealed by the verifier. For example, `Verification Verdict: VERIFIED` with `Ticket Progression: FAILED` because stable target, authority, loaded bundle or boundary protocol changed is a progression/currentness failure under the changed target/authority/boundary owner. Preserve VERIFIED and its exact verdict-record provenance, resolve the owning drift or validation condition, and require fresh verification when the correction makes prior evidence stale. `ALREADY_DONE_MATCHING_BINDING` is current-state confirmation, not new completion proof.
 
 ### 4. Runtime contradiction check
 

@@ -183,8 +183,17 @@ class GoalCalibrationTests(unittest.TestCase):
         binding_path = (self.root / "binding.json").resolve()
         binding_path.write_text(json.dumps({"schema": "iis-verification-binding/v1", "ticket_path": str(ticket),
                                             "ticket_status_at_capture": "ready",
-                                            "ticket_sha256": hashlib.sha256(ready).hexdigest()}))
+                                            "ticket_sha256": hashlib.sha256(ready).hexdigest(),
+                                            "bundle_identity": "bundle-A",
+                                            "boundary_protocol": "iis-ready-boundary/v1"}))
         binding_sha = hashlib.sha256(binding_path.read_bytes()).hexdigest()
+        verdict_path = (self.root / "verdict.json").resolve()
+        verdict_path.write_text(json.dumps({"schema": "iis-verification-verdict/v1",
+                                            "binding_path": str(binding_path), "binding_sha256": binding_sha,
+                                            "ticket_path": str(ticket), "bundle_identity": "bundle-A",
+                                            "boundary_protocol": "iis-ready-boundary/v1",
+                                            "verification_verdict": "VERIFIED"}))
+        verdict_sha = hashlib.sha256(verdict_path.read_bytes()).hexdigest()
         sessions = self.root / "sessions"
         sessions.mkdir()
         narration = [{"type": "message_end", "message": {"role": "assistant", "stopReason": "stop",
@@ -194,15 +203,19 @@ class GoalCalibrationTests(unittest.TestCase):
         terminal = ("READY TICKET VERIFICATION RESULT\n"
                     f"Verification Binding: {binding_path}\n"
                     f"Verification Binding SHA256: {binding_sha}\n"
+                    f"Verification Verdict Record: {verdict_path}\n"
+                    f"Verification Verdict Record SHA256: {verdict_sha}\n"
                     "Verification Verdict: VERIFIED\n"
                     "Verifier Ticket Progression: PENDING CALLER FINALIZATION\n"
                     "Observed Ticket Status: ready\n")
         semantic = {"type": "message_end", "message": {"role": "assistant", "stopReason": "stop",
                     "content": [{"type": "text", "text": terminal}]}}
         start = {"type": "tool_execution_start", "toolCallId": "finalize", "toolName": "ready_finalize",
-                 "args": {"binding_path": str(binding_path), "binding_sha256": binding_sha, "verdict": "VERIFIED"}}
+                 "args": {"verdict_path": str(verdict_path), "verdict_sha256": verdict_sha}}
         result = {"ticket_path": str(ticket), "verification_binding": str(binding_path),
-                  "verification_binding_sha256": binding_sha, "verification_verdict": "VERIFIED",
+                  "verification_binding_sha256": binding_sha,
+                  "verification_verdict_record": str(verdict_path),
+                  "verification_verdict_record_sha256": verdict_sha, "verification_verdict": "VERIFIED",
                   "ticket_progression": "COMPLETED", "progression_basis": "WRITE_PERFORMED_THIS_CALL",
                   "ticket_status_after": "done"}
         events = [semantic, start,
@@ -212,6 +225,9 @@ class GoalCalibrationTests(unittest.TestCase):
         mismatched = json.loads(json.dumps(events))
         mismatched[2]["result"]["details"]["verification_binding_sha256"] = "0" * 64
         self.assertIsNone(goal.guarded_delivery(mismatched, sessions, ticket))
+        caller_verdict = json.loads(json.dumps(events))
+        caller_verdict[1]["args"]["verdict"] = "VERIFIED"
+        self.assertIsNone(goal.guarded_delivery(caller_verdict, sessions, ticket))
         already_done = json.loads(json.dumps(events))
         already_done[2]["result"]["details"]["ticket_progression"] = "NOT APPLICABLE"
         already_done[2]["result"]["details"]["progression_basis"] = "ALREADY_DONE_MATCHING_BINDING"

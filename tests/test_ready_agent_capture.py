@@ -135,9 +135,13 @@ class ReadyAgentCaptureTests(unittest.TestCase):
             self.assertIsNone(self.capture.summarize([message("stop", terminal), {"type": "agent_end"}])["parsed_verdict"])
         binding = "/outside/verification-binding.json"
         sha256 = "a" * 64
+        verdict_record = "/outside/verification-verdict.json"
+        verdict_sha256 = "b" * 64
         terminal = ("READY TICKET VERIFICATION RESULT\n"
                     f"Verification Binding: {binding}\n"
                     f"Verification Binding SHA256: {sha256}\n"
+                    f"Verification Verdict Record: {verdict_record}\n"
+                    f"Verification Verdict Record SHA256: {verdict_sha256}\n"
                     "Verification Verdict: VERIFIED\n"
                     "Verifier Ticket Progression: PENDING CALLER FINALIZATION\n"
                     "Observed Ticket Status: ready")
@@ -146,13 +150,17 @@ class ReadyAgentCaptureTests(unittest.TestCase):
         self.assertEqual(pending["verifier_ticket_progression"], "PENDING CALLER FINALIZATION")
         self.assertEqual(pending["verification_binding_path"], binding)
         self.assertEqual(pending["verification_binding_sha256"], sha256)
+        self.assertEqual(pending["verification_verdict_record_path"], verdict_record)
+        self.assertEqual(pending["verification_verdict_record_sha256"], verdict_sha256)
         self.assertIsNone(pending["ticket_progression"])
         events = [
             message("stop", terminal),
             {"type": "tool_execution_start", "toolCallId": "f", "toolName": "ready_finalize",
-             "args": {"binding_path": binding, "binding_sha256": sha256, "verdict": "VERIFIED"}},
+             "args": {"verdict_path": verdict_record, "verdict_sha256": verdict_sha256}},
             {"type": "tool_execution_end", "toolCallId": "f", "isError": False,
              "result": {"details": {"verification_binding": binding, "verification_binding_sha256": sha256,
+                                      "verification_verdict_record": verdict_record,
+                                      "verification_verdict_record_sha256": verdict_sha256,
                                       "verification_verdict": "VERIFIED", "ticket_progression": "COMPLETED",
                                       "progression_basis": "WRITE_PERFORMED_THIS_CALL", "ticket_status_after": "done"}}},
             {"type": "agent_end"},

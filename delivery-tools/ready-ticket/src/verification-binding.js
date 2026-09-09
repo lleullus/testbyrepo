@@ -88,18 +88,22 @@ function defaultBindingPath() {
   return path.join(os.homedir(), ".cache", "iis-ready", "verification-bindings", `${crypto.randomUUID()}.json`);
 }
 
-function canonicalNewOutsidePath(rawPath, projectRoot) {
-  if (!path.isAbsolute(rawPath)) throw new Error("binding_path must be an exact absolute path");
+function defaultVerdictPath() {
+  return path.join(os.homedir(), ".cache", "iis-ready", "verification-verdicts", `${crypto.randomUUID()}.json`);
+}
+
+function canonicalNewOutsidePath(rawPath, projectRoot, label = "verification binding") {
+  if (!path.isAbsolute(rawPath)) throw new Error(`${label}_path must be an exact absolute path`);
   fs.mkdirSync(path.dirname(rawPath), { recursive: true, mode: 0o700 });
   const parent = fs.realpathSync(path.dirname(rawPath));
   const file = path.join(parent, path.basename(rawPath));
-  if (isInsideProject(projectRoot, file)) throw new Error("verification binding must be outside Project Root");
-  if (fs.existsSync(file)) throw new Error(`verification binding already exists: ${file}`);
+  if (isInsideProject(projectRoot, file)) throw new Error(`${label} must be outside Project Root`);
+  if (fs.existsSync(file)) throw new Error(`${label} already exists: ${file}`);
   return file;
 }
 
-function atomicCreate(file, bytes) {
-  const temporary = path.join(path.dirname(file), `.iis-binding-${crypto.randomUUID()}.tmp`);
+function atomicCreate(file, bytes, temporaryPrefix = ".iis-binding-") {
+  const temporary = path.join(path.dirname(file), `${temporaryPrefix}${crypto.randomUUID()}.tmp`);
   try {
     const fd = fs.openSync(temporary, "wx", 0o600);
     try {
@@ -169,7 +173,7 @@ export async function captureVerification({
     scenario_effect_paths: effects,
     navigation,
   };
-  const destination = canonicalNewOutsidePath(bindingPath ?? defaultBindingPath(), root);
+  const destination = canonicalNewOutsidePath(bindingPath ?? defaultBindingPath(), root, "verification binding");
   binding.binding_path = destination;
   const bytes = Buffer.from(`${JSON.stringify(binding, null, 2)}\n`);
   atomicCreate(destination, bytes);
@@ -192,6 +196,54 @@ export function readVerificationBinding(bindingPath, bindingSha256) {
   const root = canonicalProjectRoot(binding.project_root);
   if (binding.project_root !== root || binding.binding_path !== canonical || isInsideProject(root, canonical)) throw new Error("verification binding identity/root mismatch");
   return { binding, bytes, binding_path: canonical, binding_sha256: hashBytes(bytes) };
+}
+
+export function sealVerificationVerdict({ bindingPath, bindingSha256, verdict, verdictPath }) {
+  if (!["VERIFIED", "FAILED", "INCONCLUSIVE"].includes(verdict)) throw new Error("invalid verification verdict");
+  const loaded = readVerificationBinding(bindingPath, bindingSha256);
+  const binding = loaded.binding;
+  const record = {
+    schema: "iis-verification-verdict/v1",
+    binding_path: loaded.binding_path,
+    binding_sha256: loaded.binding_sha256,
+    ticket_path: binding.ticket_path,
+    bundle_identity: binding.bundle_identity,
+    boundary_protocol: binding.boundary_protocol,
+    verification_verdict: verdict,
+  };
+  const destination = canonicalNewOutsidePath(verdictPath ?? defaultVerdictPath(), binding.project_root, "verification verdict");
+  const bytes = Buffer.from(`${JSON.stringify(record, null, 2)}\n`);
+  atomicCreate(destination, bytes, ".iis-verdict-");
+  return {
+    schema: record.schema,
+    verdict_path: destination,
+    verdict_sha256: hashBytes(bytes),
+    binding_path: loaded.binding_path,
+    binding_sha256: loaded.binding_sha256,
+    verification_verdict: verdict,
+  };
+}
+
+export function readVerificationVerdict(verdictPath, verdictSha256) {
+  if (typeof verdictPath !== "string" || !path.isAbsolute(verdictPath)) throw new Error("verdict_path must be an exact absolute path");
+  const canonical = fs.realpathSync(verdictPath);
+  if (canonical !== verdictPath || !fs.statSync(canonical).isFile()) throw new Error("verification verdict path is not canonical");
+  const bytes = fs.readFileSync(canonical);
+  if (hashBytes(bytes) !== verdictSha256) throw new Error("verification verdict record SHA256 mismatch");
+  const verdict = JSON.parse(bytes);
+  if (verdict.schema !== "iis-verification-verdict/v1") throw new Error("unsupported verification verdict schema");
+  if (!["VERIFIED", "FAILED", "INCONCLUSIVE"].includes(verdict.verification_verdict)) throw new Error("invalid verification verdict");
+  if (typeof verdict.binding_path !== "string" || !path.isAbsolute(verdict.binding_path) || !/^[0-9a-f]{64}$/.test(verdict.binding_sha256)) {
+    throw new Error("verification verdict contains invalid binding identity");
+  }
+  const loaded = readVerificationBinding(verdict.binding_path, verdict.binding_sha256);
+  if (isInsideProject(loaded.binding.project_root, canonical)) throw new Error("verification verdict must be outside Project Root");
+  if (verdict.ticket_path !== loaded.binding.ticket_path
+      || verdict.bundle_identity !== loaded.binding.bundle_identity
+      || verdict.boundary_protocol !== loaded.binding.boundary_protocol) {
+    throw new Error("verification verdict binding identity mismatch");
+  }
+  return { verdict, bytes, verdict_path: canonical, verdict_sha256: hashBytes(bytes), binding: loaded };
 }
 
 export async function checkVerificationCurrentness(binding, { expectedTicketSha256 } = {}) {
