@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -174,19 +175,47 @@ class GoalCalibrationTests(unittest.TestCase):
             self.goal.check_citation(review["evidence_refs"][0], record, self.root, actual_tool=True)
 
 
-    def test_done_text_cannot_trigger_dependency_drift_without_guarded_delivery(self):
+    def test_done_text_or_mismatched_finalizer_cannot_replace_bound_caller_completion(self):
         goal = self.goal
-        ticket = self.root / "TICKET-001.md"
-        ticket.write_text("Status: done\n")
+        ticket = (self.root / "TICKET-001.md").resolve()
+        ready = b"Status: ready\n"
+        ticket.write_bytes(b"Status: done\n")
+        binding_path = (self.root / "binding.json").resolve()
+        binding_path.write_text(json.dumps({"schema": "iis-verification-binding/v1", "ticket_path": str(ticket),
+                                            "ticket_status_at_capture": "ready",
+                                            "ticket_sha256": hashlib.sha256(ready).hexdigest()}))
+        binding_sha = hashlib.sha256(binding_path.read_bytes()).hexdigest()
         sessions = self.root / "sessions"
         sessions.mkdir()
-        narration = [{"type": "message_end", "message": {"role": "assistant", "content": [{"type": "text", "text": "VERIFIED; ticket_progression COMPLETED; Status: done"}]}}]
+        narration = [{"type": "message_end", "message": {"role": "assistant", "stopReason": "stop",
+                     "content": [{"type": "text", "text": "VERIFIED; ticket_progression COMPLETED; Status: done"}]}},
+                     {"type": "agent_end"}]
         self.assertIsNone(goal.guarded_delivery(narration, sessions, ticket))
-        events = [
-            {"type": "tool_execution_start", "toolCallId": "finalize", "toolName": "ready_guard", "args": {"action": "finalize_verification", "ticket_path": str(ticket)}},
-            {"type": "tool_execution_end", "toolCallId": "finalize", "result": {"details": {"ticket_progression": "COMPLETED", "verification_verdict": "VERIFIED", "ticket_status_after": "done"}}},
-        ]
+        terminal = ("READY TICKET VERIFICATION RESULT\n"
+                    f"Verification Binding: {binding_path}\n"
+                    f"Verification Binding SHA256: {binding_sha}\n"
+                    "Verification Verdict: VERIFIED\n"
+                    "Verifier Ticket Progression: PENDING CALLER FINALIZATION\n"
+                    "Observed Ticket Status: ready\n")
+        semantic = {"type": "message_end", "message": {"role": "assistant", "stopReason": "stop",
+                    "content": [{"type": "text", "text": terminal}]}}
+        start = {"type": "tool_execution_start", "toolCallId": "finalize", "toolName": "ready_finalize",
+                 "args": {"binding_path": str(binding_path), "binding_sha256": binding_sha, "verdict": "VERIFIED"}}
+        result = {"ticket_path": str(ticket), "verification_binding": str(binding_path),
+                  "verification_binding_sha256": binding_sha, "verification_verdict": "VERIFIED",
+                  "ticket_progression": "COMPLETED", "progression_basis": "WRITE_PERFORMED_THIS_CALL",
+                  "ticket_status_after": "done"}
+        events = [semantic, start,
+                  {"type": "tool_execution_end", "toolCallId": "finalize", "isError": False, "result": {"details": result}},
+                  {"type": "agent_end"}]
         self.assertIsNotNone(goal.guarded_delivery(events, sessions, ticket))
+        mismatched = json.loads(json.dumps(events))
+        mismatched[2]["result"]["details"]["verification_binding_sha256"] = "0" * 64
+        self.assertIsNone(goal.guarded_delivery(mismatched, sessions, ticket))
+        already_done = json.loads(json.dumps(events))
+        already_done[2]["result"]["details"]["ticket_progression"] = "NOT APPLICABLE"
+        already_done[2]["result"]["details"]["progression_basis"] = "ALREADY_DONE_MATCHING_BINDING"
+        self.assertIsNone(goal.guarded_delivery(already_done, sessions, ticket))
         self.assertIsNone(goal.guarded_delivery(events, sessions, self.root / "other.md"))
 
 

@@ -34,9 +34,8 @@ def run_one(item: dict, protocol: dict) -> dict:
     if before != item["initial_snapshot"]:
         raise ValueError("prepared product changed before implementation")
     write_json(run_root / "before.json", before)
-    runtime_data = run_root / "runtime-data"
     preparation = run_stage("prepare", metadata, agent_dir=Path(environment["agent_dir"]),
-                            payload=Path(environment["payload"]), runtime_data=runtime_data,
+                            payload=Path(environment["payload"]),
                             model=protocol["model"], thinking=protocol["thinking"], timeout=protocol["timeout_seconds"])
     if preparation.get("parsed_completion") != "COMPLETE" or not preparation["clean_transport"]:
         result = {"metadata": str(metadata_path), "case_id": metadata["case_id"], "run_id": metadata["run_id"],
@@ -46,7 +45,7 @@ def run_one(item: dict, protocol: dict) -> dict:
         return result
     metadata["plan_review_path"] = preparation["plan_review_path"]
     record = run_stage("implement", metadata, agent_dir=Path(environment["agent_dir"]),
-                       payload=Path(environment["payload"]), runtime_data=runtime_data,
+                       payload=Path(environment["payload"]),
                        model=protocol["model"], thinking=protocol["thinking"], timeout=protocol["timeout_seconds"])
     after = product_snapshot(root, [])
     write_json(run_root / "after.json", after)
@@ -65,17 +64,12 @@ def run_one(item: dict, protocol: dict) -> dict:
     write_json(run_root / "after-parent.json", product_snapshot(root, []))
     if metadata.get("authority_state"):
         write_json(run_root / "external-after-readback.json", json.loads(Path(metadata["authority_state"]).read_text()))
-    executions = []
-    for file in sorted(runtime_data.rglob("*.json")) if runtime_data.exists() else []:
-        state = json.loads(file.read_text())
-        if state.get("kind") == "execution" and state.get("project_root") == str(root):
-            executions.append({"path": str(file), "sha256": hashlib.sha256(file.read_bytes()).hexdigest(),
-                               "execution_id": state.get("execution_id"), "phase": state.get("phase"),
-                               "pause": state.get("pause"), "completion": state.get("completion")})
     result = {"metadata": str(metadata_path), "case_id": metadata["case_id"], "run_id": metadata["run_id"],
               "profile": item["profile"], "parsed_completion": record.get("parsed_completion"),
               "clean_transport": record["clean_transport"], "changed_paths": record["changed_paths"],
-              "runtime_executions": executions, "record": str(run_root / "implement/record.json"),
+              "boundary_contract": {"plan_review_path": metadata.get("plan_review_path"),
+                                    "meaning": "stateless start/end admission; no IIS execution/session state"},
+              "record": str(run_root / "implement/record.json"),
               "product_observations": str(run_root / "product-observations.json"),
               "preparation": str(run_root / "prepare/record.json"),
               "parent_observation_snapshot": str(run_root / "after-parent.json"),

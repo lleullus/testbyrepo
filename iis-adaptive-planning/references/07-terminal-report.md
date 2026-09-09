@@ -105,7 +105,7 @@ IIS ADAPTIVE CURRENT INCREMENT IMPLEMENTED
 Current Increment: <exact INC path>
 Implementation denominator: <complete>/<total>
 Implementation results:
-- <Ticket path — exact implementation report/checkpoint>
+- <Ticket path — exact implementation terminal report>
 Verification requested: no
 Final Ticket states:
 - <Ticket path — exact current status>
@@ -143,7 +143,7 @@ Completion Predicate: <exact sufficient predicate for the assigned Goal and Requ
 Authoritative Readback: <fresh attributable evidence at the actual approved boundary, within its claim limits>
 Final Current Increment: <exact INC path or None>
 Final Ticket evidence:
-- <exact Ticket path — current preparation review if preparation-only | implementation result | final verifier result/progression/actual canonical status>
+- <exact Ticket path — current preparation review if preparation-only | implementation terminal result | verifier semantic result with binding identity | caller ready_finalize progression result/basis | actual canonical status>
 Disposition: RUN_CONTRACT_SATISFIED
 Remaining provisional horizon: non-authoritative; not a completion blocker
 STOP

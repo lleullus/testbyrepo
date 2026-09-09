@@ -37,54 +37,41 @@ A reshaped current Increment may create a new canonical Ready Ticket denominator
 
 Before each enabled delivery phase, discover and use the current installed skill contract.
 
-Skill-contract discovery during planning, routing, or documentation review is read-only: canonical `skill://` and filesystem Skill reads do not start delivery admission. Follow the selected owner's explicit begin/assignment path only after the actual current `ready` Ticket and enabled delivery phase are established. If an explicit unbound admission must be cancelled, use the owning runtime's `cancel_admission` contract; do not cancel admission merely because a Skill was read. Bound executions, assignments and workers remain with their existing owner's completion, block or recovery path.
+Skill-contract discovery during planning, routing, or documentation review is read-only: canonical `skill://` and filesystem Skill reads do not start delivery admission. For implementation, the actual implementing actor performs stateless `ready_contract check_plan_admission` before first source mutation and again before COMPLETE. For verification, the verifier captures one immutable verification binding before product/runtime scenario action. Delivery worker/process lifecycle remains a caller/host concern rather than a persistent IIS execution state.
 
 - `ready-ticket-implement` owns one exact Ready Ticket implementation and implementer self-check.
 - `ready-ticket-plan` owns method preparation, pre-implementation Heuristic and independent current per-Ticket start review.
-- `ready-ticket-verify` owns integrated discovery, fresh exact-Ticket verification, final verdict and guarded ready→done progression.
+- `ready-ticket-verify` owns integrated discovery, fresh exact-Ticket semantic verification and the final semantic verdict; Outer Main owns the separate caller `ready_finalize` status progression after terminal fan-in.
 - Invoke each owner once per current pass and follow its current mode contract. Implementation/verification default SUBAGENT without opt-in and use DIRECT only when explicitly selected for that stage. Preparation follows its own current-selection/independent-invocation rules. No model capability, difficulty, cost or worker availability authorizes topology substitution or fallback.
 - Execution mode does not select a model. Apply the closed Run Contract's [Delivery Model Selection](09-run-contract.md#delivery-model-selection): carry that stage's exact user-selected model/effort and selection basis through the current owner's existing assignment path. An unresolved recommendation or host default cannot stand in for a selected configuration. Do not ask again per Ticket, automatically escalate effort, or substitute another model when a selected configuration is unavailable.
-- Implementation uses one worker by default. Current ADMIT replaces normal first-source-change PRE_ACTION review; material changes still use affected method review and the material-turn boundary. Explicit implementation DIRECT uses current Main.
+- Implementation uses one worker by default. The actual implementing actor must pass current `check_plan_admission` before first mutation and again before COMPLETE. A material method change terminates that invocation as PARTIAL/BLOCKED and returns to affected preparation; it is not a resumable checkpoint. Explicit implementation DIRECT uses current Main.
 - Preparation uses only actual delegated Planner/Heuristic/Plan Review invocations under current selected modes/models. The writer cannot approve itself in the same invocation; no fixed three-model roster or hidden fallback creates independence.
-- `ready-ticket-verify` defaults to `SUBAGENT`: exactly one delegated verifier owns the whole verifier core and its mandatory scenario/material-turn/pre-progression checkpoint contract. Under an explicit verification `DIRECT` override, current Main owns that core directly. Outer Main does not issue a second verifier verdict.
+- `ready-ticket-verify` defaults to `SUBAGENT`: exactly one delegated verifier owns the whole semantic verifier core and returns one terminal result with verification binding path/SHA. Under an explicit verification `DIRECT` override, current Main owns that core directly and then performs finalization as a separate caller step. Outer Main never issues a second verifier verdict.
 - Do not pass `Delegated Worker: yes` or `Delegated Verifier: yes` from Adaptive; the owning Skill alone sets its child marker.
 - Treat each currently discovered delivery skill's required input/handoff fields as the canonical owner interface. Adaptive owns routing, not a remembered copy of that interface: before invoking a downstream owner, forward every current required handoff field from the exact upstream owner result/context unchanged, and never synthesize a missing binding, verdict, target identity, or evidence field. If a required field is absent, stale, or malformed, preserve the downstream owner's exact admission/currentness result and correct only the owning condition.
 - Do not infer Ticket-set parallelism, worker scheduling, or a persistent queue from the existence of a Ready Ticket Set. Select only a currently admissible Ticket using canonical blockers, product dependencies, shared-workspace safety, and current repository evidence.
 
 Do not invoke a disabled stage for stronger evidence. Verification yes includes final verifier-owned discovery; Verification no forbids final discovery/verdict/done, but Implementation yes still requires pre-implementation Heuristic and independent review. Preparation-only creates neither implementation nor verification authority.
 
-## Invocation-local delivery checkpoint continuation
+## Invocation-local delivery terminal handoff
 
-A checkpoint from implementation/verification `SUBAGENT` execution is a nonterminal invocation-local delivery message. Outer Main may release the protected next phase only after checking:
+Adaptive does not add implementation/verification checkpoint continuation. It waits for each owner invocation's exact terminal result and routes only from that result.
 
-- exact Ticket, stage and target identity;
-- the closed Run Contract and current user instructions;
-- checkpoint denominator completeness;
-- obvious authority/Scope contradiction;
-- that the protected phase has not already been crossed; and
-- continuation capability plus currentness.
+For implementation:
 
-Outer Main returns exactly:
+- the actual implementing actor owns start/end `ready_contract check_plan_admission`;
+- normal settled failures and Plan-consistent fix/retry remain inside the same owner invocation;
+- a material method change ends that invocation as `Completion: PARTIAL | BLOCKED` with reviewed direction, new direct evidence, affected Plan scope, current working-tree state, and `Next allowed action: revise affected Plan -> Heuristic -> independent review`;
+- Outer Main does not release/resume that worker. It refreshes affected preparation, waits for actual old-worker settlement, and then starts a fresh implementing actor with the new `plan_review_path`.
 
-```text
-PARENT CONTINUATION DECISION
+For verification:
 
-Ticket:
-Stage: IMPLEMENTATION | VERIFICATION
-Checkpoint: PRE_RUNTIME | MATERIAL_TURN | PRE_PROGRESSION
-Decision: CONTINUE | STEER | STOP
-Authority / evidence anchor:
-Bounded steering: None | <exact correction>
-Reason:
-```
+- one verifier invocation captures an immutable binding before scenario action and returns one terminal semantic verdict with binding path/SHA;
+- Outer Main never modifies or reissues that semantic verdict;
+- after terminal fan-in, Outer Main calls `ready_finalize` with the exact binding path/SHA and unchanged verdict, then routes from the returned progression/result fields;
+- if a verifier binding becomes stale/unattributable during the evidence cycle, that verifier terminates with the applicable exact result; Parent does not resume it through a phase-release API.
 
-`STEER` must identify the problematic checkpoint field, current authority/evidence anchor, why the protected phase cannot safely proceed unchanged, and the bounded correction. Vague preference-based steering is not sufficient.
-
-Checkpoint review must not redesign the implementation diff from scratch, rerun all verifier flows, issue a Parent AC/whole-Ticket verdict, or convert a checkpoint into Adaptive defect classification. Do not forward a checkpoint as a user approval prompt. Do not create a checkpoint ledger or persistent state. A checkpoint is internal phase release under already established user authority, not the `/승인게이트` Run Contract release or any new Mandate/Scope/Spec/Ticket approval gate.
-
-Adaptive delivery routing and verification triage wait for the exact terminal owner result. A checkpoint, candidate verdict, Parent steering decision, or partial observation is not a terminal implementation/verifier result.
-
-Use public `checkpoint` with the exact kind and `release_checkpoint`. Parent continuation does not replace current plan review or erase authority/target drift. A plan refresh on release supplies `plan_review_path` to the common binding check; PAUSED permits safe read/analysis but no source mutation. Resumption/replacement preserves exact owner/currentness and actual service/effect settlement; no normal first-change reapproval is introduced.
+Worker/process replacement is host/caller lifecycle, not IIS state. Do not start a replacement on the same mutable worktree/effect surface until actual prior worker/process/service settlement is established. A cancel receipt alone is not settlement. Do not create a checkpoint ledger, worker lease, reservation, or persistent execution state.
 
 ## Invocation-local evidence economy
 
@@ -98,7 +85,7 @@ This does **not** weaken authored flows, independence, conditional boundaries, c
 
 Before Implementation yes, or for explicit READY_EXECUTION_PLANS, invoke `ready-ticket-plan` when an actual independent current ADMIT is not already available for the required Ticket. Preserve exact Ticket/root, existing investigation and method navigation, current mode/model instructions and outside-root review output. Shared plans cover the impact of important producer/consumer decisions before dependent implementation, not a universal all-Ticket design gate.
 
-Consume only actual `READY TICKET PLAN RESULT` and its `Plan Review` artifact. Forward the exact result as `plan_review_path`; the runtime recomputes current plan/common-plan/review/Ticket/authority identity on direct admission, assignment, child begin and affected resume. Planner/Heuristic intermediate output, JSON shape, past conversational approval or another Ticket's ADMIT is not admission. REVISE/EVIDENCE_NEEDED or PLAN_REVIEW_REQUIRED/PLAN_REVIEW_STALE/PLAN_NOT_ADMITTED returns to the affected preparation/evidence owner, not Adaptive final defect triage.
+Consume only actual `READY TICKET PLAN RESULT` and its `Plan Review` artifact. Forward the exact result as `plan_review_path`; the actual implementing actor's `ready_contract check_plan_admission` recomputes current Plan/Review/Ticket/authority identity before first mutation and again before COMPLETE. Planner/Heuristic intermediate output, JSON shape, past conversational approval or another Ticket's ADMIT is not admission. REVISE/EVIDENCE_NEEDED or PLAN_REVIEW_REQUIRED/PLAN_REVIEW_STALE/PLAN_NOT_ADMITTED returns to the affected preparation/evidence owner, not Adaptive final defect triage.
 
 READY_EXECUTION_PLANS closes only with every explicitly required preparation Ticket current ADMIT and actual independent-review provenance. Partial useful plans or a smaller admitted subset cannot close it. Return the exact owner limits if independence/capability/evidence is unavailable; do not silently delegate or self-approve. Both delivery switches stay no and this terminal claims no implementation, verdict or done.
 
@@ -112,9 +99,9 @@ Continue from implementation directly to final verification only when all of the
 - the current implementation report for the exact Ticket contains `Completion: COMPLETE`; and
 - the canonical Ticket remains exact `Status: ready` for the next delivery owners.
 
-Preserve exact actual implementation target/checkpoint, self-check evidence and optional plan/review context as verifier navigation, not final findings or verdicts.
+Preserve exact actual implementation target, self-check evidence and optional plan/review context as verifier navigation, not final findings or verdicts.
 
-BLOCKED/PARTIAL or unavailable implementation results do not silently become verification. Correct only their owning condition; re-enter after material candidate correction, changed authority or genuinely new evidence. A method-material correction starts at the affected preparation owner, while equivalent local repair stays with the worker/current ADMIT.
+BLOCKED/PARTIAL or unavailable implementation results do not silently become verification. Correct only their owning condition. When `Material method change: yes`, return to the affected preparation owner, revise the affected Plan, run Heuristic and independent review, then start a fresh implementation invocation after confirming the prior invocation has ended. Equivalent Plan-consistent local repair stays with the current worker and current ADMIT.
 
 When `Verification: no`, retain the exact implementation result and canonical Ticket status. After every current canonical Ticket has one exact `Completion: COMPLETE` result, apply the active boundary:
 
@@ -135,35 +122,45 @@ One complete implementation report is not the current-Increment implementation d
 
 ## Verification handoff
 
-When Verification is yes, invoke `ready-ticket-verify` directly on the current stable ready target. Implementation yes supplies its exact COMPLETE target/self-check as navigation; Implementation no requires direct attribution of the already implemented target, not an inference from ready status. No new execution plan ADMIT is required for verification-only. Forward current required inputs from the discovered verifier, without synthesizing evidence or binding. Its current cycle owns mandatory scenarios plus a bounded material discovery frontier; no-lane/no-finding is not PASS.
+When Verification is yes, invoke `ready-ticket-verify` directly on the current stable ready target. Implementation yes supplies its exact COMPLETE target/self-check as navigation; Implementation no requires direct attribution of the already implemented target, not an inference from ready status. No new execution plan ADMIT is required for verification-only. Forward current required inputs from the discovered verifier without synthesizing evidence or binding. The verifier captures its own immutable binding, owns mandatory scenarios plus a bounded material discovery frontier, and returns one terminal semantic verdict; no-lane/no-finding is not PASS.
 
 Actual product-source/authority/runtime/readback drift invalidates affected evidence and requires fresh applicable observations. Exact declared method-context-only changes merely stale that navigation, unless the plan is itself an approved product target; do not force final verdict invalidation or new implementation preparation solely for method context. Undeclared files are conservatively product-target candidates until narrowly resolved.
 
 ## Verification terminal routing
 
-Route from the exact verifier result fields, not a summarized label, implementation report or intermediate discovery/checkpoint:
+Route first from the exact terminal verifier result, then from the exact caller finalizer result. Do not route from a summarized label, implementation report, scenario report, or partial observation.
+
+For a normal `ready` Ticket the verifier returns `PENDING CALLER FINALIZATION`; Outer Main must call `ready_finalize` with the exact `Verification Binding`, `Verification Binding SHA256`, and unchanged `Verification Verdict` before terminal delivery routing:
 
 ```text
 Verification Verdict: VERIFIED
 Ticket Progression: COMPLETED
-Ticket status after verification: done
+Progression Basis: WRITE_PERFORMED_THIS_CALL | RECOVERED_CAPTURED_FINALIZER_RESULT
+Ticket Status After: done
   -> Ticket terminal delivery complete
 
 Verification Verdict: VERIFIED
 Ticket Progression: FAILED
-  -> preserve actual observed status (even done); do not claim completed progression
-  -> resolve the guarded progression/currentness failure under its owning authority
+  -> preserve actual observed status; do not claim completed progression
+  -> resolve the finalizer currentness/validation failure under its owning authority
 
 Verification Verdict: FAILED | INCONCLUSIVE
-  -> classify with 06-verification-triage.md
+Ticket Progression: NOT APPLICABLE
+  -> classify semantic result with 06-verification-triage.md
 
-No final Verification Verdict
+Verification Verdict: VERIFIED
+Ticket Progression: NOT APPLICABLE
+Progression Basis: ALREADY_DONE_MATCHING_BINDING
+  -> current done state matches this binding but is not new completion proof
+  -> preserve exact status/provenance and do not claim this call performed delivery progression
+
+No final Verification Verdict or missing binding identity
   -> preserve the verifier's exact admission/capability/currentness result
   -> correct only its owning condition when current authority permits
   -> never invent an implementation/planning defect classification
 ```
 
-Never reduce terminal completion to `VERIFIED -> done`; the canonical Ticket must actually be `done` after `Ticket Progression: COMPLETED`.
+Never reduce terminal completion to narration such as `VERIFIED -> done`; the canonical Ticket must actually be `done` and the caller finalizer result must establish a completion basis attributable to finalization.
 
 After one Ticket reaches `done`, re-read the complete current canonical Ticket denominator. The complete `done` denominator is a necessary progression fact, not automatic `CURRENT_INCREMENT_DELIVERED` success. Before emitting that terminal, Outer Main must also compare the approved current parent and validated Ticket Set, identify every parent-Spec/Behavior/UI obligation applicable to this Increment, confirm an existing Ticket acceptance boundary owns each one, and consume the owning result's actual current observation, authoritative readback, `Evidence limit`, and `Remaining uncertainty`. Do not include future, candidate, Non-Goal, or unrelated preserved obligations that do not apply to the current Increment.
 

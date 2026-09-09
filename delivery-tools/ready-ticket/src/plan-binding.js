@@ -1,18 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
-import crypto from "node:crypto";
-import { isInsideProject } from "./authority-binding.js";
+import { hashBytes, isInsideProject } from "./authority-binding.js";
 
-export const hashBytes = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
 const fail = (code, detail) => { throw new Error(`${code}: ${detail}`); };
-const exactFile = file => {
+
+function exactFile(file) {
   if (typeof file !== "string" || !path.isAbsolute(file)) fail("PLAN_REVIEW_STALE", "paths must be exact absolute paths");
-  const canonical = fs.realpathSync(file);
+  let canonical;
+  try { canonical = fs.realpathSync(file); }
+  catch (error) { fail("PLAN_REVIEW_STALE", error.message); }
   if (canonical !== file || !fs.statSync(file).isFile()) fail("PLAN_REVIEW_STALE", `not a canonical file: ${file}`);
   return canonical;
-};
+}
 
-// This verifies current byte pairing, not independence or semantic sufficiency.
+// This verifies exact current byte pairing. Reviewer independence and semantic sufficiency
+// remain properties of the planning/review workflow rather than this boundary check.
 export function bindPlanReview({ planReviewPath, authority, requireAdmit = true }) {
   if (!planReviewPath) fail("PLAN_REVIEW_REQUIRED", "supply the actual reviewer result path");
   try {
@@ -30,19 +32,28 @@ export function bindPlanReview({ planReviewPath, authority, requireAdmit = true 
       if (sha256 !== plan.sha256) fail("PLAN_REVIEW_STALE", `plan changed: ${file}`);
       return { path: file, sha256 };
     });
-    if (new Set(plans.map(p => p.path)).size !== plans.length) fail("PLAN_REVIEW_STALE", "duplicate plan binding");
-    const contracts = review.contracts.filter(c => c.ticket_path === authority.ticket_path);
-    const decisions = review.decisions.filter(d => d.ticket_path === authority.ticket_path);
+    if (new Set(plans.map(item => item.path)).size !== plans.length) fail("PLAN_REVIEW_STALE", "duplicate plan binding");
+    const contracts = review.contracts.filter(item => item.ticket_path === authority.ticket_path);
+    const decisions = review.decisions.filter(item => item.ticket_path === authority.ticket_path);
     if (contracts.length !== 1 || decisions.length !== 1) fail("PLAN_REVIEW_STALE", "exact Ticket pairing missing or ambiguous");
-    const contract = contracts[0], decision = decisions[0];
+    const contract = contracts[0];
+    const decision = decisions[0];
     if (contract.ticket_sha256 !== hashBytes(fs.readFileSync(authority.ticket_path)) || contract.authority_digest !== authority.authority_digest) fail("PLAN_REVIEW_STALE", "product authority changed");
     if (!["ADMIT", "REVISE", "EVIDENCE_NEEDED"].includes(decision.decision)) fail("PLAN_REVIEW_STALE", "unknown decision");
     if (typeof decision.rationale !== "string" || typeof decision.start_scope !== "string" || !Array.isArray(decision.conditions)) fail("PLAN_REVIEW_STALE", "malformed decision");
-    for (const condition of decision.conditions) for (const field of ["plan_anchor", "permitted_initial_work", "discriminating_observation", "dependent_work_not_yet_permitted", "response_if_refuted"]) {
-      if (typeof condition[field] !== "string") fail("PLAN_REVIEW_STALE", `malformed condition: ${field}`);
+    for (const condition of decision.conditions) {
+      for (const field of ["plan_anchor", "permitted_initial_work", "discriminating_observation", "dependent_work_not_yet_permitted", "response_if_refuted"]) {
+        if (typeof condition[field] !== "string") fail("PLAN_REVIEW_STALE", `malformed condition: ${field}`);
+      }
     }
     if (requireAdmit && decision.decision !== "ADMIT") fail("PLAN_NOT_ADMITTED", decision.decision);
-    return { review_path: reviewPath, review_sha256: hashBytes(bytes), plans, authority_digest: authority.authority_digest, decision };
+    return {
+      review_path: reviewPath,
+      review_sha256: hashBytes(bytes),
+      plans,
+      authority_digest: authority.authority_digest,
+      decision,
+    };
   } catch (error) {
     if (/^PLAN_/.test(error.message)) throw error;
     fail("PLAN_REVIEW_STALE", error.message);
@@ -51,9 +62,12 @@ export function bindPlanReview({ planReviewPath, authority, requireAdmit = true 
 
 export function checkPlanCurrentness(binding) {
   const changed = [];
-  for (const item of [{ path: binding.review_path, sha256: binding.review_sha256 }, ...binding.plans]) {
-    try { if (hashBytes(fs.readFileSync(item.path)) !== item.sha256) changed.push(item.path); }
-    catch { changed.push(item.path); }
+  for (const item of [{ path: binding.review_path, sha256: binding.review_sha256 }, ...(binding.plans || [])]) {
+    try {
+      if (hashBytes(fs.readFileSync(item.path)) !== item.sha256) changed.push(item.path);
+    } catch {
+      changed.push(item.path);
+    }
   }
   return { current: changed.length === 0, changed };
 }

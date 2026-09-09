@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -19,7 +20,7 @@ from urllib.parse import urlsplit
 
 from planning import APP, POLICY, behavior, put, snapshot, spec, ticket
 from completion import write_json
-from run_agent import guard_results, invoke, load_events, summarize
+from run_agent import boundary_results, invoke, load_events, summarize
 
 ROOT = Path(__file__).resolve().parent
 ORACLE = ROOT / "goal-cases.json"
@@ -363,6 +364,26 @@ def native_project(path: Path) -> str | None:
     return None
 
 
+def _binding_matches_current_done(ticket_path: Path, binding_path: str, binding_sha256: str) -> bool:
+    try:
+        binding_file = Path(binding_path).resolve(strict=True)
+        if str(binding_file) != binding_path or hashlib.sha256(binding_file.read_bytes()).hexdigest() != binding_sha256:
+            return False
+        binding = json.loads(binding_file.read_text(encoding="utf-8"))
+        if binding.get("ticket_path") != str(ticket_path.resolve()) or binding.get("ticket_status_at_capture") != "ready":
+            return False
+        current = ticket_path.read_text(encoding="utf-8")
+        header_end = re.search(r"(?m)^##\s", current)
+        header = current[:header_end.start()] if header_end else current
+        match = re.search(r"(?m)^(Status:\s*)done(\s*)$", header)
+        if not match or len(re.findall(r"(?m)^Status:", header)) != 1:
+            return False
+        ready = (current[:match.start(0)] + match.group(1) + "ready" + match.group(2) + current[match.end(0):]).encode()
+        return hashlib.sha256(ready).hexdigest() == binding.get("ticket_sha256")
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        return False
+
+
 def guarded_delivery(events: list, sessions: Path, ticket_path: Path) -> dict | None:
     captures = [("outer-events", events)]
     for path in sorted(sessions.rglob("*.jsonl")):
@@ -372,6 +393,7 @@ def guarded_delivery(events: list, sessions: Path, ticket_path: Path) -> dict | 
         for event in native:
             message = event.get("message", {})
             if message.get("role") == "assistant":
+                normalized.append({"type": "message_end", "message": message})
                 for part in message.get("content", []):
                     if isinstance(part, dict) and part.get("type") == "toolCall":
                         normalized.append({"type": "tool_execution_start", "toolCallId": part.get("id"),
@@ -380,12 +402,30 @@ def guarded_delivery(events: list, sessions: Path, ticket_path: Path) -> dict | 
                 normalized.append({"type": "tool_execution_end", "toolCallId": message.get("toolCallId"),
                                    "isError": message.get("isError", False), "result": message})
         captures.append((str(path), native + normalized))
+    exact_ticket = str(ticket_path.resolve())
     for origin, capture in captures:
-        for row in guard_results(capture, "finalize_verification"):
+        summary = summarize(capture)
+        if (summary.get("parsed_verdict") != "VERIFIED"
+                or summary.get("verifier_ticket_progression") != "PENDING CALLER FINALIZATION"
+                or not summary.get("verification_binding_path")
+                or not summary.get("verification_binding_sha256")):
+            continue
+        for row in boundary_results(capture, "ready_finalize"):
             result = row["result"]
-            if (row["args"].get("ticket_path") == str(ticket_path) and result.get("ticket_progression") == "COMPLETED"
-                    and result.get("verification_verdict") == "VERIFIED" and result.get("ticket_status_after") == "done"):
-                return {"origin": origin, "tool_call_id": row["tool_call_id"], "result": result}
+            if (result.get("ticket_path") == exact_ticket
+                    and row["args"].get("binding_path") == summary["verification_binding_path"]
+                    and row["args"].get("binding_sha256") == summary["verification_binding_sha256"]
+                    and row["args"].get("verdict") == "VERIFIED"
+                    and result.get("verification_binding") == summary["verification_binding_path"]
+                    and result.get("verification_binding_sha256") == summary["verification_binding_sha256"]
+                    and result.get("ticket_progression") == "COMPLETED"
+                    and result.get("progression_basis") in {"WRITE_PERFORMED_THIS_CALL", "RECOVERED_CAPTURED_FINALIZER_RESULT"}
+                    and result.get("verification_verdict") == "VERIFIED"
+                    and result.get("ticket_status_after") == "done"
+                    and _binding_matches_current_done(ticket_path, summary["verification_binding_path"], summary["verification_binding_sha256"])):
+                return {"origin": origin, "tool_call_id": row["tool_call_id"], "result": result,
+                        "verification_binding": summary["verification_binding_path"],
+                        "verification_binding_sha256": summary["verification_binding_sha256"]}
     return None
 
 
@@ -450,7 +490,7 @@ def run_one(cohort_path: Path, run_id: str) -> dict:
     invocation_error = None
     try:
         observation = invoke(project_root=project, prompt=initial_prompt(metadata), output_dir=root / "actor",
-                             agent_dir=host, payload=Path(environment["payload"]), runtime_data=root / "runtime-data",
+                             agent_dir=host, payload=Path(environment["payload"]),
                              model=MODEL, thinking=THINKING, timeout=definition["timeout"], stage="adaptive",
                              session_dir=root / "sessions", boundary_callback=boundary)
     except Exception as error:

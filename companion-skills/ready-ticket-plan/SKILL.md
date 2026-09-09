@@ -21,7 +21,7 @@ Read all three references before preparation: [plan.md](references/plan.md), [he
 - Current user instructions, selected execution mode/model scope and permitted actions.
 - Optional navigation: existing plans/common plans, repository-investigation artifact, Matt/Scope evidence, implementation observations and actual independent-review evidence.
 
-Validate every selected Ticket with the current canonical `validate_ticket.py` from the same pinned IIS bundle; require exact `VALID` and `Status: ready`. Resolve the whole Ticket, Parent Spec, applicable Behavior/UI and current references. `ready_guard inspect_authority` provides current flat `project_root`, `ticket_path`, `authority_digest` and validator/bundle identity without arming or beginning implementation. Skill reads and preparation artifact writing are not implementation admission. Do not begin an execution to obtain a review digest.
+Validate every selected Ticket with the current canonical `validate_ticket.py` from the same pinned IIS bundle; require exact `VALID` and `Status: ready`. Resolve the whole Ticket, Parent Spec, applicable Behavior/UI and current references. `ready_contract inspect_authority` provides current flat `project_root`, `ticket_path`, `authority_digest` and validator/bundle identity without arming or beginning implementation. Skill reads and preparation artifact writing are not implementation admission. Do not begin an execution to obtain a review digest.
 
 Do not implement `draft/blocked/done` Tickets through preparation. Preserve any exact admission failure and useful reachable method evidence without creating ADMIT. Existing implemented ready targets requested only for verification go directly to `ready-ticket-verify`; no new plan/review is required.
 

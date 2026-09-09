@@ -14,7 +14,7 @@ Adaptive must distinguish:
 
 Do not change the verifier's exact verdict. Add a separate Adaptive root-cause classification and route. Apply the transition discipline in `08-delivery-continuation.md`: under explicit Adaptive mode, a material correction is followed by fresh execution at the affected owner by default; an explicit no-corrective-re-entry/fail-and-report instruction changes that handoff to report-and-STOP. This is distinct from success continuation into another Increment.
 
-Classification begins only from the exact terminal `ready-ticket-verify` result plus applicable current authority/evidence. A scenario checkpoint, material-turn checkpoint, pre-progression checkpoint, candidate verdict, Parent steering decision, or partial observation is nonterminal and cannot by itself receive `IMPLEMENTATION_DEFECT`, `VERIFICATION_MECHANISM_DEFECT`, `CONTRACT_OVERREACH`, `CURRENT_INCREMENT_MISMATCH`, or `INCONCLUSIVE` Adaptive classification.
+Classification begins only from the exact terminal `ready-ticket-verify` semantic result, the exact caller `ready_finalize` result when finalization was applicable, and current authority/evidence. Scenario reports, material observations, candidate interpretations, or partial evidence are verifier-internal/nonterminal and cannot by themselves receive `IMPLEMENTATION_DEFECT`, `VERIFICATION_MECHANISM_DEFECT`, `CONTRACT_OVERREACH`, `CURRENT_INCREMENT_MISMATCH`, or `INCONCLUSIVE` Adaptive classification.
 
 Preparation `REVISE | EVIDENCE_NEEDED` and `PLAN_REVIEW_REQUIRED | PLAN_REVIEW_STALE | PLAN_NOT_ADMITTED` are not final product verdicts or Adaptive defect enums. Preserve their actual owner result and return to the affected Planner/reviewer/evidence owner before implementation. Internal final-discovery no-finding/no-lane is likewise not PASS.
 
@@ -27,7 +27,8 @@ Before classifying, reopen enough current authority to compare the failing claim
 - Parent Spec;
 - adopted Behavior/UI authority relevant to the claim;
 - exact Ticket and authored Verification flow(s);
-- exact fresh `ready-ticket-verify` result/evidence as available;
+- exact fresh `ready-ticket-verify` semantic result/evidence, including verification binding identity;
+- exact `ready_finalize` progression result when caller finalization was applicable;
 - current runtime/repository evidence needed to attribute the observed behavior.
 
 Apply `09-run-contract.md`'s actual-boundary evidence rule. Implementation reports, test names, logs, and mocks are navigation/support; a substitute cannot prove the boundary it replaces. Direct inspection may close the actual approved artifact-only result, and real authorized disposable execution may close its observed boundary, but neither a Ticket-authored fake nor limited evidence can override the user's promised runtime/external result.
@@ -57,6 +58,8 @@ This includes a contract that is coherent in isolation but bundles later maturit
 If the contract is valid and correctly placed, ask whether the integrated verifier bound the actual current authority/target, performed its material frontier and all authored flows, and measured the approved acceptance boundary/readback under attributable conditions.
 
 If not, classify `VERIFICATION_MECHANISM_DEFECT` when the mechanism is wrong, or `INCONCLUSIVE` when required evidence/capability is unavailable. A discovery finding is not a product contradiction until the verifier adjudicates it against current authority.
+
+A caller finalization failure is not automatically a verification-mechanism defect and never rewrites the semantic verdict. For example, `Verification Verdict: VERIFIED` with `Ticket Progression: FAILED` because stable target or authority changed is a progression/currentness failure under the changed target/authority owner. Preserve VERIFIED, resolve the owning drift or validation condition, and require fresh verification when the target/authority correction makes prior evidence stale. `ALREADY_DONE_MATCHING_BINDING` is current-state confirmation, not new completion proof.
 
 ### 4. Runtime contradiction check
 

@@ -72,7 +72,7 @@ class ReadyCompletionCalibrationTests(unittest.TestCase):
         observed = subprocess.run(metadata["trigger_argv"], check=True, capture_output=True, text=True)
         self.assertIs(json.loads(observed.stdout)["approved"], False)
         with self.assertRaises(ValueError):
-            self.completion.run(metadata_path, agent_dir=self.root, payload=self.root, runtime_data=self.root,
+            self.completion.run(metadata_path, agent_dir=self.root, payload=self.root,
                                 model="opencodex/gpt-6-astra", thinking="medium", timeout=480)
 
     def test_operator_readback_computes_self_check_from_current_request(self) -> None:
@@ -90,7 +90,7 @@ class ReadyCompletionCalibrationTests(unittest.TestCase):
         ticket.write_text(ticket.read_text().replace("Status: ready\n", "Status: done\n", 1))
         with self.assertRaises(ValueError):
             self.completion.run(metadata_path, agent_dir=self.root / "unavailable", payload=self.root / "unavailable",
-                                runtime_data=self.root, model="opencodex/gpt-6-astra", thinking="medium", timeout=480)
+                                model="opencodex/gpt-6-astra", thinking="medium", timeout=480)
 
     def test_parser_accepts_only_official_success_or_explicit_noncompletion(self) -> None:
         self.assertIs(self.completion.parse_completion("IIS ADAPTIVE RUN COMPLETE\n\nSTOP\n"), True)
@@ -111,7 +111,7 @@ class ReadyCompletionCalibrationTests(unittest.TestCase):
         (output / "plan-review.json").write_text(json.dumps({"schema": "iis-plan-review/v1", "decisions": [{"decision": "ADMIT"}]}))
         (output / "record.json").write_text(json.dumps({"parsed_completion": "COMPLETE", "roles": []}))
         with self.assertRaises(ValueError):
-            self.completion.run(metadata_path, agent_dir=self.root, payload=self.root, runtime_data=self.root,
+            self.completion.run(metadata_path, agent_dir=self.root, payload=self.root,
                                 model="opencodex/gpt-6-astra", thinking="high", timeout=60)
 
     def build_complete_candidate_cohort(self) -> tuple[list[Path], list[dict[str, object]], list[dict[str, object]]]:

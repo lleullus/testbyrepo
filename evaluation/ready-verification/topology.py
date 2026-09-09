@@ -144,32 +144,8 @@ def _capture_raw(source_value: object, destination: Path) -> dict[str, Any]:
                 "error": f"{type(error).__name__}: {error}"}
 
 
-def _runtime_states(runtime_data: Path) -> list[dict[str, Any]]:
-    states: list[dict[str, Any]] = []
-    try:
-        files = sorted(runtime_data.rglob("*.json")) if runtime_data.exists() else []
-    except OSError as error:
-        return [{"error": f"{type(error).__name__}: {error}"}]
-    for path in files:
-        entry: dict[str, Any] = {"path": str(path)}
-        try:
-            data = path.read_bytes()
-            entry["sha256"] = hashlib.sha256(data).hexdigest()
-            value = json.loads(data)
-            if isinstance(value, dict) and value.get("kind") == "execution":
-                entry.update({key: value.get(key) for key in (
-                    "execution_id", "purpose", "phase", "final_verdict", "completion",
-                    "pause", "active_operation", "uncertain_effect", "project_root", "ticket_path")})
-            else:
-                entry["kind"] = value.get("kind") if isinstance(value, dict) else None
-        except (OSError, json.JSONDecodeError) as error:
-            entry["error"] = f"{type(error).__name__}: {error}"
-        states.append(entry)
-    return states
-
-
 def _capture_boundary(label: str, metadata: dict[str, Any], protected: dict[str, str],
-                      runtime_data: Path, capture_root: Path) -> dict[str, Any]:
+                      capture_root: Path) -> dict[str, Any]:
     root = Path(metadata["project_root"])
     boundary: dict[str, Any] = {"label": label}
     try:
@@ -180,7 +156,7 @@ def _capture_boundary(label: str, metadata: dict[str, Any], protected: dict[str,
     authority_path = metadata.get("authority_state_path", metadata.get("authority_state"))
     boundary["authority_state"] = _capture_raw(authority_path, capture_root / f"authority-state.{label}.raw")
     boundary["request_log"] = _capture_raw(metadata.get("request_log_path"), capture_root / f"request-log.{label}.raw")
-    boundary["runtime_executions"] = _runtime_states(runtime_data)
+    boundary["ready_boundary_state"] = "stateless; no IIS execution/session records"
     _write_new_json(capture_root / f"boundary.{label}.json", boundary)
     return boundary
 
@@ -222,7 +198,7 @@ def _stage_summary(record: dict[str, Any]) -> dict[str, Any]:
     return {key: record.get(key) for key in (
         "stage", "parsed_verdict", "ticket_progression", "ticket_status_after", "clean_transport", "exit_code",
         "timed_out", "agent_ended", "stop_reason", "error_message", "elapsed_seconds", "usage",
-        "tool_events", "target_mutated", "changed_paths", "all_changed_paths", "runtime_progression_paths",
+        "tool_events", "target_mutated", "changed_paths", "all_changed_paths", "finalizer_progression_paths",
         "raw_terminal_result", "raw_events")}
 
 
@@ -240,7 +216,6 @@ def run_one(item: dict[str, Any], protocol: dict[str, Any], source_hashes: dict[
     run_root = Path(metadata["run_root"])
     capture_root = run_root / f"topology-{item['profile'].lower()}"
     capture_root.mkdir(mode=0o700, exist_ok=False)
-    runtime_data = run_root / "runtime-data"
     started = time.monotonic()
     deadline = started + protocol["episode_timeout_seconds"]
     records: list[dict[str, Any]] = []
@@ -256,7 +231,7 @@ def run_one(item: dict[str, Any], protocol: dict[str, Any], source_hashes: dict[
         timeout, _wall_timeout = allowance
         try:
             record = run_stage(stage, metadata, agent_dir=Path(environment["agent_dir"]),
-                               payload=Path(environment["payload"]), runtime_data=runtime_data,
+                               payload=Path(environment["payload"]),
                                model=protocol["model"], thinking=protocol["thinking"], timeout=timeout,
                                episode_deadline=deadline)
             records.append(record)
@@ -272,9 +247,9 @@ def run_one(item: dict[str, Any], protocol: dict[str, Any], source_hashes: dict[
     if challenge_path.is_file():
         challenge = json.loads(challenge_path.read_text(encoding="utf-8"))
 
-    after_actor = _capture_boundary("after-actor", metadata, protected, runtime_data, capture_root)
+    after_actor = _capture_boundary("after-actor", metadata, protected, capture_root)
     observations = _parent_observations(metadata, capture_root)
-    after_parent = _capture_boundary("after-parent-observation", metadata, protected, runtime_data, capture_root)
+    after_parent = _capture_boundary("after-parent-observation", metadata, protected, capture_root)
     usage, tool_events = _aggregate_stages(records)
     verify_records = [record for record in records if record["stage"] == "verify"]
     route = "INTEGRATED_VERIFY"

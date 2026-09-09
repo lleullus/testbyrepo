@@ -42,13 +42,13 @@ def prepare(source: Path, arena: Path, models: Path, origins: list[Path] | None 
     result = {"schema": "iis-calibration-environment/v2", "source": str(source),
               "arena": str(arena), "payload": str(payload), "agent_dir": str(host),
               "bundle_id": manifest["bundle_id"], "bundle_manifest": str(payload / "bundle.json"),
-              "runtime_data": str(arena / "runtime-data"), "workflow": str(payload / "iis-workflow/SKILL.md"),
+              "workflow": str(payload / "iis-workflow/SKILL.md"),
               "validator": str(payload / "matt/skills/to-tickets/validate_ticket.py"),
-              "extension": str(payload / "delivery-runtime/ready-ticket-implement/index.js"),
-              "tool_exposure": "Ready native tools and host-native device transport; tools.xdev=true",
+              "extension": str(payload / "delivery-tools/ready-ticket/omp.js"),
+              "tool_exposure": "Stateless ready_contract/ready_finalize plus ordinary host-native tools; no global interception",
               "models_sha256": hashlib.sha256((host / "models.yml").read_bytes()).hexdigest(),
               "config_sha256": hashlib.sha256((host / "config.yml").read_bytes()).hexdigest(),
-              "runtime_admission": "NOT YET EXERCISED", "loaded_identity": "NOT_CHECKED"}
+              "boundary_tools": "NOT YET EXERCISED", "loaded_identity": "NOT_CHECKED"}
     (arena / "environment.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     return result
 

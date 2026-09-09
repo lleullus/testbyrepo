@@ -19,7 +19,7 @@ import time
 from typing import Any
 
 import score_result
-from run_agent import invoke, load_events, summarize, guard_results
+from run_agent import boundary_results, invoke, load_events, summarize
 
 ROOT = Path(__file__).resolve().parent
 
@@ -96,10 +96,10 @@ def stage_prompt(stage: str, metadata: dict[str, Any], run_root: Path) -> str:
         if metadata.get("plan_review_path"):
             target += f"Optional method navigation (not product admission): {metadata['plan_review_path']}\n"
         return common + target + ("read로 skill://ready-ticket-verify 를 호출하고 이 Ticket의 통합 최종 검증을 수행하라. "
-            "현재 authority/actual target을 직접 bind하고 원계약의 모든 authored flow와 실제 실패 가능 frontier를 확인하라. "
+            "현재 authority와 stable target/scenario effect 경계를 직접 확인하고 ready_contract capture_verification으로 immutable binding을 만든 뒤 원계약의 모든 authored flow와 실제 실패 가능 frontier를 확인하라. "
             "발견한 반례는 verifier-owned current evidence와 finding disposition으로 닫아라. "
-            "필요 실제 실행은 ready_guard begin_verify 뒤 허용된 ready_argv/native host 경로로 수행한다. "
-            "원래 source/authority를 고쳐 합격시키지 말고 규정의 terminal result와 가능한 guarded progression까지 끝내라.\n")
+            "실제 실행은 일반 host-native 도구를 사용하고 settled nonzero 결과를 global lock으로 승격하지 않는다. "
+            "원래 source/authority를 고쳐 합격시키지 말고 semantic terminal result를 먼저 닫은 뒤, 이 DIRECT 호출의 caller 단계에서 exact binding/SHA와 같은 verdict로 ready_finalize를 호출해 progression result를 별도로 보고하라.\n")
     if stage == "plan":
         return common + metadata["planning_prompt"] + ("\n이번 요청은 이 한 결과의 기획부터 approved Spec과 reviewed Ready Ticket Set까지다. "
             "read로 skill://ask-matt 를 호출하고 현재 권위를 확인하라. 제품 의미가 완전히 정해져 있으면 To Spec과 To Tickets까지 진행한다. "
@@ -125,27 +125,25 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import fs from 'node:fs';
 const [payload, root, reviewPath, ticketsJson] = process.argv.slice(1);
-const {bindAuthority} = await import(pathToFileURL(payload + '/delivery-runtime/ready-ticket-implement/src/core.js'));
-const {bindPlanReview} = await import(pathToFileURL(payload + '/delivery-runtime/ready-ticket-implement/src/plan-binding.js'));
+const {checkPlanAdmission} = await import(pathToFileURL(payload + '/delivery-tools/ready-ticket/src/core.js'));
 const bundle = JSON.parse(fs.readFileSync(payload + '/bundle.json', 'utf8'));
 const executeArgv = async (argv, options) => {
   try { const result = await promisify(execFile)(argv[0], argv.slice(1), {cwd:options.cwd, timeout:options.timeout});
     return {exitCode:0, interrupted:false, terminationState:'settled', ...result};
   } catch (error) { return {exitCode:error.code, interrupted:!!error.killed, terminationState:error.killed?'unknown':'settled', stdout:error.stdout, stderr:error.stderr}; }
 };
-const bindings = [];
+const admissions = [];
 for (const ticketPath of JSON.parse(ticketsJson)) {
-  const authority = await bindAuthority({ticketPath, projectRoot:root, validatorPath:payload + '/matt/skills/to-tickets/validate_ticket.py', bundleIdentity:bundle.bundle_id, executeArgv});
-  bindings.push(bindPlanReview({planReviewPath:reviewPath, authority}));
+  admissions.push(await checkPlanAdmission({ticketPath, projectRoot:root, planReviewPath:reviewPath, validatorPath:payload + '/matt/skills/to-tickets/validate_ticket.py', bundleIdentity:bundle.bundle_id, executeArgv}));
 }
-console.log(JSON.stringify(bindings));
+console.log(JSON.stringify(admissions));
 """
     result = subprocess.run(["node", "--input-type=module", "-e", script, str(payload.resolve()), metadata["project_root"], str(review_path), json.dumps(tickets)], capture_output=True, text=True, timeout=60)
     return {"current": result.returncode == 0, "exit_code": result.returncode, "stdout": result.stdout, "stderr": result.stderr,
             "meaning": "current binding only; raw independent review remains required"}
 
 
-def run_preparation(metadata: dict[str, Any], *, agent_dir: Path, payload: Path, runtime_data: Path,
+def run_preparation(metadata: dict[str, Any], *, agent_dir: Path, payload: Path,
                     model: str, thinking: str, timeout: int) -> dict[str, Any]:
     root, run_root = Path(metadata["project_root"]), Path(metadata["run_root"])
     output = run_root / "prepare"
@@ -162,7 +160,7 @@ def run_preparation(metadata: dict[str, Any], *, agent_dir: Path, payload: Path,
     observations = []
     def role(name: str, instructions: str, resume: Path | None = None):
         result = invoke(project_root=root, prompt=common + instructions, output_dir=output / name,
-                        agent_dir=agent_dir, payload=payload, runtime_data=runtime_data, model=model,
+                        agent_dir=agent_dir, payload=payload, model=model,
                         thinking=thinking, timeout=timeout, stage="prepare",
                         session_dir=output / "writer-sessions" if name in {"planner", "revision", "lead"} else None,
                         resume_session=resume)
@@ -177,7 +175,7 @@ def run_preparation(metadata: dict[str, Any], *, agent_dir: Path, payload: Path,
             if revision["clean_transport"] and not review.exists():
                 reviewed_snapshot = product_snapshot(root, [])
                 review_before_lead = None
-                reviewer = role("reviewer", f"작성자와 별도 독립 Plan Review다. 원계약 전체와 현재 계획을 직접 읽는다. Planner evidence: {output / 'revision/terminal.txt'}; Heuristic evidence: {output / 'heuristic/events.jsonl'}. 현재 bytes와 ready_guard inspect_authority를 사용하여 실제 판단의 iis-plan-review/v1 JSON을 {review}에 작성한다. review_origin.evidence_reference는 이 invocation의 {output / 'reviewer/events.jsonl'}이다. 계획/제품을 고쳐 허가하지 말고 정확한 ADMIT/REVISE/EVIDENCE_NEEDED와 근거를 반환한다. lead terminal은 내지 않는다.")
+                reviewer = role("reviewer", f"작성자와 별도 독립 Plan Review다. 원계약 전체와 현재 계획을 직접 읽는다. Planner evidence: {output / 'revision/terminal.txt'}; Heuristic evidence: {output / 'heuristic/events.jsonl'}. 현재 bytes와 ready_contract inspect_authority를 사용하여 실제 판단의 iis-plan-review/v1 JSON을 {review}에 작성한다. review_origin.evidence_reference는 이 invocation의 {output / 'reviewer/events.jsonl'}이다. 계획/제품을 고쳐 허가하지 말고 정확한 ADMIT/REVISE/EVIDENCE_NEEDED와 근거를 반환한다. lead terminal은 내지 않는다.")
                 if reviewer["clean_transport"] and review.is_file() and product_snapshot(root, []) == reviewed_snapshot:
                     review_before_lead = hashlib.sha256(review.read_bytes()).hexdigest()
                     lead = role("lead", f"원래 준비 lead의 handoff fan-in이다. 실제 별도 reviewer 결과 {review}, raw {output / 'reviewer/events.jsonl'}와 Heuristic/Planner evidence의 귀속·currentness·원래 requested Tickets 전체 ADMIT 분모만 대조한다. 두 번째 의미 검토/승인 단계가 아니다. 어느 계획/review/제품 파일도 수정하지 말고 READY TICKET PLAN RESULT terminal을 반환한다. 구현/최종 검증은 시작하지 않는다.", Path(revision["session_file"]))
@@ -213,13 +211,19 @@ def run_preparation(metadata: dict[str, Any], *, agent_dir: Path, payload: Path,
 
 def apply_challenge(metadata: dict[str, Any], run_root: Path, events: list[dict[str, Any]]) -> dict[str, Any] | None:
     challenge = metadata.get("verification_challenge")
-    if not challenge or (run_root / "challenge.json").exists() or any(event.get("type") == "agent_end" for event in events) or guard_results(events, "finalize_verification"):
+    if (not challenge or (run_root / "challenge.json").exists()
+            or any(event.get("type") == "agent_end" for event in events)
+            or boundary_results(events, "ready_finalize")):
         return None
-    binding = next((entry["result"] for entry in guard_results(events, "begin_verify")
-                    if entry["result"].get("execution_id") and entry["result"].get("phase") in {"ACTIVE", "PAUSED"}), None)
-    if binding is None:
+    capture = next((entry["result"] for entry in boundary_results(events, "ready_contract", "capture_verification")
+                    if entry["result"].get("binding_path") and entry["result"].get("binding_sha256")
+                    and isinstance(entry["result"].get("binding"), dict)), None)
+    if capture is None:
         return None
-    paths = [Path(value) for value in challenge["paths"]]
+    paths = [Path(value).resolve() for value in challenge["paths"]]
+    stable = {Path(value).resolve() for value in capture["binding"].get("stable_target_paths", [])}
+    if not paths or any(path not in stable for path in paths):
+        raise ValueError("challenge path is not part of the captured stable verification target")
     before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
     for path in paths:
         content = path.read_text(encoding="utf-8")
@@ -227,7 +231,8 @@ def apply_challenge(metadata: dict[str, Any], run_root: Path, events: list[dict[
             raise ValueError("challenge precondition changed")
     for path in paths:
         path.write_text(path.read_text(encoding="utf-8").replace(challenge["before"], challenge["after"]), encoding="utf-8")
-    applied = {"applied": True, "boundary": "successful_begin_verify_result", "execution_id": binding["execution_id"],
+    applied = {"applied": True, "boundary": "successful_capture_verification_result",
+               "verification_binding": capture["binding_path"], "verification_binding_sha256": capture["binding_sha256"],
                "before": before, "after": {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths},
                "attribution": "external evaluator, not actor mutation or actor evidence"}
     write_json(run_root / "challenge.json", applied)
@@ -235,11 +240,11 @@ def apply_challenge(metadata: dict[str, Any], run_root: Path, events: list[dict[
 
 
 def run_stage(stage: str, metadata: dict[str, Any], *, agent_dir: Path, payload: Path,
-              runtime_data: Path, model: str, thinking: str, timeout: int,
+              model: str, thinking: str, timeout: int,
               wall_timeout_seconds: float | None = None, episode_deadline: float | None = None) -> dict[str, Any]:
     run_root = Path(metadata["run_root"])
     if stage == "prepare":
-        return run_preparation(metadata, agent_dir=agent_dir, payload=payload, runtime_data=runtime_data,
+        return run_preparation(metadata, agent_dir=agent_dir, payload=payload,
                                model=model, thinking=thinking, timeout=timeout)
     root = Path(metadata["project_root"])
     before = product_snapshot(root, metadata["allowed_output_paths"])
@@ -250,22 +255,30 @@ def run_stage(stage: str, metadata: dict[str, Any], *, agent_dir: Path, payload:
         if wall_timeout_seconds <= 0:
             raise TimeoutError("episode timeout exhausted before invocation")
     observation = invoke(project_root=root, prompt=stage_prompt(stage, metadata, run_root), output_dir=run_root / stage,
-                         agent_dir=agent_dir, payload=payload, runtime_data=runtime_data, model=model, thinking=thinking, timeout=timeout,
+                         agent_dir=agent_dir, payload=payload, model=model, thinking=thinking, timeout=timeout,
                          stage=stage, wall_timeout_seconds=wall_timeout_seconds,
                          boundary_callback=(lambda events: apply_challenge(metadata, run_root, events)) if stage == "verify" and metadata.get("verification_challenge") else None)
     after = product_snapshot(root, metadata["allowed_output_paths"])
     events = load_events(Path(observation["raw_events"]))
-    finalizations = guard_results(events, "finalize_verification") if stage == "verify" else []
+    finalizations = boundary_results(events, "ready_finalize") if stage == "verify" else []
     finalization = finalizations[-1]["result"] if finalizations else {}
     changed = sorted(path for path in before.keys() | after.keys() if before.get(path) != after.get(path))
-    runtime_progression_paths: list[str] = []
+    finalizer_progression_paths: list[str] = []
     if stage == "verify" and ticket_before is not None and ticket.exists():
         ticket_after = ticket.read_text(encoding="utf-8")
+        binding_matches = bool(observation.get("verification_binding_path")
+                               and observation.get("verification_binding_sha256")
+                               and finalization.get("verification_binding") == observation["verification_binding_path"]
+                               and finalization.get("verification_binding_sha256") == observation["verification_binding_sha256"])
         if (ticket_after == re.sub(r"(?m)^Status: ready$", "Status: done", ticket_before)
+                and observation.get("parsed_verdict") == "VERIFIED"
+                and finalization.get("ticket_path") == str(ticket)
                 and finalization.get("verification_verdict") == "VERIFIED"
                 and finalization.get("ticket_progression") == "COMPLETED"
-                and finalization.get("ticket_status_after") == "done"):
-            runtime_progression_paths.append(str(ticket.relative_to(root)))
+                and finalization.get("progression_basis") in {"WRITE_PERFORMED_THIS_CALL", "RECOVERED_CAPTURED_FINALIZER_RESULT"}
+                and finalization.get("ticket_status_after") == "done"
+                and binding_matches):
+            finalizer_progression_paths.append(str(ticket.relative_to(root)))
     external_changes = []
     challenge_path = run_root / "challenge.json"
     if stage == "verify" and challenge_path.is_file():
@@ -275,20 +288,24 @@ def run_stage(stage: str, metadata: dict[str, Any], *, agent_dir: Path, payload:
             relative = str(path.relative_to(root))
             if after.get(relative) == expected and before.get(relative) == challenge["before"].get(filename):
                 external_changes.append(relative)
-    unexpected_changed = [path for path in changed if path not in runtime_progression_paths and path not in external_changes]
+    unexpected_changed = [path for path in changed if path not in finalizer_progression_paths and path not in external_changes]
     record = {"case_id": metadata["case_id"], "run_id": metadata["run_id"], "stage": stage,
               "model_tool_profile": {"model": model, "thinking": thinking, "actual_models": observation["actual_models"]},
               "input_target_identity": digest(before), "raw_terminal_result": str(run_root / stage / "terminal.txt"),
               "raw_events": observation["raw_events"], "parsed_verdict": observation["parsed_verdict"],
+              "verifier_ticket_progression": observation.get("verifier_ticket_progression"),
+              "verification_binding_path": observation.get("verification_binding_path"),
+              "verification_binding_sha256": observation.get("verification_binding_sha256"),
               "ticket_progression": observation["ticket_progression"],
+              "progression_basis": observation.get("progression_basis"),
               "ticket_status_after": (re.search(r"(?m)^Status: (\w+)$", ticket.read_text()).group(1) if ticket.exists() and re.search(r"(?m)^Status: (\w+)$", ticket.read_text()) else None),
               "pre_project_root_digest": digest(before), "post_project_root_digest": digest(after),
               "target_mutated": bool(unexpected_changed) if stage == "verify" else False,
               "changed_paths": unexpected_changed, "all_changed_paths": changed,
-              "runtime_progression_paths": runtime_progression_paths,
+              "finalizer_progression_paths": finalizer_progression_paths,
               "external_challenge_paths": external_changes,
               "challenge_applied": challenge_path.is_file() if metadata.get("verification_challenge") else None,
-              "runtime_finalization": finalization,
+              "caller_finalization": finalization,
               "elapsed_seconds": observation["elapsed_seconds"],
               "exit_code": observation["exit_code"], "timed_out": observation["timed_out"], "agent_ended": observation["agent_ended"],
               "clean_transport": observation["clean_transport"], "stop_reason": observation["stop_reason"], "error_message": observation["error_message"],
@@ -311,7 +328,7 @@ def run_cohort(args) -> int:
         raise ValueError("workers must be positive")
     def run_one(metadata_path):
         argv = [sys.executable, "-B", str(Path(__file__).resolve()), "run", "verify", "--metadata", str(metadata_path),
-                "--agent-dir", str(args.agent_dir), "--payload", str(args.payload), "--runtime-data", str(args.runtime_data),
+                "--agent-dir", str(args.agent_dir), "--payload", str(args.payload),
                 "--model", args.model, "--thinking", args.thinking, "--timeout", str(args.timeout)]
         result = subprocess.run(argv, capture_output=True, text=True)
         (metadata_path.parent / "invocation.stdout.txt").write_text(result.stdout, encoding="utf-8")
@@ -444,8 +461,23 @@ def build_report(metadata_paths: list[Path], records: list[dict[str, Any]], revi
                     _add_error(errors, "terminal_verdict_mismatch", **_pair_value(pair))
                 if expected[pair][0].get("verification_challenge") and record.get("challenge_applied") is not True:
                     _add_error(errors, "required_challenge_not_applied", **_pair_value(pair))
+                if record.get("stage") == "verify":
+                    if (record.get("verification_binding_path") != native.get("verification_binding_path")
+                            or record.get("verification_binding_sha256") != native.get("verification_binding_sha256")
+                            or record.get("ticket_progression") != native.get("ticket_progression")
+                            or record.get("progression_basis") != native.get("progression_basis")
+                            or record.get("caller_finalization") != (native.get("caller_finalization") or {})):
+                        _add_error(errors, "boundary_result_mismatch", **_pair_value(pair))
                 if native.get("parsed_verdict") == "VERIFIED" and record.get("stage") == "verify":
-                    if record.get("ticket_progression") != "COMPLETED" or record.get("ticket_status_after") != "done" or record.get("runtime_finalization", {}).get("ticket_progression") != "COMPLETED":
+                    caller = native.get("caller_finalization") or {}
+                    if (native.get("verifier_ticket_progression") != "PENDING CALLER FINALIZATION"
+                            or native.get("ticket_progression") != "COMPLETED"
+                            or native.get("ticket_status_after") != "done"
+                            or caller.get("verification_verdict") != "VERIFIED"
+                            or caller.get("ticket_progression") != "COMPLETED"
+                            or caller.get("progression_basis") not in {"WRITE_PERFORMED_THIS_CALL", "RECOVERED_CAPTURED_FINALIZER_RESULT"}
+                            or caller.get("verification_binding") != native.get("verification_binding_path")
+                            or caller.get("verification_binding_sha256") != native.get("verification_binding_sha256")):
                         _add_error(errors, "verified_progression_not_completed", **_pair_value(pair))
 
     result_pairs: list[tuple[str, str]] = []
@@ -536,7 +568,6 @@ def main() -> int:
     run.add_argument("--metadata", required=True, type=Path)
     run.add_argument("--agent-dir", required=True, type=Path)
     run.add_argument("--payload", required=True, type=Path)
-    run.add_argument("--runtime-data", required=True, type=Path)
     run.add_argument("--model", required=True)
     run.add_argument("--thinking", default="medium")
     run.add_argument("--timeout", type=int, default=600)
@@ -545,7 +576,6 @@ def main() -> int:
     batch.add_argument("--output", required=True, type=Path)
     batch.add_argument("--agent-dir", required=True, type=Path)
     batch.add_argument("--payload", required=True, type=Path)
-    batch.add_argument("--runtime-data", required=True, type=Path)
     batch.add_argument("--model", required=True)
     batch.add_argument("--thinking", default="medium")
     batch.add_argument("--timeout", type=int, default=600)
@@ -572,7 +602,7 @@ def main() -> int:
             write_json(Path(metadata["run_root"]) / f"reset-before-{stage}.json", {"argv": metadata["reset_argv"], "exit_code": reset.returncode, "stdout": reset.stdout, "stderr": reset.stderr})
             if reset.returncode:
                 raise RuntimeError("fixture state reset failed; refusing to contaminate verification")
-        record = run_stage(stage, metadata, agent_dir=args.agent_dir, payload=args.payload, runtime_data=args.runtime_data,
+        record = run_stage(stage, metadata, agent_dir=args.agent_dir, payload=args.payload,
                            model=args.model, thinking=args.thinking, timeout=args.timeout)
         records.append(record)
         if stage == "prepare":

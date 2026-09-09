@@ -97,15 +97,15 @@ Apply exact overrides independently:
 - planning-only, stop-at-Ready-Tickets, no implementation and no verification -> `no` / `no`;
 - execution-preparation-only -> no / no with READY_EXECUTION_PLANS and exact required preparation Tickets, not READY_TICKET_SET;
 - implement but do not verify -> `yes` / `no`;
-- verify an already implemented current target without implementation -> no / yes when actual stable target and verifier admission are established; no new execution plan ADMIT is required;
+- verify an already implemented current target without implementation -> no / yes when the actual stable target is attributable and the verifier can capture its immutable verification binding; no new execution plan ADMIT is required;
 - do not implement -> never infer implementation authority from verification or a broader outcome;
 - do not verify -> no final discovery/verdict/done, but pre-implementation Heuristic/review still applies when Implementation is yes.
 
-These two fields express the invocation envelope, not exact owner authority or admission. Preparation belongs to ready-ticket-plan, implementation to ready-ticket-implement, and integrated final adjudication to ready-ticket-verify.
+These two fields express the invocation envelope, not exact owner authority or admission. Preparation belongs to ready-ticket-plan, implementation to ready-ticket-implement, integrated semantic adjudication to ready-ticket-verify, and the narrow post-verdict Ticket status progression to the caller's ready_finalize step.
 
 Explicit planning-only, preparation-only, and implementation-only assignments close only their requested stage's actual result, not unperformed product delivery or verification. Do not invent a stage-only interpretation to shrink an assigned product Goal. A pause/stop is not a successful narrower Goal unless current user authority actually changes the assignment; preserve any unresolved distinction and disabled stages.
 
-Delegated implementation/verification checkpoints and Parent continuation decisions are invocation-local delivery messages only. They do not add a Run Contract field, do not modify `Implementation` or `Verification`, do not activate or satisfy the `/승인게이트` Run Contract Approval Gate, and do not require a template change. Their phase-release authority comes from the already closed Run Contract, current user instructions, and the exact delivery skill contract.
+Implementation and verification delivery ownership remains invocation-local and terminal-result based. A material implementation method change ends the affected implementation invocation and returns to preparation; a verifier returns one terminal semantic result and binding before caller finalization. These owner boundaries do not add a Run Contract field, do not modify `Implementation` or `Verification`, do not activate or satisfy the `/승인게이트` Run Contract Approval Gate, and do not require a template change.
 
 ### Delivery Model Selection
 

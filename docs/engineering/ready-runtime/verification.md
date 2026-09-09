@@ -1,29 +1,75 @@
-# Ready runtime v2 verification boundary
+# Ready boundary-tools verification boundary
 
-This is the candidate verification plan and evidence boundary. The prior runtime's historical pass counts do not validate this redesign. Runtime tests were rewritten during parallel implementation; no formatter/linter/build/test was run by the runtime worker in that phase. Integration Main owns execution and final acceptance.
+This document defines current source-side and isolated-candidate verification for the Ready delivery boundary. Dated runtime reports in this directory are historical records and do not establish current boundary-tool behavior or live-host activation.
 
-## Deterministic behavior
+## Deterministic boundary behavior
 
-From `delivery-runtime/ready-ticket-implement`, run `node --test tests/*.test.js`.
+From `delivery-tools/ready-ticket`, run `npm test`.
 
-- `runtime-core.test.js`: missing plan rejection before reservation, actual first file/CLI change, one-use assignment, old-owner late operations, plan drift/resume fence, uncertain effect retention, reservation interruption→attributed cleanup→new admission with late commit rejection, v1 rejection and no old-live-lock theft.
-- `plan-binding.test.js`: wrong Ticket, REVISE, stale actual plan/review bytes, inside-root review rejection, recheck at assignment consumption. Fixture ADMIT JSON is byte-pairing input, never independent semantic review proof.
-- `authority-service.test.js`: product authority versus ordinary code, product/context manifest separation and undeclared file drift, plan-free verification and delegated PRE_RUNTIME.
-- `omp-adapter.test.js`: real host initialization order and host-provided schema boundary; reading/inspection does not arm; guarded file change; unknown native/device and paused effect denial; current-owner checklist closure without late product dispatch; real loopback timeout, report-only recovery and replay exclusion; native/device nested service callbacks with one exact reservation. Synthetic daemon events establish policy behavior only, not host settlement equivalence.
-- `finalization.test.js` and `finalization-storage.test.js`: real canonical validator/status-only transition, DIRECT without parent checkpoint versus delegated release, unrelated bytes/mode preservation, post-validator failure with conditional restoration, external-write preservation, persisted candidate recovery, source-drift failure and durable terminal/index cleanup interruptions.
+- `authority-plan.test.js`: canonical product authority and exact independent Plan Review admission, including missing/stale/non-admitted review behavior and the fact that ordinary implementation source edits do not by themselves stale an unchanged reviewed Plan.
+- `verification-binding.test.js`: immutable outside-root verification bindings, recursive stable-target identity, separately declared scenario-effect paths, stable/effect overlap rejection, protected authority/method effect rejection, and effect mutation that does not invalidate an unchanged stable target.
+- `finalization.test.js`: semantic verdict versus status progression separation, exact ready-to-done status-only write, post-write validation and conditional exact restoration, stable/authority drift rejection, diagnostic done capture, and no fresh-completion inference from already-done bytes.
+- `omp-tools.test.js`: exactly two registered Ready boundary tools, zero global interception hooks, caller-owned finalization, and the incident regression in which a settled exit status 1 is followed by an ordinary source edit and successful retry.
 
-A direct Node consumer must import the core with no OMP environment/config/module, supply structured execution, inspect authority, and exercise admission/actual output/closure. No complete alternate-client adapter is claimed by that smoke.
+These tests use the canonical Ticket validator and real files in disposable project roots. Fixture review JSON establishes exact byte pairing only; it is not semantic proof of independent review quality.
 
-## Real host checks required
+## Evaluation and anti-fake boundaries
 
-Use a fresh isolated top-level OMP loaded from the coherent candidate bundle, not a child of an already cached old host. Inspect registered schemas and loaded module/bundle identity. Exercise native and supported device action paths, exact parent versus worker, superseded late dispatch, structured argv literal arguments, normal/nonzero/killed/abort/timeout/full output and loopback external readback. Code 0 plus killed is interrupted, not success. Local file hash equality is never evidence of absent external effect.
+Run the focused Python contract tests:
 
-For services, observe native hub start readiness timeout retaining a live handle, explicit logs/wait/stop, owner and id/startedAt/restartCount generation, and wrong same-name generation rejection. Explicit cleanup must precede terminal/suspend/replacement. Root process exit or cancellation receipt is not broad escaped-descendant/external-effect settlement. Hub's name-only stop and host result fidelity remain capability limits; do not reinstate a Ready raw supervisor to hide them.
+```text
+python3 -m unittest discover -s tests -p test_ready_agent_capture.py
+python3 -m unittest discover -s tests -p test_ready_verification_fixture_boundaries.py
+python3 -m unittest discover -s tests -p test_goal_calibration.py
+python3 -m unittest discover -s tests -p test_ready_completion_calibration.py
+```
 
-Inject finalization failures before write, during replacement/postvalidate/durable terminal/index cleanup, and across restart. No failure may fabricate COMPLETED from done bytes. Current foreign bytes/authority must prevent rollback. An orphan reservation is released only by the current designated owner's exact attributed evidence, absence of execution/assignment, and locked identity match. No age-based orphan auto-expiry or blind admission replay is allowed.
+Required properties include:
 
-## Integration and historical evidence
+- verifier terminal output may establish a semantic verdict and immutable binding identity, but cannot itself manufacture caller status progression;
+- evaluator drift injected after verification capture makes later VERIFIED progression fail while preserving the semantic verdict;
+- narration containing VERIFIED/done/completed is not delivery evidence;
+- completion requires the same binding path/SHA at semantic terminal and caller finalization, an attributable completion basis, and current canonical done bytes that correspond exactly to the binding's captured ready Ticket with only the status transition.
 
-The integrating owner runs `python3 run_tests.py` once after fan-in and owns candidate installer/evaluation smoke. Actual author/reviewer and final-verifier traces must adjudicate semantic V1–V6/V10–V13 separately from structural JSON tests. Product planning-only, preparation-only, implementation-only, verification-only and full delivery retain distinct terminals and obligation denominators.
+## Dependency and installer boundaries
 
-Earlier v1 reports and Click selection documents remain historical. They do not imply v2 test success, production installation, an active host migration, or support for every custom/MCP/browser/program effect surface.
+Run:
+
+```text
+python3 -B scripts/check-ready-boundary-deps.py --root .
+python3 -m unittest discover -s tests -p test_ready_ticket_boundary_tools.py
+```
+
+The dependency scan covers only candidate payload roots and fails on retired delivery dependencies. Historical documentation and installer migration signatures are not candidate payload dependencies.
+
+The installer contract tests cover:
+
+- candidate `ready-boundary-tools` manifest/self-validation;
+- legacy protocol-2 release validation against that release's own manifest/signature rather than the new candidate file set;
+- explicit old-extension to new-extension link migration in isolated host roots;
+- read-only retired-runtime state classification into terminal history, evidence-backed stale records, and blockers;
+- activation rejection before link switching for live, unsettled, or unattributed legacy work/effects;
+- immutable archival snapshot of approved retired state;
+- rollback to the exact previous release/link identity without rewriting retired state bytes;
+- refusal to overwrite intervening user changes.
+
+## Isolated candidate verification
+
+Build a candidate in a disposable release store with `scripts/sync_installed_iis.py prepare`, then run `check` against the returned bundle id. Activation tests, when needed, use only disposable host roots and explicit quiescent confirmation. Inspect the new extension link, the absence of the retired extension, installed family/bundle identity, and rollback/remove behavior.
+
+Candidate preparation and isolated activation do not establish actual loaded identity in a real operating OMP/Codex process. `loaded_identity: NOT_CHECKED` must remain explicit until a separately authorized live-host check is actually performed.
+
+## Host-native execution semantics
+
+Ready boundary tools do not proxy ordinary shell/argv execution or globally intercept host tools. Therefore command failure/retry coverage focuses on observable host semantics:
+
+- settled nonzero result is an ordinary command failure, not a workflow lock;
+- the implementing actor may inspect, edit within the admitted Plan, and rerun immediately;
+- interruption/timeout/response loss is distinguished from settled nonzero;
+- a real non-idempotent/external effect with lost response is never blindly replayed and must use its authored authoritative readback/cleanup path.
+
+Service/process settlement and worker replacement remain host/caller lifecycle responsibilities. A cancellation receipt alone is not settlement evidence.
+
+## Operating activation boundary
+
+Do not infer production readiness from source tests, an immutable candidate bundle, isolated host-root activation, or fixture settlement evidence. Actual operating activation is a separate change requiring explicit authorization, a current cutover scan of the real retired runtime root when applicable, host quiescence/settlement evidence, and post-activation loaded-identity/readback checks. Rollback restores the previous release/link identity; it does not attempt to recreate retired runtime semantics in the new family.

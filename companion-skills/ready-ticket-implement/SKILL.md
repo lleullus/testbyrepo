@@ -1,6 +1,6 @@
 ---
 name: ready-ticket-implement
-description: "Implement one existing IIS Ready Ticket and perform implementer self-check. Use for exact Ready Ticket delivery. Top-level execution defaults to SUBAGENT with one checkpointed implementation worker; use DIRECT only when the current user explicitly selects it for this stage. This skill never performs or adjudicates the separate verification authority."
+description: "Implement one existing IIS Ready Ticket and perform implementer self-check. Use for exact Ready Ticket delivery. Top-level execution defaults to SUBAGENT with one implementation worker; use DIRECT only when the current user explicitly selects it for this stage. The actual implementing actor must pass current plan admission before mutation and again before COMPLETE. This skill never performs or adjudicates the separate verification authority."
 ---
 
 # Ready Ticket Implement
@@ -36,16 +36,17 @@ Exact assignment, 단일 owner lane, checkpoint continuation, capability failure
 - `draft` 또는 `blocked`이면 구현을 시작하지 않는다.
 - 이 스킬은 Ticket status를 `done`으로 바꾸지 않는다. 정상 구현 입력인 `ready`는 구현 완료 후에도 그대로 유지한다.
 
-## Ready runtime guard
+## Ready boundary admission과 host-native 실행
 
-Skill/reference 조회와 준비 artifact 작성만으로 실행을 arm하거나 만들지 않는다. 실제 current review가 있는 exact Ticket의 명시적 begin/assignment가 경계다.
+Skill/reference 조회와 준비 artifact 작성은 implementation admission이 아니다. 실제 implementing actor가 첫 source mutation 전에 exact Ticket/Project Root/`plan_review_path`로 `ready_contract check_plan_admission`을 직접 호출한다.
 
-- `DIRECT`: exact Ticket/Project Root와 `plan_review_path`로 `ready_guard begin_direct`를 완료한다.
-- `SUBAGENT`: Outer Main이 같은 입력으로 `ready_guard assign_subagent`를 완료한 뒤 한 child를 할당하고, 지정 worker가 `assignment_id`와 같은 review로 `begin_delegated`를 완료한다. 공통 검사는 현재 bytes를 다시 확인하며 성공 시 `ACTIVE`다.
-- runtime은 pinned canonical validator와 exact Ticket/Parent Spec/Behavior/UI authority, 현재 plan/review를 직접 bind한다. 누락은 `PLAN_REVIEW_REQUIRED`, stale은 `PLAN_REVIEW_STALE`, 미허가는 `PLAN_NOT_ADMITTED`다. 대화의 통과나 worker 합성 JSON으로 대신하지 않는다.
-- exact owner, Project Root/보호된 authority/plan/review/output 경계와 active effect를 유지한다. 일반 read ledger, inventory quota, 일률 retry latch 또는 read 한 번으로 self-check를 증명하는 gate는 없다.
-- command는 지원된 structured `ready_argv`, ephemeral service는 host-native `hub`를 사용한다. 서비스 생성/timeout/cancel receipt가 실제 정착이나 외부 effect 종료를 증명하지 않는다.
-- terminal 전에 owned activity/service/effect를 실제로 닫고 `complete` 또는 `block`을 호출한다. 불확실한 효과는 `EFFECT_UNCERTAIN`과 점유를 보존하며 file hash 불변만으로 미적용 처리하지 않는다.
+- `DIRECT`: 현재 Main이 actual implementing actor이며 첫 mutation 전 current `ADMIT`을 확인한다.
+- `SUBAGENT`: Outer Main은 exact Ticket/Project Root/`plan_review_path`와 scope를 한 child에게 전달하고, 그 child가 actual implementing actor로서 같은 admission을 직접 확인한다. 별도 execution/assignment/session/reservation ID는 만들지 않는다.
+- boundary check는 pinned canonical validator와 exact Ticket/Parent Spec/Behavior/UI authority, 현재 Plan/Review bytes를 다시 묶는다. 누락은 `PLAN_REVIEW_REQUIRED`, stale은 `PLAN_REVIEW_STALE`, 미허가는 `PLAN_NOT_ADMITTED`다. 대화의 통과나 worker 합성 JSON으로 대신하지 않는다.
+- admission 뒤 read/search/edit/write/unit/integration/build/lint/CLI는 host-native tools를 그대로 사용한다. settled process의 nonzero exit는 그 command의 정상 실패 결과일 수 있으며 global execution lock으로 승격하지 않는다. 실패를 읽고 Plan 범위 안에서 수정한 뒤 재실행할 수 있다.
+- actual non-idempotent/external effect가 timeout/abort/response loss로 정착 여부가 불명확하면 같은 effect를 blind replay하지 않는다. Ticket/Plan이 승인한 authoritative readback, cleanup, log/evidence 작성은 계속 수행할 수 있다. applied/not-applied가 확인되면 그 사실에 맞춰 계속하고, 확인 불가이면 그 effect에 의존하는 작업을 멈추고 `PARTIAL | BLOCKED`로 반환한다.
+- worker 교체는 caller/host 책임이다. old worker/process가 실제 종료됐다는 host evidence가 없으면 같은 mutable worktree에 replacement를 시작하지 않는다. cancel receipt만으로 settlement를 주장하지 않는다.
+- `Completion: COMPLETE` 직전에 같은 review로 `ready_contract check_plan_admission`을 다시 호출하고 load-bearing runtime/source assumptions를 직접 확인한다. current가 아니면 COMPLETE를 주장하지 않는다.
 
 ## 제품 의미 해석
 
@@ -69,16 +70,16 @@ Ticket은 이번 구현 경계, Parent Spec은 상위 결과, Behavior Authority
 
 Verification flow를 임의의 1:1 파일 작업으로 바꾸지 않는다. 구현 change와 self-check evidence를 각 flow에 연결하고, acceptance boundary와 authoritative readback으로 current product 결과를 확인한다. Authored independent-verification requirement가 있으면 원문 의미와 관련 implementation/self-check evidence를 final handoff에 보존하되 충족 여부는 판정하지 않는다.
 
-## Checkpoint와 종료
+## Material method change와 종료
 
-current ADMIT 후 정상 첫 source 변경과 무변경 재개/교체에는 PRE_ACTION 재심사가 없다. worker는 load-bearing anchor/search universe/runtime 전제와 current user/Scope를 첫 의존 변경 전에 확인하며, 검토된 조건부 첫 작업의 지지/반증/불충분 분기를 따른다.
+current ADMIT 후 정상 첫 source 변경에는 PRE_ACTION 재심사가 없다. worker는 load-bearing anchor/search universe/runtime 전제와 current user/Scope를 첫 의존 변경 전에 확인하며, 검토된 조건부 첫 작업의 지지/반증/불충분 분기를 따른다.
 
-구현 방향, authority 해석, change surface 또는 evidence 전략이 material하게 바뀌는 경우에만 `IMPLEMENTATION TURN REPORT`를 `MATERIAL_TURN` checkpoint로 반환한다. 정상 진행, 일시적 test failure, 스타일 또는 단순 리팩터링은 periodic progress checkpoint 사유가 아니다.
+구현 중 다른 root cause, owner, shared interface, persistence 의미, authoritative readback 또는 non-idempotent effect strategy가 직접 evidence로 드러나 reviewed Plan의 중요한 방법이 바뀌면 새 방향에 의존하는 mutation을 즉시 멈춘다. 정상 진행, 일시적 test failure, 스타일 또는 동등한 국소 리팩터링은 material method change가 아니다.
 
-중요 owner/interface/persistence/readback/원인 변경은 영향 Planner → Heuristic → independent review로 반환한다. `checkpoint`의 `kind: MATERIAL_TURN`과 `release_checkpoint`를 사용하며, plan drift 해제에는 새 `plan_review_path`의 공통 검사가 필요하다. Parent CONTINUE만으로 우회하지 않는다. DIRECT owner도 currentness와 pause fence를 준수한다. `PAUSED`에서는 안전한 read/분석만 허용하며 mutation은 금지한다.
+material method change는 runtime pause/resume이 아니라 current implementation invocation의 terminal 경계다. worker는 `Completion: PARTIAL | BLOCKED`, reviewed direction, 새 직접 evidence, affected Plan scope, current working-tree state, `Next allowed action: revise affected Plan -> Heuristic -> independent review`를 반환하고 invocation을 끝낸다. Outer Main은 실제 Plan revision과 새 independent review를 얻은 뒤 fresh implementation actor를 시작한다. old worker를 CONTINUE로 release하지 않는다.
 
-`IMPLEMENT` 완료에는 Ticket Scope/Non-Goals 보존, 모든 authored Verification-flow obligation에 연결된 current self-check evidence, unresolved authority conflict/material blocker 부재, authored independent-verification requirement evidence 보존, decision-critical source/diff/artifact/command/runtime behavior의 직접 확인이 필요하다.
+`IMPLEMENT` 완료에는 Ticket Scope/Non-Goals 보존, 모든 authored Verification-flow obligation에 연결된 current self-check evidence, unresolved authority conflict/material blocker 부재, authored independent-verification requirement evidence 보존, decision-critical source/diff/artifact/command/runtime behavior의 직접 확인, 그리고 terminal 직전 current `check_plan_admission` 재확인이 필요하다.
 
-`Completion: COMPLETE`여도 exact Ticket의 `Status: ready`는 유지한다. actual implementation target/checkpoint와 current self-check evidence를 final verifier의 navigation handoff로 보존한다. 이후 verification 또는 IIS planning continuation을 자동 실행하지 않는다.
+`Completion: COMPLETE`여도 exact Ticket의 `Status: ready`는 유지한다. actual implementation target과 current self-check evidence를 final verifier의 navigation handoff로 보존한다. 이후 verification 또는 IIS planning continuation을 자동 실행하지 않는다.
 
-`Completion: BLOCKED | PARTIAL`이 admission, authority/readback, target currentness, 또는 checkpoint `STOP` 때문에 현재 구현 owner가 계속할 수 없음을 뜻할 때는 [references/implement.md](references/implement.md)의 **Non-continuation provenance**를 terminal caller-facing report에 포함한다. 정상 `Completion: COMPLETE`에는 이 설명 블록을 추가하지 않는다.
+`Completion: BLOCKED | PARTIAL`이 admission, authority/readback, target currentness, external-effect uncertainty 또는 material method change 때문에 현재 구현 owner가 계속할 수 없음을 뜻할 때는 [references/implement.md](references/implement.md)의 **Non-continuation provenance**를 terminal caller-facing report에 포함한다. 정상 `Completion: COMPLETE`에는 이 설명 블록을 추가하지 않는다.

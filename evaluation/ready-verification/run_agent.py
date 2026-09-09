@@ -75,20 +75,16 @@ def _verification_verdict(terminal: str) -> str | None:
     return verdict.upper() if verdict else None
 
 
-def guard_results(events: list[dict[str, Any]], action: str) -> list[dict[str, Any]]:
+def boundary_results(events: list[dict[str, Any]], tool_name: str, action: str | None = None) -> list[dict[str, Any]]:
+    """Return successful explicit Ready boundary-tool results; assistant narration is never evidence."""
     calls = {event.get("toolCallId"): event for event in events if event.get("type") == "tool_execution_start"}
     results = []
     for event in events:
+        if event.get("type") != "tool_execution_end" or event.get("isError"):
+            continue
         call = calls.get(event.get("toolCallId"), {})
         args = call.get("args", {})
-        name = call.get("toolName")
-        if name == "write" and args.get("path") == "xd://ready_guard":
-            try:
-                args = json.loads(args.get("content", ""))
-                name = "ready_guard"
-            except (TypeError, json.JSONDecodeError):
-                continue
-        if event.get("type") != "tool_execution_end" or event.get("isError") or name != "ready_guard" or args.get("action") != action:
+        if call.get("toolName") != tool_name or (action is not None and args.get("action") != action):
             continue
         result = event.get("result", {})
         if not isinstance(result, dict):
@@ -116,6 +112,13 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
     preparation = canonical_field(terminal, "READY TICKET PLAN RESULT", "Completion", "COMPLETE|BLOCKED|PARTIAL")
     review = canonical_field(terminal, "READY TICKET PLAN RESULT", "Plan Review", r"/[^\n]+")
     implementation = canonical_field(terminal, "IMPLEMENT RESULT", "Completion", "COMPLETE|BLOCKED|PARTIAL")
+    verifier_progression = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verifier Ticket Progression", "PENDING CALLER FINALIZATION|NOT APPLICABLE")
+    if verifier_progression is None:
+        verifier_progression = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Ticket Progression", "PENDING CALLER FINALIZATION|NOT APPLICABLE")
+    verification_binding = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verification Binding", r"/[^\n]+")
+    verification_binding_sha256 = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verification Binding SHA256", r"[0-9a-fA-F]{64}")
+    finalizations = boundary_results(events, "ready_finalize")
+    finalization = finalizations[-1]["result"] if finalizations else None
     calls = [event for event in events if event.get("type") == "tool_execution_start"]
     results = [event for event in events if event.get("type") == "tool_execution_end"]
     tool_errors = [event for event in results if event.get("isError") is True]
@@ -124,7 +127,13 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
     return {"terminal_text": terminal, "parsed_verdict": parsed if model_completed else None,
             "preparation_completion": preparation.upper() if model_completed and preparation else None,
             "plan_review_path": review if model_completed else None,
-            "ticket_progression": canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Ticket Progression", "COMPLETED|FAILED|NOT APPLICABLE") if model_completed else None,
+            "verifier_ticket_progression": verifier_progression.upper() if model_completed and verifier_progression else None,
+            "verification_binding_path": verification_binding if model_completed else None,
+            "verification_binding_sha256": verification_binding_sha256.lower() if model_completed and verification_binding_sha256 else None,
+            "caller_finalization": finalization,
+            "ticket_progression": finalization.get("ticket_progression") if finalization else None,
+            "progression_basis": finalization.get("progression_basis") if finalization else None,
+            "ticket_status_after": finalization.get("ticket_status_after") if finalization else None,
             "implementation_completion": implementation if model_completed else None,
             "tool_calls": calls, "tool_results": results, "tool_errors": tool_errors,
             "usage": usage, "actual_models": models,
@@ -133,7 +142,7 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def invoke(*, project_root: Path, prompt: str, output_dir: Path, agent_dir: Path,
-           payload: Path, runtime_data: Path, model: str, thinking: str = "medium",
+           payload: Path, model: str, thinking: str = "medium",
            timeout: int = 600, session_dir: Path | None = None,
            resume_session: Path | None = None, wall_timeout_seconds: float | None = None,
            stage: str, boundary_callback=None) -> dict[str, Any]:
@@ -171,18 +180,17 @@ def invoke(*, project_root: Path, prompt: str, output_dir: Path, agent_dir: Path
     bundle = json.loads((payload / "bundle.json").read_text(encoding="utf-8"))
     if bundle.get("schema") != "iis-bundle/v2" or bundle.get("protocol") != 2:
         raise ValueError("a complete current protocol-2 bundle is required")
-    for key in ("IIS_READY_RUNTIME_DATA", "IIS_READY_VALIDATOR_PATH", "IIS_READY_BUNDLE_ID", "IIS_READY_IIS_WORKFLOW_SKILL"):
+    for key in ("IIS_READY_VALIDATOR_PATH", "IIS_READY_BUNDLE_ID", "IIS_READY_IIS_WORKFLOW_SKILL"):
         environment.pop(key, None)
     environment.update(PI_CODING_AGENT_DIR=str(agent_dir), PYTHONDONTWRITEBYTECODE="1")
-    runtime_required = stage in {"prepare", "implement", "verify", "adaptive"}
-    if runtime_required:
-        environment.update(IIS_READY_RUNTIME_DATA=str(runtime_data.resolve()),
-                           IIS_READY_VALIDATOR_PATH=str(payload / "matt/skills/to-tickets/validate_ticket.py"),
+    boundary_tools_required = stage in {"prepare", "implement", "verify", "adaptive"}
+    if boundary_tools_required:
+        environment.update(IIS_READY_VALIDATOR_PATH=str(payload / "matt/skills/to-tickets/validate_ticket.py"),
                            IIS_READY_BUNDLE_ID=bundle["bundle_id"])
     session_args = ["--no-session"] if session_dir is None else ["--session-dir", str(session_dir), "--no-title"]
     if resume_session is not None:
         session_args.extend(["--resume", str(resume_session)])
-    extensions = ["--extension", str(payload / "delivery-runtime/ready-ticket-implement/index.js")] if runtime_required else []
+    extensions = ["--extension", str(payload / "delivery-tools/ready-ticket/omp.js")] if boundary_tools_required else []
     argv = ["omp", "--cwd", str(project_root), "--mode", "json", "--print", *session_args, "--no-rules",
             "--no-extensions", *extensions, "--model", model, "--thinking", thinking,
             "--max-time", f"{timeout}s", "--approval-mode", "yolo", prompt]
@@ -229,12 +237,14 @@ def invoke(*, project_root: Path, prompt: str, output_dir: Path, agent_dir: Path
     result.update(schema="iis-agent-observation/v2", stage=stage, bundle_id=bundle["bundle_id"],
                   extension_requested=extensions, loaded_identity="REQUIRES_RAW_HOST_EVIDENCE",
                   model_requested=model, thinking=thinking,
-                  project_root=str(project_root), runtime_data=str(runtime_data.resolve()), payload=str(payload),
+                  project_root=str(project_root), payload=str(payload),
                   raw_events=str(output_dir / "events.jsonl"), prompt_sha256=hashlib.sha256(prompt.encode()).hexdigest(),
                   elapsed_seconds=time.monotonic() - started, exit_code=exit_code, timed_out=timed_out)
     result["clean_transport"] = exit_code == 0 and not timed_out and result["model_completed"] and result["actual_models"] == [model]
     if not result["clean_transport"]:
-        for field in ("implementation_completion", "preparation_completion", "plan_review_path", "parsed_verdict", "ticket_progression"):
+        for field in ("implementation_completion", "preparation_completion", "plan_review_path", "parsed_verdict",
+                      "verifier_ticket_progression", "verification_binding_path", "verification_binding_sha256",
+                      "caller_finalization", "ticket_progression", "progression_basis", "ticket_status_after"):
             result[field] = None
     if session_dir is not None:
         sessions = list(session_dir.glob("*.jsonl"))
@@ -255,7 +265,6 @@ def main() -> int:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--agent-dir", required=True, type=Path)
     parser.add_argument("--payload", required=True, type=Path)
-    parser.add_argument("--runtime-data", required=True, type=Path)
     parser.add_argument("--model", required=True)
     parser.add_argument("--thinking", default="medium")
     parser.add_argument("--timeout", default=600, type=int)
@@ -263,7 +272,7 @@ def main() -> int:
     parser.add_argument("--resume-session", type=Path)
     args = parser.parse_args()
     result = invoke(project_root=args.project_root, prompt=args.prompt.read_text(encoding="utf-8"), output_dir=args.output,
-                    agent_dir=args.agent_dir, payload=args.payload, runtime_data=args.runtime_data,
+                    agent_dir=args.agent_dir, payload=args.payload,
                     model=args.model, thinking=args.thinking, timeout=args.timeout,
                     session_dir=args.session_dir, resume_session=args.resume_session, stage=args.stage)
     print(json.dumps({key: result[key] for key in ("exit_code", "timed_out", "agent_ended", "clean_transport", "stop_reason", "error_message", "parsed_verdict", "preparation_completion", "implementation_completion", "actual_models", "elapsed_seconds", "raw_events")}, indent=2))

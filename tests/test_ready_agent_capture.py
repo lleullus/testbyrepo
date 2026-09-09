@@ -125,7 +125,7 @@ class ReadyAgentCaptureTests(unittest.TestCase):
         duplicate = terminal + "\nPlan Review: /different/review.json"
         self.assertIsNone(self.capture.summarize([message("stop", duplicate), {"type": "agent_end"}])["plan_review_path"])
 
-    def test_verdict_rejects_quotes_conflicts_and_progression_is_distinct(self) -> None:
+    def test_verdict_rejects_quotes_conflicts_and_caller_progression_is_distinct(self) -> None:
         for terminal in (
             "> READY TICKET VERIFICATION RESULT\n> Verification Verdict: VERIFIED",
             "```text\nREADY TICKET VERIFICATION RESULT\nVerification Verdict: VERIFIED\n```",
@@ -133,9 +133,34 @@ class ReadyAgentCaptureTests(unittest.TestCase):
             "VERIFICATION NOT STARTED\nREADY TICKET VERIFICATION RESULT\nVerification Verdict: VERIFIED",
         ):
             self.assertIsNone(self.capture.summarize([message("stop", terminal), {"type": "agent_end"}])["parsed_verdict"])
-        summary = self.capture.summarize([message("stop", "READY TICKET VERIFICATION RESULT\nVerification Verdict: VERIFIED\nTicket Progression: FAILED"), {"type": "agent_end"}])
-        self.assertEqual(summary["parsed_verdict"], "VERIFIED")
-        self.assertEqual(summary["ticket_progression"], "FAILED")
+        binding = "/outside/verification-binding.json"
+        sha256 = "a" * 64
+        terminal = ("READY TICKET VERIFICATION RESULT\n"
+                    f"Verification Binding: {binding}\n"
+                    f"Verification Binding SHA256: {sha256}\n"
+                    "Verification Verdict: VERIFIED\n"
+                    "Verifier Ticket Progression: PENDING CALLER FINALIZATION\n"
+                    "Observed Ticket Status: ready")
+        pending = self.capture.summarize([message("stop", terminal), {"type": "agent_end"}])
+        self.assertEqual(pending["parsed_verdict"], "VERIFIED")
+        self.assertEqual(pending["verifier_ticket_progression"], "PENDING CALLER FINALIZATION")
+        self.assertEqual(pending["verification_binding_path"], binding)
+        self.assertEqual(pending["verification_binding_sha256"], sha256)
+        self.assertIsNone(pending["ticket_progression"])
+        events = [
+            message("stop", terminal),
+            {"type": "tool_execution_start", "toolCallId": "f", "toolName": "ready_finalize",
+             "args": {"binding_path": binding, "binding_sha256": sha256, "verdict": "VERIFIED"}},
+            {"type": "tool_execution_end", "toolCallId": "f", "isError": False,
+             "result": {"details": {"verification_binding": binding, "verification_binding_sha256": sha256,
+                                      "verification_verdict": "VERIFIED", "ticket_progression": "COMPLETED",
+                                      "progression_basis": "WRITE_PERFORMED_THIS_CALL", "ticket_status_after": "done"}}},
+            {"type": "agent_end"},
+        ]
+        finalized = self.capture.summarize(events)
+        self.assertEqual(finalized["ticket_progression"], "COMPLETED")
+        self.assertEqual(finalized["progression_basis"], "WRITE_PERFORMED_THIS_CALL")
+        self.assertEqual(finalized["ticket_status_after"], "done")
 
     def test_normal_domain_failure_is_not_a_transport_failure(self) -> None:
         summary = self.capture.summarize([
@@ -201,7 +226,7 @@ class ReadyAgentCaptureTests(unittest.TestCase):
             self.assertIn("model_not_cleanly_terminated", {error["code"] for error in report["errors"]})
             with self.assertRaises(ValueError):
                 planning.run_turn(metadata_path, "Continue", agent_dir=arena / "missing",
-                                  payload=arena / "missing", runtime_data=arena,
+                                  payload=arena / "missing",
                                   model="opencodex/gpt-6-astra")
             self.assertFalse((run_root / "turn-2").exists())
 
@@ -221,7 +246,7 @@ class ReadyAgentCaptureTests(unittest.TestCase):
                     with mock.patch.object(planning, "invoke", side_effect=AssertionError("Model must not run")):
                         with self.assertRaises(ValueError):
                             planning.run_turn(metadata_path, "Start", agent_dir=arena / "missing",
-                                              payload=arena / "missing", runtime_data=arena,
+                                              payload=arena / "missing",
                                               model="opencodex/gpt-6-astra")
                     self.assertFalse((run_root / "turn-1").exists())
 
@@ -243,7 +268,7 @@ class ReadyAgentCaptureTests(unittest.TestCase):
             with mock.patch.object(planning, "invoke", side_effect=AssertionError("Model must not run")):
                 with self.assertRaises(ValueError):
                     planning.run_turn(metadata_path, "Start", agent_dir=root / "missing",
-                                      payload=root / "missing", runtime_data=root,
+                                      payload=root / "missing",
                                       model="opencodex/gpt-6-astra")
             self.assertEqual(metadata_path.read_bytes(), original_metadata)
             self.assertFalse((metadata_path.parent / "turn-1").exists())

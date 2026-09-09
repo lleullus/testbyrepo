@@ -20,34 +20,27 @@ Additional User Instructions:
 Delegated Verifier: yes
 ```
 
-The delegated verifier continues to own canonical admission, semantic contract check, complete authored Flow denominator, scenario authorship, runtime/canonical evidence, heuristic finding disposition, every Flow adjudication, every AC verdict, Scope/Non-Goals and cross-AC closure, whole-Ticket verdict and guarded status write. Parent Main does not perform a second verification pass.
+The delegated verifier continues to own canonical admission, semantic contract check, complete authored Flow denominator, scenario authorship, runtime/canonical evidence, heuristic finding disposition, every Flow adjudication, every AC verdict, Scope/Non-Goals and cross-AC closure, and the whole-Ticket semantic verdict. It never owns the status write. Parent Main does not perform a second verification pass; after terminal fan-in it owns the separate `ready_finalize` call.
 
-### SUBAGENT checkpoint continuation
+### SUBAGENT terminal fan-in and settlement
 
-A checkpoint is a logical phase boundary. It is not a required live-wait primitive, direct-user approval gate or durable workflow state.
+The delegated verifier runs one invocation-local evidence cycle and returns one terminal `READY TICKET VERIFICATION RESULT`. There are no IIS verification checkpoints, release decisions, execution leases, or persistent verifier sessions.
 
-At a checkpoint:
+1. exactly one delegated verifier owns the same Ticket/stage at a time;
+2. the verifier captures the immutable verification binding before product/runtime scenario action;
+3. normal scenario progress and settled command failures stay inside that invocation;
+4. if target identity/effect partition/authority changes enough that the captured binding is no longer attributable, the verifier terminates with the applicable `VERIFICATION NOT STARTED | FAILED | INCONCLUSIVE` result rather than waiting for Parent continuation;
+5. Parent receives only the terminal semantic result and never substitutes a different verifier verdict;
+6. Parent then invokes `ready_finalize` with the exact binding path/SHA and unchanged verdict;
+7. never auto-fallback between `SUBAGENT` and `DIRECT`.
 
-1. delegated owner returns a complete checkpoint report to Parent Main;
-2. it does not cross the named `Protected next phase` before Parent decision;
-3. Parent returns exactly one decision:
-   - `CONTINUE`: release the protected next phase;
-   - `STEER`: provide a bounded correction with exact authority/evidence anchor; if decision-critical content changes, the verifier updates and resubmits the same checkpoint;
-   - `STOP`: do not enter the protected phase and close with the applicable existing `VERIFICATION NOT STARTED | INCONCLUSIVE | terminal progression` owner contract;
-4. only one delegated owner lane exists for the same Ticket/stage at a time;
-5. do not repeat a checkpoint without material delta or create periodic progress checkpoints;
-6. if checkpoint continuation capability is unavailable, return `SUBAGENT CAPABILITY UNAVAILABLE`;
-7. never auto-fallback to `DIRECT`.
-
-Continuation is harness-neutral: it may use live child yield/reply, same-session return/resume, or an attributable continuation invocation after confirming the prior child is inactive. A replacement continuation explicitly supersedes the prior worker and rechecks exact Ticket, target/current working-tree identity, previous checkpoint payload, Parent decision and baseline/currentness. The hard rule is: do not cross the protected next phase before Parent decision.
-
-The verifier ends with one `READY TICKET VERIFICATION RESULT`. Checkpoint reports are nonterminal and do not themselves carry Adaptive defect classification.
+If the verifier process must be replaced, the caller/host must first establish actual prior worker/process settlement before starting another verifier on the same mutable worktree/effect surface. A cancel receipt or session/job ID is not settlement evidence. A fresh verifier invocation captures a fresh binding.
 
 ## 2. Admission and current authority
 
 Before any runtime/product action:
 
-Skill reads and preparation artifact writing do not arm or enter execution. Explicit `begin_verify` or delegated assignment/begin starts admission only after one actual Ticket is selected. Current authority and actual target validation precede execution commit; a method plan/review is optional navigation, never a verification ADMIT prerequisite. `cancel_admission` fences only an in-flight unbound admission. Bound/uncertain execution stays with its current owner's closure/recovery path; orphan reservations require verified withdrawal/termination and no live work/uncertain effects before exact-identity recovery.
+Skill reads and preparation artifact writing do not arm or enter execution. After one actual Ticket is selected, canonical/semantic/authority/target preflight resolves the exact stable implementation targets and exact scenario-effect paths. `ready_contract capture_verification` then creates the immutable outside-root binding used by this verifier invocation. A method plan/review is optional navigation, never a verification ADMIT prerequisite. No verification execution/session/reservation/admission lifecycle is created.
 
 
 1. Resolve the current pinned bundle's canonical To Tickets `validate_ticket.py`, the same validator identity used by Ready runtime. The discovered `iis-workflow` route is navigation within that bundle; never probe historical source or another client home for a substitute validator.
@@ -109,27 +102,21 @@ If target drift occurs:
 - do not carry a prior PASS across the drift;
 - re-establish a stable target and obtain fresh required observations before `VERIFIED`.
 
-### Runtime enforcement boundary
+### Stateless verification boundary
 
-After canonical/status/semantic/authority/projection gates and exact target resolution succeed, call `ready_guard begin_verify` with exact Ticket/Project Root, exact actual implementation `target_paths`, and only exact declared outside-root evidence outputs. No earlier exploration artifact/binding is required. Preserve the actual admission rejection; do not invent a machine-currentness diagnosis from prose.
+After canonical/status/semantic/authority/projection gates and exact target resolution succeed, call `ready_contract capture_verification` with exact Ticket/Project Root, exact `stable_target_paths`, exact `scenario_effect_paths`, and optional `plan_review_path`. The tool validates current authority, rejects stable/effect overlap and protected authority/method effect paths, and creates an immutable outside-root binding with exact path/SHA. Preserve the actual capture failure; do not invent a machine-currentness diagnosis from prose.
 
-Optional method navigation uses only `plan_review_path`; runtime resolves actually checked review/plans from that artifact, not arbitrary separately supplied plan paths. Product-required paths take precedence over method context. Do not require ADMIT to verify an already implemented target or synthesize a review merely for classification.
+Optional method navigation uses only `plan_review_path`; the binding records the exact review bytes and checked plan paths as navigation/method context. Product-required paths take precedence over method context. Do not require ADMIT to verify an already implemented target or synthesize a review merely for classification.
 
-Continue only with returned `purpose: verify` and a bound target digest. Generic source/config/test/planning mutation and `ready_argv mutate` are forbidden. Use supported guarded inspection or structured `ready_argv execute` for ordinary runtime argv. Protected product drift enters PAUSED with reason TARGET_DRIFT and prevents stale VERIFIED. Authority drift, target drift and EFFECT_UNCERTAIN are distinct, and a parent CONTINUE cannot erase them.
+After capture, use host-native inspection/read/CLI/service surfaces. Verification must not edit product source/config/tests/planning artifacts to manufacture success. Settled nonzero command results are ordinary verifier evidence and do not create generic workflow uncertainty. The stable implementation target remains immutable for attribution; scenario-effect paths may change only as predeclared by the authored scenario.
 
-Separate product-target identity from exact declared method-context navigation. Plan/review-only drift stales that navigation, not product evidence automatically; no write permission follows. A plan required by the approved product contract remains a product target. Undeclared new files are conservatively product changes until narrowly classified. File hashes do not prove runtime/DB/provider/permission currentness; obtain actual authoritative readback and required observation windows.
+Separate product-target identity from exact declared method-context navigation. Plan/review-only drift stales navigation, not product evidence automatically; no write permission follows. A plan required by the approved product contract remains a product target. Undeclared new files are conservatively product changes until narrowly classified. File hashes do not prove runtime/DB/provider/permission currentness; obtain actual authoritative readback and required observation windows.
 
-For delegated verification, Parent uses `assign_subagent` with `purpose: verify`; the worker uses `begin_delegated` with the same target inputs. Before actual scenario work use `checkpoint`, `kind: PRE_RUNTIME`; material and candidate VERIFIED closure use the same action with MATERIAL_TURN/PRE_PROGRESSION. Parent releases the exact pause through `release_checkpoint`; DIRECT current owner has no Parent ceremony but observes the same currentness/effect fence. PAUSED permits safe read/analysis, not source mutation or protected runtime action.
+There are no delegated Ready assignments, begin calls, checkpoints, pause/release actions, or verifier execution IDs. Parent/caller owns only worker process lifecycle and terminal fan-in. Replacement requires actual old-worker/process/service settlement before a fresh verifier touches the same mutable worktree/effect surface; cancel receipt alone is not settlement.
 
-Replacement requires old dispatch revocation, actual work/service settlement, prior `suspend_worker`, Parent inactive confirmation and `replace_worker` one-use assignment. The new owner rechecks current authority/target and its scenario PRE_RUNTIME before dependent runtime work. Cancel receipt alone is not settlement; do not equate agent/job/session/assignment IDs. Parent STOP does not invent a verdict: the verifier owns its applicable terminal and `finalize_verification` closure.
+Use host-native service/process facilities when a scenario requires them. Preserve exact returned handle/generation where available, never adopt/stop shared existing services without authority, observe readiness and actual settlement, and complete authored cleanup before terminal verdict. A timeout can leave a live service; root exit/cancel receipt does not prove escaped descendants or external effects ended.
 
-Use native `hub start/logs/wait/stop` for one execution-owned ephemeral service with exact handle/generation, persist:false, detached:false and no automatic restart. Never adopt/stop shared existing services. Observe readiness and actual settlement; timeout can leave a live service. Stop/reap before terminal/suspend/replacement. Root exit/cancel receipt does not prove escaped descendants or external effects ended. Unsupported host surfaces remain explicit capability limitations.
-
-The supported adapter uses an execution-UUID-unique service name and actual host resource `id`, `startedAt`, `restartCount` generation; preserve its returned handle and inspect stop/wait settlement. Names alone cannot adopt a later generation.
-
-Mutation-capable scenario timeout/abort/transport loss can leave an applied effect even when local files are unchanged. Preserve EFFECT_UNCERTAIN and ownership; do not blind replay or claim rollback. `resolve_mutation` needs exact operation/effect surface and actual authoritative readback reference, with an authorized owner decision where local identity cannot decide. Unresolved effects remain protected after a blocked report.
-
-The recovery request fields are `operation_id`, `effect_surface`, `evidence_reference`, `outcome`; exact current recovery-owner judgment and actual readback are required, not an arbitrary outcome string. Orphan admission recovery uses `recover_admission(project_root, ticket_path, reservation_id, recovery_evidence_reference)` only after the designated recovery owner establishes that exact admission ended/was withdrawn and no related live work/uncertain effects remain. Runtime compares the same reservation under lock; a handoff is not automatic host proof.
+Mutation-capable scenario timeout/abort/transport loss can leave an applied external/product effect even when local files are unchanged. Do not blind replay or claim rollback. Continue with the authored authoritative readback, cleanup, and evidence path. If readback establishes applied/not-applied, adjudicate from that fact; if settlement or attribution remains unknown, affected evidence is `INCONCLUSIVE` and any verdict depending on it cannot be `VERIFIED`. No generic execution-uncertainty phase, recovery operation, reservation, or mutation-resolution state is created.
 
 
 ## 6. Integrated scenario ownership
@@ -264,14 +251,13 @@ Cleanup / terminal conditions:
 Authority-required actions:
 Execution disposition: PROCEED | AUTHORITY REQUIRED | BLOCKED
 
-Checkpoint: NOT_APPLICABLE | PRE_RUNTIME
-Protected next phase: NOT_APPLICABLE | FIRST_PRODUCT_OR_RUNTIME_ACTION
-Checkpoint state: NOT_APPLICABLE | PARENT_CONTINUATION_REQUIRED
+Verification Binding: <exact outside-root path>
+Verification Binding SHA256: <sha256>
+Stable Target Paths: <exact list>
+Scenario Effect Paths: <exact list>
 ```
 
-In `DIRECT`, the report is informational and has no Parent continuation. In `SUBAGENT`, `PRE_RUNTIME` is mandatory after semantic/scenario closure and before the first product/runtime action; the delegated verifier does not cross `FIRST_PRODUCT_OR_RUNTIME_ACTION` before Parent `CONTINUE`. Parent reviews authored Flow/AC denominator completeness, heuristic-finding coverage, authoritative readback strength, Scope and obvious target/authority mismatch only; Parent does not execute the flows or issue AC verdicts.
-
-Call `ready_guard checkpoint` with `kind: PRE_RUNTIME` for the delegated report and wait for exact Parent `release_checkpoint`. Use the same public action with MATERIAL_TURN and PRE_PROGRESSION at their defined boundaries; no normal implementation-first-change checkpoint is implied.
+In both `DIRECT` and `SUBAGENT`, the report is informational and records the immutable binding captured before scenario execution. No Parent release/checkpoint is required. Parent does not execute the flows or issue AC verdicts; in SUBAGENT it receives only the eventual terminal verifier result.
 
 ## 9. Evidence sufficiency and execution
 
@@ -351,19 +337,13 @@ Previous assumption:
 New attributable evidence:
 Material effect:
 Affected AC / authority / target:
-Proposed continuation direction:
-
-Checkpoint: NOT_APPLICABLE | MATERIAL_TURN
-Protected next phase: NOT_APPLICABLE | <exact protected phase>
-Checkpoint state: NOT_APPLICABLE | PARENT_CONTINUATION_REQUIRED
-Work permitted before continuation: safe read/analysis only while PAUSED; no protected runtime action
+Binding impact: NONE | STALE_OR_UNATTRIBUTABLE
+Verifier action: CONTINUE WITH SAME BINDING | TERMINATE FOR FRESH VERIFICATION
 ```
 
 A bounded observation already inside the authored flow may be recorded as `SCENARIO AMENDMENT`. Do not use a turn report to invent a trigger, initial state, decision boundary, Scope or authority.
 
-In `DIRECT`, the report remains informational and verifier-owned execution continues under current authority. In `SUBAGENT`, the report becomes a `MATERIAL_TURN` checkpoint only when the changed evidence can alter adjudication or safe progression; after returning it, do not perform work that depends on the changed direction before Parent continuation. `STEER` that changes decision-critical content requires an updated checkpoint before protected work resumes.
-
-If new evidence establishes a terminal blocker or material semantic gap that prevents authoritative adjudication, do not create an unnecessary checkpoint: return the applicable existing `VERIFICATION NOT STARTED`, `FAILED` or `INCONCLUSIVE` terminal result. Checkpoints are for cases that can continue after bounded resynchronization, not periodic progress or terminal blockers.
+When the changed evidence does not alter the captured stable/effect partition or authority identity, the verifier may continue in the same invocation. When it makes the binding stale or attribution unsafe, terminate with the applicable `VERIFICATION NOT STARTED`, `FAILED` or `INCONCLUSIVE` result and exact evidence limit. Do not wait for Parent continuation, patch an immutable binding, or carry PASS evidence across the drift.
 
 ## 11. Disposition-specific execution
 
@@ -411,67 +391,45 @@ Complete every authored cleanup, absence window, process stop, disposable-target
 
 A still-running duplicate-sensitive effect, incomplete cleanup or unfinished absence/ordering window prevents final `VERIFIED` when it affects the decision boundary. Capture necessary evidence before disposing of a temporary target.
 
-## 14. Terminal status transition
+## 14. Terminal semantic result and caller-owned status transition
 
-Keep verification verdict and Ticket progression separate.
+Keep verification verdict and Ticket progression separate. The verifier owns only the semantic result; the caller owns the narrow status transition.
 
-For normal delivery verification of `Status: ready`:
+For every normal delivery verification captured from `Status: ready`, the verifier returns one terminal `READY TICKET VERIFICATION RESULT` with the exact binding path/SHA and `Ticket Progression: PENDING CALLER FINALIZATION`, regardless of whether the semantic verdict is `VERIFIED`, `FAILED`, or `INCONCLUSIVE`. The verifier never writes `done` and never invokes `ready_finalize`.
 
-- `FAILED` -> keep `ready`; `Ticket Progression: NOT APPLICABLE`.
-- `INCONCLUSIVE` -> keep `ready`; `Ticket Progression: NOT APPLICABLE`.
-- `VERIFIED` -> attempt guarded progression only through the sequence below.
+Before emitting semantic `VERIFIED`, the verifier must still ensure within its evidence cycle that:
 
-For `SUBAGENT`, after all Flow adjudications and AC candidate verdicts are closed, Scope/Non-Goals and cleanup are closed, and candidate whole-Ticket verdict is `VERIFIED`, return this checkpoint before final `VERIFIED` emission or status mutation:
+1. every authored Flow has an attributable final result;
+2. every current AC is `PASS`;
+3. Scope/Non-Goals, heuristic finding dispositions, cleanup and terminal conditions are closed;
+4. no unresolved material semantic-contract defect or evidence conflict remains;
+5. the source/config/build target used for the verdict remains attributable to the captured stable target; and
+6. no unresolved external-effect settlement gap prevents required evidence from being decisive.
+
+The terminal verifier result includes:
 
 ```text
-VERIFICATION PRE-PROGRESSION CHECKPOINT
-
-Ticket:
-Execution Mode: SUBAGENT
-Verifier:
-Verification target:
-Target stability:
-Candidate whole-Ticket verdict: VERIFIED
-
-Flow closure:
-- <every authored Flow and candidate result>
-
-AC closure:
-- <every AC and candidate verdict>
-
-Heuristic finding dispositions:
-Scope / Non-Goals closure:
-Cross-AC closure:
-Evidence limits:
-Cleanup / terminal conditions:
-Ticket status currently observed:
-
-Checkpoint: PRE_PROGRESSION
-Protected next phase: FINAL_VERIFIED_AND_GUARDED_READY_TO_DONE
-Checkpoint state: PARENT_CONTINUATION_REQUIRED
+Verification Binding: <exact outside-root path>
+Verification Binding SHA256: <sha256>
+Stable Target Paths: <exact list>
+Scenario Effect Paths: <exact list>
+Verification Verdict: VERIFIED | FAILED | INCONCLUSIVE
+Ticket Progression: PENDING CALLER FINALIZATION | NOT APPLICABLE
+Observed Ticket Status: ready | done | <actual>
 ```
 
-Parent reviews only obvious closure errors: missing authored Flow/AC, `INCONCLUSIVE` evidence paired with candidate `VERIFIED`, missing heuristic disposition or Scope/Non-Goals closure, incomplete cleanup, target/status drift, or direct internal contradiction. Parent does not rerun runtime verification or issue its own verdict. `FAILED` and `INCONCLUSIVE` candidates have no `PRE_PROGRESSION` checkpoint and terminate without `done` mutation.
+In `SUBAGENT`, Parent Main consumes this terminal result and calls `ready_finalize(binding_path, binding_sha256, verdict)` without changing the verdict. In `DIRECT`, Main first completes the verifier result and then performs the same call as a distinct caller step. `ready_finalize` rechecks immutable binding SHA, current authority, stable target and canonical Ticket validation. It does not rerun or reinterpret semantic verification.
 
-On Parent `CONTINUE`, the delegated verifier rechecks currentness and performs the existing guarded progression. On `STEER`, it reopens only the bounded Flow/evidence/closure identified by Parent and resubmits `PRE_PROGRESSION` if the candidate remains `VERIFIED`. Parent may use `STOP` at `PRE_PROGRESSION` only when current authority, target currentness, current user instruction, evidence closure, or progression authority means candidate `VERIFIED` can no longer be finalized. On that `STOP`, the delegated verifier re-adjudicates the candidate under that exact evidence limit and emits the existing terminal `READY TICKET VERIFICATION RESULT` with `Verification Verdict: INCONCLUSIVE`, `Ticket Progression: NOT APPLICABLE`, and `Ticket status after verification: ready`; it performs no `done` mutation. Parent Main does not issue or substitute that verdict.
+For an original `ready` binding:
 
-Every terminal verdict closes the bound verification execution through `ready_guard finalize_verification`; do not leave the guard active after emitting a terminal result. `FAILED` and `INCONCLUSIVE` finalize with `Ticket Progression: NOT APPLICABLE` and perform no status mutation.
+- `FAILED` or `INCONCLUSIVE` -> no status mutation; caller reports the finalizer's non-progressing result.
+- `VERIFIED` -> only the finalizer may perform the exact top-metadata `Status: ready` -> `Status: done` compare-and-swap and exact post-write validation.
+- stable target/authority/Ticket drift -> finalizer reports progression `FAILED`; semantic `VERIFIED` stays `VERIFIED`.
+- a current `done` Ticket matching the same captured ready candidate without attributable prior finalizer provenance is `ALREADY_DONE_MATCHING_BINDING`, not a new completion.
 
-Before candidate `VERIFIED` on normal `ready`:
+The finalizer preserves bytes/mode except the one status token, uses exact compare-and-swap atomic replacement, and conditionally restores only this call's exact candidate when post-write validation fails and authority/stable target remain unchanged. It must not overwrite an external edit or infer fresh completion from a `done` string.
 
-1. Re-read the exact Ticket and require the verification target/source/config/build identity used for the verdict is still current and attributable.
-2. Resolve the current canonical To Tickets validator through the same admission path and require exact `VALID`.
-3. Re-resolve current parent Spec and adopted Behavior/UI authorities and require the same projection/currentness checks still hold with no unresolved material semantic-contract defect.
-4. Require the Ticket is still the exact canonical `Status: ready` contract that was verified.
-5. Call `ready_guard finalize_verification` with the exact verification execution and `verdict: VERIFIED`. `Perform one guarded targeted replacement` remains the progression invariant: the runtime rechecks target/authority currentness, performs the only allowed top-metadata `Status: ready` -> `Status: done` replacement, and immediately requires exact `VALID` post-write validation. Do not perform this mutation through generic file tools.
-
-When the runtime reports success, report `Ticket Progression: COMPLETED` and `Ticket status after verification: done`.
-
-If the guarded write or post-write validation fails, preserve `Verification Verdict: VERIFIED` but report `Ticket Progression: FAILED` and the exact observed status/failure. Do not rewrite ACs, Verification flows, Spec, Scope, Behavior/UI authority or other planning meaning.
-
-The finalizer preserves bytes/mode except the one top-metadata status, records exact before/candidate intent, uses status-only compare-and-swap atomic replacement and validates the actual canonical Ticket path after writing. Only its exact expected candidate is exempted as the intended authority transition; other authority/source drift still blocks. On failure it conditionally restores ready only if candidate bytes, owner and authority still match. Do not overwrite an external edit, infer success from a done string, or drop a reservation before durable progression/intent recovery closes. Report actual status and exact recovery limit even when verdict is VERIFIED, progression FAILED and bytes remain done.
-
-Diagnostic re-verification of `done` still calls `finalize_verification`, never rewrites status, and reports `Ticket Progression: NOT APPLICABLE`.
+Diagnostic re-verification captured from `done` is semantic/diagnostic only. The verifier reports `Ticket Progression: NOT APPLICABLE`; caller finalization, if invoked for normalized reporting, never rewrites status.
 
 ## 15. No remediation loop
 
@@ -488,12 +446,12 @@ Verifier: Main / DIRECT | <delegated verifier identity>
 Ticket status before verification:
 Verification target:
 Target stability:
+Verification Binding: <exact outside-root path>
+Verification Binding SHA256: <sha256>
+Stable Target Paths: <exact list>
+Scenario Effect Paths: <exact list>
 Heuristic finding dispositions: None | <finding -> disposition>
 Material turn reports: None | <concise list>
-Checkpoint decisions:
-- PRE_RUNTIME: CONTINUE | STEERED_THEN_CONTINUE | STOP | NOT_APPLICABLE
-- MATERIAL_TURN: None | <turn -> decision>
-- PRE_PROGRESSION: CONTINUE | STEERED_THEN_CONTINUE | STOP | NOT_APPLICABLE
 
 Semantic contract findings: None | <exact material gap and owning contract location>
 
@@ -529,8 +487,10 @@ Cross-AC findings:
 Implementation-report differences:
 
 Verification Verdict: VERIFIED | FAILED | INCONCLUSIVE
-Ticket Progression: COMPLETED | NOT APPLICABLE | FAILED
-Ticket status after verification:
+Verifier Ticket Progression: PENDING CALLER FINALIZATION | NOT APPLICABLE
+Observed Ticket Status: ready | done | <actual>
 ```
 
-When final `INCONCLUSIVE` is caused specifically by an authority/evidence-attribution/target-currentness boundary, or when a `VERIFIED` evidence verdict cannot complete guarded progression, append the same `Decision / Governing authority / Observed condition / Effect / Next allowed action` provenance fields. Do not append them to a normal evidence-complete `FAILED` verdict merely because the product contradicted the Ticket.
+The delegated verifier stops at this report. The caller then appends the exact `ready_finalize` result as a separate finalization record: `Ticket Progression`, `Progression Basis`, `Ticket Status After`, and any exact progression detail. DIRECT follows the same semantic-result-then-finalization sequence in one Main invocation.
+
+When final `INCONCLUSIVE` is caused specifically by an authority/evidence-attribution/target-currentness/effect-settlement boundary, or when a `VERIFIED` evidence verdict cannot complete caller finalization, append the same `Decision / Governing authority / Observed condition / Effect / Next allowed action` provenance fields. Do not append them to a normal evidence-complete `FAILED` verdict merely because the product contradicted the Ticket.

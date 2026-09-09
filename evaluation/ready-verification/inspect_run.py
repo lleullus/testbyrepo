@@ -18,7 +18,7 @@ def inspect(run_root: Path, stage: str) -> dict:
     entry = Path(metadata["trigger_argv"][1])
     for ordinal, call in enumerate(summary["tool_calls"], 1):
         name = call["toolName"]
-        if name not in {"bash", "ready_argv", "ready_guard", "hub", "write"}:
+        if name not in {"bash", "ready_contract", "ready_finalize", "hub", "write"}:
             continue
         result = results.get(call["toolCallId"])
         if result is None:
@@ -30,9 +30,7 @@ def inspect(run_root: Path, stage: str) -> dict:
         except json.JSONDecodeError:
             output = raw
         args = call.get("args", {})
-        if name == "ready_argv" and args.get("action") == "execute":
-            command = args.get("argv", [])
-        elif name == "bash":
+        if name == "bash":
             try:
                 command = shlex.split(args.get("command", ""))
             except ValueError:

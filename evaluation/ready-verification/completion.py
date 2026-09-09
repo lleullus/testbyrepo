@@ -19,7 +19,7 @@ import uuid
 from typing import Any
 
 from fixture_catalog import _put
-from run_agent import invoke, load_events, summarize, terminal_lines, guard_results
+from run_agent import boundary_results, invoke, load_events, summarize, terminal_lines
 from calibrate import current_review
 
 ROOT = Path(__file__).resolve().parent
@@ -652,7 +652,51 @@ def parse_completion(terminal: str, *, transport_valid: bool = True) -> bool | N
     return success
 
 
-def run(metadata_path: Path, *, agent_dir: Path, payload: Path, runtime_data: Path,
+def _binding_matches_current_done(ticket_path: Path, binding_path: str, binding_sha256: str) -> bool:
+    try:
+        binding_file = Path(binding_path).resolve(strict=True)
+        raw = binding_file.read_bytes()
+        if str(binding_file) != binding_path or hashlib.sha256(raw).hexdigest() != binding_sha256:
+            return False
+        binding = json.loads(raw)
+        if binding.get("ticket_path") != str(ticket_path.resolve()) or binding.get("ticket_status_at_capture") != "ready":
+            return False
+        current = ticket_path.read_text(encoding="utf-8")
+        header_end = re.search(r"(?m)^##\s", current)
+        header = current[:header_end.start()] if header_end else current
+        match = re.search(r"(?m)^(Status:\s*)done(\s*)$", header)
+        if not match or len(re.findall(r"(?m)^Status:", header)) != 1:
+            return False
+        ready = (current[:match.start(0)] + match.group(1) + "ready" + match.group(2) + current[match.end(0):]).encode()
+        return hashlib.sha256(ready).hexdigest() == binding.get("ticket_sha256")
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        return False
+
+
+def _verified_delivery(summary: dict[str, Any], events: list[dict[str, Any]], ticket_path: Path) -> bool:
+    if (summary.get("parsed_verdict") != "VERIFIED"
+            or summary.get("verifier_ticket_progression") != "PENDING CALLER FINALIZATION"
+            or not summary.get("verification_binding_path")
+            or not summary.get("verification_binding_sha256")):
+        return False
+    for row in reversed(boundary_results(events, "ready_finalize")):
+        result = row["result"]
+        if (row["args"].get("binding_path") == summary["verification_binding_path"]
+                and row["args"].get("binding_sha256") == summary["verification_binding_sha256"]
+                and row["args"].get("verdict") == "VERIFIED"
+                and result.get("ticket_path") == str(ticket_path.resolve())
+                and result.get("verification_binding") == summary["verification_binding_path"]
+                and result.get("verification_binding_sha256") == summary["verification_binding_sha256"]
+                and result.get("verification_verdict") == "VERIFIED"
+                and result.get("ticket_progression") == "COMPLETED"
+                and result.get("progression_basis") in {"WRITE_PERFORMED_THIS_CALL", "RECOVERED_CAPTURED_FINALIZER_RESULT"}
+                and result.get("ticket_status_after") == "done"
+                and _binding_matches_current_done(ticket_path, summary["verification_binding_path"], summary["verification_binding_sha256"])):
+            return True
+    return False
+
+
+def run(metadata_path: Path, *, agent_dir: Path, payload: Path,
         model: str, thinking: str, timeout: int) -> dict[str, Any]:
     metadata_path = metadata_path.resolve(strict=True)
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -691,14 +735,14 @@ def run(metadata_path: Path, *, agent_dir: Path, payload: Path, runtime_data: Pa
             raise ValueError(f"actual {stage} setup did not terminate cleanly on its unchanged target")
         if not _model_matches(model, observed.get("actual_models")):
             raise ValueError(f"actual {stage} setup used a different model")
-        if stage == "verify" and (native_setup.get("parsed_verdict") != "VERIFIED" or setup.get("parsed_verdict") != "VERIFIED"
-                                  or setup.get("ticket_progression") != "COMPLETED" or setup.get("ticket_status_after") != "done"):
-            raise ValueError("actual VERIFIED/COMPLETED/done setup is required")
-        finalized = guard_results(load_events(run_root / stage / "events.jsonl"), "finalize_verification")
-        if stage == "verify" and (not finalized or finalized[-1]["result"].get("ticket_progression") != "COMPLETED"
-                                  or finalized[-1]["result"].get("verification_verdict") != "VERIFIED"
-                                  or finalized[-1]["result"].get("ticket_status_after") != "done"):
-            raise ValueError("actual guarded progression evidence is required")
+        if stage == "verify":
+            stage_events = load_events(run_root / stage / "events.jsonl")
+            if (native_setup.get("parsed_verdict") != "VERIFIED" or setup.get("parsed_verdict") != "VERIFIED"
+                    or setup.get("verification_binding_path") != native_setup.get("verification_binding_path")
+                    or setup.get("verification_binding_sha256") != native_setup.get("verification_binding_sha256")
+                    or setup.get("ticket_progression") != "COMPLETED" or setup.get("ticket_status_after") != "done"
+                    or not _verified_delivery(native_setup, stage_events, Path(metadata["ticket_path"]))):
+                raise ValueError("actual verifier-terminal/caller-finalization/done setup is required")
     before = product_snapshot(project)
     if snapshot_digest(before) != metadata.get("initial_product_digest"):
         raise ValueError("prepared product changed before the completion observation")
@@ -708,7 +752,6 @@ def run(metadata_path: Path, *, agent_dir: Path, payload: Path, runtime_data: Pa
         output_dir=run_root / "completion",
         agent_dir=agent_dir,
         payload=payload,
-        runtime_data=runtime_data,
         model=model,
         thinking=thinking,
         timeout=timeout,
@@ -1028,7 +1071,6 @@ def main() -> int:
     execute.add_argument("--metadata", required=True, type=Path)
     execute.add_argument("--agent-dir", required=True, type=Path)
     execute.add_argument("--payload", required=True, type=Path)
-    execute.add_argument("--runtime-data", required=True, type=Path)
     execute.add_argument("--model", required=True)
     execute.add_argument("--thinking", default="medium")
     execute.add_argument("--timeout", default=480, type=int)
@@ -1043,7 +1085,7 @@ def main() -> int:
         print(json.dumps({"metadata": str(metadata_path), "service_argv": metadata["service_argv"], "service_port": metadata["service_port"]}, indent=2))
         return 0
     if args.command == "run":
-        record = run(args.metadata, agent_dir=args.agent_dir, payload=args.payload, runtime_data=args.runtime_data,
+        record = run(args.metadata, agent_dir=args.agent_dir, payload=args.payload,
                      model=args.model, thinking=args.thinking, timeout=args.timeout)
         print(json.dumps(record, indent=2, ensure_ascii=False, sort_keys=True))
         return 0 if record["clean_transport"] else 1

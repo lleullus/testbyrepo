@@ -389,7 +389,7 @@ Read request.txt for the exact current user product meaning; inspect current pro
     return common + "This is a projection-only observation. Explicitly invoke skill://to-tickets from docs/planning/work/publication/SPEC.md. Review the complete draft Set, every applicable obligation including legacy preservation, and compatible mutation boundaries. Correct decomposition/serialization within approved meaning, or return a real upstream meaning gap. No separate per-artifact approval gate is requested. Stop at the complete validated Ready Ticket Set."
 
 
-def run_turn(metadata_path: Path, message: str, *, agent_dir: Path, payload: Path, runtime_data: Path,
+def run_turn(metadata_path: Path, message: str, *, agent_dir: Path, payload: Path,
              model: str, thinking: str = "medium", timeout: int = 480) -> dict:
     _require_current_source()
     metadata_path = metadata_path.resolve(strict=True)
@@ -411,7 +411,7 @@ def run_turn(metadata_path: Path, message: str, *, agent_dir: Path, payload: Pat
         raise ValueError("prepared input changed before invocation")
     output = root / f"turn-{len(turns) + 1}"
     observation = invoke(project_root=project, prompt=message, output_dir=output,
-                         agent_dir=agent_dir, payload=payload, runtime_data=runtime_data,
+                         agent_dir=agent_dir, payload=payload,
                          model=model, thinking=thinking, timeout=timeout, session_dir=root / "sessions",
                          resume_session=Path(turns[-1]["session_file"]) if turns else None, stage="plan")
     after = snapshot(project)
@@ -504,7 +504,7 @@ def main() -> int:
     run = sub.add_parser("run")
     run.add_argument("--metadata", required=True, type=Path)
     run.add_argument("--message", type=Path)
-    for flag in ("agent-dir", "payload", "runtime-data"):
+    for flag in ("agent-dir", "payload"):
         run.add_argument("--" + flag, required=True, type=Path)
     run.add_argument("--model", required=True)
     run.add_argument("--thinking", default="medium")
@@ -525,7 +525,7 @@ def main() -> int:
         raise ValueError("continuation requires an explicit caller-authored message")
     message = args.message.read_text() if args.message else initial_prompt(metadata)
     result = run_turn(args.metadata, message, agent_dir=args.agent_dir, payload=args.payload,
-                      runtime_data=args.runtime_data, model=args.model, thinking=args.thinking, timeout=args.timeout)
+                      model=args.model, thinking=args.thinking, timeout=args.timeout)
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0 if result["clean_transport"] and not result["product_mutated"] else 1
 

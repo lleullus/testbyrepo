@@ -1,6 +1,6 @@
 ---
 name: ready-ticket-verify
-description: "Verify one existing IIS Ready Ticket against a stable current implementation target, independently discover material false-completion paths, semantically check every authored AC/Verification flow, adjudicate all obligations from fresh verifier-owned evidence, and own guarded terminal done progression. Top-level execution defaults to SUBAGENT with exactly one checkpointed verifier; use DIRECT only when the current user explicitly selects it for this exact stage."
+description: "Verify one existing IIS Ready Ticket against a stable current implementation target, independently discover material false-completion paths, semantically check every authored AC/Verification flow, and adjudicate all obligations from fresh verifier-owned evidence. The verifier captures an immutable verification binding and returns one terminal semantic verdict; the caller separately invokes ready_finalize for status progression. Top-level execution defaults to SUBAGENT with exactly one verifier; use DIRECT only when the current user explicitly selects it for this exact stage."
 ---
 
 # Ready Ticket Verify
@@ -9,7 +9,7 @@ description: "Verify one existing IIS Ready Ticket against a stable current impl
 
 Verify one exact IIS Ready Ticket directly from fresh current product/canonical evidence.
 
-In `DIRECT`, the current Main owns the complete verifier core. In `SUBAGENT`, exactly one delegated verifier owns semantic preflight, the complete authored Verification-flow denominator, scenario authorship, verifier-owned evidence, every flow/AC verdict, cross-AC reconciliation, Scope/Non-Goals verification, the whole-Ticket verdict and guarded `ready -> done` progression. Parent Main owns only bounded checkpoint continuation and terminal fan-in; it does not repeat the verifier core or issue a second verdict.
+In `DIRECT`, the current Main owns the complete verifier core and then, only after the semantic verdict is terminal, performs the separate caller finalization step. In `SUBAGENT`, exactly one delegated verifier owns semantic preflight, the complete authored Verification-flow denominator, scenario authorship, verifier-owned evidence, every flow/AC verdict, cross-AC reconciliation, Scope/Non-Goals verification and the whole-Ticket semantic verdict. Parent Main owns terminal fan-in and the separate `ready_finalize` call; it does not repeat the verifier core or issue a second verdict.
 
 Before work, read [references/verify.md](references/verify.md) in full.
 
@@ -23,7 +23,7 @@ Optional navigation inputs:
 
 - Candidate Verification Target: `None | <current source/config/build/artifact/runtime hint>`
 - Implementation Report / Evidence: `None | <navigation/reference only>`
-- Execution Plan / Review: `None | <exact optional outside-root plan_review_path>`; runtime derives checked method-context plans from this single input. No plan ADMIT is required to verify an already implemented ready target.
+- Execution Plan / Review: `None | <exact optional outside-root plan_review_path>`; when supplied, `ready_contract capture_verification` records it only as navigation/method context. No plan ADMIT is required to verify an already implemented ready target.
 - Additional User Instructions: `<instructions>`
 
 Derive `Status`, `Parent-Spec`, `Project-Root`, `UI`, Acceptance Criteria, Scope, Non-Goals, Blockers, Verification flows, Behavior Authorities and References from the validated Ticket itself. Optional target/report inputs never override the Ticket or current repository/runtime observation.
@@ -32,7 +32,7 @@ Derive `Status`, `Parent-Spec`, `Project-Root`, `UI`, Acceptance Criteria, Scope
 
 Top-level execution defaults to `SUBAGENT`. Use `DIRECT` only when the current user explicitly selects it for this exact verification stage. Do not require a separate SUBAGENT opt-in.
 
-The canonical exact-assignment, single-verifier, checkpoint continuation, capability-failure, and no-fallback contract lives in [references/verify.md#1-subagent-first-invocation](references/verify.md#1-subagent-first-invocation). Apply that section before verifier work rather than duplicating its execution mechanics here.
+The canonical exact-assignment, single-verifier, terminal fan-in, capability-failure, and no-fallback contract lives in [references/verify.md#1-subagent-first-invocation](references/verify.md#1-subagent-first-invocation). Apply that section before verifier work rather than duplicating its execution mechanics here.
 `SUBAGENT CAPABILITY UNAVAILABLE` returns through the existing [admission/current-authority provenance schema](references/verify.md#2-admission-and-current-authority).
 
 This entry contract keeps the authority boundary explicit: one verifier owns the complete Ticket verdict cycle, while Parent Main never becomes a second verifier.
@@ -57,9 +57,9 @@ Before deriving runtime execution, semantically compare every AC and mapped Veri
 
 ## Current target admission and integrated discovery
 
-After canonical/status/semantic/authority/projection gates and actual target resolution pass, call `ready_guard begin_verify` with exact Ticket/Project Root and `target_paths`. This directly binds current product authority and the actual target; no prior exploration result/binding or implementation-plan ADMIT is required. Preserve the actual admission outcome, not a guessed diagnosis. Continue only with `purpose: verify` and a bound target digest.
+After canonical/status/semantic/authority/projection gates and actual target resolution pass, call `ready_contract capture_verification` with the exact Ticket/Project Root, exact stable implementation `stable_target_paths`, exact `scenario_effect_paths` that the verification scenario is allowed to mutate, and optional current `plan_review_path` navigation. The tool creates an immutable outside-root binding and returns its exact path/SHA. No implementation-plan ADMIT is required to verify an already implemented ready target.
 
-Use supported guarded inspection and structured `ready_argv execute` for runtime commands. Generic product source/config/test/planning mutation and `ready_argv mutate` are forbidden. Any declared output must stay outside Project Root and cannot cover protected authority/target/method files. Runtime drift and unknown effects are not resolved by a prose claim.
+Use host-native read/inspection/CLI/service tools for scenario execution. Verification must not edit product source/config/tests/planning artifacts to manufacture the expected result. Declared scenario-effect paths must stay disjoint from stable implementation targets and protected authority/method paths. A settled nonzero command is ordinary scenario evidence; actual non-idempotent/external response loss is never blind-replayed. Use the authored authoritative readback/cleanup/evidence path, and return `INCONCLUSIVE` when effect settlement or attribution cannot be established.
 
 The final verifier derives a bounded frontier from original purpose, every authored flow/conditional boundary and current implementation, in addition to the mandatory scenario. Admit extra discovery only with a current contract anchor, reachable plausible false-completion/attribution path, material impact and decisive observable readback. Safely minimize triggers and preserve fresh attributable evidence. No distinct lane/no finding is not PASS; all authored Flow/AC and cleanup obligations still close independently. This method is self-contained and has no external Skill dependency.
 
@@ -85,15 +85,11 @@ Do not relax or rewrite those criteria after observing results.
 
 ## Scenario report and material turns
 
-Before the first product/runtime action, produce `VERIFICATION SCENARIO REPORT` after semantic preflight and integrated scenario closure.
+Before the first product/runtime action, produce `VERIFICATION SCENARIO REPORT` after semantic preflight, exact stable/effect path resolution, verification-binding capture, and integrated scenario closure. In both `DIRECT` and `SUBAGENT`, this is an informational verifier artifact rather than a runtime checkpoint; scenario execution may proceed immediately under the same verifier invocation.
 
-- `DIRECT`: the report remains informational with `Checkpoint: NOT_APPLICABLE`; continue under the existing direct verifier authority.
-- `SUBAGENT`: return the report as `Checkpoint: PRE_RUNTIME`, `Protected next phase: FIRST_PRODUCT_OR_RUNTIME_ACTION`, `Checkpoint state: PARENT_CONTINUATION_REQUIRED`. Do not perform the protected product/runtime action before Parent `CONTINUE`.
-- Public guard calls use `checkpoint` with `kind: PRE_RUNTIME | MATERIAL_TURN | PRE_PROGRESSION`, then exact owner/Parent `release_checkpoint`. Source mutation while PAUSED remains forbidden; parent continuation does not bypass currentness or effect uncertainty.
+Produce `VERIFICATION TURN REPORT` only when target identity, authority mapping, scenario execution, evidence attribution or an expected authoritative readback changes materially enough to affect flow adjudication. Routine progress, normal command output and confidence-only updates are not report events. If the change makes the original stable/effect partition or binding no longer attributable, do not patch the binding or continue against stale evidence: terminate `INCONCLUSIVE` (or `VERIFICATION NOT STARTED` if no product action occurred) with the exact evidence limit so the caller can decide whether a fresh verification invocation is appropriate.
 
-Produce `VERIFICATION TURN REPORT` only when target identity, authority mapping, scenario execution, evidence attribution or an expected authoritative readback changes materially enough to affect flow adjudication or safe terminal progression. Routine progress, normal command output and confidence-only updates are not report events. In `SUBAGENT`, a material turn is a `MATERIAL_TURN` checkpoint and work depending on the changed direction does not continue before Parent continuation.
-
-Checkpoint continuation is a logical phase boundary, not a required live-wait primitive, direct-user approval gate or durable workflow state. Parent returns exactly one of `CONTINUE | STEER | STOP`. If bounded continuation cannot resolve required caller/operator/external authority, return the correct `VERIFICATION NOT STARTED`, `INCONCLUSIVE` or terminal progression result with exact evidence limits.
+There are no PRE_RUNTIME, MATERIAL_TURN, PRE_PROGRESSION or release checkpoints in verification. The verifier owns one invocation-local semantic evidence cycle and returns one terminal result.
 
 ## Disposition handling
 
@@ -137,29 +133,29 @@ Whole Ticket: VERIFIED | FAILED | INCONCLUSIVE
 - Any AC `FAIL` -> `FAILED`
 - Otherwise -> `INCONCLUSIVE`
 
-## Terminal `done` transition
+## Terminal verifier result and caller finalization
 
-For a normal `Status: ready` Ticket, first close every authored Verification flow, require every current AC candidate verdict to be `PASS`, close Scope/Non-Goals and cleanup/terminal conditions, and establish candidate `Whole Ticket: VERIFIED`.
+For a normal `Status: ready` Ticket, first close every authored Verification flow, require every current AC candidate verdict to be `PASS` for `VERIFIED`, close Scope/Non-Goals and cleanup/terminal conditions, and establish exactly one terminal semantic `Whole Ticket: VERIFIED | FAILED | INCONCLUSIVE`.
 
-In `SUBAGENT`, before final `VERIFIED` emission or any `ready -> done` mutation, the delegated verifier must return `VERIFICATION PRE-PROGRESSION CHECKPOINT` with `Checkpoint: PRE_PROGRESSION`, `Protected next phase: FINAL_VERIFIED_AND_GUARDED_READY_TO_DONE`, and `Checkpoint state: PARENT_CONTINUATION_REQUIRED`. Parent reviews only denominator/closure completeness, obvious contradiction, target/status drift and evidence-limit consistency; it does not rerun runtime flows or issue a second verdict. `FAILED` or `INCONCLUSIVE` candidates do not use this checkpoint.
+The verifier does not write `Status: done`, does not call `ready_finalize`, and does not keep a verification execution open for later continuation. Its terminal result must include the immutable binding identity captured before scenario execution:
 
-After `CONTINUE` (`DIRECT` reaches this point without Parent checkpoint), the verifier may attempt `Status: done` only after:
+```text
+Verification Binding: <exact outside-root path>
+Verification Binding SHA256: <sha256>
+Stable Target Paths: <exact list>
+Scenario Effect Paths: <exact list>
+Verification Verdict: VERIFIED | FAILED | INCONCLUSIVE
+Ticket Progression: PENDING CALLER FINALIZATION | NOT APPLICABLE
+Observed Ticket Status: ready | done | <actual>
+```
 
-1. every authored Verification flow has an attributable final result;
-2. every current AC is `PASS`;
-3. no unresolved material semantic-contract defect, evidence conflict, authority gate, target drift or cleanup/terminal-condition gap remains;
-4. the verification target remains current and attributable;
-5. the exact Ticket passes the same current canonical validator again as exact `VALID`;
-6. current parent Spec / Behavior / UI authority and Ticket-to-parent projection checks still hold; and
-7. the exact Ticket is still the same canonical `Status: ready` contract immediately before the write.
+For a normal `ready` Ticket, use `PENDING CALLER FINALIZATION` for all three semantic verdicts so the caller can consume the exact same binding/verdict through `ready_finalize`; `FAILED` and `INCONCLUSIVE` finalization is non-progressing and leaves status unchanged. For explicit diagnostic re-verification captured from `done`, use `Ticket Progression: NOT APPLICABLE` and never reopen status.
 
-Do not perform that write through generic file tools. Call Ready runtime `ready_guard finalize_verification` with the exact execution and final verifier verdict. For `VERIFIED` on a normal `ready` Ticket, the runtime alone performs the single guarded top-metadata `Status: ready` -> `Status: done` replacement and immediate exact `VALID` post-write validation; for `FAILED`, `INCONCLUSIVE`, or diagnostic `done` re-verification it performs no status progression.
+In `SUBAGENT`, Parent Main receives this terminal verifier result and then calls `ready_finalize` with the exact binding path/SHA and unchanged verifier verdict. In `DIRECT`, the current Main first completes the semantic verifier result, then performs the same caller-owned finalization as a distinct step. Neither mode may derive a different semantic verdict during finalization.
 
-If Parent returns `STEER`, the delegated verifier reopens only the bounded flow/evidence/closure identified by the steering and resubmits `PRE_PROGRESSION` if the candidate remains `VERIFIED`. Parent may return `STOP` at `PRE_PROGRESSION` only when current authority, target currentness, current user instruction, evidence closure, or progression authority means candidate `VERIFIED` can no longer be finalized. In that case the delegated verifier, not Parent Main, emits the existing terminal `Verification Verdict: INCONCLUSIVE`, reports `Ticket Progression: NOT APPLICABLE`, leaves the Ticket at `Status: ready`, and performs no `done` mutation.
+`ready_finalize` independently rechecks the binding SHA, current authority and stable target. `VERIFIED` from an original `ready` binding can perform only the exact top-metadata `Status: ready` -> `Status: done` replacement and exact post-validation. Stable source drift or authority drift makes progression `FAILED`; `FAILED`/`INCONCLUSIVE` verdicts perform no status mutation. A provenance-free already-`done` match is current-state confirmation, not a new completion.
 
-Keep `Verification Verdict` separate from `Ticket Progression`. A `VERIFIED` verdict remains the evidence verdict if the guarded write or post-write validation fails; report `Ticket Progression: FAILED` without pretending delivery progression completed.
-
-Report actual status even if it is `done` while progression is FAILED. The finalizer conditionally restores only its exact status-only candidate under unchanged ownership/authority; external changes and unresolved intent/effects must not be overwritten or silently declared complete.
+Keep `Verification Verdict`, `Ticket Progression`, `Progression Basis`, and actual `Ticket Status After` separate. A semantic `VERIFIED` remains `VERIFIED` if finalization fails; report progression `FAILED` without pretending delivery completed. Conversely, narration containing VERIFIED/done without the exact caller `ready_finalize` result is not completion proof.
 
 ## Safety and non-goals
 

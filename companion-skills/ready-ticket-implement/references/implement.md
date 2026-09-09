@@ -21,69 +21,59 @@ Top-level invocation은 `SUBAGENT`가 기본이다. 현재 사용자가 이 exac
 
 `SUBAGENT`에서 Outer Main은:
 
-1. 한 명의 implementation worker를 시작할 capability, 같은 Project Root 접근, checkpoint return/continuation과 terminal result capability를 확인한다.
+1. 한 명의 implementation worker를 시작할 capability와 같은 Project Root 접근, terminal result 회수 capability를 확인한다.
 2. exact Ticket, Project Root, current `plan_review_path`, 추가 사용자 지시와 `Delegated Worker: yes`를 하나의 완전한 assignment에 담는다.
 3. worker assignment에 exact targets, Scope/Non-Goals, 요구되는 observable evidence와 다음 communication contract를 포함한다.
-4. worker의 checkpoint report를 수신하고 `CONTINUE | STEER | STOP` 중 하나의 bounded continuation decision을 반환한다.
+4. material method change terminal을 받으면 old worker를 resume하지 않고 affected Plan revision → Heuristic → independent review를 실제로 수행한 뒤 fresh worker invocation으로만 재개한다.
 5. terminal `IMPLEMENT RESULT`를 수신해 exact Ticket identity와 필수 terminal fields를 확인한 뒤 caller-facing 결과를 작성한다.
 
 ```text
 # Communication
 
+- actual implementing actor가 첫 source mutation 전에 ready_contract check_plan_admission으로 현재 ADMIT을 직접 확인한다.
 - 현재 ADMIT과 load-bearing 전제 확인 뒤 검토된 범위에서 바로 시작한다. 정상 첫 source 변경의 PRE_ACTION 재심사는 없다.
-- 중요한 원인, owner, interface, persistence 또는 readback 변경에만 IMPLEMENTATION TURN REPORT를 반환하고 영향 계획 검토를 갱신한다.
-- 정상 진행, 단순 tool activity, 일시적 test failure, 스타일 또는 내부 리팩터링은 보고하지 않는다.
-- Material-turn report 뒤에는 새 방향에 의존하는 작업을 Parent continuation decision 전에 진행하지 않는다.
-- Parent/user authority가 필요한 unresolved decision이 bounded continuation으로 해결될 수 없으면 evidence와 exact blocker를 포함한 terminal BLOCKED result를 반환한다.
-- 성공 또는 blocker는 반드시 terminal IMPLEMENT RESULT로 끝낸다.
+- 중요한 원인, owner, interface, persistence, authoritative readback 또는 non-idempotent effect strategy가 바뀌면 새 방향에 의존한 mutation을 멈추고 terminal PARTIAL/BLOCKED material-method result를 반환한다.
+- 정상 진행, 단순 tool activity, settled test failure, 스타일 또는 동등한 내부 리팩터링은 별도 checkpoint 사유가 아니다.
+- actual external effect의 response loss는 blind replay하지 않고 approved authoritative readback/cleanup/evidence로만 정착 여부를 판단한다.
+- 성공 또는 blocker는 반드시 terminal IMPLEMENT RESULT로 끝내며 COMPLETE 직전 같은 review로 admission을 재확인한다.
 ```
 
 필요 capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 보고한다. `DIRECT`로 자동 전환하지 않는다.
 
 `Delegated Worker: yes`를 받은 worker는 아래 implementation core를 직접 수행하며 다시 위임하지 않는다.
 
-### SUBAGENT checkpoint continuation
+### SUBAGENT ownership and settlement
 
-`SUBAGENT` checkpoint는 logical phase boundary다. required live-wait primitive, direct-user approval gate 또는 durable workflow state가 아니다.
+`SUBAGENT`는 exact Ticket과 같은 mutable worktree에 한 시점에 하나의 implementation owner만 둔다. 이 규칙은 IIS execution DB나 lease가 아니라 caller/host process contract가 소유한다.
 
-Checkpoint에서는 다음을 지킨다.
+1. delegated owner는 assignment에 전달된 exact Ticket/Project Root/`plan_review_path`로 첫 mutation 전 admission을 직접 확인한다.
+2. 정상 local failure/fix/retry는 worker가 같은 invocation 안에서 host-native tools로 수행한다.
+3. material method change는 continuation checkpoint가 아니라 terminal `PARTIAL | BLOCKED`로 current invocation을 끝낸다.
+4. old worker가 사라지거나 교체가 필요하면 host가 실제 process/session/work settlement를 확인하기 전에는 같은 mutable worktree에 replacement를 시작하지 않는다.
+5. cancel/stop request의 receipt, job/session ID 또는 단순 응답 유실만으로 old worker 종료를 추정하지 않는다.
+6. settlement를 증명할 수 없으면 current owner/caller가 `PARTIAL | BLOCKED`로 반환한다. 병렬 작업이 필요하면 caller가 별도 isolated worktree를 사용한다.
+7. fresh replacement는 current `plan_review_path`로 admission부터 다시 수행한다. `DIRECT`와 `SUBAGENT` 사이의 자동 fallback은 없다.
 
-1. delegated owner는 완전한 checkpoint report를 Parent Main에게 반환한다.
-2. report에 적힌 `Protected next phase`를 Parent decision 전에 넘어가지 않는다.
-3. Parent Main은 정확히 하나를 반환한다.
-   - `CONTINUE`: 현재 방향으로 보호된 다음 phase 진입을 허용한다.
-   - `STEER`: exact authority/evidence anchor를 가진 bounded correction을 전달한다. decision-critical 내용이 바뀌면 worker는 같은 checkpoint를 갱신해 다시 반환한다.
-   - `STOP`: 보호된 다음 phase로 진입하지 않고 기존 `BLOCKED | PARTIAL` owner terminal 형식으로 pass를 닫는다.
-4. 동일 Ticket과 implementation stage에는 한 시점에 정확히 하나의 delegated owner lane만 존재한다.
-5. 동일한 checkpoint를 material delta 없이 반복하거나 periodic progress checkpoint로 사용하지 않는다.
-6. checkpoint continuation capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 반환한다.
-7. `DIRECT`로 자동 fallback하지 않는다.
+Detached child, background delivery queue, polling controller 또는 persistent IIS execution scheduler로 ownership을 넘기지 않는다. IIS boundary tools는 worker/session/assignment state를 생성하거나 소비하지 않는다.
 
-Continuation은 특정 harness API를 제품 계약으로 요구하지 않는다. 다만 runtime assignment는 exact Ticket/Project Root와 정확히 한 child session에 one-use로 bind되고 parent는 checkpoint와 terminal result를 회수하는 joined lifecycle을 유지한다. detached child, background delivery queue, polling controller 또는 persistent execution scheduler로 continuation을 넘기지 않는다. 핵심 규칙은 `Parent decision 전에는 protected next phase로 넘어가지 않는다`이다.
+### Ready contract admission과 host-native execution
 
-### Ready runtime binding
+Skill/reference 조회, read-only `ready_contract inspect_authority`, 준비 artifact 작성은 implementation admission이 아니다. actual implementing actor의 `ready_contract check_plan_admission` 성공이 첫 source mutation 전 경계다. 이 check는 pinned canonical validator를 사용해 current Ticket/authority/Plan/Review bytes를 다시 묶고 제품/실행 상태를 쓰지 않는다.
 
-Skill/reference 조회, read-only `ready_guard inspect_authority`, 준비 artifact 작성은 arm/bind가 아니다. 명시적 구현 begin/assignment만 실행 경계다. `inspect_authority`는 pinned canonical validator를 사용해 flat current authority identity를 반환하며 제품/실행 상태를 쓰지 않는다.
-
-- `DIRECT`: current independent ADMIT 후 exact Ticket/Project Root/`plan_review_path`로 `begin_direct`.
-- `SUBAGENT`: Parent가 같은 입력으로 `assign_subagent`를 성공시킨 뒤 정확히 한 worker를 할당한다. worker는 exact one-use `assignment_id`와 review로 `begin_delegated`를 호출한다. 모든 경로가 현재 plan/common-plan/review/Ticket/authority bytes를 재확인하며 성공 시 `ACTIVE`다.
+- `DIRECT`와 `SUBAGENT` 모두 actual implementing actor가 exact Ticket/Project Root/`plan_review_path`로 `check_plan_admission`을 직접 호출한다. Parent가 execution/assignment/reservation을 만들지 않는다.
 - 누락 `PLAN_REVIEW_REQUIRED`, stale `PLAN_REVIEW_STALE`, 미허가 `PLAN_NOT_ADMITTED`를 실제 결과 그대로 보존한다. field 존재나 fixture JSON은 독립 검토의 의미 증거가 아니며 worker는 결과를 합성/승격하지 않는다.
-- runtime은 current pinned bundle validator/제품 authority, exact owner, 보호된 root/authority/plan/review/output, effect reservation을 소유한다. 일반 관찰 ledger, broad-inventory quota, mutation-revision COMPLETE latch, 영구 동일-input retry gate는 없다. 필요한 안전한 재관측은 허용하되 의미 없는 반복을 하지 않는다.
-- native shell의 의미를 추측하지 않는다. 지원된 structured `ready_argv`를 사용하고 필요한 실제 출력은 host의 허용된 outside-root artifact에 보존한다. unsupported surface는 정확한 capability 한계이지 안전 조건 우회 사유가 아니다.
-- ephemeral service는 native `hub start/logs/wait/stop`으로 관리한다. exact execution-owned handle/generation, 실제 readiness와 settlement를 확인한다. `persist:false`, `detached:false`, 자동 restart 없음. shared/pre-existing service를 adoption/stop하지 않는다. start timeout도 live handle일 수 있으며 cancel receipt/root 종료는 descendant·외부 effect 종료의 증거가 아니다.
-- 지원 adapter의 service name은 execution UUID로 unique하게 만들며 실제 resource `id`, `startedAt`, `restartCount` generation을 보존한다. 이름만으로 후속 process를 같은 서비스로 간주하지 않는다.
-- terminal 전에 owned work/service/effect를 실제로 닫고 `complete` 또는 `block`을 호출한다. `COMPLETE`는 기계적 owner/currentness/closure이지 self-check 충분성 판정이 아니다.
-- timeout/abort/결과 유실 등 불확실한 효과는 `EFFECT_UNCERTAIN`으로 보존한다. local file identity 불변으로 program/external 효과를 미적용 판정하지 않는다. `resolve_mutation`은 exact operation/effect surface/실제 authoritative readback reference와 권한 있는 owner 판단을 요구한다. 확인 불가면 blind replay·자동 rollback·slot 재사용을 하지 않는다.
-- `resolve_mutation` 입력은 `operation_id`, `effect_surface`, `evidence_reference`, `outcome`이며 현재 recovery owner의 실제 근거 판단이 필요하다. 단순 outcome 문자열로 성공을 만들지 않는다.
-- 같은 worker 재개는 currentness와 실제 작업/효과만 확인한다. 교체는 old owner dispatch 회수, 실제 work/service 정착, `suspend_worker`, Parent의 inactive 확인 및 `replace_worker` one-use assignment를 거친다. 새 worker도 common current plan 검사를 하며 무변경 설계의 전체 review/정상 첫 변경 checkpoint를 반복하지 않는다. cancel receipt나 agent/job/session ID의 우연한 일치로 교체를 허용하지 않는다.
-- 미시작 `cancel_admission`은 in-flight unbound admission만 취소한다. bound/uncertain 실행을 지우지 않는다. 중단된 admission의 orphan 점유도 실제 종료/철회와 live work·uncertain effect 부재를 지정 복구 owner가 확인하고 같은 reservation identity를 잠금 안에서 확인한 경우만 좁은 복구 경로로 해제한다. 불명확하면 보존하며 정상 착수의 추가 gate로 만들지 않는다.
-- 좁은 orphan 복구 API는 `recover_admission(project_root, ticket_path, reservation_id, recovery_evidence_reference)`다. 지정 recovery owner가 exact 근거 JSON으로 위 종료/효과 부재를 판단하며 이것을 host 자동 증명으로 설명하지 않는다.
+- admission 뒤에는 host-native read/search/edit/write/test/build/lint/CLI를 사용한다. IIS가 shell/argv grammar나 일반 tool dispatch를 재구현하지 않는다. settled nonzero는 command failure일 뿐 generic effect uncertainty가 아니며, worker는 결과를 읽고 Plan 범위 안에서 수정·재실행할 수 있다.
+- ephemeral service가 필요하면 host-native service/process surface를 사용하고 실제 handle/generation/readiness/settlement를 직접 확인한다. shared/pre-existing service를 임의로 adoption/stop하지 않으며 start timeout이나 cancel receipt를 settlement로 과대해석하지 않는다.
+- actual non-idempotent/external effect가 timeout/abort/response loss로 불명확하면 같은 effect를 blind replay하지 않는다. Ticket/Plan이 승인한 authoritative readback을 수행하고 cleanup/log/evidence 작성은 막지 않는다. readback으로 applied/not-applied가 확인되면 그 사실에 맞춰 계속한다. 확인 불가이면 그 effect에 의존하는 후속 mutation을 멈추고 exact evidence gap과 함께 `PARTIAL | BLOCKED`로 반환한다.
+- generic execution-uncertainty phase, mutation-resolution API, operation reservation, recovery JSON, active-ticket/session/assignment lifecycle은 만들지 않는다. 필요한 evidence는 원래 제품/Plan/Verifier evidence surface에 남긴다.
+- worker replacement는 host/caller 책임이다. old worker/process가 실제 종료됐다는 host evidence가 없으면 같은 mutable worktree에 fresh worker를 시작하지 않는다. settlement가 증명된 뒤 fresh worker는 current admission부터 다시 수행한다.
+- `Completion: COMPLETE` 직전에 같은 `plan_review_path`로 `check_plan_admission`을 다시 호출하고 load-bearing source/runtime assumptions와 self-check evidence를 현재 상태로 재확인한다. Plan/authority stale이면 COMPLETE를 금지하고 `PARTIAL | BLOCKED`로 반환한다.
 
 ## 3. Contract preflight
 
 첫 source-file 변경 전에:
 
-1. Ticket 전체와 연결된 Parent Spec, Behavior/UI Authority, constraints와 references를 읽고 의미를 결합한다. runtime binding이 exact Ticket과 적용되는 canonical Parent Spec/Behavior/UI Authority의 bounded identity를 계산하며, 각 identity는 exact authority artifact 자체에 scoped되고 content-sensitive하다. runtime은 canonical path + file/content SHA를 사용한다. repository-wide working-tree 변화는 authority drift로 취급하지 않으며 exact authority artifact currentness만 비교한다.
+1. Ticket 전체와 연결된 Parent Spec, Behavior/UI Authority, constraints와 references를 읽고 의미를 결합한다. `ready_contract check_plan_admission`이 exact Ticket과 적용되는 canonical Parent Spec/Behavior/UI Authority의 bounded identity를 current Plan Review와 함께 계산하며, 각 identity는 exact authority artifact 자체에 scoped되고 content-sensitive하다. repository-wide working-tree 변화 자체는 authority drift가 아니며 exact authority/Plan/Review artifact currentness를 구분한다.
 2. 한 문장으로 observable product outcome을 적는다.
 3. 각 authored Verification flow의 initial state, trigger, acceptance boundary, expected result, authoritative readback, decision boundary와 disposition을 정리한다.
 4. Scope와 Non-Goals에서 생겨야 하는 것과 생기면 안 되는 것을 분리한다.
@@ -100,13 +90,13 @@ Skill/reference 조회, read-only `ready_guard inspect_authority`, 준비 artifa
 
 검토된 계획을 다시 설계하거나 최초 source 변경 앞에 정상 PRE_ACTION 재심사를 만들지 않는다. current ADMIT은 제품 성공이 아니며 plan/authority hash 일치만으로 source/search/runtime 전제가 현재라고 단정하지 않는다. 첫 의존 변경 전에 계획의 load-bearing anchors, 검색 범위, 동적 전제와 현재 user/Scope를 직접 확인한다. 기존 증거가 현재면 재사용한다.
 
-조건부 ADMIT의 `permitted_initial_work`만 먼저 수행하고 `discriminating_observation`을 얻는다. 지지하면 이미 검토된 의존 방향으로 새 Parent 승인 없이 진행한다. 반증이면 `response_if_refuted`에 따라 영향 작업을 멈추고 Planner로 반환한다. 불충분이면 `dependent_work_not_yet_permitted`로 확장하지 않는다. 안전한 비의존 작업은 shared state/interface/effect 독립성이 설명되고 execution이 ACTIVE인 경우만 계속한다.
+조건부 ADMIT의 `permitted_initial_work`만 먼저 수행하고 `discriminating_observation`을 얻는다. 지지하면 이미 검토된 의존 방향으로 새 Parent 승인 없이 진행한다. 반증이면 `response_if_refuted`에 따라 영향 작업을 멈추고 Planner로 반환한다. 불충분이면 `dependent_work_not_yet_permitted`로 확장하지 않는다. 안전한 비의존 작업은 shared state/interface/effect 독립성이 실제로 설명되는 경우에만 계속한다.
 
-명명, private helper, 동등한 국소 수정은 worker 재량이다. 중요한 원인/owner/interface/persistence/readback/effect 변경은 Planner 수정 → 영향 Heuristic → independent review → 새 current binding을 요구한다. 제품 의미 변경은 원 planning authority로 반환한다. worker가 bound plan을 직접 고쳐 gate를 맞추지 않는다.
+명명, private helper, 동등한 국소 수정은 worker 재량이다. 중요한 원인/owner/interface/persistence/readback/effect 변경은 current invocation에서 새 방향에 의존한 mutation을 중단하고 terminal `PARTIAL | BLOCKED`로 반환한 뒤 Planner 수정 → 영향 Heuristic → independent review → fresh actor admission을 요구한다. 제품 의미 변경은 원 planning authority로 반환한다. worker가 bound Plan을 직접 고쳐 gate를 맞추지 않는다.
 
-`checkpoint`의 `kind: MATERIAL_TURN`으로 실제 중요한 변경을 pause한다. `PAUSED`의 안전한 read/분석은 가능하지만 source mutation은 release 전 금지다. delegated Parent 또는 DIRECT current owner가 `release_checkpoint`를 소유하며 plan 갱신에는 새 `plan_review_path`로 common 검사를 다시 수행한다. Parent CONTINUE는 stale plan/authority를 우회하지 않는다. 동일 consumed assignment를 다시 소비하거나 owner를 몰래 바꾸지 않는다.
+material method change를 보고받은 caller는 old review가 byte-current하다는 이유만으로 그대로 재사용해 fresh worker를 시작하지 않는다. affected Plan을 실제로 수정하고 Heuristic/Independent Review를 다시 거친 후 새 `plan_review_path`로 fresh implementation invocation을 시작한다.
 
-exact Ticket/Parent Spec/Behavior/UI authority drift, authoritative readback의 unavailable/non-attributable 상태 또는 대체 필요가 확인되면 영향 작업을 즉시 멈춘다. 원 권위 안에서 faithful direction/readback을 재확정하고 필요한 review를 갱신할 수 없으면 BLOCKED다. readback 약화나 새 제품 의미를 checkpoint 승인으로 만들지 않는다. 일반 repository 변경과 제품 authority drift는 구분한다.
+exact Ticket/Parent Spec/Behavior/UI authority drift, authoritative readback의 unavailable/non-attributable 상태 또는 대체 필요가 확인되면 영향 작업을 즉시 멈춘다. 원 권위 안에서 faithful direction/readback을 재확정하고 필요한 review를 갱신할 수 없으면 BLOCKED다. readback 약화나 새 제품 의미를 caller 승인으로 만들지 않는다. 일반 repository 변경과 제품 authority drift는 구분한다.
 
 ## 5. 구현
 
@@ -142,41 +132,37 @@ Ticket의 observable product outcome, Scope/Non-Goals, 적용되는 product inva
 - Mock, 로그, 내부 변수만으로 authoritative readback을 대체하지 않는다.
 - 외부 효과는 Ticket이 허용한 sandbox, authority, cleanup과 readback 경계 안에서만 실행한다.
 
-## 6. Material turn report
+## 6. Material method change terminal
 
-Delegated worker는 다음 중 하나가 실제로 발생해 current reviewed 방향을 material하게 바꾸는 경우에만 보고한다.
+Worker는 다음 중 하나가 실제로 발생해 current reviewed 방향의 load-bearing method를 바꾸는 경우에만 새 방향에 의존한 mutation을 멈추고 current invocation을 terminal로 반환한다.
 
-- repository/runtime 직접 evidence가 initial product interpretation 또는 authority mapping을 뒤집는다.
-- expected change surface가 다른 component, interface, persistence boundary 또는 user-visible surface로 material하게 이동한다.
+- repository/runtime 직접 evidence가 initial root cause 또는 authority mapping을 뒤집는다.
+- expected owner/change surface가 다른 component, shared interface, persistence boundary 또는 user-visible surface로 material하게 이동한다.
 - self-check 결과가 단순 결함 수정이 아니라 구현 strategy 또는 cross-flow/cross-AC meaning 변경을 요구한다.
 - target identity, external condition 또는 authoritative readback strategy가 더 이상 attributable하지 않다.
+- non-idempotent/external effect strategy가 reviewed Plan과 달라져야 한다.
 - 최신 사용자 지시가 현재 implementation direction을 변경·축소·취소한다.
 
 ```text
-IMPLEMENTATION TURN REPORT
+IMPLEMENTATION TURN / PARTIAL
 
 Ticket:
-Turn:
-Previous direction:
+Completion: PARTIAL | BLOCKED
+Material method change: yes
+Reviewed direction:
 New direct evidence:
-Material change:
-Affected flow / authority / scope:
+Affected plan scope:
 Current working-tree state:
-Proposed new direction:
-
-Checkpoint: MATERIAL_TURN
-Protected next phase:
-Checkpoint state: PARENT_CONTINUATION_REQUIRED
-Work permitted before continuation: safe read/analysis only; no source mutation while PAUSED
+Next allowed action: revise affected Plan -> Heuristic -> independent review
 ```
 
-보고 뒤 runtime pause를 해제하기 전 mutation은 하지 않는다. Parent `CONTINUE | STEER | STOP`는 bounded continuation만 소유한다. 중요한 방법 변경에는 영향 Planner/Heuristic/independent review와 current `plan_review_path`가 추가로 필요하며 CONTINUE만으로 대체하지 않는다. `STEER`의 중요한 변경은 같은 checkpoint를 갱신한다. `STOP` 또는 해결 불가 authority blocker면 `Completion: BLOCKED | PARTIAL`로 닫되 uncertain effect/점유는 보존한다.
+이 result로 current invocation은 끝난다. Parent `CONTINUE`나 runtime release로 same child를 살려두지 않는다. caller는 affected Plan을 실제로 수정하고 Heuristic/Independent Review를 다시 수행한 뒤 fresh worker를 시작한다. 해결 불가 authority/readback blocker이거나 external effect 정착 여부를 확인할 수 없으면 exact evidence gap을 포함해 `BLOCKED | PARTIAL`로 닫고 성공을 추측하지 않는다.
 
 ## 7. Completion self-check
 
 Completion candidate 전에:
 
-- mode와 관계없이 현재 exact Ticket/Parent Spec/Behavior/UI, current review, actual target 및 authoritative readback을 다시 확인한다. drift, unavailable/non-attributable readback 또는 substitution은 위 current plan/resynchronization 경계를 따른다. DIRECT는 Parent 승인 없이 current owner가 필요한 review/currentness를 확보하지만 pause fence를 우회하지 않는다.
+- mode와 관계없이 현재 exact Ticket/Parent Spec/Behavior/UI, current review, actual target 및 authoritative readback을 다시 확인한다. 같은 `plan_review_path`로 `ready_contract check_plan_admission`을 재호출하며 drift, unavailable/non-attributable readback 또는 substitution은 위 current plan/resynchronization 경계를 따른다. DIRECT와 SUBAGENT 모두 이 end admission을 건너뛰지 않는다.
 - Scope/Non-Goals를 다시 읽는다.
 - 모든 authored Verification-flow obligation에 연결된 tests/runtime evidence를 실행한다.
 - pre-existing diff와 Ticket delta를 분리한다.
@@ -189,7 +175,7 @@ Required implementation, self-check와 evidence가 닫히면 Ticket과 무관한
 
 이 스킬은 exact Ticket의 top metadata `Status:`를 변경하지 않는다. 정상 구현 입력인 `ready`는 `Completion: COMPLETE` 뒤에도 `ready`로 유지한다.
 
-- `done`은 separate verification authority가 최종 verdict에 따라 소유하는 terminal delivery marker다.
+- `done`은 separate verifier의 semantic verdict를 받은 뒤 caller가 `ready_finalize`로 수행하는 terminal delivery progression이다. implementation worker는 직접 쓰지 않는다.
 - 구현 완료, passing tests 또는 implementer self-check만으로 `done`을 쓰지 않는다.
 - Spec, Scope, Increment, AC, Verification flow, Behavior/UI Authority 또는 다른 planning source를 수정하지 않는다.
 - final verifier가 사용할 exact actual implementation target/checkpoint, self-check/runtime evidence, 해당하는 plan/review navigation을 보존한다.
@@ -213,9 +199,8 @@ Separate verification authority required:
 Verification status: NOT ADJUDICATED BY THIS SKILL
 Verification evidence handoff:
 Tests/runtime evidence:
-Material turn reports: None | <concise list>
-Checkpoint decisions:
-- MATERIAL_TURN: None | <turn -> decision>
+Material method change: no | yes
+Plan admission at completion: CURRENT | <actual failure>
 External conditions / limitations:
 Working-tree scope:
 Completion: COMPLETE | BLOCKED | PARTIAL
@@ -223,7 +208,7 @@ Completion: COMPLETE | BLOCKED | PARTIAL
 
 ### Non-continuation provenance
 
-`Completion: BLOCKED | PARTIAL`이 현재 owner가 권위·readback·target currentness·checkpoint 경계 때문에 계속할 수 없음을 나타낼 때, 또는 `SUBAGENT CAPABILITY UNAVAILABLE`로 반환할 때 기존 결과 뒤에 다음 다섯 필드를 붙인다. 기존 owner 결과를 유지하며 이 블록은 새 상태가 아니다. 실행 전 반환에 아직 얻지 않은 Completion/runtime evidence를 채워 넣지 않는다.
+`Completion: BLOCKED | PARTIAL`이 현재 owner가 admission·권위·readback·target currentness·external-effect uncertainty·material method change 때문에 계속할 수 없음을 나타낼 때, 또는 `SUBAGENT CAPABILITY UNAVAILABLE`로 반환할 때 기존 결과 뒤에 다음 다섯 필드를 붙인다. 기존 owner 결과를 유지하며 이 블록은 새 상태가 아니다. 실행 전 반환에 아직 얻지 않은 Completion/runtime evidence를 채워 넣지 않는다.
 
 ```text
 Decision: <exact existing Completion result or SUBAGENT CAPABILITY UNAVAILABLE>
