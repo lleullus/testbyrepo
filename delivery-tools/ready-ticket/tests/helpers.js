@@ -1,7 +1,8 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { bindAuthority, executeArgvNode, hashBytes } from "../src/core.js";
 
 export async function fixture(t) {
@@ -35,4 +36,39 @@ export async function fixture(t) {
   };
   fs.writeFileSync(review, JSON.stringify(reviewData));
   return { base, root, work, ticket, plan, review, behavior, stable, effect, validatorPath, authority, reviewData };
+}
+
+export async function materializeReadyBundle(base, mutate = () => {}) {
+  const sourceRoot = fileURLToPath(new URL("../", import.meta.url));
+  const bundleId = hashBytes(`${base}:${crypto.randomUUID()}`);
+  const release = path.join(base, "releases", bundleId);
+  const relatives = [
+    "package.json",
+    ...fs.readdirSync(sourceRoot).filter(name => name.endsWith(".js")).map(name => name),
+    ...fs.readdirSync(path.join(sourceRoot, "src")).filter(name => name.endsWith(".js")).map(name => `src/${name}`),
+  ].sort();
+  const files = {};
+  for (const packageRelative of relatives) {
+    const source = path.join(sourceRoot, packageRelative);
+    const target = path.join(release, "delivery-tools/ready-ticket", packageRelative);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const bytes = fs.readFileSync(source);
+    const mode = fs.statSync(source).mode & 0o555;
+    fs.writeFileSync(target, bytes, { mode });
+    fs.chmodSync(target, mode);
+    files[`delivery-tools/ready-ticket/${packageRelative}`] = { sha256: hashBytes(bytes), mode };
+  }
+  const manifest = {
+    schema: "iis-bundle/v2",
+    protocol: 2,
+    family: "ready-boundary-tools",
+    bundle_id: bundleId,
+    files,
+  };
+  mutate({ release, manifest });
+  const manifestPath = path.join(release, "bundle.json");
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o444 });
+  fs.chmodSync(manifestPath, 0o444);
+  const specifier = pathToFileURL(path.join(release, "delivery-tools/ready-ticket/omp.js")).href;
+  return { bundleId, release, module: await import(`${specifier}?fixture=${crypto.randomUUID()}`) };
 }

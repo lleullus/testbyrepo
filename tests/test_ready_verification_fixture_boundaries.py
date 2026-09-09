@@ -142,18 +142,25 @@ const executeArgv = async (argv, options) => {
 const captured = await module.captureVerification({projectRoot: metadata.project_root,
     ticketPath: metadata.ticket_path, stableTargetPaths: metadata.target_paths,
     bindingPath: process.argv[3], executeArgv});
-const sealed = module.sealVerificationVerdict({bindingPath: captured.binding_path,
-    bindingSha256: captured.binding_sha256, verdict: 'VERIFIED', verdictPath: process.argv[4]});
+const verifierTerminal = {schema: 'iis-ready-host-terminal/v1', handle: 'drift-terminal',
+    owner_id: 'Verifier', verifier_model: 'test/verifier', project_root: captured.binding.project_root,
+    ticket_path: captured.binding.ticket_path, verification_binding: captured.binding_path,
+    verification_binding_sha256: captured.binding_sha256,
+    stable_target_paths: captured.binding.stable_target_paths,
+    scenario_effect_paths: captured.binding.scenario_effect_paths,
+    verification_verdict: 'VERIFIED', ticket_progression: 'PENDING CALLER FINALIZATION',
+    observed_ticket_status: 'ready'};
 fs.appendFileSync(metadata.target_paths.at(-1), '\\n# evaluator drift after immutable capture\\n');
-const result = await module.finalizeVerification({verdictPath: sealed.verdict_path,
-    verdictSha256: sealed.verdict_sha256, executeArgv});
+const result = await module.finalizeVerification({acceptedTerminal: verifierTerminal,
+    bundleIdentity: captured.binding.bundle_identity, executeArgv});
 console.log(JSON.stringify(result));
 """
         result = subprocess.run(
             ["node", "--input-type=module", "-e", program, BOUNDARY_MODULE.as_uri(), json.dumps(metadata),
-             str(self.root / "drift-binding.json"), str(self.root / "drift-verdict.json")],
-            cwd=metadata["project_root"], env=self.environment, check=True, text=True, capture_output=True,
+             str(self.root / "drift-binding.json")],
+            cwd=metadata["project_root"], env=self.environment, check=False, text=True, capture_output=True,
         )
+        self.assertEqual(result.returncode, 0, result.stderr)
         observed = json.loads(result.stdout)
         self.assertEqual(observed["verification_verdict"], "VERIFIED")
         self.assertEqual(observed["ticket_progression"], "FAILED")

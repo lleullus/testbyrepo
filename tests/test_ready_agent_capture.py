@@ -125,7 +125,7 @@ class ReadyAgentCaptureTests(unittest.TestCase):
         duplicate = terminal + "\nPlan Review: /different/review.json"
         self.assertIsNone(self.capture.summarize([message("stop", duplicate), {"type": "agent_end"}])["plan_review_path"])
 
-    def test_verdict_rejects_quotes_conflicts_and_caller_progression_is_distinct(self) -> None:
+    def test_verdict_rejects_quotes_and_only_host_delivery_authorizes_finalization(self) -> None:
         for terminal in (
             "> READY TICKET VERIFICATION RESULT\n> Verification Verdict: VERIFIED",
             "```text\nREADY TICKET VERIFICATION RESULT\nVerification Verdict: VERIFIED\n```",
@@ -135,37 +135,42 @@ class ReadyAgentCaptureTests(unittest.TestCase):
             self.assertIsNone(self.capture.summarize([message("stop", terminal), {"type": "agent_end"}])["parsed_verdict"])
         binding = "/outside/verification-binding.json"
         sha256 = "a" * 64
-        verdict_record = "/outside/verification-verdict.json"
-        verdict_sha256 = "b" * 64
+        host_record = "/private/host-verdict.json"
+        host_record_sha256 = "b" * 64
+        handle = "ready-terminal-00000000-0000-4000-8000-000000000001"
         terminal = ("READY TICKET VERIFICATION RESULT\n"
-                    f"Verification Binding: {binding}\n"
-                    f"Verification Binding SHA256: {sha256}\n"
-                    f"Verification Verdict Record: {verdict_record}\n"
-                    f"Verification Verdict Record SHA256: {verdict_sha256}\n"
                     "Verification Verdict: VERIFIED\n"
                     "Verifier Ticket Progression: PENDING CALLER FINALIZATION\n"
                     "Observed Ticket Status: ready")
         pending = self.capture.summarize([message("stop", terminal), {"type": "agent_end"}])
         self.assertEqual(pending["parsed_verdict"], "VERIFIED")
         self.assertEqual(pending["verifier_ticket_progression"], "PENDING CALLER FINALIZATION")
-        self.assertEqual(pending["verification_binding_path"], binding)
-        self.assertEqual(pending["verification_binding_sha256"], sha256)
-        self.assertEqual(pending["verification_verdict_record_path"], verdict_record)
-        self.assertEqual(pending["verification_verdict_record_sha256"], verdict_sha256)
-        self.assertIsNone(pending["ticket_progression"])
+        self.assertIsNone(pending["host_verifier_terminal_handle"])
+        self.assertIsNone(pending["verification_binding_path"])
+        self.assertIsNone(pending["host_verdict_record_path"])
         events = [
-            message("stop", terminal),
+            {"type": "message_start", "message": {"role": "custom", "customType": "async-result",
+             "attribution": "agent", "content": f"Background task complete.\nReady Verification Terminal: {handle}"}},
             {"type": "tool_execution_start", "toolCallId": "f", "toolName": "ready_finalize",
-             "args": {"verdict_path": verdict_record, "verdict_sha256": verdict_sha256}},
+             "args": {"terminal_handle": handle}},
             {"type": "tool_execution_end", "toolCallId": "f", "isError": False,
-             "result": {"details": {"verification_binding": binding, "verification_binding_sha256": sha256,
-                                      "verification_verdict_record": verdict_record,
-                                      "verification_verdict_record_sha256": verdict_sha256,
-                                      "verification_verdict": "VERIFIED", "ticket_progression": "COMPLETED",
+             "result": {"details": {"verification_terminal": handle,
+                                      "verification_binding": binding, "verification_binding_sha256": sha256,
+                                      "verification_verdict_record": host_record,
+                                      "verification_verdict_record_sha256": host_record_sha256,
+                                      "verification_verdict": "VERIFIED",
+                                      "verifier_ticket_progression": "PENDING CALLER FINALIZATION",
+                                      "ticket_progression": "COMPLETED",
                                       "progression_basis": "WRITE_PERFORMED_THIS_CALL", "ticket_status_after": "done"}}},
+            message("stop", terminal),
             {"type": "agent_end"},
         ]
         finalized = self.capture.summarize(events)
+        self.assertEqual(finalized["host_verifier_terminal_handle"], handle)
+        self.assertEqual(finalized["host_verifier_terminal_delivery_count"], 1)
+        self.assertEqual(finalized["verification_binding_path"], binding)
+        self.assertEqual(finalized["host_verdict_record_path"], host_record)
+        self.assertEqual(finalized["caller_finalization_args"], {"terminal_handle": handle})
         self.assertEqual(finalized["ticket_progression"], "COMPLETED")
         self.assertEqual(finalized["progression_basis"], "WRITE_PERFORMED_THIS_CALL")
         self.assertEqual(finalized["ticket_status_after"], "done")

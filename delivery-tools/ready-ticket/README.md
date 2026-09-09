@@ -10,13 +10,12 @@ The OMP extension registers exactly two IIS tools and does not install global to
   - `inspect_authority`: validate and bind the current Ticket/product authority bytes.
   - `check_plan_admission`: require an exact current independent `iis-plan-review/v1` ADMIT before implementation work.
   - `capture_verification`: create one immutable verifier binding outside Project Root.
-  - `seal_verdict`: bind the verifier's terminal semantic verdict to that exact binding in a new immutable outside-root record.
 - `ready_finalize`
-  - consume only an immutable verifier-owned verdict-record path/SHA;
-  - verify its binding and current loaded bundle/protocol identities before mutation;
+  - accept only `{ "terminal_handle": "<opaque host-delivered handle>" }` for a successful delegated Ready Verify worker;
+  - consume host-owned binding/verdict provenance and verify current loaded bundle/protocol identities before mutation;
   - perform at most the narrow canonical Ticket `ready -> done` status progression without interpreting semantic verification.
 
-The optional CLI exposes the same two surfaces for host integration without creating persistent IIS execution state.
+The optional CLI exposes `ready_contract`; its `ready_finalize` name fails with `CAPABILITY_UNAVAILABLE` because only the live OMP host can resolve terminal authority.
 
 ## Implementation boundary
 
@@ -41,21 +40,21 @@ A material implementation method change ends the current implementation invocati
 
 The binding is created as a mode-0600 outside-root file and is never overwritten. Scenario-effect paths may change during the authored verification scenario; stable targets may not. Stable-target or authority drift makes later status progression fail rather than silently reusing stale evidence.
 
-After closing the semantic cycle, the verifier calls `ready_contract seal_verdict` and returns both binding and verdict-record path/SHA. It does not write Ticket status. The caller passes only that exact verdict-record identity to `ready_finalize`; it cannot supply or rewrite the semantic verdict.
+After closing the semantic cycle, the delegated verifier returns one successful terminal report with the binding identity and semantic verdict. It does not write Ticket status or create a portable verdict credential. OMP recognizes the exact Ready Verify worker terminal, validates its shape and immutable binding, persists it privately, and delivers an opaque terminal handle out-of-band.
 
-The verdict record is a mode-0600, non-overwritable outside-root evidence file. It copies Ticket, binding, bundle and protocol identity from the verified binding. It is not execution/session/workflow state.
+The caller submits exactly that host-delivered handle as the sole `ready_finalize` input. It cannot supply, rewrite, extract, serialize, copy, or recreate the semantic verdict authority. Binding paths, verdict text, task output copied into a new object, CLI JSON, a fabricated handle, or another caller/session's handle are insufficient.
 
 ## Finalization and provenance
 
-For a verdict record referencing a binding captured from `Status: ready`:
+For host terminal authority referencing a binding captured from `Status: ready`:
 
 - `FAILED` and `INCONCLUSIVE` never mutate the Ticket.
-- `VERIFIED` may perform only the exact top-metadata status replacement after verdict-record/binding/current-bundle/current-protocol, currentness and canonical validation checks.
-- any record/binding/current bundle or protocol mismatch performs no Ticket mutation.
+- `VERIFIED` may perform only the exact top-metadata status replacement after terminal/binding/current-bundle/current-protocol, currentness, and canonical validation checks.
+- any terminal authority, binding, current-bundle, or protocol mismatch performs no Ticket mutation.
 - post-write validation failure conditionally restores only this finalizer call's exact candidate when protected state is still unchanged.
 - an already-`done` Ticket matching the binding is current-state confirmation, not proof that the current call performed completion.
 
-A completion result is attributable only when the finalizer actually performed the write in the current call or when the same host process has captured provenance for that exact verdict record's prior finalizer result. Semantic verdict, verdict provenance, progression result, progression basis and observed Ticket status remain separate fields.
+A completion result is attributable only when the finalizer actually performed the write in the current call or recovered the exact captured result from its host-owned consumed-terminal ledger. Semantic verdict, terminal provenance, progression result, progression basis, and observed Ticket status remain separate fields. The ledger is minimal idempotency provenance, not execution/session/workflow state, and stores no verifier transcript or reusable credential.
 
 A binding captured from an already-`done` Ticket is diagnostic only and never reopens status.
 
@@ -75,4 +74,4 @@ Run:
 npm test
 ```
 
-The suite covers authority/admission currentness, immutable verification binding and verdict records, bundle/protocol identity gates, stable/effect separation, exact finalization/rollback semantics, ordinary settled command failure followed by edit/retry, and zero global interception hooks.
+The suite covers authority/admission currentness, immutable verification binding, host terminal authority capture/consumption, restart-safe exact-result replay, bundle/protocol identity gates, stable/effect separation, exact finalization/rollback semantics, ordinary settled command failure followed by edit/retry, and zero global tool interception hooks.

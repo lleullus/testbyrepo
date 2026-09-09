@@ -424,43 +424,47 @@ def guarded_delivery(events: list, sessions: Path, ticket_path: Path) -> dict | 
             elif message.get("role") == "toolResult":
                 normalized.append({"type": "tool_execution_end", "toolCallId": message.get("toolCallId"),
                                    "isError": message.get("isError", False), "result": message})
+            elif message.get("role") == "custom":
+                normalized.append({"type": "message_start", "message": message})
         captures.append((str(path), native + normalized))
     exact_ticket = str(ticket_path.resolve())
     for origin, capture in captures:
         summary = summarize(capture)
+        terminal_handle = summary.get("host_verifier_terminal_handle")
         if (summary.get("parsed_verdict") != "VERIFIED"
                 or summary.get("verifier_ticket_progression") != "PENDING CALLER FINALIZATION"
+                or not terminal_handle
+                or summary.get("host_verifier_terminal_delivery_count") != 1
                 or not summary.get("verification_binding_path")
                 or not summary.get("verification_binding_sha256")
-                or not summary.get("verification_verdict_record_path")
-                or not summary.get("verification_verdict_record_sha256")
+                or not summary.get("host_verdict_record_path")
+                or not summary.get("host_verdict_record_sha256")
                 or not _verdict_record_matches(
                     summary["verification_binding_path"], summary["verification_binding_sha256"],
-                    summary["verification_verdict_record_path"], summary["verification_verdict_record_sha256"],
+                    summary["host_verdict_record_path"], summary["host_verdict_record_sha256"],
                     summary["parsed_verdict"])):
             continue
         for row in boundary_results(capture, "ready_finalize"):
             result = row["result"]
             if (result.get("ticket_path") == exact_ticket
-                    and row["args"].get("verdict_path") == summary["verification_verdict_record_path"]
-                    and row["args"].get("verdict_sha256") == summary["verification_verdict_record_sha256"]
-                    and "verdict" not in row["args"]
-                    and "binding_path" not in row["args"]
-                    and "binding_sha256" not in row["args"]
+                    and row["args"] == {"terminal_handle": terminal_handle}
+                    and result.get("verification_terminal") == terminal_handle
                     and result.get("verification_binding") == summary["verification_binding_path"]
                     and result.get("verification_binding_sha256") == summary["verification_binding_sha256"]
-                    and result.get("verification_verdict_record") == summary["verification_verdict_record_path"]
-                    and result.get("verification_verdict_record_sha256") == summary["verification_verdict_record_sha256"]
+                    and result.get("verification_verdict_record") == summary["host_verdict_record_path"]
+                    and result.get("verification_verdict_record_sha256") == summary["host_verdict_record_sha256"]
+                    and result.get("verifier_ticket_progression") == "PENDING CALLER FINALIZATION"
                     and result.get("ticket_progression") == "COMPLETED"
                     and result.get("progression_basis") in {"WRITE_PERFORMED_THIS_CALL", "RECOVERED_CAPTURED_FINALIZER_RESULT"}
                     and result.get("verification_verdict") == summary["parsed_verdict"]
                     and result.get("ticket_status_after") == "done"
                     and _binding_matches_current_done(ticket_path, summary["verification_binding_path"], summary["verification_binding_sha256"])):
                 return {"origin": origin, "tool_call_id": row["tool_call_id"], "result": result,
+                        "host_verifier_terminal_handle": terminal_handle,
                         "verification_binding": summary["verification_binding_path"],
                         "verification_binding_sha256": summary["verification_binding_sha256"],
-                        "verification_verdict_record": summary["verification_verdict_record_path"],
-                        "verification_verdict_record_sha256": summary["verification_verdict_record_sha256"]}
+                        "host_verdict_record": summary["host_verdict_record_path"],
+                        "host_verdict_record_sha256": summary["host_verdict_record_sha256"]}
     return None
 
 

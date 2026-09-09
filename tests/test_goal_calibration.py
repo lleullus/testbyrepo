@@ -200,27 +200,28 @@ class GoalCalibrationTests(unittest.TestCase):
                      "content": [{"type": "text", "text": "VERIFIED; ticket_progression COMPLETED; Status: done"}]}},
                      {"type": "agent_end"}]
         self.assertIsNone(goal.guarded_delivery(narration, sessions, ticket))
+        handle = "ready-terminal-00000000-0000-4000-8000-000000000001"
         terminal = ("READY TICKET VERIFICATION RESULT\n"
-                    f"Verification Binding: {binding_path}\n"
-                    f"Verification Binding SHA256: {binding_sha}\n"
-                    f"Verification Verdict Record: {verdict_path}\n"
-                    f"Verification Verdict Record SHA256: {verdict_sha}\n"
                     "Verification Verdict: VERIFIED\n"
                     "Verifier Ticket Progression: PENDING CALLER FINALIZATION\n"
                     "Observed Ticket Status: ready\n")
         semantic = {"type": "message_end", "message": {"role": "assistant", "stopReason": "stop",
                     "content": [{"type": "text", "text": terminal}]}}
+        delivery = {"type": "message_start", "message": {"role": "custom", "customType": "async-result",
+                    "attribution": "agent", "content": f"Ready Verification Terminal: {handle}"}}
         start = {"type": "tool_execution_start", "toolCallId": "finalize", "toolName": "ready_finalize",
-                 "args": {"verdict_path": str(verdict_path), "verdict_sha256": verdict_sha}}
-        result = {"ticket_path": str(ticket), "verification_binding": str(binding_path),
+                 "args": {"terminal_handle": handle}}
+        result = {"verification_terminal": handle,
+                  "ticket_path": str(ticket), "verification_binding": str(binding_path),
                   "verification_binding_sha256": binding_sha,
                   "verification_verdict_record": str(verdict_path),
                   "verification_verdict_record_sha256": verdict_sha, "verification_verdict": "VERIFIED",
+                  "verifier_ticket_progression": "PENDING CALLER FINALIZATION",
                   "ticket_progression": "COMPLETED", "progression_basis": "WRITE_PERFORMED_THIS_CALL",
                   "ticket_status_after": "done"}
-        events = [semantic, start,
+        events = [delivery, start,
                   {"type": "tool_execution_end", "toolCallId": "finalize", "isError": False, "result": {"details": result}},
-                  {"type": "agent_end"}]
+                  semantic, {"type": "agent_end"}]
         self.assertIsNotNone(goal.guarded_delivery(events, sessions, ticket))
         mismatched = json.loads(json.dumps(events))
         mismatched[2]["result"]["details"]["verification_binding_sha256"] = "0" * 64

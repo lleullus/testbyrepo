@@ -241,6 +241,69 @@ BLUEPRINTS: dict[str, dict[str, Any]] = {
         "required": ["core-result"],
         "candidate": ["future-polish"],
     },
+    "implementation-complete-verification-pending": {
+        "boundary": "CURRENT_INCREMENT_DELIVERED",
+        "predicate": "The current result is independently verified and its Ticket has completed guarded progression.",
+        "state": {"value": "revised-value"},
+        "tickets": [("TICKET-001", "ready")],
+        "obligations": [("ordinary current result returns value=revised-value", "TICKET-001", ["state/current.json"])],
+        "command": "status",
+        "implementation_enabled": True,
+        "verification_enabled": True,
+        "owner_return": {"owner": "ready-ticket-implement", "completion": "COMPLETE", "ticket_status": "ready"},
+    },
+    "verifier-terminal-finalization-pending": {
+        "boundary": "CURRENT_INCREMENT_DELIVERED",
+        "predicate": "The current result is independently verified and its Ticket has completed guarded progression.",
+        "state": {"value": "revised-value"},
+        "tickets": [("TICKET-001", "ready")],
+        "obligations": [("ordinary current result returns value=revised-value", "TICKET-001", ["state/current.json"])],
+        "command": "status",
+        "verification_enabled": True,
+        "owner_return": {"owner": "ready-ticket-verify", "verification_verdict": "VERIFIED", "host_terminal_handle": "synthetic-terminal", "ticket_progression": "PENDING CALLER FINALIZATION"},
+    },
+    "verified-progression-failed": {
+        "boundary": "CURRENT_INCREMENT_DELIVERED",
+        "predicate": "The current result is independently verified and its Ticket has completed guarded progression.",
+        "state": {"value": "revised-value"},
+        "tickets": [("TICKET-001", "ready")],
+        "obligations": [("ordinary current result returns value=revised-value", "TICKET-001", ["state/current.json"])],
+        "command": "status",
+        "verification_enabled": True,
+        "owner_return": {"owner": "ready_finalize", "verification_verdict": "VERIFIED", "ticket_progression": "FAILED", "progression_basis": "NONE", "ticket_status_after": "ready"},
+    },
+    "current-increment-delivered-goal-remaining": {
+        "boundary": "BOUNDED_OUTCOME_SATISFIED",
+        "predicate": "Both required results current-result and follow-up-result are delivered.",
+        "state": {"current_result": "ready", "follow_up_result": "missing"},
+        "tickets": [("TICKET-001", "done")],
+        "obligations": [("required current-result is ready", "TICKET-001", ["state/current.json"])],
+        "command": "status",
+        "required": ["current-result", "follow-up-result"],
+    },
+    "no-progress-unchanged-owner-return": {
+        "boundary": "CURRENT_INCREMENT_DELIVERED",
+        "predicate": "The ordinary current result returns value=revised-value and guarded progression is complete.",
+        "state": {"value": "original-value"},
+        "tickets": [("TICKET-001", "ready")],
+        "obligations": [("ordinary current result returns value=revised-value", "TICKET-001", ["state/current.json"])],
+        "command": "status",
+        "implementation_enabled": True,
+        "verification_enabled": True,
+        "owner_return": {"owner": "ready-ticket-verify", "verification_verdict": "FAILED", "same_target_evidence_and_route": True},
+    },
+    "verification-disabled-delivery-boundary": {
+        "boundary": "CURRENT_INCREMENT_DELIVERED",
+        "predicate": "The ordinary current result is independently verified and guarded progression is complete.",
+        "state": {"value": "revised-value"},
+        "tickets": [("TICKET-001", "ready")],
+        "obligations": [("ordinary current result returns value=revised-value", "TICKET-001", ["state/current.json"])],
+        "command": "status",
+        "implementation_enabled": True,
+        "verification_enabled": False,
+        "owner_return": {"owner": "ready-ticket-implement", "completion": "COMPLETE", "ticket_status": "ready"},
+        "hard_constraints": "Verification is explicitly disabled; do not invoke it or claim delivered completion.",
+    },
 }
 
 
@@ -384,7 +447,11 @@ def materialize(case_id: str, project: Path, support: Path) -> dict[str, Any]:
     boundary = blueprint["boundary"]
     required = blueprint.get("required", [])
     candidate = blueprint.get("candidate", [])
-    implementation_enabled = boundary == "CURRENT_INCREMENT_IMPLEMENTED"
+    implementation_enabled = blueprint.get("implementation_enabled", boundary == "CURRENT_INCREMENT_IMPLEMENTED")
+    verification_enabled = blueprint.get(
+        "verification_enabled",
+        not implementation_enabled and boundary != "READY_EXECUTION_PLANS",
+    )
     command = blueprint["command"]
     obligations = [
         {
@@ -405,7 +472,7 @@ def materialize(case_id: str, project: Path, support: Path) -> dict[str, Any]:
 
 Desired Product Outcome: {predicate}
 Decision Priorities: preserve current approved meaning; prefer actual attributable readback
-Hard Constraints: local read-only final assessment; no new planning, product mutation, service, retry, or external action
+Hard Constraints: local read-only final assessment; no new planning, product mutation, service, retry, or external action. {blueprint.get('hard_constraints', '')}
 Non-Goals: future candidate work and unrelated product expansion
 Continuation Authority: {'BOUNDED_OUTCOME' if boundary != 'CURRENT_INCREMENT_DELIVERED' and boundary != 'CURRENT_INCREMENT_IMPLEMENTED' else 'CURRENT_INCREMENT'}
 Return-to-User Boundary: missing authority, missing required evidence, or a material unresolved product decision
@@ -418,7 +485,7 @@ Applicability: this disposable current product
         "Candidate Named Items": candidate or "None named",
         "Required Item Policy": "EXACT_REQUIRED_SET" if required else "NONE_REQUIRED",
         "Implementation": "yes" if implementation_enabled else "no",
-        "Verification": "no" if implementation_enabled or boundary == "READY_EXECUTION_PLANS" else "yes",
+        "Verification": "yes" if verification_enabled else "no",
         "Run Completion Boundary": boundary,
         "Completion Predicate": predicate,
         "Authoritative Readback": "Inspect the ordinary local command, current state, canonical artifact, canonical Spec/Ticket ownership, and attributable evidence paths in this product.",
@@ -534,6 +601,9 @@ Current use: inspect every claimed readback directly; this seeded report cannot 
     if "implementation" in blueprint:
         extra_readback_paths.append(str(project / "evidence/implementation-result.json"))
         write_json(project / "evidence/implementation-result.json", {**blueprint["implementation"], "fixture_setup_history": True})
+    if "owner_return" in blueprint:
+        extra_readback_paths.append(str(project / "evidence/owner-return.json"))
+        write_json(project / "evidence/owner-return.json", {**blueprint["owner_return"], "fixture_setup_history": True})
 
     trigger_argv = [sys.executable, str(app), command]
     readback_values = [str(app), str(state), str(contract), str(mandate), str(spec), *ticket_paths, *owner_report_paths, *extra_readback_paths]
@@ -697,29 +767,30 @@ def _verdict_record_matches(binding_path: str, binding_sha256: str, verdict_path
 
 
 def _verified_delivery(summary: dict[str, Any], events: list[dict[str, Any]], ticket_path: Path) -> bool:
+    terminal_handle = summary.get("host_verifier_terminal_handle")
     if (summary.get("parsed_verdict") != "VERIFIED"
             or summary.get("verifier_ticket_progression") != "PENDING CALLER FINALIZATION"
+            or not terminal_handle
+            or summary.get("host_verifier_terminal_delivery_count") != 1
             or not summary.get("verification_binding_path")
             or not summary.get("verification_binding_sha256")
-            or not summary.get("verification_verdict_record_path")
-            or not summary.get("verification_verdict_record_sha256")
+            or not summary.get("host_verdict_record_path")
+            or not summary.get("host_verdict_record_sha256")
             or not _verdict_record_matches(
                 summary["verification_binding_path"], summary["verification_binding_sha256"],
-                summary["verification_verdict_record_path"], summary["verification_verdict_record_sha256"],
+                summary["host_verdict_record_path"], summary["host_verdict_record_sha256"],
                 summary["parsed_verdict"])):
         return False
     for row in reversed(boundary_results(events, "ready_finalize")):
         result = row["result"]
-        if (row["args"].get("verdict_path") == summary["verification_verdict_record_path"]
-                and row["args"].get("verdict_sha256") == summary["verification_verdict_record_sha256"]
-                and "verdict" not in row["args"]
-                and "binding_path" not in row["args"]
-                and "binding_sha256" not in row["args"]
+        if (row["args"] == {"terminal_handle": terminal_handle}
+                and result.get("verification_terminal") == terminal_handle
                 and result.get("ticket_path") == str(ticket_path.resolve())
                 and result.get("verification_binding") == summary["verification_binding_path"]
                 and result.get("verification_binding_sha256") == summary["verification_binding_sha256"]
-                and result.get("verification_verdict_record") == summary["verification_verdict_record_path"]
-                and result.get("verification_verdict_record_sha256") == summary["verification_verdict_record_sha256"]
+                and result.get("verification_verdict_record") == summary["host_verdict_record_path"]
+                and result.get("verification_verdict_record_sha256") == summary["host_verdict_record_sha256"]
+                and result.get("verifier_ticket_progression") == "PENDING CALLER FINALIZATION"
                 and result.get("verification_verdict") == summary["parsed_verdict"]
                 and result.get("ticket_progression") == "COMPLETED"
                 and result.get("progression_basis") in {"WRITE_PERFORMED_THIS_CALL", "RECOVERED_CAPTURED_FINALIZER_RESULT"}
@@ -771,10 +842,13 @@ def run(metadata_path: Path, *, agent_dir: Path, payload: Path,
         if stage == "verify":
             stage_events = load_events(run_root / stage / "events.jsonl")
             if (native_setup.get("parsed_verdict") != "VERIFIED" or setup.get("parsed_verdict") != "VERIFIED"
+                    or setup.get("host_verifier_terminal_handle") != native_setup.get("host_verifier_terminal_handle")
+                    or setup.get("verifier_model") != native_setup.get("verifier_model")
+                    or setup.get("host_verifier_terminal_delivery_count") != 1
                     or setup.get("verification_binding_path") != native_setup.get("verification_binding_path")
                     or setup.get("verification_binding_sha256") != native_setup.get("verification_binding_sha256")
-                    or setup.get("verification_verdict_record_path") != native_setup.get("verification_verdict_record_path")
-                    or setup.get("verification_verdict_record_sha256") != native_setup.get("verification_verdict_record_sha256")
+                    or setup.get("host_verdict_record_path") != native_setup.get("host_verdict_record_path")
+                    or setup.get("host_verdict_record_sha256") != native_setup.get("host_verdict_record_sha256")
                     or setup.get("caller_finalization_args") != (native_setup.get("caller_finalization_args") or {})
                     or setup.get("ticket_progression") != "COMPLETED" or setup.get("ticket_status_after") != "done"
                     or not _verified_delivery(native_setup, stage_events, Path(metadata["ticket_path"]))):

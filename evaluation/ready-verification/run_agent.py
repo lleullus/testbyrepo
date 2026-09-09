@@ -99,6 +99,24 @@ def boundary_results(events: list[dict[str, Any]], tool_name: str, action: str |
             results.append({"args": args, "result": details, "tool_call_id": event.get("toolCallId")})
     return results
 
+def host_ready_terminal_handles(events: list[dict[str, Any]]) -> list[str]:
+    """Read handles only from host-produced task results/async delivery, never assistant narration."""
+    calls = {event.get("toolCallId"): event for event in events if event.get("type") == "tool_execution_start"}
+    sources: list[str] = []
+    for event in events:
+        if event.get("type") == "message_start":
+            message = event.get("message", {})
+            if message.get("role") == "custom" and message.get("customType") == "async-result" and message.get("attribution") == "agent":
+                sources.append(str(message.get("content", "")))
+        elif event.get("type") == "tool_execution_end" and not event.get("isError"):
+            call = calls.get(event.get("toolCallId"), {})
+            if call.get("toolName") == "task" and isinstance(event.get("result"), dict):
+                sources.append(text_content(event["result"]))
+    handles: list[str] = []
+    for source in sources:
+        handles.extend(re.findall(r"(?m)^Ready Verification Terminal: (ready-terminal-[0-9a-f-]+)$", source))
+    return handles
+
 
 def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
     messages = [event["message"] for event in events if event.get("type") == "message_end" and event.get("message", {}).get("role") == "assistant"]
@@ -108,33 +126,45 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
     ) else ""
     agent_ended = any(event.get("type") == "agent_end" for event in events)
     model_completed = agent_ended and last.get("stopReason") == "stop" and bool(terminal.strip()) and not last.get("errorMessage")
-    parsed = _verification_verdict(terminal)
-    preparation = canonical_field(terminal, "READY TICKET PLAN RESULT", "Completion", "COMPLETE|BLOCKED|PARTIAL")
-    review = canonical_field(terminal, "READY TICKET PLAN RESULT", "Plan Review", r"/[^\n]+")
-    implementation = canonical_field(terminal, "IMPLEMENT RESULT", "Completion", "COMPLETE|BLOCKED|PARTIAL")
-    verifier_progression = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verifier Ticket Progression", "PENDING CALLER FINALIZATION|NOT APPLICABLE")
-    if verifier_progression is None:
-        verifier_progression = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Ticket Progression", "PENDING CALLER FINALIZATION|NOT APPLICABLE")
-    verification_binding = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verification Binding", r"/[^\n]+")
-    verification_binding_sha256 = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verification Binding SHA256", r"[0-9a-fA-F]{64}")
-    verification_verdict_record = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verification Verdict Record", r"/[^\n]+")
-    verification_verdict_record_sha256 = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verification Verdict Record SHA256", r"[0-9a-fA-F]{64}")
     finalizations = boundary_results(events, "ready_finalize")
     finalization = finalizations[-1]["result"] if finalizations else None
     finalization_args = finalizations[-1]["args"] if finalizations else None
+    delivered_handles = host_ready_terminal_handles(events)
+    unique_handles = list(dict.fromkeys(delivered_handles))
+    host_terminal = unique_handles[0] if len(unique_handles) == 1 else None
+    parsed_text_verdict = _verification_verdict(terminal)
+    finalizer_verdict = finalization.get("verification_verdict") if finalization else None
+    parsed = finalizer_verdict if finalizer_verdict in {"VERIFIED", "FAILED", "INCONCLUSIVE"} else parsed_text_verdict
+    preparation = canonical_field(terminal, "READY TICKET PLAN RESULT", "Completion", "COMPLETE|BLOCKED|PARTIAL")
+    review = canonical_field(terminal, "READY TICKET PLAN RESULT", "Plan Review", r"/[^\n]+")
+    implementation = canonical_field(terminal, "IMPLEMENT RESULT", "Completion", "COMPLETE|BLOCKED|PARTIAL")
+    verifier_progression = finalization.get("verifier_ticket_progression") if finalization else None
+    if verifier_progression is None:
+        verifier_progression = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verifier Ticket Progression", "PENDING CALLER FINALIZATION|NOT APPLICABLE")
+    verification_binding = finalization.get("verification_binding") if finalization else None
+    verification_binding_sha256 = finalization.get("verification_binding_sha256") if finalization else None
+    host_verdict_record = finalization.get("verification_verdict_record") if finalization else None
+    host_verdict_record_sha256 = finalization.get("verification_verdict_record_sha256") if finalization else None
+    verifier_model = finalization.get("verifier_model") if finalization else None
     calls = [event for event in events if event.get("type") == "tool_execution_start"]
     results = [event for event in events if event.get("type") == "tool_execution_end"]
     tool_errors = [event for event in results if event.get("isError") is True]
     usage = {key: sum(message.get("usage", {}).get(key, 0) for message in messages) for key in ("input", "output", "cacheRead", "cacheWrite", "totalTokens")}
-    models = sorted({f"{message.get('provider')}/{message.get('model')}" for message in messages})
+    models = {f"{message.get('provider')}/{message.get('model')}" for message in messages}
+    if isinstance(verifier_model, str):
+        models.add(verifier_model.split(":", 1)[0])
+    models = sorted(models)
     return {"terminal_text": terminal, "parsed_verdict": parsed if model_completed else None,
             "preparation_completion": preparation.upper() if model_completed and preparation else None,
             "plan_review_path": review if model_completed else None,
-            "verifier_ticket_progression": verifier_progression.upper() if model_completed and verifier_progression else None,
+            "verifier_ticket_progression": verifier_progression.upper() if model_completed and isinstance(verifier_progression, str) else None,
+            "host_verifier_terminal_handle": host_terminal if model_completed else None,
+            "host_verifier_terminal_delivery_count": len(delivered_handles),
+            "verifier_model": verifier_model if model_completed else None,
             "verification_binding_path": verification_binding if model_completed else None,
-            "verification_binding_sha256": verification_binding_sha256.lower() if model_completed and verification_binding_sha256 else None,
-            "verification_verdict_record_path": verification_verdict_record if model_completed else None,
-            "verification_verdict_record_sha256": verification_verdict_record_sha256.lower() if model_completed and verification_verdict_record_sha256 else None,
+            "verification_binding_sha256": verification_binding_sha256.lower() if model_completed and isinstance(verification_binding_sha256, str) else None,
+            "host_verdict_record_path": host_verdict_record if model_completed else None,
+            "host_verdict_record_sha256": host_verdict_record_sha256.lower() if model_completed and isinstance(host_verdict_record_sha256, str) else None,
             "caller_finalization": finalization,
             "caller_finalization_args": finalization_args,
             "ticket_progression": finalization.get("ticket_progression") if finalization else None,
@@ -186,13 +216,12 @@ def invoke(*, project_root: Path, prompt: str, output_dir: Path, agent_dir: Path
     bundle = json.loads((payload / "bundle.json").read_text(encoding="utf-8"))
     if bundle.get("schema") != "iis-bundle/v2" or bundle.get("protocol") != 2:
         raise ValueError("a complete current protocol-2 bundle is required")
-    for key in ("IIS_READY_VALIDATOR_PATH", "IIS_READY_BUNDLE_ID", "IIS_READY_IIS_WORKFLOW_SKILL"):
+    for key in ("IIS_READY_VALIDATOR_PATH", "IIS_READY_IIS_WORKFLOW_SKILL"):
         environment.pop(key, None)
     environment.update(PI_CODING_AGENT_DIR=str(agent_dir), PYTHONDONTWRITEBYTECODE="1")
     boundary_tools_required = stage in {"prepare", "implement", "verify", "adaptive"}
     if boundary_tools_required:
-        environment.update(IIS_READY_VALIDATOR_PATH=str(payload / "matt/skills/to-tickets/validate_ticket.py"),
-                           IIS_READY_BUNDLE_ID=bundle["bundle_id"])
+        environment["IIS_READY_VALIDATOR_PATH"] = str(payload / "matt/skills/to-tickets/validate_ticket.py")
     session_args = ["--no-session"] if session_dir is None else ["--session-dir", str(session_dir), "--no-title"]
     if resume_session is not None:
         session_args.extend(["--resume", str(resume_session)])
@@ -249,9 +278,10 @@ def invoke(*, project_root: Path, prompt: str, output_dir: Path, agent_dir: Path
     result["clean_transport"] = exit_code == 0 and not timed_out and result["model_completed"] and result["actual_models"] == [model]
     if not result["clean_transport"]:
         for field in ("implementation_completion", "preparation_completion", "plan_review_path", "parsed_verdict",
-                      "verifier_ticket_progression", "verification_binding_path", "verification_binding_sha256",
-                      "verification_verdict_record_path", "verification_verdict_record_sha256",
-                      "caller_finalization", "caller_finalization_args", "ticket_progression", "progression_basis", "ticket_status_after"):
+                      "verifier_ticket_progression", "host_verifier_terminal_handle", "verifier_model",
+                      "verification_binding_path", "verification_binding_sha256", "host_verdict_record_path",
+                      "host_verdict_record_sha256", "caller_finalization", "caller_finalization_args",
+                      "ticket_progression", "progression_basis", "ticket_status_after"):
             result[field] = None
     if session_dir is not None:
         sessions = list(session_dir.glob("*.jsonl"))

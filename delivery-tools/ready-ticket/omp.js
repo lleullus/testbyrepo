@@ -1,28 +1,14 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
+  currentReadyBundleIdentity,
   BOUNDARY_PROTOCOL,
   captureVerification,
   checkPlanAdmission,
   finalizeVerification,
   inspectAuthority,
-  sealVerificationVerdict,
 } from "./src/core.js";
 
 const resultText = value => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }], details: value });
 
-function bundleIdentityFromModule(options) {
-  if (options.bundleIdentity) return options.bundleIdentity;
-  if (process.env.IIS_READY_BUNDLE_ID) return process.env.IIS_READY_BUNDLE_ID;
-  const bundleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-  const manifest = path.join(bundleRoot, "bundle.json");
-  if (fs.existsSync(manifest)) {
-    try { return JSON.parse(fs.readFileSync(manifest, "utf8")).bundle_id ?? "source"; }
-    catch { return "source"; }
-  }
-  return "source";
-}
 
 function requiredString(params, name, action) {
   const value = params[name];
@@ -32,7 +18,7 @@ function requiredString(params, name, action) {
 
 export function installReadyBoundaryTools(pi, options = {}) {
   const z = pi.zod;
-  const bundleIdentity = bundleIdentityFromModule(options);
+  const bundleIdentity = currentReadyBundleIdentity();
   const validatorPath = options.validatorPath ?? process.env.IIS_READY_VALIDATOR_PATH;
   const executeArgv = options.executeArgv ?? (async (argv, request = {}) => {
     if (!pi.exec) throw new Error("CAPABILITY_UNAVAILABLE: host structured exec missing");
@@ -50,34 +36,22 @@ export function installReadyBoundaryTools(pi, options = {}) {
       stderr: raw.stderr ?? "",
     };
   });
-  const provenance = options.provenance ?? new Map();
 
   pi.registerTool({
     name: "ready_contract",
     loadMode: "essential",
     label: "Ready Contract",
-    description: "Stateless Ready authority/admission checks plus immutable verification binding and verdict evidence capture. Does not intercept ordinary host tools.",
+    description: "Stateless Ready authority/admission checks plus immutable verification binding capture. Does not intercept ordinary host tools.",
     parameters: z.object({
-      action: z.enum(["inspect_authority", "check_plan_admission", "capture_verification", "seal_verdict"]),
+      action: z.enum(["inspect_authority", "check_plan_admission", "capture_verification"]),
       project_root: z.string().optional(),
       ticket_path: z.string().optional(),
       plan_review_path: z.string().optional(),
       stable_target_paths: z.array(z.string()).optional(),
       scenario_effect_paths: z.array(z.string()).optional(),
       binding_path: z.string().optional(),
-      binding_sha256: z.string().optional(),
-      verdict: z.enum(["VERIFIED", "FAILED", "INCONCLUSIVE"]).optional(),
-      verdict_path: z.string().optional(),
     }),
     async execute(_callId, params, signal) {
-      if (params.action === "seal_verdict") {
-        return resultText(sealVerificationVerdict({
-          bindingPath: requiredString(params, "binding_path", params.action),
-          bindingSha256: requiredString(params, "binding_sha256", params.action),
-          verdict: requiredString(params, "verdict", params.action),
-          verdictPath: params.verdict_path,
-        }));
-      }
       const common = {
         projectRoot: requiredString(params, "project_root", params.action),
         ticketPath: requiredString(params, "ticket_path", params.action),
@@ -107,28 +81,36 @@ export function installReadyBoundaryTools(pi, options = {}) {
     name: "ready_finalize",
     loadMode: "essential",
     label: "Ready Finalize",
-    description: "Consume an immutable verifier-owned verdict record; only this tool may perform the exact ready-to-done Ticket progression.",
+    description: "Consume one host-accepted Ready verifier terminal; only this tool may perform the exact ready-to-done Ticket progression.",
     parameters: z.object({
-      verdict_path: z.string(),
-      verdict_sha256: z.string(),
+      terminal_handle: z.string(),
     }),
-    async execute(_callId, params, signal) {
+    async execute(_callId, params, signal, _onUpdate, ctx) {
+      const previous = pi.pi.resolveReadyVerifierFinalization(params.terminal_handle, ctx.agentId, ctx.sessionId);
+      if (previous) return resultText(previous);
+      const terminal = pi.pi.resolveReadyVerifierTerminal(params.terminal_handle, ctx.agentId, ctx.sessionId);
       const value = await finalizeVerification({
-        verdictPath: params.verdict_path,
-        verdictSha256: params.verdict_sha256,
+        verdictRecordPath: options.verdictRecordPath?.() ?? pi.pi.readyVerifierVerdictRecordPath(params.terminal_handle, ctx.agentId, ctx.sessionId),
+        acceptedTerminal: terminal,
         executeArgv: (argv, request = {}) => executeArgv(argv, { ...request, signal: request.signal ?? signal }),
-        provenance,
         bundleIdentity,
         boundaryProtocol: BOUNDARY_PROTOCOL,
+        recordResult: result => pi.pi.recordReadyVerifierFinalization(
+          params.terminal_handle,
+          ctx.agentId,
+          ctx.sessionId,
+          result,
+        ),
       });
-      if (value.ticket_progression === "COMPLETED" && value.progression_basis === "WRITE_PERFORMED_THIS_CALL") {
-        provenance.set(`${params.verdict_path}:${params.verdict_sha256}`, value);
-      }
       return resultText(value);
     },
   });
+  pi.on("session_shutdown", (_event, ctx) => {
+    pi.pi.releaseReadyVerifierTerminalsForSession(ctx.agentId, ctx.sessionId);
+  });
 
-  return { provenance, bundleIdentity, validatorPath };
+
+  return { bundleIdentity, validatorPath };
 }
 
 export default function readyTicketBoundaryTools(pi) {

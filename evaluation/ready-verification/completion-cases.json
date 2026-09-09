@@ -123,6 +123,48 @@
       "state": "the current required item is missing while a future Candidate happens to be available",
       "expected_completion": false,
       "review_focus": "the current required item is not demoted to optional or replaced by Candidate progress"
+    },
+    {
+      "case_id": "implementation-complete-verification-pending",
+      "family": "owner-return-routing",
+      "state": "The implementation owner returned COMPLETE, the current product works, Verification is enabled, and the Ticket remains ready",
+      "expected_completion": false,
+      "review_focus": "implementation COMPLETE routes to the verifier rather than becoming whole-run success"
+    },
+    {
+      "case_id": "verifier-terminal-finalization-pending",
+      "family": "owner-return-routing",
+      "state": "The verifier returned VERIFIED with one opaque host terminal handle and the Ticket remains ready pending caller finalization",
+      "expected_completion": false,
+      "review_focus": "the exact host terminal result routes once to ready_finalize and is not itself progression"
+    },
+    {
+      "case_id": "verified-progression-failed",
+      "family": "owner-return-routing",
+      "state": "The verifier result is VERIFIED but ready_finalize reports FAILED with no progression and the Ticket remains ready",
+      "expected_completion": false,
+      "review_focus": "semantic success cannot override finalizer failure or current Ticket state"
+    },
+    {
+      "case_id": "current-increment-delivered-goal-remaining",
+      "family": "success-reentry",
+      "state": "The current Increment is done but one required broader Goal result remains missing within the Mandate ceiling",
+      "expected_completion": false,
+      "review_focus": "current-Increment success re-enters planning from actual state rather than returning whole-run success"
+    },
+    {
+      "case_id": "no-progress-unchanged-owner-return",
+      "family": "no-progress-retry",
+      "state": "The same verifier route already failed for the same target and evidence with no authority or implementation change",
+      "expected_completion": false,
+      "review_focus": "an unchanged owner return does not justify another automatic same-owner retry"
+    },
+    {
+      "case_id": "verification-disabled-delivery-boundary",
+      "family": "disabled-stage-resume",
+      "state": "Implementation returned COMPLETE, Verification is explicitly disabled, the Ticket remains ready, and the requested boundary is delivered completion",
+      "expected_completion": false,
+      "review_focus": "the disabled stage is not invoked and its missing result is not silently claimed"
     }
   ]
 }

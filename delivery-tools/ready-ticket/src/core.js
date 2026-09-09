@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { bindAuthority, hashBytes } from "./authority-binding.js";
@@ -6,6 +9,64 @@ import { captureVerification as captureVerificationCore, sealVerificationVerdict
 import { finalizeVerification as finalizeVerificationCore } from "./finalization.js";
 
 const execFileAsync = promisify(execFile);
+const PACKAGE_ROOT = path.resolve(path.dirname(fs.realpathSync(fileURLToPath(import.meta.url))), "..");
+const REQUIRED_BOUNDARY_FILES = [
+  "delivery-tools/ready-ticket/omp.js",
+  "delivery-tools/ready-ticket/cli.js",
+  "delivery-tools/ready-ticket/index.js",
+  "delivery-tools/ready-ticket/src/authority-binding.js",
+  "delivery-tools/ready-ticket/src/plan-binding.js",
+  "delivery-tools/ready-ticket/src/verification-binding.js",
+  "delivery-tools/ready-ticket/src/finalization.js",
+  "delivery-tools/ready-ticket/src/core.js",
+];
+
+function invalidBundle(detail) {
+  throw new Error(`READY_BUNDLE_INVALID: ${detail}`);
+}
+
+export function currentReadyBundleIdentity() {
+  const releaseRoot = path.resolve(PACKAGE_ROOT, "..", "..");
+  const manifestPath = path.join(releaseRoot, "bundle.json");
+  let manifest;
+  try {
+    const stat = fs.lstatSync(manifestPath);
+    if (!stat.isFile() || stat.isSymbolicLink()) invalidBundle("bundle.json must be a regular file");
+    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  } catch (error) {
+    if (error.message?.startsWith("READY_BUNDLE_INVALID:")) throw error;
+    invalidBundle(`cannot read bundle.json: ${error.message}`);
+  }
+  if (manifest?.schema !== "iis-bundle/v2" || manifest.protocol !== 2 || manifest.family !== "ready-boundary-tools") {
+    invalidBundle("unsupported schema, protocol, or family");
+  }
+  if (typeof manifest.bundle_id !== "string" || !/^[0-9a-f]{64}$/.test(manifest.bundle_id)) {
+    invalidBundle("bundle_id must be an exact SHA-256");
+  }
+  if (path.basename(releaseRoot) !== manifest.bundle_id) invalidBundle("loaded release path does not match bundle_id");
+  if (!manifest.files || typeof manifest.files !== "object" || Array.isArray(manifest.files)) {
+    invalidBundle("files manifest is missing");
+  }
+  for (const relative of REQUIRED_BOUNDARY_FILES) {
+    const expected = manifest.files[relative];
+    const file = path.join(releaseRoot, relative);
+    if (!expected || typeof expected.sha256 !== "string" || !Number.isInteger(expected.mode)) {
+      invalidBundle(`missing boundary file identity: ${relative}`);
+    }
+    let stat;
+    let bytes;
+    try {
+      stat = fs.lstatSync(file);
+      bytes = fs.readFileSync(file);
+    } catch (error) {
+      invalidBundle(`cannot read boundary file ${relative}: ${error.message}`);
+    }
+    if (!stat.isFile() || stat.isSymbolicLink() || hashBytes(bytes) !== expected.sha256 || (stat.mode & 0o777) !== expected.mode) {
+      invalidBundle(`boundary file drift: ${relative}`);
+    }
+  }
+  return manifest.bundle_id;
+}
 
 export async function executeArgvNode(argv, options = {}) {
   try {
@@ -88,10 +149,11 @@ export async function checkPlanAdmission({
 export async function captureVerification(options) {
   return captureVerificationCore({ ...options, executeArgv: options.executeArgv ?? executeArgvNode });
 }
-
+/** Internal/evaluator helper. Not exposed by the OMP Ready public tool surface. */
 export function sealVerificationVerdict(options) {
   return sealVerificationVerdictCore(options);
 }
+
 
 export async function finalizeVerification(options) {
   return finalizeVerificationCore({ ...options, executeArgv: options.executeArgv ?? executeArgvNode });

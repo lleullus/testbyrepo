@@ -78,7 +78,9 @@ def prepare(case_id: str, arena: Path, port: int, kind: str = "verification") ->
 
 def stage_prompt(stage: str, metadata: dict[str, Any], run_root: Path) -> str:
     root = metadata["project_root"]
-    common = (f"Project Root: {root}\n이 호출은 승인된 disposable 로컬 제품 작업이다. DIRECT로 수행하고 subagent를 만들지 않는다. "
+    execution = ("이 stage는 DIRECT로 수행하고 subagent를 만들지 않는다. " if stage != "verify" else
+                 "Parent Main은 host authorityProfile iis-ready-verifier/v1로 exactly one SUBAGENT verifier를 dispatch하고 passive terminal fan-in 뒤 exact host terminal handle만 ready_finalize에 전달한다. ")
+    common = (f"Project Root: {root}\n" + execution +
               "운영 파일·다른 프로젝트·다른 세션·평가 정답을 읽거나 변경하지 않는다. 부모 디렉터리를 탐색하지 않는다. "
               "실제 도구 결과만 근거로 삼고 source 모양이나 내부 테스트로 실제 경계 결과를 대체하지 않는다. "
               "설치된 canonical skill과 그 reference/validator는 읽을 수 있다. 비밀키·외부 실계정은 사용하지 않는다. "
@@ -96,10 +98,10 @@ def stage_prompt(stage: str, metadata: dict[str, Any], run_root: Path) -> str:
         if metadata.get("plan_review_path"):
             target += f"Optional method navigation (not product admission): {metadata['plan_review_path']}\n"
         return common + target + ("read로 skill://ready-ticket-verify 를 호출하고 이 Ticket의 통합 최종 검증을 수행하라. "
-            "현재 authority와 stable target/scenario effect 경계를 직접 확인하고 ready_contract capture_verification으로 immutable binding을 만든 뒤 원계약의 모든 authored flow와 실제 실패 가능 frontier를 확인하라. "
-            "발견한 반례는 verifier-owned current evidence와 finding disposition으로 닫아라. "
-            "실제 실행은 일반 host-native 도구를 사용하고 settled nonzero 결과를 global lock으로 승격하지 않는다. "
-            "원래 source/authority를 고쳐 합격시키지 말고 semantic terminal result를 먼저 닫아 ready_contract seal_verdict로 exact binding/verdict를 immutable record에 봉인한 뒤, 이 DIRECT 호출의 caller 단계에서 exact verdict record path/SHA만 ready_finalize에 전달해 progression result를 별도로 보고하라. caller가 semantic verdict를 입력하거나 재작성하면 안 된다.\n")
+            "Parent Main은 verifier core를 직접 수행하지 말고 skill contract의 exact host authority profile로 단 한 verifier를 dispatch하라. task call의 agent/effort는 지정하지 말고 이 실행에 configured된 selected task role을 그대로 사용하라. "
+            "Verifier는 current authority와 stable target/scenario effect 경계를 직접 확인하고 ready_contract capture_verification으로 immutable binding을 만든 뒤 원계약의 모든 authored flow와 실제 실패 가능 frontier를 확인한다. "
+            "발견한 반례는 verifier-owned current evidence와 finding disposition으로 닫고, 실제 실행은 일반 host-native 도구를 사용하며 settled nonzero 결과를 global lock으로 승격하지 않는다. "
+            "원래 source/authority를 고쳐 합격시키지 않는다. Verifier는 semantic terminal result를 한 번 반환하고, Parent Main은 host가 전달한 exact terminal handle을 그대로 ready_finalize의 유일한 입력으로 사용해 progression result를 별도로 보고하라. verdict/path/SHA를 finalizer 입력으로 만들거나 재작성하지 않는다.\n")
     if stage == "plan":
         return common + metadata["planning_prompt"] + ("\n이번 요청은 이 한 결과의 기획부터 approved Spec과 reviewed Ready Ticket Set까지다. "
             "read로 skill://ask-matt 를 호출하고 현재 권위를 확인하라. 제품 의미가 완전히 정해져 있으면 To Spec과 To Tickets까지 진행한다. "
@@ -114,6 +116,19 @@ def stage_prompt(stage: str, metadata: dict[str, Any], run_root: Path) -> str:
             "승인된 authority를 바꾸지 말고 실제 제품 진입점과 readback으로 self-check를 수행하라. "
             "loopback 서비스의 내부/설정은 수정하지 않는다. 정확한 구현 결과와 남은 한계를 보고하고 최종 검증은 시작하지 않는다.\n")
     raise ValueError(f"unknown stage: {stage}")
+
+def exact_hashed_json(path_value: object, sha256_value: object) -> dict[str, Any] | None:
+    if not isinstance(path_value, str) or not isinstance(sha256_value, str):
+        return None
+    try:
+        file = Path(path_value).resolve(strict=True)
+        raw = file.read_bytes()
+        value = json.loads(raw)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if str(file) != path_value or hashlib.sha256(raw).hexdigest() != sha256_value or not isinstance(value, dict):
+        return None
+    return value
 
 
 def current_review(metadata: dict[str, Any], review_path: Path, payload: Path) -> dict[str, Any]:
@@ -267,19 +282,27 @@ def run_stage(stage: str, metadata: dict[str, Any], *, agent_dir: Path, payload:
     finalizer_progression_paths: list[str] = []
     if stage == "verify" and ticket_before is not None and ticket.exists():
         ticket_after = ticket.read_text(encoding="utf-8")
-        binding_matches = bool(observation.get("verification_binding_path")
-                               and observation.get("verification_binding_sha256")
+        terminal_handle = observation.get("host_verifier_terminal_handle")
+        terminal_matches = bool(terminal_handle
+                                and observation.get("host_verifier_terminal_delivery_count") == 1
+                                and finalization_args == {"terminal_handle": terminal_handle}
+                                and finalization.get("verification_terminal") == terminal_handle)
+        binding = exact_hashed_json(observation.get("verification_binding_path"),
+                                    observation.get("verification_binding_sha256"))
+        binding_matches = bool(binding
                                and finalization.get("verification_binding") == observation["verification_binding_path"]
-                               and finalization.get("verification_binding_sha256") == observation["verification_binding_sha256"])
-        verdict_matches = bool(observation.get("verification_verdict_record_path")
-                               and observation.get("verification_verdict_record_sha256")
-                               and finalization_args.get("verdict_path") == observation["verification_verdict_record_path"]
-                               and finalization_args.get("verdict_sha256") == observation["verification_verdict_record_sha256"]
-                               and "verdict" not in finalization_args
-                               and "binding_path" not in finalization_args
-                               and "binding_sha256" not in finalization_args
-                               and finalization.get("verification_verdict_record") == observation["verification_verdict_record_path"]
-                               and finalization.get("verification_verdict_record_sha256") == observation["verification_verdict_record_sha256"])
+                               and finalization.get("verification_binding_sha256") == observation["verification_binding_sha256"]
+                               and binding.get("ticket_path") == str(ticket))
+        host_record = exact_hashed_json(observation.get("host_verdict_record_path"),
+                                       observation.get("host_verdict_record_sha256"))
+        host_record_matches = bool(host_record and binding
+                                   and host_record.get("binding_path") == observation["verification_binding_path"]
+                                   and host_record.get("binding_sha256") == observation["verification_binding_sha256"]
+                                   and host_record.get("verification_verdict") == observation.get("parsed_verdict")
+                                   and host_record.get("bundle_identity") == binding.get("bundle_identity")
+                                   and host_record.get("boundary_protocol") == binding.get("boundary_protocol")
+                                   and finalization.get("verification_verdict_record") == observation["host_verdict_record_path"]
+                                   and finalization.get("verification_verdict_record_sha256") == observation["host_verdict_record_sha256"])
         if (ticket_after == re.sub(r"(?m)^Status: ready$", "Status: done", ticket_before)
                 and observation.get("parsed_verdict") == "VERIFIED"
                 and finalization.get("ticket_path") == str(ticket)
@@ -287,7 +310,7 @@ def run_stage(stage: str, metadata: dict[str, Any], *, agent_dir: Path, payload:
                 and finalization.get("ticket_progression") == "COMPLETED"
                 and finalization.get("progression_basis") in {"WRITE_PERFORMED_THIS_CALL", "RECOVERED_CAPTURED_FINALIZER_RESULT"}
                 and finalization.get("ticket_status_after") == "done"
-                and binding_matches and verdict_matches):
+                and binding_matches and host_record_matches and terminal_matches):
             finalizer_progression_paths.append(str(ticket.relative_to(root)))
     external_changes = []
     challenge_path = run_root / "challenge.json"
@@ -302,12 +325,15 @@ def run_stage(stage: str, metadata: dict[str, Any], *, agent_dir: Path, payload:
     record = {"case_id": metadata["case_id"], "run_id": metadata["run_id"], "stage": stage,
               "model_tool_profile": {"model": model, "thinking": thinking, "actual_models": observation["actual_models"]},
               "input_target_identity": digest(before), "raw_terminal_result": str(run_root / stage / "terminal.txt"),
-              "raw_events": observation["raw_events"], "parsed_verdict": observation["parsed_verdict"],
+              "host_verifier_terminal_handle": observation.get("host_verifier_terminal_handle"),
+              "host_verifier_terminal_delivery_count": observation.get("host_verifier_terminal_delivery_count"),
+              "parsed_verdict": observation.get("parsed_verdict"),
               "verifier_ticket_progression": observation.get("verifier_ticket_progression"),
+              "verifier_model": observation.get("verifier_model"),
               "verification_binding_path": observation.get("verification_binding_path"),
               "verification_binding_sha256": observation.get("verification_binding_sha256"),
-              "verification_verdict_record_path": observation.get("verification_verdict_record_path"),
-              "verification_verdict_record_sha256": observation.get("verification_verdict_record_sha256"),
+              "host_verdict_record_path": observation.get("host_verdict_record_path"),
+              "host_verdict_record_sha256": observation.get("host_verdict_record_sha256"),
               "ticket_progression": observation["ticket_progression"],
               "progression_basis": observation.get("progression_basis"),
               "ticket_status_after": (re.search(r"(?m)^Status: (\w+)$", ticket.read_text()).group(1) if ticket.exists() and re.search(r"(?m)^Status: (\w+)$", ticket.read_text()) else None),
@@ -475,10 +501,13 @@ def build_report(metadata_paths: list[Path], records: list[dict[str, Any]], revi
                 if expected[pair][0].get("verification_challenge") and record.get("challenge_applied") is not True:
                     _add_error(errors, "required_challenge_not_applied", **_pair_value(pair))
                 if record.get("stage") == "verify":
-                    if (record.get("verification_binding_path") != native.get("verification_binding_path")
+                    if (record.get("host_verifier_terminal_handle") != native.get("host_verifier_terminal_handle")
+                            or record.get("verifier_model") != native.get("verifier_model")
+                            or record.get("host_verifier_terminal_delivery_count") != native.get("host_verifier_terminal_delivery_count")
+                            or record.get("verification_binding_path") != native.get("verification_binding_path")
                             or record.get("verification_binding_sha256") != native.get("verification_binding_sha256")
-                            or record.get("verification_verdict_record_path") != native.get("verification_verdict_record_path")
-                            or record.get("verification_verdict_record_sha256") != native.get("verification_verdict_record_sha256")
+                            or record.get("host_verdict_record_path") != native.get("host_verdict_record_path")
+                            or record.get("host_verdict_record_sha256") != native.get("host_verdict_record_sha256")
                             or record.get("ticket_progression") != native.get("ticket_progression")
                             or record.get("progression_basis") != native.get("progression_basis")
                             or record.get("caller_finalization") != (native.get("caller_finalization") or {})
@@ -486,21 +515,21 @@ def build_report(metadata_paths: list[Path], records: list[dict[str, Any]], revi
                         _add_error(errors, "boundary_result_mismatch", **_pair_value(pair))
                 if native.get("parsed_verdict") == "VERIFIED" and record.get("stage") == "verify":
                     caller = native.get("caller_finalization") or {}
+                    terminal_handle = native.get("host_verifier_terminal_handle")
                     if (native.get("verifier_ticket_progression") != "PENDING CALLER FINALIZATION"
+                            or not terminal_handle
+                            or native.get("host_verifier_terminal_delivery_count") != 1
+                            or native.get("caller_finalization_args") != {"terminal_handle": terminal_handle}
                             or native.get("ticket_progression") != "COMPLETED"
                             or native.get("ticket_status_after") != "done"
+                            or caller.get("verification_terminal") != terminal_handle
                             or caller.get("verification_verdict") != native.get("parsed_verdict")
                             or caller.get("ticket_progression") != "COMPLETED"
                             or caller.get("progression_basis") not in {"WRITE_PERFORMED_THIS_CALL", "RECOVERED_CAPTURED_FINALIZER_RESULT"}
                             or caller.get("verification_binding") != native.get("verification_binding_path")
                             or caller.get("verification_binding_sha256") != native.get("verification_binding_sha256")
-                            or caller.get("verification_verdict_record") != native.get("verification_verdict_record_path")
-                            or caller.get("verification_verdict_record_sha256") != native.get("verification_verdict_record_sha256")
-                            or (native.get("caller_finalization_args") or {}).get("verdict_path") != native.get("verification_verdict_record_path")
-                            or (native.get("caller_finalization_args") or {}).get("verdict_sha256") != native.get("verification_verdict_record_sha256")
-                            or "verdict" in (native.get("caller_finalization_args") or {})
-                            or "binding_path" in (native.get("caller_finalization_args") or {})
-                            or "binding_sha256" in (native.get("caller_finalization_args") or {})):
+                            or caller.get("verification_verdict_record") != native.get("host_verdict_record_path")
+                            or caller.get("verification_verdict_record_sha256") != native.get("host_verdict_record_sha256")):
                         _add_error(errors, "verified_progression_not_completed", **_pair_value(pair))
 
     result_pairs: list[tuple[str, str]] = []
