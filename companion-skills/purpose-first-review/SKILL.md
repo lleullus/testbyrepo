@@ -5,11 +5,29 @@ description: Apply purpose-first review discipline to proposed changes, review f
 
 # Purpose-First Review
 
+## First rule: safety and security are not a license for bloat or ignored tradeoffs
+
+A safety, security, audit, or verification label establishes neither necessity
+nor effectiveness and does not waive tradeoff analysis. Explain which plausible
+failure an added control reduces beyond existing mechanisms, how it does so,
+and why that benefit justifies the added complexity, context burden, friction
+in normal operation, and maintenance cost.
+
+Comply with applicable mandatory requirements, but do not treat them as
+automatic justification for a particular implementation or extra controls.
+Do not promote optional measures to mandatory requirements merely by
+invoking safety or security.
+
+Compare realistic approaches that meet mandatory requirements and sufficiently
+preserve the necessary guarantees. Where additional protection does not justify
+the added burden, narrow or replace the approach, or withdraw unnecessary
+additions. More rules and reviews are not evidence of more safety.
+Do not use this principle to introduce another review stage or standing
+reporting obligation.
+
 ## Core rule
 
 Review to determine whether a material problem exists, not to manufacture findings. If no material problem exists, conclude **NO PROBLEM** and stop. Do not add speculative caveats merely to make the review look thorough.
-
-Honor higher-authority requirements and hard safety, legal, or contractual invariants before applying this review discipline.
 
 ## Decision order
 
