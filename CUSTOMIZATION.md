@@ -13,6 +13,10 @@ Maintain the custom ttyd 1.7.7 frontend used by the Android Web Terminal without
 
 ## Customized source
 
+- `src/server.c`
+  - preserve the five-second WebSocket probe cadence while allowing a 30-second PONG/valid-traffic grace period before closing a live terminal
+- `src/protocol.c`
+  - retain resumable sessions for six hours by default; `TTYD_RECONNECT_GRACE` accepts values from 1 through 21600 seconds
 - `html/src/components/terminal/index.tsx`
   - single-row compact bottom toolbar: TAB / Shift / arrows / Enter / ESC / CTRL / font-size / fullscreen
   - Shift as a one-shot modifier for TAB and arrow keys
@@ -47,8 +51,9 @@ Production runtime files remain outside this repository:
 - staging port: `7684`
 
 `session.sh` must continue to start a fresh login shell per ttyd connection. Do not add tmux or session reuse.
+Resumable sessions default to a six-hour reconnect grace. `TTYD_RECONNECT_GRACE` may shorten that window for testing or operations, up to 21600 seconds.
 
-Do not add a ttyd `-m` / `--max-clients` limit. ttyd's default `0` means no client limit. Keep the default WebSocket ping behavior unless there is a separately verified reason to change it.
+Keep the default five-second WebSocket probe cadence. The 30-second validity grace is deliberate: browser rendering, WSL forwarding, or a transient network handoff can delay a valid PONG long enough to otherwise discard a live OMP terminal. Do not shorten it without reproducing and verifying the disconnect behavior.
 
 Do not change or reset Tailscale Funnel. Production must remain `/terminal -> 127.0.0.1:7683` at the existing external URL.
 

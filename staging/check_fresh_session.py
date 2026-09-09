@@ -187,7 +187,7 @@ try:
     connections.remove(ws_a3)
     time.sleep(GRACE + 0.8)
 
-    # Once the 60-second policy window (shortened in test) expires, the same
+    # Once the configured grace window (shortened in test) expires, the same
     # page id starts a genuinely fresh shell.
     ws_a4 = connect(http, ws_base, resume_a)
     connections.append(ws_a4)
