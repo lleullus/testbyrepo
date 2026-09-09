@@ -253,6 +253,9 @@ class BundleInstallTests(unittest.TestCase):
         self.assertEqual(checked["family"], self.installer.OLD_FAMILY)
         self.assertEqual(checked["bundle_id"], old_bundle)
         runtime_root, record, _ = self._runtime_record("COMPLETE")
+        history = runtime_root / "outputs/execution-1/evidence.json"
+        history.parent.mkdir(parents=True, exist_ok=True)
+        history.write_text(json.dumps({"stdout": "historical execution evidence"}) + "\n")
         before_runtime = record.read_bytes()
         candidate = self.prepare()
         state = self.activate(candidate, retired_ready_runtime_root=runtime_root)
@@ -262,6 +265,7 @@ class BundleInstallTests(unittest.TestCase):
         self.assertTrue(new_extension.is_symlink())
         retirement = state["retired_ready_runtime"]
         self.assertEqual(retirement["summary"]["blockers"], 0)
+        self.assertEqual(retirement["summary"]["history_files"], 1)
         self.assertEqual(retirement["summary"]["terminal_history"], 1)
         self.assertTrue(Path(retirement["archive"]["path"]).is_dir())
         self.assertEqual(record.read_bytes(), before_runtime)

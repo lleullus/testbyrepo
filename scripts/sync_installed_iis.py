@@ -400,11 +400,13 @@ def scan_retired_runtime(runtime_root: Path, evidence_path: Path | None = None) 
         if kind == "execution" and value.get("execution_id"):
             executions[value["execution_id"]] = value
     records = []
+    state_kinds = {"execution", "assignment", "session", "active_ticket"}
     for identity in identities:
         relative = identity["path"]
         value = values[relative]
-        schema_valid = value.get("schema_version") == 2 and value.get("kind") in {"execution", "assignment", "session", "active_ticket"}
-        if schema_valid and _terminal_runtime_record(value, executions):
+        if value.get("kind") not in state_kinds:
+            disposition, detail = "history_file", {}
+        elif value.get("schema_version") == 2 and _terminal_runtime_record(value, executions):
             disposition, detail = "terminal_history", {}
         else:
             disposition, detail = _retirement_evidence_disposition(relative, identity, value, evidence)
@@ -419,7 +421,9 @@ def scan_retired_runtime(runtime_root: Path, evidence_path: Path | None = None) 
         "evidence_path": str(evidence_file) if evidence_file else None,
         "evidence_sha256": sha(evidence_file.read_bytes()) if evidence_file else None,
         "records": records,
-        "summary": {"records": len(records), "terminal_history": sum(item["disposition"] == "terminal_history" for item in records),
+        "summary": {"records": len(records),
+                    "history_files": sum(item["disposition"] == "history_file" for item in records),
+                    "terminal_history": sum(item["disposition"] == "terminal_history" for item in records),
                     "retired_stale_record": len(stale), "blockers": len(blockers), "activation_allowed": not blockers},
     }
 
