@@ -40,13 +40,18 @@ static const struct lws_extension extensions[] = {
 #endif
 
 #if LWS_LIBRARY_VERSION_NUMBER >= 4000000
+enum {
+  DEFAULT_PING_INTERVAL_SECS = 5,
+  VALIDITY_GRACE_SECS = 30,
+};
+
 static const uint32_t backoff_ms[] = {1000, 2000, 3000, 4000, 5000};
 static lws_retry_bo_t retry = {
     .retry_ms_table = backoff_ms,
     .retry_ms_table_count = LWS_ARRAY_SIZE(backoff_ms),
     .conceal_count = LWS_ARRAY_SIZE(backoff_ms),
-    .secs_since_valid_ping = 5,
-    .secs_since_valid_hangup = 10,
+    .secs_since_valid_ping = DEFAULT_PING_INTERVAL_SECS,
+    .secs_since_valid_hangup = DEFAULT_PING_INTERVAL_SECS + VALIDITY_GRACE_SECS,
     .jitter_percent = 0,
 };
 #endif
@@ -466,7 +471,7 @@ int main(int argc, char **argv) {
           return -1;
         }
         retry.secs_since_valid_ping = interval;
-        retry.secs_since_valid_hangup = interval + 7;
+        retry.secs_since_valid_hangup = (uint32_t)interval + VALIDITY_GRACE_SECS;
       } break;
 #endif
       case '6':

@@ -174,10 +174,79 @@ def check_long_initial_messages():
                 proc.wait(timeout=3)
 
 
+def check_validity_grace():
+    if not TTYD_BIN.exists():
+        raise AssertionError(f'ttyd test binary not found: {TTYD_BIN}; set TTYD_BIN explicitly')
+
+    port = free_port()
+    http = f'http://127.0.0.1:{port}/'
+    proc = subprocess.Popen(
+        [
+            str(TTYD_BIN),
+            '-W',
+            '-P',
+            '1',
+            '-i',
+            '127.0.0.1',
+            '-p',
+            str(port),
+            '-I',
+            str(INDEX),
+            '/bin/sh',
+            '-c',
+            'sleep 60',
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    ws = None
+    try:
+        wait_http(http + 'token')
+        ws = websocket.create_connection(
+            f'ws://127.0.0.1:{port}/ws',
+            subprotocols=['tty'],
+            origin=http.rstrip('/'),
+            timeout=5,
+        )
+        with urllib.request.urlopen(http + 'token', timeout=5) as response:
+            auth_token = json.load(response)['token']
+        ws.send_binary(json.dumps({'AuthToken': auth_token, 'columns': 80, 'rows': 24}).encode())
+
+        # Read wire bytes directly so websocket-client does not answer the server PING.
+        ws.sock.settimeout(0.25)
+        deadline = time.monotonic() + 12
+        received_bytes = 0
+        while time.monotonic() < deadline:
+            try:
+                data = ws.sock.recv(4096)
+            except socket.timeout:
+                continue
+            assert data, 'ttyd closed a live websocket before the validity grace elapsed'
+            received_bytes += len(data)
+
+        assert proc.poll() is None, proc.poll()
+        return {'remainedOpenForSeconds': 12, 'receivedBytes': received_bytes, 'serverAlive': True}
+    finally:
+        if ws is not None:
+            try:
+                ws.close()
+            except Exception:
+                pass
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=3)
+
+
 results = {
     'ttydBin': str(TTYD_BIN),
     'remainingSprintf': check_sprintf_gate(),
     'openUri': check_open_uri_injection(),
     'longInitialMessages': check_long_initial_messages(),
+    'validityGrace': check_validity_grace(),
 }
 print(json.dumps(results, indent=2, sort_keys=True))
