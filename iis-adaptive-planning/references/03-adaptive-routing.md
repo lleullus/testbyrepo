@@ -18,10 +18,10 @@ Apply the current Baseline leaf directly. Use the Adaptive Mandate only for genu
 
 Before the Starting route below can perform any planning mutation, Outer Main for the current explicit Adaptive invocation must close and render one Run Contract.
 
-- If current authority determines Goal Outcome, Required Named Items, Candidate Named Items, Required Item Policy, Implementation, Verification, Run Completion Boundary, Completion Predicate, and Authoritative Readback, mark it `CLOSED` and route without another approval prompt.
+- Apply every closure requirement in [09-run-contract.md](09-run-contract.md), including Goal/required-item coverage, actual Source Authority, model consent, and any explicit approval gate. Determined fields or a supplied `CLOSED` label alone do not establish a faithful sufficient contract.
 - If a material field remains unresolved, mark it `USER_INPUT_REQUIRED`, ask only for that smallest field, and hard STOP before mutation.
 - Read-only inspection needed to establish inspectable facts may precede closure.
-- A later leaf may expose a genuine material contradiction that requires a Run Contract revision; return only that decision and preserve all settled fields.
+- A later leaf may expose a material contradiction requiring Run Contract correction; repair from already-clear user authority or return only the unresolved decision while preserving settled obligations.
 - A Run Completion Boundary broader than the Mandate's Continuation Authority ceiling cannot close unless the current user instruction explicitly revises/adopts that broader authority.
 
 Do not treat this as a new Baseline admission gate. It belongs to the explicit outer Adaptive invocation and does not alter ordinary IIS requests.
@@ -40,7 +40,7 @@ Use current `iis-workflow` admission unchanged.
 - exact existing implementation request -> current preparation/review as needed, then implementation;
 - verification-only of an implemented ready target -> `ready-ticket-verify` directly; no new execution plan prerequisite.
 
-Adaptive never makes a broad request next-increment-ready by assertion.
+Adaptive never makes a broad request next-increment-ready by assertion. Direct next-increment-ready entry still requires the same outer Goal/required-item closure; readiness of one unit cannot narrow the invocation or bypass relevant Source Authority handoff.
 
 ## Leaf delta matrix
 
@@ -60,18 +60,18 @@ Adaptive delta:
 - the ordinary single user confirmation of an otherwise complete Scope proposal may be satisfied by standing delegated confirmation when the Mandate resolves the selection and no Return-to-User Boundary is triggered;
 - after canonical Scope/Increment closure validates, perform the post-shape Run Contract revalidation below; only after it passes, do not expose the ordinary manual-continuation STOP and return the exact selected `ready-for-matt` Increment to the Adaptive router to continue to Ask Matt in the same planning request;
 - when a later leaf finds a construction-stage/foundation/split/merge/order defect, re-enter Scope Shaper directly if reshaping is delegated;
-- preserve Required Named Items across Increment selection and reshaping without forcing all obligations into one current Increment;
+- preserve the assigned Goal and Required Named Items across selection/reshaping without forcing all outer obligations into one current Increment;
 - treat Candidate Named Items as mutable candidate means under the Mandate and evidence; and
 - do not select a next Increment that would make the Run Completion Boundary exceed the Mandate ceiling.
 
 #### Post-shape Run Contract revalidation
 
-After canonical Scope/Increment closure and before Ask Matt handoff, compare the unsatisfied Required Named Items with the selected Increment's Includes/Excludes/Deferred scope, the active Run Completion Boundary, Completion Predicate, and Mandate Continuation Authority ceiling. Repeat the same revalidation whenever a material reshape changes the selected current Increment.
+After canonical Scope/Increment closure and before Ask Matt handoff, apply [Goal and required-item coverage](09-run-contract.md#goal-and-required-item-coverage-invariant) against relevant Source Authority, the selected Increment's Includes/Excludes/Deferred scope, and the active Boundary/Predicate/Readback and Mandate ceiling. Repeat after each material reshape; pass the relevant source anchors with the bounded handoff.
 
-- If the active boundary is a broader named-item or outcome boundary and the Mandate ceiling permits it, continue with exactly one selected Increment while preserving the outer Required Named Items and Completion Predicate.
-- If the active boundary is a current-Increment terminal and every unsatisfied Required Named Item is covered by the selected Increment, continue normally.
-- If the active boundary is a current-Increment terminal but unsatisfied Required Named Items remain outside the selected Increment, treat that as contract mismatch and do not enter Ask Matt. A broader Mandate ceiling does not silently upgrade the narrow active boundary. Revise the Run Contract from already-clear current user authority or return only the exact boundary decision to the user; do not shrink Required Named Items.
-- If the active boundary actually requires continuation beyond the Mandate ceiling, revise/adopt the Mandate only when current user authority grants that continuation; otherwise return the exact authority gap. Never close a smaller boundary merely to avoid the revision.
+- With a sufficient broader outcome/named-item boundary inside the ceiling, continue with exactly one Increment while preserving outer Goal and required scope.
+- A current-Increment terminal is valid only when it closes the entire assigned Goal and required scope, including when `None required` applies.
+- If current exclusions/deferrals leave any assigned result outside that narrow terminal, do not enter Ask Matt. Correct the derived Run Contract from already-clear user authority or return only the exact unresolved boundary meaning; a broad ceiling does not automatically upgrade the terminal and a small Increment does not shrink the Goal.
+- If the actual continuation exceeds the ceiling, revise/adopt the Mandate when current user authority grants it; otherwise return the exact gap. Never narrow the Goal to avoid revision.
 
 Keep hard:
 
@@ -188,7 +188,7 @@ Hard even in Adaptive:
 - complete Ready Ticket Set STOP for IIS Planning ownership;
 - boundary between IIS Planning and implementation/verification/delivery ownership. Outer Main applies the closed Implementation and Verification fields rather than assuming both stages from the planning STOP.
 
-An owner STOP is not an invocation STOP. Outer Main compares every exact owner result with the active Run Completion Boundary and Completion Predicate. Blocked, inconclusive, user-return, contract-drift, and no-progress STOPs remain incomplete returns; only an actually satisfied Run Contract is whole-invocation success.
+An owner STOP is not an invocation STOP. Outer Main applies the Goal/required-item coverage and completion discipline in `09-run-contract.md` to every exact owner result. Continue through the existing owner when an authorized next action or readback can resolve the unmet Goal; preserve genuine blocked, inconclusive, user-return, contract-drift, and no-progress limits as incomplete returns.
 
 `CURRENT_INCREMENT_IMPLEMENTED` is an implementation-only invocation terminal. It does not create a success re-entry cycle and does not mark Tickets `done`.
 

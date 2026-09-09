@@ -22,7 +22,7 @@ Preparation `REVISE | EVIDENCE_NEEDED` and `PLAN_REVIEW_REQUIRED | PLAN_REVIEW_S
 
 Before classifying, reopen enough current authority to compare the failing claim precisely:
 
-- current user instruction and Adaptive Mandate;
+- current user instruction, relevant actual Source Authority anchors, Adaptive Mandate, and active Run Contract Goal/required scope/Boundary/Predicate/Readback;
 - current Scope revision and exact INC;
 - Parent Spec;
 - adopted Behavior/UI authority relevant to the claim;
@@ -30,7 +30,7 @@ Before classifying, reopen enough current authority to compare the failing claim
 - exact fresh `ready-ticket-verify` result/evidence as available;
 - current runtime/repository evidence needed to attribute the observed behavior.
 
-Implementation reports, prior test names, logs, and mocks are navigation/support unless the approved contract makes that exact surface authoritative.
+Apply `09-run-contract.md`'s actual-boundary evidence rule. Implementation reports, test names, logs, and mocks are navigation/support; a substitute cannot prove the boundary it replaces. Direct inspection may close the actual approved artifact-only result, and real authorized disposable execution may close its observed boundary, but neither a Ticket-authored fake nor limited evidence can override the user's promised runtime/external result.
 
 ## Classification order
 
@@ -41,6 +41,8 @@ Use this order so difficulty is not mistaken for overreach.
 Ask whether the failing Ticket/Verification requirement is an exact valid projection of its mapped Parent Spec outcome and applicable Behavior/UI authority.
 
 If **no**, classify `CONTRACT_OVERREACH` (or projection distortion) even if implementation could be changed to satisfy it.
+
+Outer Main also applies the Goal/required-item coverage invariant to the active Run Contract. A weak outer Predicate or omitted source obligation returns to Outer Main for faithful contract recovery, not to implementation as an invented defect. If the gap is in Scope/parent/Ticket projection, return to that exact existing owner. A valid current Increment covering only part of a broader Goal is not itself a defect: preserve it and the outer continuation obligation.
 
 ### 2. Current-INC appropriateness check
 
@@ -122,6 +124,7 @@ Examples:
 - Parent outcome requires at-most-once user-visible submission; Ticket flow silently upgrades it to exactly-once external effect across process death.
 - Parent outcome is operator-assisted; Ticket marks it independently verifiable by inventing a product sandbox not authorized by the Spec.
 - Ticket adds ordering/persistence/retention requirements copied from another outcome.
+- Parent outcome requires a real runtime/external result, but the Ticket authors only a mock/helper success readback; return that projection gap rather than letting verification repair the flow and declare PASS.
 
 Route:
 

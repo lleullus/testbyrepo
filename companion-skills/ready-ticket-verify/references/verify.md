@@ -80,7 +80,7 @@ The provenance fields explain the exact owner result, such as `CANONICAL TICKET 
 
 ## 3. Semantic contract check
 
-Before deriving or executing the runtime scenario, compare every current AC and mapped Verification flow against the approved parent outcome and applicable Behavior/UI meaning. Confirm that the authored observation/readback actually decides the material AC obligation rather than only a weaker proxy. When a concrete plausible false-positive or false-negative path could change the verdict, challenge it before execution.
+Before deriving or executing the runtime scenario, compare every current AC and mapped Verification flow against the approved parent outcome, applicable Behavior/UI meaning, and relevant current user instructions supplied through the existing handoff. Confirm that the authored observation/readback decides the material approved obligation rather than a weaker proxy or a fake replacing its required boundary. Ticket wording alone cannot authorize that substitution. Challenge concrete plausible false-positive or false-negative paths that could change the verdict; preserve the exact Ticket scope rather than importing unrelated outer Goal work.
 
 Do not treat approval, structural `VALID`, ordinal closure, matching wording, tests or implementation narration as proof that the flow is semantically sufficient. Do not invent new requirements or strengthen the approved contract.
 
@@ -282,10 +282,14 @@ Evidence priority when applicable:
 1. actual runtime / canonical acceptance-surface observation;
 2. authoritative product/canonical readback;
 3. rendered UI interaction/readback when UI is the acceptance surface;
-4. deterministic fake/controlled-environment evidence when the contract permits it;
-5. source/diff/unit tests as supporting explanation and regression evidence.
+4. real execution in an authorized disposable/controlled environment when it exercises the approved implementation, entrypoint, state/effect, lifecycle, and readback;
+5. source/diff/unit tests and supporting doubles as explanation/navigation, not proof of a boundary they replace.
 
-Passing implementation tests do not substitute for a Ticket-authored runtime/UI/provider/canonical readback. Conversely, do not invent runtime for a source/artifact/document/structure claim whose approved boundary is direct canonical inspection. For a runtime claim, do not mark a flow `SATISFIED` unless the declared `Discriminating observation` was actually captured with its `Sensitivity activation` present; source-only mechanism shape remains support, not closure.
+A mock, stub, canned response, seeded success state, or surrogate readback cannot prove the actual acceptance boundary it substitutes for. A double for an ancillary dependency need not invalidate observations of an unrelated real boundary; never claim the double's replaced boundary was verified. Test format or disposable location alone does not invalidate evidence that actually exercises and observes the required real path. Required provider/external effects need their approved effect readback, not merely internal success or HTTP acceptance.
+
+Directly inspect an artifact, source, document, schema, plan, or simulator when that actual deliverable is the original approved result, faithful to parent authority and current user instructions; do not demand invented runtime or claim unobserved external/product effects. Apply §3 to a flow that substitutes for required meaning rather than repairing it inside verification. If a valid real boundary is unavailable, preserve `INCONCLUSIVE` unless attributable evidence establishes contradiction; neither unknown nor contradiction becomes fake success.
+
+For runtime claims, use the existing `Nearest nonconforming state`, `Discriminating observation`, and `Sensitivity activation` to determine whether this run actually exercised the required boundary. Do not mark a flow `SATISFIED` without the declared discriminating readback and its sensitivity activation; passing implementation tests or source-only mechanism shape cannot substitute.
 
 ### Existence and current-state claims
 

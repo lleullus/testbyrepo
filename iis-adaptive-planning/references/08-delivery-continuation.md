@@ -6,10 +6,10 @@ Keep ownership separate while the current explicit Adaptive invocation continues
 
 1. **IIS Planning ownership** ends at one approved Spec plus its validated complete Ready Ticket Set.
 2. **Explicit Adaptive activation** defaults Outer Main to `Implementation: yes` and `Verification: yes`.
-3. When current authority supplies no narrower stop override and no broader named-item or outcome terminal, the default current-Increment terminal is `CURRENT_INCREMENT_DELIVERED`, subject to the Run Contract Required-item coverage invariant and Mandate ceiling.
+3. With no explicit stage/stop override, default to `CURRENT_INCREMENT_DELIVERED` only when [Goal and required-item coverage](09-run-contract.md#goal-and-required-item-coverage-invariant) establishes that it closes the entire current assignment within the Mandate ceiling. Natural-language broader outcome authority needs no additional continuation phrase.
 4. Current instructions override those fields independently: `planning only` or `stop after Ready Tickets` selects `no`/`no`; `do not verify` preserves implementation authority as `yes`/`no`; `do not implement` never invents implementation authority.
    Execution-preparation-only selects READY_EXECUTION_PLANS, both switches no and exact required Tickets; this is distinct from product-planning-only READY_TICKET_SET.
-5. Before any planning or delivery mutation, Outer Main must carry one `CLOSED` Run Contract from [09-run-contract.md](09-run-contract.md). Planning ownership completion, one Ticket completion, and one Increment completion are not whole-run completion unless that contract's boundary says so.
+5. Before mutation and after each owner return, Outer Main applies that invariant against relevant Source Authority and the owner result's actual scope/limits. A `CLOSED` label, weak Predicate, phase result, or current-Increment completion cannot waive the assigned Goal.
 
 Outer Main is the thin invocation-local handoff owner defined by the top-level skill. It carries the Run Contract, invokes each exact owner only when enabled, receives exact terminal results, and performs fresh completion assessment by comparing the active boundary's applicable parent obligations, their existing acceptance owners, and current attributable readback. It does not become a second planning, implementation, or verification authority and does not issue or revise an AC/whole-Ticket verdict.
 
@@ -25,10 +25,11 @@ Pass the following exact decision-critical Run Contract fields through the exist
 - Required Item Policy;
 - Implementation and Verification;
 - Run Completion Boundary;
-- Completion Predicate; and
-- Authoritative Readback.
+- Completion Predicate;
+- Authoritative Readback; and
+- relevant Source Authority anchors and current user constraints for that Ticket, not the whole conversation or roadmap.
 
-Do not turn the form into delivery authority. The exact Ticket remains the implementation and verification contract. Run Contract fields prevent Outer Main from dropping Required Named Items, treating Candidate Named Items as obligations, running a disabled delivery stage, or terminating at the wrong phase; they do not authorize a delivery owner to expand one Ticket.
+Do not turn the form into delivery authority. The exact Ticket remains the implementation and verification contract. This bounded context preserves the Goal/required scope and stage/terminal limits without expanding one Ticket; an unfaithful lower contract returns to its existing owner rather than licensing delivery to rewrite it.
 
 A reshaped current Increment may create a new canonical Ready Ticket denominator. Re-read the current validated Set after planning correction rather than retaining a stale denominator.
 
@@ -89,9 +90,9 @@ Use public `checkpoint` with the exact kind and `release_checkpoint`. Parent con
 
 Pass this bounded instruction through each enabled delivery skill's existing `Additional User Instructions` input:
 
-> Subject to the exact Ticket contract, the closed Run Contract, and current explicit user instructions, collect only evidence that can change admission, an authored flow result, target attribution/freshness, required cleanup/terminal closure, or the next authority route. Once those obligations are decidable, stop confidence-only duplicate evidence collection and emit the owning terminal result.
+> Subject to the exact Ticket contract, the closed Run Contract, and current explicit user instructions, collect only evidence that can change admission, an authored flow result, target attribution/freshness, required cleanup/terminal closure, or the next authority route. Once those obligations are decidable at their actual approved boundaries, stop confidence-only duplicate collection and emit the owning terminal result.
 
-This does **not** weaken authored Verification flows, independent-verification requirements, counterexamples, ordering/interruption/persistence/UI/external boundaries, cleanup, Required Named Items, or the active Run Completion Predicate. It only prevents repeating the same claim across source/tests/browser or other modalities when the approved acceptance boundary/readback has already made the owning decision possible. Do not create evidence budgets, counters, modality quotas, extra report fields, or persistent evidence state.
+This does **not** weaken authored flows, independence, conditional boundaries, cleanup, or the assigned Goal/required scope. Apply `09-run-contract.md`'s actual-boundary evidence rule: replaced mock/seeded boundaries remain unproved, while actual artifact inspection and real authorized disposable execution keep their approved claims. Obtain reachable required evidence; economy is not permission to return a known readback gap without acting. Do not add evidence budgets, counters, quotas, report fields, or persistent state.
 
 ## Preparation handoff
 
@@ -122,7 +123,7 @@ CURRENT_INCREMENT_IMPLEMENTED
   -> confirm the complete current Ticket denominator
   -> confirm every exact implementation result is COMPLETE
   -> confirm no verifier progression was claimed
-  -> emit IIS ADAPTIVE RUN COMPLETE
+  -> with Goal/required-item coverage and the actual implementation-only claim closed, emit IIS ADAPTIVE RUN COMPLETE
 
 any delivered/outcome boundary not already satisfied
   -> Run Contract inconsistency or user-authority gap
@@ -213,7 +214,7 @@ Before repeating a planning or delivery owner, identify at least one material ch
 - newly attributable verification target or mechanism; or
 - genuinely new evidence/external condition.
 
-If the same artifact/target, same evidence, same finding, and same route would repeat without such a change, stop at the owning boundary and report the unresolved condition as whole-run incomplete. Do not add a numeric retry policy, persistent attempt ledger, or workflow state.
+If the same artifact/target, same evidence, same finding, and same route would repeat without such a change, stop at the owning boundary and report the unresolved condition as whole-run incomplete. A valid authorized action or readback not yet attempted is not a no-progress repetition. Do not add a numeric retry policy, persistent attempt ledger, or workflow state.
 
 An explicit no-corrective-re-entry override stops cross-owner continuation after the current owner reports its terminal result/classification. It does not suppress normal local self-correction inside that owner before the terminal result, and it does not convert an unsatisfied Run Contract into success.
 
@@ -221,7 +222,7 @@ An explicit no-corrective-re-entry override stops cross-owner continuation after
 
 A current Increment is fully delivered only after every current canonical Ticket in its approved Ready Ticket Set has reached exact `done` through the owning one-exact-Ticket verification lifecycle and every approved parent obligation applicable to that Increment is acceptance-owned in the existing Set and closed by that owner's current attributable evidence/readback. Do not pull future or otherwise non-applicable whole-Goal obligations into this boundary.
 
-Apply the active Run Completion Boundary and current Mandate ceiling:
+Before applying the active boundary, revalidate Goal/required-item coverage against actual Source Authority and the returned evidence/limits under `09-run-contract.md`. If the Predicate could pass while the assigned result remains unmet, correct the derived Run Contract from current authority or return the exact unresolved meaning; do not shrink the Goal or enlarge one current Ticket. The stage cases below assume that invariant holds and remain subject to the current Mandate ceiling:
 
 ```text
 READY_TICKET_SET
@@ -259,10 +260,12 @@ A current attributable readback that directly contradicts the Completion Predica
 
 For any broader boundary, Outer Main chooses exactly one disposition from fresh actual product state:
 
-- `RUN_CONTRACT_SATISFIED` — the active Required Named Items, bounded outcome, or Mandate outcome predicate is satisfied; emit `IIS ADAPTIVE RUN COMPLETE`.
+- `RUN_CONTRACT_SATISFIED` — the coverage invariant holds and actual fresh evidence satisfies the assigned Goal and Required Named Items through the sufficient Predicate; emit `IIS ADAPTIVE RUN COMPLETE` within that approved claim.
 - `NEXT_INCREMENT_REQUIRED` — the predicate is unsatisfied, current authority establishes that more product construction is required, and the Mandate ceiling permits it; return to Scope Shaper for exactly one new current Increment.
 - `USER_DECISION_REQUIRED` — the predicate is unsatisfied but a material user-owned product choice remains after applying the Mandate and current authority; return only that decision.
 - `EVIDENCE_REQUIRED` — current attributable evidence cannot determine satisfaction or the need for more construction; obtain only the missing authoritative readback or operator/external evidence and do not infer completion, product defect, or Scope Shaper re-entry.
+
+These dispositions are routing decisions, not excuses to end an actionable invocation. With unmet Goal and a valid authorized next action, continue through its existing owner in the same invocation. `NEXT_INCREMENT_REQUIRED` requires actual fresh-state Scope Shaper re-entry; for `EVIDENCE_REQUIRED`, obtain reachable authorized readback before returning an unavailable condition. Preserve explicit user stops, disabled stages, external authority and the no-progress guard.
 
 The Mandate's Continuation Authority is the ceiling for success continuation; the Run Completion Boundary is the actual terminal of this invocation. If the boundary would exceed the ceiling and the current instruction does not explicitly revise that authority, the Run Contract should never have closed. Return the exact authority gap rather than silently stopping early or expanding authority.
 
@@ -270,7 +273,7 @@ A broader continuation never consumes a pre-authored Work Package/Increment list
 
 For `NAMED_REQUIRED_ITEMS_DELIVERED`, an item is not complete merely because a Ticket title resembles it. Trace the item to delivered canonical authority and confirm its applicable product result. Required Named Items remain obligations across multiple Increments until satisfied or explicitly revised by the user. Candidate Named Items may be dropped without blocking completion when current authority supports that choice.
 
-An implementation-only run cannot use verified success re-entry to span several Increments. If Required Named Items need another Increment while `Verification: no`, return the smallest verification/boundary decision rather than silently omitting an item or claiming delivery.
+An implementation-only run cannot use verified success re-entry to span several Increments. If the assigned Goal or Required Named Items need another Increment while `Verification: no`, return the smallest verification/boundary decision rather than omitting the obligation or claiming delivery.
 
 ## Hard boundaries
 
@@ -282,5 +285,5 @@ An implementation-only run cannot use verified success re-entry to span several 
 - `done` belongs only to the verifier's guarded terminal progression.
 - Verification no never permits final discovery/verdict/done; it does not disable required pre-implementation review.
 - Candidate Named Items are not completion obligations; Required Named Items are not disposable.
-- No phase, Ticket, or Increment may claim whole-run success before the active Completion Predicate is satisfied.
+- No phase, Ticket, or Increment may claim whole-run success without faithful Goal/required-item coverage and actual sufficient completion evidence under `09-run-contract.md`.
 - This route is a thin handoff discipline, not a controller, scheduler, workflow database, approval engine, or generic Graph runtime.

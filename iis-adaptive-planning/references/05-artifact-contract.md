@@ -32,7 +32,7 @@ The compact form in [../templates/ADAPTIVE-RUN-CONTRACT.template.md](../template
 
 It is invocation-local authority, not a canonical IIS artifact and not a required third durable companion artifact. Do not add the form to canonical IIS artifacts, create a project-local workflow-state file for it, or use it as an attempt ledger.
 
-Carry the closed form in the current request/context and pass only its decision-critical fields across planning and delivery ownership boundaries. When a material Run Contract decision or revision affects later interpretation, summarize that decision in the Adaptive trace. Do not persist routine phase transitions, Ticket progress, or a copy of every form rendering.
+Carry the closed form and relevant Source Authority anchors in the current request/context; pass only decision-critical fields and applicable actual user constraints across ownership boundaries under `09-run-contract.md`. Do not propagate only a derived Goal summary or copy the entire conversation into every Ticket. Trace only a material closure/revision or Goal/contract recovery and its source basis when later interpretation needs it, not routine transitions, progress, or every rendering.
 
 Delivery model/effort selections and their user-confirmation basis stay in that invocation-local form and the relevant delivery assignments. The replaceable model guide is an operational recommendation reference, not a canonical product artifact, planning Source Authority, persistent worker roster, or permission to change models. Do not duplicate its ranking tables or encode selected models in Spec/Ticket metadata.
 
@@ -70,7 +70,7 @@ Material events:
 
 - a `DELEGATED_RECOMMENDATION` that materially affects observable product meaning;
 - a material standing-delegated user-owned planning decision whose provenance affects later interpretation;
-- a material Run Contract closure/revision whose required/candidate classification, delivery stages, or completion semantics affect later interpretation;
+- a material Run Contract closure/revision whose Goal fidelity, required/candidate classification, delivery stages, or completion semantics affect later interpretation, including recovery of an omission or weak Predicate from actual source authority;
 - INC split/merge/reorder/replace/defer/drop/foundation insertion/supersession;
 - verification triage that changes the owning route;
 - success re-entry that selects `NEXT_INCREMENT_REQUIRED`, returns `EVIDENCE_REQUIRED`, or establishes `RUN_CONTRACT_SATISFIED`;

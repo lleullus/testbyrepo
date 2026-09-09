@@ -111,7 +111,7 @@ Do not create a new verification surface. Confirm the approved absence/reason an
 
 ## Evidence sufficiency
 
-Runtime/acceptance-surface observation and authoritative readback are load-bearing when the Ticket defines them. Implementation reports, source shape, mocks, logs, tests or prior verification are navigation/support only unless the Ticket explicitly makes that exact target the acceptance boundary.
+Evidence must decide the actual approved acceptance boundary, faithfully projected from parent authority and current applicable user instructions. Ticket wording alone cannot replace a runtime/product obligation with a fake acceptance target. Apply [references/verify.md §9](references/verify.md#9-evidence-sufficiency-and-execution) to distinguish real disposable execution or actual artifact inspection from a substitute for the claimed boundary; return authority/projection mismatch through semantic preflight, not a compensating verification flow.
 
 Match evidence to the actual claim:
 

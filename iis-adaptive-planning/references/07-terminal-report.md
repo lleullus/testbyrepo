@@ -12,7 +12,7 @@ Effect: <what cannot continue or which owner boundary has ended>
 Next allowed action: <exact owner/action or None>
 ```
 
-When an owner result is not the whole-run result, also include `Owner status`, `Invocation status`, and `Returned to`. Do not infer a domain cause from a tool/transport/protocol failure, do not replace the exact owner result with an Adaptive wrapper, and do not expose hidden reasoning. Successful whole-run completion needs no extra provenance block beyond the facts already required by its terminal report.
+When an owner result is not the whole-run result, also include `Owner status`, `Invocation status`, and `Returned to`. Use the existing `Observed condition`, `Effect`, and `Next allowed action` entries to identify the remaining assigned Goal/required scope and actual blocker or continuation; do not add a Goal report schema. Preserve exact owner results and tool/transport limits without inventing a domain cause or exposing hidden reasoning. Successful whole-run completion needs no extra provenance block beyond its terminal facts.
 
 When current attributable readback directly contradicts the Completion Predicate and the current user has disabled corrective continuation, use the existing provenance form above as the terminal: state the unsatisfied predicate, exact counterexample and existing owner, `Next allowed action: None`, `Whole-run completion: no`, then STOP. Do not call a known contradiction evidence insufficiency, ask the user to reconsider an already-settled read-only instruction, or use the Mandate-ceiling authority-gap report for a disabled stage. Recognizing that whole-run completion is false does not issue a new AC/Ticket verdict or authorize reopening `done`.
 
@@ -87,7 +87,7 @@ Do not append an offer to implement, verify, or plan the next provisional Increm
 
 Return the Ready Ticket Set and the closed Run Contract to Outer Main. Under explicit Adaptive activation, Outer Main continues the current Increment through exactly the enabled delivery stages without another approval merely because ownership changes. The planning owner STOP is not an invocation STOP.
 
-When the active Run Completion Boundary is `READY_TICKET_SET`, the planning phase also satisfies whole-run completion and Outer Main emits the Run Complete report below. For every broader boundary, planning phase completion alone is not whole-run success.
+When `READY_TICKET_SET` faithfully covers the current planning-only assignment under `09-run-contract.md`, the completed planning phase also closes the run and Outer Main emits the report below. It cannot replace a broader assigned product Goal; other boundaries require their own actual completion evidence.
 
 ## Execution preparation complete or limited
 
@@ -97,7 +97,7 @@ Do not create another preparation terminal label: the lead's READY TICKET PLAN R
 
 ## Current Increment implemented
 
-Use when `Implementation: yes`, `Verification: no`, and every current canonical Ticket in the validated Ready Ticket Set has one exact implementation lifecycle result with `Completion: COMPLETE`.
+Use when `Implementation: yes`, `Verification: no`, the active `CURRENT_INCREMENT_IMPLEMENTED` contract passes Goal/required-item coverage in `09-run-contract.md`, and every current canonical Ticket has an exact implementation lifecycle result with `Completion: COMPLETE`. This reports only the requested implementation/self-check scope, not verified product delivery.
 
 ```text
 IIS ADAPTIVE CURRENT INCREMENT IMPLEMENTED
@@ -119,11 +119,11 @@ STOP
 
 Do not emit this report from one Ticket result, a partial denominator, or an implementation result that changed a Ticket to `done`.
 
-An implementation-only terminal does not authorize success re-entry into another Increment. If Required Named Items remain outside the current Increment, return the smallest Verification or Run Completion Boundary decision rather than claiming the broader run complete.
+An implementation-only terminal does not authorize success re-entry. If assigned Goal or required scope remains outside the current Increment, return the smallest Verification or boundary decision rather than claiming broader completion.
 
 ## Adaptive run complete
 
-Use only when the active Run Contract's exact Completion Predicate is actually satisfied. For `CURRENT_INCREMENT_DELIVERED`, this requires not just the complete exact `done` denominator but also an existing Ticket acceptance owner and current attributable evidence/readback for every approved parent obligation applicable to that Increment. For every boundary, preserve the claim limits of the owning evidence and exclude future, candidate, Non-Goal, and unrelated obligations that the active boundary does not make applicable.
+Use only after [Goal and required-item coverage](09-run-contract.md#goal-and-required-item-coverage-invariant) is revalidated against relevant actual Source Authority and fresh evidence satisfies the sufficient Predicate. A Predicate true with assigned Goal unmet is contract mismatch, not success. For `CURRENT_INCREMENT_DELIVERED`, require the complete exact `done` denominator and existing acceptance ownership/current attributable closure for every applicable parent obligation. Exclude unassigned future/candidate/Non-Goal work, not assigned Goal obligations merely deferred from this Increment. Explicit stage-only success closes only its requested result.
 
 ```text
 IIS ADAPTIVE RUN COMPLETE
@@ -131,7 +131,7 @@ IIS ADAPTIVE RUN COMPLETE
 Mandate: <exact companion path/revision or current-conversation authority>
 Mandate Continuation Ceiling: CURRENT_INCREMENT | BOUNDED_OUTCOME | MANDATE_OUTCOME
 Run Completion Boundary: READY_TICKET_SET | READY_EXECUTION_PLANS | CURRENT_INCREMENT_IMPLEMENTED | CURRENT_INCREMENT_DELIVERED | NAMED_REQUIRED_ITEMS_DELIVERED | BOUNDED_OUTCOME_SATISFIED | MANDATE_OUTCOME_SATISFIED
-Goal Outcome: <exact Run Contract outcome>
+Goal Outcome: <exact current outcome faithful to the user's assignment>
 Required Named Items:
 - <item or None required>
 Candidate Named Items:
@@ -139,8 +139,8 @@ Candidate Named Items:
 Required Item Policy: EXACT_REQUIRED_SET | REQUIRED_FLOOR | NONE_REQUIRED
 Implementation: yes | no
 Verification: yes | no
-Completion Predicate: <exact predicate>
-Authoritative Readback: <fresh attributable evidence>
+Completion Predicate: <exact sufficient predicate for the assigned Goal and Required Named Items>
+Authoritative Readback: <fresh attributable evidence at the actual approved boundary, within its claim limits>
 Final Current Increment: <exact INC path or None>
 Final Ticket evidence:
 - <exact Ticket path — current preparation review if preparation-only | implementation result | final verifier result/progression/actual canonical status>
@@ -149,9 +149,9 @@ Remaining provisional horizon: non-authoritative; not a completion blocker
 STOP
 ```
 
-Populate the existing `Authoritative Readback` and `Final Ticket evidence` entries with the actual closure evidence used, including the effect of any owner-reported `Evidence limit` or `Remaining uncertainty`; do not add a second verdict or acceptance matrix. A limited PASS may support only the approved canonical fact or absence it actually establishes. It cannot support an unobserved runtime, operator, external, or integrated result. Canonical source/artifact/document/structure inspection is sufficient when that is the approved acceptance boundary.
+Populate the existing `Authoritative Readback` and `Final Ticket evidence` with actual closure evidence and the effect of owner-reported `Evidence limit`/`Remaining uncertainty`; do not add a second verdict or acceptance matrix. Apply `09-run-contract.md`'s actual-boundary rule: limited PASS or a substitute cannot prove an unobserved runtime/operator/external result. Actual canonical artifact inspection and real authorized disposable execution remain valid for the approved claims they observe.
 
-Do not emit this report for a planning leaf STOP, one completed Ticket, one delivered Increment when Required Named Items remain, an implementation-only result when the boundary requires delivery, a blocked/inconclusive return, or roadmap exhaustion.
+Do not emit this report from an unfaithful Goal summary, weak Predicate, planning leaf STOP, one delivered Increment or named-item list with assigned Goal still unmet, an implementation-only result when delivery is required, a blocked/inconclusive return, or roadmap exhaustion.
 
 VERIFIED with Ticket Progression FAILED is not completed delivery even if actual Ticket bytes say done. Preserve verdict, exact progression failure, actual status and owning recovery evidence; the caller must not infer COMPLETED from the status string or repair authority itself.
 
@@ -164,7 +164,7 @@ Use only after the current Increment satisfies the full delivered boundary in [0
 - `RUN_CONTRACT_SATISFIED` — use the single `IIS ADAPTIVE RUN COMPLETE` report above; do not emit a second Mandate-complete terminal.
 - `NEXT_INCREMENT_REQUIRED` — record the nonterminal transition below and continue through Outer Main to Scope Shaper in the same invocation.
 - `USER_DECISION_REQUIRED` — use the material product decision report below.
-- `EVIDENCE_REQUIRED` — use the completion-evidence report below and do not infer completion or Scope Shaper re-entry.
+- `EVIDENCE_REQUIRED` — obtain reachable authorized readback; use the completion-evidence return below only for a remaining genuine evidence/authority/condition limit, without inferring completion or Scope Shaper re-entry.
 
 For `NEXT_INCREMENT_REQUIRED`:
 
@@ -214,7 +214,7 @@ Do not dump the entire planning analysis. Ask only for the branch that blocks au
 
 ## Completion evidence required
 
-Use when an existing acceptance owner is established but current attributable evidence cannot decide an obligation required by the active Completion Predicate. This includes a complete exact `done` denominator whose required current observation is missing, stale, `INCONCLUSIVE`, or limited beyond the claim, as well as a fully delivered current Increment whose broader outcome assessment cannot determine whether more product construction is required. A missing truthful acceptance owner is instead the exact To Tickets or upstream planning gap; do not disguise it as an evidence request.
+Use when an existing acceptance owner is established but current attributable evidence cannot decide an obligation required by the faithful Goal/Predicate, after obtaining the reachable authorized readback. This includes missing, stale, inconclusive, or claim-limited current evidence despite a complete `done` denominator. A missing truthful acceptance owner is the exact To Tickets/upstream gap; a weak Predicate is outer contract correction. Do not disguise either as an evidence request or end an invocation while a valid authorized next action can resolve the gap.
 
 ```text
 IIS ADAPTIVE COMPLETION EVIDENCE REQUIRED
@@ -282,7 +282,7 @@ Examples:
 - active adversarial gate missing Challenger/Intent Anchor -> current gate's exact result
 - external/operator verification evidence unavailable -> verifier/triage result as applicable
 
-Adaptive trace may record the disposition, but does not replace the owning result. Every such return is whole-run incomplete unless the active Completion Predicate was already independently satisfied.
+Adaptive trace may record the disposition, but does not replace the owning result. Such a return is whole-run incomplete unless Goal/required-item coverage and actual completion evidence independently satisfy `09-run-contract.md`.
 
 ## Verification triage report
 
@@ -298,7 +298,7 @@ Primary authority basis: <exact parent authority>
 Disposition: <implementation | verification mechanism | Scope Shaper | Ask Matt | To Tickets | evidence required>
 Contract changed: yes | no
 Fresh verification required: yes | pending evidence
-Whole-run completion: no unless the active predicate is independently satisfied
+Whole-run completion: no unless faithful Goal/required-item coverage and the sufficient predicate are independently satisfied
 ```
 
 Unless the user explicitly disabled corrective re-entry, a material triage result continues to its owning correction route after an actual correction/new evidence rather than stopping merely to announce the classification. Report the triage at the eventual user-return, planning-phase, current-Increment, or Run Contract terminal boundary. Success continuation into another Increment remains governed by the Mandate ceiling and closed Run Contract.

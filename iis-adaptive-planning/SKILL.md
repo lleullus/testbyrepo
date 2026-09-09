@@ -12,7 +12,7 @@ Run an **opt-in alternate operating mode** for IIS Planning without replacing or
 Preserve the current IIS product-planning semantics, authority owners, canonical artifact schemas, validators, and terminal Ready Ticket boundary. Add only these Adaptive behaviors:
 
 1. establish a user-authorized Planning Mandate;
-2. close one invocation-local Adaptive Run Contract that preserves required/candidate item meaning, independent delivery-stage authority, and whole-run completion before mutation;
+2. close one invocation-local Adaptive Run Contract that faithfully preserves the user's assigned Goal, required/candidate meaning, independent delivery-stage authority, and sufficient whole-run completion/readback before mutation;
 3. satisfy eligible repeated planning confirmations through standing delegated confirmation when the mandate resolves the decision;
 4. reshape the current Increment and re-enter the correct planning leaf when new evidence makes the current shape materially worse;
 5. classify later verification problems by authority and route them to implementation, verification setup, or planning instead of forcing a test pass; and
@@ -77,7 +77,7 @@ Do not search for or auto-select a repository-investigation artifact merely beca
 
 ## Adaptive Run Contract
 
-Before the first Adaptive planning mutation, close and render the compact invocation contract in [references/09-run-contract.md](references/09-run-contract.md) using [templates/ADAPTIVE-RUN-CONTRACT.template.md](templates/ADAPTIVE-RUN-CONTRACT.template.md).
+Before the first Adaptive planning mutation, close and render the compact invocation contract using [templates/ADAPTIVE-RUN-CONTRACT.template.md](templates/ADAPTIVE-RUN-CONTRACT.template.md). Apply [Goal and required-item coverage](references/09-run-contract.md#goal-and-required-item-coverage-invariant) against the relevant actual user instructions at closure, post-shape/material reshape, and owner-return/final assessment; a Goal string or preclosed label alone is insufficient.
 
 The Run Contract establishes:
 
@@ -108,9 +108,9 @@ Implementation and Verification are independent invocation fields. Preserve expl
 
 An explicit execution-preparation-only request selects `READY_EXECUTION_PLANS` with Implementation/Verification both no and exact required Tickets; it stops only after every required Ticket has current independent ADMIT. Product-planning-only stays `READY_TICKET_SET`. No third stage switch is added. Implementation yes always consumes current plan review, even with Verification no; verification-only of an implemented ready target binds actual target directly without a new plan.
 
-When explicit Adaptive activation supplies no narrower stop override and no broader named-item or outcome terminal, close the default current-Increment execution envelope as `Implementation: yes`, `Verification: yes`, and `Run Completion Boundary: CURRENT_INCREMENT_DELIVERED`, subject to the Required-item coverage invariant and Mandate Continuation Authority ceiling in `references/09-run-contract.md`. Do not force this current-Increment terminal when current authority already assigns a broader outcome or when required-item coverage is unknown or partial.
+With explicit Adaptive activation and no explicit stage/stop override, default to `Implementation: yes`, `Verification: yes`, and `CURRENT_INCREMENT_DELIVERED` only when it closes the entire assigned Goal and required scope within the Mandate ceiling. A clear broader natural-language assignment needs no enum or extra continuation phrase; `None required` is not a Goal exemption.
 
-Do not let a planning leaf STOP, one implementation report, one Ticket, one current Increment, or a complete `done` denominator stand in for whole-run completion unless the closed Run Completion Boundary and Completion Predicate are satisfied by the applicable parent obligations, their existing acceptance owners, and actual current evidence/readback.
+Do not let a planning leaf STOP, one implementation report, one Ticket, one current Increment, or a complete `done` denominator stand in for whole-run completion. The Predicate must remain sufficient for the assigned Goal and Required Named Items, and actual current evidence/readback must close the promised boundary under `references/09-run-contract.md`, not a mocked substitute.
 
 The Run Contract is invocation-local authority, not a third durable companion artifact or workflow state. Carry its decision-critical fields through planning, delivery, corrective re-entry, and success re-entry. Record only a material closure/revision in the Adaptive trace when later interpretation requires it.
 
@@ -190,7 +190,7 @@ When the mandate delegates reshaping, Adaptive may split, merge, reorder, replac
 
 Use [references/04-increment-reshaping.md](references/04-increment-reshaping.md). Preserve current IIS lineage rules and unique work slugs. Never rewrite an immutable Scope revision or a delivered `done` history.
 
-A reshape is not permission to change the user's product intent, Hard Constraints, Non-Goals, a material trade-off that remains genuinely unresolved, Required Named Items, Required Item Policy, delivery-stage limits, or the active Completion Predicate. Required Named Items remain whole-run obligations even when split across multiple Increments. Candidate Named Items may be replaced/deferred/dropped only under current Mandate authority and evidence.
+A reshape changes the construction choice, not the user's assigned Goal, Hard Constraints, Non-Goals, unresolved material trade-offs, required-item meaning, or stage/whole-run promise. Apply the coverage invariant in `references/09-run-contract.md`: current deferral preserves outer obligations; dropping a candidate means never waives the result it was meant to support.
 
 ## Spec and Ticket projection
 
@@ -233,14 +233,16 @@ A successful current Increment may trigger a new Adaptive planning cycle only af
 
 `CURRENT_INCREMENT_IMPLEMENTED` is an implementation-only terminal and never triggers success re-entry.
 
-Before selecting anything next, inspect fresh actual product state and compare the active Completion Predicate against current authoritative readback. For `CURRENT_INCREMENT_DELIVERED`, first compare the approved current parent and validated Ticket Set, limit the denominator to obligations actually applicable to this Increment, confirm each has an existing Ticket acceptance owner, and consume that owner's current observation/readback plus any `Evidence limit` and `Remaining uncertainty`. Do not infer completion or success continuation from `done` status alone, widen a limited result beyond what it observed, pull future/unrelated whole-Goal obligations into the current boundary, or consume the existing Work Package list or Provisional Construction Horizon as an execution queue.
+Before selecting anything next, revalidate Goal/required-item coverage against Source Authority and inspect fresh actual state/readback. Correct a weak derived Predicate rather than shrinking the Goal. For `CURRENT_INCREMENT_DELIVERED`, compare the approved current parent and validated Ticket Set, keep the denominator to applicable current obligations, confirm each existing acceptance owner, and consume its current readback, `Evidence limit`, and `Remaining uncertainty`. Do not widen limited evidence or use `done` alone. Preserve broader outer obligations without forcing them into this Increment or consuming a provisional horizon as a queue.
 
 Choose exactly one completion-assessment disposition:
 
-- `RUN_CONTRACT_SATISFIED` — the active Required Named Items, bounded outcome, or Mandate outcome predicate is satisfied in fresh actual product state; stop the Adaptive invocation and report Run Contract completion.
+- `RUN_CONTRACT_SATISFIED` — the coverage invariant holds and fresh actual evidence satisfies the assigned Goal and Required Named Items through the sufficient Predicate at its approved stage/claim boundary; stop and report Run Contract completion.
 - `NEXT_INCREMENT_REQUIRED` — the active predicate is not yet satisfied and current authority can determine that more construction is required; re-enter Scope Shaper against fresh actual state so it selects exactly one new current Increment.
 - `USER_DECISION_REQUIRED` — the active predicate is not yet satisfied but a material user-owned trade-off remains after applying current authority and priorities; return only that decision to the user.
 - `EVIDENCE_REQUIRED` — current attributable evidence cannot determine whether the active predicate is satisfied or whether more construction is required; obtain only the missing authoritative readback or operator/external evidence and do not infer completion, product defect, or Scope Shaper re-entry.
+
+When the Goal remains unmet and current authority/evidence determines a valid next action, continue through the existing owner in the same invocation. Do not stop merely to announce `NEXT_INCREMENT_REQUIRED` or omit reachable authorized readback under `EVIDENCE_REQUIRED`. Preserve explicit user stops, disabled stages, external authority and the existing no-material-progress guard.
 
 When an applicable obligation has no truthful existing Ticket acceptance owner, return the exact To Tickets or upstream planning gap; Outer Main does not invent an umbrella Ticket, acceptance matrix, or verdict. When the owner exists but required current evidence is absent, stale, inconclusive, or limited beyond the approved claim, use `EVIDENCE_REQUIRED`. Preserve canonical artifact/source-only completion when direct inspection is the approved boundary, and preserve implementation-only completion when `Verification: no` and the active boundary is `CURRENT_INCREMENT_IMPLEMENTED`.
 
@@ -272,7 +274,7 @@ Do not:
 - collapse mixed Required/Candidate Named Items into one list-wide meaning;
 - invoke implementation when Implementation is `no`;
 - invoke verification or claim `done` when Verification is `no`;
-- claim whole-run completion before the active Completion Predicate is satisfied;
+- claim whole-run completion from a weak Predicate, an unfaithful Goal summary, or evidence that substitutes for the actual required acceptance boundary;
 - claim `CURRENT_INCREMENT_DELIVERED` from `done` aggregation while an applicable parent obligation lacks an existing acceptance owner or current attributable closure;
 - close a Run Completion Boundary broader than the Mandate ceiling without explicit current authority;
 - edit Baseline skills, templates, or validators as part of Adaptive operation;
@@ -297,6 +299,6 @@ Report the result as `IIS ADAPTIVE PLANNING PHASE COMPLETE` using [references/07
 
 
 For `READY_EXECUTION_PLANS`, Outer Main consumes the actual `READY TICKET PLAN RESULT`, exact outside-root review and every required current ADMIT; useful plans or a subset cannot close the run. This is preparation completion, not product implementation, final verification or done.
-Outer Main applies Implementation and Verification independently and emits `IIS ADAPTIVE RUN COMPLETE` only when the active Run Completion Boundary and Completion Predicate are actually satisfied. `CURRENT_INCREMENT_IMPLEMENTED` stops after the complete implementation denominator without verifier progression. Broader delivery or outcome boundaries require the exact enabled stages and current Mandate ceiling.
+Outer Main applies Implementation and Verification independently and emits `IIS ADAPTIVE RUN COMPLETE` only when Goal and required-item coverage and actual completion evidence satisfy `references/09-run-contract.md`. Explicit stage-only success claims only that stage's requested result; `CURRENT_INCREMENT_IMPLEMENTED` requires its complete denominator without verifier progression. Broader delivery or outcome boundaries require the exact enabled stages and current Mandate ceiling.
 
 Do not plan the next provisional Increment or declare the whole product complete merely because current Increment planning completed. A broader success continuation begins only after the current Increment is actually delivered, the active Run Contract requires it, and the Mandate ceiling permits it; even then Scope Shaper selects the next current Increment from actual state rather than consuming a provisional plan.

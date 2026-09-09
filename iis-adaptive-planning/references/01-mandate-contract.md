@@ -46,7 +46,7 @@ Ask only for a missing fact whose different answers would materially change prod
 
 Use exactly one value:
 
-- `CURRENT_INCREMENT` — no success continuation is authorized beyond the fully delivered current Increment. This is the default when the user did not explicitly authorize a broader success boundary.
+- `CURRENT_INCREMENT` — no success continuation is authorized beyond the fully delivered current Increment. Default only when the current user's assignment needs no broader success continuation under the Goal and required-item coverage invariant in `09-run-contract.md`.
 - `BOUNDED_OUTCOME` — after each fully delivered Increment, Adaptive may re-evaluate one exact bounded outcome and, while that outcome remains unsatisfied, may let Scope Shaper select another current Increment from fresh actual product state.
 - `MANDATE_OUTCOME` — after each fully delivered Increment, Adaptive may re-evaluate the Mandate's Desired Product Outcome and, while it remains unsatisfied, may let Scope Shaper select another current Increment from fresh actual product state.
 
@@ -54,15 +54,15 @@ Continuation Authority is a **ceiling**, not the actual terminal of the current 
 
 A Run Completion Boundary must fit within this ceiling:
 
-- `CURRENT_INCREMENT` permits planning-only completion, current-Increment implementation completion, and current-Increment delivery completion. A named-required-items boundary is also within this ceiling only when current authority establishes that every required item is contained in the current Increment; otherwise it requires broader continuation authority.
+- `CURRENT_INCREMENT` permits planning-only, current-Increment implementation, or current-Increment delivery completion only with full coverage of the current assigned Goal and required scope. A named-required-items boundary fits only when the current Increment closes that same full assignment; otherwise broader continuation authority is needed.
 - `BOUNDED_OUTCOME` permits success continuation only as far as the exact bounded outcome authorized for the run.
 - `MANDATE_OUTCOME` permits success continuation as far as the Desired Product Outcome.
 
-If the current user instruction explicitly requires a Run Completion Boundary broader than the stored Mandate ceiling, revise or adopt the Mandate before the first mutation. If the current instruction does not grant that broader authority, return the exact authority gap. Never close a smaller Run Contract merely to avoid the revision, and never silently expand the Mandate.
+If the current user assigns an outcome that requires broader continuation than the stored ceiling, revise or adopt the Mandate before the first mutation. Clear natural-language outcome authority is sufficient; the user need not name an enum or add `끝까지`. If the actual completion meaning is materially ambiguous or broader authority absent, return only that gap. Never close a smaller Goal/Run Contract to avoid revision or silently expand the Mandate.
 
 Do not infer `BOUNDED_OUTCOME` or `MANDATE_OUTCOME` merely because `Applies-To` names an initiative, Scope, or Work Package. `BOUNDED_OUTCOME` requires one exact bounded Completion Predicate in the Run Contract; applicability alone is not a completion test.
 
-For an existing Adaptive Mandate created before this field existed, treat missing Continuation Authority as `CURRENT_INCREMENT`. Do not require reapproval merely to preserve that prior behavior; serialize the explicit field the next time the Mandate is materially revised.
+For a legacy Mandate with missing Continuation Authority, preserve `CURRENT_INCREMENT` only when no current broader assignment supersedes it. A clear latest broad Goal requires the revision above; a missing field cannot override current user authority. Do not require reapproval merely to preserve prior behavior; serialize the explicit field at the next material Mandate revision.
 
 Success continuation never means consuming a pre-authored WP list or provisional horizon in order. After a delivered Increment, compare fresh actual product state with the active Run Completion Predicate; only when more construction is still required and the ceiling permits it does Scope Shaper choose the next Increment.
 

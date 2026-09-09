@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Close the meaning of one explicit Adaptive invocation before planning mutation so that current invocation cannot stop at a smaller result than the user assigned, silently treat required work as disposable, or collapse a mixed required/candidate assignment into one inaccurate list-wide label.
+Close the meaning of one explicit Adaptive invocation before planning mutation so that it preserves the user's assigned Goal Outcome and required work through every lower contract and completion claim, without treating candidates as obligations or substituted evidence as actual achievement.
 
 The Run Contract answers seven questions:
 
@@ -23,7 +23,7 @@ Before the first Adaptive planning mutation:
 1. inspect the current user instruction, applicable Mandate, canonical planning authority, and inspectable current facts;
 2. normalize them into the form in [../templates/ADAPTIVE-RUN-CONTRACT.template.md](../templates/ADAPTIVE-RUN-CONTRACT.template.md), including the guide-backed delivery model selection below;
 3. set `Run Contract Approval Gate: required` only when the current user uses exact `/승인게이트` as an affirmative directive/modifier on the current explicitly active Adaptive invocation; otherwise set `not_required`. Quoted, explanatory, hypothetical, or negated mentions do not activate the gate, and `/승인게이트` does not activate Adaptive by itself;
-4. mark the form `CLOSED` only when every material field is determined by current authority and each applicable delivery model selection is user-specified or user-confirmed, not merely recommended;
+4. mark the form `CLOSED` only when every material field is determined by current authority, the Goal and required-item coverage invariant below holds, stage/ceiling meaning is consistent, and each applicable delivery model selection is user-specified or user-confirmed, not merely recommended;
 5. when one or more material fields remain unresolved, mark it `USER_INPUT_REQUIRED` and ask only for the smallest unresolved field whose different answers would change required scope, candidate freedom, delivery stages, delivery model/effort selection, success continuation, or completion meaning;
 6. when the form is `CLOSED` and `Run Contract Approval Gate: required`, render the exact current form and STOP before mutation until the user directly approves that rendered contract; and
 7. do not begin Scope, Behavior/UI, Spec, Ticket, implementation, or verification mutation until the contract is `CLOSED` and any required Run Contract Approval Gate has been directly satisfied.
@@ -34,7 +34,7 @@ Read-only inspection needed to close inspectable facts is allowed. Do not ask th
 
 ### Goal Outcome
 
-State the durable user/operator result assigned to this invocation. It may equal the Mandate's Desired Product Outcome or be a narrower current assignment.
+State the durable user/operator result assigned to this invocation as a faithful derivative of the current user's words, not background aspiration or a new source of authority. Applicable user instructions, constraints, and explicit stage/stop limits outrank this summary and every Boundary, Predicate, Increment, Spec, Ticket, method, and owner report. It may equal the Mandate's Desired Product Outcome or be a narrower current assignment; a broad long-term Mandate alone does not enlarge this invocation.
 
 ### Required Named Items
 
@@ -90,7 +90,7 @@ Verification: yes | no
 
 Explicit Adaptive activation preserves Implementation yes and Verification yes unless current authority overrides either independently. Implementation yes first needs current execution-method review. Verification yes invokes the integrated final verifier directly on a stable actual target; discovery is inside that cycle, not a third switch or separate whole-run terminal.
 
-When current authority supplies no planning-only, implementation-only, no-verification, named-required-item, bounded-outcome, or Mandate-outcome terminal, the default current-Increment terminal is `CURRENT_INCREMENT_DELIVERED`. Close that default only when the Required-item coverage invariant permits a current-Increment boundary; do not use it to shrink broader Required Named Items, replace a broader outcome already assigned by the user, or bypass an unresolved coverage or Mandate-ceiling decision.
+The default current-Increment terminal is `CURRENT_INCREMENT_DELIVERED` only when the Goal and required-item coverage invariant establishes that it closes the entire current assignment and no explicit stage/stop override applies. A clear natural-language assignment of a broader outcome supplies its completion authority without naming an enum or saying `끝까지` or `여러 Increment를 돌려`. Do not replace it with the default or bypass an unresolved coverage or Mandate-ceiling decision.
 
 Apply exact overrides independently:
 
@@ -102,6 +102,8 @@ Apply exact overrides independently:
 - do not verify -> no final discovery/verdict/done, but pre-implementation Heuristic/review still applies when Implementation is yes.
 
 These two fields express the invocation envelope, not exact owner authority or admission. Preparation belongs to ready-ticket-plan, implementation to ready-ticket-implement, and integrated final adjudication to ready-ticket-verify.
+
+Explicit planning-only, preparation-only, and implementation-only assignments close only their requested stage's actual result, not unperformed product delivery or verification. Do not invent a stage-only interpretation to shrink an assigned product Goal. A pause/stop is not a successful narrower Goal unless current user authority actually changes the assignment; preserve any unresolved distinction and disabled stages.
 
 Delegated implementation/verification checkpoints and Parent continuation decisions are invocation-local delivery messages only. They do not add a Run Contract field, do not modify `Implementation` or `Verification`, do not activate or satisfy the `/승인게이트` Run Contract Approval Gate, and do not require a template change. Their phase-release authority comes from the already closed Run Contract, current user instructions, and the exact delivery skill contract.
 
@@ -151,11 +153,11 @@ Boundary meaning:
 - `BOUNDED_OUTCOME_SATISFIED` — the exact bounded outcome assigned to this run is satisfied in fresh actual product state.
 - `MANDATE_OUTCOME_SATISFIED` — the Mandate's Desired Product Outcome is satisfied in fresh actual product state.
 
-An implementation-only multi-Increment promise is not silently invented. If required named items cannot fit in the current Increment and the user disables verification, current verified success-re-entry rules cannot safely guarantee `NAMED_REQUIRED_ITEMS_DELIVERED`; return the smallest boundary or verification decision instead of silently reducing the required list.
+An implementation-only multi-Increment promise is not silently invented. If the assigned Goal or Required Named Items need another Increment and the user disables verification, current verified success-re-entry rules cannot guarantee that broader delivery; return the smallest boundary or verification decision instead of silently reducing the obligation.
 
 ### Completion Predicate
 
-Write one concise observable predicate that distinguishes successful whole-run completion from a planning phase, one Ticket, one Increment, or roadmap progress. For a delivered current-Increment predicate, name both the complete canonical `done` denominator and closure of every applicable parent obligation through its existing acceptance owner and current attributable readback; do not make status aggregation the whole predicate.
+Write one concise observable predicate whose satisfaction at the declared boundary is sufficient for the assigned Goal Outcome and every Required Named Item under the coverage invariant below, without adding unassigned outcomes or stronger acceptance. For a delivered current-Increment predicate, name both the complete canonical `done` denominator and closure of every applicable parent obligation through its existing acceptance owner and current attributable readback; do not make status aggregation the whole predicate.
 
 Examples:
 
@@ -177,7 +179,13 @@ Do not use `all planned work is done`, WP exhaustion, provisional-horizon exhaus
 
 ### Authoritative Readback
 
-Identify the current product surface, canonical Ticket state, exact implementation result, operator evidence, or other authority that can prove the Completion Predicate.
+Identify the actual product surface, canonical Ticket state, exact implementation result, operator evidence, or other authority that can decide the assigned result through the Completion Predicate, not merely a weaker proxy.
+
+A mock, stub, canned response, seeded success state, or surrogate readback cannot prove the acceptance boundary it replaces. A test runner may supply valid evidence when it executes the actual required path and observes the required state/effect. An authorized disposable environment may qualify when it uses the approved real implementation, entrypoint, storage, lifecycle, and readback. Supporting dependency doubles do not invalidate unrelated real observations, but never prove the boundary they replace. For required external effects, helper success, HTTP acceptance, or logs alone do not replace the approved effect readback.
+
+When the requested result is an artifact, document, schema, source, plan, or simulator itself, inspect that actual deliverable and its approved meaning; do not inflate its claim into an unobserved product/runtime/external effect. A Ticket-authored fake boundary cannot override its parent meaning or current user instructions. Missing real access, environment, or authority preserves the original obligation as unknown/incomplete rather than licensing fake success.
+
+Tool-route non-support or an argv inspection allowlist rejection alone establishes neither product-surface unavailability nor missing external authority. For an already requested and authorized actual trigger/readback, use another supported, normally authorized execution route only if it preserves active Ready binding/effect ownership, user stops, disabled stages, and side-effect authority; never bypass a guard or security/authority denial. Source evidence of contradiction does not complete an explicitly required actual observation left unperformed.
 
 For READY_EXECUTION_PLANS use the exact required Ticket denominator, actual preparation terminal and current independent review artifact/evidence. A plan file, Heuristic no-finding, JSON structure or historical ADMIT label is not sufficient. This method-readiness boundary neither satisfies product-delivery obligations nor changes named-item meaning.
 
@@ -191,7 +199,7 @@ Use `Not yet established` only when establishing the readback is itself legitima
 
 ### Source Authority
 
-Record the current instruction and applicable Mandate revision concisely. Do not fabricate a user quote.
+Record concise anchors to the relevant actual user instructions, constraints, explicit revisions, and applicable Mandate revision, not another copy of the derived Goal. Preserve enough source wording or an exact current-conversation reference to recover an omission in Goal/Required Named Items; do not fabricate a quote or copy the whole conversation downstream.
 
 ### Run Contract Approval Gate
 
@@ -209,6 +217,8 @@ If the user's approval response materially changes Goal Outcome, Required Named 
 ## Consistency checks
 
 Before marking the form `CLOSED`:
+
+- apply the Goal and required-item coverage invariant below against relevant Source Authority, including on a supplied preclosed form; matching derived Goal/Predicate text or a `CLOSED` label is not proof of fidelity;
 
 - no item may appear in both Required Named Items and Candidate Named Items;
 - `EXACT_REQUIRED_SET` and `REQUIRED_FLOOR` require non-empty Required Named Items;
@@ -228,26 +238,26 @@ Before marking the form `CLOSED`:
 - `Run Contract Approval Gate` is `required` only from the affirmative exact invocation modifier above and otherwise is `not_required`; and
 - an active required gate preserves `Status: CLOSED` but forbids mutation until direct user approval of the rendered current form.
 
-### Required-item coverage invariant
+### Goal and required-item coverage invariant
 
-A form is `CLOSED` only when satisfying its Run Completion Boundary and Completion Predicate necessarily satisfies every currently unsatisfied Required Named Item to the completion meaning promised by that boundary.
+A form is `CLOSED` only when Goal Outcome and Required Named Items faithfully preserve the current user's actual assignment and satisfaction of the Completion Predicate at its declared boundary necessarily satisfies that Goal and every Required Named Item. `None required` waives no Goal obligation. Judge promised results, not word inclusion or agreement between two derived summaries; do not add unassigned outcomes or stronger acceptance to make the check conservative.
 
-`READY_TICKET_SET`, `CURRENT_INCREMENT_IMPLEMENTED`, and `CURRENT_INCREMENT_DELIVERED` are current-Increment terminals. When Required Named Items exist, one of those boundaries may close only when every currently unsatisfied Required Named Item is either already satisfied by fresh authoritative readback or current authority establishes that the selected current Increment covers it in its approved Includes and completion contract.
+At closure, post-shape/material reshape, and owner-return/final assessment, ask: **Could this contract count as successful while the result the user assigned is still unmet?** If yes, correct the derived Goal/items/Boundary/Predicate from already-clear current authority before proceeding; return `USER_INPUT_REQUIRED` only for an actual unresolved user-owned meaning. A Predicate that is true while the assigned Goal is false is contract mismatch, not success, including in a previously `CLOSED` form. Do not lower Goal/items to fit a chosen terminal. A material recovery is traced; leaf approval, Challenger agreement, Ticket `ready`/`done`, or Parent `CONTINUE` cannot withdraw the outer obligation.
 
-READY_EXECUTION_PLANS is bounded by the exact preparation Tickets named in this invocation, not automatically by the whole current Set. It may close only the preparation meaning explicitly requested for every required item; it cannot satisfy an outstanding promise to implement/deliver them or silently authorize a later Increment.
+`READY_TICKET_SET`, `CURRENT_INCREMENT_IMPLEMENTED`, and `CURRENT_INCREMENT_DELIVERED` are current-Increment terminals. They are valid only when fresh authoritative readback supports already-satisfied parts of the assignment and current authority establishes that every outstanding part of the Goal and required scope is covered by that Increment's Includes and completion contract. Unknown or partial coverage, including before shaping, cannot be assumed complete merely because no Required Named Items exist. One Increment may legitimately close the remaining whole Goal; do not force multiple Increments when coverage is established.
 
-If the current Increment is not yet shaped, or required-item coverage is unknown or partial, do not infer that the broader Required Named Items are covered by a current-Increment terminal. This does not prohibit a current-Increment boundary when there are no Required Named Items or current authority independently establishes that the required scope is exactly the selected current Increment.
+READY_EXECUTION_PLANS is bounded by the exact preparation Tickets named in this invocation, not automatically by the whole current Set. It may close only the preparation meaning explicitly requested for every required item; it cannot satisfy an outstanding promise to implement/deliver them or silently authorize a later Increment. Other explicit stage-only or narrow assignments likewise preserve their actual requested result and claim limits, not an unassigned broader product outcome.
 
-`NAMED_REQUIRED_ITEMS_DELIVERED`, `BOUNDED_OUTCOME_SATISFIED`, and `MANDATE_OUTCOME_SATISFIED` may span multiple Increments when the enabled delivery stages and Mandate ceiling permit that continuation. Do not force those outer obligations into one selected Increment merely to make coverage look complete.
+`NAMED_REQUIRED_ITEMS_DELIVERED`, `BOUNDED_OUTCOME_SATISFIED`, and `MANDATE_OUTCOME_SATISFIED` may span multiple Increments when enabled stages and the Mandate ceiling permit it. Named-item delivery is insufficient if a broader assigned Goal still remains. Keep a smaller current construction choice separate from the whole-run promise; do not force all outer obligations into one Increment.
 
 Ceiling checks use actual continuation requirements, not the boundary label alone:
 
-- `CURRENT_INCREMENT` permits `READY_TICKET_SET`, `CURRENT_INCREMENT_IMPLEMENTED`, and `CURRENT_INCREMENT_DELIVERED`. It permits `NAMED_REQUIRED_ITEMS_DELIVERED` only when current authority establishes every Required Named Item is covered by the current Increment.
+- `CURRENT_INCREMENT` permits the current-Increment terminals only with full Goal/required-item coverage. It permits `NAMED_REQUIRED_ITEMS_DELIVERED` only when the current Increment closes that same full assignment.
 - READY_EXECUTION_PLANS creates no success-continuation authority beyond its exact approved preparation scope; it never uses a planning-only terminal to shrink required product delivery.
 - a named-item or bounded predicate that requires another Increment needs at least `BOUNDED_OUTCOME`;
 - `MANDATE_OUTCOME_SATISFIED` requires `MANDATE_OUTCOME`.
 
-The Mandate Continuation Authority is only the maximum success-continuation ceiling; the active Run Completion Boundary remains the invocation terminal. A broader ceiling does not silently upgrade a narrower active boundary. If current user authority already establishes a broader boundary than the stored ceiling, revise/adopt the Mandate before mutation. If current authority establishes a broader active boundary within the existing ceiling, revise the Run Contract before mutation. Otherwise return only the exact unresolved boundary or authority gap. Never close a smaller boundary merely to avoid that revision, and never shrink Required Named Items to fit it.
+The Mandate Continuation Authority is only the maximum success-continuation ceiling; the active Run Completion Boundary remains the invocation terminal. A broader ceiling does not silently upgrade a narrower assignment. If current user authority already assigns a broader outcome than the stored ceiling, revise/adopt the Mandate before mutation; if it fits the ceiling, correct the Run Contract. Natural-language outcome authority is sufficient. If completion meaning remains materially ambiguous, return only that meaning or authority gap, not a convenient current-Increment default. Never shrink Goal or Required Named Items to avoid the revision, or add an independent outcome under `EXACT_REQUIRED_SET` without current authority.
 
 Concrete counterexample:
 
@@ -264,16 +274,22 @@ This form is not `CLOSED`. It requires an explicit Mandate revision or a user-ow
 
 | Scenario | Condition | Required result |
 | --- | --- | --- |
-| `WHOLE_REQUIRED_NO_INCREMENT` | broader Required Named Items exist, current-Increment coverage is not established, and the boundary is `READY_TICKET_SET`, `CURRENT_INCREMENT_IMPLEMENTED`, or `CURRENT_INCREMENT_DELIVERED` | `CLOSED` is forbidden; revise from already-clear broader current authority or return `USER_INPUT_REQUIRED`. |
-| `WHOLE_REQUIRED_FOUNDATION_INCREMENT` | a selected foundation/partial Increment leaves unsatisfied Required Named Items outside it while the active boundary is a current-Increment terminal | `CONTRACT_DRIFT`; do not enter Ask Matt until the Run Contract is revised from current authority or the exact boundary decision returns to the user. |
-| `CURRENT_INCREMENT_REQUIRED_ONLY` | every unsatisfied Required Named Item is covered by the selected current Increment and the delivery-stage combination matches the boundary | the corresponding current-Increment boundary is allowed. |
-| `WHOLE_REQUIRED_BOUNDED_OUTCOME` | broader Required Named Items remain, the boundary is `BOUNDED_OUTCOME_SATISFIED`, and the Mandate ceiling permits it | `CLOSED` is allowed; project only one current Increment while preserving outer Required Named Items and the Completion Predicate. |
+| `WHOLE_REQUIRED_NO_INCREMENT` | the assigned Goal or Required Named Items are broader, current-Increment coverage is not established, and the boundary is a current-Increment terminal | `CLOSED` is forbidden; revise from already-clear broader current authority or return `USER_INPUT_REQUIRED`. |
+| `WHOLE_REQUIRED_FOUNDATION_INCREMENT` | a selected foundation/partial Increment leaves assigned Goal or required scope outside it while the active boundary is a current-Increment terminal | `CONTRACT_DRIFT`; do not enter Ask Matt until the Run Contract is corrected from current authority or the exact boundary decision returns to the user. |
+| `CURRENT_INCREMENT_REQUIRED_ONLY` | the entire current Goal and every unsatisfied Required Named Item are covered by the selected current Increment and the stage combination matches | the corresponding current-Increment boundary is allowed, even for a broadly worded Goal. |
+| `WHOLE_REQUIRED_BOUNDED_OUTCOME` | broader Goal/Required Named Items remain, the boundary is `BOUNDED_OUTCOME_SATISFIED`, and the Mandate ceiling permits it | `CLOSED` is allowed; project one current Increment while preserving outer Goal, Required Named Items, and the sufficient Predicate. |
 | `LEAF_APPROVAL_ONLY` | Scope, Intent Anchor, Behavior/UI, Spec, Ticket, or current Increment receives only its owning leaf approval/confirmation | outer Goal Outcome, required/candidate classification, delivery stages, Run Completion Boundary, and Completion Predicate remain unchanged. |
-| `DEFAULT_ADAPTIVE_CURRENT_INCREMENT` | explicit Adaptive activation supplies no narrower stop, broader named-item/outcome terminal, or unresolved required-item coverage | close `Implementation: yes`, `Verification: yes`, and `CURRENT_INCREMENT_DELIVERED` as the default current-Increment terminal. |
-| `REQUIRED_REMAINS_AFTER_DELIVERY` | the current Increment is delivered but broader Required Named Items or the broader outcome predicate remain unsatisfied | `RUN_COMPLETE` is forbidden; use fresh-state success re-entry and its existing next disposition. |
-| `POST_DELIVERY_EVIDENCE_GAP` | the current Increment is delivered under a broader boundary but attributable authoritative readback cannot determine satisfaction or the need for more construction | return `EVIDENCE_REQUIRED`; do not infer completion, product defect, or Scope Shaper re-entry. |
+| `DEFAULT_ADAPTIVE_CURRENT_INCREMENT` | explicit Adaptive activation supplies no narrower stop and full Goal/required-item coverage in the current Increment is established | close `Implementation: yes`, `Verification: yes`, and `CURRENT_INCREMENT_DELIVERED` as the default. |
+| `REQUIRED_REMAINS_AFTER_DELIVERY` | the current Increment is delivered but assigned Goal or Required Named Items remain unsatisfied | `RUN_COMPLETE` is forbidden; correct a weak derived contract if needed and use fresh-state success re-entry and its existing next disposition. |
+| `POST_DELIVERY_EVIDENCE_GAP` | attributable authoritative readback cannot determine satisfaction or the need for more construction | use `EVIDENCE_REQUIRED`; obtain reachable authorized readback before returning, without inferring completion, product defect, or Scope Shaper re-entry. |
 | `CURRENT_INCREMENT_DONE_WITH_GAP` | every current Ticket is exact `done`, but an applicable parent obligation has no existing Ticket acceptance owner or its required current evidence/readback is absent, limited beyond the approved claim, stale, or inconclusive | `RUN_COMPLETE` is forbidden; return the exact Ticket-projection/upstream planning gap when ownership is missing, or `EVIDENCE_REQUIRED` when the owner exists but attributable evidence cannot decide the obligation. Do not create another verifier or reopen `done` history. |
-| `CURRENT_INCREMENT_FUTURE_ONLY` | every applicable current-Increment obligation is owned and currently closed, and only future, candidate, Non-Goal, or unrelated obligations remain | the current-Increment boundary may complete; do not enlarge it with non-applicable whole-Goal work. |
+| `CURRENT_INCREMENT_FUTURE_ONLY` | all assigned Goal/required scope and applicable current obligations are closed; only unassigned future, candidate, Non-Goal, or unrelated obligations remain | the current-Increment boundary may complete; do not enlarge this invocation with unassigned whole-product work. |
+| `GOAL_ONLY_BROAD` | the user assigns a broader lifecycle result with `None required`, but only its first capability fits the current Increment | preserve the full Goal and derive a sufficient outcome boundary/ceiling; no enum or extra continuation phrase is needed. |
+| `SOURCE_OMISSION` | the source assigns A+B, but derived Goal/items and Predicate agree only on A | restore B from Source Authority; summary self-consistency cannot close the form. |
+| `WEAK_PREDICATE_PRECLOSED` | a supplied `CLOSED` form uses a broad Goal/boundary label but a Predicate satisfied by only a subset | correct the derived contract from current authority or return the exact unresolved meaning; the label does not authorize mutation or success. |
+| `SUBSTITUTED_READBACK` | mocked/seeded success replaces the runtime or external boundary required by the assigned Goal | that evidence cannot close the obligation; use the existing semantic-projection owner for an invalid flow, or preserve unknown/contradiction according to real evidence. |
+| `EXPLICIT_NARROW_OR_STAGE` | current user authority explicitly limits this invocation to the current result or a planning/preparation/implementation-only result | close that actual limited assignment when its evidence is sufficient; do not import the long-term Mandate as extra work or claim unperformed delivery. |
+| `REAL_DISPOSABLE_OR_ARTIFACT` | authorized disposable execution observes the approved real boundary, or the actual requested artifact is directly inspected | accept only the observed approved claim; neither disposable location nor test format makes it fake. |
 
 ## Carry-forward and reshaping
 
@@ -287,8 +303,9 @@ Pass only its decision-critical fields to another owner:
 - Required Item Policy;
 - Implementation and Verification;
 - Run Completion Boundary;
-- Completion Predicate; and
-- Authoritative Readback.
+- Completion Predicate;
+- Authoritative Readback; and
+- relevant Source Authority anchors and current user constraints for that owner's scope, not the entire conversation or roadmap.
 
 Outer Main also carries the selected Delivery Model Selection and user-confirmation basis to the relevant delivery owner only. Pass that stage's resolved model/effort through its existing assignment path; do not ask planning leaves to select models or write them into canonical artifacts. If current exposed capability cannot execute the selection, return that exact selection/capability issue rather than substituting a guide recommendation.
 
@@ -296,9 +313,9 @@ Approval or confirmation of Scope, an Intent Anchor, Behavior/UI authority, a Sp
 
 Do not pass `Run Contract Approval Gate` downstream as a Scope, Ask Matt, Spec, Ticket, implementation, or verification approval requirement. It remains an outer Run Contract release control. Once the exact rendered contract has been directly approved, downstream owners follow their existing authority unless the Run Contract's decision-critical meaning is materially revised as described above.
 
-A reshape may change the current Increment, Spec, Ticket Set, ordering, and denominator. It does not erase Required Named Items, convert them into candidates, or lower the Run Completion Boundary. Recompute the current canonical denominator after a valid reshape and continue against the same Run Contract.
+A reshape may change the current Increment, Spec, Ticket Set, ordering, and denominator. It does not erase or weaken the assigned Goal, erase Required Named Items, convert them into candidates, or lower the whole-run promise. Defer from the current Increment without removing obligations from this invocation; revalidate coverage and recompute the current canonical denominator after a valid reshape.
 
-Candidate Named Items may be preserved, replaced, deferred, or dropped when the Mandate and evidence establish a materially better route. A material user revision may move an item between lists or change the Required Item Policy. Apply the new authority prospectively and record a concise material trace entry when the revision changes planning meaning or completion.
+Candidate Named Items may be preserved, replaced, deferred, or dropped when the Mandate and evidence establish a materially better route that still satisfies the Goal. Dropping a candidate means does not waive an outcome needed for the Goal. A material user revision may change Goal or item meaning; apply only that delta prospectively, re-close affected fields and existing gates, and trace its basis without rewriting prior verdicts or `done` history.
 
 ## Completion discipline
 
@@ -309,12 +326,14 @@ Likewise:
 - one implementation result is not `CURRENT_INCREMENT_IMPLEMENTED`;
 - `CURRENT_INCREMENT_IMPLEMENTED` is not independent verification and does not mark Tickets `done`;
 - a complete Ticket `done` denominator is not `CURRENT_INCREMENT_DELIVERED` while an applicable parent obligation lacks an existing acceptance owner or current attributable closure;
-- one delivered Increment is not `NAMED_REQUIRED_ITEMS_DELIVERED` when Required Named Items remain;
+- one delivered Increment or delivered named-item list is not whole-run completion when the assigned Goal or Required Named Items remain;
 - Candidate Named Items never block completion unless the user revises them into Required Named Items;
 - delivered Tickets are not proof of an outcome-satisfaction boundary without fresh authoritative readback; and
 - a provisional Work Package or Increment list is never a completion queue.
 
-Emit whole-run success only when the active Completion Predicate is actually satisfied. `RETURN_TO_USER`, `EVIDENCE_REQUIRED`, `BLOCKED`, `INCONCLUSIVE`, `CONTRACT_DRIFT`, unavailable authority, and no-material-progress are incomplete returns, not successful completion.
+Emit whole-run success only when the coverage invariant still holds and fresh attributable evidence satisfies the Goal and Required Named Items through the sufficient Predicate at the approved stage/claim boundary. `RETURN_TO_USER`, `EVIDENCE_REQUIRED`, `BLOCKED`, `INCONCLUSIVE`, `CONTRACT_DRIFT`, unavailable authority, and no-material-progress are incomplete returns, not success.
+
+While the Goal is unmet and current authority/evidence determines a valid next action, continue through its existing owner in this invocation. Obtain reachable authorized readback rather than merely announcing `EVIDENCE_REQUIRED`; `NEXT_INCREMENT_REQUIRED` requires actual fresh-state Scope Shaper re-entry. Preserve user stops, disabled stages, external authority and the existing no-material-progress guard. Do not call an available action never attempted a no-progress repetition.
 
 ## Persistence boundary
 

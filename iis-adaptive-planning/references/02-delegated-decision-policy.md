@@ -72,6 +72,8 @@ Ordinary Baseline adversarial consensus still requires direct user confirmation 
 
 Ask Matt first constructs the same current Baseline Intent Anchor, then compares it in authority order against: the current user conversation including later explicit changes; the current user-adopted Mandate; the closed Run Contract; applicable current Scope/Behavior/UI/verification authority; and directly verified current facts. The Anchor remains a derivative representation and never replaces or outranks the user's words.
 
+Outer Main applies the same source-before-derivative fidelity discipline to Goal Outcome and Required Named Items, then checks the sufficiency of Boundary/Predicate/Readback under [09-run-contract.md](09-run-contract.md#goal-and-required-item-coverage-invariant). Deterministic recovery of an omission from current user authority is not a new preference decision; correct it and trace a material contract revision. An actual Goal change needs current user authority, not Anchor finalization, Challenger agreement, or leaf approval. This does not add another Anchor or Goal reviewer.
+
 Standing delegated Intent Anchor finalization is valid only when all of the following hold:
 
 1. Adaptive is currently explicitly active and the applicable Mandate/Run Contract remain current;
@@ -109,7 +111,7 @@ Standing delegated post-consensus finalization is valid only when all of the fol
 4. the delegated-decision test above still passes;
 5. authority delta is exactly `NONE`;
 6. no Return-to-User Boundary or unresolved authority conflict exists; and
-7. finalization remains inside the current Run Contract, including its Required Named Items, delivery stages, Run Completion Boundary, and Completion Predicate.
+7. finalization remains inside the current Run Contract, including its faithful Goal Outcome, Required Named Items, delivery stages, Run Completion Boundary, and Completion Predicate.
 
 When all seven conditions hold, Ask Matt may approve the applicable completed Behavior/UI authority, finalize the exact integrated shared understanding, record `DELEGATED_RECOMMENDATION`, and continue to To Spec without another user approval. This is not a claim that the user directly approved that candidate and does not revise the outer Run Contract.
 

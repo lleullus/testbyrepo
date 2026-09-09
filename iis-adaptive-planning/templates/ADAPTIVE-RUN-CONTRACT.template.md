@@ -7,7 +7,7 @@ Run Contract Approval Gate: required | not_required
 
 ## Goal Outcome
 
-<durable result assigned to this invocation>
+<faithful result assigned by the current user to this invocation, preserving explicit constraints and stage/stop limits; not a replacement for Source Authority>
 
 ## Required Named Items
 
@@ -55,17 +55,17 @@ READY_TICKET_SET | READY_EXECUTION_PLANS | CURRENT_INCREMENT_IMPLEMENTED | CURRE
 
 ## Completion Predicate
 
-<one observable condition that proves whole-run success>
+<one observable condition sufficient for the entire assigned Goal Outcome and every Required Named Item at the approved boundary, without adding unassigned outcomes>
 
 ## Authoritative Readback
 
-<exact product surface, canonical Ticket state, implementation result, operator evidence, or Not yet established>
+<actual product/canonical surface, implementation result, or operator/effect readback that decides the promised result without substituting for its required boundary; Not yet established only for legitimate planned readback work>
 
 For READY_EXECUTION_PLANS: <exact required preparation Tickets, actual READY TICKET PLAN RESULT, outside-root current independent ADMIT review/evidence for every required Ticket>. Both delivery switches are no; this is not product planning, implementation or delivery completion.
 
 ## Source Authority
 
-<concise current instruction and applicable Mandate revision; do not fabricate a quote>
+<relevant actual user instruction/constraint/revision anchors and applicable Mandate revision, sufficient to check the derived Goal/items for omissions; do not fabricate a quote>
 
 ## Unresolved Field
 
@@ -77,7 +77,7 @@ or, only when `Status: USER_INPUT_REQUIRED`:
 
 ## Notes
 
-- Auto-fill every field current authority determines; do not ask the user to restate it.
+- Auto-fill every field current authority determines; apply [Goal and required-item coverage](../references/09-run-contract.md#goal-and-required-item-coverage-invariant), including to a preclosed form. `None required` does not waive the Goal; correct determinable omissions rather than asking the user to restate authority.
 - A recommendation from the model guide or a host default is not a user selection. Confirm missing active SUBAGENT model/effort choices together; do not ask again for choices already fixed by current user authority.
 - Required Named Items and Candidate Named Items may coexist; no item may appear in both.
 - Default `Run Contract Approval Gate` to `not_required`. Set it to `required` only when exact `/승인게이트` is an affirmative directive/modifier on the current explicitly active Adaptive invocation; quoted, explanatory, hypothetical, or negated mentions do not activate it, and the token does not activate Adaptive by itself.
@@ -86,6 +86,6 @@ or, only when `Status: USER_INPUT_REQUIRED`:
 - If direct approval materially revises decision-critical Run Contract meaning, re-close and re-render the revised form before requesting approval again; downstream changes already allowed by the approved contract do not retrigger the gate.
 - Do not begin planning or delivery mutation while a material field remains unresolved.
 - Implementation and Verification are independent invocation fields; preserve explicit `do not implement` and `do not verify` overrides.
-- With explicit Adaptive activation and no narrower stop or broader named-item/outcome terminal, the default current-Increment terminal is `CURRENT_INCREMENT_DELIVERED`, subject to Required-item coverage and the Mandate ceiling.
+- With explicit Adaptive activation and no explicit stage/stop override, default to `CURRENT_INCREMENT_DELIVERED` only when it covers the entire current Goal and required scope within the Mandate ceiling. A clear broader natural-language assignment needs no enum or extra continuation phrase.
 - Continuation Authority is the Mandate ceiling; this form's Run Completion Boundary is the actual invocation terminal within that ceiling.
 - This form is invocation-local and is not a canonical IIS artifact or required durable companion file.

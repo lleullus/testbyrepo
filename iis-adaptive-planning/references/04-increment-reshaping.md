@@ -42,19 +42,19 @@ Use product meaning and counterfactual dependency, not technical layers, to deci
 
 ## Run Contract preservation
 
-Apply the active invocation-local Run Contract in [09-run-contract.md](09-run-contract.md) before treating a user-named item as mutable scope.
+Apply [Goal and required-item coverage](09-run-contract.md#goal-and-required-item-coverage-invariant) to the active Run Contract before treating scope as mutable.
 
-- Every Required Named Item remains a whole-run obligation across split, reorder, replacement, foundation insertion, and success re-entry.
+- The assigned Goal and every Required Named Item remain whole-run obligations across split, reorder, replacement, foundation insertion, and success re-entry, even with `None required`.
 - Under `EXACT_REQUIRED_SET`, Adaptive may add supporting work needed to deliver the Required Named Items but may not add another independent user-visible completion obligation without a Run Contract revision.
 - Under `REQUIRED_FLOOR`, Adaptive may add other product outcomes when current authority establishes they are required or materially necessary for the Goal Outcome.
-- Candidate Named Items may be preserved, replaced, deferred, or dropped when current evidence and Mandate priorities establish a materially better route to the Goal Outcome.
-- `NONE_REQUIRED` adds no item-level obligation beyond the Goal Outcome and Completion Predicate.
+- Candidate Named Items may be preserved, replaced, deferred, or dropped when current evidence and Mandate priorities establish a better route that still satisfies the Goal; their removal never waives an outcome necessary for it.
+- `NONE_REQUIRED` adds no item-level obligation and grants no exemption from the assigned Goal or a sufficient Completion Predicate.
 
 Required Named Items and Candidate Named Items may coexist. A mixed assignment such as required A/B plus candidate C must remain mixed; do not convert the complete list to all-required or all-candidate during reshaping.
 
-A reshape may replace the current Increment and therefore the current Ticket denominator. It does not lower the Run Completion Boundary, erase Required Named Items, move them into the Candidate list, or turn planning-phase completion into whole-run completion.
+A reshape may replace the current Increment and Ticket denominator, not the whole-run promise. Deferring Goal/required scope from current Includes leaves it owed by this invocation. Apply post-shape revalidation in `03-adaptive-routing.md` before downstream handoff; do not fit the Goal to a narrower terminal or turn planning-phase completion into whole-run completion.
 
-If a proposed reshape would remove a Required Named Item, move it into the Candidate list, change the Required Item Policy, or materially change the Completion Predicate, return for a Run Contract revision unless current user authority already establishes that exact change.
+If a proposed reshape requires changing the assigned Goal, required-item meaning/policy, or Completion Predicate, correct a determinable derived-contract mismatch from relevant Source Authority or return the exact user-owned revision. Reshaping authority alone cannot supply a Goal change.
 
 ## Evidence before reshape
 
@@ -113,21 +113,9 @@ Adaptive does not create an implementation-consumption ledger to solve this ambi
 
 ## Defer versus drop
 
-Use **defer** when:
+Use **defer from the current Increment** when the capability remains consistent with the Desired Product Outcome but is not required for the current durable result. Goal/Required Named Item obligations may move to later construction only while remaining owed before whole-run success; unassigned future need/order remains provisional.
 
-- the capability is still consistent with the Desired Product Outcome;
-- it is not required for the current durable outcome;
-- later need/order depends on future actual product state or policy; and
-- it is not a Required Named Item that would be omitted from successful whole-run completion.
-
-Use **drop** when:
-
-- the capability is not supported by the current Mandate/approved intent;
-- it came from speculative implementation/test thinking rather than product authority;
-- retaining it in the horizon would incorrectly imply intended future scope; and
-- it is not protected as a Required Named Item by the active Run Contract.
-
-Candidate Named Items may be deferred or dropped under these rules. Required Named Items may not.
+Use **drop** when the capability is unsupported speculative scope and retaining it would falsely imply a product promise. Do not drop an assigned Goal result or Required Named Item. A candidate means may be dropped or replaced when the Goal remains achievable without that means; candidate status does not erase the outcome it supported.
 
 Do not create a future INC merely to preserve every discarded idea.
 

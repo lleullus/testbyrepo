@@ -174,7 +174,7 @@ def invoke(*, project_root: Path, prompt: str, output_dir: Path, agent_dir: Path
     for key in ("IIS_READY_RUNTIME_DATA", "IIS_READY_VALIDATOR_PATH", "IIS_READY_BUNDLE_ID", "IIS_READY_IIS_WORKFLOW_SKILL"):
         environment.pop(key, None)
     environment.update(PI_CODING_AGENT_DIR=str(agent_dir), PYTHONDONTWRITEBYTECODE="1")
-    runtime_required = stage in {"prepare", "implement", "verify"}
+    runtime_required = stage in {"prepare", "implement", "verify", "adaptive"}
     if runtime_required:
         environment.update(IIS_READY_RUNTIME_DATA=str(runtime_data.resolve()),
                            IIS_READY_VALIDATOR_PATH=str(payload / "matt/skills/to-tickets/validate_ticket.py"),
@@ -250,7 +250,7 @@ def invoke(*, project_root: Path, prompt: str, output_dir: Path, agent_dir: Path
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-root", required=True, type=Path)
-    parser.add_argument("--stage", required=True, choices=("plan", "prepare", "implement", "verify", "completion"))
+    parser.add_argument("--stage", required=True, choices=("plan", "prepare", "implement", "verify", "completion", "adaptive"))
     parser.add_argument("--prompt", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--agent-dir", required=True, type=Path)
