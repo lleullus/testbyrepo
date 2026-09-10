@@ -147,7 +147,7 @@ Verifier Ticket Progression: PENDING CALLER FINALIZATION | NOT APPLICABLE
 Observed Ticket Status: ready | done | <actual>
 ```
 
-Render both path lists as compact JSON arrays exactly matching the structured arrays, including order and empty `[]`.
+Render both path lists as whitespace-free compact JSON arrays exactly matching the structured arrays, including order and empty `[]` (equivalent to JSON separators `(',', ':')`). Across the complete report, each reserved identity/result label in the block above appears exactly once; nested scenario or evidence text must use different labels rather than repeat `Ticket:`, `Verification Binding:`, `Verification Binding SHA256:`, `Stable Target Paths:`, `Scenario Effect Paths:`, `Verification Verdict:`, `Verifier Ticket Progression:` or `Observed Ticket Status:`.
 
 The delegated verifier submits this report through the host-owned strict structured terminal, not as an unbound text-only result. Its `yield` data is exactly:
 
