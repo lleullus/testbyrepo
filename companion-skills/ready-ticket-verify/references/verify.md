@@ -130,7 +130,7 @@ A material projection mismatch returns `VERIFICATION NOT STARTED: TICKET/PARENT 
 
 ### Scenario materiality gate
 
-Freeze every authored flow and conditional boundary as the mandatory denominator. This gate never permits omission, weakening, merging or early termination of required coverage.
+Freeze every authored flow and conditional boundary as the mandatory scenario, adjudication and report denominator. This gate never permits omission from that denominator, weakening, or merging materially distinct flows. After a decisive attributable failure, §9 may leave only information-value-negative remaining work unexecuted and explicitly `INCONCLUSIVE`; it never permits `VERIFIED` without complete execution and evidence.
 
 Add a derived positive variation, counterexample, boundary exercise or observation only when it materially tests an authored decision boundary, closes a concrete false-verdict path or prevents a concrete attribution error. Require a contract anchor and plausible failure path. Do not expand the scenario merely for exhaustiveness.
 
@@ -260,7 +260,7 @@ The report is informational and records the immutable binding captured before sc
 
 ## 9. Evidence sufficiency and execution
 
-The verifier directly performs each authored trigger or canonical inspection and directly captures authoritative readback for every required flow.
+The verifier directly performs every authored trigger or canonical inspection and captures authoritative readback for every flow whose execution remains required under the verdict-specific rules below. Every authored flow remains in the scenario and terminal adjudication denominator whether executed or explicitly left `INCONCLUSIVE` after a decisive failure.
 
 Evidence priority when applicable:
 
@@ -275,6 +275,22 @@ A mock, stub, canned response, seeded success state, or surrogate readback canno
 Directly inspect an artifact, source, document, schema, plan, or simulator when that actual deliverable is the original approved result, faithful to parent authority and current user instructions; do not demand invented runtime or claim unobserved external/product effects. Apply §3 to a flow that substitutes for required meaning rather than repairing it inside verification. If a valid real boundary is unavailable, preserve `INCONCLUSIVE` unless attributable evidence establishes contradiction; neither unknown nor contradiction becomes fake success.
 
 For runtime claims, use the existing `Nearest nonconforming state`, `Discriminating observation`, and `Sensitivity activation` to determine whether this run actually exercised the required boundary. Do not mark a flow `SATISFIED` without the declared discriminating readback and its sensitivity activation; passing implementation tests or source-only mechanism shape cannot substitute.
+
+### Failure-aware ordering and continuation
+
+After semantic preflight and binding capture, order scenario work without changing authored dependencies, initial state, ordering, shared-state or one-shot-effect meaning: first establish target/authority/attribution, then execute and observe the cheapest decisive flow or same-cause group, then reclassify remaining work under this section before starting another setup, long wait or separate external action, and finally perform the remaining required acceptance flows. Do not batch an unrelated high-cost or effectful trigger with cheaper potentially decisive checks in a way that prevents this evidence-driven continuation decision. Common setup, environment and cleanup may be reused only when flow meaning remains intact.
+
+A first failure is not by itself a stop condition. Only after fresh attributable evidence directly contradicts an authored decision boundary and thereby fixes at least one AC `FAIL` and whole-Ticket `FAILED`, classify remaining work as follows:
+
+- continue same-setup observations that cheaply establish other uses of the same failed assumption;
+- continue observations that can change failure validity, target attribution, cause/implementation owner or the bounded correction span;
+- finish every started product/external effect's required settlement, authoritative readback and cleanup;
+- finish authored ordering, absence-window or terminal-condition work needed to make the observed failure itself valid;
+- execute the user's requested diagnostic scope only when current Additional User Instructions explicitly require all-item diagnosis; the ordinary request to verify a whole Ticket is not such a request;
+- when information value is uncertain but the observation is cheap, perform it before deciding;
+- leave unexecuted a flow unrelated to the established failure when it requires new setup, a long wait or a separate external action and cannot realistically change verdict, attribution, correction span or required cleanup. This is the default cost boundary, not optional extra coverage.
+
+All of the following are required for such non-execution: the contradiction is bound to the current target; it alone fixes whole-Ticket `FAILED`; the omitted flow has no realistic path to change the failure's validity, attribution, correction span or mandatory cleanup; and the report records the omission and material basis. Every authored Flow/AC remains in the reporting and adjudication denominator by receiving an explicit result; that denominator does not require every flow to execute after a decisive failure. Never copy an earlier target's PASS or infer PASS for an unexecuted flow. This rule cannot select `INCONCLUSIVE` merely because required reachable execution is expensive, and it never narrows the work required for `VERIFIED`.
 
 ### Existence and current-state claims
 
@@ -312,7 +328,7 @@ Keywords, count checks, test names, schema presence, implementation narration or
 
 If the approved contract makes a process step, external action, provider call or retained history itself the acceptance boundary, obtain that authorized evidence. If the contract deliberately makes only current canonical result authoritative, do not create a new run ledger, receipt or observability surface and do not fail the Ticket merely because unrequired history was not retained.
 
-Exercise authored positive and material counterexample cases, including ordering, duplicate, interruption, timeout, stale identity, concurrency, refresh/reopen, partial external response, retry, Scope-excluded behavior or user-visible/canonical disagreement only where the Ticket makes them relevant.
+For scenario work still required by the failure-aware continuation rule, exercise authored positive and material counterexample cases, including ordering, duplicate, interruption, timeout, stale identity, concurrency, refresh/reopen, partial external response, retry, Scope-excluded behavior or user-visible/canonical disagreement only where the Ticket makes them relevant.
 
 ## 10. Material verification turns
 
@@ -364,7 +380,7 @@ For every authored flow assign exactly one result:
 
 - `SATISFIED`: all required observable/readback conditions are established and no material semantic-contract or decision-boundary contradiction remains.
 - `CONTRADICTED`: fresh attributable evidence directly violates the authored decision boundary.
-- `INCONCLUSIVE`: required evidence, authority, terminal condition or current attribution could not be established without a direct contradiction.
+- `INCONCLUSIVE`: required evidence, authority, terminal condition or current attribution could not be established without a direct contradiction, or the flow was not executed under the decisive-failure continuation rule and carries its exact material stop basis.
 
 For every top-level AC in authored order:
 
@@ -386,9 +402,9 @@ A material semantic-contract defect discovered before valid adjudication is not 
 
 Before `VERIFIED`, directly check that the current product did not introduce or expose forbidden Scope/Non-Goal behavior relevant to the Ticket and that satisfying one AC did not contradict another AC or adopted Behavior/UI authority.
 
-Complete every authored cleanup, absence window, process stop, disposable-target disposal and external-effect terminal condition required for attributable evidence.
+Complete every authored cleanup, absence window, process stop, disposable-target disposal and external-effect terminal condition required for attributable evidence. Decisive failure never permits abandoning settlement, readback or cleanup for an effect already started.
 
-A still-running duplicate-sensitive effect, incomplete cleanup or unfinished absence/ordering window prevents final `VERIFIED` when it affects the decision boundary. Capture necessary evidence before disposing of a temporary target.
+A still-running duplicate-sensitive effect, incomplete cleanup or unfinished absence/ordering window prevents final `VERIFIED` when it affects the decision boundary and prevents `FAILED` when needed to make the contradiction attributable. Capture necessary evidence before disposing of a temporary target.
 
 ## 14. Terminal semantic result and caller-owned status transition
 
@@ -404,6 +420,10 @@ Before emitting semantic `VERIFIED`, the verifier must still ensure within its e
 4. no unresolved material semantic-contract defect or evidence conflict remains;
 5. the source/config/build target used for the verdict remains attributable to the captured stable target; and
 6. no unresolved external-effect settlement gap prevents required evidence from being decisive.
+
+For `FAILED`, require at least one fresh attributable `CONTRADICTED` flow that fixes an AC `FAIL`; keep every authored flow and AC in the report; mark any permitted unexecuted flow and its mapped unresolved obligation `INCONCLUSIVE`, never `PASS`; and complete related cheap observations plus every readback, settlement and cleanup needed to make the failure valid. Uncertainty confined to unrelated permitted omissions does not replace the already established whole-Ticket `FAILED`.
+
+Use whole-Ticket `INCONCLUSIVE` only when current evidence does not establish a direct product contradiction and required authority, environment, readback, terminal condition or attribution is missing. Cost alone is not a basis, and a reachable required observation may not be left unattempted under this verdict.
 
 The readable terminal verifier result includes:
 
@@ -457,7 +477,7 @@ Material turn reports: None | <concise list>
 Semantic contract findings: None | <exact material gap and owning contract location>
 
 Scenario report:
-Executed scenario blocks:
+Executed scenario blocks: <each authored flow -> executed | not executed after decisive failure, with material basis>
 Environment / external conditions:
 Cleanup / terminal conditions:
 
@@ -474,7 +494,7 @@ Flow results:
   Result: SATISFIED | CONTRADICTED | INCONCLUSIVE
   Runtime / canonical observation:
   Authoritative readback:
-  Evidence limit:
+  Evidence limit: <including `not executed after decisive failure` and the material basis when applicable>
 
 AC results:
 - AC ordinal:

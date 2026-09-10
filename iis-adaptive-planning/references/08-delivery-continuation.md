@@ -98,7 +98,9 @@ Continue from implementation directly to final verification only when all of the
 - the current implementation report for the exact Ticket contains `Completion: COMPLETE`; and
 - the canonical Ticket remains exact `Status: ready` for the next delivery owners.
 
-Preserve exact actual implementation target, self-check evidence and optional plan/review context as verifier navigation, not final findings or verdicts.
+When this is corrective re-entry after a verifier/triage result, the report must also account for how each original contradiction and verifier-confirmed related same-cause path was resolved, tie cheap regression and minimum actual-path self-check to the final current target, state whether the prior environment/authority/readback gap actually changed, and not contradict its own limitations.
+
+Preserve exact actual implementation target, reported-finding and same-cause disposition, self-check evidence, authoritative readback, external conditions/limits and optional plan/review context as verifier navigation, not final findings or verdicts. Outer Main compares those report fields with the current verifier/triage evidence for handoff consistency; it does not rerun implementation commands/tests, repeat the self-check, or make an AC verdict. A missing or contradictory corrective handoff returns to its current implementation/preparation owner instead of being sent to verification.
 
 BLOCKED/PARTIAL or unavailable implementation results do not silently become verification. Correct only their owning condition. When `Material method change: yes`, return to the affected preparation owner, revise the affected Plan, run Heuristic and independent review, then start a fresh implementation invocation after confirming the prior invocation has ended. Equivalent Plan-consistent local repair stays with the current worker and current ADMIT.
 
@@ -168,18 +170,19 @@ Never reduce terminal completion to narration such as `VERIFIED -> done`; the ca
 After one Ticket reaches `done`, re-read the complete current canonical Ticket denominator. The complete `done` denominator is a necessary progression fact, not automatic `CURRENT_INCREMENT_DELIVERED` success. Before emitting that terminal, Outer Main must also compare the approved current parent and validated Ticket Set, identify every parent-Spec/Behavior/UI obligation applicable to this Increment, confirm an existing Ticket acceptance boundary owns each one, and consume the owning result's actual current observation, authoritative readback, `Evidence limit`, and `Remaining uncertainty`. Do not include future, candidate, Non-Goal, or unrelated preserved obligations that do not apply to the current Increment.
 ## Corrective routing is the Adaptive default
 
-Unless the current user explicitly requested `no re-entry`, `fail and report`, or equivalent, apply authority-based correction and re-enter the affected enabled owner after a material correction/new evidence:
+Unless the current user explicitly requested `no re-entry`, `fail and report`, or equivalent, apply authority-based correction and re-enter the affected enabled owner after a material correction/new evidence. First apply the verdict-specific mechanism check in `06-verification-triage.md`: a valid partial-execution `FAILED` does not return to the verifier merely because an unrelated flow is unexecuted.
 
 ```text
 IMPLEMENTATION_DEFECT
   -> if Implementation yes: current reviewed method local repair by ready-ticket-implement
   -> material cause/owner/interface/persistence/readback change: affected ready-ticket-plan review before dependent implementation
-  -> any changed target -> if Verification yes: fresh integrated ready-ticket-verify
+  -> before fresh verification, current COMPLETE handoff must resolve the original contradiction and verifier-confirmed related span, then show cheap regression plus minimum actual-path self-check on the final target
+  -> a changed target alone is not verification readiness; if Verification yes and the handoff gate is satisfied, run a fresh integrated ready-ticket-verify
   -> required stage disabled: return exact authority gap without bypass
 
 VERIFICATION_MECHANISM_DEFECT
-  -> correct only the actual integrated verifier/harness mechanism
-  -> if Verification yes: fresh verifier-owned scenario/frontier/readback on stable target
+  -> correct only the actual integrated verifier/harness mechanism, not product source by inference
+  -> if Verification yes and the mechanism correction can change the result: fresh verifier-owned scenario/frontier/readback on stable target
   -> if Verification no: do not invoke the verifier
 
 CONTRACT_OVERREACH
@@ -196,9 +199,12 @@ CURRENT_INCREMENT_MISMATCH
   -> repeat only enabled stages; no stale result becomes current approval or PASS
 
 INCONCLUSIVE
-  -> obtain only missing evidence, operator condition, attributable target or verifier mechanism state
-  -> continue only when that new evidence makes a valid next route available
+  -> obtain only the exact missing evidence, operator condition, attributable target or verifier mechanism state
+  -> do not redispatch while that condition remains materially unchanged
+  -> continue only when new evidence can change the result and makes a valid next route available
 ```
+
+Every fresh success candidate uses the complete current authored denominator; never copy partial PASS from an earlier `FAILED` target into `VERIFIED`.
 
 Never turn an earlier failure into PASS after planning changes. Validate current authority and obtain fresh applicable owner evidence. No independent discovery-stage result or binding is required before the integrated verifier.
 
@@ -208,7 +214,7 @@ After a later Ticket or correction changes a product surface that can materially
 
 Before dispatching an owner that already returned during this invocation, compare the proposed next route with the prior event across five facts: owner, canonical target/artifact, controlling authority, decision-relevant evidence/external condition, and route/classification. The owner return itself, elapsed time, a rewritten summary, or unchanged re-read is not progress.
 
-Another dispatch is allowed only when at least one material input changed: a corrected planning/implementation candidate, changed canonical authority, newly attributable target/mechanism, genuinely new evidence/external condition, or an explicit current user instruction that changes the allowed route. The changed fact must be capable of changing that owner's next result; unrelated repository activity is not enough.
+Another dispatch is allowed only when at least one material input changed: a corrected planning/implementation candidate that directly addresses the prior result, changed canonical authority, newly attributable target/mechanism, genuinely new evidence/external condition, or an explicit current user instruction that changes the allowed route. A source byte or target identity change can stale affected evidence, but is not by itself readiness to redispatch; the changed fact must be capable of changing that owner's next result. Unrelated repository activity is not enough.
 
 If owner, target, authority, evidence, and route are materially unchanged, do not dispatch the same owner again. Stop at the owning boundary with the exact unresolved result and `Whole-run completion: no`. A valid authorized action or readback not yet attempted is not a repeated no-progress route. Do not add a numeric retry policy, persistent attempt ledger, or workflow state.
 
