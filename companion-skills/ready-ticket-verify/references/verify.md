@@ -130,7 +130,7 @@ A material projection mismatch returns `VERIFICATION NOT STARTED: TICKET/PARENT 
 
 ### Scenario materiality gate
 
-Freeze every authored flow and conditional boundary as the mandatory scenario, adjudication and report denominator. This gate never permits omission from that denominator, weakening, or merging materially distinct flows. After a decisive attributable failure, §9 may leave only information-value-negative remaining work unexecuted and explicitly `INCONCLUSIVE`; it never permits `VERIFIED` without complete execution and evidence.
+Freeze every authored flow and conditional boundary as the mandatory scenario, adjudication and report denominator. This gate never permits omission from that denominator, weakening, or merging materially distinct flows. After a decisive attributable failure, §9 may leave only information-value-negative remaining work unexecuted and explicitly `INCONCLUSIVE`; it never permits `VERIFIED` without all contract-required execution and sufficient fresh evidence for every applicable flow.
 
 Add a derived positive variation, counterexample, boundary exercise or observation only when it materially tests an authored decision boundary, closes a concrete false-verdict path or prevents a concrete attribution error. Require a contract anchor and plausible failure path. Do not expand the scenario merely for exhaustiveness.
 
@@ -191,6 +191,8 @@ Derived Execution Plan:
 ```
 
 Do not replace exact authored labels with convenience aliases or silently drop future validator-admitted fields.
+
+Use the existing Derived Execution Plan fields to make clear why the selected current observation or real execution is sufficient to distinguish the flow's `SATISFIED`, `CONTRADICTED`, and `INCONCLUSIVE` conditions. Choose that evidence from the authored obligation and current changes to code, data volume or distribution, configuration, runtime, shared state, owners, and read paths; do not turn this choice into a separate exhaustive independence audit. Common setup and same-cycle verifier-owned evidence may support multiple flows only when each flow's initial conditions, contract-required actions, observation window, and decision boundary are actually satisfied. If later scenario work changes shared state or another premise on which earlier evidence depended, refresh the affected observation under the existing target-attribution and cross-AC rules.
 
 ## 7. Coverage matrices
 
@@ -260,7 +262,11 @@ The report is informational and records the immutable binding captured before sc
 
 ## 9. Evidence sufficiency and execution
 
-The verifier directly performs every authored trigger or canonical inspection and captures authoritative readback for every flow whose execution remains required under the verdict-specific rules below. Every authored flow remains in the scenario and terminal adjudication denominator whether executed or explicitly left `INCONCLUSIVE` after a decisive failure.
+The verifier directly obtains the smallest sufficient fresh, attributable evidence for every authored flow whose verification remains required under the verdict-specific rules below. Preserve every contract-required action, initial condition, acceptance boundary, observation window and terminal condition. Freshness alone does not require replaying an earlier setup or trigger.
+
+Use current authoritative canonical/product inspection when it fully decides the authored obligation. Execute the necessary real path when the obligation requires behavior, transition, ordering, persistence, performance or an external effect that current-state inspection cannot establish. Use full end-to-end execution when the contract requires that connection or a narrower observation would miss a material false-verdict path; do not choose it merely for freshness.
+
+Use changes to code, configuration, data volume or distribution, runtime, shared state, owners and read paths to determine which conditions and observations are necessary, not as permission to carry a prior `PASS` or omit current evidence. Do not require a separate exhaustive proof of independence for every flow. File-diff absence, prior `PASS` and implementation narration do not close a current flow. Every authored flow remains in the scenario and terminal adjudication denominator whether satisfied by current inspection, by necessary real execution, or explicitly left `INCONCLUSIVE` after a decisive failure.
 
 Evidence priority when applicable:
 
@@ -328,7 +334,7 @@ Keywords, count checks, test names, schema presence, implementation narration or
 
 If the approved contract makes a process step, external action, provider call or retained history itself the acceptance boundary, obtain that authorized evidence. If the contract deliberately makes only current canonical result authoritative, do not create a new run ledger, receipt or observability surface and do not fail the Ticket merely because unrequired history was not retained.
 
-For scenario work still required by the failure-aware continuation rule, exercise authored positive and material counterexample cases, including ordering, duplicate, interruption, timeout, stale identity, concurrency, refresh/reopen, partial external response, retry, Scope-excluded behavior or user-visible/canonical disagreement only where the Ticket makes them relevant.
+For scenario work still required by the failure-aware continuation rule, obtain the fresh observations needed to decide authored positive and material counterexample cases, including ordering, duplicate, interruption, timeout, stale identity, concurrency, refresh/reopen, partial external response, retry, Scope-excluded behavior or user-visible/canonical disagreement only where the Ticket makes them relevant. A single same-cycle setup, action or readback may decide more than one flow or case when it fully activates and discriminates each authored boundary; do not repeat it solely because the obligations are separate. Do not omit a contract-required trigger, condition, observation window, terminal condition or cleanup.
 
 ## 10. Material verification turns
 
@@ -477,7 +483,7 @@ Material turn reports: None | <concise list>
 Semantic contract findings: None | <exact material gap and owning contract location>
 
 Scenario report:
-Executed scenario blocks: <each authored flow -> executed | not executed after decisive failure, with material basis>
+Executed scenario blocks: <each authored flow -> fresh observation or execution used | not executed after decisive failure, with material basis>
 Environment / external conditions:
 Cleanup / terminal conditions:
 
@@ -511,6 +517,8 @@ Verification Verdict: VERIFIED | FAILED | INCONCLUSIVE
 Verifier Ticket Progression: PENDING CALLER FINALIZATION | NOT APPLICABLE
 Observed Ticket Status: ready | done | <actual>
 ```
+
+`Executed scenario blocks` treats a sufficient fresh canonical/product inspection or explicitly identified same-cycle verifier-owned evidence as completed verification work for that flow; it is neither a skip nor prior-`PASS` carry-over. Record the concrete observation under that flow's existing `Runtime / canonical observation` and `Authoritative readback`. Reserve `not executed after decisive failure` for the §9 cost boundary and leave that flow `INCONCLUSIVE`.
 
 Render both path lists as whitespace-free compact JSON arrays exactly matching the structured arrays, including order and empty `[]` (equivalent to JSON separators `(',', ':')`). Across the complete report, each reserved top-level identity/result label in the template appears exactly once; nested scenario, flow or evidence sections must use different labels rather than repeat `Ticket:`, `Verification Binding:`, `Verification Binding SHA256:`, `Stable Target Paths:`, `Scenario Effect Paths:`, `Verification Verdict:`, `Verifier Ticket Progression:` or `Observed Ticket Status:`.
 

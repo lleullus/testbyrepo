@@ -20,6 +20,8 @@ Use concise sections that establish all of the following, without a length or co
 6. Actual implementation self-check and final acceptance/readback path. For each relevant failure, connect the cheapest valid discriminating check, the confirmed same-assumption impact span, the minimum check through the real acceptance path, and the current-target condition for verifier handoff. Order checks by discriminating power, cost, authority, side effects, dependencies and initial state rather than a fixed test-category sequence. Where an environment is required, identify the artifact/build, service-start and current-instance readiness owner, scenario state changes, settlement/cleanup owner and known limits.
 7. Permitted local discretion, any conditional initial work, and exact conditions returning the affected plan to review.
 
+Across these sections, connect the current entry/read path that controls the approved outcome to the load-bearing assumption whose late refutation would cause the most rework or make that outcome unreachable. Use current evidence to choose the smallest safe decisive observation and the first coherent implementation move that advances the outcome or enables that observation. Apply Conditional first work when the premise remains unresolved; do not expand dependent work before it is decided.
+
 Future paths, helper names and internal sequence belong here, not in Ticket ACs. Keep the Plan as a method: do not append command output, pass/fail journals or repeated execution logs. Do not add telemetry, fallback, persistence, recovery guarantees or new acceptance surfaces unless an approved obligation or a concrete necessary failure path supports them. Keep external authority explicit.
 
 ## Conditional first work

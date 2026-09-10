@@ -123,16 +123,16 @@ Ticket의 observable product outcome, Scope/Non-Goals, 적용되는 product inva
 
 ### Flow 단위 수정 loop
 
-각 change와 self-check를 authored Verification flow에 연결한다. 전달된 결함·모순이 있으면 각 항목을 먼저 빠짐없이 식별하고, user-reported observation은 ground truth로 둔다. 그 관찰을 사실인지 확인하려고 같은 검사를 반복하지 않는다; 수정 위치 판별이나 수정 뒤 회귀 확인에 필요할 때만 가장 싼 유효 reproducer/readback을 사용한다.
+이 loop는 전달받은 결함 수정뿐 아니라 최초 구현과 구현자가 자체 발견한 in-scope 결함·모순에도 적용한다. 각 의미 있는 change와 self-check를 authored Verification flow에 연결하고, 현재 가능한 가장 싼 유효 관찰로 기대한 제품 동작과 실제 readback을 비교한다. 검토된 방향 안의 국소 결함이면 수정·재관찰하여 해당 의무의 evidence를 확보하거나 기존 Scope/authority/material-method 경계로 반환한다. 전달된 결함·모순이 있으면 각 항목을 먼저 빠짐없이 식별하고, user-reported observation은 ground truth로 둔다. 그 관찰을 사실인지 확인하려고 같은 검사를 반복하지 않는다; 수정 위치 판별이나 수정 뒤 회귀 확인에 필요할 때만 가장 싼 유효 reproducer/readback을 사용한다.
 
-현재 evidence가 같은 falsified assumption, producer/consumer, writer/reader, token, state owner 또는 invariant를 공유한다고 보여 주는 항목만 한 원인 group으로 묶는다. 직접 확인된 관련 경로까지만 bounded impact span을 추적하고, 이름이나 증상만 비슷한 문제·모든 historical data·Scope 밖 surface로 확장하지 않는다. 각 전달 항목은 다음 중 하나로 disposition되어야 한다.
+현재 evidence가 같은 falsified assumption, producer/consumer, writer/reader, token, state owner 또는 invariant를 공유한다고 보여 주는 항목만 한 원인 group으로 묶는다. 직접 확인된 관련 경로까지만 bounded impact span을 추적하고, 이름이나 증상만 비슷한 문제·모든 historical data·Scope 밖 surface로 확장하지 않는다. 각 전달 항목과 구현 중 자체 발견한 in-scope 결함·모순은 다음 중 하나로 disposition되어야 한다.
 
 - current target에서 직접 해소됨;
 - 같은 원인 group의 수정과 evidence로 함께 해소됨;
 - current evidence상 별도 원인으로 분리되어 별도 수정됨;
 - Scope/authority/material-method boundary 때문에 exact next owner와 함께 terminal `PARTIAL | BLOCKED`로 반환됨.
 
-검토된 Ticket scope 안에서는 확인된 원인 group을 수정하고, group별 값싼 회귀 확인과 그 수정에 연결된 최소 실제 acceptance path를 수행한 뒤 다음 group으로 진행한다. 한 항목 또는 한 줄을 수정했다는 이유로 알려진 나머지 항목을 성공으로 추정하거나 verifier에게 넘기지 않는다. 원인, owner, interface, persistence, readback 또는 effect strategy가 reviewed method를 실질적으로 바꾸면 위 material-method terminal을 사용한다; `같은 결함군`이라는 이름으로 새 제품 의미를 승인하지 않는다.
+검토된 Ticket scope 안에서는 확인된 원인 group을 수정하고, group별 값싼 회귀 확인과 그 수정에 연결된 최소 실제 acceptance path를 수행한 뒤 다음 group으로 진행한다. 한 항목 또는 한 줄을 수정했다는 이유로 알려진 나머지 항목이나 자체 발견한 관련 모순을 성공으로 추정하거나 verifier에게 넘기지 않는다. 원인, owner, interface, persistence, readback 또는 effect strategy가 reviewed method를 실질적으로 바꾸면 위 material-method terminal을 사용한다; `같은 결함군`이라는 이름으로 새 제품 의미를 승인하지 않는다.
 
 각 group에 대해 다음을 evidence로 연결한다.
 
@@ -183,14 +183,14 @@ Completion candidate 전에:
 
 - mode와 관계없이 현재 exact Ticket/Parent Spec/Behavior/UI, current review, actual target 및 authoritative readback을 다시 확인한다. 같은 `plan_review_path`로 `ready_contract check_plan_admission`을 재호출하며 drift, unavailable/non-attributable readback 또는 substitution은 위 current plan/resynchronization 경계를 따른다. DIRECT와 SUBAGENT 모두 이 end admission을 건너뛰지 않는다.
 - Scope/Non-Goals를 다시 읽는다.
-- 모든 전달 결함이 current target 해소, evidence-supported common-cause 해소, 별도 원인 수정 또는 terminal boundary 중 하나로 빠짐없이 disposition됐는지 확인한다.
+- 모든 전달 결함과 구현 중 자체 발견한 in-scope 결함·모순이 current target 해소, evidence-supported common-cause 해소, 별도 원인 수정 또는 terminal boundary 중 하나로 빠짐없이 disposition됐는지 확인한다.
 - 모든 authored Verification-flow obligation에 연결된 tests/runtime evidence를 마지막 load-bearing source/runtime identity에서 실행한다.
 - 각 수정 group의 값싼 회귀 check와 최소 실제 acceptance path readback이 current인지 확인한다.
 - pre-existing diff와 Ticket delta를 분리한다.
 - limitation, external condition, inconclusive evidence와 unresolved authority conflict를 기록한다.
 - decision-critical source claim, diff, artifact, command와 runtime behavior를 worker가 직접 확인한다.
 
-Required implementation, known in-scope reported findings, current self-check와 evidence가 닫히면 `Completion: COMPLETE`를 반환하고 Ticket과 무관한 개선을 계속하지 않는다.
+Required implementation, known in-scope findings (reported or implementation-discovered), current self-check와 evidence가 닫히면 `Completion: COMPLETE`를 반환하고 Ticket과 무관한 개선을 계속하지 않는다.
 
 ## 8. Ticket status handoff
 
@@ -227,7 +227,7 @@ Working-tree scope:
 Completion: COMPLETE | BLOCKED | PARTIAL
 ```
 
-기존 필드는 새 인증서 없이 이 loop를 전달한다. `Implemented scope`에는 해소한 전달 결함과 직접 확인한 관련 범위, `Verification flows used for implementation/self-check`에는 각 수정 group의 authored flow, `Authoritative readback`과 `Tests/runtime evidence`에는 current 실제 경로와 값싼 회귀 결과, `Verification evidence handoff`에는 verifier가 독립적으로 재확인할 exact target/navigation, `External conditions / limitations`에는 남은 환경·권한·관찰 경계를 기록한다. Known in-scope 전달 결함이 이 accounting에서 빠졌거나 마지막 target의 self-check가 닫히지 않았으면 `COMPLETE`를 사용할 수 없다.
+기존 필드는 새 인증서 없이 이 loop를 전달한다. `Implemented scope`에는 해소한 전달 결함과 구현 중 자체 발견한 in-scope 결함·모순 및 직접 확인한 관련 범위, `Verification flows used for implementation/self-check`에는 각 수정 group의 authored flow, `Authoritative readback`과 `Tests/runtime evidence`에는 current 실제 경로와 값싼 회귀 결과, `Verification evidence handoff`에는 verifier가 독립적으로 재확인할 exact target/navigation, `External conditions / limitations`에는 남은 환경·권한·관찰 경계를 기록한다. Known in-scope findings (reported or implementation-discovered)이 이 accounting에서 빠졌거나 마지막 target의 self-check가 닫히지 않았으면 `COMPLETE`를 사용할 수 없다.
 
 ### Non-continuation provenance
 

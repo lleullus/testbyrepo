@@ -4,7 +4,7 @@
 
 Work in a review invocation separate from the plan writer. Read the exact original Ticket, Parent Spec and applicable Behavior/UI, current purpose and preserved paths directly before treating the plan's diagnosis as the frame. Current repository evidence is evidence, not product authority. An external method Skill is optional; this reference owns the required method.
 
-Ask how this plausible plan could leave the approved purpose unfulfilled: wrong cause; ordinary entry bypass; a second writer/reader or external owner; producer/consumer mismatch; ordering/interruption/partial effect; stale identity; weak proxy readback; lost preserved behavior. Inspect only boundaries that could materially change start sufficiency. Do not create findings to fill a roster or demand an alternative count.
+Ask how this plausible plan could leave the approved purpose unfulfilled: wrong cause; ordinary entry bypass; a second writer/reader or external owner; producer/consumer mismatch; ordering/interruption/partial effect; stale identity; weak proxy readback; lost preserved behavior. Inspect only boundaries that could materially change start sufficiency. Do not create findings to fill a roster or demand an alternative count. Prioritize assumptions whose failure would invalidate the most dependent implementation or make the approved outcome unreachable. Challenge them first using bounded decisive observations available under current cost and authority constraints. Once start sufficiency is adequately established, do not broaden exploration merely to increase confidence; preserve the disposition of every material candidate already identified.
 
 ## Material frontier and minimal checks
 

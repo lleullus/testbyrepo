@@ -93,7 +93,7 @@ There are no PRE_RUNTIME, MATERIAL_TURN, PRE_PROGRESSION or release checkpoints 
 
 ### Independent
 
-The verifier directly executes the authored trigger or canonical inspection and obtains fresh attributable authoritative readback. `Independent verification required: yes` cannot be satisfied by implementation narration, source plausibility, test names or prior evidence.
+The verifier directly obtains fresh, attributable evidence sufficient to decide each authored flow under [references/verify.md §9](references/verify.md#9-evidence-sufficiency-and-execution), performing all actions and conditions that the authored contract makes obligatory. `Independent verification required: yes` cannot be satisfied by implementation narration, source plausibility, test names or prior evidence.
 
 ### Operator-assisted
 
@@ -133,7 +133,7 @@ Whole Ticket: VERIFIED | FAILED | INCONCLUSIVE
 
 ## Terminal verifier result and caller finalization
 
-For a normal `Status: ready` Ticket, keep every authored Verification flow and current AC in the terminal denominator and establish exactly one semantic `Whole Ticket: VERIFIED | FAILED | INCONCLUSIVE`. `VERIFIED` requires every applicable flow to be freshly executed and `SATISFIED`, every AC `PASS`, and Scope/Non-Goals plus cleanup/terminal conditions closed. `FAILED` requires a fresh attributable contradiction producing an AC `FAIL`; permitted post-failure omissions remain explicit flow/AC `INCONCLUSIVE`, never inferred `PASS`, after related observation and required settlement/cleanup are complete. Use `INCONCLUSIVE` when no direct contradiction establishes failure and required evidence or attribution is missing, not merely because execution is expensive.
+For a normal `Status: ready` Ticket, keep every authored Verification flow and current AC in the terminal denominator and establish exactly one semantic `Whole Ticket: VERIFIED | FAILED | INCONCLUSIVE`. `VERIFIED` requires every applicable flow to be `SATISFIED` by fresh verifier-owned evidence obtained under [references/verify.md §9](references/verify.md#9-evidence-sufficiency-and-execution), every AC `PASS`, and Scope/Non-Goals plus all contract-required actions, observation windows, cleanup and terminal conditions closed. `FAILED` requires a fresh attributable contradiction producing an AC `FAIL`; permitted post-failure omissions remain explicit flow/AC `INCONCLUSIVE`, never inferred `PASS`, after related observation and required settlement/cleanup are complete. Use `INCONCLUSIVE` when no direct contradiction establishes failure and required evidence or attribution is missing, not merely because execution is expensive.
 
 The verifier does not write `Status: done`, does not call `ready_finalize`, does not call `ready_contract seal_verdict`, and does not create a verdict record. It emits exactly one terminal `READY TICKET VERIFICATION RESULT` and exits successfully. That report includes readable evidence identities and verdict only:
 
