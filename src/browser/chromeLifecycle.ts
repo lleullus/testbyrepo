@@ -183,6 +183,7 @@ export async function connectToRemoteChrome(
   browserWSEndpoint?: string,
   options?: {
     approvalWaitMs?: number;
+    useBrowserTargetCreation?: boolean;
   },
 ): Promise<RemoteChromeConnection> {
   if (browserWSEndpoint) {
@@ -191,6 +192,20 @@ export async function connectToRemoteChrome(
       targetUrl: targetUrl ?? "about:blank",
       closeTargetOnDispose: true,
       approvalWaitMs: options?.approvalWaitMs,
+    });
+  }
+  if (options?.useBrowserTargetCreation && targetUrl) {
+    const version = await CDP.Version({ host, port });
+    const discoveredBrowserWSEndpoint = version.webSocketDebuggerUrl;
+    if (!discoveredBrowserWSEndpoint) {
+      throw new Error(`Chrome at ${host}:${port} did not expose a browser websocket endpoint.`);
+    }
+    logger(`[browser] Using browser-level target creation for ${host}:${port}`);
+    return await connectToRemoteChromeTarget(host, port, logger, {
+      browserWSEndpoint: discoveredBrowserWSEndpoint,
+      targetUrl,
+      closeTargetOnDispose: true,
+      approvalWaitMs: options.approvalWaitMs,
     });
   }
   if (targetUrl) {

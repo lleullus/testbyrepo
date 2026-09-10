@@ -6,6 +6,7 @@ import path from "node:path";
 const cdpNewMock = vi.fn();
 const cdpCloseMock = vi.fn();
 const cdpListMock = vi.fn();
+const cdpVersionMock = vi.fn();
 const cdpMock = Object.assign(vi.fn(), {
   // biome-ignore lint/style/useNamingConvention: CDP API uses capitalized members.
   New: cdpNewMock,
@@ -13,6 +14,8 @@ const cdpMock = Object.assign(vi.fn(), {
   Close: cdpCloseMock,
   // biome-ignore lint/style/useNamingConvention: CDP API uses capitalized members.
   List: cdpListMock,
+  // biome-ignore lint/style/useNamingConvention: CDP API uses capitalized members.
+  Version: cdpVersionMock,
 });
 
 vi.mock("chrome-remote-interface", () => ({ default: cdpMock }));
@@ -286,6 +289,7 @@ describe("closeBlankChromeTabs", () => {
     cdpNewMock.mockReset();
     cdpCloseMock.mockReset();
     cdpListMock.mockReset();
+    cdpVersionMock.mockReset();
   });
 
   afterEach(() => {
@@ -369,6 +373,48 @@ describe("closeBlankChromeTabs", () => {
       port: 9222,
       id: "blank-b",
     });
+  });
+
+  test("uses browser-level target creation when requested without an explicit websocket endpoint", async () => {
+    const browserClient = {
+      Target: {
+        createTarget: vi.fn(async () => ({ targetId: "target-project" })),
+        attachToTarget: vi.fn(async () => ({ sessionId: "session-project" })),
+        detachFromTarget: vi.fn(async () => ({})),
+        closeTarget: vi.fn(async () => ({ success: true })),
+      },
+      on: vi.fn(),
+      once: vi.fn(),
+      removeListener: vi.fn(),
+      close: vi.fn(async () => {}),
+    };
+    Object.defineProperty(browserClient, "send", { value: vi.fn(async () => ({})) });
+    cdpVersionMock.mockResolvedValue({
+      webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/browser/project",
+    });
+    cdpMock.mockResolvedValue(browserClient);
+
+    const { connectToRemoteChrome } = await import("../../src/browser/chromeLifecycle.js");
+    const logger = vi.fn();
+    const connection = await connectToRemoteChrome(
+      "127.0.0.1",
+      9222,
+      logger,
+      "about:blank",
+      undefined,
+      { useBrowserTargetCreation: true },
+    );
+
+    expect(cdpVersionMock).toHaveBeenCalledWith({ host: "127.0.0.1", port: 9222 });
+    expect(cdpNewMock).not.toHaveBeenCalled();
+    expect(cdpMock).toHaveBeenCalledWith({
+      target: "ws://127.0.0.1:9222/devtools/browser/project",
+      local: true,
+    });
+    expect(browserClient.Target.createTarget).toHaveBeenCalledWith({ url: "about:blank" });
+    expect(connection.targetId).toBe("target-project");
+    await connection.close();
+    expect(browserClient.Target.closeTarget).toHaveBeenCalledWith({ targetId: "target-project" });
   });
 
   test("opens a dedicated tab through a browser websocket endpoint", async () => {

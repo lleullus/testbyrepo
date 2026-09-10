@@ -62,6 +62,141 @@ export async function navigateToChatGPT(
   await waitForDocumentReady(Runtime, 45_000);
 }
 
+const PROJECT_SIDEBAR_DISCOVERY_MS = 5_000;
+const PROJECT_SIDEBAR_SETTLE_MS = 5_000;
+const PROJECT_SIDEBAR_POLL_MS = 100;
+
+type ProjectSidebarTarget = {
+  pathname: string;
+  normalizedName: string;
+};
+
+function normalizeProjectSidebarName(value: string): string {
+  return value.normalize("NFKC").toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function resolveProjectSidebarTarget(url: string): ProjectSidebarTarget | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" || parsed.hostname !== "chatgpt.com") return null;
+    const routeMatch = parsed.pathname.match(/^\/g\/(g-p-[^/]+)\/project\/?$/i);
+    const projectSegment = routeMatch?.[1];
+    if (!projectSegment) return null;
+    const slugMatch = projectSegment.match(/^g-p-[a-f0-9]{32}-(.+)$/i);
+    const rawSlug = slugMatch?.[1];
+    if (!rawSlug) return null;
+    const normalizedName = normalizeProjectSidebarName(decodeURIComponent(rawSlug));
+    if (!normalizedName) return null;
+    return {
+      pathname: parsed.pathname.replace(/\/+$/, ""),
+      normalizedName,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function supportsProjectSidebarNavigation(url: string): boolean {
+  return resolveProjectSidebarTarget(url) !== null;
+}
+
+export async function tryNavigateToProjectHomeViaSidebar(
+  Runtime: ChromeClient["Runtime"],
+  url: string,
+  logger: BrowserLogger,
+): Promise<boolean> {
+  const target = resolveProjectSidebarTarget(url);
+  if (!target) return false;
+
+  const discoveryDeadline = Date.now() + PROJECT_SIDEBAR_DISCOVERY_MS;
+  let projectName = "";
+  for (;;) {
+    try {
+      const clickOutcome = await Runtime.evaluate({
+        expression: `(() => {
+          const normalize = (value) => String(value || '')
+            .normalize('NFKC')
+            .toLowerCase()
+            .replace(/[-_]+/g, ' ')
+            .replace(/\\s+/g, ' ')
+            .trim();
+          const expected = ${JSON.stringify(target.normalizedName)};
+          const optionPrefix = 'Open project options for ';
+          const matches = Array.from(
+            document.querySelectorAll('button[aria-label^="Open project options for "]'),
+          ).filter((button) => {
+            const label = String(button.getAttribute('aria-label') || '');
+            return normalize(label.slice(optionPrefix.length)) === expected;
+          });
+          if (matches.length !== 1) {
+            return { status: matches.length > 1 ? 'ambiguous' : 'not-found' };
+          }
+
+          const optionsButton = matches[0];
+          let row = optionsButton.parentElement;
+          for (let depth = 0; row && depth < 6; depth += 1, row = row.parentElement) {
+            const homeButton = Array.from(row.querySelectorAll('button')).find(
+              (button) => button.getAttribute('aria-label') === 'Open project home',
+            );
+            if (homeButton) {
+              homeButton.click();
+              const label = String(optionsButton.getAttribute('aria-label') || '');
+              return { status: 'clicked', projectName: label.slice(optionPrefix.length) };
+            }
+          }
+          return { status: 'home-button-missing' };
+        })()`,
+        returnByValue: true,
+      });
+      const result = clickOutcome.result?.value as
+        | { status?: string; projectName?: string }
+        | undefined;
+      if (result?.status === "clicked") {
+        projectName = String(result.projectName || "");
+        break;
+      }
+    } catch {
+      // A transient renderer/context transition is not a reason to block stock navigation.
+    }
+    if (Date.now() >= discoveryDeadline) {
+      logger(
+        `[nav] project home sidebar action unavailable for ${target.normalizedName}; using direct navigation`,
+      );
+      return false;
+    }
+    await delay(PROJECT_SIDEBAR_POLL_MS);
+  }
+
+  const expectedTitleName = normalizeProjectSidebarName(projectName || target.normalizedName);
+  const settleDeadline = Date.now() + PROJECT_SIDEBAR_SETTLE_MS;
+  for (;;) {
+    try {
+      const stateOutcome = await Runtime.evaluate({
+        expression: "({ href: location.href, title: document.title })",
+        returnByValue: true,
+      });
+      const state = stateOutcome.result?.value as { href?: string; title?: string } | undefined;
+      const currentPath = new URL(String(state?.href || "")).pathname.replace(/\/+$/, "");
+      const currentTitleName = normalizeProjectSidebarName(
+        String(state?.title || "").replace(/^ChatGPT\s*-\s*/i, ""),
+      );
+      if (currentPath === target.pathname && currentTitleName === expectedTitleName) {
+        logger(`[nav] project home opened through ChatGPT sidebar (${projectName})`);
+        return true;
+      }
+    } catch {
+      // Keep polling while the SPA swaps renderer state.
+    }
+    if (Date.now() >= settleDeadline) {
+      logger(
+        `[nav] project home sidebar action did not settle for ${target.normalizedName}; using direct navigation`,
+      );
+      return false;
+    }
+    await delay(PROJECT_SIDEBAR_POLL_MS);
+  }
+}
+
 export interface PromptReadyNavigationOptions {
   url: string;
   fallbackUrl?: string;

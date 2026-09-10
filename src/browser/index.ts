@@ -29,6 +29,8 @@ import {
 import { clearStaleChatGptConversationCookies, syncCookies } from "./cookies.js";
 import {
   navigateToChatGPT,
+  supportsProjectSidebarNavigation,
+  tryNavigateToProjectHomeViaSidebar,
   navigateToPromptReadyWithFallback,
   ensureNotBlocked,
   ensureLoggedIn,
@@ -3085,6 +3087,7 @@ async function runRemoteBrowserMode(
         browserWSEndpoint,
         {
           approvalWaitMs: config.attachRunning && browserWSEndpoint ? 20_000 : undefined,
+          useBrowserTargetCreation: supportsProjectSidebarNavigation(config.url),
         },
       );
       client = connection.client;
@@ -3141,7 +3144,21 @@ async function runRemoteBrowserMode(
     if (config.resumeConversationUrl) {
       await navigateToChatGPT(Page, Runtime, config.resumeConversationUrl, logger);
     } else if (!attachedExistingTab) {
-      await navigateToChatGPT(Page, Runtime, config.url, logger);
+      if (supportsProjectSidebarNavigation(config.url)) {
+        await navigateToChatGPT(Page, Runtime, CHATGPT_URL, logger);
+        await ensureNotBlocked(Runtime, config.headless, logger);
+        await ensureLoggedIn(Runtime, logger, { remoteSession: true });
+        const usedProjectSidebar = await tryNavigateToProjectHomeViaSidebar(
+          Runtime,
+          config.url,
+          logger,
+        );
+        if (!usedProjectSidebar) {
+          await navigateToChatGPT(Page, Runtime, config.url, logger);
+        }
+      } else {
+        await navigateToChatGPT(Page, Runtime, config.url, logger);
+      }
     }
     await ensureNotBlocked(Runtime, config.headless, logger);
     await ensureLoggedIn(Runtime, logger, { remoteSession: true });

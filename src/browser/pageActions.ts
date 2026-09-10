@@ -1,5 +1,7 @@
 export {
   navigateToChatGPT,
+  supportsProjectSidebarNavigation,
+  tryNavigateToProjectHomeViaSidebar,
   navigateToPromptReadyWithFallback,
   ensureNotBlocked,
   ensureLoggedIn,
