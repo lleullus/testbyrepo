@@ -138,6 +138,7 @@ For a normal `Status: ready` Ticket, keep every authored Verification flow and c
 The verifier does not write `Status: done`, does not call `ready_finalize`, does not call `ready_contract seal_verdict`, and does not create a verdict record. It emits exactly one terminal `READY TICKET VERIFICATION RESULT` and exits successfully. That report includes readable evidence identities and verdict only:
 
 ```text
+Ticket: <exact absolute canonical Ticket path, byte-for-byte equal to structured `ticket_path`; never a title, basename or relative path>
 Verification Binding: <exact outside-root path>
 Verification Binding SHA256: <sha256>
 Stable Target Paths: ["<exact absolute path>", "..."]
