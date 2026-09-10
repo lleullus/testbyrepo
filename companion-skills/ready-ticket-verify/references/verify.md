@@ -512,7 +512,7 @@ Verifier Ticket Progression: PENDING CALLER FINALIZATION | NOT APPLICABLE
 Observed Ticket Status: ready | done | <actual>
 ```
 
-Render both path lists as compact JSON arrays exactly matching the structured arrays, including order and empty `[]`.
+Render both path lists as whitespace-free compact JSON arrays exactly matching the structured arrays, including order and empty `[]` (equivalent to JSON separators `(',', ':')`). Across the complete report, each reserved top-level identity/result label in the template appears exactly once; nested scenario, flow or evidence sections must use different labels rather than repeat `Ticket:`, `Verification Binding:`, `Verification Binding SHA256:`, `Stable Target Paths:`, `Scenario Effect Paths:`, `Verification Verdict:`, `Verifier Ticket Progression:` or `Observed Ticket Status:`.
 
 The delegated verifier returns the report through one strict host terminal `yield` whose data uses schema `iis-ready-verifier-terminal/v1` and exact fields `project_root`, `ticket_path`, `verification_binding`, `verification_binding_sha256`, `stable_target_paths`, `scenario_effect_paths`, `verification_verdict`, `ticket_progression`, `observed_ticket_status`, and `report`. Every field must equal the corresponding readable report/binding fact; `report` contains the complete text above. Text-only narration, a caller output schema, or copied task output does not create finalization authority.
 
