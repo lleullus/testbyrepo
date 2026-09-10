@@ -461,7 +461,7 @@ Verification ends with evidence and verdict. Do not automatically edit source, i
 ```text
 READY TICKET VERIFICATION RESULT
 
-Ticket:
+Ticket: <exact absolute canonical Ticket path, byte-for-byte equal to structured `ticket_path`; never a title, basename or relative path>
 Execution Mode: SUBAGENT
 Verifier: <delegated verifier identity>
 Ticket status before verification:
