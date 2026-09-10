@@ -33,7 +33,7 @@ def _put(root: Path, relative: str, text: str) -> Path:
 
 
 SERVICE = '''
-import argparse, json
+import argparse, json, time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -86,6 +86,11 @@ class Handler(BaseHTTPRequestHandler):
             state['request'] = {'key': data['key']}
             save(state)
             self.reply(200, {'accepted': True, 'key': data['key']}); return
+        if self.path == '/feedback/settle':
+            time.sleep(2)
+            state['feedback'] = {'settled': True, 'key': data['key']}
+            save(state)
+            self.reply(200, {'accepted': True, 'request_id': 'feedback-1'}); return
         self.reply(404, {'error': 'not found'})
     def do_GET(self):
         if self.path in ('/surface', '/readback/surface'):
@@ -185,6 +190,51 @@ def ordinary(command, value):
 
 
 def _engine(family: str, variant: str, endpoint: str, runtime_state: Path) -> tuple[str, str | None, str | None]:
+    if family == 'feedback-loop':
+        parser_mode = 'three-part' if variant == 'all-correct' else 'first-separator-only'
+        remote_mode = 'local-ack-only' if variant == 'mixed-reported-defects' else 'service'
+        return f'''
+import json, urllib.error, urllib.request
+
+BASE = {endpoint!r}
+PARSER_MODE = {parser_mode!r}
+REMOTE_MODE = {remote_mode!r}
+
+def parse_identifier(value):
+    parts = value.split(':', 2) if PARSER_MODE == 'three-part' else value.split(':', 1)
+    if len(parts) != 3:
+        return None
+    tenant, region, record = parts
+    return {{'tenant': tenant, 'region': region, 'record': record}}
+
+def request(path, payload=None):
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(BASE + path, data=data, headers={{'Content-Type': 'application/json'}})
+    try:
+        with urllib.request.urlopen(req, timeout=3) as response:
+            return {{'http_status': response.status, 'body': json.loads(response.read())}}
+    except urllib.error.HTTPError as error:
+        return {{'http_status': error.code, 'body': json.loads(error.read())}}
+    except urllib.error.URLError as error:
+        return {{'available': False, 'reason': str(error.reason)}}
+
+def ordinary(command, value):
+    if command == 'readback':
+        return request('/readback/feedback')
+    if command in {{'lookup', 'display'}}:
+        parsed = parse_identifier(value)
+        if parsed is None:
+            return {{'error': 'invalid composite identifier', 'input': value}}
+        if command == 'lookup':
+            return {{'consumer': 'lookup', **parsed}}
+        return {{'consumer': 'display', 'identifier': value,
+                 'label': f"{{parsed['tenant']}}/{{parsed['region']}}/{{parsed['record']}}"}}
+    if command == 'remote':
+        if REMOTE_MODE == 'local-ack-only':
+            return {{'http_status': 200, 'body': {{'accepted': True, 'request_id': 'local-only'}}}}
+        return request('/feedback/settle', {{'key': value}})
+    return {{'error': 'unknown command', 'command': command}}
+''', 'normal', 'feedback'
     if family in {'auth-boundary', 'external-effect', 'operator-assisted', 'missing-surface', 'unknown-preservation'}:
         kind = {'auth-boundary': 'authorization', 'external-effect': 'effect', 'operator-assisted': 'operator'}.get(family, 'surface')
         trigger = {'authorization': '/authorize', 'effect': '/effect', 'operator': '/operator/request', 'surface': '/surface'}[kind]
@@ -322,6 +372,19 @@ def _contracts(family: str, app: Path, endpoint: str, kind: str | None) -> list[
     trigger = f'Run python3 {app} run sample.'
     readback = 'The JSON written to stdout by that ordinary entrypoint.'
     expected = 'JSON value is revised-value and input is sample.'
+    if family == 'feedback-loop':
+        identifier = 'org:west:item-42'
+        return [
+            {'outcome': 'The lookup consumer accepts composite identifier org:west:item-42 and returns tenant=org, region=west and record=item-42.',
+             'trigger': f'Run python3 {app} lookup {identifier}.',
+             'readback': 'The JSON written to stdout by that actual lookup CLI entrypoint.'},
+            {'outcome': 'The display consumer uses the same composite identifier parser and returns label=org/west/item-42 without losing an identifier segment.',
+             'trigger': f'Run python3 {app} display {identifier}.',
+             'readback': 'The JSON written to stdout by that distinct display CLI consumer.'},
+            {'outcome': 'The remote command settles key=gamma through the provided loopback service and authoritative feedback readback has settled=true and key=gamma.',
+             'trigger': f'Run python3 {app} remote gamma once; the disposable loopback service may take two seconds to settle.',
+             'readback': f'The JSON from python3 {app} readback gamma and actual HTTP GET {endpoint}/readback/feedback; POST /feedback/settle in the service request log distinguishes actual execution from a local acknowledgement.'},
+        ]
     if family == 'concurrency':
         expected = 'All four competing tasks complete and observed peak concurrency is exactly 2.'
     elif family == 'partial-failure':
@@ -480,6 +543,14 @@ assert {assertion}
     trigger_argv = [sys.executable, str(app), 'run', 'sample']
     readback_argv = [sys.executable, str(app), 'readback', 'sample'] if kind else [sys.executable, str(app), 'run', 'sample']
     additional_trigger_argv = [[sys.executable, str(app), 'run', 'legacy']] if family == 'ticket-regression' else []
+    if family == 'feedback-loop':
+        identifier = 'org:west:item-42'
+        trigger_argv = [sys.executable, str(app), 'lookup', identifier]
+        additional_trigger_argv = [
+            [sys.executable, str(app), 'display', identifier],
+            [sys.executable, str(app), 'remote', 'gamma'],
+        ]
+        readback_argv = [sys.executable, str(app), 'readback', 'gamma']
     if family == 'minimal-input-frontier':
         additional_trigger_argv = [[sys.executable, str(app), 'run', 'sample ']]
     elif family == 'finding-retention':
@@ -491,7 +562,7 @@ assert {assertion}
                 'allowed_output_paths': allowed_output_paths, 'trigger_argv': trigger_argv,
                 'readback_argv': readback_argv, 'additional_trigger_argv': additional_trigger_argv,
                 'observer_argv': observer_argv, 'service_argv': service_argv, 'reset_argv': reset_argv, 'verification_challenge': challenge,
-                'planning_prompt': planning_prompt, 'implementation_prompt': f'Implement only the exact ready Ticket {ticket}. Preserve its outcome and actual readback, and self-check the ordinary entrypoint.',
+                'planning_prompt': planning_prompt, 'implementation_prompt': (f'Implement only the exact ready Ticket {ticket}. Preserve its outcome and actual readback, and self-check the ordinary entrypoint.' if family != 'feedback-loop' else f'Implement only the exact ready Ticket {ticket}. Current reported failures are: lookup and display both reject org:west:item-42 through their shared parser assumption; remote returns a local acknowledgement without settling key=gamma through the loopback service. Account for all three, group only evidence-supported common causes, fix them within the reviewed scope, run cheap regressions and the minimum actual CLI/readback paths, and do not start final verification.'),
                 'service_port': port if kind else None}
     if implementation_report:
         metadata['implementation_report_path'] = str(implementation_report)

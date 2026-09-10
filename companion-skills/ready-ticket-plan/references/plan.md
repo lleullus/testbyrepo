@@ -14,13 +14,13 @@ Use concise sections that establish all of the following, without a length or co
 
 1. Exact product contracts, applicable Tickets/common plans and current code/search/environment evidence.
 2. Obligations to achieve, existing paths/invariants to preserve, Scope and Non-Goals.
-3. Where relevant, the cause hypothesis, competing explanation and falsifying observation. Do not invent a root-cause exercise for work that has none.
+3. Where relevant, the cause hypothesis, competing explanation and falsifying observation. When concrete reported findings already exist, account for each once and group only those that current evidence shows share a cause or assumption; distinguish observed reach from hypothesis. Do not invent a root-cause exercise for work that has none.
 4. State writers/readers, internal/existing/external owners, shared interfaces and existing callers/data affected.
 5. Change structure, important prerequisites and relevant partial failure, interruption, resumption and external-effect boundaries.
-6. Actual implementation self-check and final acceptance/readback path, required environment/operator conditions and known limits.
+6. Actual implementation self-check and final acceptance/readback path. For each relevant failure, connect the cheapest valid discriminating check, the confirmed same-assumption impact span, the minimum check through the real acceptance path, and the current-target condition for verifier handoff. Order checks by discriminating power, cost, authority, side effects, dependencies and initial state rather than a fixed test-category sequence. Where an environment is required, identify the artifact/build, service-start and current-instance readiness owner, scenario state changes, settlement/cleanup owner and known limits.
 7. Permitted local discretion, any conditional initial work, and exact conditions returning the affected plan to review.
 
-Future paths, helper names and internal sequence belong here, not in Ticket ACs. Do not add telemetry, fallback, persistence, recovery guarantees or new acceptance surfaces unless an approved obligation or a concrete necessary failure path supports them. Keep external authority explicit.
+Future paths, helper names and internal sequence belong here, not in Ticket ACs. Keep the Plan as a method: do not append command output, pass/fail journals or repeated execution logs. Do not add telemetry, fallback, persistence, recovery guarantees or new acceptance surfaces unless an approved obligation or a concrete necessary failure path supports them. Keep external authority explicit.
 
 ## Conditional first work
 
@@ -32,7 +32,7 @@ For each unresolved premise that can be safely decided during implementation, st
 - `dependent_work_not_yet_permitted`: expansion forbidden until that observation;
 - `response_if_refuted`: affected work to stop and exact plan/authority owner to revisit.
 
-The reviewer must assess this bundle as part of ADMIT. Do not defer every difficult shared decision to 'build a little and see'. Support permits the already reviewed dependent direction without a new parent approval; refutation stops affected work; insufficient evidence does not permit forbidden expansion. Safe unrelated work may continue only when ownership/state/effect independence can actually be explained and the runtime is ACTIVE. A PAUSED execution permits safe reads/analysis, never source mutation until release.
+The reviewer must assess this bundle as part of ADMIT. Do not defer every difficult shared decision to 'build a little and see'. Support permits the already reviewed dependent direction without a new parent approval. Refutation or insufficient evidence that would change a load-bearing method stops affected mutation and returns terminal `PARTIAL | BLOCKED` with the exact plan/authority owner; safe unrelated work may continue only when ownership, state and effect independence can actually be explained. A fresh implementation actor begins the affected work only after the affected Plan, Heuristic and independent review are current.
 
 ## Revision ownership
 

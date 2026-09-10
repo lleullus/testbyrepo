@@ -55,9 +55,13 @@ This includes a contract that is coherent in isolation but bundles later maturit
 
 ### 3. Verification mechanism check
 
-If the contract is valid and correctly placed, ask whether the integrated verifier bound the actual current authority/target, performed its material frontier and all authored flows, and measured the approved acceptance boundary/readback under attributable conditions.
+If the contract is valid and correctly placed, judge the integrated verifier against its exact terminal verdict rather than applying one all-flow execution rule to every outcome.
 
-If not, classify `VERIFICATION_MECHANISM_DEFECT` when the mechanism is wrong, or `INCONCLUSIVE` when required evidence/capability is unavailable. A discovery finding is not a product contradiction until the verifier adjudicates it against current authority.
+- **`VERIFIED`:** require the actual current authority/target, material frontier, every authored flow executed and attributable as `SATISFIED`, every AC `PASS`, and required cleanup/terminal closure.
+- **`FAILED`:** require at least one current attributable contradiction that produces an AC `FAIL`; every authored flow/AC present in the report; permitted unexecuted items explicitly `INCONCLUSIVE` with their decisive-failure stop basis; and enough same-cause cheap observation, attribution, readback, started-effect settlement and cleanup to make the failure and correction span valid. When these hold, an unrelated flow's non-execution alone is not `VERIFICATION_MECHANISM_DEFECT`. A `FAILED` report without a contradiction, or one that skips evidence or cleanup needed to validate that contradiction, is defective or evidence-limited.
+- **`INCONCLUSIVE`:** require the exact missing target, environment, authority, readback, terminal condition or attribution; do not let this verdict hide an established product contradiction or an unattempted reachable required observation.
+
+Classify `VERIFICATION_MECHANISM_DEFECT` when the applicable mechanism rule is wrong, or `INCONCLUSIVE` when required evidence/capability is genuinely unavailable. A discovery finding is not a product contradiction until the verifier adjudicates it against current authority.
 
 A caller finalization failure is not automatically a verification-mechanism defect and never rewrites the verifier's semantic verdict. For example, `Verification Verdict: VERIFIED` with `Ticket Progression: FAILED` because stable target, authority, loaded bundle, boundary protocol, terminal authority, or current Ticket state changed is a progression/currentness failure under its owning boundary. Preserve VERIFIED as the readable semantic result, preserve the exact host/finalizer provenance, resolve the owning drift or validation condition, and require fresh verification when the correction makes prior evidence stale. A copied, serialized, or reused terminal result has no finalization authority. `ALREADY_DONE_MATCHING_BINDING` is current-state confirmation, not new completion proof.
 
@@ -178,7 +182,7 @@ Use when current evidence cannot attribute success/failure, for example:
 - authoritative readback cannot currently be obtained for a reason that does not establish product contradiction;
 - it is unclear whether a `ready` Ticket has already been implementation-consumed and that fact materially affects history.
 
-Route according to the evidence gap. Do not manufacture PASS or FAIL.
+Route according to the exact evidence gap. Do not manufacture PASS or FAIL. Do not dispatch the same verifier again while the required target, environment, authority, readback, terminal condition and attribution remain materially unchanged; first obtain the missing condition that can change the result.
 
 An `INCONCLUSIVE` result may later reveal a planning problem, but absence of evidence alone is not permission to rewrite the contract.
 

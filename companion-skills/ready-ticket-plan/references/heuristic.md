@@ -10,16 +10,19 @@ Ask how this plausible plan could leave the approved purpose unfulfilled: wrong 
 
 A useful candidate has an exact contract/plan anchor, a reachable current path, material consequence and an executable or inspectable discriminating observation. Separate observed contradiction from hypothesis and missing evidence. A hypothetical future capability, unreachable path or Scope-excluded promise is not a reason to enlarge the plan.
 
-Use the smallest authorized read/check that distinguishes the competing explanation. For risky, shared, credential-bearing or duplicate-sensitive effects, preserve exact existing authority and stop before unpermitted action. A timeout/transport failure is not proof an effect did not occur; no blind replay. Preparation itself does not authorize source implementation or bypass current admission. Leave a condition for the later admitted worker when that is the safe bounded first check.
+Use the smallest authorized read/check that distinguishes the competing explanation; do not substitute a full E2E of the unimplemented product or an exhaustive product audit. For risky, shared, credential-bearing or duplicate-sensitive effects, preserve exact existing authority and stop before unpermitted action. A timeout/transport failure is not proof an effect did not occur; no blind replay. Preparation itself does not authorize source implementation or bypass current admission. Leave a condition for the later admitted worker when that is the safe bounded first check.
 
-For each material candidate, preserve concise evidence with:
+For each material causal candidate, rather than each symptom separately, preserve concise evidence with:
 
 - original contract and current path/plan anchor;
-- plausible false-completion or incorrect-cause path;
-- observed evidence versus inference/unknown;
+- exact suspect assumption or competing cause and its false-completion path;
+- reported symptoms it explains and the writer/reader or producer/consumer paths directly confirmed to share that assumption;
+- observed propagation versus inference/unknown;
 - minimal discriminating check and its actual result or exact missing condition;
 - disposition and causal basis: material finding, evidence needed, or dismissed;
-- affected Tickets/shared decision and permitted next owner/action.
+- affected Tickets/shared decision, exact Scope boundary and permitted next owner/action.
+
+Group multiple symptoms only when current evidence supports the same assumption or cause. Keep similar symptoms separate when their causal evidence differs; do not declare unobserved or Scope-excluded paths defective.
 
 Dismiss only with a precise current anchor showing out-of-scope, unreachable, already handled or non-material behavior. The original symptom remaining is a purpose failure even when pre-existing. Do not dismiss it solely because the plan did not introduce it.
 
