@@ -14,9 +14,9 @@ Adaptive must distinguish:
 
 Do not change the verifier's exact verdict. Add a separate Adaptive root-cause classification and route. Apply the transition discipline in `08-delivery-continuation.md`: under explicit Adaptive mode, a material correction is followed by fresh execution at the affected owner by default; an explicit no-corrective-re-entry/fail-and-report instruction changes that handoff to report-and-STOP. This is distinct from success continuation into another Increment.
 
-Classification begins only from the exact terminal `ready-ticket-verify` semantic result, the exact caller `ready_finalize` result when finalization was applicable, and current authority/evidence. Scenario reports, material observations, candidate interpretations, or partial evidence are verifier-internal/nonterminal and cannot by themselves receive `IMPLEMENTATION_DEFECT`, `VERIFICATION_MECHANISM_DEFECT`, `CONTRACT_OVERREACH`, `CURRENT_INCREMENT_MISMATCH`, or `INCONCLUSIVE` Adaptive classification.
+Classification begins only from the exact terminal `ready-ticket-verify` semantic result, the exact terminal Coverage review when performed, the actual caller `ready_finalize` result when submitted, and current authority/evidence. Scenario reports, material observations, candidate interpretations, or partial evidence are verifier-internal/nonterminal and cannot by themselves receive `IMPLEMENTATION_DEFECT`, `VERIFICATION_MECHANISM_DEFECT`, `CONTRACT_OVERREACH`, `CURRENT_INCREMENT_MISMATCH`, or `INCONCLUSIVE` Adaptive classification.
 
-Preparation `REVISE | EVIDENCE_NEEDED` and `PLAN_REVIEW_REQUIRED | PLAN_REVIEW_STALE | PLAN_NOT_ADMITTED` are not final product verdicts or Adaptive defect enums. Preserve their actual owner result and return to the affected Planner/reviewer/evidence owner before implementation. Internal final-discovery no-finding/no-lane is likewise not PASS.
+Preparation `REVISE | EVIDENCE_NEEDED` and `PLAN_REVIEW_REQUIRED | PLAN_REVIEW_STALE | PLAN_NOT_ADMITTED` are not final product verdicts or Adaptive defect enums. Preserve their actual owner result and return to the affected Planner/reviewer/evidence owner before implementation. Coverage COMPLETE/no-finding is likewise not PASS; it permits success submission only when no material gap remains.
 
 ## Required authority/evidence
 
@@ -28,10 +28,15 @@ Before classifying, reopen enough current authority to compare the failing claim
 - adopted Behavior/UI authority relevant to the claim;
 - exact Ticket and authored Verification flow(s);
 - exact fresh `ready-ticket-verify` semantic result/evidence, including verification-binding identity and the exact host-delivered terminal result when available;
-- exact `ready_finalize` verdict/progression result and attributable basis when caller finalization was applicable;
+- exact Coverage result, reviewed verification references and material findings/limits when performed;
+- exact `ready_finalize` verdict/progression result and attributable basis when submitted, otherwise the actual reason for withholding submission;
 - current runtime/repository evidence needed to attribute the observed behavior.
 
 Apply `09-run-contract.md`'s actual-boundary evidence rule. Implementation reports, test names, logs, and mocks are navigation/support; a substitute cannot prove the boundary it replaces. Direct inspection may close the actual approved artifact-only result, and real authorized disposable execution may close its observed boundary, but neither a Ticket-authored fake nor limited evidence can override the user's promised runtime/external result.
+
+## Coverage findings before finalization
+
+A terminal Coverage result may expose an untested path or projection gap after semantic VERIFIED. Preserve that verdict and withhold success finalization; do not require a finalizer return that was deliberately not requested. Route a material unverified path to a fresh verifier for current decisive evidence, and a concrete contract-projection gap to its existing planning owner. A hypothesis is not IMPLEMENTATION_DEFECT or a product FAIL. Coverage tool failure, missing primary evidence or unattributable target returns its exact PARTIAL/BLOCKED limit and evidence owner, not a fabricated product verdict. Existing current authority, disabled-stage, no-re-entry and no-progress rules still govern continuation.
 
 ## Classification order
 
@@ -57,7 +62,7 @@ This includes a contract that is coherent in isolation but bundles later maturit
 
 If the contract is valid and correctly placed, judge the integrated verifier against its exact terminal verdict rather than applying one all-flow execution rule to every outcome.
 
-- **`VERIFIED`:** require the actual current authority/target, material frontier, every authored flow executed and attributable as `SATISFIED`, every AC `PASS`, and required cleanup/terminal closure.
+- **`VERIFIED`:** require the actual current authority/target, discriminating scenario evidence, every authored flow executed and attributable as `SATISFIED`, every AC `PASS`, and required cleanup/terminal closure.
 - **`FAILED`:** require at least one current attributable contradiction that produces an AC `FAIL`; every authored flow/AC present in the report; permitted unexecuted items explicitly `INCONCLUSIVE` with their decisive-failure stop basis; and enough same-cause cheap observation, attribution, readback, started-effect settlement and cleanup to make the failure and correction span valid. When these hold, an unrelated flow's non-execution alone is not `VERIFICATION_MECHANISM_DEFECT`. A `FAILED` report without a contradiction, or one that skips evidence or cleanup needed to validate that contradiction, is defective or evidence-limited.
 - **`INCONCLUSIVE`:** require the exact missing target, environment, authority, readback, terminal condition or attribution; do not let this verdict hide an established product contradiction or an unattempted reachable required observation.
 

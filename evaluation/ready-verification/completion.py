@@ -771,7 +771,6 @@ def _verified_delivery(summary: dict[str, Any], events: list[dict[str, Any]], ti
     if (summary.get("parsed_verdict") != "VERIFIED"
             or summary.get("verifier_ticket_progression") != "PENDING CALLER FINALIZATION"
             or not terminal_handle
-            or summary.get("host_verifier_terminal_delivery_count") != 1
             or not summary.get("verification_binding_path")
             or not summary.get("verification_binding_sha256")
             or not summary.get("host_verdict_record_path")
@@ -844,7 +843,7 @@ def run(metadata_path: Path, *, agent_dir: Path, payload: Path,
             if (native_setup.get("parsed_verdict") != "VERIFIED" or setup.get("parsed_verdict") != "VERIFIED"
                     or setup.get("host_verifier_terminal_handle") != native_setup.get("host_verifier_terminal_handle")
                     or setup.get("verifier_model") != native_setup.get("verifier_model")
-                    or setup.get("host_verifier_terminal_delivery_count") != 1
+                    or setup.get("host_verifier_terminal_delivery_count") != native_setup.get("host_verifier_terminal_delivery_count")
                     or setup.get("verification_binding_path") != native_setup.get("verification_binding_path")
                     or setup.get("verification_binding_sha256") != native_setup.get("verification_binding_sha256")
                     or setup.get("host_verdict_record_path") != native_setup.get("host_verdict_record_path")

@@ -434,7 +434,6 @@ def guarded_delivery(events: list, sessions: Path, ticket_path: Path) -> dict | 
         if (summary.get("parsed_verdict") != "VERIFIED"
                 or summary.get("verifier_ticket_progression") != "PENDING CALLER FINALIZATION"
                 or not terminal_handle
-                or summary.get("host_verifier_terminal_delivery_count") != 1
                 or not summary.get("verification_binding_path")
                 or not summary.get("verification_binding_sha256")
                 or not summary.get("host_verdict_record_path")

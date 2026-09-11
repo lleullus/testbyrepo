@@ -39,8 +39,9 @@ Before each enabled delivery phase, discover and use the current installed skill
 
 - `ready-ticket-plan` owns grounded method preparation and independent current per-Ticket start review.
 - `ready-ticket-implement` owns one exact Ready Ticket implementation and implementer self-check. Its actual implementing actor performs `ready_contract check_plan_admission` before first source mutation and again before COMPLETE.
-- `ready-ticket-verify` owns integrated discovery and the final exact-Ticket semantic verdict. It is always one `SUBAGENT` verifier; Adaptive never offers or synthesizes a verifier `DIRECT` path.
-- Outer Main owns only invocation-local dispatch, passive terminal fan-in, exact host-delivered `terminal_handle` submission to `ready_finalize`, and routing from owner returns. It never issues, copies, seals, or revises a verifier verdict.
+- `ready-ticket-verify` owns discriminating scenarios and the final exact-Ticket semantic verdict. It is always one `SUBAGENT` verifier per cycle; Adaptive never offers or synthesizes a verifier `DIRECT` path.
+- `ready-ticket-coverage` owns one independent read-only review of actual implementation paths against the exact successful verifier evidence, not a second verdict or product execution.
+- Outer Main owns invocation-local dispatch, passive terminal fan-in, post-success Coverage, eligible exact host-delivered `terminal_handle` submission to `ready_finalize`, and routing from owner returns. It never issues, copies, seals, or revises a verifier verdict. As finalization owner it dispatches Coverage once itself, without an additional top-level verify wrapper.
 - Invoke each owner once per current pass and follow its current mode contract. Implementation defaults to one `SUBAGENT` worker and uses `DIRECT` only when the current user explicitly selected that implementation mode. Preparation follows its own current-selection and independent-invocation rules. No model capability, difficulty, cost, or worker availability authorizes topology substitution or fallback.
 - Execution mode does not select a model. Apply the closed Run Contract's [Delivery Model Selection](09-run-contract.md#delivery-model-selection): carry that stage's exact user-selected model/effort and selection basis through the current owner's existing assignment path. An unresolved recommendation or host default cannot stand in for a selected configuration. Do not ask again per Ticket, automatically escalate effort, or substitute another model when a selected configuration is unavailable.
 - Preparation uses only actual delegated Planner and Plan Review invocations under current selected modes/models. Lead fan-in is the writer-side continuation, not a separate approval/model role. The writer cannot approve itself in the same invocation; no fixed multi-model roster or hidden fallback creates independence.
@@ -48,17 +49,18 @@ Before each enabled delivery phase, discover and use the current installed skill
 - Do not infer Ticket-set parallelism, worker scheduling, or a persistent queue from the Ready Ticket Set. Select only one currently admissible Ticket using canonical blockers, product dependencies, shared-workspace safety, and current repository evidence.
 - Do not pass `Delegated Worker: yes` or `Delegated Verifier: yes`; the owning Skill alone sets its child marker.
 
-Do not invoke a disabled stage for stronger evidence. `Verification: yes` includes final verifier-owned discovery. `Verification: no` forbids verifier dispatch, final semantic verdict, and `done`, while `Implementation: yes` still requires a current independent Plan Review. Preparation-only creates neither implementation nor verification authority.
+Do not invoke a disabled stage for stronger evidence. `Verification: yes` includes a verifier cycle and, after VERIFIED from ready, read-only Coverage before success finalization. `Verification: no` forbids verifier/Coverage dispatch, final semantic verdict and `done`, while `Implementation: yes` still requires a current independent Plan Review. Preparation-only creates neither implementation nor verification authority. Coverage is not another delivery switch.
 
 ## Invocation-local owner-return event loop
 
-Outer Main advances only on an exact owner terminal return or on its own immediately following `ready_finalize` return. Phase narration, progress text, repository observation during an active owner, and a sibling message are not lifecycle events.
+Outer Main advances only on an exact owner terminal return (including Coverage) or its own eligible `ready_finalize` return. Phase narration, progress text, repository observation during an active owner, and a sibling message are not lifecycle events.
 
 | Event | Required action | Forbidden shortcut |
 |---|---|---|
 | `PREPARATION_OWNER_TERMINAL` | Route exact ADMIT/REVISE/EVIDENCE_NEEDED under Preparation handoff. A material implementation-method change requires fresh affected review before a new implementing actor. | Treating an intermediate Planner/reviewer result as admission. |
 | `IMPLEMENTATION_OWNER_TERMINAL` | On exact `Completion: COMPLETE`, retain its exact target/self-check and, when Verification is yes, dispatch one fresh verifier for the exact ready Ticket. When Verification is no, apply only the implementation-only boundary. Route PARTIAL/BLOCKED to the owning preparation/implementation condition. | Promoting COMPLETE to VERIFIED, `done`, delivered completion, or another implementation dispatch without material change. |
-| `VERIFIER_OWNER_TERMINAL` | Validate that this is the exact host-delivered terminal for the one dispatched verifier, then call `ready_finalize` once with exactly `{ "terminal_handle": "<host-delivered handle>" }`. Preserve the readable semantic verdict for reporting only. | Extracting, reconstructing, serializing, or editing verdict authority; calling finalization from progress text, copied terminal fields, or a fabricated/foreign handle. |
+| `VERIFIER_OWNER_TERMINAL` | Validate the exact host-delivered terminal of the dispatched verifier. For VERIFIED from ready, retain the opaque handle and dispatch one read-only Coverage worker with the exact authority/report/primary evidence and target/binding identity, not the handle. For FAILED/INCONCLUSIVE or diagnostic non-progressing results, call existing `ready_finalize` with only that handle. | Immediate success finalization before Coverage; extracting/reconstructing verdict authority; duplicate Coverage dispatch; using progress or foreign handles. |
+| `COVERAGE_OWNER_TERMINAL` | On COMPLETE with no unresolved material finding or evidence gap, submit the associated original verifier handle to `ready_finalize` while target/authority remain current. Otherwise withhold success submission, preserve VERIFIED, and route the exact finding or PARTIAL/BLOCKED limit to its existing owner under the rules below. | Treating no response, failure or incomplete review as no-finding; issuing a second AC verdict; silently erasing a material finding; fabricating a finalizer return. |
 | `FINALIZER_RETURNED` | Route only from the exact finalizer output. `COMPLETED` with an attributable write/recovery basis permits current Ticket/denominator readback. `FAILED`, `NOT_APPLICABLE`, unknown/foreign/malformed authority, or tool error remains non-progressing and goes to its owning currentness/provenance/semantic route. Exact same-handle replay returns the captured result and creates no second completion. | Converting semantic VERIFIED or an already-`done` readback into a progression claim. |
 | `CURRENT_TICKET_SET_RECHECKED` | When every exact current Ticket is canonically `done`, assess applicable parent-obligation ownership and current attributable readback. | Equating the `done` denominator with whole-Increment or whole-run success. |
 | `RUN_BOUNDARY_RECHECKED` | Emit success only when the active Completion Predicate and Goal/Required coverage are actually satisfied. Otherwise choose corrective routing, `NEXT_INCREMENT_REQUIRED`, `USER_DECISION_REQUIRED`, or `EVIDENCE_REQUIRED` from current facts and authority. | Ending at current-Increment success when the active broader boundary remains unsatisfied. |
@@ -123,18 +125,20 @@ One complete implementation report is not the current-Increment implementation d
 
 ## Verification handoff
 
-When Verification is yes, dispatch `ready-ticket-verify` as exactly one `SUBAGENT` on the current stable ready target. Implementation yes supplies its exact COMPLETE target/self-check as navigation; Implementation no requires direct attribution of the already implemented target, not an inference from ready status. No new execution-plan ADMIT is required for verification-only. Forward current required inputs from the discovered verifier without synthesizing evidence, a binding, or a terminal result. The verifier captures its own immutable binding, owns mandatory scenarios plus a bounded material discovery frontier, fixes one semantic verdict, and returns one terminal result; no-lane/no-finding is not PASS.
+When Verification is yes, dispatch `ready-ticket-verify` as exactly one `SUBAGENT` on the current stable ready target. Implementation yes supplies its exact COMPLETE target/self-check as navigation; Implementation no requires direct attribution of the already implemented target, not an inference from ready status. No new execution-plan ADMIT is required for verification-only. Forward current required inputs without synthesizing evidence, a binding or terminal. The verifier captures its own immutable binding, owns all mandatory flows and their discriminating observations, resolves known material findings and returns one semantic terminal. The separate additional implementation-path search belongs to subsequent read-only Coverage, not a duplicated verifier frontier.
 
 Actual product-source/authority/runtime/readback drift invalidates affected evidence and requires fresh applicable observations. Exact declared method-context-only changes merely stale that navigation, unless the plan is itself an approved product target; do not force final verdict invalidation or new implementation preparation solely for method context. Undeclared files are conservatively product-target candidates until narrowly resolved.
 
 ## Verification terminal routing
 
-Route first from the exact host-delivered terminal verifier result, then from the exact caller finalizer result. Do not route from a summarized label, implementation report, scenario report, progress text, or partial observation.
+Route from the exact host-delivered verifier terminal, then the exact Coverage terminal when success requires it, and finally the actual caller finalizer return if submitted. Do not route from a summarized label, implementation/scenario report, progress text or partial observation.
 
-For a normal `ready` Ticket the verifier's readable terminal report says `PENDING CALLER FINALIZATION`. OMP validates and privately persists that exact successful terminal return, then delivers an opaque handle. Outer Main supplies exactly that handle as the sole `ready_finalize` input—no path, SHA, semantic verdict, or reconstructed payload:
+For a normal `ready` Ticket the verifier report says `PENDING CALLER FINALIZATION`. After host capture, retain the exact handle. Semantic VERIFIED requires one `ready-ticket-coverage` review under its full read-only contract. Only COMPLETE with no unresolved material finding or evidence gap permits the original handle's submission. Other semantic verdicts preserve existing non-progressing finalization. The finalizer still receives only that exact opaque handle, not path, SHA, verdict, Coverage payload or reconstructed authority:
 
 ```text
 Verifier host terminal handle: <exact opaque host-delivered handle>
+  -> VERIFIED from ready: one read-only Coverage terminal, COMPLETE and no unresolved material gap
+  -> FAILED / INCONCLUSIVE / diagnostic: skip normal-success Coverage
   -> ready_finalize({ terminal_handle: "<same exact handle>" })
 
 Verification Verdict: VERIFIED
@@ -167,10 +171,16 @@ Malformed, copied, serialized, reused, or non-verifier terminal result
 
 Never reduce terminal completion to narration such as `VERIFIED -> done`; the canonical Ticket must actually be `done`, and the finalizer result must establish an attributable completion basis. Semantic verdict text and binding metadata are report evidence, not finalization authority.
 
+Coverage withholding success is not a finalizer failure: report the unchanged semantic verdict, exact Coverage report/limits, `Finalization: not called`, actual Ticket status and next owner. Current target/authority limitations remain evidence limits, not product FAILED. The unchanged finalizer does not mechanically enforce Coverage; this ordering is the caller's protocol responsibility.
+
 After one Ticket reaches `done`, re-read the complete current canonical Ticket denominator. The complete `done` denominator is a necessary progression fact, not automatic `CURRENT_INCREMENT_DELIVERED` success. Before emitting that terminal, Outer Main must also compare the approved current parent and validated Ticket Set, identify every parent-Spec/Behavior/UI obligation applicable to this Increment, confirm an existing Ticket acceptance boundary owns each one, and consume the owning result's actual current observation, authoritative readback, `Evidence limit`, and `Remaining uncertainty`. Do not include future, candidate, Non-Goal, or unrelated preserved obligations that do not apply to the current Increment.
 ## Corrective routing is the Adaptive default
 
 Unless the current user explicitly requested `no re-entry`, `fail and report`, or equivalent, apply authority-based correction and re-enter the affected enabled owner after a material correction/new evidence. First apply the verdict-specific mechanism check in `06-verification-triage.md`: a valid partial-execution `FAILED` does not return to the verifier merely because an unrelated flow is unexecuted.
+
+A terminal Coverage finding can route an evidence or contract gap without becoming an AC verdict or Adaptive product-defect classification. For an approved but untested reachable path, send the exact finding to a fresh verifier with any required newly available authority/environment; identifying an unattempted discriminating observation is useful new input, not an unchanged retry. A concrete projection defect returns to the original contract owner. Confirmed product contradictions follow existing Implement/Plan Review authority; a hypothesis alone does not establish a fix or IMPLEMENTATION_DEFECT. Coverage failure/missing primary evidence returns PARTIAL/BLOCKED with the exact evidence owner. Disabled stages and explicit no-re-entry still apply.
+
+Never resume an ended verifier or modify its binding/terminal. A fresh verifier owns all applicable obligations, current evidence and a new terminal; retain the old result as history and never submit its held success handle after a superseding cycle. New VERIFIED requires a follow-up Coverage review of prior gap resolution and materially affected scope, not repetition of unrelated inspection. Do not redispatch the same finding and same evidence without material progress. These rules add no retry engine or ledger.
 
 ```text
 IMPLEMENTATION_DEFECT
@@ -182,7 +192,7 @@ IMPLEMENTATION_DEFECT
 
 VERIFICATION_MECHANISM_DEFECT
   -> correct only the actual integrated verifier/harness mechanism, not product source by inference
-  -> if Verification yes and the mechanism correction can change the result: fresh verifier-owned scenario/frontier/readback on stable target
+  -> if Verification yes and the mechanism correction can change the result: fresh verifier-owned discriminating scenario/readback on stable target, then Coverage for VERIFIED
   -> if Verification no: do not invoke the verifier
 
 CONTRACT_OVERREACH
@@ -206,7 +216,7 @@ INCONCLUSIVE
 
 Every fresh success candidate uses the complete current authored denominator; never copy partial PASS from an earlier `FAILED` target into `VERIFIED`.
 
-Never turn an earlier failure into PASS after planning changes. Validate current authority and obtain fresh applicable owner evidence. No independent discovery-stage result or binding is required before the integrated verifier.
+Never turn an earlier failure into PASS after planning changes. Validate current authority and obtain fresh applicable owner evidence. No Coverage result or separate discovery binding is required before the verifier; Coverage follows each new normal-delivery VERIFIED result.
 
 After a later Ticket or correction changes a product surface that can materially affect an earlier delivered obligation, current completion assessment uses new evidence only for the actually affected integration/preservation boundary. That boundary must be acceptance-owned and adjudicated through the relevant existing exact Ticket's authored verification and Scope/Non-Goals/cross-AC closure; Outer Main checks coverage and currentness but does not issue a second verdict. Keep unaffected evidence and prior `done` history intact; do not reset that history, infer permission for diagnostic re-verification of a `done` Ticket, or rerun unrelated flows. Explicit diagnostic authorization remains governed by the existing verifier contract. A historical PASS or `done` status cannot stand in for current readback at the affected boundary.
 

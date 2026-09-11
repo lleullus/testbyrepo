@@ -223,6 +223,13 @@ class GoalCalibrationTests(unittest.TestCase):
                   {"type": "tool_execution_end", "toolCallId": "finalize", "isError": False, "result": {"details": result}},
                   semantic, {"type": "agent_end"}]
         self.assertIsNotNone(goal.guarded_delivery(events, sessions, ticket))
+        previous = json.loads(json.dumps(delivery).replace(handle, "ready-terminal-00000000-0000-4000-8000-000000000000"))
+        # A previous held verifier result does not invalidate the newly finalized cycle.
+        self.assertIsNotNone(goal.guarded_delivery([previous] + events, sessions, ticket))
+        newer = json.loads(json.dumps(delivery).replace(handle, "ready-terminal-00000000-0000-4000-8000-000000000002"))
+        self.assertIsNone(goal.guarded_delivery(events[:-2] + [newer] + events[-2:], sessions, ticket))
+        # Even pre-existing done bytes cannot turn an unsubmitted success into delivery.
+        self.assertIsNone(goal.guarded_delivery([delivery, semantic, {"type": "agent_end"}], sessions, ticket))
         mismatched = json.loads(json.dumps(events))
         mismatched[2]["result"]["details"]["verification_binding_sha256"] = "0" * 64
         self.assertIsNone(goal.guarded_delivery(mismatched, sessions, ticket))

@@ -16,6 +16,12 @@ When an owner result is not the whole-run result, also include `Owner status`, `
 
 When current attributable readback directly contradicts the Completion Predicate and the current user has disabled corrective continuation, use the existing provenance form above as the terminal: state the unsatisfied predicate, exact counterexample and existing owner, `Next allowed action: None`, `Whole-run completion: no`, then STOP. Do not call a known contradiction evidence insufficiency, ask the user to reconsider an already-settled read-only instruction, or use the Mandate-ceiling authority-gap report for a disabled stage. Recognizing that whole-run completion is false does not issue a new AC/Ticket verdict or authorize reopening `done`.
 
+## Post-success Coverage result
+
+Keep the immutable verifier semantic verdict, exact Coverage terminal and actual finalization outcome distinct. If Coverage leaves a material finding/evidence gap or returns PARTIAL/BLOCKED, use the existing provenance form: retain VERIFIED, name the exact reviewed verification and Coverage result/limits, report `Finalization: not called`, actual Ticket status, `Whole-run completion: no` and the next existing owner. Do not fabricate a finalizer failure or change the product verdict. If continuation is authorized, this is an owner handoff rather than the final user STOP. Missing/failed Coverage is never no-finding.
+
+For successful normal delivery, include the associated COMPLETE Coverage result with no unresolved material gap in existing Ticket evidence before the actual finalizer progression evidence. FAILED/INCONCLUSIVE and diagnostic non-progressing results do not require normal-success Coverage.
+
 ## Run Contract input required
 
 Use before any planning or delivery mutation when [09-run-contract.md](09-run-contract.md) cannot close one material field from current authority and inspectable facts.
@@ -143,7 +149,7 @@ Completion Predicate: <exact sufficient predicate for the assigned Goal and Requ
 Authoritative Readback: <fresh attributable evidence at the actual approved boundary, within its claim limits>
 Final Current Increment: <exact INC path or None>
 Final Ticket evidence:
-- <exact Ticket path — current preparation review if preparation-only | implementation terminal result | readable verifier semantic result and binding identity | caller ready_finalize verdict/progression result/basis | actual canonical status>
+- <exact Ticket path — current preparation review if preparation-only | implementation terminal result | readable verifier semantic result and binding identity | associated Coverage result/limits when required | caller ready_finalize verdict/progression result/basis | actual canonical status>
 Disposition: RUN_CONTRACT_SATISFIED
 Remaining provisional horizon: non-authoritative; not a completion blocker
 STOP

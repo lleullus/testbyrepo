@@ -79,7 +79,7 @@ def prepare(case_id: str, arena: Path, port: int, kind: str = "verification") ->
 def stage_prompt(stage: str, metadata: dict[str, Any], run_root: Path) -> str:
     root = metadata["project_root"]
     execution = ("이 stage는 DIRECT로 수행하고 subagent를 만들지 않는다. " if stage != "verify" else
-                 "Parent Main은 host authorityProfile iis-ready-verifier/v1로 exactly one SUBAGENT verifier를 dispatch하고 passive terminal fan-in 뒤 exact host terminal handle만 ready_finalize에 전달한다. ")
+                 "Parent Main은 host authorityProfile iis-ready-verifier/v1로 한 cycle마다 exactly one SUBAGENT verifier를 dispatch한다. VERIFIED from ready이면 terminal fan-in 뒤 읽기 전용 Coverage를 한 번 수행하고 중요한 미해결 공백 없는 COMPLETE일 때만 해당 exact host handle을 ready_finalize에 전달한다. ")
     common = (f"Project Root: {root}\n" + execution +
               "운영 파일·다른 프로젝트·다른 세션·평가 정답을 읽거나 변경하지 않는다. 부모 디렉터리를 탐색하지 않는다. "
               "실제 도구 결과만 근거로 삼고 source 모양이나 내부 테스트로 실제 경계 결과를 대체하지 않는다. "
@@ -98,10 +98,10 @@ def stage_prompt(stage: str, metadata: dict[str, Any], run_root: Path) -> str:
         if metadata.get("plan_review_path"):
             target += f"Optional method navigation (not product admission): {metadata['plan_review_path']}\n"
         return common + target + ("read로 skill://ready-ticket-verify 를 호출하고 이 Ticket의 통합 최종 검증을 수행하라. "
-            "Parent Main은 verifier core를 직접 수행하지 말고 skill contract의 exact host authority profile로 단 한 verifier를 dispatch하라. task call의 agent/effort는 지정하지 말고 이 실행에 configured된 selected task role을 그대로 사용하라. "
-            "Verifier는 current authority와 stable target/scenario effect 경계를 직접 확인하고 ready_contract capture_verification으로 immutable binding을 만든 뒤 원계약의 모든 authored flow와 실제 실패 가능 frontier를 확인한다. "
+            "Parent Main은 verifier core를 직접 수행하지 말고 skill contract의 exact host authority profile로 한 cycle에 단 한 verifier를 dispatch하라. verifier와 후속 Coverage 모두 task call의 agent/effort를 지정하지 말고 이 실행에 configured된 selected task role을 그대로 사용하라. "
+            "Verifier는 current authority와 stable target/scenario effect 경계를 직접 확인하고 ready_contract capture_verification으로 immutable binding을 만든 뒤 원계약의 모든 authored flow를 실제 구현에 근거한 판별력 있는 시나리오로 검증한다. 별도 추가 구현 경로 탐색은 후속 Coverage가 맡으며 Verifier는 이미 알려진 중요한 반례를 무시하지 않는다. "
             "발견한 반례는 verifier-owned current evidence와 finding disposition으로 닫고, 실제 실행은 일반 host-native 도구를 사용하며 settled nonzero 결과를 global lock으로 승격하지 않는다. "
-            "원래 source/authority를 고쳐 합격시키지 않는다. Verifier는 semantic terminal result를 한 번 반환하고, Parent Main은 host가 전달한 exact terminal handle을 그대로 ready_finalize의 유일한 입력으로 사용해 progression result를 별도로 보고하라. verdict/path/SHA를 finalizer 입력으로 만들거나 재작성하지 않는다.\n")
+            "원래 source/authority를 고쳐 합격시키지 않는다. Verifier는 semantic terminal result를 한 번 반환하고, Parent Main은 VERIFIED from ready 뒤 skill://ready-ticket-coverage를 한 독립 read-only worker로 호출하고 exact authority/report/primary evidence와 target identity를 전달하라. opaque handle은 전달하지 않는다. COMPLETE와 중요한 미해결 공백 없음일 때만 원래 exact handle을 ready_finalize의 유일한 입력으로 사용하라. Coverage finding/PARTIAL/BLOCKED/도구 실패는 성공 반영 보류이며 semantic VERIFIED를 바꾸거나 finalizer 결과를 만들지 않는다. FAILED/INCONCLUSIVE는 Coverage 없이 기존 비진행 finalization을 따른다. 보충 판정이 현재 권한에서 가능하면 fresh verifier와 새 binding/terminal을 사용하고 모든 적용 의무를 판정한 뒤 새 성공 결과에 Coverage를 수행한다. 종료된 verifier를 재개하거나 이전 handle을 제출하지 않는다. 제품 수정은 이 verify 요청의 권한이 아니며 진전 없는 자동 반복을 하지 않는다. 실제 progression 또는 미호출 상태를 별도로 보고하라. verdict/path/SHA를 finalizer 입력으로 만들거나 재작성하지 않는다.\n")
     if stage == "plan":
         return common + metadata["planning_prompt"] + ("\n이번 요청은 이 한 결과의 기획부터 approved Spec과 reviewed Ready Ticket Set까지다. "
             "read로 skill://ask-matt 를 호출하고 현재 권위를 확인하라. 제품 의미가 완전히 정해져 있으면 To Spec과 To Tickets까지 진행한다. "
@@ -281,7 +281,6 @@ def run_stage(stage: str, metadata: dict[str, Any], *, agent_dir: Path, payload:
         ticket_after = ticket.read_text(encoding="utf-8")
         terminal_handle = observation.get("host_verifier_terminal_handle")
         terminal_matches = bool(terminal_handle
-                                and observation.get("host_verifier_terminal_delivery_count") == 1
                                 and finalization_args == {"terminal_handle": terminal_handle}
                                 and finalization.get("verification_terminal") == terminal_handle)
         binding = exact_hashed_json(observation.get("verification_binding_path"),
@@ -515,7 +514,6 @@ def build_report(metadata_paths: list[Path], records: list[dict[str, Any]], revi
                     terminal_handle = native.get("host_verifier_terminal_handle")
                     if (native.get("verifier_ticket_progression") != "PENDING CALLER FINALIZATION"
                             or not terminal_handle
-                            or native.get("host_verifier_terminal_delivery_count") != 1
                             or native.get("caller_finalization_args") != {"terminal_handle": terminal_handle}
                             or native.get("ticket_progression") != "COMPLETED"
                             or native.get("ticket_status_after") != "done"

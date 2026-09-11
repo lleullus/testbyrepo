@@ -11,6 +11,7 @@ Ticket:
 Candidate Verification Target:
 Implementation Report / Evidence:
 Execution Plan / Review: None | <exact optional outside-root plan_review_path>
+Known Coverage Findings: None | <exact prior Coverage result and relevant correction/new evidence>
 Additional User Instructions:
 Delegated Verifier: yes
 ```
@@ -27,7 +28,7 @@ The verifier runs one invocation-local evidence cycle and returns exactly one te
 4. if target identity, effect partition, or authority becomes unattributable, the verifier terminates with the applicable `VERIFICATION NOT STARTED | FAILED | INCONCLUSIVE` result rather than waiting for Parent continuation;
 5. after fixing the semantic verdict, the verifier emits its exact terminal result and exits successfully; it does not seal a verdict record;
 6. OMP captures non-forgeable finalization authority only for that exact successful Ready Verify terminal return and delivers one opaque terminal handle;
-7. Parent submits exactly that host-delivered handle as the sole `ready_finalize` input; it never extracts or recreates verdict authority.
+7. for VERIFIED from ready, Parent obtains one read-only Coverage terminal before success submission under §14; for other results, existing non-progressing finalization remains. Parent submits only the applicable exact host-delivered handle and never extracts or recreates verdict authority.
 
 After successful background verifier dispatch, Parent Main does not poll normal progress or completion. It does not call `hub wait`, `hub jobs`, `hub list`, or `hub inbox`, send a status request, or duplicate repository/runtime inspection solely to observe the verifier. It stands by once and lets the host-delivered terminal result wake it; routing and `ready_finalize` begin only from that exact result.
 
@@ -136,7 +137,7 @@ Add a derived positive variation, counterexample, boundary exercise or observati
 
 Do not introduce or change product obligations, supported conditions, Scope, acceptance surfaces or decision criteria. Preserve every authored mandatory flow and explicit initial condition. Within the approved usage and existing action authority, a derived variation of data, entity identity or execution order may exercise the same obligation when a current implementation-grounded failure path makes that variation material. Such a variation supplements, rather than replaces, the authored flow. Do not expand into unrelated mutation or exhaustive coverage; prefer the smallest sufficient scenario.
 
-For every material finding from this verifier's current discovery cycle or optional navigation, reopen its current contract anchor and assign one verifier-owned disposition:
+For every material finding discovered while grounding/executing this scenario or supplied through navigation (including a prior Coverage result), reopen its current contract anchor and assign one verifier-owned disposition. A concrete path rejected using current evidence is recorded with that evidence; do not require a failure reproduction for a hypothesis already decisively refuted.
 
 ```text
 Finding Disposition:
@@ -155,15 +156,11 @@ Finding Disposition:
 
 Navigation never substitutes for fresh verifier-owned evidence. Prefer the safely minimized trigger; same-cycle evidence directly obtained by this verifier can support both discovery and adjudication without repeating a risky effect. The verifier's final judgment remains independent from prior implementation narration/self-check.
 
-### Bounded post-implementation frontier
+### Scenario challenges and known findings
 
-Review every authored flow and applicable conditional boundary for realistic false-completion/attribution paths in the actual implementation, separately from the mandatory scenario. For a runtime claim, trace the actual acceptance path far enough to connect its entrypoint, deciding state/effect and authoritative readback. Derive material counterexamples from load-bearing assumptions on that path, including relevant identity, ownership, lifetime or ordering assumptions and weak readbacks, not just the reviewed plan's diagnosis. Use source and schema inspection to select discriminating execution, not to substitute for runtime evidence. Bound this inspection by the original purpose and approved claim, not a repository-wide audit. A lane requires a current contract anchor, reachable concrete path, material consequence and executable/inspectable discriminating readback. Dismiss unreachable, out-of-scope or already-handled hypotheses with exact evidence; the original unfixed symptom is a purpose failure even if pre-existing.
+The separate additional implementation-path frontier search belongs to `ready-ticket-coverage` after a successful terminal. Do not add a mandatory separate frontier pass to this verifier cycle. Continue grounding each flow's discrimination in the actual entrypoint, deciding state/effect and authoritative readback, and resolve every known material counterexample under the existing evidence rules. Source/schema inspection selects discriminating execution; it does not replace runtime evidence.
 
-For admitted exploration, preserve initial state and target identity, make the smallest authorized trigger, minimize one irrelevant dimension at a time where safe, and capture primary output/readback before cleanup. Keep observed facts separate from inference; transport failure does not decide mutation outcome. Preserve each lane's material finding, attributable no-finding or exact evidence limit without forcing a finding count. No distinct lane/no finding is not PASS and never removes any authored obligation. A same-cycle finding becomes CONTRADICTED only through its actual affected flow/AC decision boundary.
-
-Stop minimization when further reduction loses reproducibility, crosses authority, becomes unsafe or stops answering the contract question. Keep a compact finding record: exact contract/flow anchor, minimal trigger/actions, observed result, authoritative comparison/readback, primary evidence, current target identity, cleanup/terminal state and remaining uncertainty. Where assistance is explicitly permitted, isolate read/effect/cleanup state; serialize shared records, idempotency keys, service lifecycles or dependency-sensitive observations. Agreement is not evidence and one attributable contradiction is not discarded by majority.
-
-Required risky/external/one-shot actions retain current Ticket/user authority; do not bypass protection to make a trigger. A verifier may use bounded assistance only when the current stage explicitly permits delegation; the default one-verifier/no-redelegation contract does not secretly create a worker roster. Assistance is navigation and the final verifier owns fresh decisive evidence. These principles are self-contained; no external methodology installation is required.
+For an authorized scenario challenge, preserve initial state and target identity, use the smallest sufficient trigger, and capture primary output/readback before cleanup. Keep observed facts separate from inference; transport failure does not decide mutation outcome. Stop trigger minimization when it loses reproducibility, crosses authority, becomes unsafe or no longer answers the contract question. Record the exact contract anchor, actions, observed result, authoritative comparison, primary evidence, identity, cleanup state and uncertainty. Agreement is not evidence. Required risky/external/one-shot actions retain current Ticket/user authority; the verifier never delegates or expands that authority.
 
 For each block keep authored contract and derived execution separate:
 
@@ -231,7 +228,7 @@ Target-stability check:
 Environment:
 External/operator conditions:
 Semantic contract check: <no material gap found | exact blocking defect already returned before execution>
-Counterexample frontier: <material lanes or no distinct lane, with bounded rationale>
+Known material counterexamples: None | <scenario-discrimination challenges / supplied findings and their current basis>
 Findings / proposed verifier dispositions: None | <finding -> disposition>
 
 Scenario Blocks:
@@ -418,7 +415,7 @@ A still-running duplicate-sensitive effect, incomplete cleanup or unfinished abs
 
 ## 14. Terminal semantic result and caller-owned status transition
 
-Keep semantic verification and Ticket progression separate. The delegated verifier owns the semantic result; OMP owns opaque terminal authority; the caller owns only the narrow `ready_finalize` invocation.
+Keep semantic verification and Ticket progression separate. The delegated verifier owns the semantic result; OMP owns opaque terminal authority; the caller owns post-success Coverage fan-in and the narrow `ready_finalize` invocation, not a second verdict.
 
 For every normal delivery verification captured from `Status: ready`, the verifier fixes one semantic verdict and returns one terminal `READY TICKET VERIFICATION RESULT` with `Verifier Ticket Progression: PENDING CALLER FINALIZATION`. This applies to `VERIFIED`, `FAILED`, and `INCONCLUSIVE`. The verifier never writes `done`, invokes `ready_finalize`, calls `seal_verdict`, or creates a verdict record.
 
@@ -447,7 +444,7 @@ Verifier Ticket Progression: PENDING CALLER FINALIZATION | NOT APPLICABLE
 Observed Ticket Status: ready | done | <actual>
 ```
 
-OMP accepts finalization authority only from the exact successful terminal result of the delegated Ready Verify worker. Parent Main calls `ready_finalize({ terminal_handle: "<exact host-delivered handle>" })`. It supplies no semantic verdict, binding path/SHA, Ticket, bundle, protocol, or reconstructed payload. Terminal text, copied fields, a fabricated handle, or another caller/session's handle has no authority; an exact retry of the same accepted handle returns the same captured result without another status write.
+OMP accepts finalization authority only from the exact successful terminal result of the delegated Ready Verify worker. Parent Main first applies the caller-owned post-success Coverage sequence below, then calls `ready_finalize({ terminal_handle: "<exact host-delivered handle>" })` only when permitted. It supplies no semantic verdict, binding path/SHA, Ticket, bundle, protocol, or reconstructed payload. Terminal text, copied fields, a fabricated handle, or another caller/session's handle has no authority; an exact retry of the same accepted handle returns the same captured result without another status write.
 
 `ready_finalize` obtains the verifier verdict and binding provenance only from host-owned terminal metadata and rechecks current loaded bundle/protocol identity, current authority, stable target, and canonical Ticket validation. It does not rerun or reinterpret semantic verification.
 
@@ -461,6 +458,16 @@ For an original `ready` binding:
 The finalizer preserves bytes/mode except the one status token, uses exact compare-and-swap atomic replacement, and conditionally restores only this call's exact candidate when post-write validation fails and authority/stable target remain unchanged. It must not overwrite an external edit or infer fresh completion from a `done` string.
 
 Diagnostic re-verification captured from `done` is semantic/diagnostic only and reports `Verifier Ticket Progression: NOT APPLICABLE`; it never reopens or rewrites status.
+
+### Caller-owned post-success Coverage
+
+For normal ready-to-done VERIFIED only, the finalization-owning caller dispatches one independent `ready-ticket-coverage` worker after verifier settlement. Forward exact Ticket/parent/Behavior/UI/user authority, the completed verifier report and primary evidence, and existing target/binding identities. Keep the opaque handle private to the caller. Coverage uses the current applicable user-selected model/effort policy, returns one ordinary read-only terminal, has no verifier authority profile, and never delegates. If Adaptive Outer Main is the caller it performs this step directly; no second verify wrapper or duplicate Coverage invocation is added.
+
+COMPLETE with no unresolved material finding or evidence gap permits submission of that original handle while target/authority remain current. A material finding, PARTIAL/BLOCKED or failed/missing Coverage result withholds success submission: preserve VERIFIED and actual Ticket status, report Coverage result/limits and `Finalization: not called`, and route to the existing verification/correction or contract owner. No response or incomplete review is not no-finding. Do not invent a finalizer return or new semantic verdict. FAILED/INCONCLUSIVE and diagnostic non-progressing terminals skip normal-success Coverage and keep existing finalization.
+
+Supplementary execution/adjudication needs a fresh verifier invocation, binding and terminal, never resumption or edits to an ended result. Forward the finding as navigation; the fresh verifier owns current decisive evidence and every applicable Flow/AC, not just one extra test. Changed source/config/effect paths cannot be patched into the old binding or inherit old PASS. Remediation remains subject to existing implementation/plan authority; a standalone verification request does not authorize automatic repair. Follow-up Coverage uses the new exact report, checks prior gap resolution and materially affected scope, and does not repeat unrelated investigation. No redispatch of the same finding/evidence without a material change or an unattempted authorized discriminating observation.
+
+This adds a real caller procedure, not mechanical Coverage enforcement by the finalizer. Keep opaque handles, terminal schema, binding and guarded status write unchanged. The full read-only investigation/finding/result contract belongs to `ready-ticket-coverage`; no Coverage store, validator or lifecycle is added.
 
 ## 15. No remediation loop
 
@@ -528,6 +535,6 @@ Render both path lists as whitespace-free compact JSON arrays exactly matching t
 
 The delegated verifier returns the report through one strict host terminal `yield` whose data uses schema `iis-ready-verifier-terminal/v1` and exact fields `project_root`, `ticket_path`, `verification_binding`, `verification_binding_sha256`, `stable_target_paths`, `scenario_effect_paths`, `verification_verdict`, `ticket_progression`, `observed_ticket_status`, and `report`. Every field must equal the corresponding readable report/binding fact; `report` contains the complete text above. Text-only narration, a caller output schema, or copied task output does not create finalization authority.
 
-The delegated verifier stops at this report and exits successfully. OMP validates and privately persists that exact terminal result, then delivers its opaque handle to Parent Main. Parent submits only that handle to `ready_finalize` and appends the returned `Verification Verdict`, `Ticket Progression`, `Progression Basis`, `Ticket Status After`, host provenance, and any exact progression detail. The verifier report itself contains no transferable finalization credential.
+The delegated verifier stops at this report and exits successfully. OMP validates and privately persists that exact terminal result, then delivers its opaque handle to Parent Main. Parent applies §14 post-success Coverage, submits only the eligible exact handle to `ready_finalize`, and appends its actual `Verification Verdict`, `Ticket Progression`, `Progression Basis`, `Ticket Status After`, host provenance and progression detail. When Coverage withholds submission, report the exact review and `Finalization: not called` instead. The verifier report contains no transferable finalization credential.
 
 When final `INCONCLUSIVE` is caused specifically by an authority/evidence-attribution/target-currentness/effect-settlement boundary, or when a `VERIFIED` evidence verdict cannot complete caller finalization, append the same `Decision / Governing authority / Observed condition / Effect / Next allowed action` provenance fields. Do not append them to a normal evidence-complete `FAILED` verdict merely because the product contradicted the Ticket.

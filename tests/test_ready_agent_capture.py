@@ -175,6 +175,40 @@ class ReadyAgentCaptureTests(unittest.TestCase):
         self.assertEqual(finalized["progression_basis"], "WRITE_PERFORMED_THIS_CALL")
         self.assertEqual(finalized["ticket_status_after"], "done")
 
+        # A held success (including a failed/incomplete Coverage review) is not progression.
+        held = self.capture.summarize(events[:1] + [
+            message("stop", terminal + "\nCoverage: BLOCKED — primary evidence unavailable\nFinalization: not called"),
+            {"type": "agent_end"},
+        ])
+        self.assertEqual(held["parsed_verdict"], "VERIFIED")
+        self.assertEqual(held["host_verifier_terminal_handle"], handle)
+        self.assertIsNone(held["caller_finalization"])
+        self.assertIsNone(held["ticket_progression"])
+
+        new_handle = "ready-terminal-00000000-0000-4000-8000-000000000002"
+        new_delivery = json.loads(json.dumps(events[0]).replace(handle, new_handle))
+        fresh_finalization = json.loads(json.dumps(events[1:3]).replace(handle, new_handle).replace(binding, "/outside/fresh-binding.json"))
+        fresh = self.capture.summarize(events[:1] + [new_delivery] + fresh_finalization + events[-2:])
+        self.assertEqual(fresh["host_verifier_terminal_handle"], new_handle)
+        self.assertEqual(fresh["host_verifier_terminal_delivery_count"], 2)
+        self.assertEqual(fresh["verification_binding_path"], "/outside/fresh-binding.json")
+        self.assertEqual(fresh["ticket_progression"], "COMPLETED")
+
+        # The old finalizer cannot supply either the new verdict or the new progression.
+        stale = self.capture.summarize(events[:-2] + [new_delivery,
+            message("stop", "READY TICKET VERIFICATION RESULT\nVerification Verdict: INCONCLUSIVE"),
+            {"type": "agent_end"},
+        ])
+        self.assertEqual(stale["parsed_verdict"], "INCONCLUSIVE")
+        self.assertEqual(stale["host_verifier_terminal_handle"], new_handle)
+        self.assertIsNone(stale["verification_binding_path"])
+        self.assertIsNone(stale["ticket_progression"])
+        self.assertEqual(stale["caller_finalization_args"], {"terminal_handle": handle})
+
+        duplicate = self.capture.summarize(events[:1] + [new_delivery, new_delivery] + fresh_finalization + events[-2:])
+        self.assertIsNone(duplicate["host_verifier_terminal_handle"])
+        self.assertIsNone(duplicate["ticket_progression"])
+
     def test_normal_domain_failure_is_not_a_transport_failure(self) -> None:
         summary = self.capture.summarize([
             {"type": "tool_execution_end", "isError": True},

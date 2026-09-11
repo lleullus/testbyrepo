@@ -12,17 +12,19 @@ from run_agent import load_events, summarize, text_content
 
 def inspect(run_root: Path, stage: str) -> dict:
     metadata = json.loads((run_root / "metadata.json").read_text(encoding="utf-8"))
-    summary = summarize(load_events(run_root / stage / "events.jsonl"))
+    events = load_events(run_root / stage / "events.jsonl")
+    summary = summarize(events)
+    event_ordinals = {id(event): ordinal for ordinal, event in enumerate(events, 1)}
     results = {event["toolCallId"]: event for event in summary["tool_results"]}
     evidence, first_trigger = [], None
     entry = Path(metadata["trigger_argv"][1])
     for ordinal, call in enumerate(summary["tool_calls"], 1):
         name = call["toolName"]
-        if name not in {"bash", "ready_contract", "ready_finalize", "hub", "write"}:
+        if name not in {"bash", "ready_contract", "ready_finalize", "hub", "write", "task"}:
             continue
         result = results.get(call["toolCallId"])
         if result is None:
-            evidence.append({"tool_ordinal": ordinal, "tool": name, "args": call.get("args"), "completed": False})
+            evidence.append({"tool_ordinal": ordinal, "event_ordinal": event_ordinals[id(call)], "tool": name, "args": call.get("args"), "completed": False})
             continue
         raw = text_content(result.get("result", {}))
         try:
@@ -47,13 +49,19 @@ def inspect(run_root: Path, stage: str) -> dict:
                                        and resolved_script == entry.resolve() and not result.get("isError"))
         if actual_entry_invocation and first_trigger is None:
             first_trigger = ordinal
-        evidence.append({"tool_ordinal": ordinal, "tool_call_id": call["toolCallId"], "tool": name, "args": args,
+        evidence.append({"tool_ordinal": ordinal, "event_ordinal": event_ordinals[id(call)], "tool_call_id": call["toolCallId"], "tool": name, "args": args,
                          "completed": True, "is_error": result.get("isError", False), "output": output,
                          "ordinary_entrypoint_invoked": actual_entry_invocation})
     return {"case_id": metadata["case_id"], "run_id": metadata["run_id"], "stage": stage,
             "terminal_text": summary["terminal_text"], "parsed_verdict": summary["parsed_verdict"],
             "preparation_completion": summary["preparation_completion"], "actual_models": summary["actual_models"],
             "first_entrypoint_tool_ordinal": first_trigger, "raw_tool_evidence": evidence,
+            "raw_owner_returns": [{"event_ordinal": ordinal, "message": event["message"]}
+                                  for ordinal, event in enumerate(events, 1)
+                                  if event.get("type") == "message_start"
+                                  and event.get("message", {}).get("role") == "custom"
+                                  and event["message"].get("customType") == "async-result"
+                                  and event["message"].get("attribution") == "agent"],
             "interpretation": "Command execution is evidence of a boundary attempt, not proof of its success or sufficiency."}
 
 

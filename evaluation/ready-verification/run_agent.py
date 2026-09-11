@@ -130,22 +130,26 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
     finalization = finalizations[-1]["result"] if finalizations else None
     finalization_args = finalizations[-1]["args"] if finalizations else None
     delivered_handles = host_ready_terminal_handles(events)
-    unique_handles = list(dict.fromkeys(delivered_handles))
-    host_terminal = unique_handles[0] if len(unique_handles) == 1 else None
+    # Sequential re-verification supersedes earlier held handles; preserve raw delivery history.
+    latest_handle = delivered_handles[-1] if delivered_handles else None
+    host_terminal = latest_handle if latest_handle and delivered_handles.count(latest_handle) == 1 else None
+    current_finalization = finalization if (host_terminal
+        and finalization_args == {"terminal_handle": host_terminal}
+        and finalization.get("verification_terminal") == host_terminal) else None
     parsed_text_verdict = _verification_verdict(terminal)
-    finalizer_verdict = finalization.get("verification_verdict") if finalization else None
+    finalizer_verdict = current_finalization.get("verification_verdict") if current_finalization else None
     parsed = finalizer_verdict if finalizer_verdict in {"VERIFIED", "FAILED", "INCONCLUSIVE"} else parsed_text_verdict
     preparation = canonical_field(terminal, "READY TICKET PLAN RESULT", "Completion", "COMPLETE|BLOCKED|PARTIAL")
     review = canonical_field(terminal, "READY TICKET PLAN RESULT", "Plan Review", r"/[^\n]+")
     implementation = canonical_field(terminal, "IMPLEMENT RESULT", "Completion", "COMPLETE|BLOCKED|PARTIAL")
-    verifier_progression = finalization.get("verifier_ticket_progression") if finalization else None
+    verifier_progression = current_finalization.get("verifier_ticket_progression") if current_finalization else None
     if verifier_progression is None:
         verifier_progression = canonical_field(terminal, "READY TICKET VERIFICATION RESULT", "Verifier Ticket Progression", "PENDING CALLER FINALIZATION|NOT APPLICABLE")
-    verification_binding = finalization.get("verification_binding") if finalization else None
-    verification_binding_sha256 = finalization.get("verification_binding_sha256") if finalization else None
-    host_verdict_record = finalization.get("verification_verdict_record") if finalization else None
-    host_verdict_record_sha256 = finalization.get("verification_verdict_record_sha256") if finalization else None
-    verifier_model = finalization.get("verifier_model") if finalization else None
+    verification_binding = current_finalization.get("verification_binding") if current_finalization else None
+    verification_binding_sha256 = current_finalization.get("verification_binding_sha256") if current_finalization else None
+    host_verdict_record = current_finalization.get("verification_verdict_record") if current_finalization else None
+    host_verdict_record_sha256 = current_finalization.get("verification_verdict_record_sha256") if current_finalization else None
+    verifier_model = current_finalization.get("verifier_model") if current_finalization else None
     calls = [event for event in events if event.get("type") == "tool_execution_start"]
     results = [event for event in events if event.get("type") == "tool_execution_end"]
     tool_errors = [event for event in results if event.get("isError") is True]
@@ -167,9 +171,9 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
             "host_verdict_record_sha256": host_verdict_record_sha256.lower() if model_completed and isinstance(host_verdict_record_sha256, str) else None,
             "caller_finalization": finalization,
             "caller_finalization_args": finalization_args,
-            "ticket_progression": finalization.get("ticket_progression") if finalization else None,
-            "progression_basis": finalization.get("progression_basis") if finalization else None,
-            "ticket_status_after": finalization.get("ticket_status_after") if finalization else None,
+            "ticket_progression": current_finalization.get("ticket_progression") if current_finalization else None,
+            "progression_basis": current_finalization.get("progression_basis") if current_finalization else None,
+            "ticket_status_after": current_finalization.get("ticket_status_after") if current_finalization else None,
             "implementation_completion": implementation if model_completed else None,
             "tool_calls": calls, "tool_results": results, "tool_errors": tool_errors,
             "usage": usage, "actual_models": models,
