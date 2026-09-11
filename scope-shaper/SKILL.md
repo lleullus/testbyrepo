@@ -40,6 +40,18 @@ or IIS request not yet next-increment-ready
 
 An ordinary IIS request may bypass Scope Shaper only when the IIS router and Ask Matt admission can already establish one current durable observable increment. Technical depth, file count, or implementation layers alone never decide whether Scope Shaper is required.
 
+### Product Thesis Input
+
+Before shaping a new or materially revised product meaning, the current Lead directly reads and performs `../product-thesis/SKILL.md`. This applies to an explicit Scope Shaper request as well as a router-directed entry. If a current applicable Product Thesis conclusion is already recoverable from current conversation authority or confirmed Scope/Matt authority and fresh evidence does not invalidate it, reuse it without recalibration.
+
+Product Thesis supplies the Reason to Exist, Core Utility, high-level Core Completion Loop, truth/causal invariants, named-item meaning, and success claim boundary. Scope Shaper does not reinvent those conclusions, and Product Thesis does not choose the next Increment. `USER_INPUT_REQUIRED` stops before shaping mutation; `CALIBRATED` continues into normal current-state and landscape investigation.
+
+Preserve applicable Product Thesis meaning through the existing confirmed artifact fields: `Intent Horizon`, `Verified Material Claims`, `Planning Boundary`, and `Planning Constraints`; this remains the semantic-adoption responsibility. In addition, write one compact `Product Meaning Binding` containing only Core Utility, Core Completion Loop, explicit Required Outcomes / Means, Truth / Causal Invariants, and Success Observation in the confirmed `SCOPE-SHAPING-RESULT.md`. The immutable `SHAPE-NNN` revision preserves those fields with the rest of the confirmed Scope and, by the existing byte-for-byte snapshot contract, preserves the exact same binding. Before artifact closure, use `python3 ../product-thesis/tools/product_meaning_binding.py fingerprint <SCOPE-SHAPING-RESULT.md>` to calculate the `iis-product-meaning/v1` fingerprint, write it to the binding, then run the normal Scope validator, which validates the binding internally. Do not create a required separate Product Thesis artifact, copy the complete Product Thesis report into every file, or copy the binding into `INC-NNN.md`, Work Packages, or Tickets.
+
+The selected Increment may establish one durable product state that materially advances the Core Completion Loop; it need not complete the whole loop. Reject a candidate that contributes only technical preparation or does not materially advance the Core Utility, but do not expand the current Increment with future capability merely to complete the long-term thesis. Leave detailed Behavior/UI policy and exact completion semantics to Matt.
+
+Return to the product-meaning owner only when fresh actual evidence invalidates the Reason to Exist, Core Utility, or an essential truth, identity, or ownership premise. Ordinary delivery progress, implementation detail, or a changed construction ordering decision does not trigger Product Thesis recalibration.
+
 ## Required Inputs And Preflight
 
 For every new shaping pass require one proposed change, product direction, or request. Use one of two evidence modes:
@@ -403,7 +415,7 @@ python3 <scope-shaper-directory>/tools/validate_increment.py \
   <absolute-INC-NNN.md-path>
 ```
 
-The validators check structural integrity, canonical path ownership, source confirmation, exactly one selected ready Increment, Work Package/source drift, and Increment/source drift. They do not grade product judgment or implementation design.
+The validators check structural integrity, canonical path ownership, source confirmation, exactly one selected ready Increment, Work Package/source drift, Increment/source drift, and strict `Product Meaning Binding` schema/fingerprint consistency whenever that section is present. New applicable Scope artifacts emitted by this skill must contain the binding; legacy artifacts are not bulk-migrated merely to satisfy this addition. The validators do not grade Product Thesis correctness, semantic adoption into Scope prose, product judgment, or implementation design.
 
 ## Handoff
 

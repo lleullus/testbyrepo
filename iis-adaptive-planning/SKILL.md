@@ -35,7 +35,7 @@ For every successfully dispatched background implementation or verification owne
 At the start of every Adaptive planning run:
 
 1. Load the currently discovered `iis-workflow` skill.
-2. Resolve its current Scope Shaper, Ask Matt, To Spec, and To Tickets route targets.
+2. Resolve its current Product Thesis, Scope Shaper, Ask Matt, To Spec, and To Tickets route targets.
 3. Read the applicable current leaf before performing that leaf.
 4. Use the current canonical templates, validators, path rules, authority ownership, and product-contract semantics from those sources.
 5. Apply only the explicit Adaptive Delta defined in [references/00-baseline-coexistence.md](references/00-baseline-coexistence.md), [references/03-adaptive-routing.md](references/03-adaptive-routing.md), and the invocation-closure/completion discipline in [references/09-run-contract.md](references/09-run-contract.md).
@@ -77,9 +77,29 @@ When the current user/caller supplies one exact `repository-investigation` artif
 
 Do not search for or auto-select a repository-investigation artifact merely because one exists. Do not treat the artifact, its completion status, or its planning-relevance candidate labels as Scope/Run Contract/product authority, and do not use the artifact itself as a product authoritative readback. When no exact artifact is supplied, Adaptive behavior is unchanged.
 
+## Product Meaning Before Run Closure
+
+After explicit Adaptive activation and any authorized read-only evidence intake, inspect the applicable existing Mandate and current planning authority. Apply the current `iis-workflow` Product Meaning Admission before Run Contract closure. When new or materially revised product meaning is required, Outer Main directly reads and performs the current `product-thesis` skill as read-only calibration; otherwise reuse current applicable approved product meaning.
+
+Use a `CALIBRATED` Product Thesis to normalize or revalidate Mandate meaning, then close the invocation-local Run Contract. The order is:
+
+```text
+current explicit Adaptive instruction
+-> applicable existing Mandate and current authority
+-> conditional read-only Product Thesis calibration
+-> Mandate normalization or revalidation
+-> invocation-local Run Contract closure
+-> required /승인게이트 release when applicable
+-> first planning or delivery mutation
+```
+
+Product Thesis may describe broader long-term product meaning, but the Mandate ceiling and Run Contract cover only current authority. It does not widen an explicit stage stop, authorize implementation or verification, or turn the whole Core Completion Loop into the current Increment. Newer explicit user authority wins.
+
+Do not recalibrate on ordinary Ticket progress, implementation detail, leaf-local correction, post-shape comparison, or material Increment reshaping alone. Recalibrate only when newer user authority or fresh actual evidence invalidates the Reason to Exist, Core Utility, or an essential truth, identity, or ownership premise. Preserve a still-applicable thesis through post-shape, owner-return, and final goal-fidelity checks without rerunning it.
+
 ## Adaptive Run Contract
 
-Before the first Adaptive planning mutation, close and render the compact invocation contract using [templates/ADAPTIVE-RUN-CONTRACT.template.md](templates/ADAPTIVE-RUN-CONTRACT.template.md). Apply [Goal and required-item coverage](references/09-run-contract.md#goal-and-required-item-coverage-invariant) against the relevant actual user instructions at closure, post-shape/material reshape, and owner-return/final assessment; a Goal string or preclosed label alone is insufficient.
+Before the first Adaptive planning mutation, after the conditional Product Thesis and Mandate normalization order above, close and render the compact invocation contract using [templates/ADAPTIVE-RUN-CONTRACT.template.md](templates/ADAPTIVE-RUN-CONTRACT.template.md). Apply [Goal and required-item coverage](references/09-run-contract.md#goal-and-required-item-coverage-invariant) against the relevant actual user instructions at closure, post-shape/material reshape, and owner-return/final assessment; a Goal string or preclosed label alone is insufficient.
 
 The Run Contract establishes:
 

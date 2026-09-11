@@ -6,6 +6,26 @@ Source-Increment: None | <project-relative Scope Increment path>
 
 기본적으로 현재 planning authority를 충실히 투영하고 완전성·검증 가능성·미해결 material decision 부재를 결함 중심으로 자체검수한 뒤에만 `Status: approved`로 바꾼다. 사용자가 이번 후보에 별도 승인을 명시적으로 요구한 경우에만 자체검수 통과 후 그 추가 게이트를 둔다. 자체검수 중간 상태나 별도 receipt는 만들지 않는다. Scope Shaper에서 온 작업이면 `Source-Increment`에 해당 Increment의 project-relative canonical path를 적고, 직접 Ask Matt 작업이면 정확히 `None`을 적는다. 이 trace는 미래 Scope를 가져오는 authority가 아니다.
 
+## Product Meaning Binding
+
+Schema: iis-product-meaning/v1
+Fingerprint: sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+Core Utility:
+<product-level core utility>
+
+Core Completion Loop:
+<product-level causal completion loop>
+
+Required Outcomes / Means:
+- <explicitly required product outcome or means, or use exact None instead of a list>
+
+Truth / Causal Invariants:
+- <product-level truth or causal invariant, or use exact None instead of a list>
+
+Success Observation:
+<product-level observable success condition>
+
 ## Problem
 
 해결할 문제와 영향을 받는 대상을 간결하게 적는다. 해결 방법을 먼저 결정하지 않는다.

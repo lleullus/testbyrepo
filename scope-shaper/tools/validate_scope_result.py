@@ -17,6 +17,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+PRODUCT_THESIS_TOOLS = REPO_ROOT / "product-thesis" / "tools"
+if str(PRODUCT_THESIS_TOOLS) not in sys.path:
+    sys.path.insert(0, str(PRODUCT_THESIS_TOOLS))
 
 from iis_path_contract import (  # noqa: E402
     PathContractError,
@@ -25,6 +28,7 @@ from iis_path_contract import (  # noqa: E402
     require_canonical_regular_file,
     require_work_slug,
 )
+from product_meaning_binding import ProductMeaningBindingError, parse_binding  # noqa: E402
 
 
 class ValidationError(Exception):
@@ -162,6 +166,15 @@ def _nonempty(block: str, label: str) -> str:
     if not value:
         raise ValidationError(f"{label} must not be empty")
     return value
+
+
+def _validate_product_meaning_binding(text: str) -> None:
+    if "## Product Meaning Binding" not in text:
+        return
+    try:
+        parse_binding(text)
+    except ProductMeaningBindingError as exc:
+        raise ValidationError(f"Product Meaning Binding: {exc}") from exc
 
 
 def _normalize(value: str) -> str:
@@ -427,6 +440,7 @@ def _validate_package_file(source: Path, project_root: str, package: Package) ->
 
 
 def _validate_common_sections(text: str) -> Increment:
+    _validate_product_meaning_binding(text)
     _nonempty(_section(text, "Intent Horizon"), "Intent Horizon")
     _items(_section(text, "Current Product State"))
     _items(_section(text, "Investigation Assignments"))

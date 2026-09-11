@@ -232,7 +232,8 @@ def invoke(*, project_root: Path, prompt: str, output_dir: Path, agent_dir: Path
     started = time.monotonic()
     timed_out = False
     with (output_dir / "events.jsonl").open("w", encoding="utf-8") as stdout, (output_dir / "stderr.txt").open("w", encoding="utf-8") as stderr:
-        process = subprocess.Popen(argv, cwd=project_root, env=environment, stdout=stdout, stderr=stderr, start_new_session=True)
+        process = subprocess.Popen(argv, cwd=project_root, env=environment, stdin=subprocess.DEVNULL,
+                                   stdout=stdout, stderr=stderr, start_new_session=True)
         try:
             allowance = timeout + 20 if wall_timeout_seconds is None else wall_timeout_seconds
             if boundary_callback is None:

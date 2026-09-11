@@ -19,6 +19,13 @@ sys.modules[spec.name] = validator
 assert spec.loader is not None
 spec.loader.exec_module(validator)
 
+BINDING_MODULE_PATH = ROOT / "product-thesis" / "tools" / "product_meaning_binding.py"
+binding_spec = importlib.util.spec_from_file_location("product_meaning_binding_for_scope_tests", BINDING_MODULE_PATH)
+product_meaning_binding = importlib.util.module_from_spec(binding_spec)
+sys.modules[binding_spec.name] = product_meaning_binding
+assert binding_spec.loader is not None
+binding_spec.loader.exec_module(product_meaning_binding)
+
 WORKSPACE_MODULE_PATH = ROOT / "planning-workspace" / "planning_workspace.py"
 workspace_spec = importlib.util.spec_from_file_location("planning_workspace_for_transition", WORKSPACE_MODULE_PATH)
 planning_workspace = importlib.util.module_from_spec(workspace_spec)
@@ -40,7 +47,10 @@ class ValidatorTests(unittest.TestCase):
         for old, new in replacements.items():
             text = text.replace(old, new)
         text = text.replace("Lead Disposition: SELECT | REJECT", "Lead Disposition: SELECT")
-        return re.sub(r"<[^>]+>", "Example", text)
+        text = re.sub(r"<[^>]+>", "Example", text)
+        if "## Product Meaning Binding" in text:
+            text = product_meaning_binding.stamp_fingerprint(text)
+        return text
 
     def _write_current_scope(self, source: Path, text: str) -> Path:
         source.write_text(text, encoding="utf-8")
@@ -122,6 +132,26 @@ class ValidatorTests(unittest.TestCase):
         self.addCleanup(td.cleanup)
         validator.validate(source)
         self.assertEqual(validator.validate_selected_increment(increment), source)
+
+    def test_scope_binding_stale_fingerprint_fails(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8").replace(
+            "Core Utility:\nExample",
+            "Core Utility:\nChanged after fingerprinting",
+        )
+        self._write_current_scope(source, text)
+        with self.assertRaisesRegex(validator.ValidationError, "stale Product Meaning Binding fingerprint"):
+            validator.validate(source)
+
+    def test_legacy_scope_without_binding_remains_valid(self) -> None:
+        td, source, _ = self.make_bounded()
+        self.addCleanup(td.cleanup)
+        text = source.read_text(encoding="utf-8")
+        start = text.index("## Product Meaning Binding")
+        end = text.index("## Current Product State")
+        self._write_current_scope(source, text[:start] + text[end:])
+        validator.validate(source)
 
     def test_initiative_template_work_package_and_increment_are_valid(self) -> None:
         td, source, package, increment = self.make_initiative()

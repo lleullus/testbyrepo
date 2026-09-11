@@ -55,6 +55,8 @@ Before drafting or writing the Spec, resolve `Source Increment` from the current
 - For Scope-shaped work, require one exact raw, non-symlink local `increments/INC-NNN.md` path under the exact Project Root. Run `../../../scope-shaper/tools/validate_increment.py` against it immediately before Spec drafting. Require it to remain the current `Status: ready-for-matt` Increment selected by its current Scope result, to remain bound to its immutable `Source-Scope-Revision`, and to have `Suggested-Work-Slug` exactly equal to this Spec's work slug.
 - Never convert a known Scope-shaped source to `None`, and never reuse a superseded, stale, drifted, wrong-project, or different-work-slug Increment merely because Matt previously completed planning against it.
 
+For Product Meaning Binding source resolution, do not add a new Spec metadata reference. After the existing Increment admission succeeds, follow that exact admitted Increment's existing `Source-Scope-Revision` to the exact immutable `revisions/SHAPE-NNN.md`. That immutable revision is the binding source for Scope-shaped work. The mutable `SCOPE-SHAPING-RESULT.md` remains navigation only, and `INC-NNN.md` remains a reference hop rather than another binding copy.
+
 When this gate fails, do not draft or write the Spec. Return:
 
 ```text
@@ -207,6 +209,7 @@ For Scope-shaped work, resolve the admitted raw Increment from the exact Project
 It contains these exact headings:
 
 ```text
+## Product Meaning Binding
 ## Problem
 ## Desired Outcome
 ## Requirements
@@ -217,6 +220,8 @@ It contains these exact headings:
 ## UI / UX
 ## Open Questions
 ```
+
+`## Product Meaning Binding` uses exact schema `iis-product-meaning/v1` and contains only Core Utility, Core Completion Loop, explicit Required Outcomes / Means, Truth / Causal Invariants, and Success Observation plus one `sha256:<64 lowercase hex>` fingerprint. Preserve top-level list order; use exact `None` when either collection is empty. Do not include Reason to Exist, candidate/supporting means, current Increment scope projection, Behavior/UI detail, Ticket decomposition, or implementation method in the fingerprint payload. After serializing the five values, run `python3 ../../../product-thesis/tools/product_meaning_binding.py fingerprint <absolute-SPEC.md-path>`, write the returned exact hash to `Fingerprint:`, and use the same utility for validation. Canonicalization is deterministic text normalization only; do not perform semantic paraphrase normalization.
 
 Write the Spec in the user's conversation language. `## Behavior Authorities`
 contains one path-and-scope item for every adopted authority:
@@ -306,8 +311,29 @@ By default, change the exact status value to `approved` only after all existing
 admission gates and the Mandatory contract audit pass, the exact current
 candidate is a complete faithful projection of current authority, and no
 material finding or unresolved product/Scope/Behavior/UI/completion decision
-remains. Do not describe this default adoption as an explicit user approval and
+remains. Immediately before that status transition, Scope-shaped work must first
+rerun the canonical `../../../scope-shaper/tools/validate_increment.py` against
+the exact `Source-Increment`, then run
+`python3 ../../../product-thesis/tools/product_meaning_binding.py validate-spec <absolute-SPEC.md-path>`
+from the canonical skill path. This preserves the existing Increment admission
+rules rather than reimplementing them in the binding validator. For Scope-shaped
+work `validate-spec` then resolves the exact
+`SPEC.Source-Increment -> INC.Source-Scope-Revision -> revisions/SHAPE-NNN.md`
+chain, validates both bindings and fingerprints, and requires canonical source/
+target equality. For direct Ask Matt work it validates the Spec binding's shape
+and internal fingerprint consistency only. A binding mismatch keeps the Spec at
+`draft` and reports the differing binding field(s) without rerunning Product
+Thesis automatically, creating another approval stage, or invoking a semantic
+reviewer. Do not describe this default adoption as an explicit user approval and
 do not add provenance metadata to the canonical Spec.
+
+A successful binding validator means only that the recorded binding structure,
+fingerprint, exact source resolution, and source/target equality are valid. It
+does not prove Product Thesis correctness, Product Thesis -> first-binding
+semantic fidelity, binding -> Requirements/Verification Expectations semantic
+fidelity, current Increment appropriateness, implementation safety, or product
+success. Those remain with the existing planning owner, faithful projection,
+and Mandatory contract audit.
 
 If the current user explicitly requires separate user or planning-owner
 approval of the completed Spec, run the same full self-review first and then

@@ -1,0 +1,121 @@
+{
+  "schema": "iis-product-thesis-evaluation/v1",
+  "protocol": {
+    "variants": ["baseline", "candidate"],
+    "repetitions": [1, 2],
+    "model": "opencodex/gpt-5.6-luna",
+    "thinking": "max",
+    "raw_evidence_required": true,
+    "automatic_semantic_acceptance": false,
+    "freeze_before_execution": true
+  },
+  "cases": [
+    {
+      "id": "A-feature-list-to-utility",
+      "entry": "ordinary-iis",
+      "prompt": "IIS workflow로 계획해. 운영자가 장애 원인을 빨리 좁혀 외부 분석에 넘길 수 있어야 한다. CSV export는 감사 계약 때문에 반드시 있어야 한다. 그래프와 기간/서비스 필터는 후보 수단으로 제안했으며 더 적합한 수단으로 바꿔도 된다. 지금은 원시 이벤트 목록만 있다. 제품 의미를 정리한 뒤 다음 planning owner까지만 식별하고 멈춰.",
+      "required_observations": [
+        "Core Utility is the operator's durable incident-narrowing and external-analysis result, not the three-feature list.",
+        "CSV remains an explicit required means.",
+        "Graph and filters remain supporting or candidate means unless separately required."
+      ],
+      "forbidden_observations": ["Core Utility is only a screen containing graph, filters, and CSV."]
+    },
+    {
+      "id": "B-broken-watch-loop",
+      "entry": "ordinary-iis",
+      "prompt": "IIS workflow로 다음 제품을 계획해. 목표가 입력 UI, 찜 버튼, 감시 토글, 알림 목록은 이미 있다. 찜은 browser localStorage에만 있고 감시는 열린 탭의 polling이며 서버 background monitor는 없다. 사용자는 창을 닫아도 조건 충족 알림을 받고 싶다. 제품 의미를 정리한 뒤 다음 planning owner까지만 식별하고 멈춰.",
+      "required_observations": [
+        "Feature presence is not treated as product completion.",
+        "Client-only persistence and tab-bound polling are identified as breaks in the promised loop."
+      ],
+      "forbidden_observations": ["The existing watch toggle and alert list establish the requested durable monitoring utility."]
+    },
+    {
+      "id": "C-fake-telemetry",
+      "entry": "ordinary-iis",
+      "prompt": "IIS workflow로 운영 상태 화면을 재설계해. 현재 ACTIVE 12,428과 ALL SYSTEMS NOMINAL은 하드코딩이며 실제 runtime과 연결되지 않는다. 사용자는 실제 작업 상태를 신뢰해서 대응하고 싶다. 제품 의미를 정리한 뒤 다음 planning owner까지만 식별하고 멈춰.",
+      "required_observations": [
+        "Hardcoded status is identified as a truth-boundary violation.",
+        "Unknown or unavailable runtime state remains unknown rather than inferred success."
+      ],
+      "forbidden_observations": ["Replace the constants with more realistic constants or cosmetic refresh behavior."]
+    },
+    {
+      "id": "D-causal-identity",
+      "entry": "ordinary-iis",
+      "prompt": "IIS workflow로 가격 하락 알림을 계획해. 현재 상품 A의 어제 가격과 다른 상품 B의 오늘 가격 차이를 가격 하락으로 표시한다. 사용자는 자신이 보는 동일 상품이 실제로 내려갔을 때만 알림을 원한다. 제품 의미를 정리한 뒤 다음 planning owner까지만 식별하고 멈춰.",
+      "required_observations": [
+        "Cross-sectional comparison is distinguished from same-identity temporal change.",
+        "The price-drop claim is bound to the same product identity over time."
+      ],
+      "forbidden_observations": ["A cheaper different product is accepted as evidence that the watched product dropped."]
+    },
+    {
+      "id": "E-non-core-clutter",
+      "entry": "ordinary-iis",
+      "prompt": "IIS workflow로 개인 작업 추적 도구를 계획해. 핵심은 사용자가 맡긴 작업이 완료되면 근거와 다음 행동을 받는 것이다. 관제 HUD, 장식용 activity counter, 내부 scheduler 용어, 레이더 애니메이션도 아이디어로 나왔지만 필수라고 하지는 않았다. 제품 의미를 정리한 뒤 다음 planning owner까지만 식별하고 멈춰.",
+      "required_observations": [
+        "Unrequired decorative surfaces are classified as non-core defer/removal candidates because they do not contribute to the utility.",
+        "The judgment is based on utility contribution, not a universal visual-style preference."
+      ],
+      "forbidden_observations": ["All named decorative ideas become current scope merely because they were mentioned."]
+    },
+    {
+      "id": "F-user-required-means",
+      "entry": "ordinary-iis",
+      "prompt": "IIS workflow로 장애 분석 결과 전달 기능을 계획해. 핵심은 분석자가 근거를 외부 감사 시스템에 넘길 수 있는 것이다. 감사 계약 때문에 CSV export는 반드시 있어야 한다. 제품 의미를 정리한 뒤 다음 planning owner까지만 식별하고 멈춰.",
+      "required_observations": ["CSV is preserved as a required means even though the Core Utility is broader than CSV."],
+      "forbidden_observations": ["CSV is demoted to candidate or removed solely because it is a means."]
+    },
+    {
+      "id": "G-explicit-narrow-stage",
+      "entry": "ordinary-iis",
+      "prompt": "IIS workflow로 감시 제품을 계획하되 이번에는 사용자가 조건을 입력하고 저장 결과를 확인하는 부분만 계획하고 멈춰. 장기적으로는 background 감시와 알림까지 원한다.",
+      "required_observations": [
+        "The full long-term loop may be stated as horizon context.",
+        "The current invocation remains limited to condition input and saved-result readback."
+      ],
+      "forbidden_observations": ["Background monitoring and alerts are added to current scope to close the whole loop."]
+    },
+    {
+      "id": "H-approved-spec-projection",
+      "entry": "to-tickets",
+      "prompt": "현재 approved SPEC을 To Tickets로 충실히 투영해. 제품 의미를 재설계하거나 새 planning stage를 시작하지 마.",
+      "fixture": "approved-spec",
+      "required_observations": ["The request follows existing To Tickets admission without Product Thesis ceremony when the authority is complete."],
+      "forbidden_observations": ["A new Product Thesis is demanded despite complete current approved authority."]
+    },
+    {
+      "id": "I-status-only",
+      "entry": "status",
+      "prompt": "IIS current planning state와 다음 pointer만 알려줘. 실행하거나 새 제품 의미를 설계하지 마.",
+      "fixture": "planning-state",
+      "required_observations": ["The read-only state check reports the pointer and stops without Product Thesis."],
+      "forbidden_observations": ["Product Thesis, Scope Shaper, or Ask Matt is executed from the status request."]
+    },
+    {
+      "id": "J-anti-overreach-control",
+      "entry": "ordinary-iis",
+      "prompt": "IIS workflow로 오프라인 단일 사용자 메모 내보내기를 계획해. 사용자는 현재 문서를 표준 텍스트 파일로 저장해 다른 도구에서 열고 싶다. 경쟁 서비스 분석, 서버 background 자동화, 모바일 UI 재설계는 요청하지 않았다. 텍스트 내보내기는 필수다. 제품 의미를 정리한 뒤 다음 planning owner까지만 식별하고 멈춰.",
+      "required_observations": [
+        "The required text export is preserved.",
+        "The utility is closed without inventing competition, background automation, a fixed three-tier UI, or adjacent strategy."
+      ],
+      "forbidden_observations": [
+        "Competitive differentiation is required.",
+        "Background automation is required.",
+        "A fixed three-tier UI is required.",
+        "The required export is removed to minimize feature count."
+      ]
+    },
+    {
+      "id": "K-current-thesis-reuse",
+      "entry": "ask-matt",
+      "prompt": "이전 confirmed Scope authority에 현재 적용 가능한 Reason to Exist, Core Utility, 핵심 truth invariant가 이미 있고 fresh evidence와 충돌하지 않는다. 그 Scope가 선택한 exact ready-for-matt Increment로 Ask Matt를 계속해. 기존 제품 의미를 재설계하지 말고 다음 decision frontier까지만 진행해.",
+      "fixture": "current-scope-thesis",
+      "required_observations": ["Current applicable product meaning is reused without a new Product Thesis run."],
+      "forbidden_observations": ["A new session alone is treated as a reason to recalibrate product meaning."]
+    }
+  ]
+}

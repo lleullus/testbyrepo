@@ -22,13 +22,14 @@ NEW_FAMILY = "ready-boundary-tools"
 OLD_FAMILY = "ready-runtime-v2"
 SUPPORTED_FAMILIES = {NEW_FAMILY, OLD_FAMILY}
 PAYLOAD_ROOTS = (
-    "iis-workflow", "iis-adaptive-planning", "matt/skills", "scope-shaper",
+    "iis-workflow", "product-thesis", "iis-adaptive-planning", "matt/skills", "scope-shaper",
     "behavior-design-lead", "scope-investigation-runner", "repo-snapshot",
     "companion-skills", "planning-workspace", "iis_path_contract.py",
     "delivery-tools/ready-ticket",
 )
 REQUIRED = (
     "iis-workflow/SKILL.md", "matt/skills/to-tickets/validate_ticket.py",
+    "product-thesis/SKILL.md", "product-thesis/tools/product_meaning_binding.py",
     "companion-skills/ready-ticket-plan/SKILL.md",
     "companion-skills/ready-ticket-implement/SKILL.md",
     "companion-skills/ready-ticket-verify/SKILL.md",

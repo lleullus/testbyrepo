@@ -15,6 +15,26 @@ Planning-Shape: initiative
 
 <long-term product direction preserved without making all of it current scope>
 
+## Product Meaning Binding
+
+Schema: iis-product-meaning/v1
+Fingerprint: sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+Core Utility:
+<product-level core utility>
+
+Core Completion Loop:
+<product-level causal completion loop>
+
+Required Outcomes / Means:
+- <explicitly required product outcome or means, or use exact None instead of a list>
+
+Truth / Causal Invariants:
+- <product-level truth or causal invariant, or use exact None instead of a list>
+
+Success Observation:
+<product-level observable success condition>
+
 ## Current Product State
 
 - <directly verified current observable capability or absence>

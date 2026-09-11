@@ -1,15 +1,15 @@
 ---
 name: iis-workflow
-description: Canonical planning-only router for IIS next-increment admission, Scope Shaping, Matt planning, Spec creation, and Ready Ticket production.
+description: Canonical planning-only router for conditional Product Thesis Design, IIS next-increment admission, Scope Shaping, Matt planning, Spec creation, and Ready Ticket production.
 ---
 
 # IIS Planning Router
 
 ## Purpose
 
-IIS is a planning system. Route the user's planning request through next-increment admission, Scope Shaper, Ask Matt, To Spec, and To Tickets without extending IIS into implementation, verification, delivery orchestration, or product-completion control.
+IIS is a planning system. Route the user's planning request through conditional Product Thesis Design, next-increment admission, Scope Shaper, Ask Matt, To Spec, and To Tickets without extending IIS into implementation, verification, delivery orchestration, or product-completion control.
 
-A generic request to "start the IIS workflow" is not an alias for Ask Matt. Before routing an ordinary IIS request, decide whether the request already names one current, durable, observable product increment or whether Scope Shaper must first choose that increment from the user's larger intent and the actual current product state.
+A generic request to "start the IIS workflow" is not an alias for Ask Matt. Before routing an ordinary IIS request, determine whether new or materially revised product meaning is required, then decide whether the request already names one current, durable, observable product increment or whether Scope Shaper must first choose that increment from the user's larger intent and the actual current product state.
 
 The IIS terminal product for one admitted increment is one approved Spec and its reviewed Ready Ticket Set. To Spec and To Tickets use defect-first, leaf-local self-review as the default guard for faithful projection; a separate per-artifact user or planning-owner approval is added only when the current user explicitly requires it. This review creates no additional lifecycle status, receipt, or workflow state. Ready Tickets are the delivery interface. IIS does not implement them, verify them, schedule delivery agents, or declare the product complete.
 
@@ -50,6 +50,16 @@ Returned to: <exact caller/owner>
 Do not add this block to ordinary successful continuation or to a read-only state check whose requested task is complete. Do not replace an existing result/verdict/status label, invent a persistent decision ID, expose chain-of-thought or discarded alternatives, or add a second explanation layer when the same fields already appear in the owning result.
 
 ## Route By Planning Unit
+
+### Product Meaning Admission
+
+Apply explicit leaf and read-only classifications first. A state-only request uses the Current Planning State Check and stops. Explicit To Spec and To Tickets requests retain their existing projection admission; an exact Ready Ticket implementation or verification request remains outside IIS Planning. None of those paths starts Product Thesis Design merely because it enters a new session.
+
+Before next-increment admission for an ordinary IIS request or an explicit Scope Shaper or Ask Matt request, determine whether the request newly establishes or materially revises product meaning. New products, new feature families, broad product directions, feature bundles whose durable utility is not approved, and material redesigns of an existing user or operator flow require the current planning owner to directly perform [Product Thesis Design](../product-thesis/SKILL.md). Fresh actual evidence also requires recalibration when it invalidates the applicable approved Reason to Exist, Core Utility, or an essential truth, identity, or ownership premise.
+
+Reuse current applicable product meaning from current conversation authority or existing confirmed Scope/Matt authority. Do not rerun Product Thesis because a later leaf or fresh session begins. Product Thesis is complete before the existing next-increment admission; it does not select Scope Shaper versus Ask Matt, create a separate agent or approval gate, or widen the current user instruction.
+
+If Product Thesis returns `USER_INPUT_REQUIRED`, ask only for its smallest unresolved user-owned meaning and stop before planning mutation. If it returns `CALIBRATED`, continue directly to Next-Increment Admission. A projection leaf that discovers a material product-meaning defect returns to its existing Scope/Matt product-planning owner instead of designing a thesis inside To Spec or To Tickets.
 
 ### Next-Increment Admission
 

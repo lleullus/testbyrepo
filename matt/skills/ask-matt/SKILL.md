@@ -121,10 +121,7 @@ before Matt presents a final shared understanding:
 /home/user01/project/iis-skills/behavior-design-lead/SKILL.md
 ```
 
-Matt forms a provisional frame: desired outcome, included and excluded scope,
-Non-Goals, preserved behavior, external constraints, UI authority when
-applicable, exact project root, planning owner, and known unresolved decisions.
-This frame is not approved or normative.
+Matt forms a provisional frame: applicable Product Thesis meaning, desired outcome, included and excluded scope, Non-Goals, preserved behavior, external constraints, UI authority when applicable, exact project root, planning owner, and known unresolved decisions. The Product Thesis contribution is high-level product meaning, not approved detailed Behavior/UI policy or authority to widen the admitted Increment. This frame is not approved or normative.
 
 Matt directly reads and performs the complete canonical leaf in the current
 conversation context; the phase has no separate execution role or context.
@@ -203,6 +200,14 @@ Spec, and affected unfinished Tickets to `draft`.
 Before Grill, Behavior Design, UI routing, workspace creation, or Spec writing,
 classify and validate the entry. An explicit request to use Ask Matt chooses this
 leaf, but it does not waive this admission contract.
+
+Apply Product Thesis admission before evaluating the direct request's next-increment readiness. When the direct request newly establishes or materially revises product meaning, Matt directly reads and performs `../../../product-thesis/SKILL.md` before Grill, Behavior Design, or UI work. A `USER_INPUT_REQUIRED` result stops at that smallest product-meaning decision. A `CALIBRATED` result continues through this unchanged admission contract; it does not make a broad request next-increment-ready.
+
+For a Scope-shaped continuation, reuse the applicable product meaning and exact `Product Meaning Binding` preserved in the exact immutable Scope revision; the selected Increment remains the admission/reference hop and does not copy the binding. Do not rerun or redefine Product Thesis merely because Ask Matt starts in a new session. For a direct request whose existing approved product meaning remains current and sufficient, reuse that meaning. Recalibrate only when fresh actual evidence or newer explicit user authority invalidates the Reason to Exist, Core Utility, or an essential truth, identity, or ownership premise.
+
+Carry applicable Product Thesis meaning into the final confirmed shared understanding through its desired outcome, included/excluded scope, Non-Goals, preserved invariants, and outcome-local verification contracts. Also preserve the five binding values needed for To Spec to serialize exactly one `iis-product-meaning/v1` `Product Meaning Binding`: Core Utility, Core Completion Loop, explicit Required Outcomes / Means, Truth / Causal Invariants, and Success Observation. For Scope-shaped work those values must remain equal to the immutable Scope revision binding; for direct Ask Matt work `SPEC.md` is the first durable binding. Detailed states, transitions, recovery, ordering, concurrency, and UI behavior remain owned by Behavior/UI planning.
+
+The binding is product-level meaning and never widens the admitted Increment. A selected Increment may deliver only part of the Core Completion Loop while preserving the full product-level binding. Mechanical binding equality does not prove that the binding faithfully captured Product Thesis or that the actual Requirements/Verification Expectations faithfully adopt it; those remain planning-owner and Mandatory contract audit responsibilities.
 
 1. A direct ordinary request with no Scope artifact enters the normal flow only
    when it is already `next-increment-ready`: the current product baseline is
