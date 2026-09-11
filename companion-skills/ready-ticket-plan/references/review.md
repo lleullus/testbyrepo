@@ -16,6 +16,10 @@ Review a condition's permitted first work, discriminating observation, prohibite
 
 Heuristic no-finding does not decide ADMIT. Resolve all material findings and inspect the complete obligations independently. Do not reinterpret a pre-implementation REVISE as final FAILED or Adaptive implementation defect.
 
+ADMIT requires the Code Grounding in [plan.md](plan.md) for load-bearing existing premises of the stated start scope and Heuristic evidence valid for the current method and premises, including justified non-material carry-forward under [heuristic.md](heuristic.md). Assess safely unresolved implementation-time premises through the existing conditional-first-work bundle. Evidence-field presence and Heuristic completion are not additional approvals or substitutes for semantic sufficiency; unresolved Heuristic findings can support an independent `REVISE` or `EVIDENCE_NEEDED` decision.
+
+For REVISE, identify the applicable obligation or plan anchor, concrete inadequate method or material unresolved decision, consequence, smallest closure observation and responsible owner. Provide current source/schema anchors when asserting implementation facts; do not invent them for contract ambiguity or proposed design. Distinguish observed contradictions, reachable proposed-method counterexamples and missing evidence. Do not move closure conditions through taste, Scope-excluded promises or unreachable sequences; legitimate new evidence and repair-induced failures remain reviewable against the complete original obligations.
+
 ## One current result
 
 Write one JSON artifact at the exact invocation-supplied outside-Project-Root path. Never search for a newest review, create a project-local approval DB, or duplicate the judgment in a second Markdown verdict. This one artifact contains both semantic explanation and current machine links:
@@ -46,8 +50,14 @@ Write one JSON artifact at the exact invocation-supplied outside-Project-Root pa
 
 This is a shape illustration, not a completed review. Use `conditions: []` when no conditional start exists; use the actual decision enum and substantive explanation. Include every reviewed Ticket exactly once in contracts/decisions and every used common plan in plans; per-Ticket decisions may differ. Do not fill examples or fixture JSON and claim semantic success.
 
+Use the existing `heuristic.evidence_reference` and primary evidence references to preserve Grounding observations, actual Heuristic input identities and refresh/carry-forward evidence. Summarize dispositions in `heuristic.disposition_summary` and semantic judgment in each decision's `rationale`; no additional schema fields or verdict artifacts are required.
+
 Calculate hashes from bytes actually reviewed. Obtain `authority_digest` via read-only `ready_contract inspect_authority` (exact Ticket/root, current pinned canonical validator/bundle) or the same core API. Do not synthesize that digest from a guessed schema, trust a caller's copied hash, or begin implementation first. Before writing, recheck that reviewed bytes and load-bearing source/search/runtime premises remain current; if changed, inspect the impact and revise only the necessary review.
 
+If a material method or source/search/runtime premise change invalidates Heuristic evidence, obtain the necessary affected refresh before ADMIT. Preserve independently checked non-material carry-forward evidence rather than relabeling old work; a matching plan hash alone does not establish unchanged premises.
+
 `rationale`, `start_scope` and `conditions` express semantic judgment; the stateless boundary check does not score their length or infer sufficiency from string presence. `ready_contract check_plan_admission` independently recomputes plan/review/Ticket/authority identity and checks selected ADMIT without creating execution/session state. Missing review yields `PLAN_REVIEW_REQUIRED`, stale links `PLAN_REVIEW_STALE`, non-admitted Ticket `PLAN_NOT_ADMITTED`; these are admission outcomes, not product verdicts.
+
+These Grounding and revision obligations are semantic review requirements, not a claim that the current stateless checker automatically verifies source meaning or observation truth. Do not infer a new machine-enforced gate, schema version or admission error from this document change.
 
 Return the actual artifact and raw evidence to the preparation lead. The lead may report COMPLETE only for its entire required current ADMIT denominator. Lost/stale artifacts cannot be repaired by relabeling an old conversation or changing REVISE to ADMIT; the owning reviewer must perform the needed current judgment.
