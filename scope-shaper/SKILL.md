@@ -276,6 +276,10 @@ The connected observable product or operating landscape relevant to the request.
 
 Verified external, public, persisted, safety, authority, or deliberately preserved observable boundaries that later planning must honor. Current implementation facts enter this section only when the Constraint Test succeeds.
 
+When an approved Transition Baseline applies, every applicable Global/Path Invariant must be carried into Scope's Planning Constraints and the selected Increment's existing Preserved Foundations/constraint fields, with its exact Baseline identity/revision source. Re-entry must re-establish those invariants against fresh actual state before selecting another Increment or Block. A changed construction order, reshape, or context slice may narrow to the applicable path but must not silently drop, weaken, or reinterpret a carried invariant; material conflict returns to its owning authority. Do not copy the whole future Baseline map or treat its Blocks as a ready-work queue.
+
+
+
 ### Candidate Outcome Areas
 
 Connected results that may be independently acceptable. They remain candidates until split/merge analysis decides whether they belong in separate Work Packages.
@@ -330,6 +334,9 @@ A selected candidate must pass all applicable tests:
 
 Do not force an artificially small Increment. A broader Increment is justified when verified evidence shows that a smaller candidate cannot produce a safe, meaningful, independently readable product state, or when an unavoidable compatibility, migration, external-contract, or atomic lifecycle boundary requires the broader state. Record the smaller candidate tested and the exact reason it fails.
 
+When the Baseline marks a cutover `HARD_ATOMIC`, the indivisible transition is limited to one selected Scope Increment. Internal execution units may exist inside that Increment, but they are not separately accepted Increments and do not permit a Block handoff mid-cutover. If a proposed smaller boundary lacks a safe, durable, independently readable state, reject the split under this exception and preserve the atomic boundary.
+
+
 ### Provisional Construction Horizon
 
 The Lead may record likely later capability ordering to explain why the selected Increment is foundational. This horizon is explicitly non-normative. Do not create future ready Increment files, pre-approve their product policy, or let Matt import them into the current Spec.
@@ -353,7 +360,8 @@ Select exactly one Increment for the current Scope confirmation. It contains:
 - Re-entry Contract; and
 - Delivery Context.
 
-The `Re-entry Contract` states what actual delivered product state must be inspected before a later Scope Shaping pass chooses another Increment. Re-entry is a new shaping decision against reality, not automatic continuation of the provisional horizon.
+
+The `Re-entry Contract` states what actual delivered product state must be inspected before a later Scope Shaping pass chooses another Increment. For an applicable Transition Baseline it must also name the Safe Continuation Predicate, the actual facts/readbacks and owner required to prove that another Increment or Block is safe, and the approved Safe Abort boundary (trigger, target state, owner/action boundary, and authoritative readback) when continuation cannot be established. Re-entry is a new shaping decision against fresh reality, not automatic continuation of the provisional horizon or approval of a future Increment.
 
 Exactly one selected Increment may have `Status: ready-for-matt` in one confirmed Scope result. Future increments do not exist as ready artifacts yet. On a later re-entry in the same Scope directory, assign the next unused `INC-NNN` ordinal and change every earlier `ready-for-matt` Increment to exact `Status: superseded` before the newly confirmed Increment becomes ready. `superseded` is planning-admission state only; it does not claim that delivery completed.
 

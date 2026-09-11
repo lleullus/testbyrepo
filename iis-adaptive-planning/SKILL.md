@@ -77,6 +77,31 @@ When the current user/caller supplies one exact `repository-investigation` artif
 
 Do not search for or auto-select a repository-investigation artifact merely because one exists. Do not treat the artifact, its completion status, or its planning-relevance candidate labels as Scope/Run Contract/product authority, and do not use the artifact itself as a product authoritative readback. When no exact artifact is supplied, Adaptive behavior is unchanged.
 
+## Transition Baseline intake and Active Block Envelope
+
+Transition Baseline is optional and activates only when the current caller/user explicitly opts in, supplies the exact approved Baseline identity and revision, and authorizes its applicability to this invocation. The presence of a `BASELINE-NNN.md` file, a remembered transition, or a general request for unattended work never activates it. The approval may include inter-Block auto-continuation only within its stated ceiling; it does not grant deployment, credential, destructive-action, production, or other missing authority.
+
+Outer Main owns intake and projection. At intake it reconciles the approved Baseline with the current Mandate, newer explicit user instructions, applicable canonical authority, and measured actual entry state. It must read enough of the approved map to locate the eligible coarse Block, but must not place the whole map or a future work queue into the planning context. It projects exactly one Active Block Envelope and clears the prior projection before a new Block is presented.
+
+The single Active Block Envelope carries only the current Block's decision-critical slice:
+
+- exact Baseline identity/revision, Mandate/source anchors, and the full assigned Goal/Required Named Items reference;
+- current Block ID, Name, Meaning Contribution, order/dependency boundary, measured Entry facts/readback, and one local objective;
+- applicable Global/Path Invariants, with their source anchors and carry-forward obligations;
+- measured Block Exit predicate/readback, Insufficient-for-Exit conditions, and the next eligible Block boundary;
+- Safe Continuation Predicate and required settled/contained-effect evidence;
+- Safe Abort trigger, authorized safe target, owner/action boundary, and authoritative readback;
+- Atomic Boundary, including whether `HARD_ATOMIC` requires one Increment, and remaining Goal obligations/source readback.
+
+Scope receives this envelope and selects exactly one current durable Increment inside the active Block. A Block may require several safe Increments, but `HARD_ATOMIC` remains one Increment with internal execution units only. The envelope constrains transition geography; it does not pre-approve future Increments, Work Packages, Tickets, implementation methods, or a provisional queue. Reconcile and re-project it after a measured Block transition or material current-state change, never from stale Run Contract bytes.
+
+### Caller/host auto-continuation protocol
+
+When the approved Baseline authorizes unattended continuation, Outer Main may select `SAFE_INCOMPLETE_HANDOFF` only under [09-run-contract.md](references/09-run-contract.md)'s narrow rule. The current Block Exit and Safe Continuation Predicate must be measured true, active effects must be settled or safely contained, remaining Goal/Required obligations and applicable invariants must be preserved, and the exact successor authority and inputs must be available. The current invocation closes incomplete; it does not claim whole-run success.
+
+The caller/host, not a planning leaf or an invented controller, owns the actual successor invocation. It starts that invocation only with evidence that the handoff was dispatched/started; a suggested command or planned intent is not a start. The successor reads fresh actual state plus the exact approved Baseline/Mandate/source authority, selects the next eligible Block, projects one new envelope, and closes a fresh Run Contract before entering Scope. It never resumes or treats a serialized prior Run Contract as active authority, and it does not request a new per-Block approval merely for continuation inside the approved ceiling; any newly explicit Run Contract gate remains applicable to the fresh successor contract. Unknown safety, unsettled effects, unavailable authority/capability, or an unmet Safe Continuation Predicate forbids auto-continuation; use authorized Safe Abort and prove its result when its trigger applies, otherwise continue the current owner/evidence route.
+
+
 ## Product Meaning Before Run Closure
 
 After explicit Adaptive activation and any authorized read-only evidence intake, inspect the applicable existing Mandate and current planning authority. Apply the current `iis-workflow` Product Meaning Admission before Run Contract closure. When new or materially revised product meaning is required, Outer Main directly reads and performs the current `product-thesis` skill as read-only calibration; otherwise reuse current applicable approved product meaning.
@@ -263,8 +288,13 @@ Choose exactly one completion-assessment disposition:
 - `NEXT_INCREMENT_REQUIRED` — the active predicate is not yet satisfied and current authority can determine that more construction is required; re-enter Scope Shaper against fresh actual state so it selects exactly one new current Increment.
 - `USER_DECISION_REQUIRED` — the active predicate is not yet satisfied but a material user-owned trade-off remains after applying current authority and priorities; return only that decision to the user.
 - `EVIDENCE_REQUIRED` — current attributable evidence cannot determine whether the active predicate is satisfied or whether more construction is required; obtain only the missing authoritative readback or operator/external evidence and do not infer completion, product defect, or Scope Shaper re-entry.
+- `SAFE_INCOMPLETE_HANDOFF` — only for an explicitly approved Transition Baseline with a measured current Block Exit and Safe Continuation Predicate, settled/contained active work, preserved full Goal/Required obligations and invariants, and exact caller/host successor authority/input. This is a non-success incomplete handoff at a safe Block boundary; it never changes the Run Completion Boundary, shrinks the Goal, promotes candidates, or substitutes a Block predicate for the final transformation predicate.
 
-When the Goal remains unmet and current authority/evidence determines a valid next action, continue through the existing owner in the same invocation. Do not stop merely to announce `NEXT_INCREMENT_REQUIRED` or omit reachable authorized readback under `EVIDENCE_REQUIRED`. Preserve explicit user stops, disabled stages, external authority and the existing no-material-progress guard.
+
+When the Goal remains unmet and current authority/evidence determines a valid next action, continue through the existing owner in the same invocation, except for the proven approved safe Block-boundary transfer defined in [references/09-run-contract.md](references/09-run-contract.md). Do not stop merely to announce `NEXT_INCREMENT_REQUIRED` or omit reachable authorized readback under `EVIDENCE_REQUIRED`. Preserve explicit user stops, disabled stages, external authority and the existing no-material-progress guard.
+
+For this narrow approved transition exception, the explicit `SAFE_INCOMPLETE_HANDOFF` rule in [references/09-run-contract.md](references/09-run-contract.md) takes precedence over the ordinary same-invocation/reporting route described by `references/07-terminal-report.md` and `references/08-delivery-continuation.md`. Those references remain unchanged and govern every ordinary, unsafe, unknown, or non-transition case. A false Block Exit or false Safe Continuation Predicate remains on the ordinary corrective/evidence route; an approved Safe Abort trigger uses its safe-state owner/readback and never becomes success.
+
 
 When an applicable obligation has no truthful existing Ticket acceptance owner, return the exact To Tickets or upstream planning gap; Outer Main does not invent an umbrella Ticket, acceptance matrix, or verdict. When the owner exists but required current evidence is absent, stale, inconclusive, or limited beyond the approved claim, use `EVIDENCE_REQUIRED`. Preserve canonical artifact/source-only completion when direct inspection is the approved boundary, and preserve implementation-only completion when `Verification: no` and the active boundary is `CURRENT_INCREMENT_IMPLEMENTED`.
 
@@ -284,6 +314,9 @@ Additionally keep only the minimal Adaptive companion provenance described in [r
 - `ADAPTIVE-PLANNING-TRACE.md` only when material delegated decisions, Run Contract classifications/revisions, reshaping, verification triage, success re-entry/completion, or user-return decisions exist
 
 The rendered Run Contract remains invocation-local and is not a required third companion file.
+
+- An explicitly supplied, approved Transition Baseline may be carried as a separate optional authority artifact alongside this minimal provenance. It is not a Run Contract, cursor, status log, retry ledger, or required third companion file; ordinary Adaptive work remains unchanged when it is absent.
+
 
 Never inject Adaptive-only metadata into canonical IIS artifacts merely for convenience.
 
@@ -318,6 +351,8 @@ Adaptive Planning ends at the same current-Increment product as Baseline IIS: on
 Report the result as `IIS ADAPTIVE PLANNING PHASE COMPLETE` using [references/07-terminal-report.md](references/07-terminal-report.md), then STOP at the planning ownership boundary.
 
 `STOP` here is the **IIS Planning owner boundary**, not necessarily the end of the current Adaptive invocation. Do not implement or verify **as IIS Planning** merely because current Increment planning completed. Return the Ready Ticket Set and closed Run Contract to Outer Main; this owner STOP is not an invocation STOP.
+
+The terminal boundary must distinguish the IIS Planning owner STOP, an incomplete caller/host `SAFE_INCOMPLETE_HANDOFF`, and a true `RUN_CONTRACT_SATISFIED` result. A Block Exit or successful successor dispatch alone is never final transformation completion; only the final Goal predicate and authoritative readback can close the Run Contract.
 
 
 For `READY_EXECUTION_PLANS`, Outer Main consumes the actual `READY TICKET PLAN RESULT`, exact outside-root review and every required current ADMIT; useful plans or a subset cannot close the run. This is preparation completion, not product implementation, final verification or done.

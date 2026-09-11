@@ -338,13 +338,39 @@ Likewise:
 - Candidate Named Items never block completion unless the user revises them into Required Named Items;
 - delivered Tickets are not proof of an outcome-satisfaction boundary without fresh authoritative readback; and
 - a provisional Work Package or Increment list is never a completion queue.
+- `SAFE_INCOMPLETE_HANDOFF` is a narrow non-success exception for an explicitly approved Transition Baseline at a measured safe Block boundary; it does not add a Run Completion Boundary, Run status, Ticket verdict, or whole-run success meaning.
+
 
 Emit whole-run success only when the coverage invariant still holds and fresh attributable evidence satisfies the Goal and Required Named Items through the sufficient Predicate at the approved stage/claim boundary. `RETURN_TO_USER`, `EVIDENCE_REQUIRED`, `BLOCKED`, `INCONCLUSIVE`, `CONTRACT_DRIFT`, unavailable authority, and no-material-progress are incomplete returns, not success.
 
-While the Goal is unmet and current authority/evidence determines a valid next action, continue through its existing owner in this invocation. Obtain reachable authorized readback rather than merely announcing `EVIDENCE_REQUIRED`; `NEXT_INCREMENT_REQUIRED` requires actual fresh-state Scope Shaper re-entry. Preserve user stops, disabled stages, external authority and the existing no-material-progress guard. Do not call an available action never attempted a no-progress repetition.
+While the Goal is unmet and current authority/evidence determines a valid next action, continue through its existing owner in this invocation. The only exception is the measured, approved safe Block-boundary transfer defined below; otherwise obtain reachable authorized readback rather than merely announcing `EVIDENCE_REQUIRED`, and require actual fresh-state Scope Shaper re-entry for `NEXT_INCREMENT_REQUIRED`. Preserve user stops, disabled stages, external authority and the existing no-material-progress guard. Do not call an available action never attempted a no-progress repetition.
+
+### Goal-preserving `SAFE_INCOMPLETE_HANDOFF` and fresh successor invocation
+
+`SAFE_INCOMPLETE_HANDOFF` may terminate the current invocation incomplete only when every condition below is directly established:
+
+1. Transition Baseline mode is explicitly opted in, the exact approved Baseline identity/revision is supplied, and its one-time approval explicitly includes inter-Block auto-continuation within the applicable Mandate/authority ceiling.
+2. The current Active Block's Exit predicate is measured true through its approved readback, and the Safe Continuation Predicate is measured true through the required safety/readback facts.
+3. All active effects are settled or safely contained. No unknown or response-lost non-idempotent effect is treated as safe merely because no danger is currently visible.
+4. The full Goal, Required Named Items, final Completion Predicate, authoritative readback boundary, applicable Global/Path Invariants, and remaining obligations are carried forward unchanged. A Block-specific predicate never substitutes for the final transformation predicate; Required work is not narrowed, promoted to candidate, or silently dropped.
+5. The handoff names the exact Baseline, Mandate, and Source Authority identities; departing Block; actual Entry/Exit and safety readbacks plus limits; remaining Goal/Required obligations; next entry inspection; successor authority/ceiling; and the caller/host action that is authorized to start the successor.
+
+This is an ordinary incomplete terminal handoff, not `RUN_CONTRACT_SATISFIED`, `RUN_COMPLETE`, or a new completion-boundary value. The narrow rule takes precedence over the ordinary same-invocation/reporting instructions in `references/07-terminal-report.md` and `references/08-delivery-continuation.md` only for this proven approved safe transfer; those consumers remain unchanged and govern every other case. If Block Exit, Safe Continuation, effect settlement/containment, remaining-obligation preservation, or successor authority is false or unknown, do not use this disposition. Continue the authorized current owner/evidence route, or execute only the approved Safe Abort action and prove its safe-state readback when its trigger applies. If caller/host transport is unavailable, report that actual capability limit and do not claim a successor started.
+
+The caller/host owns autonomous successor start; this protocol does not create a scheduler, controller, queue, or new approval ledger. Within the already approved continuation ceiling, a human prompt is not required for each Block, but actual dispatch/start evidence is required. The successor invocation must:
+
+- read fresh actual state and the exact approved Baseline/Mandate/Source Authority identities;
+- resolve the next eligible Block from measured entry state and ordering/invariants rather than consuming a pre-authored Increment queue;
+- project exactly one new Active Block Envelope and pass only its applicable slice to Scope;
+- close a fresh existing-form Run Contract preserving the full Goal/Required obligations, current stages, model choices, completion predicate, readback, gate applicability, and current source anchors, then run the normal structural consistency check; and
+- enter the existing Scope route only after that fresh contract is closed and any newly applicable gate is satisfied.
+
+The successor never resumes a serialized prior Run Contract, copies stale status/Boundary bytes as active authority, or treats the handoff text itself as proof of current state. The prior invocation remains closed and incomplete; final transformation completion still requires the fresh successor's actual authoritative readback.
+
 
 ## Persistence boundary
 
 The Run Contract is invocation-local authority. Render it at activation and carry it in the current request/context; do not create a required third durable companion artifact, persistent run state, or approval ledger. An active `/승인게이트` is likewise invocation-local and does not persist into later Adaptive invocations unless the user explicitly applies it again.
+An approved Transition Baseline may be durable authority for its exact map/revision and continuation ceiling, but it is separate from the invocation-local Run Contract. It is not a cursor, completion ledger, successor queue, retry log, or permission to resume prior Run Contract bytes. A successor always closes from fresh actual state and current durable authority.
 
 When its meaning materially affects later interpretation, summarize the relevant user-owned required/candidate classification, delivery-stage revision, or completion revision in `ADAPTIVE-PLANNING-TRACE.md`. Do not log routine phase transitions, delivery progress, retry counts, or private reasoning.
