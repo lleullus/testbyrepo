@@ -31,7 +31,6 @@ export async function fixture(t) {
     plans: [{ path: plan, sha256: hashBytes(fs.readFileSync(plan)) }],
     contracts: [{ ticket_path: ticket, ticket_sha256: authority.ticket_sha256, authority_digest: authority.authority_digest }],
     review_origin: { reviewer: "fixture-independent-invocation", evidence_reference: "fixture-byte-pairing-only" },
-    heuristic: { evidence_reference: "fixture-not-semantic-proof", disposition_summary: "test input" },
     decisions: [{ ticket_path: ticket, decision: "ADMIT", rationale: "fixture", start_scope: "cli.js", conditions: [] }],
   };
   fs.writeFileSync(review, JSON.stringify(reviewData));

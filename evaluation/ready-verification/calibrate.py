@@ -168,7 +168,7 @@ def run_preparation(metadata: dict[str, Any], *, agent_dir: Path, payload: Path,
     before = product_snapshot(root, [])
     common = (f"Project Root: {root}\nTickets: {json.dumps(tickets)}\nPlan Review Output: {review}\n"
               f"현재 선택 모델은 {model}, thinking={thinking}; 이 역할은 DIRECT이며 subagent를 생성하지 않는다. "
-              "read로 skill://ready-ticket-plan 및 그 세 reference를 읽는다. 제품/승인 authority/Ticket status는 수정하지 않는다. "
+              "read로 skill://ready-ticket-plan 및 plan.md, review.md 두 reference를 읽는다. 제품/승인 authority/Ticket status는 수정하지 않는다. "
               "프로젝트와 명시된 evidence/reference 밖을 탐색하지 않는다. evaluator oracle/다른 run/운영 자격증명은 읽지 않는다. "
               "이번 호출의 역할만 수행하며 이후 독립 역할은 외부 caller가 별도 invocation으로 실행한다.\n")
     common += f"Existing method navigation: {json.dumps(metadata.get('plan_navigation_paths', []))}\nExisting investigation evidence: {json.dumps(metadata.get('preparation_evidence_paths', []))}\n"
@@ -177,23 +177,20 @@ def run_preparation(metadata: dict[str, Any], *, agent_dir: Path, payload: Path,
         result = invoke(project_root=root, prompt=common + instructions, output_dir=output / name,
                         agent_dir=agent_dir, payload=payload, model=model,
                         thinking=thinking, timeout=timeout, stage="prepare",
-                        session_dir=output / "writer-sessions" if name in {"planner", "revision", "lead"} else None,
+                        session_dir=output / "writer-sessions" if name in {"planner", "lead"} else None,
                         resume_session=resume)
         observations.append({"role": name, **result})
         return result
     planner = role("planner", "Planner로 현재 근거를 조사하고 필요한 project-local 실행계획을 작성한다. 계획 exact 경로와 근거를 반환한다. 자기 ADMIT/review JSON이나 lead 완료 terminal은 작성하지 않는다.")
     lead = None
-    if planner["clean_transport"] and planner.get("session_file"):
-        heuristic = role("heuristic", f"독립 Heuristic이다. 원계약에서 먼저 독립 pass 후 {output / 'planner/terminal.txt'}의 계획과 근거를 검토한다. 현실적 반례/미확인/기각 anchor를 반환한다. 계획·제품·review JSON은 수정하지 않으며 lead 완료 terminal을 내지 않는다.")
-        if heuristic["clean_transport"]:
-            revision = role("revision", f"동일 Planner로 {output / 'heuristic/terminal.txt'}와 raw evidence의 finding disposition만 수행한다. 실질 수정이 필요할 때만 영향 방법을 수정하거나 근거로 기각한다. 정상·무발견이면 계획 bytes를 그대로 유지하며 재설계/추가 승인/reviewer를 만들지 않는다. 독립 검토 판단은 만들지 않는다.", Path(planner["session_file"]))
-            if revision["clean_transport"] and not review.exists():
-                reviewed_snapshot = product_snapshot(root, [])
-                review_before_lead = None
-                reviewer = role("reviewer", f"작성자와 별도 독립 Plan Review다. 원계약 전체와 현재 계획을 직접 읽는다. Planner evidence: {output / 'revision/terminal.txt'}; Heuristic evidence: {output / 'heuristic/events.jsonl'}. 현재 bytes와 ready_contract inspect_authority를 사용하여 실제 판단의 iis-plan-review/v1 JSON을 {review}에 작성한다. review_origin.evidence_reference는 이 invocation의 {output / 'reviewer/events.jsonl'}이다. 계획/제품을 고쳐 허가하지 말고 정확한 ADMIT/REVISE/EVIDENCE_NEEDED와 근거를 반환한다. lead terminal은 내지 않는다.")
-                if reviewer["clean_transport"] and review.is_file() and product_snapshot(root, []) == reviewed_snapshot:
-                    review_before_lead = hashlib.sha256(review.read_bytes()).hexdigest()
-                    lead = role("lead", f"원래 준비 lead의 handoff fan-in이다. 실제 별도 reviewer 결과 {review}, raw {output / 'reviewer/events.jsonl'}와 Heuristic/Planner evidence의 귀속·currentness·원래 requested Tickets 전체 ADMIT 분모만 대조한다. 두 번째 의미 검토/승인 단계가 아니다. 어느 계획/review/제품 파일도 수정하지 말고 ready-ticket-plan의 canonical READY TICKET PLAN RESULT template을 정확히 따르며 `Plan Review: {review}`를 목록이 아닌 한 줄 field로 써서 terminal을 반환한다. 구현/최종 검증은 시작하지 않는다.", Path(revision["session_file"]))
+    reviewed_snapshot = None
+    review_before_lead = None
+    if planner["clean_transport"] and planner.get("session_file") and not review.exists():
+        reviewed_snapshot = product_snapshot(root, [])
+        reviewer = role("reviewer", f"작성자와 별도 독립 Plan Review다. 원계약 전체를 먼저 읽고 현재 제품 경로, current Plan bytes와 primary evidence를 직접 검토한다. Planner terminal: {output / 'planner/terminal.txt'}; Planner raw evidence: {output / 'planner/events.jsonl'}. wrong cause, ordinary-entry bypass, second writer/reader, producer/consumer mismatch, ordering/interruption/partial effect, weak readback, repair-induced path와 preserved behavior 손실을 현재 method의 load-bearing dependency에서 bounded하게 판단한다. 현재 bytes와 ready_contract inspect_authority를 사용하여 실제 판단의 iis-plan-review/v1 JSON을 {review}에 작성한다. review_origin.evidence_reference는 이 invocation의 {output / 'reviewer/events.jsonl'}이다. 계획/제품을 고쳐 허가하지 말고 정확한 ADMIT/REVISE/EVIDENCE_NEEDED와 근거를 반환한다. lead terminal은 내지 않는다.")
+        if reviewer["clean_transport"] and review.is_file() and product_snapshot(root, []) == reviewed_snapshot:
+            review_before_lead = hashlib.sha256(review.read_bytes()).hexdigest()
+            lead = role("lead", f"원래 준비 lead의 handoff fan-in이다. 실제 별도 reviewer 결과 {review}, raw {output / 'reviewer/events.jsonl'}와 Planner evidence의 귀속·currentness·원래 requested Tickets 분모를 대조한다. 두 번째 의미 검토/승인 단계가 아니다. reviewer가 REVISE/EVIDENCE_NEEDED이면 그 실제 준비 결과를 보존하고 COMPLETE로 승격하지 않는다. 어느 계획/review/제품 파일도 수정하지 말고 ready-ticket-plan의 canonical READY TICKET PLAN RESULT template을 정확히 따르며 `Plan Review: {review}`를 목록이 아닌 한 줄 field로 써서 terminal을 반환한다. 구현/최종 검증은 시작하지 않는다.", Path(planner["session_file"]))
     current = current_review(metadata, review, payload) if review.is_file() else {"current": False, "reason": "no actual review artifact"}
     after = product_snapshot(root, [])
     plan_paths = set()

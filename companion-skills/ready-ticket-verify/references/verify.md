@@ -15,7 +15,7 @@ Additional User Instructions:
 Delegated Verifier: yes
 ```
 
-The delegated verifier owns canonical admission, semantic contract check, complete authored Flow denominator, scenario authorship, runtime/canonical evidence, heuristic finding disposition, every Flow adjudication, every AC verdict, Scope/Non-Goals and cross-AC closure, and the whole-Ticket semantic verdict. It never owns the status write. Parent Main does not perform a second verification pass.
+The delegated verifier owns canonical admission, semantic contract check, complete authored Flow denominator, scenario authorship, runtime/canonical evidence, finding disposition, every Flow adjudication, every AC verdict, Scope/Non-Goals and cross-AC closure, and the whole-Ticket semantic verdict. It never owns the status write. Parent Main does not perform a second verification pass.
 
 ### SUBAGENT terminal fan-in and settlement
 
@@ -139,7 +139,7 @@ Do not introduce or change product obligations, supported conditions, Scope, acc
 For every material finding from this verifier's current discovery cycle or optional navigation, reopen its current contract anchor and assign one verifier-owned disposition:
 
 ```text
-Heuristic Finding Disposition:
+Finding Disposition:
 - REPRODUCED
 - CURRENT_READBACK_CONFIRMED
 - OUT_OF_SCOPE
@@ -231,8 +231,8 @@ Target-stability check:
 Environment:
 External/operator conditions:
 Semantic contract check: <no material gap found | exact blocking defect already returned before execution>
-Heuristic frontier: <material lanes or no distinct lane, with bounded rationale>
-Heuristic findings / proposed verifier dispositions: None | <finding -> disposition>
+Counterexample frontier: <material lanes or no distinct lane, with bounded rationale>
+Findings / proposed verifier dispositions: None | <finding -> disposition>
 
 Scenario Blocks:
 - <all authored Verification flows in authored order>
@@ -426,7 +426,7 @@ Before emitting semantic `VERIFIED`, the verifier must still ensure within its e
 
 1. every authored Flow has an attributable final result;
 2. every current AC is `PASS`;
-3. Scope/Non-Goals, heuristic finding dispositions, cleanup, and terminal conditions are closed;
+3. Scope/Non-Goals, finding dispositions, cleanup, and terminal conditions are closed;
 4. no unresolved material semantic-contract defect or evidence conflict remains;
 5. the source/config/build target used for the verdict remains attributable to the captured stable target; and
 6. no unresolved external-effect settlement gap prevents required evidence from being decisive.
@@ -481,7 +481,7 @@ Verification Binding: <exact outside-root path>
 Verification Binding SHA256: <sha256>
 Stable Target Paths: ["<exact absolute path>", "..."]
 Scenario Effect Paths: [] | ["<exact absolute path>", "..."]
-Heuristic finding dispositions: None | <finding -> disposition>
+Finding dispositions: None | <finding -> disposition>
 Material turn reports: None | <concise list>
 
 Semantic contract findings: None | <exact material gap and owning contract location>

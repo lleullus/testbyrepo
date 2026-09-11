@@ -17,7 +17,7 @@ IIS Adaptive Planning
 - exact process delta for delegated confirmations and planning re-entry
 ```
 
-There is no separate Adaptive Run skill. Outer Main is the main agent for the current explicit Adaptive invocation; it carries the Run Contract and routes exact owner results without taking over Baseline planning, implementation, heuristic-exploration, or verification authority.
+There is no separate Adaptive Run skill. Outer Main is the main agent for the current explicit Adaptive invocation; it carries the Run Contract and routes exact owner results without taking over Baseline planning, grounded method preparation/independent start review, implementation, or verification authority.
 
 Do not edit `iis-workflow`, Scope Shaper, Ask Matt, To Spec, To Tickets, Behavior/UI authority skills, their templates, or validators merely to make Adaptive work.
 
@@ -56,7 +56,7 @@ Everything else remains current Baseline authority.
 
 The Run Contract is not a Baseline artifact, new product-authority layer, or durable workflow state. It preserves this invocation's assigned Goal, required/candidate meaning, enabled stages, and sufficient observable completion condition against the user's actual instructions. It never causes one current Spec or Ticket to absorb multi-Increment scope.
 
-The Ready Ticket Set remains the terminal **IIS Planning** product. Under explicit Adaptive activation, that ownership STOP returns the Set and closed Run Contract to Outer Main, which applies the independently closed Implementation and Verification fields. Implementation requires current execution-plan review; Verification performs heuristic exploration within the final verifier, without a separate Probe stage or handoff. Neither creates a third Run Contract field or extends IIS Planning authority into delivery, and the owner STOP is not an invocation STOP.
+The Ready Ticket Set remains the terminal **IIS Planning** product. Under explicit Adaptive activation, that ownership STOP returns the Set and closed Run Contract to Outer Main, which applies the independently closed Implementation and Verification fields. Implementation requires current execution-plan review; Verification performs integrated counterexample discovery within the final verifier, without a separate pre-implementation discovery stage or handoff. Neither creates a third Run Contract field or extends IIS Planning authority into delivery, and the owner STOP is not an invocation STOP.
 
 Implementation material-method terminal returns and verifier terminal semantic results are invocation-local delivery handoffs under already established user authority. They are not the `/승인게이트` Run Contract Approval Gate, direct-user approval, a new Run Contract field, or a Mandate/Scope/Spec/Ticket approval gate. Caller-owned `ready_finalize` changes only the narrow Ticket status progression contract and creates no durable workflow state.
 

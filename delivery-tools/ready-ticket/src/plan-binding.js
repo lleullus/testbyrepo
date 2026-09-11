@@ -24,7 +24,7 @@ export function bindPlanReview({ planReviewPath, authority, requireAdmit = true 
     const review = JSON.parse(bytes);
     if (review.schema !== "iis-plan-review/v1" || review.project_root !== authority.project_root) fail("PLAN_REVIEW_STALE", "schema/root mismatch");
     if (!Array.isArray(review.plans) || !review.plans.length || !Array.isArray(review.contracts) || !Array.isArray(review.decisions)) fail("PLAN_REVIEW_STALE", "missing bindings");
-    if (!review.review_origin?.reviewer || !review.review_origin?.evidence_reference || !review.heuristic?.evidence_reference || typeof review.heuristic.disposition_summary !== "string") fail("PLAN_REVIEW_STALE", "missing review origin or heuristic result");
+    if (!review.review_origin?.reviewer || !review.review_origin?.evidence_reference) fail("PLAN_REVIEW_STALE", "missing review origin");
     const plans = review.plans.map(plan => {
       const file = exactFile(plan.path);
       if (!isInsideProject(authority.project_root, file)) fail("PLAN_REVIEW_STALE", "plans must be project-local");

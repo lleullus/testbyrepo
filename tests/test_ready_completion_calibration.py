@@ -114,6 +114,17 @@ class ReadyCompletionCalibrationTests(unittest.TestCase):
             self.completion.run(metadata_path, agent_dir=self.root, payload=self.root,
                                 model="opencodex/gpt-6-astra", thinking="high", timeout=60)
 
+    def test_stale_five_role_preparation_record_cannot_close_run(self) -> None:
+        metadata_path, metadata = self.completion.prepare("preparation-current", self.root / "legacy-roles", "candidate", 1)
+        output = Path(metadata["run_root"]) / "prepare"
+        output.mkdir()
+        (output / "plan-review.json").write_text(json.dumps({"schema": "iis-plan-review/v1", "decisions": [{"decision": "ADMIT"}]}))
+        roles = [{"role": role} for role in ("planner", "heuristic", "revision", "reviewer", "lead")]
+        (output / "record.json").write_text(json.dumps({"parsed_completion": "COMPLETE", "roles": roles}))
+        with self.assertRaises(ValueError):
+            self.completion.run(metadata_path, agent_dir=self.root, payload=self.root,
+                                model="opencodex/gpt-6-astra", thinking="high", timeout=60)
+
     def build_complete_candidate_cohort(self) -> tuple[list[Path], list[dict[str, object]], list[dict[str, object]]]:
         metadata_paths: list[Path] = []
         records: list[dict[str, object]] = []

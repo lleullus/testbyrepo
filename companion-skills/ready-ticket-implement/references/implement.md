@@ -24,7 +24,7 @@ Top-level invocation은 `SUBAGENT`가 기본이다. 현재 사용자가 이 exac
 1. 한 명의 implementation worker를 시작할 capability와 같은 Project Root 접근, terminal result 회수 capability를 확인한다.
 2. exact Ticket, Project Root, current `plan_review_path`, 추가 사용자 지시와 `Delegated Worker: yes`를 하나의 완전한 assignment에 담는다.
 3. worker assignment에 exact targets, Scope/Non-Goals, 요구되는 observable evidence와 다음 communication contract를 포함한다.
-4. material method change terminal을 받으면 old worker를 resume하지 않고 affected Plan revision → Heuristic → independent review를 실제로 수행한 뒤 fresh worker invocation으로만 재개한다.
+4. material method change terminal을 받으면 old worker를 resume하지 않고 affected Plan revision → current independent review를 실제로 수행한 뒤 fresh worker invocation으로만 재개한다.
 5. terminal `IMPLEMENT RESULT`를 수신해 exact Ticket identity와 필수 terminal fields를 확인한 뒤 caller-facing 결과를 작성한다.
 
 ```text
@@ -98,9 +98,9 @@ Skill/reference 조회, read-only `ready_contract inspect_authority`, 준비 art
 
 조건부 ADMIT의 `permitted_initial_work`만 먼저 수행하고 `discriminating_observation`을 얻는다. 지지하면 이미 검토된 의존 방향으로 새 Parent 승인 없이 진행한다. 반증이면 `response_if_refuted`에 따라 영향 작업을 멈추고 Planner로 반환한다. 불충분이면 `dependent_work_not_yet_permitted`로 확장하지 않는다. 안전한 비의존 작업은 shared state/interface/effect 독립성이 실제로 설명되는 경우에만 계속한다.
 
-명명, private helper, 동등한 국소 수정은 worker 재량이다. 중요한 원인/owner/interface/persistence/readback/effect 변경은 current invocation에서 새 방향에 의존한 mutation을 중단하고 terminal `PARTIAL | BLOCKED`로 반환한 뒤 Planner 수정 → 영향 Heuristic → independent review → fresh actor admission을 요구한다. 제품 의미 변경은 원 planning authority로 반환한다. worker가 bound Plan을 직접 고쳐 gate를 맞추지 않는다.
+명명, private helper, 동등한 국소 수정은 worker 재량이다. 중요한 원인/owner/interface/persistence/readback/effect 변경은 current invocation에서 새 방향에 의존한 mutation을 중단하고 terminal `PARTIAL | BLOCKED`로 반환한 뒤 affected Plan revision → current independent review → fresh actor admission을 요구한다. 제품 의미 변경은 원 planning authority로 반환한다. worker가 bound Plan을 직접 고쳐 gate를 맞추지 않는다.
 
-material method change를 보고받은 caller는 old review가 byte-current하다는 이유만으로 그대로 재사용해 fresh worker를 시작하지 않는다. affected Plan을 실제로 수정하고 Heuristic/Independent Review를 다시 거친 후 새 `plan_review_path`로 fresh implementation invocation을 시작한다.
+material method change를 보고받은 caller는 old review가 byte-current하다는 이유만으로 그대로 재사용해 fresh worker를 시작하지 않는다. affected Plan을 실제로 수정하고 current independent review를 다시 받은 후 새 `plan_review_path`로 fresh implementation invocation을 시작한다.
 
 exact Ticket/Parent Spec/Behavior/UI authority drift, authoritative readback의 unavailable/non-attributable 상태 또는 대체 필요가 확인되면 영향 작업을 즉시 멈춘다. 원 권위 안에서 faithful direction/readback을 재확정하고 필요한 review를 갱신할 수 없으면 BLOCKED다. readback 약화나 새 제품 의미를 caller 승인으로 만들지 않는다. 일반 repository 변경과 제품 authority drift는 구분한다.
 
@@ -172,10 +172,10 @@ Reviewed direction:
 New direct evidence:
 Affected plan scope:
 Current working-tree state:
-Next allowed action: revise affected Plan -> Heuristic -> independent review
+Next allowed action: revise affected Plan -> independent review
 ```
 
-이 result로 current invocation은 끝난다. Parent `CONTINUE`나 runtime release로 same child를 살려두지 않는다. caller는 affected Plan을 실제로 수정하고 Heuristic/Independent Review를 다시 수행한 뒤 fresh worker를 시작한다. 해결 불가 authority/readback blocker이거나 external effect 정착 여부를 확인할 수 없으면 exact evidence gap을 포함해 `BLOCKED | PARTIAL`로 닫고 성공을 추측하지 않는다.
+이 result로 current invocation은 끝난다. Parent `CONTINUE`나 runtime release로 same child를 살려두지 않는다. caller는 affected Plan을 실제로 수정하고 current independent review를 다시 받은 뒤 fresh worker를 시작한다. 해결 불가 authority/readback blocker이거나 external effect 정착 여부를 확인할 수 없으면 exact evidence gap을 포함해 `BLOCKED | PARTIAL`로 닫고 성공을 추측하지 않는다.
 
 ## 7. Completion self-check
 

@@ -60,7 +60,7 @@ def inspect(run_root: Path, stage: str) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_root", type=Path)
-    parser.add_argument("stage", choices=("plan", "prepare/planner", "prepare/heuristic", "prepare/reviewer", "prepare/lead", "implement", "verify"))
+    parser.add_argument("stage", choices=("plan", "prepare/planner", "prepare/reviewer", "prepare/lead", "implement", "verify"))
     args = parser.parse_args()
     print(json.dumps(inspect(args.run_root, args.stage), indent=2, ensure_ascii=False))
     return 0

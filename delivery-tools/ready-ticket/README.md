@@ -25,7 +25,7 @@ A settled process exit with a nonzero status is an ordinary command failure. The
 
 If a real non-idempotent or external effect loses its response, do not blindly replay it. Use the Ticket/Plan-authorized readback and cleanup path. Continue when the effect is attributable as applied or not applied; otherwise stop dependent work and return the exact evidence limit.
 
-A material implementation method change ends the current implementation invocation. Revise the affected Plan, run Heuristic and independent review, then start a fresh actor only after the prior worker/process is actually settled.
+A material implementation method change ends the current implementation invocation. Revise the affected Plan, obtain a current independent review, then start a fresh actor only after the prior worker/process is actually settled.
 
 ## Verification binding
 

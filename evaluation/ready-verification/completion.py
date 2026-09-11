@@ -813,7 +813,7 @@ def run(metadata_path: Path, *, agent_dir: Path, payload: Path,
             try:
                 setup = json.loads((run_root / "prepare/record.json").read_text())
                 roles = setup["roles"]
-                if {role["role"] for role in roles} != {"planner", "heuristic", "revision", "reviewer", "lead"}:
+                if {role["role"] for role in roles} != {"planner", "reviewer", "lead"}:
                     raise ValueError("missing actual independent preparation roles")
                 for role in roles:
                     native = summarize(load_events(Path(role["raw_events"])))

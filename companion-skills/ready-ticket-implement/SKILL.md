@@ -76,7 +76,7 @@ current ADMIT 후 정상 첫 source 변경에는 PRE_ACTION 재심사가 없다.
 
 구현 중 다른 root cause, owner, shared interface, persistence 의미, authoritative readback 또는 non-idempotent effect strategy가 직접 evidence로 드러나 reviewed Plan의 중요한 방법이 바뀌면 새 방향에 의존하는 mutation을 즉시 멈춘다. 정상 진행, 일시적 test failure, 스타일 또는 동등한 국소 리팩터링은 material method change가 아니다.
 
-material method change는 runtime pause/resume이 아니라 current implementation invocation의 terminal 경계다. worker는 `Completion: PARTIAL | BLOCKED`, reviewed direction, 새 직접 evidence, affected Plan scope, current working-tree state, `Next allowed action: revise affected Plan -> Heuristic -> independent review`를 반환하고 invocation을 끝낸다. Outer Main은 실제 Plan revision과 새 independent review를 얻은 뒤 fresh implementation actor를 시작한다. old worker를 CONTINUE로 release하지 않는다.
+material method change는 runtime pause/resume이 아니라 current implementation invocation의 terminal 경계다. worker는 `Completion: PARTIAL | BLOCKED`, reviewed direction, 새 직접 evidence, affected Plan scope, current working-tree state, `Next allowed action: revise affected Plan -> independent review`를 반환하고 invocation을 끝낸다. Outer Main은 실제 affected Plan revision과 current independent review를 얻은 뒤 fresh implementation actor를 시작한다. old worker를 CONTINUE로 release하지 않는다.
 
 `IMPLEMENT` 완료에는 Ticket Scope/Non-Goals 보존, 모든 authored Verification-flow obligation에 연결된 current self-check evidence, unresolved authority conflict/material blocker 부재, authored independent-verification requirement evidence 보존, decision-critical source/diff/artifact/command/runtime behavior의 직접 확인, 그리고 terminal 직전 current `check_plan_admission` 재확인이 필요하다.
 

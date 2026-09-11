@@ -104,7 +104,7 @@ class ReadyAgentCaptureTests(unittest.TestCase):
             "Previous result:\n```text\nREADY TICKET PLAN RESULT\nCompletion: COMPLETE\n```",
             "READY TICKET PLAN RESULT\nCompletion: COMPLETE\nCompletion: BLOCKED",
             "Planner result\nCompletion: COMPLETE",
-            "Heuristic result\nCompletion: COMPLETE",
+            "Reviewer result\nCompletion: COMPLETE",
         ):
             with self.subTest(terminal=terminal):
                 summary = self.capture.summarize([message("stop", terminal), {"type": "agent_end"}])

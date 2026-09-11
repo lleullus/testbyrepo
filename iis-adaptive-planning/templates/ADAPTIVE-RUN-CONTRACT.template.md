@@ -45,7 +45,7 @@ Guide consulted: <resolved guide path and authored version | Not needed — no r
 
 Recommendations awaiting confirmation: None | <missing stage -> proposed model/effort, workload reason, guide section, meaningful alternative>
 
-Preparation selections: None needed | <actual delegated Planner/Heuristic/Plan Review invocation -> current selected model/effort and user-selection basis>. Reuse an applicable selection; do not require three models or add a preparation switch. DIRECT writing still cannot self-approve as independent review; report an unavailable independent invocation without ADMIT.
+Preparation selections: None needed | <actual delegated Planner/Plan Review invocation -> current selected model/effort and user-selection basis>. Reuse an applicable selection; do not require separate models per preparation role or add a preparation switch. Lead fan-in is writer-side continuation, not another selection row. DIRECT writing still cannot self-approve as independent review; report an unavailable independent invocation without ADMIT.
 
 These are invocation-local execution choices, not a worker roster or another stage switch. Apply [Delivery Model Selection](../references/09-run-contract.md#delivery-model-selection): preserve supplied choices, leave recommendations unselected until confirmed, and use USER_INPUT_REQUIRED only for actual missing selections. Implementation DIRECT and disabled stages need no child-model question; Verification yes always needs one selected SUBAGENT configuration. Verification no does not disable pre-implementation review for Implementation yes.
 

@@ -168,7 +168,7 @@ If the current request is explicitly to implement or verify an already-existing 
 
 If the user requests whole-Spec delivery after planning, the caller may deliver Ready Tickets using a separate delivery mechanism. That caller is not IIS, and IIS does not define its scheduling, retries, completion state, or final orchestration.
 
-Detailed execution preparation for existing Ready Tickets belongs to the separate [ready-ticket-plan](../companion-skills/ready-ticket-plan/SKILL.md) companion. A caller may request plans, Heuristic and independent start review without implementation; this does not extend IIS Planning's READY_TICKET_SET terminal or change product ready. A later implementation owner consumes current review; an already implemented ready target requested only for verification goes directly to its verifier without a new plan. IIS itself neither runs nor supervises these owners.
+Detailed execution preparation for existing Ready Tickets belongs to the separate [ready-ticket-plan](../companion-skills/ready-ticket-plan/SKILL.md) companion. A caller may request plans and independent start review without implementation; this does not extend IIS Planning's READY_TICKET_SET terminal or change product ready. A later implementation owner consumes current review; an already implemented ready target requested only for verification goes directly to its verifier without a new plan. IIS itself neither runs nor supervises these owners.
 
 Resolve these relative routes within the same loaded immutable bundle. Do not follow historical source absolute paths or mix another release's validator into the current contract.
 

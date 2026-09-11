@@ -95,7 +95,7 @@ Fresh verification after implementation correction: Required
 
 Do not shrink the contract merely because the correct implementation is difficult.
 
-An implementation-local repair stays with the worker under current ADMIT. Important cause/owner/interface/persistence/readback changes require affected Planner → Heuristic → independent review before dependent implementation. A new product promise returns to original planning authority, not method review.
+An implementation-local repair stays with the worker under current ADMIT. Important cause/owner/interface/persistence/readback changes require affected Plan revision → current independent review before dependent implementation, followed by a fresh implementation actor. A new product promise returns to original planning authority, not method review.
 
 ## `VERIFICATION_MECHANISM_DEFECT`
 

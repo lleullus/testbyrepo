@@ -17,6 +17,38 @@ test("authority inspection and plan admission are stateless current-byte checks"
   assert.equal(fs.existsSync(`${f.base}/state`), false);
 });
 
+test("legacy extra heuristic data is ignored while reviewer origin remains required", async t => {
+  const f = await fixture(t);
+  f.reviewData.heuristic = { evidence_reference: "legacy-only", disposition_summary: "ignored" };
+  fs.writeFileSync(f.review, JSON.stringify(f.reviewData));
+  const admission = await checkPlanAdmission({ projectRoot: f.root, ticketPath: f.ticket, planReviewPath: f.review, validatorPath: f.validatorPath });
+  assert.equal(admission.schema, "iis-implementation-admission/v1");
+  assert.equal(admission.decision, "ADMIT");
+  delete f.reviewData.review_origin.reviewer;
+  fs.writeFileSync(f.review, JSON.stringify(f.reviewData));
+  await assert.rejects(checkPlanAdmission({ projectRoot: f.root, ticketPath: f.ticket, planReviewPath: f.review, validatorPath: f.validatorPath }), /PLAN_REVIEW_STALE/);
+});
+
+test("missing reviewer evidence reference is stale", async t => {
+  const f = await fixture(t);
+  delete f.reviewData.review_origin.evidence_reference;
+  fs.writeFileSync(f.review, JSON.stringify(f.reviewData));
+  await assert.rejects(checkPlanAdmission({ projectRoot: f.root, ticketPath: f.ticket, planReviewPath: f.review, validatorPath: f.validatorPath }), /PLAN_REVIEW_STALE/);
+});
+
+test("EVIDENCE_NEEDED is not admitted", async t => {
+  const f = await fixture(t);
+  f.reviewData.decisions[0].decision = "EVIDENCE_NEEDED";
+  fs.writeFileSync(f.review, JSON.stringify(f.reviewData));
+  await assert.rejects(checkPlanAdmission({ projectRoot: f.root, ticketPath: f.ticket, planReviewPath: f.review, validatorPath: f.validatorPath }), /PLAN_NOT_ADMITTED/);
+});
+
+test("Ticket authority byte changes make the review stale", async t => {
+  const f = await fixture(t);
+  fs.appendFileSync(f.ticket, "\n");
+  await assert.rejects(checkPlanAdmission({ projectRoot: f.root, ticketPath: f.ticket, planReviewPath: f.review, validatorPath: f.validatorPath }), /PLAN_REVIEW_STALE/);
+});
+
 test("missing, stale, and non-admitted reviews fail before implementation admission", async t => {
   const f = await fixture(t);
   await assert.rejects(checkPlanAdmission({ projectRoot: f.root, ticketPath: f.ticket, validatorPath: f.validatorPath }), /PLAN_REVIEW_REQUIRED/);
