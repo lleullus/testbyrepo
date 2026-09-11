@@ -23,7 +23,7 @@ export type BrowserReasoningControlKind = "slider" | "dropdown";
 
 /** Capability declared by the managed Browser-slots transport. */
 export interface BrowserManagedSlotCapability {
-  slotId: 1 | 2 | 3 | 4 | 5;
+  slotId: 1 | 2 | 3 | 4 | 5 | 10;
   expectedControl: BrowserReasoningControlKind;
   maximumReasoning: "pro" | "high";
 }

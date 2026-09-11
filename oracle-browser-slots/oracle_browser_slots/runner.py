@@ -33,7 +33,7 @@ FORBIDDEN_TRANSPORT_FLAGS = (
     "--remote-host",
     "--bridge",
 )
-MODEL_FLAGS = ("--model", "--models")
+MODEL_FLAGS = ("--model", "-m", "--models")
 REASONING_FLAG = "--browser-thinking-time"
 
 
@@ -176,27 +176,72 @@ class JobRunner:
     def compatible_slots(self, argv: Sequence[str]) -> tuple[int, ...]:
         """Return slots with an approved capability for the canonical request."""
 
-        models = self._option_values(argv, MODEL_FLAGS)
-        reasoning_values = self._option_values(argv, (REASONING_FLAG,))
-        if len(models) > 1 or len(reasoning_values) > 1:
+        model_occurrences = self._option_occurrences(argv, MODEL_FLAGS)
+        reasoning_occurrences = self._option_occurrences(argv, (REASONING_FLAG,))
+        if (
+            len(model_occurrences) > 1
+            or len(reasoning_occurrences) > 1
+            or any(flag == "--models" for flag, _, _ in model_occurrences)
+        ):
             return ()
-        model = models[0] if models else "gpt-5.6-sol"
+
+        if model_occurrences:
+            model_flag, model, model_form = model_occurrences[0]
+            if model is None or not model.strip() or (
+                model_flag == "-m" and model_form == "equals"
+            ):
+                return ()
+        else:
+            model = "gpt-5.6-sol"
+
+        if reasoning_occurrences:
+            _, reasoning, _ = reasoning_occurrences[0]
+            if reasoning is None or not reasoning.strip():
+                return ()
+            normalized_reasoning = (
+                reasoning.strip().lower().replace("_", "-").replace(" ", "-")
+            )
+            if normalized_reasoning not in (
+                "heavy",
+                "extra-high",
+                "extrahigh",
+                "xhigh",
+                "pro",
+                "extended",
+                "high",
+                "light",
+                "instant",
+                "low",
+                "standard",
+                "medium",
+            ):
+                return ()
+        else:
+            normalized_reasoning = None
+
         normalized_model = model.strip().lower()
-        if normalized_model not in ("gpt-5.6", "gpt-5.6-sol"):
+        if normalized_model not in (
+            "gpt-5.5",
+            "gpt-5.6",
+            "gpt-5.6-sol",
+            "gpt-6",
+            "gpt-6-pro",
+        ):
             return ()
-        if not reasoning_values:
-            return (1, 2, 3, 4, 5, 10)
-        reasoning = reasoning_values[0]
-        normalized_reasoning = reasoning.strip().lower().replace("_", "-").replace(" ", "-")
-        if normalized_reasoning in ("heavy", "extra-high", "extrahigh", "xhigh", "pro"):
+        if normalized_model == "gpt-6-pro" or normalized_reasoning in (
+            "heavy",
+            "extra-high",
+            "extrahigh",
+            "xhigh",
+            "pro",
+            "light",
+            "instant",
+            "low",
+        ):
             return (1, 2, 10)
         if normalized_reasoning in ("extended", "high"):
             return (3, 4, 5, 1, 2, 10)
-        if normalized_reasoning in ("light", "instant", "low"):
-            return (1, 2, 10)
-        if normalized_reasoning in ("standard", "medium"):
-            return (1, 2, 3, 4, 5, 10)
-        return ()
+        return (1, 2, 3, 4, 5, 10)
 
     def assert_slot_compatible(self, slot_id: int, argv: Sequence[str]) -> None:
         if slot_id in self.compatible_slots(argv):
@@ -641,6 +686,31 @@ class JobRunner:
                 normalized, ("--chatgpt-url", injection)
             )
         return normalized
+
+    @staticmethod
+    def _option_occurrences(
+        argv: Sequence[str], flags: Sequence[str]
+    ) -> list[tuple[str, str | None, str]]:
+        occurrences: list[tuple[str, str | None, str]] = []
+        index = 1
+        while index < len(argv):
+            token = argv[index]
+            if token == "--":
+                break
+            if token in flags:
+                value = None
+                if index + 1 < len(argv) and not argv[index + 1].startswith("-"):
+                    value = argv[index + 1]
+                    index += 1
+                occurrences.append((token, value, "separated"))
+            else:
+                for flag in flags:
+                    prefix = f"{flag}="
+                    if token.startswith(prefix):
+                        occurrences.append((flag, token[len(prefix) :], "equals"))
+                        break
+            index += 1
+        return occurrences
 
     @staticmethod
     def _option_values(argv: Sequence[str], flags: Sequence[str]) -> list[str]:

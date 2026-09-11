@@ -63,6 +63,14 @@ describe("resolveBrowserConfig", () => {
       expectedControl: "slider",
       maximumReasoning: "high",
     });
+    expect(resolveManagedBrowserSlotCapability({ ORACLE_BROWSER_SLOT_ID: "10" })).toEqual({
+      slotId: 10,
+      expectedControl: "slider",
+      maximumReasoning: "pro",
+    });
+    for (const slotId of ["", "6", "7", "8", "9", "garbage"]) {
+      expect(resolveManagedBrowserSlotCapability({ ORACLE_BROWSER_SLOT_ID: slotId })).toBeNull();
+    }
   });
 
   test("rejects explicit reasoning above a managed capability", () => {
@@ -115,6 +123,19 @@ describe("resolveBrowserConfig", () => {
     expect(() =>
       resolveBrowserConfig({ desiredModel: "Thinking 5.5", reasoningIntent: "pro" }),
     ).toThrow(/supports reasoning up to High/i);
+  });
+
+  test("routes slot 10 through the managed Pro guard", () => {
+    process.env.ORACLE_BROWSER_SLOT_ID = "10";
+
+    const resolved = resolveBrowserConfig({ reasoningIntent: "pro" });
+
+    expect(resolved.managedSlot).toEqual({
+      slotId: 10,
+      expectedControl: "slider",
+      maximumReasoning: "pro",
+    });
+    expect(resolved.reasoningIntent).toBe("pro");
   });
 
   test("maps explicit extended reasoning to High without promoting Pro slots", () => {

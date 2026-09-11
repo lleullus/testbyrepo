@@ -290,6 +290,11 @@ describe("inferModelFromLabel", () => {
     expect(inferModelFromLabel("GPT-5.6 Sol")).toBe("gpt-5.6-sol");
     expect(inferModelFromLabel("ChatGPT 5_6")).toBe("gpt-5.6");
   });
+  test("preserves GPT-6 browser canonical ids, including Pro", () => {
+    expect(inferModelFromLabel("gpt-6")).toBe("gpt-6");
+    expect(inferModelFromLabel("GPT-6 Pro")).toBe("gpt-6-pro");
+    expect(inferModelFromLabel("6Pro")).toBe("gpt-6-pro");
+  });
 
   test("does not reserve unrelated slashless API model ids containing 5.6", () => {
     expect(isGpt56BrowserLabel("vendor-5.6-large")).toBe(false);

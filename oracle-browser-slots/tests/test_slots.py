@@ -36,7 +36,7 @@ from oracle_browser_slots.launcher import (
     _is_chrome_process,
 )
 from oracle_browser_slots.model import AVAILABLE, OCCUPIED, SLOT_IDS, UNAVAILABLE, Settings
-from oracle_browser_slots.runner import CANONICAL_ORACLE_CLI, JobRunner
+from oracle_browser_slots.runner import CANONICAL_ORACLE_CLI, JobRunner, OracleTransportError
 from oracle_browser_slots.service import SlotService, process_starttime
 from oracle_browser_slots.state import StateError, StateStore
 
@@ -1345,27 +1345,38 @@ class JobRunnerTests(unittest.TestCase):
             service = SlotService(settings_for(Path(directory)))
             runner = JobRunner(service, oracle_cli_path=TEST_ORACLE_CLI)
 
-            capabilities = {
-                None: (1, 2, 3, 4, 5, 10),
-                "standard": (1, 2, 3, 4, 5, 10),
-                "medium": (1, 2, 3, 4, 5, 10),
-                "light": (1, 2, 10),
-                "instant": (1, 2, 10),
-                "low": (1, 2, 10),
-                "heavy": (1, 2, 10),
-                "extra-high": (1, 2, 10),
-                "extrahigh": (1, 2, 10),
-                "xhigh": (1, 2, 10),
-                "pro": (1, 2, 10),
-                "extended": (3, 4, 5, 1, 2, 10),
-                "high": (3, 4, 5, 1, 2, 10),
+            default_slots = (1, 2, 3, 4, 5, 10)
+            high_slots = (3, 4, 5, 1, 2, 10)
+            pro_slots = (1, 2, 10)
+            reasoning_matrix = {
+                None: default_slots,
+                "standard": default_slots,
+                "medium": default_slots,
+                "light": pro_slots,
+                "instant": pro_slots,
+                "low": pro_slots,
+                "heavy": pro_slots,
+                "extra-high": pro_slots,
+                "extrahigh": pro_slots,
+                "xhigh": pro_slots,
+                "pro": pro_slots,
+                "extended": high_slots,
+                "high": high_slots,
             }
-            for reasoning, expected in capabilities.items():
-                with self.subTest(reasoning=reasoning):
-                    command = [TEST_ORACLE_CLI, "--model", "gpt-5.6-sol"]
+            for model in ("gpt-5.5", "gpt-5.6", "gpt-5.6-sol", "gpt-6"):
+                for reasoning, expected in reasoning_matrix.items():
+                    with self.subTest(model=model, reasoning=reasoning):
+                        command = [TEST_ORACLE_CLI, "--model", model]
+                        if reasoning is not None:
+                            command.extend(("--browser-thinking-time", reasoning))
+                        self.assertEqual(runner.compatible_slots(command), expected)
+
+            for reasoning in reasoning_matrix:
+                with self.subTest(model="gpt-6-pro", reasoning=reasoning):
+                    command = [TEST_ORACLE_CLI, "--model", "gpt-6-pro"]
                     if reasoning is not None:
                         command.extend(("--browser-thinking-time", reasoning))
-                    self.assertEqual(runner.compatible_slots(command), expected)
+                    self.assertEqual(runner.compatible_slots(command), pro_slots)
 
             self.assertEqual(
                 runner.compatible_slots(
@@ -1375,12 +1386,84 @@ class JobRunnerTests(unittest.TestCase):
                         "--browser-thinking-time=extended",
                     ]
                 ),
-                (3, 4, 5, 1, 2, 10),
+                high_slots,
+            )
+            self.assertEqual(
+                runner.compatible_slots([TEST_ORACLE_CLI, "-m", "gpt-5.5"]),
+                default_slots,
+            )
+            self.assertEqual(
+                runner.compatible_slots([TEST_ORACLE_CLI, "-m", "gpt-5.5", "--model", "gpt-6"]),
+                (),
+            )
+            self.assertEqual(
+                runner.compatible_slots(
+                    [TEST_ORACLE_CLI, "--model", "gpt-5.5", "--model", "gpt-6"]
+                ),
+                (),
+            )
+            self.assertEqual(
+                runner.compatible_slots([TEST_ORACLE_CLI, "--models", "gpt-5.5,gpt-6"]),
+                (),
             )
             self.assertEqual(
                 runner.compatible_slots([TEST_ORACLE_CLI, "--model", "gpt-5.5-pro"]),
                 (),
             )
+
+            invalid_commands = (
+                [TEST_ORACLE_CLI, "--model"],
+                [TEST_ORACLE_CLI, "-m"],
+                [TEST_ORACLE_CLI, "--model", "--verbose"],
+                [TEST_ORACLE_CLI, "-m", "-x"],
+                [TEST_ORACLE_CLI, "--model", "--"],
+                [TEST_ORACLE_CLI, "--model="],
+                [TEST_ORACLE_CLI, "-m=gpt-5.5"],
+                [TEST_ORACLE_CLI, "--browser-thinking-time"],
+                [TEST_ORACLE_CLI, "--browser-thinking-time", "-x"],
+                [TEST_ORACLE_CLI, "--browser-thinking-time="],
+                [TEST_ORACLE_CLI, "--model", "gpt-6-pro", "--browser-thinking-time", "nonsense"],
+                [TEST_ORACLE_CLI, "--model", "gpt-5.5", "--model", "gpt-5.5"],
+                [TEST_ORACLE_CLI, "--browser-thinking-time", "high", "--browser-thinking-time", "high"],
+                [TEST_ORACLE_CLI, "--models", "gpt-6-pro"],
+                [TEST_ORACLE_CLI, "--models=gpt-6-pro"],
+                [TEST_ORACLE_CLI, "--models"],
+                [TEST_ORACLE_CLI, "--models="],
+                [TEST_ORACLE_CLI, "--models", "gpt-5.5,gpt-6"],
+                [TEST_ORACLE_CLI, "--models", "gpt-6-pro", "--model", "gpt-6-pro"],
+            )
+            for command in invalid_commands:
+                with self.subTest(command=command):
+                    self.assertEqual(runner.compatible_slots(command), ())
+                    with self.assertRaisesRegex(OracleTransportError, "호환되지 않습니다"):
+                        runner.assert_slot_compatible(1, command)
+
+            self.assertEqual(
+                runner.compatible_slots(
+                    [TEST_ORACLE_CLI, "--model", "gpt-5.5", "--", "--models", "gpt-6-pro"]
+                ),
+                default_slots,
+            )
+
+    def test_invalid_model_or_reasoning_is_rejected_before_claim(self):
+        with TemporaryDirectory() as directory:
+            service = SlotService(settings_for(Path(directory)))
+            runner = JobRunner(service, oracle_cli_path=TEST_ORACLE_CLI)
+            command = [
+                TEST_ORACLE_CLI,
+                "--model",
+                "gpt-6-pro",
+                "--browser-thinking-time",
+                "nonsense",
+            ]
+
+            with patch.object(service, "claim_job") as claim:
+                result = runner.run(1, "invalid-routing", command)
+
+            self.assertFalse(result["accepted"])
+            self.assertEqual(result["exit_code"], 2)
+            claim.assert_not_called()
+
 
     def test_missing_oracle_flags_are_injected_for_selected_slot(self):
         with TemporaryDirectory() as directory:
@@ -1594,9 +1677,7 @@ class JobRunnerTests(unittest.TestCase):
                 service,
                 popen_factory=failing_popen,
                 oracle_cli_path=TEST_ORACLE_CLI,
-            ).run(
-                1, "spawn-error", oracle_argv(19222, "missing-command")
-            )
+            ).run(1, "spawn-error", oracle_argv(19222, "missing-command"))
             self.assertEqual(result["exit_code"], 127)
             self.assertEqual(result["record"]["outcome"], "spawn_error")
             self.assertTrue(result["record"]["released"])
@@ -1762,8 +1843,6 @@ class JobRunnerTests(unittest.TestCase):
             self.assertEqual(rejected["record"]["status"], UNAVAILABLE)
             recovered = service.prepare(1)
             self.assertEqual(recovered["status"], AVAILABLE)
-
-
 class CliTests(unittest.TestCase):
     def test_direct_cli_status_uses_safe_empty_runtime(self):
         project_root = Path(__file__).resolve().parents[1]

@@ -1553,6 +1553,19 @@ describe("browser model selection matchers", () => {
     expect(expression).toContain("candidateTextVersion !== desiredVersion");
     expect(expression).toContain("canTrustSelectedOption(option, normalizedText, testid)");
   });
+  it.each(["6 Pro", "6Pro", "GPT 6 Pro", "GPT 6Pro", "ChatGPT 6 Pro", "ChatGPT 6Pro"])(
+    "rejects the closed reasoning label %s as a model row",
+    async (label) => {
+      const runtime = {
+        evaluate: vi.fn().mockResolvedValue({
+          result: { value: { status: "already-selected", label } },
+        }),
+      };
+      await expect(
+        ensureModelSelection(runtime as never, "Latest", (() => {}) as never, "select"),
+      ).rejects.toThrow(/reasoning control/);
+    },
+  );
 });
 
 describe("ensureModelSelection composer-pill wait", () => {

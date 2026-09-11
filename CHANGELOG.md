@@ -13,6 +13,7 @@
 - Browser: recover completed answers after a recoverable DevTools disconnect by confirming target liveness and attempting bounded reattachment, while preserving fail-closed handling for unavailable targets. Fixes #326. Thanks @piyushbag!
 - CLI: avoid inheriting `browser.thinkingTime` from config when `--browser-model-strategy current` is explicit, while preserving an explicit `--browser-thinking-time` override. Thanks @jung0han!
 - Browser/Serve: keep the authenticated manual-login Chrome process alive while closing each successfully captured service-owned run tab, preventing renderer and memory accumulation across repeated remote consultations without changing explicit `--browser-keep-browser`, attached-tab, or incomplete-run recovery behavior. Thanks @rtl-ai!
+- Browser: preserve GPT-6 browser model identifiers, route managed GPT-6 Pro requests only to Pro-capable slots (including slot 10), and verify ChatGPT's five-step `6 Pro` elevation with native slider input and unchanged-current model evidence instead of silently falling back or submitting through an unverified picker state.
 
 ## 0.16.0 — 2026-07-12
 

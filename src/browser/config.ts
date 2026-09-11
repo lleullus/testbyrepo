@@ -184,9 +184,9 @@ export function resolveManagedBrowserSlotCapability(
   env: Record<string, string | undefined> = process.env,
 ): BrowserManagedSlotCapability | null {
   const raw = (env.ORACLE_BROWSER_SLOT_ID ?? "").trim();
-  if (raw === "1" || raw === "2") {
+  if (raw === "1" || raw === "2" || raw === "10") {
     return {
-      slotId: Number(raw) as 1 | 2,
+      slotId: Number(raw) as 1 | 2 | 10,
       expectedControl: "slider",
       maximumReasoning: "pro",
     };

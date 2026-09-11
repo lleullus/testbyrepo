@@ -139,6 +139,12 @@ function isReasoningOnlyLabel(value: string | null | undefined): boolean {
     normalized === "pro" ||
     normalized === "pro extended" ||
     normalized === "extended pro" ||
+    normalized === "6 pro" ||
+    normalized === "6pro" ||
+    normalized === "gpt 6 pro" ||
+    normalized === "gpt 6pro" ||
+    normalized === "chatgpt 6 pro" ||
+    normalized === "chatgpt 6pro" ||
     /^(?:chatgpt )?(?:gpt )?5(?: [0-9])? pro$/.test(normalized)
   );
 }

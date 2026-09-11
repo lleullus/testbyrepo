@@ -101,7 +101,7 @@ describe("strict browser reasoning selection", () => {
       "aria-checked": "false",
     });
     const high = new Node("High", { role: "menuitemradio", "aria-checked": "true" });
-    const modelMenuItem = new Node("GPT-5.6 Sol", { role: "menuitem" });
+    const modelMenuItem = new Node("GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
     const reasoningOwner = {
       getAttribute: (name: string) => {
         if (name === "data-testid") return "composer-intelligence-picker-content";
@@ -237,7 +237,7 @@ describe("strict browser reasoning selection", () => {
       "aria-valuenow": "3",
       "aria-orientation": "horizontal",
     });
-    const modelMenuItem = new Node("ModelGPT-5.6 Sol", { role: "menuitem" });
+    const modelMenuItem = new Node("ModelGPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
     modelMenuItem.innerText = "Model\nGPT-5.6 Sol";
     const effortMenuItem = new Node("EffortExtra High GPT-9.9", { role: "menuitem" });
     effortMenuItem.innerText = "Effort\nExtra High GPT-9.9";
@@ -312,17 +312,18 @@ describe("strict browser reasoning selection", () => {
         EventStub,
       ),
     ).resolves.toMatchObject({
-      status: "switched",
+      status: "action-required",
       controlKind: "slider",
-      resolvedLevel: "pro",
+      resolvedLevel: "extra-high",
       modelUnchanged: true,
       originalModelFingerprint: expect.any(String),
       observedModelFingerprint: expect.any(String),
+      action: { targetValue: 4, direction: "increase" },
     });
     expect(openClicks).toBeGreaterThan(0);
-    expect(arrowRightKeydowns).toBe(1);
-    expect(powerOwner.focused).toBe(true);
-    expect(sliderReadback.getAttribute("aria-valuenow")).toBe("4");
+    expect(arrowRightKeydowns).toBe(0);
+    expect(powerOwner.focused).toBe(false);
+    expect(sliderReadback.getAttribute("aria-valuenow")).toBe("3");
   });
 
   it.each([
@@ -386,7 +387,7 @@ describe("strict browser reasoning selection", () => {
       const arrowKeys: string[] = [];
       const observedLabels: string[] = [];
       const readbacks: Node[] = [];
-      const modelMenuItem = new Node("GPT-5.6 Sol", { role: "menuitem" });
+      const modelMenuItem = new Node("GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
       const makeReadback = (level: (typeof levels)[number]) => {
         const readback = new Node(
           "",
@@ -471,17 +472,18 @@ describe("strict browser reasoning selection", () => {
           EventStub,
         ),
       ).resolves.toMatchObject({
-        status: "switched",
+        status: "action-required",
         controlKind: "slider",
-        resolvedLevel: target,
+        resolvedLevel: target === "extra-high" ? "medium" : "extra-high",
         modelUnchanged: true,
+        action: {
+          targetValue: 2,
+        },
       });
-      expect(currentIndex).toBe(targetIndex);
-      expect(arrowKeys).toEqual(
-        Array.from({ length: Math.abs(targetIndex - levels.indexOf(initial)) }, () => key),
-      );
-      expect(new Set(readbacks).size).toBe(arrowKeys.length + 1);
-      expect(observedLabels).toEqual(expect.arrayContaining([initial, "high", target]));
+      expect(currentIndex).toBe(levels.indexOf(initial));
+      expect(arrowKeys).toEqual([]);
+      expect(new Set(readbacks).size).toBe(1);
+      expect(observedLabels).toEqual(expect.arrayContaining([initial]));
     },
   );
 
@@ -545,7 +547,7 @@ describe("strict browser reasoning selection", () => {
       },
     );
     powerOwner.children = [sliderReadback];
-    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
     const effortMenuItem = new Node("Effort Extra High", { role: "menuitem" });
     const reasoningOwner = {
       getAttribute: (name: string) =>
@@ -584,15 +586,16 @@ describe("strict browser reasoning selection", () => {
         EventStub,
       ),
     ).resolves.toMatchObject({
-      status: "unavailable",
+      status: "action-required",
       controlKind: "slider",
       resolvedLevel: "extra-high",
       modelUnchanged: true,
       originalModelFingerprint: expect.any(String),
       observedModelFingerprint: expect.any(String),
+      action: { targetValue: 4, direction: "increase" },
       diagnostic: { controlCount: 1, matchingControlCount: 1, observedKinds: ["slider"] },
     });
-    expect(arrowRightKeydowns).toBe(1);
+    expect(arrowRightKeydowns).toBe(0);
     expect(sliderReadback.getAttribute("aria-valuenow")).toBe("3");
   });
 
@@ -641,7 +644,7 @@ describe("strict browser reasoning selection", () => {
       "data-orientation": "vertical",
     });
     invalidOwner.children = [hiddenSlider];
-    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
     const reasoningOwner = {
       getAttribute: (name: string) =>
         name === "data-testid" ? "composer-intelligence-picker-content" : null,
@@ -847,7 +850,7 @@ describe("strict browser reasoning selection", () => {
     });
     const standard = new Node("Standard", { role: "menuitemradio", "aria-checked": "true" });
     const high = new Node("High", { role: "menuitemradio", "aria-checked": "false" });
-    const modelMenuItem = new Node("GPT-5.6 Sol", { role: "menuitem" });
+    const modelMenuItem = new Node("GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
     const reasoningOwner = {
       getAttribute: (name: string) =>
         name === "data-testid" ? "composer-intelligence-picker-content" : null,
@@ -966,7 +969,7 @@ describe("strict browser reasoning selection", () => {
       standard.setAttribute("aria-checked", "false");
       high.setAttribute("aria-checked", "true");
     });
-    const modelMenuItem = new FakeElement("GPT-5.6 Sol", { role: "menuitem" });
+    const modelMenuItem = new FakeElement("GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
     const reasoningOwner = {
       getAttribute: (name: string) =>
         name === "data-testid" ? "composer-intelligence-picker-content" : null,
@@ -1085,7 +1088,7 @@ describe("strict browser reasoning selection", () => {
       standard.setAttribute("aria-checked", "false");
       high.setAttribute("aria-checked", "true");
     });
-    const modelMenuItem = new Node("GPT-5.6 Sol", { role: "menuitem" });
+    const modelMenuItem = new Node("GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
     const reasoningTrigger = new Node(
       "Reasoning",
       {
@@ -1227,7 +1230,7 @@ describe("strict browser reasoning selection", () => {
       liveSlider = replacement;
     });
     liveSlider = initial;
-    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
     const reasoningOwner = {
       getAttribute: (name: string) =>
         name === "data-testid" ? "composer-intelligence-picker-content" : null,
@@ -1268,8 +1271,13 @@ describe("strict browser reasoning selection", () => {
         EventStub,
         EventStub,
       ),
-    ).resolves.toMatchObject({ status: "switched", controlKind: "slider", resolvedLevel: "pro" });
-    expect(refreshed).toBe(true);
+    ).resolves.toMatchObject({
+      status: "action-required",
+      controlKind: "slider",
+      resolvedLevel: "medium",
+      action: { targetValue: 2, direction: "increase" },
+    });
+    expect(refreshed).toBe(false);
     expect(initial.ariaWrites).toBe(0);
   });
 
@@ -1325,7 +1333,7 @@ describe("strict browser reasoning selection", () => {
       "data-orientation": "vertical",
     });
     powerOwner.children = [sliderReadback];
-    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
     const effortMenuItem = new Node("Effort GPT-9.9", { role: "menuitem" });
     const reasoningOwner = {
       getAttribute: (name: string) =>
@@ -1423,7 +1431,7 @@ describe("strict browser reasoning selection", () => {
       "data-orientation": "vertical",
     });
     powerOwner.children = [sliderReadback];
-    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
     const effortMenuItem = new Node("Effort GPT-9.9", { role: "menuitem" });
     const reasoningOwner = {
       getAttribute: (name: string) =>
@@ -1522,7 +1530,7 @@ describe("strict browser reasoning selection", () => {
       "data-orientation": "vertical",
     });
     powerOwner.children = [sliderReadback];
-    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
     const effortMenuItem = new Node("Effort Standard", { role: "menuitem" });
     const reasoningOwner = {
       getAttribute: (name: string) =>
@@ -1633,7 +1641,7 @@ describe("strict browser reasoning selection", () => {
       "aria-valuemax": "4",
       "aria-valuetext": "3.7",
     });
-    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
     const reasoningOwner = {
       getAttribute: (name: string) =>
         name === "data-testid" ? "composer-intelligence-picker-content" : null,
@@ -1743,7 +1751,7 @@ describe("strict browser reasoning selection", () => {
       "aria-valuemax": "4",
       "aria-valuetext": "3.7",
     });
-    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
     const reasoningOwner = {
       getAttribute: (name: string) =>
         name === "data-testid" ? "composer-intelligence-picker-content" : null,
@@ -1851,7 +1859,7 @@ describe("strict browser reasoning selection", () => {
       "aria-valuemax": "4",
       "aria-valuetext": "3.7",
     });
-    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem" });
+    const modelMenuItem = new Node("Model GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
     const reasoningOwner = {
       getAttribute: (name: string) =>
         name === "data-testid" ? "composer-intelligence-picker-content" : null,
@@ -1937,7 +1945,7 @@ describe("strict browser reasoning selection", () => {
       const reasoningPill = new Node("Standard", {
         "data-testid": "model-switcher-dropdown-button",
       });
-      const baseModel = new Node("GPT 5.5", { role: "menuitem" });
+      const baseModel = new Node("GPT 5.5", { role: "menuitem", "aria-checked": "true" });
       const standard = new Node("Standard", { role: "menuitemradio", "aria-checked": "true" });
       const high = new Node("High", { role: "menuitemradio", "aria-checked": "false" }, () => {
         // This visual pill is reasoning-only and must not affect model proof.
@@ -1957,6 +1965,9 @@ describe("strict browser reasoning selection", () => {
       const documentStub = {
         querySelector: (_selector: string) => reasoningPill,
         querySelectorAll: (selector: string) => {
+          if (selector.includes('[role="menuitem"], [role="menuitemradio"]')) {
+            return [standard, high, baseModel];
+          }
           if (selector.includes("composer-intelligence-picker-content")) return [reasoningOwner];
           if (selector.includes('role="option"') || selector.includes('role="menuitemradio"')) {
             return [standard, high];
@@ -2045,7 +2056,7 @@ describe("strict browser reasoning selection", () => {
         standard.setAttribute("aria-checked", "false");
         high.setAttribute("aria-checked", "true");
       });
-      const modelMenuItem = new Node("GPT-5.6 Sol", { role: "menuitem" });
+      const modelMenuItem = new Node("GPT-5.6 Sol", { role: "menuitem", "aria-checked": "true" });
       const reasoningOwner = {
         getAttribute: (name: string) =>
           name === "data-testid" ? "composer-intelligence-picker-content" : null,
@@ -2093,5 +2104,350 @@ describe("strict browser reasoning selection", () => {
       result: { status: "unavailable", resolvedLevel: null },
       bareProClicks: 0,
     });
+  });
+  it("uses CDP mouse events for exact 6 Pro elevation", async () => {
+    class Target {
+      public children: Target[] = [];
+      constructor(
+        public textContent: string,
+        private readonly attributes: Record<string, string>,
+        private readonly onDispatch?: (event: { type?: string }) => void,
+      ) {}
+      get innerText(): string { return this.textContent; }
+      getAttribute(name: string): string | null { return this.attributes[name] ?? null; }
+      setAttribute(name: string, value: string): void { this.attributes[name] = value; }
+      getBoundingClientRect(): { x: number; y: number; width: number; height: number } {
+        return { x: 10, y: 10, width: 100, height: 30 };
+      }
+      querySelectorAll(_selector: string): Target[] { return this.children; }
+      matches(selector: string): boolean {
+        return selector.includes('[data-radix-slider-track]') && this.getAttribute('data-track') === 'true';
+      }
+      dispatchEvent(event: { type?: string }): boolean {
+        this.onDispatch?.(event);
+        return true;
+      }
+    }
+    class EventStub {
+      constructor(public readonly type: string, _init?: unknown) {}
+    }
+
+    let ownerOpen = false;
+    const mouseEvents: Array<{ type?: string; x?: number; y?: number }> = [];
+    const reasoningPill = new Target(
+      "Extra High",
+      { "data-testid": "model-switcher-dropdown-button", "aria-expanded": "false" },
+      (event) => {
+        if (event.type === "click") {
+          ownerOpen = true;
+          reasoningPill.setAttribute("aria-expanded", "true");
+        }
+      },
+    );
+    const sliderReadback = new Target("", {
+      role: "slider",
+      tabindex: "-1",
+      "aria-hidden": "true",
+      "aria-valuemin": "0",
+      "aria-valuemax": "4",
+      "aria-valuenow": "3",
+      "aria-valuetext": "Extra High",
+      "aria-orientation": "horizontal",
+    });
+    const modelMenuItem = new Target("Latest", {
+      role: "menuitemradio",
+      "aria-checked": "true",
+      "data-state": "checked",
+    });
+    const effortMenuItem = new Target("Effort Extra High", { role: "menuitem" });
+    const powerOwner = new Target(
+      "",
+      {
+        role: "menuitem",
+        tabindex: "0",
+        "aria-label": "Power",
+        "aria-keyshortcuts": "ArrowLeft ArrowRight",
+        "data-orientation": "vertical",
+      },
+    );
+    powerOwner.children = [sliderReadback];
+    const reasoningOwner = new Target("", { id: "radix-live-owner", role: "menu" });
+    reasoningOwner.children = [powerOwner, sliderReadback, modelMenuItem, effortMenuItem];
+    const documentStub = {
+      querySelector: (selector: string) => {
+        if (selector.includes('[role="menu"]')) return ownerOpen ? reasoningOwner : null;
+        return selector.includes("model-switcher-dropdown-button") ? reasoningPill : null;
+      },
+      querySelectorAll: (selector: string) => {
+        if (selector === '[role="menu"]') return ownerOpen ? [reasoningOwner] : [];
+        if (selector.includes("button.__composer-pill")) return [reasoningPill];
+        return [];
+      },
+    };
+    const evaluateExpression = (expression: string) => {
+      const evaluate = new Function(
+        "document",
+        "setTimeout",
+        "window",
+        "EventTarget",
+        "PointerEvent",
+        "MouseEvent",
+        "Event",
+        `return ${expression};`,
+      ) as (...args: unknown[]) => Promise<unknown>;
+      return evaluate(
+        documentStub,
+        (callback: () => void) => callback(),
+        { innerWidth: 1280, innerHeight: 720, PointerEvent: EventStub, KeyboardEvent: EventStub },
+        Target,
+        EventStub,
+        EventStub,
+        EventStub,
+      );
+    };
+    const runtime = {
+      evaluate: async ({ expression }: { expression: string }) => ({
+        result: { value: await evaluateExpression(expression) },
+      }),
+    };
+    let mouseReleaseCount = 0;
+    const input = {
+      dispatchMouseEvent: async (event: { type?: string; x?: number; y?: number }) => {
+        mouseEvents.push(event);
+        if (event.type !== "mouseReleased") return;
+        mouseReleaseCount += 1;
+        if (mouseReleaseCount === 1) {
+          ownerOpen = true;
+          reasoningPill.setAttribute("aria-expanded", "true");
+          sliderReadback.setAttribute("aria-valuenow", "4");
+          sliderReadback.setAttribute("aria-valuetext", "Pro");
+          effortMenuItem.textContent = "Effort Pro";
+          reasoningPill.textContent = "6 Pro";
+          return;
+        }
+        ownerOpen = false;
+        reasoningPill.setAttribute("aria-expanded", "false");
+      },
+    };
+
+    const evidence = await ensureBrowserReasoning(
+      runtime as never,
+      input as never,
+      { intent: "pro", managedSlot: { slotId: 1, expectedControl: "slider", maximumReasoning: "pro" } },
+      (() => {}) as never,
+    );
+    expect(evidence).toMatchObject({
+      status: "already-selected",
+      resolvedLevel: "pro",
+      verified: true,
+      modelUnchanged: true,
+    });
+    expect(mouseEvents.map((event) => event.type)).toEqual([
+      "mouseMoved",
+      "mousePressed",
+      "mouseReleased",
+      "mouseMoved",
+      "mousePressed",
+      "mouseReleased",
+    ]);
+    expect(mouseEvents.every((event) => Number.isFinite(event.x) && Number.isFinite(event.y))).toBe(true);
+  });
+  it("uses a checked Latest row as an unchanged-current identity sentinel", async () => {
+    class Node {
+      constructor(
+        public textContent: string,
+        private readonly attributes: Record<string, string>,
+      ) {}
+      get innerText(): string { return this.textContent; }
+      getAttribute(name: string): string | null { return this.attributes[name] ?? null; }
+      getBoundingClientRect(): { width: number; height: number } {
+        return { width: 100, height: 30 };
+      }
+      querySelectorAll(_selector: string): Node[] { return []; }
+      dispatchEvent(_event: unknown): boolean { return true; }
+    }
+    class Owner extends Node {
+      constructor(private readonly children: Node[]) {
+        super("", { "data-testid": "composer-intelligence-picker-content" });
+      }
+      override querySelectorAll(_selector: string): Node[] { return this.children; }
+    }
+    class EventStub {
+      constructor(public readonly type: string, _init?: unknown) {}
+    }
+    const latest = new Node("Latest", { role: "menuitem", "aria-checked": "true" });
+    const high = new Node("High", { role: "menuitemradio", "aria-checked": "true" });
+    const owner = new Owner([latest, high]);
+    const documentStub = {
+      querySelector: () => null,
+      querySelectorAll: (selector: string) =>
+        selector.includes("composer-intelligence-picker-content") ? [owner] : [],
+    };
+    const expression = buildBrowserReasoningExpressionForTest({
+      intent: "high",
+      managedSlot: { slotId: 3, expectedControl: "dropdown", maximumReasoning: "high" },
+    });
+    const evaluate = new Function(
+      "document",
+      "setTimeout",
+      "window",
+      "EventTarget",
+      "PointerEvent",
+      "MouseEvent",
+      "Event",
+      `return ${expression};`,
+    ) as (...args: unknown[]) => Promise<unknown>;
+    await expect(
+      evaluate(
+        documentStub,
+        (callback: () => void) => callback(),
+        { innerWidth: 1280, innerHeight: 720, PointerEvent: EventStub },
+        Node,
+        EventStub,
+        EventStub,
+        EventStub,
+      ),
+    ).resolves.toMatchObject({
+      status: "already-selected",
+      originalModelFingerprint: expect.any(String),
+      observedModelFingerprint: expect.any(String),
+      modelUnchanged: true,
+    });
+  });
+
+  it("does not approve 6 Pro elevation without active model identity evidence", async () => {
+    class Node {
+      public children: Node[] = [];
+      constructor(
+        public textContent: string,
+        private readonly attributes: Record<string, string>,
+      ) {}
+      get innerText(): string { return this.textContent; }
+      getAttribute(name: string): string | null { return this.attributes[name] ?? null; }
+      getBoundingClientRect(): { x: number; y: number; width: number; height: number } {
+        return { x: 10, y: 10, width: 100, height: 30 };
+      }
+      querySelectorAll(_selector: string): Node[] { return this.children; }
+      matches(_selector: string): boolean { return false; }
+    }
+    class EventStub {
+      constructor(public readonly type: string, _init?: unknown) {}
+    }
+    const pill = new Node("6 Pro", {
+      "data-testid": "model-switcher-dropdown-button",
+      "aria-expanded": "false",
+    });
+    const readback = new Node("", {
+      role: "slider",
+      tabindex: "-1",
+      "aria-hidden": "true",
+      "aria-valuemin": "0",
+      "aria-valuemax": "4",
+      "aria-valuenow": "4",
+      "aria-valuetext": "Pro",
+      "aria-orientation": "horizontal",
+    });
+    const powerOwner = new Node("", {
+      role: "menuitem",
+      tabindex: "0",
+      "aria-label": "Power",
+      "aria-keyshortcuts": "ArrowLeft ArrowRight",
+      "data-orientation": "vertical",
+    });
+    powerOwner.children = [readback];
+    const effort = new Node("Effort Pro", { role: "menuitem" });
+    const owner = new Node("", { "data-testid": "composer-intelligence-picker-content" });
+    owner.children = [powerOwner, readback, effort];
+    const documentStub = {
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => {
+        if (selector.includes("composer-intelligence-picker-content")) return [owner];
+        if (selector.includes("button.__composer-pill")) return [pill];
+        return [];
+      },
+    };
+    const expression = buildBrowserReasoningExpressionForTest({
+      intent: "pro",
+      managedSlot: { slotId: 1, expectedControl: "slider", maximumReasoning: "pro" },
+    });
+    const evaluate = new Function(
+      "document",
+      "setTimeout",
+      "window",
+      "EventTarget",
+      "PointerEvent",
+      "MouseEvent",
+      "Event",
+      `return ${expression};`,
+    ) as (...args: unknown[]) => Promise<unknown>;
+    await expect(
+      evaluate(
+        documentStub,
+        (callback: () => void) => callback(),
+        { innerWidth: 1280, innerHeight: 720, PointerEvent: EventStub },
+        Node,
+        EventStub,
+        EventStub,
+        EventStub,
+      ),
+    ).resolves.toMatchObject({
+      status: "model-mismatch",
+      originalModelFingerprint: null,
+      observedModelFingerprint: null,
+    });
+  });
+  it("rejects a native slider move in the wrong direction", async () => {
+    const identity = {
+      fingerprint: "model-fingerprint-a",
+      source: "chatgpt-model-picker" as const,
+      capturedAt: "2026-09-11T00:00:00.000Z",
+    };
+    const action = (now: number) => ({
+      targetValue: 4,
+      direction: "increase" as const,
+      orientation: "horizontal" as const,
+      interactionRect: { x: 10, y: 10, width: 100, height: 20 },
+      thumbRect: null,
+      min: 0,
+      max: 4,
+      now,
+    });
+    let selectionEvaluation = 0;
+    const runtime = {
+      evaluate: async ({ expression }: { expression: string }) => {
+        if (!expression.includes("const TARGET")) {
+          return { result: { value: { open: true } } };
+        }
+        selectionEvaluation += 1;
+        return {
+          result: {
+            value: {
+              status: "action-required",
+              controlKind: "slider",
+              availableLevels: ["extra-high"],
+              resolvedLevel: "extra-high",
+              modelUnchanged: true,
+              originalModelFingerprint: identity.fingerprint,
+              observedModelFingerprint: identity.fingerprint,
+              ownerKey: "stable-owner",
+              controlKey: "stable-control",
+              action: action(selectionEvaluation === 1 ? 3 : 2),
+            },
+          },
+        };
+      },
+    };
+    const input = { dispatchMouseEvent: async () => undefined };
+    await expect(
+      ensureBrowserReasoning(
+        runtime as never,
+        input as never,
+        { intent: "pro", originalModelIdentity: identity },
+        (() => {}) as never,
+      ),
+    ).rejects.toMatchObject({
+      evidence: expect.objectContaining({ status: "unavailable", verified: false }),
+    });
+    expect(selectionEvaluation).toBe(2);
   });
 });

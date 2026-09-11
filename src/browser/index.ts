@@ -1555,6 +1555,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
         try {
           const evidence = await ensureBrowserReasoning(
             Runtime,
+            Input,
             {
               intent: config.reasoningIntent as NonNullable<typeof config.reasoningIntent>,
               managedSlot: config.managedSlot,
@@ -3239,6 +3240,7 @@ async function runRemoteBrowserMode(
         try {
           const evidence = await ensureBrowserReasoning(
             Runtime,
+            Input,
             {
               intent: config.reasoningIntent as NonNullable<typeof config.reasoningIntent>,
               managedSlot: config.managedSlot,

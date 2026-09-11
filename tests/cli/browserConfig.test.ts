@@ -35,6 +35,18 @@ describe("buildBrowserConfig", () => {
     const sol = await buildBrowserConfig({ model: "gpt-5.6-sol" });
     expect(sol.desiredModel).toBe("GPT-5.6 Sol");
   });
+  test("preserves GPT-6 Pro canonical metadata and base picker label", async () => {
+    const config = await buildBrowserConfig({
+      model: "gpt-6-pro" as never,
+      browserThinkingTime: "pro",
+      browserModelStrategy: "current",
+    });
+    expect(config).toMatchObject({
+      desiredModel: "Latest",
+      modelStrategy: "current",
+      reasoningIntent: "pro",
+    });
+  });
 
   test("keeps version signal for gpt-5.5 Instant browser runs", async () => {
     const config = await buildBrowserConfig({ model: "gpt-5.5-instant" });

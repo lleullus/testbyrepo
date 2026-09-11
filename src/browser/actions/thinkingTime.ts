@@ -35,6 +35,19 @@ type ThinkingTimeOutcome = (
 
 const BROWSER_THINKING_LOG_PREFIX = "[browser] Thinking time:";
 
+type BrowserSliderAction = {
+  targetValue: number;
+  direction: "increase" | "decrease";
+  orientation: "horizontal" | "vertical";
+  interactionRect: { x: number; y: number; width: number; height: number };
+  thumbRect?: { x: number; y: number; width: number; height: number } | null;
+  min: number;
+  max: number;
+  now: number;
+  viewportWidth?: number;
+  viewportHeight?: number;
+};
+
 type BrowserReasoningOutcome = {
   status?:
     | "already-selected"
@@ -42,13 +55,18 @@ type BrowserReasoningOutcome = {
     | "unavailable"
     | "ambiguous"
     | "model-changed"
-    | "model-mismatch";
+    | "model-mismatch"
+    | "action-required";
   controlKind?: "slider" | "dropdown" | null;
   availableLevels?: BrowserReasoningIntent[];
   resolvedLevel?: BrowserReasoningIntent | null;
   modelUnchanged?: boolean;
+  approvedElevation?: boolean;
   originalModelFingerprint?: string | null;
   observedModelFingerprint?: string | null;
+  action?: BrowserSliderAction;
+  ownerKey?: string | null;
+  controlKey?: string | null;
   diagnostic?: {
     controlCount?: number;
     matchingControlCount?: number;
@@ -77,21 +95,22 @@ export function shouldRequirePersistedOriginalModelIdentity(args: {
 }): boolean {
   return args.isResumingConversation || args.turnIndex > 0;
 }
+type BrowserReasoningArgs = {
+  intent: BrowserReasoningIntent;
+  managedSlot?: BrowserManagedSlotCapability | null;
+  originalModelIdentity?: BrowserModelIdentityEvidence | null;
+  requireOriginalModelIdentity?: boolean;
+};
 
-/**
- * Strict browser-only reasoning gate. Unlike the legacy thinking-time helper,
- * every non-success outcome rejects before the prompt composer is submitted.
- */
 export async function ensureBrowserReasoning(
   Runtime: ChromeClient["Runtime"],
-  args: {
-    intent: BrowserReasoningIntent;
-    managedSlot?: BrowserManagedSlotCapability | null;
-    originalModelIdentity?: BrowserModelIdentityEvidence | null;
-    requireOriginalModelIdentity?: boolean;
-  },
-  logger: BrowserLogger,
+  inputOrArgs: ChromeClient["Input"] | BrowserReasoningArgs,
+  argsOrLogger: BrowserReasoningArgs | BrowserLogger,
+  maybeLogger?: BrowserLogger,
 ): Promise<BrowserReasoningSelectionEvidence> {
+  const Input = maybeLogger ? (inputOrArgs as ChromeClient["Input"]) : undefined;
+  const args = (maybeLogger ? argsOrLogger : inputOrArgs) as BrowserReasoningArgs;
+  const logger = (maybeLogger ?? argsOrLogger) as BrowserLogger;
   const capturedAt = new Date().toISOString();
   if (args.requireOriginalModelIdentity && !args.originalModelIdentity) {
     const evidence: BrowserReasoningSelectionEvidence = {
@@ -113,7 +132,7 @@ export async function ensureBrowserReasoning(
       evidence,
     );
   }
-  const outcome = await evaluateBrowserReasoningSelection(Runtime, args);
+  const outcome = await evaluateBrowserReasoningSelection(Runtime, Input, args);
   const diagnostic = {
     controlCount: outcome?.diagnostic?.controlCount ?? 0,
     matchingControlCount: outcome?.diagnostic?.matchingControlCount ?? 0,
@@ -128,18 +147,22 @@ export async function ensureBrowserReasoning(
           capturedAt,
         }
       : null);
+  const exactIdentityMatch =
+    originalModelIdentity !== null &&
+    outcome?.observedModelFingerprint === originalModelIdentity.fingerprint;
   const evidence: BrowserReasoningSelectionEvidence = {
     requestedIntent: args.intent,
     controlKind: outcome?.controlKind ?? null,
     availableLevels: outcome?.availableLevels ?? [],
     resolvedLevel: outcome?.resolvedLevel ?? null,
-    status: outcome?.status ?? "unavailable",
+    status: outcome?.status === "action-required" ? "unavailable" : (outcome?.status ?? "unavailable"),
     verified:
       (outcome?.status === "already-selected" || outcome?.status === "switched") &&
       outcome?.resolvedLevel === args.intent &&
       outcome?.modelUnchanged === true &&
-      originalModelIdentity !== null &&
-      outcome?.observedModelFingerprint === originalModelIdentity.fingerprint,
+      (args.intent === "pro"
+        ? outcome?.approvedElevation === true
+        : exactIdentityMatch || outcome?.approvedElevation === true),
     modelUnchanged: outcome?.modelUnchanged === true,
     originalModelIdentity,
     observedModelFingerprint: outcome?.observedModelFingerprint ?? null,
@@ -161,19 +184,273 @@ export async function ensureBrowserReasoning(
 
 async function evaluateBrowserReasoningSelection(
   Runtime: ChromeClient["Runtime"],
+  Input: ChromeClient["Input"] | undefined,
   args: {
     intent: BrowserReasoningIntent;
     managedSlot?: BrowserManagedSlotCapability | null;
     originalModelIdentity?: BrowserModelIdentityEvidence | null;
   },
 ): Promise<BrowserReasoningOutcome | undefined> {
-  const outcome = await Runtime.evaluate({
-    expression: buildBrowserReasoningExpression(args),
-    awaitPromise: true,
+  let originalModelIdentity = args.originalModelIdentity ?? null;
+  let lastActionNow: number | null = null;
+  let lastActionDirection: BrowserSliderAction["direction"] | null = null;
+  let ownerKey: string | null = null;
+  let controlKey: string | null = null;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    await openReasoningControlWithNativeClick(Runtime, Input);
+    const outcome = (
+      await Runtime.evaluate({
+        expression: buildBrowserReasoningExpression({ ...args, originalModelIdentity }),
+        awaitPromise: true,
+        returnByValue: true,
+      })
+    ).result?.value as BrowserReasoningOutcome | undefined;
+    if (
+      outcome?.controlKind === "slider" &&
+      (outcome.status === "action-required" ||
+        outcome.status === "already-selected" ||
+        outcome.status === "switched")
+    ) {
+      if (
+        !outcome.ownerKey ||
+        !outcome.controlKey ||
+        (ownerKey !== null && outcome.ownerKey !== ownerKey) ||
+        (controlKey !== null && outcome.controlKey !== controlKey)
+      ) {
+        return {
+          ...outcome,
+          status: "model-changed",
+          modelUnchanged: false,
+          approvedElevation: false,
+          action: undefined,
+        };
+      }
+      ownerKey = outcome.ownerKey;
+      controlKey = outcome.controlKey;
+    }
+    if (outcome?.originalModelFingerprint && !originalModelIdentity) {
+      originalModelIdentity = {
+        fingerprint: outcome.originalModelFingerprint,
+        source: "chatgpt-model-picker",
+        capturedAt: new Date().toISOString(),
+      };
+    }
+    if (outcome?.status !== "action-required") {
+      const approvedElevation =
+        args.intent === "pro" &&
+        outcome?.approvedElevation === true &&
+        (await closeReasoningControlAndReadProPill(Runtime, Input));
+      return outcome
+        ? {
+            ...outcome,
+            approvedElevation,
+            originalModelFingerprint:
+              outcome.originalModelFingerprint ?? originalModelIdentity?.fingerprint,
+          }
+        : outcome;
+    }
+    const action = outcome.action;
+    if (!action) {
+      return {
+        ...outcome,
+        status: "unavailable",
+        action: undefined,
+        originalModelFingerprint:
+          outcome.originalModelFingerprint ?? originalModelIdentity?.fingerprint,
+      };
+    }
+    if (lastActionNow !== null) {
+      const movedTowardTarget =
+        lastActionDirection === "increase" ? action.now > lastActionNow : action.now < lastActionNow;
+      if (!movedTowardTarget) {
+        return {
+          ...outcome,
+          status: "unavailable",
+          action: undefined,
+          originalModelFingerprint:
+            outcome.originalModelFingerprint ?? originalModelIdentity?.fingerprint,
+        };
+      }
+    }
+    if (!(await dispatchNativeSliderStep(Input, action))) {
+      return {
+        ...outcome,
+        status: "unavailable",
+        action: undefined,
+        originalModelFingerprint:
+          outcome.originalModelFingerprint ?? originalModelIdentity?.fingerprint,
+      };
+    }
+    lastActionNow = action.now;
+    lastActionDirection = action.direction;
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+  }
+  return {
+    status: "unavailable",
+    controlKind: "slider",
+    modelUnchanged: true,
+    originalModelFingerprint: originalModelIdentity?.fingerprint ?? null,
+    observedModelFingerprint: null,
+  };
+}
+async function openReasoningControlWithNativeClick(
+  Runtime: ChromeClient["Runtime"],
+  Input: ChromeClient["Input"] | undefined,
+): Promise<void> {
+  if (!Input || typeof Input.dispatchMouseEvent !== "function") return;
+  const selector = JSON.stringify(MODEL_BUTTON_SELECTOR);
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const probe = await Runtime.evaluate({
+      expression: `(() => {
+        const owner = document.querySelector('[data-testid="composer-intelligence-picker-content"], [role="menu"]:has([role="menuitem"] [role="slider"])');
+        const ownerRect = owner?.getBoundingClientRect?.();
+        if (owner && ownerRect && ownerRect.width > 0 && ownerRect.height > 0) return { open: true };
+        const button = document.querySelector(${selector});
+        if (!button) return { open: false };
+        const rect = button.getBoundingClientRect?.();
+        if (!rect || ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) || rect.width <= 0 || rect.height <= 0) {
+          return { open: false };
+        }
+        return { open: false, x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      })()`,
+      returnByValue: true,
+    });
+    const point = probe.result?.value as { open?: boolean; x?: number; y?: number } | null | undefined;
+    if (point?.open === true) return;
+    if (typeof point?.x === "number" && typeof point.y === "number") {
+      try {
+        await Input.dispatchMouseEvent({ type: "mouseMoved", x: point.x, y: point.y });
+        await Input.dispatchMouseEvent({ type: "mousePressed", x: point.x, y: point.y, button: "left", clickCount: 1 });
+        await Input.dispatchMouseEvent({ type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 1 });
+        for (let check = 0; check < 10; check += 1) {
+          const state = await Runtime.evaluate({
+            expression: `(() => {
+              const owner = document.querySelector('[data-testid="composer-intelligence-picker-content"], [role="menu"]:has([role="menuitem"] [role="slider"])');
+              const rect = owner?.getBoundingClientRect?.();
+              return Boolean(owner && rect && rect.width > 0 && rect.height > 0);
+            })()`,
+            returnByValue: true,
+          });
+          if (state.result?.value === true) return;
+          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        }
+      } catch {
+        return;
+      }
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+async function closeReasoningControlAndReadProPill(
+  Runtime: ChromeClient["Runtime"],
+  Input: ChromeClient["Input"] | undefined,
+): Promise<boolean> {
+  if (!Input || typeof Input.dispatchMouseEvent !== "function") return false;
+  const selector = JSON.stringify(MODEL_BUTTON_SELECTOR);
+  const point = await Runtime.evaluate({
+    expression: `(() => {
+      const button = document.querySelector(${selector});
+      if (!button || button.getAttribute?.('aria-expanded') !== 'true') return null;
+      const rect = button.getBoundingClientRect?.();
+      if (!rect || ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) || rect.width <= 0 || rect.height <= 0) return null;
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    })()`,
     returnByValue: true,
   });
-  return outcome.result?.value as BrowserReasoningOutcome | undefined;
+  const value = point.result?.value as { x?: number; y?: number } | null | undefined;
+  if (typeof value?.x !== "number" || typeof value.y !== "number") return false;
+  try {
+    await Input.dispatchMouseEvent({ type: "mouseMoved", x: value.x, y: value.y });
+    await Input.dispatchMouseEvent({
+      type: "mousePressed",
+      x: value.x,
+      y: value.y,
+      button: "left",
+      clickCount: 1,
+    });
+    await Input.dispatchMouseEvent({
+      type: "mouseReleased",
+      x: value.x,
+      y: value.y,
+      button: "left",
+      clickCount: 1,
+    });
+  } catch {
+    return false;
+  }
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const readback = await Runtime.evaluate({
+      expression: `(() => {
+        const normalize = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\\s+/g, ' ').trim();
+        const visible = (node) => {
+          if (!node || node.getAttribute?.('aria-hidden') === 'true') return false;
+          const rect = node.getBoundingClientRect?.();
+          return !rect || (rect.width > 0 && rect.height > 0);
+        };
+        const owner = document.querySelector('[data-testid="composer-intelligence-picker-content"], [role="menu"]:has([role="menuitem"] [role="slider"])');
+        if (owner && visible(owner)) return false;
+        return Array.from(document.querySelectorAll('button.__composer-pill, [data-testid="model-switcher-dropdown-button"]'))
+          .filter(visible)
+          .filter((node) => node?.getAttribute?.('aria-expanded') !== 'true')
+          .some((node) => ['6 pro', '6pro'].includes(normalize(String(node?.innerText || node?.textContent || '') + ' ' + String(node?.getAttribute?.('aria-label') || ''))));
+      })()`,
+      returnByValue: true,
+    });
+    if (readback.result?.value === true) return true;
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+  }
+  return false;
 }
+
+async function dispatchNativeSliderStep(
+  Input: ChromeClient["Input"] | undefined,
+  action: BrowserSliderAction,
+): Promise<boolean> {
+  if (!Input || typeof Input.dispatchMouseEvent !== "function") return false;
+  const { interactionRect: rect, thumbRect, min, max, targetValue } = action;
+  if (
+    ![rect.x, rect.y, rect.width, rect.height, min, max, targetValue].every(Number.isFinite) ||
+    rect.width <= 0 ||
+    rect.height <= 0 ||
+    max <= min ||
+    targetValue < min ||
+    targetValue > max
+  ) {
+    return false;
+  }
+  const thumbRadius =
+    thumbRect && Number.isFinite(thumbRect.width) && Number.isFinite(thumbRect.height)
+      ? Math.max(0, Math.min(thumbRect.width, thumbRect.height) / 2)
+      : 0;
+  const horizontal = action.orientation !== "vertical";
+  const extent = horizontal ? rect.width : rect.height;
+  const radius = Math.max(8, Math.min(thumbRadius || 12, extent / 2));
+  const usable = Math.max(1, extent - radius * 2);
+  const ratio = (targetValue - min) / (max - min);
+  const coordinate = radius + usable * (horizontal ? ratio : 1 - ratio);
+  const x = Math.min(rect.x + rect.width - 8, Math.max(rect.x + 8, horizontal ? rect.x + coordinate : rect.x + rect.width / 2));
+  const y = Math.min(rect.y + rect.height - 8, Math.max(rect.y + 8, horizontal ? rect.y + rect.height / 2 : rect.y + coordinate));
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    x < 0 ||
+    y < 0 ||
+    (action.viewportWidth != null && x > action.viewportWidth) ||
+    (action.viewportHeight != null && y > action.viewportHeight)
+  ) {
+    return false;
+  }
+  try {
+    await Input.dispatchMouseEvent({ type: "mouseMoved", x, y });
+    await Input.dispatchMouseEvent({ type: "mousePressed", x, y, button: "left", clickCount: 1 });
+    await Input.dispatchMouseEvent({ type: "mouseReleased", x, y, button: "left", clickCount: 1 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 
 /**
  * Kept self-contained because it executes in the ChatGPT tab. It intentionally
@@ -226,8 +503,17 @@ function buildBrowserReasoningExpression(args: {
         ['checked', 'selected', 'on', 'true'].includes(state);
     };
     const levelFor = (node) => {
+      const ariaDescribedby =
+        node?.getAttribute?.('aria-describedby') ||
+        node?.closest?.('[aria-describedby]')?.getAttribute?.('aria-describedby');
+      const describedTexts = (ariaDescribedby || '')
+        .split(' ')
+        .filter(Boolean)
+        .map((id) => document.getElementById(id)?.innerText || '')
+        .join(' ');
       const text = normalize(
         ownedSemanticText(node) + ' ' +
+        describedTexts + ' ' +
         String(node?.getAttribute?.('aria-valuetext') || '').slice(0, 256),
       );
       if (!text || text.includes('gpt ')) return null;
@@ -239,15 +525,13 @@ function buildBrowserReasoningExpression(args: {
       if (words.includes('light') || words.includes('instant')) return 'instant';
       return null;
     };
-    // Model identity must not be derived from a reasoning pill: ChatGPT can
-    // change that pill from Standard to Pro without changing the base model.
-    // The authenticated intelligence picker exposes the active model as a
-    // distinct version-bearing menuitem inside the same owned container as the
-    // effort control. Keep identity scoped to that owner: the closed composer
-    // pill is reasoning-only, while the wider model catalog is not proof of the
-    // current selection.
+    // The selected model row is the identity owner. A version-bearing label is
+    // canonicalized normally; the live current strategy exposes only a
+    // checked Latest row, retained as an equality sentinel rather than
+    // interpreted as proof of a particular GPT version.
     const canonicalModelSignal = (value) => {
       const normalized = normalize(value);
+      if (normalized === 'latest') return 'current latest';
       const version = normalized.match(/(?:^| )(?:gpt )?(\\d+) (\\d+)(?: |$)/);
       if (!version) return null;
       const words = normalized.split(' ');
@@ -288,17 +572,34 @@ function buildBrowserReasoningExpression(args: {
       }
       return String(hash >>> 0);
     };
+    const isCheckedModelNode = (node) => {
+      const role = normalize(node?.getAttribute?.('role'));
+      if (role !== 'menuitem' && role !== 'menuitemradio') return false;
+      return node?.getAttribute?.('aria-checked') === 'true' ||
+        normalize(node?.getAttribute?.('data-state')) === 'checked';
+    };
+    const activeComposerBaseSignals = () => Array.from(
+      document.querySelectorAll?.('button.__composer-pill, [data-testid="model-switcher-dropdown-button"]') || [],
+    )
+      .filter(isVisible)
+      .filter((node) => node?.getAttribute?.('aria-expanded') !== 'true')
+      .map((node) => canonicalModelSignal(ownedSemanticText(node)))
+      .filter(Boolean);
     const stableModelFingerprint = (owner) => {
       if (!owner) return null;
-      const ownedModelSignals = Array.from(owner.querySelectorAll?.('[role="menuitem"]') || [])
+      const checkedSignals = Array.from(
+        owner.querySelectorAll?.('[role="menuitem"], [role="menuitemradio"]') || [],
+      )
         .slice(0, 24)
         .filter(isVisible)
+        .filter(isCheckedModelNode)
         .filter((node) => !isReasoningIdentityNode(node))
         .map((node) => canonicalModelSignal(ownedSemanticText(node)))
         .filter(Boolean);
-      const uniqueOwnedModelSignals = Array.from(new Set(ownedModelSignals));
-      return uniqueOwnedModelSignals.length === 1
-        ? fingerprintForSignals(uniqueOwnedModelSignals)
+      const activeSignals = [...checkedSignals, ...activeComposerBaseSignals()];
+      const uniqueActiveSignals = Array.from(new Set(activeSignals));
+      return uniqueActiveSignals.length === 1
+        ? fingerprintForSignals(uniqueActiveSignals)
         : null;
     };
     const diagnostic = (controlCount, matchingControlCount, observedKinds) => ({
@@ -314,6 +615,7 @@ function buildBrowserReasoningExpression(args: {
       availableLevels: details.availableLevels || [],
       resolvedLevel: details.resolvedLevel || null,
       modelUnchanged: details.modelUnchanged === true,
+      approvedElevation: details.approvedElevation === true,
       originalModelFingerprint: details.originalModelFingerprint ?? originalModelFingerprint,
       observedModelFingerprint: details.observedModelFingerprint ?? observedModelFingerprint,
       diagnostic: diagnostic(details.controlCount || 0, details.matchingControlCount || 0, details.observedKinds || []),
@@ -418,29 +720,15 @@ function buildBrowserReasoningExpression(args: {
       const uniqueLevels = Array.from(new Set(levels));
       return uniqueLevels.length === 1 ? uniqueLevels[0] : null;
     };
-    const dispatchArrow = (node, key) => {
-      const KeyboardEventCtor = window?.KeyboardEvent || window?.Event;
-      if (!node || typeof KeyboardEventCtor !== 'function') return false;
-      const keyCode = key === 'ArrowLeft' ? 37 : 39;
-      try { node.focus?.(); } catch {}
-      try {
-        node.dispatchEvent(new KeyboardEventCtor('keydown', {
-          key, code: key, keyCode, which: keyCode,
-          bubbles: true, cancelable: true,
-        }));
-        node.dispatchEvent(new KeyboardEventCtor('keyup', {
-          key, code: key, keyCode, which: keyCode,
-          bubbles: true, cancelable: true,
-        }));
-        return true;
-      } catch {
-        return false;
-      }
-    };
     const discoverControls = () => {
-      const owners = reasoningOwners();
-      // A bare model-menu row is deliberately not an owner and therefore
-      // cannot become a Pro reasoning option by text matching alone.
+      const directOwners = reasoningOwners();
+      const structuralOwners = Array.from(document.querySelectorAll?.('[role="menu"]') || [])
+        .filter(isVisible)
+        .filter((owner) => controlsWithinOwner(owner).sliders.some((control) => control.composite));
+      const owners = (directOwners.length > 0 ? directOwners : structuralOwners)
+        .filter((owner, index, values) => owner && values.indexOf(owner) === index);
+      // Prefer the dedicated owned group when present. The structural menu is
+      // its live Radix ancestor, not a second independent reasoning owner.
       if (owners.length !== 1) return { owner: null, ownerCount: owners.length, sliders: [], dropdownItems: [] };
       return { owner: owners[0], ownerCount: 1, ...controlsWithinOwner(owners[0]) };
     };
@@ -485,6 +773,79 @@ function buildBrowserReasoningExpression(args: {
       const now = node?.value || node?.getAttribute?.('aria-valuenow');
       return max != null && max !== '' && now != null && now !== '' && String(now) === String(max);
     };
+    const sliderInteractionMetrics = (control, owner) => {
+      const readback = control?.readbackNode;
+      const metrics = readNumericSliderMetrics(readback);
+      if (!metrics) return null;
+      const candidates = [
+        ...Array.from(owner?.querySelectorAll?.('[class*="Track"], [class*="Root"], [data-radix-slider-track], [data-radix-slider-thumb], [data-model-reasoning-effort-slider] [data-orientation], [role="slider"]') || []),
+        control?.interactionNode,
+      ]
+        .filter((node, index, values) => node && isVisible(node) && values.indexOf(node) === index)
+        .filter((node) => !node?.matches?.('[class*="ViewTrack"]'));
+      const interaction =
+        candidates.find((node) => node?.matches?.('[class*="_Track"], [data-radix-slider-track]')) ||
+        candidates.find((node) => node?.matches?.('[class*="_Root"]')) ||
+        candidates.find((node) => node === control?.interactionNode) ||
+        candidates[0];
+      const rect = interaction?.getBoundingClientRect?.();
+      const rectX = Number(rect?.x ?? rect?.left ?? 0);
+      const rectY = Number(rect?.y ?? rect?.top ?? 0);
+      const rectWidth = Number(rect?.width);
+      const rectHeight = Number(rect?.height);
+      if (!rect || ![rectX, rectY, rectWidth, rectHeight].every(Number.isFinite) || rectWidth <= 0 || rectHeight <= 0) {
+        return null;
+      }
+      const thumb = candidates.find((node) => node?.matches?.('[data-radix-slider-thumb]'));
+      const thumbRect = thumb?.getBoundingClientRect?.();
+      const orientationText = normalize(
+        readback?.getAttribute?.('aria-orientation') ||
+        interaction?.getAttribute?.('aria-orientation') ||
+        interaction?.getAttribute?.('data-orientation') ||
+        'horizontal',
+      );
+      return {
+        ...metrics,
+        orientation: orientationText === 'vertical' ? 'vertical' : 'horizontal',
+        interactionRect: { x: rectX, y: rectY, width: rectWidth, height: rectHeight },
+        thumbRect: thumbRect && [thumbRect.x, thumbRect.y, thumbRect.width, thumbRect.height].every(Number.isFinite)
+          ? { x: thumbRect.x, y: thumbRect.y, width: thumbRect.width, height: thumbRect.height }
+          : null,
+        viewportWidth: Number.isFinite(window?.innerWidth) ? window.innerWidth : undefined,
+        viewportHeight: Number.isFinite(window?.innerHeight) ? window.innerHeight : undefined,
+      };
+    };
+    const ownerKeyFor = (owner) => {
+      const id = String(owner?.id || owner?.getAttribute?.('id') || '').trim();
+      if (id) return 'id:' + id;
+      const testId = String(owner?.getAttribute?.('data-testid') || '').trim();
+      return testId ? 'testid:' + testId : null;
+    };
+    const controlKeyFor = (control) => {
+      if (!control?.interactionNode || !control?.readbackNode) return null;
+      const metrics = readNumericSliderMetrics(control.readbackNode);
+      if (!metrics) return null;
+      const interaction = control.interactionNode;
+      return [
+        interaction.getAttribute?.('role') || '',
+        interaction.getAttribute?.('tabindex') || '',
+        normalize(interaction.getAttribute?.('data-orientation')),
+        normalize(interaction.getAttribute?.('aria-keyshortcuts')),
+        control.readbackNode.getAttribute?.('role') || '',
+        control.readbackNode.getAttribute?.('aria-hidden') || '',
+        metrics.min,
+        metrics.max,
+      ].join('|');
+    };
+    const approvedElevationFor = (control, owner, level) => {
+      const metrics = sliderInteractionMetrics(control, owner);
+      return originalModelFingerprint !== null &&
+        observedModelFingerprint === originalModelFingerprint &&
+        TARGET === 'pro' &&
+        level === 'pro' &&
+        metrics !== null &&
+        metrics.now === metrics.max;
+    };
     let controls = discoverControls();
     if (!controlMatchesExpectation(controls)) {
       await openReasoningControl();
@@ -492,20 +853,17 @@ function buildBrowserReasoningExpression(args: {
     }
     observedModelFingerprint = stableModelFingerprint(controls.owner);
     originalModelFingerprint = originalModelFingerprint || observedModelFingerprint;
-    if (!originalModelFingerprint || observedModelFingerprint !== originalModelFingerprint) {
-      return fail('model-mismatch', {
-        modelUnchanged: false,
-        originalModelFingerprint,
-        observedModelFingerprint,
-        controlCount: 0,
-        matchingControlCount: 0,
-        observedKinds: [],
-      });
-    }
-    const modelStill = () => {
+    const identityMatchesInitial =
+      originalModelFingerprint !== null && observedModelFingerprint === originalModelFingerprint;
+    const modelStill = (control, owner) => {
       const refreshedIdentityControls = discoverControls();
       observedModelFingerprint = stableModelFingerprint(refreshedIdentityControls.owner);
-      return observedModelFingerprint !== null && observedModelFingerprint === originalModelFingerprint;
+      if (observedModelFingerprint !== null && observedModelFingerprint === originalModelFingerprint) return true;
+      return Boolean(
+        control &&
+        refreshedIdentityControls.owner &&
+        approvedElevationFor(control, owner || refreshedIdentityControls.owner, sliderLevel(control, owner)),
+      );
     };
     if (controls.ownerCount !== 1) {
       return fail(controls.ownerCount > 1 ? 'ambiguous' : 'unavailable', {
@@ -544,6 +902,22 @@ function buildBrowserReasoningExpression(args: {
         observedKinds,
       });
     }
+    if (!identityMatchesInitial) {
+      const approvedInitialElevation =
+        sliders.length === 1 &&
+        dropdownItems.length === 0 &&
+        approvedElevationFor(sliders[0], controls.owner, sliderLevel(sliders[0], controls.owner));
+      if (!approvedInitialElevation) {
+        return fail('model-mismatch', {
+          modelUnchanged: false,
+          originalModelFingerprint,
+          observedModelFingerprint,
+          controlCount: sliders.length + dropdownItems.length,
+          matchingControlCount: 0,
+          observedKinds,
+        });
+      }
+    }
     if ((EXPECTED_CONTROL === 'slider' || (!EXPECTED_CONTROL && sliders.length === 1)) && sliders.length === 1) {
       const initialSliderControl = sliders[0];
       const initialSlider = initialSliderControl.readbackNode;
@@ -569,170 +943,124 @@ function buildBrowserReasoningExpression(args: {
           matchingControlCount: 1, observedKinds,
         });
       }
-      if (initialLevel === TARGET || canUseManagedMaximumFallback) {
+      if ((initialLevel === TARGET || canUseManagedMaximumFallback) && (TARGET !== 'pro' || initialAtMaximum)) {
         return {
           status: 'already-selected',
           controlKind: 'slider', availableLevels: canUseManagedMaximumFallback ? [TARGET] : availableLevels,
           resolvedLevel: TARGET,
           modelUnchanged: true,
+          approvedElevation: approvedElevationFor(initialSliderControl, controls.owner, initialLevel),
           originalModelFingerprint,
           observedModelFingerprint,
+          ownerKey: ownerKeyFor(controls.owner),
+          controlKey: controlKeyFor(initialSliderControl),
           diagnostic: diagnostic(1, 1, ['slider']),
         };
       }
 
-      let currentLevel = initialLevel;
-      const maxSteps = Math.max(5, (initialMetrics?.max ?? 0) - (initialMetrics?.min ?? 0) + 2);
-      for (let step = 0; step < maxSteps; step += 1) {
-        const liveControls = discoverControls();
-        const liveKinds = [
-          ...(liveControls.sliders.length ? ['slider'] : []),
-          ...(liveControls.dropdownItems.length ? ['dropdown'] : []),
-        ];
-        if (
-          liveControls.ownerCount !== 1 ||
-          !liveControls.owner ||
-          liveControls.sliders.length !== 1 ||
-          liveControls.dropdownItems.length > 0
-        ) {
-          return fail(
-            liveControls.ownerCount > 1 || liveControls.sliders.length > 1 || liveControls.dropdownItems.length > 0
-              ? 'ambiguous'
-              : 'unavailable',
-            {
-              controlKind: liveControls.sliders.length ? 'slider' : null,
-              controlCount: liveControls.sliders.length + liveControls.dropdownItems.length,
-              matchingControlCount: liveControls.sliders.length,
-              observedKinds: liveKinds,
-            },
-          );
-        }
-        const liveControl = liveControls.sliders[0];
-        const liveLevel = sliderLevel(liveControl, liveControls.owner);
-        if (liveLevel) observedEffortLabel = true;
-        const liveAtMaximum = sliderAtMaximum(liveControl.readbackNode);
-        observedModelFingerprint = stableModelFingerprint(liveControls.owner);
-        if (observedModelFingerprint !== originalModelFingerprint) {
-          return fail('model-changed', {
-            controlKind: 'slider', modelUnchanged: false,
-            controlCount: 1, matchingControlCount: 1, observedKinds: liveKinds,
-          });
-        }
-        if (!liveLevel || !(liveLevel in LEVEL_RANK)) {
-          if (TARGET === MAXIMUM_REASONING && MAXIMUM_REASONING !== null && !observedEffortLabel && liveAtMaximum) {
-            return {
-              status: 'switched', controlKind: 'slider', availableLevels: [TARGET], resolvedLevel: TARGET,
-              modelUnchanged: true, originalModelFingerprint, observedModelFingerprint,
-              diagnostic: diagnostic(1, 1, ['slider']),
-            };
-          }
-          return fail('unavailable', {
-            controlKind: 'slider', availableLevels: [], resolvedLevel: null,
-            modelUnchanged: true, controlCount: 1, matchingControlCount: 1, observedKinds: liveKinds,
-          });
-        }
-        currentLevel = liveLevel;
-        if (currentLevel === TARGET) {
+      const liveControls = discoverControls();
+      const liveKinds = [
+        ...(liveControls.sliders.length ? ['slider'] : []),
+        ...(liveControls.dropdownItems.length ? ['dropdown'] : []),
+      ];
+      if (
+        liveControls.ownerCount !== 1 ||
+        !liveControls.owner ||
+        liveControls.sliders.length !== 1 ||
+        liveControls.dropdownItems.length > 0
+      ) {
+        return fail(
+          liveControls.ownerCount > 1 || liveControls.sliders.length > 1 || liveControls.dropdownItems.length > 0
+            ? 'ambiguous'
+            : 'unavailable',
+          {
+            controlKind: liveControls.sliders.length ? 'slider' : null,
+            controlCount: liveControls.sliders.length + liveControls.dropdownItems.length,
+            matchingControlCount: liveControls.sliders.length,
+            observedKinds: liveKinds,
+          },
+        );
+      }
+      const liveControl = liveControls.sliders[0];
+      const liveLevel = sliderLevel(liveControl, liveControls.owner);
+      if (liveLevel) observedEffortLabel = true;
+      const liveAtMaximum = sliderAtMaximum(liveControl.readbackNode);
+      observedModelFingerprint = stableModelFingerprint(liveControls.owner);
+      const liveApprovedElevation =
+        originalModelFingerprint !== null &&
+        observedModelFingerprint !== null &&
+        approvedElevationFor(liveControl, liveControls.owner, liveLevel);
+      if (observedModelFingerprint !== originalModelFingerprint && !liveApprovedElevation) {
+        return fail('model-changed', {
+          controlKind: 'slider', modelUnchanged: false,
+          controlCount: 1, matchingControlCount: 1, observedKinds: liveKinds,
+        });
+      }
+      if (!liveLevel || !(liveLevel in LEVEL_RANK)) {
+        if (TARGET === MAXIMUM_REASONING && MAXIMUM_REASONING !== null && !observedEffortLabel && liveAtMaximum) {
           return {
             status: 'switched', controlKind: 'slider', availableLevels: [TARGET], resolvedLevel: TARGET,
-            modelUnchanged: true, originalModelFingerprint, observedModelFingerprint,
+            modelUnchanged: true, approvedElevation: liveApprovedElevation,
+            originalModelFingerprint, observedModelFingerprint,
+            ownerKey: ownerKeyFor(liveControls.owner), controlKey: controlKeyFor(liveControl),
             diagnostic: diagnostic(1, 1, ['slider']),
           };
         }
-        const direction = LEVEL_RANK[TARGET] > LEVEL_RANK[currentLevel] ? 'ArrowRight' : 'ArrowLeft';
-        if (!dispatchArrow(liveControl.interactionNode, direction)) {
+        return fail('unavailable', {
+          controlKind: 'slider', availableLevels: [], resolvedLevel: null,
+          modelUnchanged: true, controlCount: 1, matchingControlCount: 1, observedKinds: liveKinds,
+        });
+      }
+      const currentLevel = liveLevel;
+      if (currentLevel === TARGET) {
+        if (TARGET === 'pro' && !liveAtMaximum) {
           return fail('unavailable', {
             controlKind: 'slider', availableLevels: [currentLevel], resolvedLevel: currentLevel,
             modelUnchanged: true, controlCount: 1, matchingControlCount: 1, observedKinds: liveKinds,
           });
         }
-        const stepDeadline = Date.now() + 2_500;
-        let progressed = false;
-        while (Date.now() < stepDeadline) {
-          await sleep(100);
-          const refreshedControls = discoverControls();
-          const refreshedKinds = [
-            ...(refreshedControls.sliders.length ? ['slider'] : []),
-            ...(refreshedControls.dropdownItems.length ? ['dropdown'] : []),
-          ];
-          if (
-            refreshedControls.ownerCount !== 1 ||
-            !refreshedControls.owner ||
-            refreshedControls.sliders.length !== 1 ||
-            refreshedControls.dropdownItems.length > 0
-          ) {
-            return fail('unavailable', {
-              controlKind: 'slider', availableLevels: currentLevel ? [currentLevel] : [],
-              resolvedLevel: currentLevel || null, modelUnchanged: true,
-              controlCount: refreshedControls.sliders.length + refreshedControls.dropdownItems.length,
-              matchingControlCount: refreshedControls.sliders.length, observedKinds: refreshedKinds,
-            });
-          }
-          const refreshedControl = refreshedControls.sliders[0];
-          const refreshedLevel = sliderLevel(refreshedControl, refreshedControls.owner);
-          if (refreshedLevel) observedEffortLabel = true;
-          const refreshedAtMaximum = sliderAtMaximum(refreshedControl.readbackNode);
-          observedModelFingerprint = stableModelFingerprint(refreshedControls.owner);
-          if (observedModelFingerprint !== originalModelFingerprint) {
-            return fail('model-changed', {
-              controlKind: 'slider', modelUnchanged: false,
-              controlCount: 1, matchingControlCount: 1, observedKinds: refreshedKinds,
-            });
-          }
-          if (!refreshedLevel || !(refreshedLevel in LEVEL_RANK)) {
-            if (
-              TARGET === MAXIMUM_REASONING &&
-              MAXIMUM_REASONING !== null &&
-              !observedEffortLabel &&
-              refreshedAtMaximum
-            ) {
-              return {
-                status: 'switched', controlKind: 'slider', availableLevels: [TARGET], resolvedLevel: TARGET,
-                modelUnchanged: true, originalModelFingerprint, observedModelFingerprint,
-                diagnostic: diagnostic(1, 1, ['slider']),
-              };
-            }
-            continue;
-          }
-          if (refreshedLevel === TARGET) {
-            return {
-              status: 'switched', controlKind: 'slider', availableLevels: [TARGET], resolvedLevel: TARGET,
-              modelUnchanged: true, originalModelFingerprint, observedModelFingerprint,
-              diagnostic: diagnostic(1, 1, ['slider']),
-            };
-          }
-          if (refreshedLevel === currentLevel) {
-            continue;
-          }
-          const previousRank = LEVEL_RANK[currentLevel];
-          const refreshedRank = LEVEL_RANK[refreshedLevel];
-          const targetRank = LEVEL_RANK[TARGET];
-          const movedTowardTarget = direction === 'ArrowRight'
-            ? refreshedRank > previousRank && refreshedRank < targetRank
-            : refreshedRank < previousRank && refreshedRank > targetRank;
-          if (movedTowardTarget) {
-            currentLevel = refreshedLevel;
-            progressed = true;
-            break;
-          }
-          return fail('unavailable', {
-            controlKind: 'slider', availableLevels: [refreshedLevel], resolvedLevel: refreshedLevel,
-            modelUnchanged: true, controlCount: 1, matchingControlCount: 1, observedKinds: refreshedKinds,
-          });
-        }
-        if (!progressed) {
-          return fail('unavailable', {
-            controlKind: 'slider', availableLevels: currentLevel ? [currentLevel] : [],
-            resolvedLevel: currentLevel || null, modelUnchanged: true,
-            controlCount: 1, matchingControlCount: 1, observedKinds: ['slider'],
-          });
-        }
+        return {
+          status: 'switched', controlKind: 'slider', availableLevels: [TARGET], resolvedLevel: TARGET,
+          modelUnchanged: true, approvedElevation: liveApprovedElevation,
+          originalModelFingerprint, observedModelFingerprint,
+          ownerKey: ownerKeyFor(liveControls.owner), controlKey: controlKeyFor(liveControl),
+          diagnostic: diagnostic(1, 1, ['slider']),
+        };
       }
-      return fail('unavailable', {
-        controlKind: 'slider', availableLevels: currentLevel ? [currentLevel] : [],
-        resolvedLevel: currentLevel || null, modelUnchanged: true,
-        controlCount: 1, matchingControlCount: 1, observedKinds: ['slider'],
-      });
+      const direction = LEVEL_RANK[TARGET] > LEVEL_RANK[currentLevel] ? 'increase' : 'decrease';
+      const metrics = sliderInteractionMetrics(liveControl, liveControls.owner);
+      const targetValue = metrics ? metrics.now + (direction === 'increase' ? 1 : -1) : Number.NaN;
+      if (!metrics || targetValue < metrics.min || targetValue > metrics.max) {
+        return fail('unavailable', {
+          controlKind: 'slider', availableLevels: [currentLevel], resolvedLevel: currentLevel,
+          modelUnchanged: true, controlCount: 1, matchingControlCount: 1, observedKinds: liveKinds,
+        });
+      }
+      return {
+        status: 'action-required',
+        controlKind: 'slider',
+        availableLevels: [currentLevel],
+        resolvedLevel: currentLevel,
+        modelUnchanged: true,
+        approvedElevation: liveApprovedElevation,
+        originalModelFingerprint,
+        observedModelFingerprint,
+        ownerKey: ownerKeyFor(liveControls.owner),
+        controlKey: controlKeyFor(liveControl),
+        action: {
+          targetValue,
+          direction,
+          orientation: metrics.orientation,
+          interactionRect: metrics.interactionRect,
+          thumbRect: metrics.thumbRect,
+          min: metrics.min,
+          max: metrics.max,
+          now: metrics.now,
+          viewportWidth: metrics.viewportWidth,
+          viewportHeight: metrics.viewportHeight,
+        },
+        diagnostic: diagnostic(1, 1, ['slider']),
+      };
     }
     const availableLevels = Array.from(new Set(dropdownItems.map(levelFor).filter(Boolean)));
     const matches = dropdownItems.filter((node) => levelFor(node) === TARGET);
