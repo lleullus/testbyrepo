@@ -47,7 +47,8 @@ struct pty_process_ {
   uv_pipe_t *in;
   uv_pipe_t *out;
   bool paused;
-
+  bool async_initialized;
+  bool thread_started;
   pty_read_cb read_cb;
   pty_exit_cb exit_cb;
   void *ctx;
@@ -64,5 +65,6 @@ void pty_resume(pty_process *process);
 int pty_write(pty_process *process, pty_buf_t *buf);
 bool pty_resize(pty_process *process);
 bool pty_kill(pty_process *process, int sig);
+bool pty_signal_foreground(pty_process *process, int sig);
 
 #endif  // TTYD_PTY_H

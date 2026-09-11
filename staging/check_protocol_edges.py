@@ -13,7 +13,7 @@ import urllib.request
 import websocket
 
 ROOT = Path(__file__).resolve().parents[1]
-TTYD_BIN = Path(os.environ.get('TTYD_BIN', ROOT / 'build-native' / 'ttyd'))
+TTYD_BIN = Path(os.environ.get('TTYD_BIN', ROOT / 'build' / 'ttyd'))
 INDEX = ROOT / 'staging' / 'index.html'
 PASTE_SIZE = int(os.environ.get('WEBTERM_TEST_PASTE_SIZE', str(64 * 1024)))
 
@@ -54,7 +54,7 @@ def connect(http, ws_base, resume_id):
     return ws
 
 
-def wait_session_state(ws, expected='fresh', timeout=5):
+def wait_session_state(ws, expected=None, timeout=5):
     deadline = time.time() + timeout
     while time.time() < deadline:
         message = ws.recv()
@@ -62,7 +62,8 @@ def wait_session_state(ws, expected='fresh', timeout=5):
             continue
         if message[:1] == b'3':
             state = message[1:].decode('utf-8', errors='replace')
-            assert state == expected, (state, expected)
+            if expected is not None:
+                assert state == expected, (state, expected)
             return state
     raise AssertionError(f'session state not received: {expected}')
 
@@ -111,7 +112,7 @@ if not TTYD_BIN.exists():
         f'ttyd test binary not found: {TTYD_BIN}; set TTYD_BIN to an explicit verified binary'
     )
 
-port = free_port()
+port = int(os.environ.get('WEBTERM_TEST_PORT', '7684'))
 http = f'http://127.0.0.1:{port}/'
 ws_base = f'ws://127.0.0.1:{port}/ws'
 proc = subprocess.Popen(
@@ -202,6 +203,67 @@ try:
     time.sleep(0.2)
     send_command(ws, 'echo PASTE_OK')
     wait_match(ws, r'PASTE_OK')
+
+    # PAUSE gates only WebSocket transmission. PTY output must continue draining
+    # while a 10 MiB writer completes and records its marker before RESUME.
+    drain_marker = Path(f'/tmp/webterm-drain-{os.getpid()}.marker')
+    overflow_marker = Path(f'/tmp/webterm-overflow-{os.getpid()}.marker')
+    redraw_marker = Path(f'/tmp/webterm-redraw-{os.getpid()}.marker')
+    for marker in (drain_marker, overflow_marker, redraw_marker):
+        marker.unlink(missing_ok=True)
+
+    ws.send_binary(b'2')
+    drain_writer = (
+        'import os\n'
+        'd=b"D"*(10*1024*1024)\n'
+        'n=0\n'
+        'while n<len(d):\n'
+        ' n+=os.write(1,d[n:])\n'
+        f'open({str(drain_marker)!r},"w").write("DONE")'
+    )
+    send_command(ws, 'python3 -c ' + shlex.quote(drain_writer))
+    deadline = time.time() + 20
+    while time.time() < deadline and not drain_marker.exists():
+        time.sleep(0.1)
+    assert drain_marker.exists() and drain_marker.read_text() == 'DONE', 'PTY output blocked while PAUSE was active'
+    results['continuousDrain'] = {'completedBeforeResume': True, 'marker': str(drain_marker)}
+    ws.send_binary(b'3')
+    time.sleep(0.2)
+
+    # A detached overflow must persist needs_redraw and signal the foreground
+    # shell process group after the resumable reconnect.
+    redraw_trap = f"trap 'printf WINCH > {redraw_marker}' WINCH"
+    send_command(ws, redraw_trap)
+    time.sleep(0.2)
+    overflow_writer = (
+        'import os\n'
+        'd=b"R"*(9*1024*1024)\n'
+        'n=0\n'
+        'while n<len(d):\n'
+        ' n+=os.write(1,d[n:])\n'
+        f'open({str(overflow_marker)!r},"w").write("DONE")'
+    )
+    send_command(ws, '(sleep 0.3; python3 -c ' + shlex.quote(overflow_writer) + ') &')
+    ws.close()
+    connections.remove(ws)
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        if overflow_marker.exists() and overflow_marker.read_text() == 'DONE':
+            break
+        time.sleep(0.1)
+    assert overflow_marker.exists() and overflow_marker.read_text() == 'DONE', 'detached PTY output did not complete'
+
+    ws = connect(http, ws_base, 'e' * 32)
+    connections.append(ws)
+    recovery_state = wait_session_state(ws, expected='resumed')
+    deadline = time.time() + 8
+    while time.time() < deadline and not redraw_marker.exists():
+        time.sleep(0.1)
+    assert redraw_marker.exists() and redraw_marker.read_text() == 'WINCH', 'foreground SIGWINCH was not observed'
+    results['overflowRecovery'] = {
+        'sessionState': recovery_state,
+        'sigwinchObserved': True,
+    }
 
     # Zero-length WebSocket data is legal at the transport layer. A malformed or
     # empty ttyd message must never kill the server process. Keep this as a permanent

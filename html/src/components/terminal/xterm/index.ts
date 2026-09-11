@@ -15,9 +15,43 @@ interface TtydTerminal extends Terminal {
     fit(): void;
 }
 
+interface TtydDiagnosticEvent {
+    at: number;
+    event: string;
+    value?: number;
+}
+
+export interface TtydDiagnosticsSnapshot {
+    state:
+        | 'connecting'
+        | 'connected'
+        | 'application-ready'
+        | 'render-lagging'
+        | 'replaying'
+        | 'terminal-state-lost'
+        | 'resyncing'
+        | 'disconnected';
+    connectionGeneration: number;
+    terminalEpoch: number;
+    pendingBytes: number;
+    pendingAgeMs: number;
+    pendingBytesHighWater: number;
+    socketBufferedAmount: number;
+    parserCallbacks: number;
+    renderEvents: number;
+    animationFrames: number;
+    maxAnimationFrameGapMs: number;
+    activeBuffer: 'normal' | 'alternate';
+    mouseTrackingMode: string;
+    visibility: DocumentVisibilityState;
+    focused: boolean;
+    events: readonly TtydDiagnosticEvent[];
+}
+
 declare global {
     interface Window {
         term: TtydTerminal;
+        ttydDiagnostics?: () => TtydDiagnosticsSnapshot;
     }
 }
 
@@ -81,9 +115,21 @@ export class Xterm {
     private disposables: IDisposable[] = [];
     private textEncoder = new TextEncoder();
     private textDecoder = new TextDecoder();
-    private written = 0;
-    private pending = 0;
-
+    private pendingBytes = 0;
+    private pendingSince = 0;
+    private pendingBytesHighWater = 0;
+    private flowPausedGeneration?: number;
+    private connectionGeneration = 0;
+    private terminalEpoch = 0;
+    private parserCallbacks = 0;
+    private renderEvents = 0;
+    private animationFrames = 0;
+    private lastAnimationFrame = 0;
+    private maxAnimationFrameGapMs = 0;
+    private animationFrame?: number;
+    private connectionState: TtydDiagnosticsSnapshot['state'] = 'disconnected';
+    private diagnosticEvents: TtydDiagnosticEvent[] = [];
+    private diagnosticsEnabled = new URLSearchParams(window.location.search).get('diagnostics') === '1';
     private terminal: Terminal;
     private fitAddon = new FitAddon();
     private overlayAddon = new OverlayAddon();
@@ -117,10 +163,76 @@ export class Xterm {
             window.clearTimeout(this.reconnectTimer);
             this.reconnectTimer = undefined;
         }
+        if (this.animationFrame !== undefined) {
+            window.cancelAnimationFrame(this.animationFrame);
+            this.animationFrame = undefined;
+        }
         for (const d of this.disposables) {
             d.dispose();
         }
         this.disposables.length = 0;
+    }
+
+    private recordDiagnostic(event: string, value?: number) {
+        if (!this.diagnosticsEnabled) return;
+        this.diagnosticEvents.push({ at: performance.now(), event, value });
+        if (this.diagnosticEvents.length > 256) this.diagnosticEvents.splice(0, this.diagnosticEvents.length - 256);
+    }
+
+    private diagnosticsSnapshot(): TtydDiagnosticsSnapshot {
+        const now = performance.now();
+        return {
+            state: this.connectionState,
+            connectionGeneration: this.connectionGeneration,
+            terminalEpoch: this.terminalEpoch,
+            pendingBytes: this.pendingBytes,
+            pendingAgeMs: this.pendingSince === 0 ? 0 : now - this.pendingSince,
+            pendingBytesHighWater: this.pendingBytesHighWater,
+            socketBufferedAmount: this.socket?.bufferedAmount ?? 0,
+            parserCallbacks: this.parserCallbacks,
+            renderEvents: this.renderEvents,
+            animationFrames: this.animationFrames,
+            maxAnimationFrameGapMs: this.maxAnimationFrameGapMs,
+            activeBuffer: this.terminal.buffer.active.type,
+            mouseTrackingMode: this.terminal.modes.mouseTrackingMode,
+            visibility: document.visibilityState,
+            focused: document.hasFocus() && document.activeElement === this.terminal.textarea,
+            events: this.diagnosticEvents.slice(),
+        };
+    }
+
+    private monitorAnimationFrames = (now: number) => {
+        if (!this.diagnosticsEnabled) {
+            this.animationFrame = undefined;
+            return;
+        }
+        if (this.lastAnimationFrame !== 0)
+            this.maxAnimationFrameGapMs = Math.max(this.maxAnimationFrameGapMs, now - this.lastAnimationFrame);
+        this.lastAnimationFrame = now;
+        this.animationFrames++;
+        this.animationFrame = window.requestAnimationFrame(this.monitorAnimationFrames);
+    };
+
+    private flowThresholds() {
+        const { limit, highWater, lowWater } = this.options.flowControl;
+        return {
+            high: Math.max(1, limit) * Math.max(1, highWater),
+            low: Math.max(0, limit) * Math.max(0, lowWater),
+        };
+    }
+
+    private sendFlowControl(command: Command.PAUSE | Command.RESUME) {
+        const socket = this.socket;
+        if (socket?.readyState !== WebSocket.OPEN) return;
+        if (command === Command.PAUSE) {
+            if (this.flowPausedGeneration === this.connectionGeneration) return;
+            this.flowPausedGeneration = this.connectionGeneration;
+        } else {
+            if (this.flowPausedGeneration !== this.connectionGeneration) return;
+            this.flowPausedGeneration = undefined;
+        }
+        socket.send(this.textEncoder.encode(command));
+        this.recordDiagnostic(command === Command.PAUSE ? 'flow-pause' : 'flow-resume', this.pendingBytes);
     }
 
     @bind
@@ -209,6 +321,7 @@ export class Xterm {
         window.term.fit = () => {
             this.fitAddon.fit();
         };
+        if (this.diagnosticsEnabled) window.ttydDiagnostics = () => this.diagnosticsSnapshot();
 
         terminal.loadAddon(fitAddon);
         terminal.loadAddon(overlayAddon);
@@ -274,10 +387,25 @@ export class Xterm {
             })
         );
         register(terminal.onData(this.onTerminalData));
-        register(terminal.onBinary(data => sendData(Uint8Array.from(data, v => v.charCodeAt(0)))));
+        register(
+            terminal.onBinary(data => {
+                this.recordDiagnostic('terminal-binary', data.length);
+                sendData(Uint8Array.from(data, v => v.charCodeAt(0)));
+            })
+        );
+        register(
+            terminal.onWriteParsed(() => {
+                this.parserCallbacks++;
+            })
+        );
+        register(
+            terminal.onRender(() => {
+                this.renderEvents++;
+            })
+        );
         register(
             terminal.onResize(({ cols, rows }) => {
-                const msg = JSON.stringify({ columns: cols, rows: rows });
+                const msg = JSON.stringify({ columns: cols, rows });
                 this.socket?.send(this.textEncoder.encode(Command.RESIZE_TERMINAL + msg));
                 if (this.resizeOverlay) overlayAddon.showOverlay(`${cols}x${rows}`, 300);
             })
@@ -299,36 +427,42 @@ export class Xterm {
         if (terminalElement && isTouchDevice) register(this.registerTouchScroll(terminalElement));
         register(addEventListener(window, 'resize', () => fitAddon.fit()));
         register(addEventListener(window, 'beforeunload', this.onWindowUnload));
+        if (this.diagnosticsEnabled && this.animationFrame === undefined)
+            this.animationFrame = window.requestAnimationFrame(this.monitorAnimationFrames);
     }
 
     @bind
     public writeData(data: string | Uint8Array) {
-        const { terminal, textEncoder } = this;
-        const { limit, highWater, lowWater } = this.options.flowControl;
+        const { terminal } = this;
+        const bytes = typeof data === 'string' ? this.textEncoder.encode(data).byteLength : data.byteLength;
+        const { high, low } = this.flowThresholds();
         const afterWrite = () => {
+            this.pendingBytes = Math.max(0, this.pendingBytes - bytes);
+            if (this.pendingBytes === 0) this.pendingSince = 0;
+            if (this.flowPausedGeneration === this.connectionGeneration && this.pendingBytes < low) {
+                this.sendFlowControl(Command.RESUME);
+            }
+            if (
+                (this.connectionState === 'render-lagging' && this.pendingBytes < low) ||
+                (this.connectionState === 'replaying' && this.pendingBytes === 0)
+            ) {
+                this.connectionState = 'application-ready';
+                this.recordDiagnostic('render-caught-up', this.pendingBytes);
+            }
             if (this.reconnectScrollWrites <= 0) return;
             this.reconnectScrollWrites--;
             terminal.scrollToBottom();
             requestAnimationFrame(() => terminal.scrollToBottom());
         };
 
-        this.written += data.length;
-        if (this.written > limit) {
-            terminal.write(data, () => {
-                this.pending = Math.max(this.pending - 1, 0);
-                if (this.pending < lowWater) {
-                    this.socket?.send(textEncoder.encode(Command.RESUME));
-                }
-                afterWrite();
-            });
-            this.pending++;
-            this.written = 0;
-            if (this.pending > highWater) {
-                this.socket?.send(textEncoder.encode(Command.PAUSE));
-            }
-        } else {
-            terminal.write(data, afterWrite);
+        if (this.pendingBytes === 0) this.pendingSince = performance.now();
+        this.pendingBytes += bytes;
+        this.pendingBytesHighWater = Math.max(this.pendingBytesHighWater, this.pendingBytes);
+        if (this.pendingBytes > high) {
+            this.connectionState = 'render-lagging';
+            this.sendFlowControl(Command.PAUSE);
         }
+        terminal.write(data, afterWrite);
     }
 
     @bind
@@ -347,6 +481,7 @@ export class Xterm {
             payload.set(data, 1);
             socket.send(payload);
         }
+        this.recordDiagnostic('input-sent', typeof data === 'string' ? data.length : data.byteLength);
     }
 
     private ctrlArmed = false;
@@ -358,6 +493,7 @@ export class Xterm {
 
     @bind
     private onTerminalData(data: string) {
+        this.recordDiagnostic('terminal-data', data.length);
         if (this.ctrlArmed) {
             this.setCtrlArmed(false);
             if (/^[a-zA-Z]$/.test(data)) {
@@ -372,6 +508,10 @@ export class Xterm {
 
     @bind
     public connect() {
+        this.connectionGeneration++;
+        this.flowPausedGeneration = undefined;
+        this.connectionState = 'connecting';
+        this.recordDiagnostic('connecting', this.connectionGeneration);
         this.socket = new WebSocket(this.options.wsUrl, ['tty']);
         const { socket, register } = this;
 
@@ -385,10 +525,17 @@ export class Xterm {
     @bind
     private onSocketOpen() {
         console.log('[ttyd] websocket connection opened');
-
         const { textEncoder, terminal, overlayAddon } = this;
-        const msg = JSON.stringify({ AuthToken: this.token, columns: terminal.cols, rows: terminal.rows });
+
+        const msg = JSON.stringify({
+            AuthToken: this.token,
+            columns: terminal.cols,
+            rows: terminal.rows,
+        });
         this.socket?.send(textEncoder.encode(msg));
+        this.connectionState = 'connected';
+        this.recordDiagnostic('connected', this.connectionGeneration);
+        if (this.pendingBytes > this.flowThresholds().high) this.sendFlowControl(Command.PAUSE);
 
         if (this.opened) {
             this.reconnecting = true;
@@ -409,6 +556,9 @@ export class Xterm {
     @bind
     private onSocketClose(event: CloseEvent) {
         console.log(`[ttyd] websocket connection closed with code: ${event.code}`);
+        this.connectionState = 'disconnected';
+        this.flowPausedGeneration = undefined;
+        this.recordDiagnostic('disconnected', event.code);
 
         const { doReconnect, overlayAddon } = this;
         overlayAddon.showOverlay('Connection Closed');
@@ -512,19 +662,25 @@ export class Xterm {
                 break;
             case Command.SET_SESSION_STATE: {
                 const state = textDecoder.decode(data);
-                if (!this.reconnecting) break;
-
-                if (state === 'fresh' || state === 'resumed-reset') {
+                const wasReconnecting = this.reconnecting;
+                this.recordDiagnostic(`session-${state}`);
+                if (state === 'fresh') {
+                    this.terminalEpoch++;
                     this.terminal.reset();
-                }
-                if (state === 'resumed' || state === 'resumed-reset') {
-                    this.reconnectScrollWrites = 4;
-                    this.terminal.scrollToBottom();
-                    requestAnimationFrame(() => this.terminal.scrollToBottom());
-                    this.overlayAddon.showOverlay('Reconnected', 300);
-                } else {
+                    this.connectionState = 'application-ready';
                     this.reconnectScrollWrites = 0;
-                    this.overlayAddon.showOverlay('New Session', 300);
+                    if (wasReconnecting) this.overlayAddon.showOverlay('New Session', 300);
+                } else if (state === 'resumed') {
+                    this.connectionState = wasReconnecting ? 'replaying' : 'application-ready';
+                    if (wasReconnecting) {
+                        this.reconnectScrollWrites = 4;
+                        this.terminal.scrollToBottom();
+                        requestAnimationFrame(() => this.terminal.scrollToBottom());
+                        this.overlayAddon.showOverlay('Reconnected', 300);
+                    }
+                } else {
+                    console.warn(`[ttyd] unknown session state: ${state}`);
+                    this.connectionState = 'application-ready';
                 }
                 this.reconnectStartedAt = 0;
                 this.reconnectAttempts = 0;

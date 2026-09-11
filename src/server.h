@@ -48,7 +48,9 @@ struct pss_tty {
   char path[128];
   char resume_id[33];
   bool resumed;
-  bool resume_reset;
+  bool client_flow_paused;
+  bool writable_pending;
+  uint64_t connection_generation;
   char **args;
   int argc;
 
@@ -57,7 +59,6 @@ struct pss_tty {
   size_t len;
 
   pty_process *process;
-  pty_buf_t *pty_buf;
   struct tty_session *session;
 
   int lws_close_status;

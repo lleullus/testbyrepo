@@ -18,7 +18,7 @@ static char initial_cmds[] = {SET_WINDOW_TITLE, SET_PREFERENCES, SET_SESSION_STA
 #define SESSION_ID_LENGTH 32
 #define SESSION_BACKLOG_MAX (8 * 1024 * 1024)
 #define SESSION_REPLAY_CHUNK (64 * 1024)
-#define SESSION_GRACE_MAX_SECONDS (6 * 60 * 60)
+#define SESSION_GRACE_MAX_SECONDS (9 * 60 * 60)
 #define SESSION_GRACE_DEFAULT_MS (SESSION_GRACE_MAX_SECONDS * 1000ULL)
 
 struct tty_session {
@@ -27,15 +27,121 @@ struct tty_session {
   pty_process *process;
   struct pss_tty *client;
   uv_timer_t *expiry_timer;
-  char *backlog;
-  size_t backlog_len;
-  size_t backlog_cap;
-  size_t replay_offset;
-  bool backlog_overflow;
+  char *output_buf;
+  size_t output_len;
+  size_t output_offset;
+  size_t output_cap;
+  bool needs_redraw;
   struct tty_session *next;
+  uint64_t diagnostic_id;
+  uint64_t pty_read_count;
+  uint64_t pty_output_bytes;
+  uint64_t pty_zero_read_count;
+  uint64_t pty_write_count;
+  uint64_t ws_input_bytes;
+  uint64_t ws_output_bytes;
+  uint64_t dropped_output_bytes;
 };
 
 static struct tty_session *session_list = NULL;
+static uint64_t next_session_diagnostic_id = 0;
+static uint64_t next_connection_generation = 0;
+
+static bool diagnostics_enabled(void) {
+  static int enabled = -1;
+  if (enabled < 0) {
+    const char *value = getenv("TTYD_DIAGNOSTICS");
+    enabled = value != NULL && *value != '\0' && strcmp(value, "0") != 0;
+  }
+  return enabled != 0;
+}
+
+static void schedule_writable(struct pss_tty *pss) {
+  if (pss == NULL || pss->wsi == NULL || pss->writable_pending) return;
+  pss->writable_pending = true;
+  lws_callback_on_writable(pss->wsi);
+}
+
+static void session_diagnostic(struct tty_session *session, struct pss_tty *pss, const char *event) {
+  if (!diagnostics_enabled() || session == NULL) return;
+  const int pid = session->process == NULL ? -1 : session->process->pid;
+  const unsigned long long connection = pss == NULL ? 0 : (unsigned long long)pss->connection_generation;
+  const size_t pending = session->output_len >= session->output_offset
+                             ? session->output_len - session->output_offset
+                             : 0;
+  lwsl_notice(
+      "diag event=%s monotonic_ms=%llu session=%llu connection=%llu pid=%d initialized=%d client_paused=%d "
+      "pty_paused=%d output=%zu/%zu pending_output=%zu needs_redraw=%d reads=%llu zero_reads=%llu "
+      "pty_output_bytes=%llu writes=%llu ws_input_bytes=%llu ws_output_bytes=%llu dropped_output_bytes=%llu\n",
+      event, (unsigned long long)(uv_hrtime() / 1000000ULL), (unsigned long long)session->diagnostic_id, connection,
+      pid, pss != NULL && pss->initialized, pss != NULL && pss->client_flow_paused,
+      session->process != NULL && session->process->paused, session->output_offset, session->output_len, pending,
+      session->needs_redraw, (unsigned long long)session->pty_read_count,
+      (unsigned long long)session->pty_zero_read_count, (unsigned long long)session->pty_output_bytes,
+      (unsigned long long)session->pty_write_count, (unsigned long long)session->ws_input_bytes,
+      (unsigned long long)session->ws_output_bytes, (unsigned long long)session->dropped_output_bytes);
+}
+
+static bool session_output_pending(const struct tty_session *session) {
+  return session != NULL && session->output_len > session->output_offset;
+}
+
+static void session_output_append(struct tty_session *session, const char *data, size_t len) {
+  if (session == NULL || data == NULL || len == 0) return;
+  if (session->needs_redraw) {
+    session->dropped_output_bytes += len;
+    return;
+  }
+
+  size_t unconsumed = session->output_len - session->output_offset;
+  if (len > SESSION_BACKLOG_MAX - unconsumed) {
+    session->dropped_output_bytes += unconsumed + len;
+    free(session->output_buf);
+    session->output_buf = NULL;
+    session->output_len = 0;
+    session->output_offset = 0;
+    session->output_cap = 0;
+    session->needs_redraw = true;
+    const int pid = session->process == NULL ? -1 : session->process->pid;
+    lwsl_warn("session output exceeded %d bytes; session=%llu pid=%d redraw required\n", SESSION_BACKLOG_MAX,
+              (unsigned long long)session->diagnostic_id, pid);
+    session_diagnostic(session, session->client, "output-overflow");
+    return;
+  }
+
+  if (session->output_offset > 0) {
+    if (unconsumed > 0) memmove(session->output_buf, session->output_buf + session->output_offset, unconsumed);
+    session->output_len = unconsumed;
+    session->output_offset = 0;
+  }
+
+  size_t needed = session->output_len + len;
+  if (needed > session->output_cap) {
+    size_t cap = session->output_cap == 0 ? 64 * 1024 : session->output_cap;
+    while (cap < needed) cap *= 2;
+    if (cap > SESSION_BACKLOG_MAX) cap = SESSION_BACKLOG_MAX;
+    session->output_buf = xrealloc(session->output_buf, cap);
+    session->output_cap = cap;
+  }
+  memcpy(session->output_buf + session->output_len, data, len);
+  session->output_len += len;
+}
+static bool session_discard_and_redraw(struct tty_session *session, struct pss_tty *pss) {
+  if (session == NULL || session->process == NULL) return false;
+  free(session->output_buf);
+  session->output_buf = NULL;
+  session->output_len = 0;
+  session->output_offset = 0;
+  session->output_cap = 0;
+
+  if (!pty_signal_foreground(session->process, SIGWINCH)) {
+    session_diagnostic(session, pss, "redraw-failed");
+    return false;
+  }
+  session->needs_redraw = false;
+  session_diagnostic(session, pss, "redraw-complete");
+  return true;
+}
 
 static uint64_t session_grace_ms(void) {
   const char *value = getenv("TTYD_RECONNECT_GRACE");
@@ -87,15 +193,17 @@ static void session_cancel_expiry(struct tty_session *session) {
 
 static void session_release(struct tty_session *session) {
   if (session == NULL) return;
+  session_diagnostic(session, session->client, "release");
   session_cancel_expiry(session);
   session_unlink(session);
-  free(session->backlog);
+  free(session->output_buf);
   free(session);
 }
 
 static struct tty_session *session_create(const char *id, bool resumable) {
   struct tty_session *session = xmalloc(sizeof(struct tty_session));
   memset(session, 0, sizeof(struct tty_session));
+  session->diagnostic_id = ++next_session_diagnostic_id;
   session->resumable = resumable;
   if (resumable) {
     memcpy(session->id, id, SESSION_ID_LENGTH);
@@ -104,31 +212,6 @@ static struct tty_session *session_create(const char *id, bool resumable) {
     session_list = session;
   }
   return session;
-}
-
-static void session_buffer_append(struct tty_session *session, const char *data, size_t len) {
-  if (session == NULL || len == 0 || session->backlog_overflow) return;
-  if (len > SESSION_BACKLOG_MAX - session->backlog_len) {
-    free(session->backlog);
-    session->backlog = NULL;
-    session->backlog_len = 0;
-    session->backlog_cap = 0;
-    session->replay_offset = 0;
-    session->backlog_overflow = true;
-    lwsl_warn("detached session output exceeded %d bytes; redraw required on resume\n", SESSION_BACKLOG_MAX);
-    return;
-  }
-
-  size_t needed = session->backlog_len + len;
-  if (needed > session->backlog_cap) {
-    size_t cap = session->backlog_cap == 0 ? 65536 : session->backlog_cap;
-    while (cap < needed) cap *= 2;
-    if (cap > SESSION_BACKLOG_MAX) cap = SESSION_BACKLOG_MAX;
-    session->backlog = xrealloc(session->backlog, cap);
-    session->backlog_cap = cap;
-  }
-  memcpy(session->backlog + session->backlog_len, data, len);
-  session->backlog_len += len;
 }
 
 static void session_expire_cb(uv_timer_t *timer) {
@@ -161,8 +244,11 @@ static void session_start_expiry(struct tty_session *session) {
   uv_timer_start(timer, session_expire_cb, session_grace_ms(), 0);
 }
 
+static const char *session_state(const struct pss_tty *pss) { return pss->resumed ? "resumed" : "fresh"; }
+
 static int send_initial_message(struct pss_tty *pss, int index) {
   char buffer[128] = "";
+  const char *state = session_state(pss);
   int n = -1;
 
   char cmd = initial_cmds[index];
@@ -175,11 +261,9 @@ static int send_initial_message(struct pss_tty *pss, int index) {
     case SET_PREFERENCES:
       n = snprintf(NULL, 0, "%c%s", cmd, server->prefs_json);
       break;
-    case SET_SESSION_STATE: {
-      const char *state = pss->resumed ? (pss->resume_reset ? "resumed-reset" : "resumed") : "fresh";
+    case SET_SESSION_STATE:
       n = snprintf(NULL, 0, "%c%s", cmd, state);
       break;
-    }
     default:
       return -1;
   }
@@ -198,11 +282,9 @@ static int send_initial_message(struct pss_tty *pss, int index) {
     case SET_PREFERENCES:
       written = snprintf((char *)p, capacity, "%c%s", cmd, server->prefs_json);
       break;
-    case SET_SESSION_STATE: {
-      const char *state = pss->resumed ? (pss->resume_reset ? "resumed-reset" : "resumed") : "fresh";
+    case SET_SESSION_STATE:
       written = snprintf((char *)p, capacity, "%c%s", cmd, state);
       break;
-    }
     default:
       break;
   }
@@ -277,24 +359,25 @@ static void process_read_cb(pty_process *process, pty_buf_t *buf, bool eof) {
 
   if (eof && !process_running(process)) {
     pty_buf_free(buf);
+    session_diagnostic(session, session->client, "pty-eof");
     if (session->client != NULL) {
       session->client->lws_close_status = process->exit_code == 0 ? 1000 : 1006;
-      lws_callback_on_writable(session->client->wsi);
+      schedule_writable(session->client);
     }
     return;
   }
-  if (buf == NULL) return;
-
-  struct pss_tty *pss = session->client;
-  if (pss != NULL && pss->initialized && session->replay_offset >= session->backlog_len && pss->pty_buf == NULL) {
-    pss->pty_buf = buf;
-    lws_callback_on_writable(pss->wsi);
+  if (buf == NULL) {
+    session->pty_zero_read_count++;
+    session_diagnostic(session, session->client, "pty-zero-read");
     return;
   }
 
-  session_buffer_append(session, buf->base, buf->len);
+  session->pty_read_count++;
+  session->pty_output_bytes += buf->len;
+  struct pss_tty *pss = session->client;
+  session_output_append(session, buf->base, buf->len);
   pty_buf_free(buf);
-  if (session->client == NULL) pty_resume(process);
+  if (pss != NULL && pss->initialized && !pss->client_flow_paused) schedule_writable(pss);
 }
 
 static void process_exit_cb(pty_process *process) {
@@ -305,13 +388,14 @@ static void process_exit_cb(pty_process *process) {
     lwsl_notice("process killed with signal %d, pid: %d\n", process->exit_signal, process->pid);
   else
     lwsl_notice("process exited with code %d, pid: %d\n", process->exit_code, process->pid);
+  session_diagnostic(session, session->client, "process-exit");
 
   if (session->client != NULL) {
     struct pss_tty *pss = session->client;
     pss->process = NULL;
     pss->session = NULL;
     pss->lws_close_status = process->exit_code == 0 ? 1000 : 1006;
-    lws_callback_on_writable(pss->wsi);
+    schedule_writable(pss);
   }
 
   session->client = NULL;
@@ -331,7 +415,6 @@ static char **build_args(struct pss_tty *pss) {
   for (i = 0; i < pss->argc; i++) {
     argv[n++] = pss->args[i];
   }
-
   argv[n] = NULL;
 
   return argv;
@@ -369,7 +452,10 @@ static bool spawn_process(struct pss_tty *pss, uint16_t columns, uint16_t rows) 
   if (pty_spawn(process, process_read_cb, process_exit_cb) != 0) {
     lwsl_err("pty_spawn: %d (%s)\n", errno, strerror(errno));
     process->ctx = NULL;
-    process_free(process);
+    if (!process->async_initialized) {
+      process_free(process);
+      free(process);
+    }
     session_release(session);
     return false;
   }
@@ -379,58 +465,50 @@ static bool spawn_process(struct pss_tty *pss, uint16_t columns, uint16_t rows) 
   pss->session = session;
   pss->process = process;
   pss->resumed = false;
-  pss->resume_reset = false;
-  lws_callback_on_writable(pss->wsi);
+  session_diagnostic(session, pss, "spawn");
+  schedule_writable(pss);
   return true;
 }
 
 static bool attach_process(struct pss_tty *pss, struct tty_session *session, uint16_t columns, uint16_t rows) {
   if (session == NULL || session->process == NULL || !process_running(session->process)) return false;
 
-  pty_pause(session->process);
   session_cancel_expiry(session);
 
   if (session->client != NULL && session->client != pss) {
     struct pss_tty *old = session->client;
-    if (old->pty_buf != NULL) {
-      session_buffer_append(session, old->pty_buf->base, old->pty_buf->len);
-      pty_buf_free(old->pty_buf);
-      old->pty_buf = NULL;
-    }
     old->session = NULL;
     old->process = NULL;
     old->lws_close_status = LWS_CLOSE_STATUS_NORMAL;
-    lws_callback_on_writable(old->wsi);
+    schedule_writable(old);
   }
 
   session->client = pss;
-  session->replay_offset = 0;
   pss->session = session;
   pss->process = session->process;
   pss->resumed = true;
-  pss->resume_reset = session->backlog_overflow;
+  pss->client_flow_paused = false;
 
   if (columns > 0) session->process->columns = columns;
   if (rows > 0) session->process->rows = rows;
   pty_resize(session->process);
-  lws_callback_on_writable(pss->wsi);
+  session_diagnostic(session, pss, "attach");
+  schedule_writable(pss);
   return true;
 }
-
-static void wsi_output_data(struct lws *wsi, const char *data, size_t len) {
-  if (data == NULL || len == 0) return;
+static void wsi_output_data(struct pss_tty *pss, const char *data, size_t len) {
+  if (pss == NULL || data == NULL || len == 0) return;
   char *message = xmalloc(LWS_PRE + 1 + len);
   char *ptr = message + LWS_PRE;
   *ptr = OUTPUT;
   memcpy(ptr + 1, data, len);
   size_t n = len + 1;
-  if (lws_write(wsi, (unsigned char *)ptr, n, LWS_WRITE_BINARY) < (int)n) lwsl_err("write OUTPUT to WS\n");
+  if (lws_write(pss->wsi, (unsigned char *)ptr, n, LWS_WRITE_BINARY) < (int)n) {
+    lwsl_err("write OUTPUT to WS\n");
+  } else if (pss->session != NULL) {
+    pss->session->ws_output_bytes += len;
+  }
   free(message);
-}
-
-static void wsi_output(struct lws *wsi, pty_buf_t *buf) {
-  if (buf == NULL) return;
-  wsi_output_data(wsi, buf->base, buf->len);
 }
 
 static bool check_auth(struct lws *wsi, struct pss_tty *pss) {
@@ -490,7 +568,9 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
       pss->session = NULL;
       pss->process = NULL;
       pss->resumed = false;
-      pss->resume_reset = false;
+      pss->client_flow_paused = false;
+      pss->writable_pending = false;
+      pss->connection_generation = ++next_connection_generation;
       parse_resume_id(wsi, pss);
 
       if (server->url_arg) {
@@ -510,6 +590,7 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
       break;
 
     case LWS_CALLBACK_SERVER_WRITEABLE:
+      pss->writable_pending = false;
       if (pss->lws_close_status > LWS_CLOSE_STATUS_NOSTATUS) {
         lws_close_reason(wsi, pss->lws_close_status, NULL, 0);
         return 1;
@@ -519,15 +600,9 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
         if (pss->initial_cmd_index == sizeof(initial_cmds)) {
           pss->initialized = true;
           struct tty_session *session = pss->session;
-          if (session != NULL && session->replay_offset < session->backlog_len) {
-            lws_callback_on_writable(wsi);
-          } else {
-            if (pss->resume_reset && pss->process != NULL) {
-              session->backlog_overflow = false;
-              pty_kill(pss->process, SIGWINCH);
-            }
-            pty_resume(pss->process);
-          }
+          if (session != NULL && session->needs_redraw) session_discard_and_redraw(session, pss);
+          if (!pss->client_flow_paused && session_output_pending(session)) schedule_writable(pss);
+          session_diagnostic(session, pss, "initialized");
           break;
         }
         if (send_initial_message(pss, pss->initial_cmd_index) < 0) {
@@ -536,34 +611,29 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
           return -1;
         }
         pss->initial_cmd_index++;
-        lws_callback_on_writable(wsi);
+        schedule_writable(pss);
         break;
       }
 
-      if (pss->session != NULL && pss->session->replay_offset < pss->session->backlog_len) {
-        struct tty_session *session = pss->session;
-        size_t remaining = session->backlog_len - session->replay_offset;
-        size_t chunk = remaining > SESSION_REPLAY_CHUNK ? SESSION_REPLAY_CHUNK : remaining;
-        wsi_output_data(wsi, session->backlog + session->replay_offset, chunk);
-        session->replay_offset += chunk;
-        if (session->replay_offset < session->backlog_len) {
-          lws_callback_on_writable(wsi);
-        } else {
-          free(session->backlog);
-          session->backlog = NULL;
-          session->backlog_len = 0;
-          session->backlog_cap = 0;
-          session->replay_offset = 0;
-          pty_resume(pss->process);
-        }
-        break;
-      }
+      if (pss->client_flow_paused) break;
+      struct tty_session *session = pss->session;
+      if (session == NULL) break;
+      if (session->needs_redraw && !session_discard_and_redraw(session, pss)) break;
+      if (!session_output_pending(session)) break;
 
-      if (pss->pty_buf != NULL) {
-        wsi_output(wsi, pss->pty_buf);
-        pty_buf_free(pss->pty_buf);
-        pss->pty_buf = NULL;
-        pty_resume(pss->process);
+      size_t remaining = session->output_len - session->output_offset;
+      size_t chunk = remaining > SESSION_REPLAY_CHUNK ? SESSION_REPLAY_CHUNK : remaining;
+      wsi_output_data(pss, session->output_buf + session->output_offset, chunk);
+      session->output_offset += chunk;
+      if (session_output_pending(session)) {
+        schedule_writable(pss);
+      } else {
+        free(session->output_buf);
+        session->output_buf = NULL;
+        session->output_len = 0;
+        session->output_offset = 0;
+        session->output_cap = 0;
+        session_diagnostic(session, pss, "output-drained");
       }
       break;
 
@@ -598,14 +668,20 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
       }
 
       switch (command) {
-        case INPUT:
+        case INPUT: {
           if (!server->writable) break;
-          int err = pty_write(pss->process, pty_buf_init(pss->buffer + 1, pss->len - 1));
+          const size_t input_len = pss->len - 1;
+          int err = pty_write(pss->process, pty_buf_init(pss->buffer + 1, input_len));
           if (err) {
             lwsl_err("uv_write: %s (%s)\n", uv_err_name(err), uv_strerror(err));
             return -1;
           }
+          if (pss->session != NULL) {
+            pss->session->pty_write_count++;
+            pss->session->ws_input_bytes += input_len;
+          }
           break;
+        }
         case RESIZE_TERMINAL:
           if (pss->process == NULL) break;
           json_object_put(
@@ -613,16 +689,23 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
           pty_resize(pss->process);
           break;
         case PAUSE:
-          pty_pause(pss->process);
+          pss->client_flow_paused = true;
+          session_diagnostic(pss->session, pss, "client-pause");
           break;
         case RESUME:
-          pty_resume(pss->process);
+          pss->client_flow_paused = false;
+          schedule_writable(pss);
+          session_diagnostic(pss->session, pss, "client-resume");
           break;
-        case JSON_DATA:
+        case JSON_DATA: {
           if (pss->process != NULL) break;
           uint16_t columns = 0;
           uint16_t rows = 0;
           json_object *obj = parse_window_size(pss->buffer, pss->len, &columns, &rows);
+          if (obj == NULL) {
+            lws_close_reason(wsi, LWS_CLOSE_STATUS_INVALID_PAYLOAD, NULL, 0);
+            return -1;
+          }
           if (server->credential != NULL) {
             struct json_object *o = NULL;
             if (json_object_object_get_ex(obj, "AuthToken", &o)) {
@@ -650,6 +733,7 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
             return 1;
           }
           break;
+        }
         default:
           lwsl_warn("ignored unknown message type: %c\n", command);
           break;
@@ -669,30 +753,21 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
       if (pss->buffer != NULL) free(pss->buffer);
       for (int i = 0; i < pss->argc; i++) free(pss->args[i]);
 
-      struct tty_session *session = pss->session;
-      if (session != NULL && session->client == pss && pss->process != NULL) {
-        if (pss->pty_buf != NULL) {
-          if (session->resumable) session_buffer_append(session, pss->pty_buf->base, pss->pty_buf->len);
-          pty_buf_free(pss->pty_buf);
-          pss->pty_buf = NULL;
-        }
-
+      struct tty_session *closed_session = pss->session;
+      session_diagnostic(closed_session, pss, "connection-close");
+      if (closed_session != NULL && closed_session->client == pss && pss->process != NULL) {
         pty_process *process = pss->process;
-        session->client = NULL;
+        closed_session->client = NULL;
         pss->session = NULL;
         pss->process = NULL;
 
-        if (session->resumable && process_running(process)) {
-          pty_resume(process);
-          session_start_expiry(session);
+        if (closed_session->resumable && process_running(process)) {
+          session_start_expiry(closed_session);
           lwsl_notice("detached resumable process, pid: %d\n", process->pid);
         } else if (process_running(process)) {
           lwsl_notice("killing process, pid: %d\n", process->pid);
           pty_kill(process, server->sig_code);
         }
-      } else if (pss->pty_buf != NULL) {
-        pty_buf_free(pss->pty_buf);
-        pss->pty_buf = NULL;
       }
 
       if ((server->once || server->exit_no_conn) && server->client_count == 0) {

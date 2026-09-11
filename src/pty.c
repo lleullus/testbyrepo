@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -61,22 +62,29 @@ void pty_buf_free(pty_buf_t *buf) {
 }
 
 static void read_cb(uv_stream_t *stream, ssize_t n, const uv_buf_t *buf) {
-  uv_read_stop(stream);
-  pty_process *process = (pty_process *) stream->data;
-  process->paused = true;
-  if (n <= 0) {
-    if (n == UV_ENOBUFS || n == 0) return;
-    process->read_cb(process, NULL, true);
-    goto done;
+  pty_process *process = (pty_process *)stream->data;
+  if (n == 0) {
+    free(buf->base);
+    return;
   }
-  process->read_cb(process, pty_buf_init(buf->base, (size_t) n), false);
-
-done:
+  if (n < 0) {
+    uv_read_stop(stream);
+    process->paused = true;
+    if (n != UV_EOF) {
+      fprintf(stderr, "pty read: %s (%s)\n", uv_err_name((int)n), uv_strerror((int)n));
+      if (process_running(process)) pty_kill(process, SIGTERM);
+    }
+    process->read_cb(process, NULL, true);
+    free(buf->base);
+    return;
+  }
+  process->read_cb(process, pty_buf_init(buf->base, (size_t)n), false);
   free(buf->base);
 }
 
-static void write_cb(uv_write_t *req, int unused) {
-  pty_buf_t *buf = (pty_buf_t *) req->data;
+static void write_cb(uv_write_t *req, int status) {
+  if (status < 0) fprintf(stderr, "pty write completion: %s (%s)\n", uv_err_name(status), uv_strerror(status));
+  pty_buf_t *buf = (pty_buf_t *)req->data;
   pty_buf_free(buf);
   free(req);
 }
@@ -91,6 +99,14 @@ pty_process *process_init(void *ctx, uv_loop_t *loop, char *argv[], char *envp[]
   process->columns = 80;
   process->rows = 24;
   process->exit_code = -1;
+  process->pid = -1;
+#ifdef _WIN32
+  process->pty = NULL;
+#else
+  process->pty = -1;
+#endif
+  process->async_initialized = false;
+  process->thread_started = false;
   return process;
 }
 
@@ -104,35 +120,61 @@ void process_free(pty_process *process) {
   if (process->si.lpAttributeList != NULL) {
     DeleteProcThreadAttributeList(process->si.lpAttributeList);
     free(process->si.lpAttributeList);
+    process->si.lpAttributeList = NULL;
   }
-  if (process->pty != NULL) pClosePseudoConsole(process->pty);
-  if (process->handle != NULL) CloseHandle(process->handle);
+  if (process->pty != NULL) {
+    pClosePseudoConsole(process->pty);
+    process->pty = NULL;
+  }
+  if (process->handle != NULL) {
+    CloseHandle(process->handle);
+    process->handle = NULL;
+  }
 #else
-  close(process->pty);
-  uv_thread_join(&process->tid);
+  if (process->pty >= 0) {
+    close(process->pty);
+    process->pty = -1;
+  }
+  if (process->thread_started) {
+    uv_thread_join(&process->tid);
+    process->thread_started = false;
+  }
 #endif
-  if (process->in != NULL) uv_close((uv_handle_t *) process->in, close_cb);
-  if (process->out != NULL) uv_close((uv_handle_t *) process->out, close_cb);
-  if (process->argv != NULL) free(process->argv);
-  if (process->cwd != NULL) free(process->cwd);
-  char **p = process->envp;
-  for (; *p; p++) free(*p);
-  free(process->envp);
+  if (process->in != NULL) {
+    uv_close((uv_handle_t *)process->in, close_cb);
+    process->in = NULL;
+  }
+  if (process->out != NULL) {
+    uv_close((uv_handle_t *)process->out, close_cb);
+    process->out = NULL;
+  }
+  if (process->argv != NULL) {
+    free(process->argv);
+    process->argv = NULL;
+  }
+  if (process->cwd != NULL) {
+    free(process->cwd);
+    process->cwd = NULL;
+  }
+  if (process->envp != NULL) {
+    char **p = process->envp;
+    for (; *p; p++) free(*p);
+    free(process->envp);
+    process->envp = NULL;
+  }
 }
-
 void pty_pause(pty_process *process) {
-  if (process == NULL) return;
-  if (process->paused) return;
-  uv_read_stop((uv_stream_t *) process->out);
+  if (process == NULL || process->paused) return;
+  uv_read_stop((uv_stream_t *)process->out);
   process->paused = true;
 }
 
 void pty_resume(pty_process *process) {
-  if (process == NULL) return;
-  if (!process->paused) return;
+  if (process == NULL || !process->paused) return;
   process->out->data = process;
-  if (uv_read_start((uv_stream_t *) process->out, alloc_cb, read_cb) == 0) process->paused = false;
+  if (uv_read_start((uv_stream_t *)process->out, alloc_cb, read_cb) == 0) process->paused = false;
 }
+
 
 int pty_write(pty_process *process, pty_buf_t *buf) {
   if (process == NULL) {
@@ -142,7 +184,12 @@ int pty_write(pty_process *process, pty_buf_t *buf) {
   uv_buf_t b = uv_buf_init(buf->base, buf->len);
   uv_write_t *req = xmalloc(sizeof(uv_write_t));
   req->data = buf;
-  return uv_write(req, (uv_stream_t *) process->in, &b, 1, write_cb);
+  int status = uv_write(req, (uv_stream_t *)process->in, &b, 1, write_cb);
+  if (status < 0) {
+    pty_buf_free(buf);
+    free(req);
+  }
+  return status;
 }
 
 bool pty_resize(pty_process *process) {
@@ -163,6 +210,23 @@ bool pty_kill(pty_process *process, int sig) {
   return TerminateProcess(process->handle, 1) != 0;
 #else
   return uv_kill(-process->pid, sig) == 0;
+#endif
+}
+
+bool pty_signal_foreground(pty_process *process, int sig) {
+#ifdef _WIN32
+  (void)process;
+  (void)sig;
+  return false;
+#else
+  if (process == NULL || process->pty < 0) return false;
+  pid_t pgid = 0;
+  if (ioctl(process->pty, TIOCGPGRP, &pgid) < 0 || pgid <= 1) return false;
+  if (kill(-pgid, sig) == 0) return true;
+  if (errno != ESRCH) return false;
+  pid_t retry = 0;
+  if (ioctl(process->pty, TIOCGPGRP, &retry) < 0 || retry <= 1) return false;
+  return kill(-retry, sig) == 0;
 #endif
 }
 
@@ -382,7 +446,10 @@ static bool fd_duplicate(int fd, uv_pipe_t *pipe) {
   int fd_dup = dup(fd);
   if (fd_dup < 0) return false;
 
-  if (!fd_set_cloexec(fd_dup)) return false;
+  if (!fd_set_cloexec(fd_dup)) {
+    close(fd_dup);
+    return false;
+  }
 
   int status = uv_pipe_open(pipe, fd_dup);
   if (status) close(fd_dup);
@@ -418,20 +485,19 @@ static void async_cb(uv_async_t *async) {
   process_free(process);
 }
 
-int pty_spawn(pty_process *process, pty_read_cb read_cb, pty_exit_cb exit_cb) {
+int pty_spawn(pty_process *process, pty_read_cb on_read_cb, pty_exit_cb on_exit_cb) {
   int status = 0;
 
   uv_disable_stdio_inheritance();
 
-  int master, pid;
+  int master = -1;
+  pid_t pid;
   struct winsize size = {process->rows, process->columns, 0, 0};
   pid = forkpty(&master, NULL, NULL, &size);
-  if (pid < 0) {
-    status = -errno;
-    return status;
-  } else if (pid == 0) {
+  if (pid < 0) return -errno;
+  if (pid == 0) {
     setsid();
-    if (process->cwd != NULL) chdir(process->cwd);
+    if (process->cwd != NULL && chdir(process->cwd) != 0) _exit(-errno);
     if (process->envp != NULL) {
       char **p = process->envp;
       for (; *p; p++) putenv(*p);
@@ -443,18 +509,23 @@ int pty_spawn(pty_process *process, pty_read_cb read_cb, pty_exit_cb exit_cb) {
     }
   }
 
+  process->pty = master;
+  process->pid = pid;
+  process->async_initialized = false;
+  process->thread_started = false;
+
   int flags = fcntl(master, F_GETFL);
   if (flags == -1) {
     status = -errno;
-    goto error;
+    goto error_master;
   }
   if (fcntl(master, F_SETFL, flags | O_NONBLOCK) == -1) {
     status = -errno;
-    goto error;
+    goto error_master;
   }
   if (!fd_set_cloexec(master)) {
     status = -errno;
-    goto error;
+    goto error_master;
   }
 
   process->in = xmalloc(sizeof(uv_pipe_t));
@@ -464,24 +535,62 @@ int pty_spawn(pty_process *process, pty_read_cb read_cb, pty_exit_cb exit_cb) {
 
   if (!fd_duplicate(master, process->in) || !fd_duplicate(master, process->out)) {
     status = -errno;
-    goto error;
+    goto error_pipes;
   }
 
-  process->pty = master;
-  process->pid = pid;
+  process->read_cb = on_read_cb;
+  process->exit_cb = on_exit_cb;
+  process->out->data = process;
   process->paused = true;
-  process->read_cb = read_cb;
-  process->exit_cb = exit_cb;
-  process->async.data = process;
-  uv_async_init(process->loop, &process->async, async_cb);
-  uv_thread_create(&process->tid, wait_cb, process);
 
+  // Stage 1: start the continuous PTY read before creating exit machinery.
+  status = uv_read_start((uv_stream_t *)process->out, alloc_cb, read_cb);
+  if (status != 0) goto error_pipes;
+  process->paused = false;
+
+  // Stage 2: initialize the event-loop exit notification handle.
+  process->async.data = process;
+  status = uv_async_init(process->loop, &process->async, async_cb);
+  if (status != 0) {
+    uv_read_stop((uv_stream_t *)process->out);
+    goto error_pipes;
+  }
+  process->async_initialized = true;
+
+  // Stage 3: commit only after the wait thread has started successfully.
+  status = uv_thread_create(&process->tid, wait_cb, process);
+  if (status != 0) {
+    uv_read_stop((uv_stream_t *)process->out);
+    uv_kill(pid, SIGKILL);
+    waitpid(pid, NULL, 0);
+    process->pid = -1;
+    uv_close((uv_handle_t *)&process->async, async_free_cb);
+    process_free(process);
+    return status;
+  }
+  process->thread_started = true;
   return 0;
 
-error:
-  close(master);
-  uv_kill(pid, SIGKILL);
-  waitpid(pid, NULL, 0);
+error_pipes:
+  if (process->in != NULL) {
+    uv_close((uv_handle_t *)process->in, close_cb);
+    process->in = NULL;
+  }
+  if (process->out != NULL) {
+    uv_close((uv_handle_t *)process->out, close_cb);
+    process->out = NULL;
+  }
+
+error_master:
+  if (process->pty >= 0) {
+    close(process->pty);
+    process->pty = -1;
+  }
+  if (process->pid > 0) {
+    uv_kill(process->pid, SIGKILL);
+    waitpid(process->pid, NULL, 0);
+    process->pid = -1;
+  }
   return status;
 }
 #endif
