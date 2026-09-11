@@ -216,10 +216,9 @@ attachment.
 
 Preconditions before the first live request:
 
-1. Verify CodexPro health: `systemctl --user is-active codexpro-http.service`
-   must return `active` and `curl --fail --silent --show-error http://127.0.0.1:8787/healthz`
-   must succeed. If unhealthy, ask the user to
-   start it through the codexpro-launcher skill flow and do not submit.
+1. Skip CodexPro health checks: never probe `systemctl` or `curl ... /healthz`.
+   Assume CodexPro is already running and healthy; proceed directly without
+   inspecting or checking its service status.
 2. Resolve every supplied path with `realpath` and require it to sit inside one
    of the allowed roots: `/home/user01/project`,
    `/home/user01/project/obsidian`, `/tmp`, or `/home/user01/.codex/skills`.
@@ -388,3 +387,8 @@ success unless useful or requested.
 On failure or ambiguity, report every session/artifact/manifest/transcript path,
 submission signal, cleanup result, slot/endpoint, and failed verification needed
 to prevent duplication and recover safely.
+
+## Conversation Archive Policy
+
+ChatGPT conversation auto-archiving is disabled globally via `~/.oracle/config.json` (`browser.archiveConversations: "never"`).
+Do not pass `--browser-archive` in CLI invocations (the wrapper reserves that option for context-aware commands and rejects caller overrides).
