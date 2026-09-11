@@ -134,7 +134,7 @@ Freeze every authored flow and conditional boundary as the mandatory scenario, a
 
 Add a derived positive variation, counterexample, boundary exercise or observation only when it materially tests an authored decision boundary, closes a concrete false-verdict path or prevents a concrete attribution error. Require a contract anchor and plausible failure path. Do not expand the scenario merely for exhaustiveness.
 
-Reject expansion that invents a new trigger, precondition, Scope, acceptance surface or stricter/weaker result; requires unrelated product mutation; or obscures the core verification. Prefer the smallest sufficient scenario.
+Do not introduce or change product obligations, supported conditions, Scope, acceptance surfaces or decision criteria. Preserve every authored mandatory flow and explicit initial condition. Within the approved usage and existing action authority, a derived variation of data, entity identity or execution order may exercise the same obligation when a current implementation-grounded failure path makes that variation material. Such a variation supplements, rather than replaces, the authored flow. Do not expand into unrelated mutation or exhaustive coverage; prefer the smallest sufficient scenario.
 
 For every material finding from this verifier's current discovery cycle or optional navigation, reopen its current contract anchor and assign one verifier-owned disposition:
 
@@ -157,7 +157,7 @@ Navigation never substitutes for fresh verifier-owned evidence. Prefer the safel
 
 ### Bounded post-implementation frontier
 
-Review every authored flow and applicable conditional boundary for realistic false-completion/attribution paths in the actual implementation, separately from the mandatory scenario. Start from original purpose/current entrypoints and alternate owners, order/partial effects and weak readbacks, not just the reviewed plan's diagnosis. A lane requires a current contract anchor, reachable concrete path, material consequence and executable/inspectable discriminating readback. Dismiss unreachable, out-of-scope or already-handled hypotheses with exact evidence; the original unfixed symptom is a purpose failure even if pre-existing.
+Review every authored flow and applicable conditional boundary for realistic false-completion/attribution paths in the actual implementation, separately from the mandatory scenario. For a runtime claim, trace the actual acceptance path far enough to connect its entrypoint, deciding state/effect and authoritative readback. Derive material counterexamples from load-bearing assumptions on that path, including relevant identity, ownership, lifetime or ordering assumptions and weak readbacks, not just the reviewed plan's diagnosis. Use source and schema inspection to select discriminating execution, not to substitute for runtime evidence. Bound this inspection by the original purpose and approved claim, not a repository-wide audit. A lane requires a current contract anchor, reachable concrete path, material consequence and executable/inspectable discriminating readback. Dismiss unreachable, out-of-scope or already-handled hypotheses with exact evidence; the original unfixed symptom is a purpose failure even if pre-existing.
 
 For admitted exploration, preserve initial state and target identity, make the smallest authorized trigger, minimize one irrelevant dimension at a time where safe, and capture primary output/readback before cleanup. Keep observed facts separate from inference; transport failure does not decide mutation outcome. Preserve each lane's material finding, attributable no-finding or exact evidence limit without forcing a finding count. No distinct lane/no finding is not PASS and never removes any authored obligation. A same-cycle finding becomes CONTRADICTED only through its actual affected flow/AC decision boundary.
 
@@ -191,6 +191,8 @@ Derived Execution Plan:
 ```
 
 Do not replace exact authored labels with convenience aliases or silently drop future validator-admitted fields.
+
+For runtime claims, ground `Nearest nonconforming state` in a concrete failure of a current implementation assumption, `Discriminating observation` in the actual result that differs between conforming and failing implementations, and `Sensitivity activation` in the initial state and execution that exposes that difference. Do not select only total non-operation when current evidence supports a material implementation that succeeds on the chosen happy path but fails during another reachable use covered by the same obligation. If that implementation would also pass the proposed observation, choose the smallest authorized activation and readback that distinguishes it. Do not invent a counterexample quota or require speculative cases without a current contract and implementation anchor.
 
 Use the existing Derived Execution Plan fields to make clear why the selected current observation or real execution is sufficient to distinguish the flow's `SATISFIED`, `CONTRADICTED`, and `INCONCLUSIVE` conditions. Choose that evidence from the authored obligation and current changes to code, data volume or distribution, configuration, runtime, shared state, owners, and read paths; do not turn this choice into a separate exhaustive independence audit. Common setup and same-cycle verifier-owned evidence may support multiple flows only when each flow's initial conditions, contract-required actions, observation window, and decision boundary are actually satisfied. If later scenario work changes shared state or another premise on which earlier evidence depended, refresh the affected observation under the existing target-attribution and cross-AC rules.
 
@@ -282,6 +284,8 @@ Directly inspect an artifact, source, document, schema, plan, or simulator when 
 
 For runtime claims, use the existing `Nearest nonconforming state`, `Discriminating observation`, and `Sensitivity activation` to determine whether this run actually exercised the required boundary. Do not mark a flow `SATISFIED` without the declared discriminating readback and its sensitivity activation; passing implementation tests or source-only mechanism shape cannot substitute.
 
+A successful happy-path execution does not satisfy an affected flow while a current, contract-anchored material counterexample remains unresolved. Obtain the discriminating runtime evidence, or dismiss the path using current evidence that it is unreachable, already handled or outside the approved obligation; dismissing a hypothesis does not replace otherwise required runtime execution. If required decisive evidence cannot be obtained, keep the affected flow `INCONCLUSIVE`; an attributable contradiction makes it `CONTRADICTED`. Lack of authority or evidence is not itself a product failure. Apply the existing flow-to-AC adjudication and failure-aware continuation rules below without adding a new verdict.
+
 ### Failure-aware ordering and continuation
 
 After semantic preflight and binding capture, order scenario work without changing authored dependencies, initial state, ordering, shared-state or one-shot-effect meaning: first establish target/authority/attribution, then execute and observe the cheapest decisive flow or same-cause group, then reclassify remaining work under this section before starting another setup, long wait or separate external action, and finally perform the remaining required acceptance flows. Do not batch an unrelated high-cost or effectful trigger with cheaper potentially decisive checks in a way that prevents this evidence-driven continuation decision. Common setup, environment and cleanup may be reused only when flow meaning remains intact.
@@ -362,9 +366,9 @@ Binding impact: NONE | STALE_OR_UNATTRIBUTABLE
 Verifier action: CONTINUE WITH SAME BINDING | TERMINATE FOR FRESH VERIFICATION
 ```
 
-A bounded observation already inside the authored flow may be recorded as `SCENARIO AMENDMENT`. Do not use a turn report to invent a trigger, initial state, decision boundary, Scope or authority.
+A bounded `SCENARIO AMENDMENT` may refine derived execution or add a discriminating variation permitted by §6 without changing authored obligations or weakening decision criteria. Record a material amendment under this section's existing reporting threshold before executing the added action; routine adjustments do not require a new report or approval.
 
-When the changed evidence does not alter the captured stable/effect partition or authority identity, the verifier may continue in the same invocation. When it makes the binding stale or attribution unsafe, terminate with the applicable `VERIFICATION NOT STARTED`, `FAILED` or `INCONCLUSIVE` result and exact evidence limit. Do not wait for Parent continuation, patch an immutable binding, or carry PASS evidence across the drift.
+Continue only within the captured stable/effect partition and existing authority. If the required variation cannot remain within those boundaries, or changed evidence makes the binding stale or attribution unsafe, terminate with the applicable `VERIFICATION NOT STARTED`, `FAILED` or `INCONCLUSIVE` result and exact evidence limit, preserving the condition needed for a fresh invocation. Do not wait for Parent continuation, patch an immutable binding, or carry PASS evidence across the drift.
 
 ## 11. Disposition-specific execution
 

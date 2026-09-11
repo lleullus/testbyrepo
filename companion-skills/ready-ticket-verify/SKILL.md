@@ -79,6 +79,8 @@ For every flow, predeclare the evidence and conditions for:
 
 For every flow also record exactly these invocation-local challenge fields: `Nearest nonconforming state`, `Discriminating observation`, and `Sensitivity activation`. The observation must differ between the conforming state and the nearest plausible nonconforming state, and this run must actually activate the boundary that makes it sensitive. For runtime claims, a source constant/helper/branch is not a discriminating observation when the actual acceptance path can bypass it.
 
+Ground runtime challenges in the actual acceptance path and its load-bearing assumptions. A happy-path success is insufficient while a current material counterexample covered by the same obligation remains unresolved; apply the bounded-variation and evidence-sufficiency rules in [references/verify.md §6](references/verify.md#6-integrated-scenario-ownership) and [§9](references/verify.md#9-evidence-sufficiency-and-execution).
+
 Do not relax or rewrite those criteria after observing results.
 
 ## Scenario report and material turns
