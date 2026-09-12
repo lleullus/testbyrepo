@@ -76,6 +76,30 @@ Intent input
 
 Adapt the loop to the actual product. Do not force background automation, persistence, a domain decision, or a fixed UI structure where the utility does not need it.
 
+### Core Behavior Concretization
+
+Make the Core Utility and Core Completion Loop concrete enough to explain which user input or situation requires the system to judge, transform, or preserve what; what result the user must obtain or observe; and why omitting that behavior would make the requested outcome impossible or false. Identify plausible-looking results that would still fail that behavior. Use the relevant current product evidence and existing question path, not a separate investigation stage or a fixed-count checklist.
+
+For example, when the promise is to make a comic from a revised story, saving the conversation is insufficient if the next plan still uses the original story. Identify the required link between the current confirmed revision, the plan the user approves, and the generation input. Whether a story revision must also recompose existing panels is a product decision, not an automatic inference. Input fidelity alone does not establish fidelity of the generated pictures.
+
+Distinguish explicit requirements, behavior necessarily derived from the promised outcome, and unresolved user-owned choices. Explain the causal necessity of derived behavior; current implementation, common practice, or agent preference alone cannot make it required. Do not record an inference as explicit user approval. Apply existing authority and delegation before asking for a material unresolved product choice. Concretize core behavior and success meaning here; leave detailed states, interaction policy, UI, and implementation methods to their existing downstream owners.
+
+### Core Clarification
+
+When core meaning remains unclear, use a provisional Core Utility and Core Completion Loop to clarify it with the user. This is a conversation method within existing conditional Thesis admission, not a separate phase, questionnaire, artifact, or approval gate. Reuse sufficient current meaning; do not require dialogue for an already clear request.
+
+Before asking, identify how different answers would materially change the user result or the input-to-outcome loop. Apply current instructions, adopted authority, delegation, and directly inspectable facts first. In greenfield work, use the brief, fixed constraints, and concrete use situations without inventing implementation facts; inspect external facts only when they materially affect the meaning. Leave detailed UI, recovery policy, and implementation choices downstream unless their product-level meaning changes the core result or loop. This focus does not restrict questions needed to resolve other Thesis obligations under the existing `USER_INPUT_REQUIRED` rule.
+
+Briefly show the current understanding in ordinary language, labeling assumptions as provisional. Explain the specific alternative behaviors and their consequences rather than asking for generally more detailed requirements. Offer a recommendation when the user's goal and constraints support it; otherwise ask without inventing a preference. Allow an open answer when fixed choices would misrepresent the decision. Never recommend a weaker overall product goal merely because it is easier to implement or makes the first Increment smaller; product meaning and construction order are different decisions.
+
+After an answer, briefly reflect the changed Core Utility or Core Completion Loop and update directly affected core behaviors, causal relationships, and success observations. Preserve the distinction between user decisions and derived meaning. Revisit only conclusions materially affected by the answer, inspect newly relevant facts as needed, and honor a user stop or scope change. Do not restart the whole Thesis, repeat settled questions, or select the next Scope here.
+
+Ask only still-unresolved or newly revealed core choices needed for the current understanding. Independent choices may be asked together when easy to answer; sequence choices whose meaning or necessity depends on an earlier answer. Require neither a complete upfront question list nor a separate dependency graph, and set no question or round quota. Do not assume an unresolved answer to finish: use `USER_INPUT_REQUIRED` and resume the relevant analysis when the user replies. Do not present a completed Thesis followed only by a generic request for feedback while core meaning remains open.
+
+For example, “make and revise a comic through conversation” may mean revising the story before generation or editing selected generated panels while preserving the others. Ask about that product difference, not button placement or model choice. If the user chooses selective panel editing, preserve that loop rather than substituting full regeneration for implementation convenience. If the request already explicitly defines the result and revision boundary, do not ask it again.
+
+End this focused dialogue when the user result and core flow are concrete and no material user-owned choice about them remains. This is not yet `CALIBRATED`: complete the existing truth/causal, required/candidate, success-observation, and counterexample checks, resolving any remaining material user-owned meaning through the existing question rule. Unknown implementation feasibility remains unknown, not verified. Carry conclusions through the existing five binding values and Result contract; add no clarification field, conversation approval record, or new approval gate, and preserve existing explicit approval requirements.
+
 ### Truth / Causal Invariants
 
 State only the high-level relationships that must be true for the core utility claim to be honest and correctly attributable. Unknown remains unknown. Surrogate, mock, cached, local, refreshed, cross-identity, or agent-reported state cannot stand for a real product result unless current authority explicitly defines that exact state as the result.
@@ -127,6 +151,8 @@ If fresh evidence invalidates the Reason to Exist, Core Utility, or an essential
 After `CALIBRATED`, run normal next-increment admission. Product Thesis never selects Scope Shaper versus Ask Matt by itself.
 
 Record only the must-preserve product-level subset as one compact `Product Meaning Binding` in the next durable planning artifact. The binding contains exactly: Core Utility, Core Completion Loop, explicitly required Outcomes / Means, Truth / Causal Invariants, and Success Observation. Candidate / Supporting Means, Non-Core / Defer Candidates, detailed Behavior/UI policy, current Increment projection, Ticket decomposition, and implementation method are excluded. Do not add a separate required Product Thesis artifact, revision ledger, registry, conversation ledger, stable obligation ID, or reviewer lifecycle.
+
+Express the core behaviors through those existing five values: Core Utility states the user result; Core Completion Loop connects the essential inputs, judgments or transformations, and results; Required Outcomes / Means preserves explicitly required or duly adopted items with their actual provenance; Truth / Causal Invariants states the necessary product-level relationships; and Success Observation distinguishes fulfillment from plausible substitutes. Do not add a sixth `Core Behaviors` field. Feature names or artifact existence alone are insufficient when they do not establish the promised behavior.
 
 For a Scope path, write the binding once in `SCOPE-SHAPING-RESULT.md`; the normal byte-for-byte immutable `revisions/SHAPE-NNN.md` snapshot preserves the same binding. Do not copy the binding into `INC-NNN.md` or Tickets. For a direct Ask Matt path, `SPEC.md` is the first durable artifact and carries the binding once.
 
