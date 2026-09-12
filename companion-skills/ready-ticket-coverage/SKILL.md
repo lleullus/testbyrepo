@@ -28,6 +28,8 @@ Required inputs:
 - existing target/binding identities and known currentness limits for that verification;
 - on a follow-up, the exact previous Coverage result and correction/new evidence that can change it.
 
+The actual caller resolves this Coverage `SKILL.md` from the current pinned IIS bundle and includes its exact readable path in the assignment, with an instruction to read and apply it before work. A role name or the caller's own read/summary is not a substitute. Bind the exact inputs above and the existing host terminal/artifact return path; instruct the worker to perform only this read-only review and end with `COVERAGE REVIEW RESULT` at the existing COMPLETE/PARTIAL/BLOCKED boundary, without product execution, tests, mutation, a second AC verdict or finalization.
+
 Plan/review and implementation reports are optional navigation. Read original authority and deciding implementation paths yourself; never select a different run by `latest` naming. Do not take the verifier conclusion as proof of sufficiency. The opaque success handle stays with the caller and is neither an input nor report content.
 
 If a required report, primary evidence, contract or target cannot be attributed, preserve the exact limit as PARTIAL/BLOCKED; do not infer no finding, product failure, or a replacement authority. Reading a cleanup-modified current DB does not establish the original verification state. Use the evidence recorded before cleanup; missing deciding history stays a limitation.

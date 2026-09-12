@@ -16,6 +16,8 @@ Additional User Instructions:
 Delegated Verifier: yes
 ```
 
+The actual caller resolves [verify SKILL.md](../SKILL.md) and [references/verify.md](verify.md) from the current pinned IIS bundle and includes both exact readable paths in that assignment, with an instruction to read them before work and apply only the delegated verifier core. A role name or the caller's read/summary is not a substitute. Keep `Delegated Verifier: yes`; bind the exact inputs and required evidence/report locations under this contract, and instruct the worker to return the existing admission failure or its host terminal after all applicable authored obligations, readback, settlement and cleanup are handled. It must not remediate implementation, dispatch Coverage or finalize. These are assignment instructions, not additional terminal-schema fields.
+
 The delegated verifier owns canonical admission, semantic contract check, complete authored Flow denominator, scenario authorship, runtime/canonical evidence, finding disposition, every Flow adjudication, every AC verdict, Scope/Non-Goals and cross-AC closure, and the whole-Ticket semantic verdict. It never owns the status write. Parent Main does not perform a second verification pass.
 
 ### SUBAGENT terminal fan-in and settlement

@@ -27,6 +27,8 @@ Top-level invocation은 `SUBAGENT`가 기본이다. 현재 사용자가 이 exac
 4. material method change terminal을 받으면 old worker를 resume하지 않고 affected Plan revision → current independent review를 실제로 수행한 뒤 fresh worker invocation으로만 재개한다.
 5. terminal `IMPLEMENT RESULT`를 수신해 exact Ticket identity와 필수 terminal fields를 확인한 뒤 caller-facing 결과를 작성한다.
 
+실제 caller는 현재 pinned IIS bundle의 [implement SKILL.md](../SKILL.md)와 [references/implement.md](implement.md)를 resolve하여 두 문서의 정확한 읽기 가능한 경로와 작업 전 직접 읽고 적용할 지시를 assignment에 포함한다. 부모의 문서 읽기·요약이나 역할명만으로 대체하지 않는다. `Delegated Worker: yes`를 유지하고, 이번 exact Ticket의 delegated implementation core와 self-check만 수행하며 기존 COMPLETE 조건 또는 PARTIAL/BLOCKED 반환 경계에서 terminal `IMPLEMENT RESULT`로 종료하도록 명시한다. 계획 재설계·독립 리뷰·최종 verification·후속 Ticket 수행 권한은 부여하지 않는다.
+
 ```text
 # Communication
 

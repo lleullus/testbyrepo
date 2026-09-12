@@ -31,6 +31,11 @@ Use current explicit instructions first and the caller's applicable selected mod
 
 DIRECT preparation uses current Main for the roles it performs, but the author cannot independently approve its own plan in that same writing invocation. Plan Review must read the original contract in an invocation separate from the writer. Use currently authorized host subagents, a separate conversation/session, or an attributable existing independent review that is still current. Do not silently switch a user-selected mode or create hidden fan-out to obtain independence. If an independent invocation cannot be obtained, return useful plans and the exact capability/independence limit; do not manufacture an ADMIT artifact. No reviewer-authentication system or extra independence gate is created: actual invocation provenance and raw evidence establish what happened.
 
+For actual delegated roles, the preparation caller resolves the following references from the current pinned IIS bundle and includes their exact readable paths and an instruction to read and apply them before work in each assignment. Include exact Ticket paths/Project Root, applicable authority and current plan/evidence inputs, role-specific output locations and these return boundaries; a role name or the caller's own read/summary does not replace this handoff.
+
+- Planner: [plan.md](references/plan.md). Write/revise the approved execution method and return the plan, grounding, any conditional first work and exact unresolved limits. Do not approve your own plan, implement the product or perform final verification.
+- Independent Plan Reviewer: [review.md](references/review.md) for the review procedure/result and [plan.md](references/plan.md) for Code Grounding and conditional-start criteria, not as a Planner assignment. Return the exact outside-Project-Root review artifact, `ADMIT | REVISE | EVIDENCE_NEEDED` judgment and evidence, then end this invocation. Do not write/revise the plan or take over the lead's revision loop.
+
 ## Preparation flow
 
 1. Bind exact requested Tickets and current product authority. Identify which important decisions genuinely couple producer/consumer Tickets; unrelated Tickets do not wait for whole-Set detailed design.
