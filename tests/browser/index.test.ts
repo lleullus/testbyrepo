@@ -14,9 +14,109 @@ import {
   runSubmissionWithRecoveryForTest,
   shouldPreferSystemTmpDirForTest,
   shouldPreserveBrowserOnErrorForTest,
+  shouldSelectBrowserModelForTest,
+  assertBrowserModelSelectionForSubmissionForTest,
 } from "../../src/browser/index.js";
 import { resolveBrowserConfig } from "../../src/browser/config.js";
 import { BrowserAutomationError } from "../../src/oracle/errors.js";
+describe("resumed browser model selection policy", () => {
+  test.each([
+    ["initial selection", { desiredModel: "Latest", modelStrategy: "select", isResumingConversation: false }, true],
+    ["explicit resumed selection", { desiredModel: "GPT-5.6 Sol", modelStrategy: "select", isResumingConversation: true, explicitResumeModel: true }, true],
+    ["omitted resumed selection", { desiredModel: "GPT-5.6 Sol", modelStrategy: "current", isResumingConversation: true, explicitResumeModel: false }, false],
+    ["ignored selection", { desiredModel: "GPT-5.5", modelStrategy: "ignore", isResumingConversation: true, explicitResumeModel: true }, false],
+  ] as const)("uses one gate for %s", (_label, args, expected) => {
+    expect(shouldSelectBrowserModelForTest(args)).toBe(expected);
+  });
+});
+describe("explicit canonical model submission gate", () => {
+  const identity = (row: "Latest" | "GPT-5.6 Sol" | "GPT-5.5") => ({
+    fingerprint: `row:${row}`,
+    row,
+    source: "chatgpt-model-picker" as const,
+    capturedAt: new Date(0).toISOString(),
+  });
+
+  test.each(["Latest", "GPT-5.6 Sol", "GPT-5.5"] as const)(
+    "accepts verified exact evidence for %s under select strategy",
+    (row) => {
+      expect(() =>
+        assertBrowserModelSelectionForSubmissionForTest({
+          requestedModel: row,
+          requestedChoice: row,
+          selectedRow: row,
+          selectedModelIdentity: identity(row),
+          strategy: "select",
+          selectionIntent: "explicit",
+          status: "already-selected",
+          verified: true,
+          source: "chatgpt-model-picker",
+          capturedAt: new Date(0).toISOString(),
+        }),
+      ).not.toThrow();
+    },
+  );
+
+  test.each([
+    ["unverified", { verified: false }],
+    ["missing row", { selectedRow: null, selectedModelIdentity: null }],
+    ["wrong row", { selectedRow: "Latest", selectedModelIdentity: identity("Latest") }],
+  ] as const)("rejects explicit canonical evidence with %s", (_label, overrides) => {
+    const evidence = {
+      requestedModel: "GPT-5.5" as const,
+      requestedChoice: "GPT-5.5" as const,
+      selectedRow: "GPT-5.5" as const,
+      selectedModelIdentity: identity("GPT-5.5"),
+      strategy: "select" as const,
+      selectionIntent: "explicit" as const,
+      status: "already-selected" as const,
+      verified: true,
+      source: "chatgpt-model-picker" as const,
+      capturedAt: new Date(0).toISOString(),
+      ...overrides,
+    };
+    expect(() => assertBrowserModelSelectionForSubmissionForTest(evidence)).toThrow(
+      /did not verify explicit/i,
+    );
+  });
+
+  test.each(["current", "ignore"] as const)(
+    "preserves explicit model requests without a picker under %s strategy",
+    (strategy) => {
+      expect(() =>
+        assertBrowserModelSelectionForSubmissionForTest({
+          requestedModel: "GPT-5.6 Sol",
+          requestedChoice: "GPT-5.6 Sol",
+          selectedRow: null,
+          selectedModelIdentity: null,
+          strategy,
+          selectionIntent: "explicit",
+          status: strategy === "current" ? "already-selected" : "skipped",
+          verified: false,
+          source: strategy === "current" ? "chatgpt-model-picker" : "config",
+          capturedAt: new Date(0).toISOString(),
+        }),
+      ).not.toThrow();
+    },
+  );
+
+  test("keeps omitted resume evidence non-assertive", () => {
+    expect(() =>
+      assertBrowserModelSelectionForSubmissionForTest({
+        requestedModel: null,
+        requestedChoice: null,
+        selectedRow: null,
+        selectedModelIdentity: null,
+        strategy: "current",
+        selectionIntent: "omitted",
+        status: "skipped",
+        verified: false,
+        source: "config",
+        capturedAt: new Date(0).toISOString(),
+      }),
+    ).not.toThrow();
+  });
+});
 
 describe("shouldPreserveBrowserOnErrorForTest", () => {
   test("preserves the browser for headful cloudflare challenge errors", () => {

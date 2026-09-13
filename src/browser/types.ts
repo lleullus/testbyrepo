@@ -21,6 +21,9 @@ export type BrowserArchiveMode = "auto" | "always" | "never";
 export type BrowserReasoningIntent = "instant" | "medium" | "high" | "extra-high" | "pro";
 export type BrowserReasoningControlKind = "slider" | "dropdown";
 
+/** Exact model/version rows owned by the current ChatGPT picker. */
+export type BrowserModelChoice = "Latest" | "GPT-5.6 Sol" | "GPT-5.5";
+
 /** Capability declared by the managed Browser-slots transport. */
 export interface BrowserManagedSlotCapability {
   slotId: 1 | 2 | 3 | 4 | 5 | 10;
@@ -31,6 +34,8 @@ export interface BrowserManagedSlotCapability {
 /** Redacted identity captured from bounded model-picker signals. */
 export interface BrowserModelIdentityEvidence {
   fingerprint: string;
+  /** Exact visible model row, when the picker exposed one. */
+  row?: BrowserModelChoice | null;
   source: "chatgpt-model-picker";
   capturedAt: string;
 }
@@ -120,6 +125,8 @@ export interface BrowserAutomationConfig {
   keepBrowser?: boolean;
   hideWindow?: boolean;
   desiredModel?: string | null;
+  /** True only when this resumed turn explicitly requested a model row. */
+  explicitResumeModel?: boolean;
   modelStrategy?: BrowserModelStrategy;
   debug?: boolean;
   allowCookieErrors?: boolean;
@@ -233,6 +240,7 @@ export type ResolvedBrowserConfig = Required<
     | "chromePath"
     | "chromeCookiePath"
     | "desiredModel"
+    | "explicitResumeModel"
     | "remoteChrome"
     | "remoteChromeBrowserWSEndpoint"
     | "remoteChromeProfileRoot"
@@ -252,6 +260,7 @@ export type ResolvedBrowserConfig = Required<
   attachRunning?: boolean;
   browserTabRef?: string | null;
   desiredModel?: string | null;
+  explicitResumeModel?: boolean;
   modelStrategy?: BrowserModelStrategy;
   thinkingTime?: ThinkingTimeLevel;
   reasoningIntent?: BrowserReasoningIntent;
@@ -293,6 +302,8 @@ export interface BrowserReasoningSelectionEvidence {
   verified: boolean;
   modelUnchanged: boolean;
   originalModelIdentity?: BrowserModelIdentityEvidence | null;
+  /** Exact checked model row observed in the same reasoning attempt. */
+  observedModelRow?: BrowserModelChoice | null;
   observedModelFingerprint?: string | null;
   managedSlotId?: number;
   turnIndex?: number;

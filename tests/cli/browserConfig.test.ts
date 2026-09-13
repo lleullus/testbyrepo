@@ -35,6 +35,18 @@ describe("buildBrowserConfig", () => {
     const sol = await buildBrowserConfig({ model: "gpt-5.6-sol" });
     expect(sol.desiredModel).toBe("GPT-5.6 Sol");
   });
+  test.each([
+    ["gpt-6-pro", "Latest"],
+    ["gpt-5.6-sol", "GPT-5.6 Sol"],
+    ["gpt-5.5", "GPT-5.5"],
+  ])("projects %s to the exact model row while keeping Pro separate", async (model, row) => {
+    const config = await buildBrowserConfig({
+      model: model as never,
+      browserThinkingTime: "pro",
+    });
+    expect(config.desiredModel).toBe(row);
+    expect(config.reasoningIntent).toBe("pro");
+  });
   test("preserves GPT-6 Pro canonical metadata and base picker label", async () => {
     const config = await buildBrowserConfig({
       model: "gpt-6-pro" as never,
@@ -425,7 +437,7 @@ describe("resolveBrowserModelLabel", () => {
   test("returns canonical ChatGPT label when CLI value matches API model", () => {
     expect(resolveBrowserModelLabel("gpt-5.5-pro", "gpt-5.5-pro")).toBe("Thinking 5.5");
     expect(resolveBrowserModelLabel("gpt-5.5-instant", "gpt-5.5-instant")).toBe("GPT-5.5 Instant");
-    expect(resolveBrowserModelLabel("gpt-5.5", "gpt-5.5")).toBe("Thinking 5.5");
+    expect(resolveBrowserModelLabel("gpt-5.5", "gpt-5.5")).toBe("GPT-5.5");
     expect(resolveBrowserModelLabel("gpt-5.4-pro", "gpt-5.4-pro")).toBe("Thinking 5.5");
     expect(resolveBrowserModelLabel("gpt-5.4", "gpt-5.4")).toBe("Thinking 5.4");
     expect(resolveBrowserModelLabel("gpt-5-pro", "gpt-5-pro")).toBe("Thinking 5.5");

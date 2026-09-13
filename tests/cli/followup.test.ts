@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 import type { SessionMetadata } from "../../src/sessionStore.js";
 import {
   applyBrowserFollowupReasoning,
+  applyBrowserFollowupSelection,
   resolveBrowserFollowupReference,
   resolveBrowserResumeConversationUrl,
 } from "../../src/cli/followup.js";
@@ -55,6 +56,47 @@ describe("browser follow-up resolution", () => {
       reasoningIntent: "pro",
       resumeConversationUrl: parent.resumeConversationUrl,
       originalModelIdentity: parent.originalModelIdentity,
+    });
+  });
+  test("selects an explicit resumed model row without inheriting the parent row", () => {
+    const parent = {
+      desiredModel: "Latest",
+      modelStrategy: "current" as const,
+      thinkingTime: "heavy" as const,
+      reasoningIntent: "pro" as const,
+      resumeConversationUrl: "https://chatgpt.com/c/resume-me",
+    };
+
+    expect(
+      applyBrowserFollowupSelection(parent, {
+        explicitModelLabel: "GPT-5.6 Sol",
+        explicitReasoning: "pro",
+      }),
+    ).toMatchObject({
+      desiredModel: "GPT-5.6 Sol",
+      modelStrategy: "select",
+      explicitResumeModel: true,
+      reasoningIntent: "pro",
+      resumeConversationUrl: parent.resumeConversationUrl,
+    });
+    expect(
+      applyBrowserFollowupSelection(parent, { explicitModelLabel: "GPT-5.5" }).thinkingTime,
+    ).toBeUndefined();
+  });
+
+  test("marks omitted resumed model intent without fabricating a requested row", () => {
+    const parent = {
+      desiredModel: "GPT-5.6 Sol",
+      modelStrategy: "current" as const,
+      explicitResumeModel: true,
+      resumeConversationUrl: "https://chatgpt.com/c/resume-me",
+    };
+
+    expect(applyBrowserFollowupSelection(parent)).toMatchObject({
+      desiredModel: parent.desiredModel,
+      modelStrategy: parent.modelStrategy,
+      explicitResumeModel: false,
+      resumeConversationUrl: parent.resumeConversationUrl,
     });
   });
 

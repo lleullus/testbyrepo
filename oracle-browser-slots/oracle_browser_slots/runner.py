@@ -21,10 +21,8 @@ from .service import SlotService
 
 LifecycleEmitter = Callable[[dict[str, Any]], None]
 CANONICAL_ORACLE_CLI = "/home/user01/.nvm/versions/node/v24.18.0/bin/oracle"
-REQUIRED_ORACLE_FLAGS = (
-    ("--engine", "browser"),
-    ("--browser-model-strategy", "current"),
-)
+REQUIRED_ORACLE_FLAGS = (("--engine", "browser"),)
+MODEL_STRATEGY_FLAG = "--browser-model-strategy"
 URL_ALIAS_FLAGS = ("--chatgpt-url", "--browser-url")
 FORBIDDEN_TRANSPORT_FLAGS = (
     "--browser-manual-login",
@@ -173,31 +171,37 @@ class JobRunner:
             raise ValueError("실행할 command가 없습니다.")
         return self._validated_oracle_command(None, command)
 
-    def compatible_slots(self, argv: Sequence[str]) -> tuple[int, ...]:
-        """Return slots with an approved capability for the canonical request."""
+    @classmethod
+    def _parse_model_request(
+        cls, argv: Sequence[str]
+    ) -> tuple[str, str | None, bool] | None:
+        """Parse the single model/reasoning request used by routing and transport."""
 
-        model_occurrences = self._option_occurrences(argv, MODEL_FLAGS)
-        reasoning_occurrences = self._option_occurrences(argv, (REASONING_FLAG,))
+        model_occurrences = cls._option_occurrences(argv, MODEL_FLAGS)
+        reasoning_occurrences = cls._option_occurrences(argv, (REASONING_FLAG,))
         if (
             len(model_occurrences) > 1
             or len(reasoning_occurrences) > 1
             or any(flag == "--models" for flag, _, _ in model_occurrences)
         ):
-            return ()
+            return None
 
         if model_occurrences:
             model_flag, model, model_form = model_occurrences[0]
             if model is None or not model.strip() or (
                 model_flag == "-m" and model_form == "equals"
             ):
-                return ()
+                return None
+            normalized_model = model.strip().lower()
+            explicit_model = True
         else:
-            model = "gpt-5.6-sol"
+            normalized_model = "gpt-5.6-sol"
+            explicit_model = False
 
         if reasoning_occurrences:
             _, reasoning, _ = reasoning_occurrences[0]
             if reasoning is None or not reasoning.strip():
-                return ()
+                return None
             normalized_reasoning = (
                 reasoning.strip().lower().replace("_", "-").replace(" ", "-")
             )
@@ -215,11 +219,36 @@ class JobRunner:
                 "standard",
                 "medium",
             ):
-                return ()
+                return None
         else:
             normalized_reasoning = None
 
-        normalized_model = model.strip().lower()
+        return normalized_model, normalized_reasoning, explicit_model
+
+    @classmethod
+    def _expected_model_strategy(cls, argv: Sequence[str]) -> str:
+        """Choose exact-row selection only for the Ticket-owned Pro requests."""
+
+        parsed = cls._parse_model_request(argv)
+        if parsed is None:
+            return "current"
+        model, reasoning, explicit_model = parsed
+        if not explicit_model:
+            return "current"
+        if model == "gpt-6-pro" or (
+            reasoning == "pro" and model in ("gpt-5.6-sol", "gpt-5.5")
+        ):
+            return "select"
+        return "current"
+
+    def compatible_slots(self, argv: Sequence[str]) -> tuple[int, ...]:
+        """Return slots with an approved capability for the canonical request."""
+
+        parsed = self._parse_model_request(argv)
+        if parsed is None:
+            return ()
+        normalized_model, normalized_reasoning, _ = parsed
+
         if normalized_model not in (
             "gpt-5.5",
             "gpt-5.6",
@@ -622,9 +651,13 @@ class JobRunner:
         ):
             injection = self.service.settings.slot_chatgpt_url_override(slot_id)
 
-        values: dict[str, list[str]] = {flag: [] for flag, _ in REQUIRED_ORACLE_FLAGS}
+        values: dict[str, list[str]] = {
+            flag: [] for flag, _ in REQUIRED_ORACLE_FLAGS
+        }
+        values[MODEL_STRATEGY_FLAG] = []
         values["--remote-chrome"] = []
         required_values = dict(REQUIRED_ORACLE_FLAGS)
+        required_values[MODEL_STRATEGY_FLAG] = self._expected_model_strategy(argv)
         if expected_remote is not None:
             required_values["--remote-chrome"] = expected_remote
         index = 1
@@ -659,7 +692,11 @@ class JobRunner:
                     f"{flag}가 중복 지정되었습니다.",
                     f"{flag}를 한 번만 지정하십시오.",
                 )
-            if occurrences and occurrences[0] != expected:
+            if (
+                occurrences
+                and occurrences[0] != expected
+                and not (flag == MODEL_STRATEGY_FLAG and expected == "current")
+            ):
                 raise OracleTransportError(
                     (
                         f"{flag} 값이 선택 슬롯과 충돌합니다: {occurrences[0]}"

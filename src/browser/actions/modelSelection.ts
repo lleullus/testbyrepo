@@ -1,4 +1,10 @@
-import type { ChromeClient, BrowserLogger, BrowserModelStrategy } from "../types.js";
+import type {
+  BrowserLogger,
+  BrowserModelChoice,
+  BrowserModelIdentityEvidence,
+  BrowserModelStrategy,
+  ChromeClient,
+} from "../types.js";
 import type { BrowserModelSelectionEvidence } from "../../sessionStore.js";
 import {
   COMPOSER_MODEL_SIGNAL_SELECTOR,
@@ -13,15 +19,125 @@ import { delay } from "../utils.js";
 const LEGACY_PRO_VERSION_WORD_TOKENS = ["5 4", "5 2", "5 1", "5 0", "gpt 5 pro"] as const;
 const LEGACY_PRO_VERSION_COMPACT_TOKENS = ["gpt54", "gpt52", "gpt51", "gpt50"] as const;
 
+type SelectedModelRowReadback = {
+  status: "selected" | "unavailable" | "ambiguous";
+  choice?: BrowserModelChoice;
+  label?: string;
+  fingerprint?: string;
+};
+
 type ModelSelectionResult =
-  | { status: "already-selected"; label?: string | null }
-  | { status: "switched"; label?: string | null }
+  | ({ status: "already-selected" | "switched"; label?: string | null } & {
+      selectedModelIdentity?: SelectedModelRowReadback;
+    })
   | {
       status: "option-not-found";
       hint?: { temporaryChat?: boolean; availableOptions?: string[] };
     }
   | { status: "button-missing" }
   | undefined;
+/** Normalize only the three exact model/version choices owned by this ticket. */
+export function normalizeBrowserModelChoice(value: string | null | undefined): BrowserModelChoice | null {
+  const normalized = (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (normalized === "latest") return "Latest";
+  if (/^(?:gpt )?5 6 sol$/.test(normalized)) return "GPT-5.6 Sol";
+  if (/^(?:gpt )?5 5$/.test(normalized)) return "GPT-5.5";
+  return null;
+}
+
+/**
+ * Shared browser-side readback for the exact checked model/version row.
+ * It deliberately ignores the closed composer pill: the row is the identity owner.
+ */
+export function buildSelectedModelIdentityReaderSource(): string {
+  return `
+    const readSelectedModelIdentity = (owner) => {
+      const normalizeRowText = (value) => String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\\s+/g, ' ')
+        .trim();
+      const visible = (node) => {
+        if (!node || node.getAttribute?.('aria-hidden') === 'true') return false;
+        const rect = node.getBoundingClientRect?.();
+        return !rect || (rect.width > 0 && rect.height > 0);
+      };
+      const isChecked = (node) => {
+        const state = normalizeRowText(node?.getAttribute?.('data-state'));
+        return node?.getAttribute?.('aria-checked') === 'true' ||
+          node?.getAttribute?.('aria-selected') === 'true' ||
+          node?.getAttribute?.('aria-current') === 'true' ||
+          node?.getAttribute?.('data-selected') === 'true' ||
+          ['checked', 'selected', 'on', 'true'].includes(state);
+      };
+      const modelChoiceFor = (node) => {
+        const text = normalizeRowText(
+          String(node?.innerText || node?.textContent || '') + ' ' +
+          String(node?.getAttribute?.('aria-label') || '') + ' ' +
+          String(node?.getAttribute?.('data-testid') || ''),
+        );
+        if (text.includes('latest')) return 'Latest';
+        const hasSol56 = text.includes('5 6') && text.includes('sol');
+        if (hasSol56 && !/(?:^| )(?:pro|thinking|instant)(?: |$)/.test(text)) {
+          return 'GPT-5.6 Sol';
+        }
+        const has55 = text.includes('5 5') || text.includes('gpt55');
+        if (has55 && !/(?:^| )(?:pro|thinking|instant)(?: |$)/.test(text)) {
+          return 'GPT-5.5';
+        }
+        return null;
+      };
+      const fingerprintFor = (choice) => {
+        if (!choice) return null;
+        let hash = 2166136261;
+        const source = 'row:' + choice;
+        for (let index = 0; index < source.length; index += 1) {
+          hash ^= source.charCodeAt(index);
+          hash = Math.imul(hash, 16777619);
+        }
+        return String(hash >>> 0);
+      };
+      const roots = owner
+        ? [owner]
+        : [
+            ...Array.from(
+              document.querySelectorAll?.(
+                '[data-testid="composer-intelligence-picker-content"], [data-radix-collection-root], [role="menu"], [role="listbox"], [role="dialog"]',
+              ) || [],
+            ),
+            document,
+          ];
+      const nodes = roots
+        .flatMap((root) => [
+          root,
+          ...Array.from(
+            root?.querySelectorAll?.(
+              '[role="menuitem"], [role="menuitemradio"], [role="option"], [role="radio"]',
+            ) || [],
+          ),
+        ])
+        .filter((node, index, values) => node && values.indexOf(node) === index && visible(node));
+      const checkedRows = nodes
+        .filter(isChecked)
+        .map((node) => ({ node, choice: modelChoiceFor(node) }))
+        .filter((entry) => entry.choice);
+      if (checkedRows.length === 0) return { status: 'unavailable' };
+      if (checkedRows.length !== 1) return { status: 'ambiguous' };
+      const choice = checkedRows[0].choice;
+      return {
+        status: 'selected',
+        choice,
+        label: choice,
+        fingerprint: fingerprintFor(choice),
+      };
+    };
+  `;
+}
 
 // The model/effort picker is a composer pill that React mounts a beat after the page
 // becomes interactive (~1-4s on a cold profile, e.g. cookie-sync's throwaway Chrome).
@@ -47,7 +163,7 @@ export async function ensureModelSelection(
   let announcedWait = false;
   for (;;) {
     const outcome = await Runtime.evaluate({
-      expression: buildModelSelectionExpression(desiredModel, strategy),
+      expression: buildModelSelectionExpression(desiredModel, strategy, true),
       awaitPromise: true,
       returnByValue: true,
     });
@@ -64,6 +180,7 @@ export async function ensureModelSelection(
     await delay(buttonPollMs);
   }
 
+  const requestedChoice = normalizeBrowserModelChoice(desiredModel);
   switch (result?.status) {
     case "already-selected":
     case "switched": {
@@ -79,7 +196,10 @@ export async function ensureModelSelection(
         );
         return {
           requestedModel: desiredModel,
+          requestedChoice,
           resolvedLabel: null,
+          selectedRow: null,
+          selectedModelIdentity: null,
           strategy,
           status: result.status,
           verified: false,
@@ -91,13 +211,40 @@ export async function ensureModelSelection(
       if (strategy !== "current") {
         assertResolvedModelSelection(desiredModel, observedLabel ?? "");
       }
+      const selected = result.selectedModelIdentity;
+      if (strategy !== "current" && requestedChoice) {
+        if (selected?.status !== "selected" || selected.choice !== requestedChoice) {
+          const actual = selected?.choice ?? "unavailable";
+          throw new Error(
+            `Model picker checked-row readback did not verify "${requestedChoice}" (observed ${actual}); refusing to submit.`,
+          );
+        }
+      }
+      const selectedModelIdentity: BrowserModelIdentityEvidence | null =
+        selected?.status === "selected" && selected.fingerprint
+          ? {
+              fingerprint: selected.fingerprint,
+              row: selected.choice ?? null,
+              source: "chatgpt-model-picker",
+              capturedAt: new Date().toISOString(),
+            }
+          : null;
+      const verified =
+        strategy !== "current" &&
+        (!requestedChoice ||
+          (selected?.status === "selected" &&
+            selected.choice === requestedChoice &&
+            selectedModelIdentity !== null));
       logger(`Model picker: ${label ?? "current model (label unavailable)"}`);
       return {
         requestedModel: desiredModel,
+        requestedChoice,
         resolvedLabel: label,
+        selectedRow: selected?.status === "selected" ? (selected.choice ?? null) : null,
+        selectedModelIdentity,
         strategy,
         status: result.status,
-        verified: strategy !== "current",
+        verified,
         source: "chatgpt-model-picker",
         capturedAt: new Date().toISOString(),
       };
@@ -223,6 +370,7 @@ export function assertResolvedModelSelectionForTest(
 function buildModelSelectionExpression(
   targetModel: string,
   strategy: BrowserModelStrategy,
+  includeSelectedIdentity = true,
 ): string {
   const matchers = buildModelMatchersLiteral(targetModel);
   const composerSignalMatchers = buildComposerSignalMatchers(targetModel);
@@ -230,6 +378,10 @@ function buildModelSelectionExpression(
   const idLiteral = JSON.stringify(matchers.testIdTokens);
   const primaryLabelLiteral = JSON.stringify(targetModel);
   const strategyLiteral = JSON.stringify(strategy);
+  const targetChoiceLiteral = JSON.stringify(
+    includeSelectedIdentity ? normalizeBrowserModelChoice(targetModel) : null,
+  );
+  const includeSelectedIdentityLiteral = JSON.stringify(includeSelectedIdentity);
   const composerSignalSelectorLiteral = JSON.stringify(COMPOSER_MODEL_SIGNAL_SELECTOR);
   const composerIncludesLiteral = JSON.stringify(composerSignalMatchers.includesAny);
   const composerExcludesLiteral = JSON.stringify(composerSignalMatchers.excludesAny);
@@ -249,10 +401,21 @@ function buildModelSelectionExpression(
     const TEST_IDS = ${idLiteral};
     const PRIMARY_LABEL = ${primaryLabelLiteral};
     const MODEL_STRATEGY = ${strategyLiteral};
+    const INCLUDE_SELECTED_IDENTITY = ${includeSelectedIdentityLiteral};
+    const TARGET_CHOICE = ${targetChoiceLiteral};
+    ${buildSelectedModelIdentityReaderSource()}
     const COMPOSER_SIGNAL_INCLUDES = ${composerIncludesLiteral};
     const COMPOSER_SIGNAL_EXCLUDES = ${composerExcludesLiteral};
     const COMPOSER_SIGNAL_ALLOW_BLANK = ${composerAllowBlankLiteral};
     const INITIAL_WAIT_MS = 150;
+    const readCurrentSelectedModelIdentity = () => readSelectedModelIdentity();
+    const resultWithSelectedModelIdentity = (status, label) => {
+      const result = { status, label };
+      if (INCLUDE_SELECTED_IDENTITY && TARGET_CHOICE) {
+        result.selectedModelIdentity = readCurrentSelectedModelIdentity();
+      }
+      return result;
+    };
     const REOPEN_INTERVAL_MS = 400;
     const MAX_WAIT_MS = 20000;
     const SETTLE_WAIT_MS = 1500;
@@ -537,12 +700,8 @@ function buildModelSelectionExpression(
     };
     if (MODEL_STRATEGY === 'current') {
       const currentLabel = getResolvedLabel('') || null;
-      return {
-        status: 'already-selected',
-        label: currentLabel,
-      };
+      return resultWithSelectedModelIdentity('already-selected', currentLabel);
     }
-
     const button = findModelButton();
     if (!button) {
       return { status: 'button-missing' };
@@ -627,6 +786,10 @@ function buildModelSelectionExpression(
       return COMPOSER_SIGNAL_INCLUDES.some((token) => token && signal.includes(token));
     };
     const activeSelectionMatchesTarget = () => {
+      if (TARGET_CHOICE) {
+        const identity = readCurrentSelectedModelIdentity();
+        return identity.status === 'selected' && identity.choice === TARGET_CHOICE;
+      }
       if (buttonMatchesTarget()) {
         return true;
       }
@@ -649,7 +812,7 @@ function buildModelSelectionExpression(
     };
 
     if (activeSelectionMatchesTarget()) {
-      return { status: 'already-selected', label: getResolvedLabel(PRIMARY_LABEL) };
+      return resultWithSelectedModelIdentity('already-selected', getResolvedLabel(PRIMARY_LABEL));
     }
 
     let lastPointerClick = 0;
@@ -1107,8 +1270,13 @@ function buildModelSelectionExpression(
           resolve('target');
           return;
         }
-        if (selectionStateChanged(previousButtonLabel, previousComposerSignal)) {
-          resolve('changed');
+        const changed = selectionStateChanged(previousButtonLabel, previousComposerSignal);
+        if (changed) {
+          if (TARGET_CHOICE) {
+            resolve('target');
+          } else {
+            resolve('changed');
+          }
           return;
         }
         if (performance.now() - waitStart > SETTLE_WAIT_MS) {
@@ -1198,11 +1366,12 @@ function buildModelSelectionExpression(
             canTrustSelectedOption(match.node, match.normalizedText, match.testid)
           ) {
             const resolvedLabel = getResolvedLabel(match.label);
+            const result = resultWithSelectedModelIdentity(
+              clickedTargetOption ? 'switched' : 'already-selected',
+              resolvedLabel,
+            );
             closeMenu();
-            resolve({
-              status: clickedTargetOption ? 'switched' : 'already-selected',
-              label: resolvedLabel,
-            });
+            resolve(result);
             return;
           }
           const previousButtonLabel = normalizeText(getButtonLabel());
@@ -1222,8 +1391,9 @@ function buildModelSelectionExpression(
           waitForTargetSelection(previousButtonLabel, previousComposerSignal).then((selectionSettled) => {
             if (selectionSettled === 'target') {
               const resolvedLabel = getResolvedLabel(match.label);
+              const result = resultWithSelectedModelIdentity('switched', resolvedLabel);
               closeMenu();
-              resolve({ status: 'switched', label: resolvedLabel });
+              resolve(result);
               return;
             }
             attempt();
@@ -1514,7 +1684,6 @@ function buildModelMatchersLiteral(targetModel: string): {
   if (!testIdTokens.size) {
     testIdTokens.add(base.replace(/\s+/g, "-"));
   }
-
   return {
     labelTokens: Array.from(labelTokens).filter(Boolean),
     testIdTokens: Array.from(testIdTokens).filter(Boolean),
@@ -1525,5 +1694,5 @@ export function buildModelSelectionExpressionForTest(
   targetModel: string,
   strategy: BrowserModelStrategy = "select",
 ): string {
-  return buildModelSelectionExpression(targetModel, strategy);
+  return buildModelSelectionExpression(targetModel, strategy, false);
 }

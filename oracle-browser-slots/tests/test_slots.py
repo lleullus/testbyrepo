@@ -1501,6 +1501,113 @@ class JobRunnerTests(unittest.TestCase):
                 ],
             )
 
+    def test_request_derived_strategy_is_injected_once_for_exact_pro_requests(self):
+        cases = (
+            (("--model", "gpt-6-pro"), "select"),
+            (("--model", "gpt-5.6-sol", "--browser-thinking-time", "pro"), "select"),
+            (("--model", "gpt-5.5", "--browser-thinking-time", "pro"), "select"),
+            (("--model", "gpt-5.6-sol"), "current"),
+            (("--model", "gpt-5.5", "--browser-thinking-time", "high"), "current"),
+            (("--model", "gpt-6-pro", "--browser-model-strategy", "select"), "select"),
+            (("--model", "gpt-5.6-sol", "--browser-model-strategy", "current"), "current"),
+            ((), "current"),
+            (("--model", "gpt-5.6-sol", "--browser-model-strategy", "ignore"), "ignore"),
+        )
+        for extra, expected_strategy in cases:
+            with self.subTest(extra=extra), TemporaryDirectory() as directory:
+                settings = settings_for(Path(directory))
+                service = SlotService(
+                    settings,
+                    cdp=FakeCDP({1: LoginResult(True, "ready", "없음")}),
+                    launcher=FakeLauncher(),
+                )
+                self.assertEqual(service.prepare(1)["status"], AVAILABLE)
+                captured: dict[str, object] = {}
+
+                def popen(argv, *, env, close_fds):
+                    captured["argv"] = argv
+                    return ReturnCodeChild(0)
+
+                command = [TEST_ORACLE_CLI, *extra]
+                result = JobRunner(
+                    service,
+                    popen_factory=popen,
+                    oracle_cli_path=TEST_ORACLE_CLI,
+                ).run(1, f"strategy-{expected_strategy}-{len(extra)}", command)
+                self.assertTrue(result["accepted"])
+                normalized = list(captured["argv"])
+                strategy_positions = [
+                    index for index, token in enumerate(normalized)
+                    if token == "--browser-model-strategy"
+                ]
+                self.assertEqual(len(strategy_positions), 1)
+                self.assertEqual(normalized[strategy_positions[0] + 1], expected_strategy)
+
+    def test_request_strategy_conflicts_fail_closed_before_claim(self):
+        invalid_commands = (
+            (
+                "gpt6-current",
+                [
+                    TEST_ORACLE_CLI,
+                    "--model",
+                    "gpt-6-pro",
+                    "--browser-model-strategy",
+                    "current",
+                ],
+                "충돌",
+            ),
+            (
+                "sol-pro-current",
+                [
+                    TEST_ORACLE_CLI,
+                    "--model",
+                    "gpt-5.6-sol",
+                    "--browser-thinking-time",
+                    "pro",
+                    "--browser-model-strategy",
+                    "current",
+                ],
+                "충돌",
+            ),
+            (
+                "gpt55-pro-ignore",
+                [
+                    TEST_ORACLE_CLI,
+                    "--model",
+                    "gpt-5.5",
+                    "--browser-thinking-time",
+                    "pro",
+                    "--browser-model-strategy",
+                    "ignore",
+                ],
+                "충돌",
+            ),
+            (
+                "gpt6-duplicate",
+                [
+                    TEST_ORACLE_CLI,
+                    "--model",
+                    "gpt-6-pro",
+                    "--browser-model-strategy",
+                    "select",
+                    "--browser-model-strategy",
+                    "select",
+                ],
+                "중복",
+            ),
+        )
+        with TemporaryDirectory() as directory:
+            service = SlotService(settings_for(Path(directory)))
+            runner = JobRunner(service, oracle_cli_path=TEST_ORACLE_CLI)
+            for job_id, command, reason_fragment in invalid_commands:
+                with self.subTest(job_id=job_id):
+                    with patch.object(service, "claim_job") as claim:
+                        result = runner.run(1, f"strategy-conflict-{job_id}", command)
+                    self.assertFalse(result["accepted"])
+                    self.assertEqual(result["exit_code"], 2)
+                    self.assertIn(reason_fragment, result["record"]["reason"])
+                    claim.assert_not_called()
+
     def test_oracle_equals_flags_are_accepted_and_transport_is_selected(self):
         with TemporaryDirectory() as directory:
             settings = settings_for(Path(directory))

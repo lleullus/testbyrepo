@@ -7,6 +7,7 @@ import type {
   BrowserArchiveMode,
   BrowserArchiveResult,
   BrowserManagedSlotCapability,
+  BrowserModelChoice,
   BrowserModelIdentityEvidence,
   BrowserModelStrategy,
   BrowserReasoningIntent,
@@ -69,6 +70,8 @@ export interface BrowserSessionConfig {
   keepBrowser?: boolean;
   hideWindow?: boolean;
   desiredModel?: string | null;
+  /** True only when this resumed turn explicitly requested a model row. */
+  explicitResumeModel?: boolean;
   modelStrategy?: BrowserModelStrategy;
   debug?: boolean;
   allowCookieErrors?: boolean;
@@ -161,7 +164,16 @@ export type BrowserModelSelectionEvidenceStatus =
 
 export interface BrowserModelSelectionEvidence {
   requestedModel?: string | null;
+  /** Whether the current attempt came from an explicit or omitted model intent. */
+  selectionIntent?: "explicit" | "omitted";
+  turnIndex?: number;
+  attemptIndex?: number;
+  /** Normalized exact requested row, when this is one of the canonical choices. */
+  requestedChoice?: BrowserModelChoice | null;
   resolvedLabel?: string | null;
+  /** Exact checked row observed in the picker, independent of the closed pill. */
+  selectedRow?: BrowserModelChoice | null;
+  selectedModelIdentity?: BrowserModelIdentityEvidence | null;
   strategy?: BrowserModelStrategy;
   status: BrowserModelSelectionEvidenceStatus;
   verified: boolean;

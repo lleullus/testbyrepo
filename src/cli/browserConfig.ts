@@ -31,11 +31,11 @@ const BROWSER_MODEL_LABELS: [ModelName, string][] = [
   ["gpt-6", "Latest"],
   ["gpt-5.6-sol", "GPT-5.6 Sol"],
   ["gpt-5.6", "GPT-5.6 Sol"],
-  // ChatGPT's Pro is a reasoning control, not a model-picker row. Select the
-  // base Thinking model and let browser reasoning selection handle Pro.
+  // Pro is a separate reasoning control; the canonical GPT-5.5 request targets
+  // the visible GPT-5.5 model/version row.
   ["gpt-5.5-pro", "Thinking 5.5"],
   ["gpt-5.5-instant", "GPT-5.5 Instant"],
-  ["gpt-5.5", "Thinking 5.5"],
+  ["gpt-5.5", "GPT-5.5"],
   ["gpt-5.4-pro", "Pro"],
   ["gpt-5.2-thinking", "GPT-5.2 Thinking"],
   ["gpt-5.2-instant", "GPT-5.2 Instant"],

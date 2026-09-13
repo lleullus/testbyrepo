@@ -2450,4 +2450,51 @@ describe("strict browser reasoning selection", () => {
     });
     expect(selectionEvaluation).toBe(2);
   });
+  it.each(["GPT-5.6 Sol", "GPT-5.5"] as const)(
+    "approves %s at Pro from row identity and maximum Power evidence",
+    async (row) => {
+      const fingerprint = `row:${row}`;
+      const runtime = {
+        evaluate: async () => ({
+          result: {
+            value: {
+              status: "already-selected",
+              controlKind: "slider",
+              availableLevels: ["pro"],
+              resolvedLevel: "pro",
+              modelUnchanged: true,
+              approvedElevation: true,
+              observedModelRow: row,
+              originalModelFingerprint: fingerprint,
+              observedModelFingerprint: fingerprint,
+              ownerKey: "stable-owner",
+              controlKey: "stable-control",
+              diagnostic: { controlCount: 1, matchingControlCount: 1, observedKinds: ["slider"] },
+            },
+          },
+        }),
+      };
+
+      const evidence = await ensureBrowserReasoning(
+        runtime as never,
+        {
+          intent: "pro",
+          originalModelIdentity: {
+            fingerprint,
+            row,
+            source: "chatgpt-model-picker",
+            capturedAt: "2026-09-13T00:00:00.000Z",
+          },
+        },
+        (() => {}) as never,
+      );
+
+      expect(evidence).toMatchObject({
+        observedModelRow: row,
+        resolvedLevel: "pro",
+        modelUnchanged: true,
+        verified: true,
+      });
+    },
+  );
 });

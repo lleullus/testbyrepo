@@ -4,6 +4,7 @@ import {
   buildComposerSignalMatchersForTest,
   buildModelMatchersLiteralForTest,
   buildModelSelectionExpressionForTest,
+  buildSelectedModelIdentityReaderSource,
   ensureModelSelection,
 } from "../../src/browser/actions/modelSelection.js";
 
@@ -938,6 +939,99 @@ const evaluateNoModelButtonExpression = (
   );
 };
 
+describe("checked model row readback", () => {
+  class FakeNode {
+    constructor(
+      public readonly textContent: string,
+      private readonly attributes: Readonly<Record<string, string>> = {},
+      private readonly children: readonly FakeNode[] = [],
+    ) {}
+
+    get innerText(): string {
+      return this.textContent;
+    }
+
+    getAttribute(name: string): string | null {
+      return this.attributes[name] ?? null;
+    }
+
+    getBoundingClientRect(): { width: number; height: number } {
+      return { width: 240, height: 36 };
+    }
+
+    querySelectorAll(_selector: string): FakeNode[] {
+      return [...this.children];
+    }
+  }
+
+  const readRows = (rows: FakeNode[]): unknown => {
+    const root = new FakeNode("", { "data-radix-collection-root": "" }, rows);
+    const documentStub = {
+      querySelectorAll: (selector: string) =>
+        selector.includes("data-radix-collection-root") ? [root, root] : [],
+    };
+    const expression = buildSelectedModelIdentityReaderSource();
+    const evaluate = new Function(
+      "document",
+      `${expression}; return readSelectedModelIdentity();`,
+    ) as (document: unknown) => unknown;
+    return evaluate(documentStub);
+  };
+
+  const row = (label: string, checked: boolean): FakeNode =>
+    new FakeNode(label, {
+      role: "menuitemradio",
+      "aria-checked": checked ? "true" : "false",
+      "data-state": checked ? "checked" : "unchecked",
+    });
+
+  it.each(["Latest", "GPT-5.6 Sol", "GPT-5.5"])(
+    "reads the checked native menuitemradio for %s from the Radix collection root",
+    (choice) => {
+      expect(readRows([row(choice, true), row(choice === "Latest" ? "GPT-5.6 Sol" : "Latest", false)])).toMatchObject({
+        status: "selected",
+        choice,
+        label: choice,
+        fingerprint: expect.any(String),
+      });
+    },
+  );
+
+  it("fails closed when no canonical row is checked", () => {
+    expect(readRows([row("Latest", false), row("GPT-5.5", false)])).toEqual({
+      status: "unavailable",
+    });
+  });
+
+  it("fails closed when multiple canonical rows are checked", () => {
+    expect(readRows([row("Latest", true), row("GPT-5.5", true)])).toEqual({
+      status: "ambiguous",
+    });
+  });
+  it.each(["Latest", "GPT-5.6 Sol", "GPT-5.5"] as const)(
+    "reads %s from document-wide native rows when no picker root marker exists",
+    (choice) => {
+      const rows = [row(choice, true), row(choice === "Latest" ? "GPT-5.6 Sol" : "Latest", false)];
+      const documentStub = {
+        querySelectorAll: (selector: string) =>
+          selector.includes("data-radix-collection-root") || selector.includes('role="menu"')
+            ? []
+            : rows,
+      };
+      const expression = buildSelectedModelIdentityReaderSource();
+      const evaluate = new Function(
+        "document",
+        `${expression}; return readSelectedModelIdentity();`,
+      ) as (document: unknown) => unknown;
+      expect(evaluate(documentStub)).toMatchObject({
+        status: "selected",
+        choice,
+        fingerprint: expect.any(String),
+      });
+    },
+  );
+
+});
 describe("browser model selection matchers", () => {
   it("includes explicit GPT-5.6 Sol tokens", () => {
     const { labelTokens, testIdTokens } = buildModelMatchersLiteralForTest("GPT-5.6 Sol");
@@ -1608,5 +1702,44 @@ describe("ensureModelSelection composer-pill wait", () => {
         buttonPollMs: 1,
       }),
     ).rejects.toThrow(/Unable to locate the ChatGPT model selector button/);
+  });
+  it.each([
+    ["Latest", "Latest"],
+    ["GPT-5.6 Sol", "GPT-5.6 Sol"],
+    ["GPT-5.5", "GPT-5.5"],
+  ] as const)("emits requested and observed identity for %s", async (requested, row) => {
+    const runtime = {
+      evaluate: vi.fn(async () => ({
+        result: {
+          value: {
+            status: "already-selected",
+            label: row,
+            selectedModelIdentity: {
+              status: "selected",
+              choice: row,
+              fingerprint: `row:${row}`,
+            },
+          },
+        },
+      })),
+    };
+
+    const evidence = await ensureModelSelection(
+      runtime as never,
+      requested,
+      noopLogger,
+      "select",
+      { buttonWaitMs: 0 },
+    );
+
+    expect(evidence).toMatchObject({
+      requestedChoice: row,
+      selectedRow: row,
+      verified: true,
+      selectedModelIdentity: {
+        row,
+        fingerprint: `row:${row}`,
+      },
+    });
   });
 });

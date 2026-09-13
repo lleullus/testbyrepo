@@ -133,10 +133,9 @@ export async function performSessionRun({
             reasoningSelection ??
             mergedReasoningSelections?.at(-1) ??
             currentBrowser?.reasoningSelection;
-          const originalModelIdentity =
-            latestReasoningSelection?.originalModelIdentity ??
-            currentBrowserConfig?.originalModelIdentity ??
-            null;
+          const modelIdentity =
+            modelSelection?.selectedModelIdentity ?? currentBrowserConfig?.originalModelIdentity ?? null;
+          const originalModelIdentity = latestReasoningSelection?.originalModelIdentity ?? modelIdentity;
           currentBrowserConfig = originalModelIdentity
             ? { ...browserConfig, originalModelIdentity }
             : browserConfig;

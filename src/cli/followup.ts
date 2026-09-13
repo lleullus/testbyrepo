@@ -28,6 +28,31 @@ export function applyBrowserFollowupReasoning(
 }
 
 /**
+ * Rebuild one browser followup's selection intent without inferring omitted axes.
+ * An explicit model label always selects the requested row on the resumed turn;
+ * omission keeps the parent's config only as inherited browser state.
+ */
+export function applyBrowserFollowupSelection(
+  config: BrowserSessionConfig,
+  options: {
+    explicitModelLabel?: string;
+    explicitReasoning?: ThinkingTimeLevel | "pro";
+  } = {},
+): BrowserSessionConfig {
+  const withReasoning = applyBrowserFollowupReasoning(config, options.explicitReasoning);
+  const explicitModelLabel = options.explicitModelLabel?.trim();
+  if (!explicitModelLabel) {
+    return { ...withReasoning, explicitResumeModel: false };
+  }
+  return {
+    ...withReasoning,
+    desiredModel: explicitModelLabel,
+    modelStrategy: "select",
+    explicitResumeModel: true,
+  };
+}
+
+/**
  * Resolve the ChatGPT conversation URL to reopen for a browser follow-up.
  *
  * Reuses the same recoverable-URL gate as conversation recovery

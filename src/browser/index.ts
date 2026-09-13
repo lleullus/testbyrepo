@@ -14,6 +14,7 @@ import type {
   BrowserArchiveResult,
   BrowserModelIdentityEvidence,
   BrowserReasoningSelectionEvidence,
+  BrowserModelStrategy,
 } from "./types.js";
 import {
   launchChrome,
@@ -48,6 +49,7 @@ import {
   waitForUserTurnAttachments,
   readAssistantSnapshot,
 } from "./pageActions.js";
+import { normalizeBrowserModelChoice } from "./actions/modelSelection.js";
 import { INPUT_SELECTORS } from "./constants.js";
 import { uploadAttachmentViaDataTransfer } from "./actions/remoteFileTransfer.js";
 import {
@@ -922,16 +924,71 @@ function shouldCleanupBlankTabsAfterLastLease(options: {
 function buildSkippedModelSelectionEvidence(
   desiredModel: string | null | undefined,
   strategy: BrowserModelSelectionEvidence["strategy"],
+  selectionIntent: "explicit" | "omitted" = desiredModel ? "explicit" : "omitted",
+  turnIndex = 0,
+  attemptIndex = 0,
 ): BrowserModelSelectionEvidence {
   return {
-    requestedModel: safeBrowserModelEvidenceLabel(desiredModel),
+    requestedModel:
+      selectionIntent === "explicit" ? safeBrowserModelEvidenceLabel(desiredModel) : null,
+    requestedChoice:
+      selectionIntent === "explicit" ? normalizeBrowserModelChoice(desiredModel) : null,
     resolvedLabel: null,
     strategy,
+    selectionIntent,
+    turnIndex,
+    attemptIndex,
     status: "skipped",
     verified: false,
     source: "config",
     capturedAt: new Date().toISOString(),
   };
+}
+
+function assertBrowserModelSelectionForSubmission(
+  evidence: BrowserModelSelectionEvidence | undefined,
+): void {
+  const requestedChoice =
+    evidence?.selectionIntent === "explicit"
+      ? (evidence.requestedChoice ?? normalizeBrowserModelChoice(evidence.requestedModel))
+      : null;
+  if (!requestedChoice || evidence?.strategy !== "select") return;
+
+  const identityRow = evidence?.selectedModelIdentity?.row ?? null;
+  if (
+    evidence?.verified !== true ||
+    evidence?.selectedRow !== requestedChoice ||
+    identityRow !== requestedChoice
+  ) {
+    throw new Error(
+      `Browser model selection did not verify explicit "${requestedChoice}" before prompt submission (selected row ${evidence?.selectedRow ?? "unavailable"}; identity ${identityRow ?? "unavailable"}).`,
+    );
+  }
+}
+
+export function assertBrowserModelSelectionForSubmissionForTest(
+  evidence: BrowserModelSelectionEvidence | undefined,
+): void {
+  assertBrowserModelSelectionForSubmission(evidence);
+}
+function shouldSelectBrowserModel(args: {
+  desiredModel?: string | null;
+  modelStrategy: BrowserModelStrategy;
+  isResumingConversation: boolean;
+  explicitResumeModel?: boolean;
+}): boolean {
+  return Boolean(args.desiredModel) &&
+    args.modelStrategy !== "ignore" &&
+    (!args.isResumingConversation || args.explicitResumeModel === true);
+}
+
+export function shouldSelectBrowserModelForTest(args: {
+  desiredModel?: string | null;
+  modelStrategy: BrowserModelStrategy;
+  isResumingConversation: boolean;
+  explicitResumeModel?: boolean;
+}): boolean {
+  return shouldSelectBrowserModel(args);
 }
 
 function safeBrowserModelEvidenceLabel(value: string | null | undefined): string | null {
@@ -990,6 +1047,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
   let originalModelIdentity: BrowserModelIdentityEvidence | null =
     config.originalModelIdentity ?? null;
   let reasoningTurnIndex = 0;
+  let modelSelectionAttemptIndex = 0;
   let tabLease: BrowserTabLease | null = null;
   let conversationUrlMonitor: ConversationUrlMonitor | null = null;
   const emitRuntimeHint = async (): Promise<void> => {
@@ -1506,10 +1564,30 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
     const updateConversationHint = conversationUrlMonitor.update;
     await captureRuntimeSnapshot();
     const modelStrategy = config.modelStrategy ?? DEFAULT_MODEL_STRATEGY;
-    if (config.desiredModel && modelStrategy !== "ignore" && !isResumingConversation) {
+    const shouldSelectModel = shouldSelectBrowserModel({
+      desiredModel: config.desiredModel,
+      modelStrategy,
+      isResumingConversation,
+      explicitResumeModel: config.explicitResumeModel,
+    });
+    if (shouldSelectModel) {
       modelSelectionEvidence = await raceWithDisconnect(
         withRetries(
-          () => ensureModelSelection(Runtime, config.desiredModel as string, logger, modelStrategy),
+          async () => {
+            const attemptIndex = modelSelectionAttemptIndex++;
+            const evidence = await ensureModelSelection(
+              Runtime,
+              config.desiredModel as string,
+              logger,
+              modelStrategy,
+            );
+            return {
+              ...evidence,
+              selectionIntent: "explicit" as const,
+              turnIndex: 0,
+              attemptIndex,
+            };
+          },
           {
             retries: 2,
             delayMs: 300,
@@ -1535,9 +1613,14 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
         `Prompt textarea ready (after model switch, ${promptText.length.toLocaleString()} chars queued)`,
       );
     } else if (modelStrategy === "ignore" || isResumingConversation) {
+      const selectionIntent =
+        isResumingConversation && config.explicitResumeModel !== true ? "omitted" : "explicit";
       modelSelectionEvidence = buildSkippedModelSelectionEvidence(
-        config.desiredModel,
+        selectionIntent === "omitted" ? null : config.desiredModel,
         modelStrategy,
+        selectionIntent,
+        0,
+        modelSelectionAttemptIndex,
       );
       logger(
         isResumingConversation
@@ -1545,6 +1628,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
           : "Model picker: skipped (strategy=ignore)",
       );
     }
+    assertBrowserModelSelectionForSubmission(modelSelectionEvidence);
     const deepResearch = config.researchMode === "deep";
     const ensureReasoningBeforeSubmission = async () => {
       if (!config.reasoningIntent || deepResearch) return;
@@ -1559,7 +1643,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
             {
               intent: config.reasoningIntent as NonNullable<typeof config.reasoningIntent>,
               managedSlot: config.managedSlot,
-              originalModelIdentity,
+              originalModelIdentity: modelSelectionEvidence?.selectedModelIdentity ?? originalModelIdentity,
               requireOriginalModelIdentity: shouldRequirePersistedOriginalModelIdentity({
                 isResumingConversation,
                 turnIndex,
@@ -2996,6 +3080,7 @@ async function runRemoteBrowserMode(
   let originalModelIdentity: BrowserModelIdentityEvidence | null =
     config.originalModelIdentity ?? null;
   let reasoningTurnIndex = 0;
+  let modelSelectionAttemptIndex = 0;
   let attachedExistingTab = false;
   let ownsTarget = true;
   let conversationUrlMonitor: ConversationUrlMonitor | null = null;
@@ -3200,9 +3285,29 @@ async function runRemoteBrowserMode(
     }
 
     const modelStrategy = config.modelStrategy ?? DEFAULT_MODEL_STRATEGY;
-    if (config.desiredModel && modelStrategy !== "ignore" && !config.resumeConversationUrl) {
+    const shouldSelectModel = shouldSelectBrowserModel({
+      desiredModel: config.desiredModel,
+      modelStrategy,
+      isResumingConversation: Boolean(config.resumeConversationUrl),
+      explicitResumeModel: config.explicitResumeModel,
+    });
+    if (shouldSelectModel) {
       modelSelectionEvidence = await withRetries(
-        () => ensureModelSelection(Runtime, config.desiredModel as string, logger, modelStrategy),
+        async () => {
+          const attemptIndex = modelSelectionAttemptIndex++;
+          const evidence = await ensureModelSelection(
+            Runtime,
+            config.desiredModel as string,
+            logger,
+            modelStrategy,
+          );
+          return {
+            ...evidence,
+            selectionIntent: "explicit" as const,
+            turnIndex: 0,
+            attemptIndex,
+          };
+        },
         {
           retries: 2,
           delayMs: 300,
@@ -3220,9 +3325,14 @@ async function runRemoteBrowserMode(
         `Prompt textarea ready (after model switch, ${promptText.length.toLocaleString()} chars queued)`,
       );
     } else if (modelStrategy === "ignore" || config.resumeConversationUrl) {
+      const selectionIntent =
+        config.resumeConversationUrl && config.explicitResumeModel !== true ? "omitted" : "explicit";
       modelSelectionEvidence = buildSkippedModelSelectionEvidence(
-        config.desiredModel,
+        selectionIntent === "omitted" ? null : config.desiredModel,
         modelStrategy,
+        selectionIntent,
+        0,
+        modelSelectionAttemptIndex,
       );
       logger(
         config.resumeConversationUrl
@@ -3230,6 +3340,7 @@ async function runRemoteBrowserMode(
           : "Model picker: skipped (strategy=ignore)",
       );
     }
+    assertBrowserModelSelectionForSubmission(modelSelectionEvidence);
     const deepResearch = config.researchMode === "deep";
     const ensureReasoningBeforeSubmission = async () => {
       if (!config.reasoningIntent || deepResearch) return;
@@ -3244,7 +3355,7 @@ async function runRemoteBrowserMode(
             {
               intent: config.reasoningIntent as NonNullable<typeof config.reasoningIntent>,
               managedSlot: config.managedSlot,
-              originalModelIdentity,
+              originalModelIdentity: modelSelectionEvidence?.selectedModelIdentity ?? originalModelIdentity,
               requireOriginalModelIdentity: shouldRequirePersistedOriginalModelIdentity({
                 isResumingConversation: Boolean(config.resumeConversationUrl),
                 turnIndex,

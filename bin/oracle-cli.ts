@@ -47,6 +47,7 @@ import {
   mergePathLikeOptions,
   dedupePathInputs,
 } from "../src/cli/options.js";
+import { buildBrowserConfig, resolveBrowserModelLabel } from "../src/cli/browserConfig.js";
 import { copyToClipboard } from "../src/cli/clipboard.js";
 import { buildMarkdownBundle } from "../src/cli/markdownBundle.js";
 import { shouldDetachSession } from "../src/cli/detach.js";
@@ -82,10 +83,7 @@ import {
   createPerfTrace,
   isTraceValueFlag,
 } from "../src/cli/perfTrace.js";
-import {
-  applyBrowserFollowupReasoning,
-  resolveBrowserFollowupReference,
-} from "../src/cli/followup.js";
+import { applyBrowserFollowupSelection, resolveBrowserFollowupReference } from "../src/cli/followup.js";
 
 interface CliOptions extends OptionValues {
   prompt?: string;
@@ -2081,6 +2079,8 @@ async function runRootCommand(options: CliOptions): Promise<void> {
     options.browserAttachmentTimeout = attachmentTimeoutEnv;
   }
 
+  const explicitBrowserFollowupModel =
+    getSource("model") === "cli" ? resolvedModel : undefined;
   let browserFollowup: Awaited<ReturnType<typeof resolveBrowserFollowupReference>> = null;
   if (options.followup) {
     if (normalizedMultiModels.length > 0) {
@@ -2099,8 +2099,8 @@ async function runRootCommand(options: CliOptions): Promise<void> {
         };
       }
       engine = "browser";
-      resolvedOptions.model = browserFollowup.model;
-      resolvedOptions.effectiveModelId = browserFollowup.model;
+      resolvedOptions.model = explicitBrowserFollowupModel ?? browserFollowup.model;
+      resolvedOptions.effectiveModelId = resolvedOptions.model;
       resolvedOptions.followupSessionId = browserFollowup.sessionId;
       resolvedOptions.browserResumeConversationUrl = browserFollowup.resumeConversationUrl;
     } else {
@@ -2128,13 +2128,15 @@ async function runRootCommand(options: CliOptions): Promise<void> {
   const browserConfig = await (async (): Promise<BrowserSessionConfig | undefined> => {
     if (sessionMode !== "browser") return undefined;
     if (browserFollowup) {
-      return applyBrowserFollowupReasoning(
-        browserFollowup.browserConfig,
-        getSource("browserThinkingTime") === "cli" ? options.browserThinkingTime : undefined,
-      );
+      const explicitModelLabel = explicitBrowserFollowupModel
+        ? resolveBrowserModelLabel(cliModelArg, explicitBrowserFollowupModel)
+        : undefined;
+      return applyBrowserFollowupSelection(browserFollowup.browserConfig, {
+        explicitModelLabel,
+        explicitReasoning:
+          getSource("browserThinkingTime") === "cli" ? options.browserThinkingTime : undefined,
+      });
     }
-    const { buildBrowserConfig, resolveBrowserModelLabel } =
-      await import("../src/cli/browserConfig.js");
     const config = await buildBrowserConfig({
       ...options,
       remoteHost: remoteHost ?? undefined,

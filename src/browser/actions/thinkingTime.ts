@@ -1,6 +1,7 @@
 import type {
   BrowserLogger,
   BrowserManagedSlotCapability,
+  BrowserModelChoice,
   BrowserModelIdentityEvidence,
   BrowserReasoningIntent,
   BrowserReasoningSelectionEvidence,
@@ -14,6 +15,7 @@ import {
 } from "../constants.js";
 import { logDomFailure } from "../domDebug.js";
 import { buildClickDispatcher } from "./domEvents.js";
+import { buildSelectedModelIdentityReaderSource } from "./modelSelection.js";
 
 // Snapshot of the model-picker / thinking-effort subtree, captured at the moment
 // detection fails so a chip-not-found can be diagnosed without re-running with
@@ -62,6 +64,7 @@ type BrowserReasoningOutcome = {
   resolvedLevel?: BrowserReasoningIntent | null;
   modelUnchanged?: boolean;
   approvedElevation?: boolean;
+  observedModelRow?: BrowserModelChoice | null;
   originalModelFingerprint?: string | null;
   observedModelFingerprint?: string | null;
   action?: BrowserSliderAction;
@@ -122,6 +125,7 @@ export async function ensureBrowserReasoning(
       verified: false,
       modelUnchanged: false,
       originalModelIdentity: null,
+      observedModelRow: null,
       observedModelFingerprint: null,
       managedSlotId: args.managedSlot?.slotId,
       capturedAt,
@@ -143,6 +147,7 @@ export async function ensureBrowserReasoning(
     (outcome?.originalModelFingerprint
       ? {
           fingerprint: outcome.originalModelFingerprint,
+          row: outcome.observedModelRow ?? null,
           source: "chatgpt-model-picker" as const,
           capturedAt,
         }
@@ -165,6 +170,7 @@ export async function ensureBrowserReasoning(
         : exactIdentityMatch || outcome?.approvedElevation === true),
     modelUnchanged: outcome?.modelUnchanged === true,
     originalModelIdentity,
+    observedModelRow: outcome?.observedModelRow ?? null,
     observedModelFingerprint: outcome?.observedModelFingerprint ?? null,
     managedSlotId: args.managedSlot?.slotId,
     capturedAt,
@@ -231,18 +237,21 @@ async function evaluateBrowserReasoningSelection(
     if (outcome?.originalModelFingerprint && !originalModelIdentity) {
       originalModelIdentity = {
         fingerprint: outcome.originalModelFingerprint,
+        row: outcome.observedModelRow ?? null,
         source: "chatgpt-model-picker",
         capturedAt: new Date().toISOString(),
       };
     }
     if (outcome?.status !== "action-required") {
-      const approvedElevation =
-        args.intent === "pro" &&
-        outcome?.approvedElevation === true &&
-        (await closeReasoningControlAndReadProPill(Runtime, Input));
+      const displayConsistent =
+        args.intent !== "pro" ||
+        outcome?.approvedElevation !== true ||
+        (await closeReasoningControlAndReadCombinedSignal(Runtime, Input, outcome?.observedModelRow ?? null));
+      const approvedElevation = args.intent === "pro" && outcome?.approvedElevation === true && displayConsistent;
       return outcome
         ? {
             ...outcome,
+            status: !displayConsistent ? "model-mismatch" : outcome.status,
             approvedElevation,
             originalModelFingerprint:
               outcome.originalModelFingerprint ?? originalModelIdentity?.fingerprint,
@@ -342,12 +351,15 @@ async function openReasoningControlWithNativeClick(
   }
 }
 
-async function closeReasoningControlAndReadProPill(
+async function closeReasoningControlAndReadCombinedSignal(
   Runtime: ChromeClient["Runtime"],
   Input: ChromeClient["Input"] | undefined,
+  expectedRow: BrowserModelChoice | null,
 ): Promise<boolean> {
-  if (!Input || typeof Input.dispatchMouseEvent !== "function") return false;
+  // The closed display is only a contradiction signal; row+Power evidence remains primary.
+  if (!Input || typeof Input.dispatchMouseEvent !== "function") return true;
   const selector = JSON.stringify(MODEL_BUTTON_SELECTOR);
+  const expectedRowLiteral = JSON.stringify(expectedRow);
   const point = await Runtime.evaluate({
     expression: `(() => {
       const button = document.querySelector(${selector});
@@ -359,29 +371,22 @@ async function closeReasoningControlAndReadProPill(
     returnByValue: true,
   });
   const value = point.result?.value as { x?: number; y?: number } | null | undefined;
-  if (typeof value?.x !== "number" || typeof value.y !== "number") return false;
+  if (typeof value?.x !== "number" || typeof value.y !== "number") return true;
   try {
     await Input.dispatchMouseEvent({ type: "mouseMoved", x: value.x, y: value.y });
     await Input.dispatchMouseEvent({
-      type: "mousePressed",
-      x: value.x,
-      y: value.y,
-      button: "left",
-      clickCount: 1,
+      type: "mousePressed", x: value.x, y: value.y, button: "left", clickCount: 1,
     });
     await Input.dispatchMouseEvent({
-      type: "mouseReleased",
-      x: value.x,
-      y: value.y,
-      button: "left",
-      clickCount: 1,
+      type: "mouseReleased", x: value.x, y: value.y, button: "left", clickCount: 1,
     });
   } catch {
-    return false;
+    return true;
   }
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const readback = await Runtime.evaluate({
       expression: `(() => {
+        const EXPECTED_ROW = ${expectedRowLiteral};
         const normalize = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\\s+/g, ' ').trim();
         const visible = (node) => {
           if (!node || node.getAttribute?.('aria-hidden') === 'true') return false;
@@ -389,18 +394,33 @@ async function closeReasoningControlAndReadProPill(
           return !rect || (rect.width > 0 && rect.height > 0);
         };
         const owner = document.querySelector('[data-testid="composer-intelligence-picker-content"], [role="menu"]:has([role="menuitem"] [role="slider"])');
-        if (owner && visible(owner)) return false;
-        return Array.from(document.querySelectorAll('button.__composer-pill, [data-testid="model-switcher-dropdown-button"]'))
+        if (owner && visible(owner)) return 'open';
+        const text = Array.from(document.querySelectorAll('button.__composer-pill, [data-testid="model-switcher-dropdown-button"]'))
           .filter(visible)
           .filter((node) => node?.getAttribute?.('aria-expanded') !== 'true')
-          .some((node) => ['6 pro', '6pro'].includes(normalize(String(node?.innerText || node?.textContent || '') + ' ' + String(node?.getAttribute?.('aria-label') || ''))));
+          .map((node) => normalize(String(node?.innerText || node?.textContent || '') + ' ' + String(node?.getAttribute?.('aria-label') || '')))
+          .join(' ');
+        if (!text) return 'unknown';
+        const observedRow = text.includes('latest')
+          ? 'Latest'
+          : text.includes('5 6') && text.includes('sol') && !/(?:^| )(?:thinking|instant)(?: |$)/.test(text)
+            ? 'GPT-5.6 Sol'
+            : (text.includes('5 5') || text.includes('gpt55')) && !/(?:^| )(?:thinking|instant)(?: |$)/.test(text)
+              ? 'GPT-5.5'
+              : null;
+        if (EXPECTED_ROW && observedRow && EXPECTED_ROW !== observedRow) return 'contradiction';
+        const words = new Set(text.split(' ').filter(Boolean));
+        if (EXPECTED_ROW && !words.has('pro') && (words.has('instant') || words.has('medium') || words.has('high') || words.has('extended') || words.has('heavy') || words.has('light'))) return 'contradiction';
+        return 'consistent';
       })()`,
       returnByValue: true,
     });
-    if (readback.result?.value === true) return true;
+    const state = readback.result?.value;
+    if (state === "contradiction") return false;
+    if (state !== "open") return true;
     await new Promise<void>((resolve) => setTimeout(resolve, 100));
   }
-  return false;
+  return true;
 }
 
 async function dispatchNativeSliderStep(
@@ -476,6 +496,7 @@ function buildBrowserReasoningExpression(args: {
     const MAXIMUM_REASONING = ${maximumReasoningLiteral};
     const ORIGINAL_MODEL_FINGERPRINT = ${originalModelFingerprintLiteral};
     const MODEL_BUTTON_SELECTOR = ${modelButtonLiteral};
+    ${buildSelectedModelIdentityReaderSource()}
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const normalize = (value) => String(value || '')
       .toLowerCase()
@@ -525,83 +546,9 @@ function buildBrowserReasoningExpression(args: {
       if (words.includes('light') || words.includes('instant')) return 'instant';
       return null;
     };
-    // The selected model row is the identity owner. A version-bearing label is
-    // canonicalized normally; the live current strategy exposes only a
-    // checked Latest row, retained as an equality sentinel rather than
-    // interpreted as proof of a particular GPT version.
-    const canonicalModelSignal = (value) => {
-      const normalized = normalize(value);
-      if (normalized === 'latest') return 'current latest';
-      const version = normalized.match(/(?:^| )(?:gpt )?(\\d+) (\\d+)(?: |$)/);
-      if (!version) return null;
-      const words = normalized.split(' ');
-      const variant = words.includes('sol') ? ' sol' : words.includes('instant') ? ' instant' : '';
-      return 'gpt ' + version[1] + ' ' + version[2] + variant;
-    };
-    const isReasoningIdentityNode = (node) => {
-      const role = normalize(node?.getAttribute?.('role'));
-      if (role === 'slider') return true;
-      const attributes = normalize([
-        node?.getAttribute?.('data-testid'),
-        node?.getAttribute?.('aria-label'),
-        node?.getAttribute?.('data-model-picker-thinking-effort-action'),
-        node?.getAttribute?.('data-composer-intelligence-pro-effort-action'),
-      ].filter(Boolean).join(' '));
-      const text = normalize(ownedDisplayText(node));
-      const words = new Set((attributes + ' ' + text).trim().split(' ').filter(Boolean));
-      return (
-        words.has('effort') ||
-        words.has('reasoning') ||
-        words.has('intelligence') ||
-        words.has('standard') ||
-        words.has('medium') ||
-        words.has('high') ||
-        words.has('heavy') ||
-        words.has('light') ||
-        words.has('extended') ||
-        words.has('pro')
-      );
-    };
-    const fingerprintForSignals = (signals) => {
-      const source = Array.from(new Set(signals.filter(Boolean))).sort().join('|');
-      if (!source) return null;
-      let hash = 2166136261;
-      for (let index = 0; index < source.length; index += 1) {
-        hash ^= source.charCodeAt(index);
-        hash = Math.imul(hash, 16777619);
-      }
-      return String(hash >>> 0);
-    };
-    const isCheckedModelNode = (node) => {
-      const role = normalize(node?.getAttribute?.('role'));
-      if (role !== 'menuitem' && role !== 'menuitemradio') return false;
-      return node?.getAttribute?.('aria-checked') === 'true' ||
-        normalize(node?.getAttribute?.('data-state')) === 'checked';
-    };
-    const activeComposerBaseSignals = () => Array.from(
-      document.querySelectorAll?.('button.__composer-pill, [data-testid="model-switcher-dropdown-button"]') || [],
-    )
-      .filter(isVisible)
-      .filter((node) => node?.getAttribute?.('aria-expanded') !== 'true')
-      .map((node) => canonicalModelSignal(ownedSemanticText(node)))
-      .filter(Boolean);
-    const stableModelFingerprint = (owner) => {
-      if (!owner) return null;
-      const checkedSignals = Array.from(
-        owner.querySelectorAll?.('[role="menuitem"], [role="menuitemradio"]') || [],
-      )
-        .slice(0, 24)
-        .filter(isVisible)
-        .filter(isCheckedModelNode)
-        .filter((node) => !isReasoningIdentityNode(node))
-        .map((node) => canonicalModelSignal(ownedSemanticText(node)))
-        .filter(Boolean);
-      const activeSignals = [...checkedSignals, ...activeComposerBaseSignals()];
-      const uniqueActiveSignals = Array.from(new Set(activeSignals));
-      return uniqueActiveSignals.length === 1
-        ? fingerprintForSignals(uniqueActiveSignals)
-        : null;
-    };
+    const stableModelIdentity = (owner) => readSelectedModelIdentity(owner);
+    const stableModelFingerprint = (owner) => stableModelIdentity(owner)?.fingerprint ?? null;
+    const stableModelRow = (owner) => stableModelIdentity(owner)?.choice ?? null;
     const diagnostic = (controlCount, matchingControlCount, observedKinds) => ({
       controlCount,
       matchingControlCount,
@@ -609,6 +556,7 @@ function buildBrowserReasoningExpression(args: {
     });
     let originalModelFingerprint = ORIGINAL_MODEL_FINGERPRINT;
     let observedModelFingerprint = null;
+    let observedModelRow = null;
     const fail = (status, details) => ({
       status,
       controlKind: details.controlKind || null,
@@ -616,6 +564,7 @@ function buildBrowserReasoningExpression(args: {
       resolvedLevel: details.resolvedLevel || null,
       modelUnchanged: details.modelUnchanged === true,
       approvedElevation: details.approvedElevation === true,
+      observedModelRow: details.observedModelRow ?? observedModelRow,
       originalModelFingerprint: details.originalModelFingerprint ?? originalModelFingerprint,
       observedModelFingerprint: details.observedModelFingerprint ?? observedModelFingerprint,
       diagnostic: diagnostic(details.controlCount || 0, details.matchingControlCount || 0, details.observedKinds || []),
@@ -852,12 +801,14 @@ function buildBrowserReasoningExpression(args: {
       controls = discoverControls();
     }
     observedModelFingerprint = stableModelFingerprint(controls.owner);
+    observedModelRow = stableModelRow(controls.owner);
     originalModelFingerprint = originalModelFingerprint || observedModelFingerprint;
     const identityMatchesInitial =
       originalModelFingerprint !== null && observedModelFingerprint === originalModelFingerprint;
     const modelStill = (control, owner) => {
       const refreshedIdentityControls = discoverControls();
       observedModelFingerprint = stableModelFingerprint(refreshedIdentityControls.owner);
+      observedModelRow = stableModelRow(refreshedIdentityControls.owner);
       if (observedModelFingerprint !== null && observedModelFingerprint === originalModelFingerprint) return true;
       return Boolean(
         control &&
@@ -950,6 +901,7 @@ function buildBrowserReasoningExpression(args: {
           resolvedLevel: TARGET,
           modelUnchanged: true,
           approvedElevation: approvedElevationFor(initialSliderControl, controls.owner, initialLevel),
+          observedModelRow,
           originalModelFingerprint,
           observedModelFingerprint,
           ownerKey: ownerKeyFor(controls.owner),
@@ -986,6 +938,7 @@ function buildBrowserReasoningExpression(args: {
       if (liveLevel) observedEffortLabel = true;
       const liveAtMaximum = sliderAtMaximum(liveControl.readbackNode);
       observedModelFingerprint = stableModelFingerprint(liveControls.owner);
+      observedModelRow = stableModelRow(liveControls.owner);
       const liveApprovedElevation =
         originalModelFingerprint !== null &&
         observedModelFingerprint !== null &&
@@ -1001,6 +954,7 @@ function buildBrowserReasoningExpression(args: {
           return {
             status: 'switched', controlKind: 'slider', availableLevels: [TARGET], resolvedLevel: TARGET,
             modelUnchanged: true, approvedElevation: liveApprovedElevation,
+            observedModelRow,
             originalModelFingerprint, observedModelFingerprint,
             ownerKey: ownerKeyFor(liveControls.owner), controlKey: controlKeyFor(liveControl),
             diagnostic: diagnostic(1, 1, ['slider']),
@@ -1022,6 +976,7 @@ function buildBrowserReasoningExpression(args: {
         return {
           status: 'switched', controlKind: 'slider', availableLevels: [TARGET], resolvedLevel: TARGET,
           modelUnchanged: true, approvedElevation: liveApprovedElevation,
+          observedModelRow,
           originalModelFingerprint, observedModelFingerprint,
           ownerKey: ownerKeyFor(liveControls.owner), controlKey: controlKeyFor(liveControl),
           diagnostic: diagnostic(1, 1, ['slider']),
@@ -1043,6 +998,7 @@ function buildBrowserReasoningExpression(args: {
         resolvedLevel: currentLevel,
         modelUnchanged: true,
         approvedElevation: liveApprovedElevation,
+        observedModelRow,
         originalModelFingerprint,
         observedModelFingerprint,
         ownerKey: ownerKeyFor(liveControls.owner),
@@ -1102,6 +1058,7 @@ function buildBrowserReasoningExpression(args: {
       status: wasSelected ? 'already-selected' : 'switched',
       controlKind: 'dropdown', availableLevels, resolvedLevel: TARGET,
       modelUnchanged: true,
+      observedModelRow,
       originalModelFingerprint,
       observedModelFingerprint,
       diagnostic: diagnostic(sliders.length + dropdownItems.length, refreshed.length, observedKinds),
