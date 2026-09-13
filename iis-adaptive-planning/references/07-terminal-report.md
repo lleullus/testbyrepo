@@ -77,17 +77,11 @@ Reshaping:
 Unresolved user decisions: None
 Planning owner terminal: validated complete Ready Ticket Set
 Planning owner result: STOP — terminal IIS Planning output
-Decision: RUN_COMPLETE | CONTINUE_TO_PREPARATION | CONTINUE_TO_IMPLEMENTATION | CONTINUE_TO_VERIFICATION | RETURN_AUTHORITY_GAP
-Governing authority: iis-adaptive-planning / Terminal boundary + active Run Contract
-Observed condition: <validated complete Ready Ticket Set plus current Completion Predicate result>
-Effect: IIS Planning ownership ends here; the Adaptive invocation <completes | continues under Outer Main | returns an authority gap>
-Next allowed action: <Outer Main terminal report | preparation | implementation | verification | authority return>
 Owner status: COMPLETE
-Invocation status: COMPLETE | INCOMPLETE
-Whole-run predicate satisfied: yes | no
 Returned to: Outer Main
-Outer disposition: RUN_COMPLETE | CONTINUE_TO_PREPARATION | CONTINUE_TO_IMPLEMENTATION | CONTINUE_TO_VERIFICATION | RETURN_AUTHORITY_GAP
 ```
+
+The planning owner supplies only the planning result above and returns it with the closed Run Contract to Outer Main. Outer Main then appends its own `Decision`, `Governing authority`, `Observed condition`, `Effect`, `Next allowed action`, `Invocation status` and `Whole-run predicate satisfied` using the completion meaning in [09-run-contract.md](09-run-contract.md). These are Main's result-consumption and whole-run decisions, not fields the planning owner pre-adjudicates. Planning COMPLETE alone never means invocation COMPLETE.
 
 Do not append an offer to implement, verify, or plan the next provisional Increment as though those actions are part of IIS Planning.
 

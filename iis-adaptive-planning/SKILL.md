@@ -71,13 +71,18 @@ If Adaptive activation is absent, do not ask whether the user wants Adaptive. Le
 
 A read-only status request remains read-only even when an Adaptive Mandate exists. Use the current Baseline state-check/Observatory contract and STOP.
 
+## Common source handoff
+
+For every actual delegated role in this Adaptive invocation, use [the shared source assignment](templates/SHARED-SOURCE-ASSIGNMENT.template.md): bind the admitted Thesis, supplied investigation and explicitly activated Transition Baseline originals once, and forward that common block unchanged alongside role-specific inputs. This includes delegated planning/review roles and downstream children; it does not authorize new delegation. Original-source access is distinct from active execution scope and never replaces the owning role contract.
+
+Outer Main reads each invoked role's caller contract, binds its required inputs and consumes its terminal result. It does not load or rewrite the delegated worker's core procedure. When Main actually performs a permitted DIRECT role or a planning leaf, it reads and applies that role's execution contract. Original-source and whole-run meaning checks remain Main responsibilities; they do not authorize a second role verdict.
+
 ## Optional repository evidence intake
 
 When the current user/caller supplies one exact `repository-investigation` artifact path for this Adaptive invocation, apply [references/10-repository-evidence-intake.md](references/10-repository-evidence-intake.md) before treating any of its claims as inspectable current facts. Validate the exact artifact, require the same current Project Root, assess currentness at its load-bearing anchors, and directly re-establish the facts that matter to Run Contract closure or the current planning leaf.
 
 Do not search for or auto-select a repository-investigation artifact merely because one exists. Do not treat the artifact, its completion status, or its planning-relevance candidate labels as Scope/Run Contract/product authority, and do not use the artifact itself as a product authoritative readback. When no exact artifact is supplied, Adaptive behavior is unchanged.
 
-For every actual delegated role in this Adaptive invocation, use [the shared source assignment](templates/SHARED-SOURCE-ASSIGNMENT.template.md): bind the admitted Thesis, supplied investigation and explicitly activated Transition Baseline originals once, and forward that common block unchanged alongside role-specific inputs. This includes delegated planning/review roles and downstream children; it does not authorize new delegation. Original-source access is distinct from active execution scope and never replaces the owning role contract.
 
 ## Transition Baseline intake and Active Block Envelope
 
@@ -274,38 +279,11 @@ After an actual correction/new evidence, corrective re-entry is the Adaptive def
 
 ## Post-delivery completion assessment and success re-entry
 
-A successful current Increment may trigger a new Adaptive planning cycle only after:
+Apply the completion meaning and dispositions owned by [references/09-run-contract.md](references/09-run-contract.md) at the owner-return boundaries in [references/08-delivery-continuation.md](references/08-delivery-continuation.md). Report the resulting decision under [references/07-terminal-report.md](references/07-terminal-report.md); those application and reporting points do not redefine success.
 
-1. its current canonical Tickets are actually `done`;
-2. Verification was enabled;
-3. the active Run Completion Boundary remains unsatisfied and requires broader success continuation; and
-4. the Mandate Continuation Authority ceiling permits that continuation.
+Main compares the assigned Goal and current applicable obligations with existing acceptance owners and their attributable results, scope and evidence limits. Missing ownership returns to the original planning owner; missing, stale or insufficient evidence returns to its evidence owner. Main must notice a material mismatch with original meaning, but does not fill the gap with its own AC verdict, replacement acceptance matrix or repeated verifier scenario.
 
-`CURRENT_INCREMENT_IMPLEMENTED` is an implementation-only terminal and never triggers success re-entry.
-
-Before selecting anything next, revalidate Goal/required-item coverage against Source Authority and inspect fresh actual state/readback. Correct a weak derived Predicate rather than shrinking the Goal. For `CURRENT_INCREMENT_DELIVERED`, compare the approved current parent and validated Ticket Set, keep the denominator to applicable current obligations, confirm each existing acceptance owner, and consume its current readback, `Evidence limit`, and `Remaining uncertainty`. Do not widen limited evidence or use `done` alone. Preserve broader outer obligations without forcing them into this Increment or consuming a provisional horizon as a queue.
-
-Choose exactly one completion-assessment disposition:
-
-- `RUN_CONTRACT_SATISFIED` — the coverage invariant holds and fresh actual evidence satisfies the assigned Goal and Required Named Items through the sufficient Predicate at its approved stage/claim boundary; stop and report Run Contract completion.
-- `NEXT_INCREMENT_REQUIRED` — the active predicate is not yet satisfied and current authority can determine that more construction is required; re-enter Scope Shaper against fresh actual state so it selects exactly one new current Increment.
-- `USER_DECISION_REQUIRED` — the active predicate is not yet satisfied but a material user-owned trade-off remains after applying current authority and priorities; return only that decision to the user.
-- `EVIDENCE_REQUIRED` — current attributable evidence cannot determine whether the active predicate is satisfied or whether more construction is required; obtain only the missing authoritative readback or operator/external evidence and do not infer completion, product defect, or Scope Shaper re-entry.
-- `SAFE_INCOMPLETE_HANDOFF` — only for an explicitly approved Transition Baseline with a measured current Block Exit and Safe Continuation Predicate, settled/contained active work, preserved full Goal/Required obligations and invariants, and exact caller/host successor authority/input. This is a non-success incomplete handoff at a safe Block boundary; it never changes the Run Completion Boundary, shrinks the Goal, promotes candidates, or substitutes a Block predicate for the final transformation predicate.
-
-
-When the Goal remains unmet and current authority/evidence determines a valid next action, continue through the existing owner in the same invocation, except for the proven approved safe Block-boundary transfer defined in [references/09-run-contract.md](references/09-run-contract.md). Do not stop merely to announce `NEXT_INCREMENT_REQUIRED` or omit reachable authorized readback under `EVIDENCE_REQUIRED`. Preserve explicit user stops, disabled stages, external authority and the existing no-material-progress guard.
-
-For this narrow approved transition exception, the explicit `SAFE_INCOMPLETE_HANDOFF` rule in [references/09-run-contract.md](references/09-run-contract.md) takes precedence over the ordinary same-invocation/reporting route described by `references/07-terminal-report.md` and `references/08-delivery-continuation.md`. Those references remain unchanged and govern every ordinary, unsafe, unknown, or non-transition case. A false Block Exit or false Safe Continuation Predicate remains on the ordinary corrective/evidence route; an approved Safe Abort trigger uses its safe-state owner/readback and never becomes success.
-
-
-When an applicable obligation has no truthful existing Ticket acceptance owner, return the exact To Tickets or upstream planning gap; Outer Main does not invent an umbrella Ticket, acceptance matrix, or verdict. When the owner exists but required current evidence is absent, stale, inconclusive, or limited beyond the approved claim, use `EVIDENCE_REQUIRED`. Preserve canonical artifact/source-only completion when direct inspection is the approved boundary, and preserve implementation-only completion when `Verification: no` and the active boundary is `CURRENT_INCREMENT_IMPLEMENTED`.
-
-`NEXT_INCREMENT_REQUIRED` never names the next WP/INC from a prior plan by default. Scope Shaper may preserve, split, merge, reorder, replace, or discard provisional structure under its current rules. Completion is judged against the active observable predicate, not by exhausting a roadmap or provisional horizon.
-
-For `NAMED_REQUIRED_ITEMS_DELIVERED`, inspect every Required Named Item against delivered canonical authority and actual product readback. Candidate Named Items do not block completion. A Ticket title or historical plan mention is not completion evidence.
-
-Continuation Authority is the success-continuation ceiling and does not grant implementation or verification authority. The closed Implementation and Verification fields govern the current invocation's delivery stages.
+Broader construction returns to Scope Shaper against actual delivered state only when the active completion boundary and continuation authority require and permit it. A provisional horizon is not a queue, implementation-only completion is not verified delivery, and an approved safe incomplete Transition handoff is not whole-run success. Preserve explicit user stops, independent stage permissions and the existing correction/evidence routes.
 
 ## Artifacts
 

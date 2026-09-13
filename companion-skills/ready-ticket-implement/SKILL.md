@@ -11,7 +11,7 @@ description: "Implement one existing IIS Ready Ticket and perform implementer se
 
 구현 worker는 구현과 구현자 self-check를 소유한다. 준비 reviewer의 독립 착수 판단과 final verifier의 탐색·AC verdict·whole-Ticket verdict·terminal `done` 전이는 소유하지 않는다.
 
-실제 작업 전에 [references/implement.md](references/implement.md)를 전부 읽는다.
+호출자는 이 entry의 입력·dispatch·결과 소비 계약을 읽는다. 실제 구현자(위임 worker 또는 명시적 DIRECT의 Main)는 [references/implement.md](references/implement.md) 전체를 읽고 적용한다. SUBAGENT 호출자는 worker core를 재서술하거나 수행하지 않는다.
 
 ## 입력
 
@@ -24,8 +24,11 @@ description: "Implement one existing IIS Ready Ticket and perform implementer se
 
 Top-level 기본 실행 모드는 `SUBAGENT`다. 현재 사용자가 이 exact implementation stage에 `DIRECT`를 명시한 경우에만 `DIRECT`를 사용한다. 기본 모드 사용을 위한 별도 SUBAGENT 승인을 요구하지 않는다.
 
-Exact assignment, 단일 owner lane, checkpoint continuation, capability failure, no-fallback 규칙의 canonical 상세는 [references/implement.md#2-subagent-first-execution-topology](references/implement.md#2-subagent-first-execution-topology)에 있다. 실제 작업 전에 그 계약을 적용한다.
-`SUBAGENT CAPABILITY UNAVAILABLE`은 기존 [Non-continuation provenance](references/implement.md#non-continuation-provenance) schema로 반환한다.
+현재 pinned bundle의 이 SKILL.md와 references/implement.md의 정확한 읽기 가능한 경로를 resolve하여 작업 전 직접 읽고 적용하라는 지시와 함께 전달한다. 한 worker에게 exact Ticket/Project Root/`plan_review_path`, 검토된 범위와 conditional first work, 현재 사용자 지시·모드·모델, 원본 authority, source ownership, 알려진 finding/변경 증거와 허용된 효과·출력 경로를 바인딩한다. `Delegated Worker: yes` 및 현재 host Communication 계약을 포함하고, 구현/self-check만 수행한 뒤 terminal `IMPLEMENT RESULT`로 종료하도록 한다. worker는 재위임·계획 재설계·독립 판정·후속 Ticket을 수행하지 않는다.
+
+Adaptive에서는 [shared source assignment](../../iis-adaptive-planning/templates/SHARED-SOURCE-ASSIGNMENT.template.md)의 공통 원본 블록을 변경 없이 전달한다. 원본을 직접 읽는 것은 Ticket 범위 확대 권한이 아니다. 필요한 worker 실행·동일 Project Root 접근·terminal 회수 capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`과 실제 한계를 반환하며 DIRECT로 대체하지 않는다.
+
+한 mutable worktree에는 하나의 구현 owner를 두고 정확한 terminal만 소비한다. 정상 실행 중 progress polling·status DM·중복 repository 검사를 하지 않는다. 사용자 status/stop 요청, host 실패, 누락/잘못된 terminal 또는 실제 replacement/settlement 진단에만 bounded snapshot을 사용한다. 취소 receipt만으로 종료를 추정하지 않으며 실제 settlement 뒤에만 fresh actor를 시작한다.
 
 이 entry contract는 implementation worker가 구현과 self-check만 소유하고 독립 준비 검토나 final verification authority를 흡수하지 않는다는 경계를 유지한다.
 
@@ -48,27 +51,9 @@ Skill/reference 조회와 준비 artifact 작성은 implementation admission이 
 - worker 교체는 caller/host 책임이다. old worker/process가 실제 종료됐다는 host evidence가 없으면 같은 mutable worktree에 replacement를 시작하지 않는다. cancel receipt만으로 settlement를 주장하지 않는다.
 - `Completion: COMPLETE` 직전에 같은 review로 `ready_contract check_plan_admission`을 다시 호출하고 load-bearing runtime/source assumptions를 직접 확인한다. current가 아니면 COMPLETE를 주장하지 않는다.
 
-## 제품 의미 해석
+## 수행 절차의 소유권
 
-구현 시작 전 한 문장으로 `이번 Ticket이 실제 제품에 추가하거나 변경하는 observable product outcome`을 고정한다. 제품 의미는 다음 authority에 계속 속한다.
-
-1. 현재의 명시적 사용자 지시
-2. Ticket 전체
-3. Parent Spec
-4. Behavior Authorities
-5. 승인된 Design/UI Authority
-6. Implementation Constraints와 References
-7. 현재 repository/runtime의 직접 관찰 사실
-
-Ticket은 이번 구현 경계, Parent Spec은 상위 결과, Behavior Authority는 identity·ownership·ordering·lifecycle 의미, Design/UI Authority는 사용자-visible 구조와 상호작용을 소유한다. References와 repository/runtime는 evidence/context이지 새 제품 권위가 아니다.
-
-구현 편의, 기존 구조, 최소 변경 또는 test 편의를 이유로 승인된 결과를 축소·대체하지 않는다. Scope/Non-Goals 밖 제품 surface나 lifecycle guarantee를 만들지 않는다. 실질적 authority 충돌로 faithful direction을 확정할 수 없으면 `Completion: BLOCKED`로 닫는다.
-
-## Verification-flow 해석과 self-check
-
-각 authored Verification flow의 Parent outcome/AC/Behavior authority mapping, initial state, trigger, acceptance boundary, expected observable result, authoritative readback, decision boundary, disposition, authored independent-verification requirement, acceptance surface, external condition과 적용되는 ordering/interruption/persistence/external-effect/UI 경계를 그대로 사용한다.
-
-Verification flow를 임의의 1:1 파일 작업으로 바꾸지 않는다. 구현 change와 self-check evidence를 각 flow에 연결하고, acceptance boundary와 authoritative readback으로 current product 결과를 확인한다. Authored independent-verification requirement가 있으면 원문 의미와 관련 implementation/self-check evidence를 final handoff에 보존하되 충족 여부는 판정하지 않는다.
+제품 의미 해석, authored Verification-flow 연결, load-bearing 전제 확인, 구현 및 current self-check 절차는 [references/implement.md](references/implement.md)의 실제 구현자 계약이 소유한다. 호출자는 원본과 검토된 방법·입출력을 전달하고, 반환된 exact target, 수행한 self-check, admission 결과와 한계를 소비한다. 테스트 통과나 구현 COMPLETE를 독립 verification으로 승격하지 않는다.
 
 ## Material method change와 종료
 
@@ -82,4 +67,4 @@ material method change는 runtime pause/resume이 아니라 current implementati
 
 `Completion: COMPLETE`여도 exact Ticket의 `Status: ready`는 유지한다. actual implementation target과 current self-check evidence를 final verifier의 navigation handoff로 보존한다. 이후 verification 또는 IIS planning continuation을 자동 실행하지 않는다.
 
-`Completion: BLOCKED | PARTIAL`이 admission, authority/readback, target currentness, external-effect uncertainty 또는 material method change 때문에 현재 구현 owner가 계속할 수 없음을 뜻할 때는 [references/implement.md](references/implement.md)의 **Non-continuation provenance**를 terminal caller-facing report에 포함한다. 정상 `Completion: COMPLETE`에는 이 설명 블록을 추가하지 않는다.
+`Completion: BLOCKED | PARTIAL` 또는 capability failure로 계속할 수 없으면 반환된 `Decision`, `Governing authority`, `Observed condition`, `Effect`, `Next allowed action`을 보존한다. 호출자 자신이 발견한 capability/transport 한계도 같은 필드로 실제 관찰과 허용된 다음 행동만 보고한다. 정상 COMPLETE에는 이 블록을 추가하지 않으며 제품 원인을 추측하지 않는다.

@@ -19,52 +19,9 @@ Top-level invocation은 `SUBAGENT`가 기본이다. 현재 사용자가 이 exac
 
 `DIRECT`에서는 현재 Main이 아래 implementation core를 직접 수행하고 다시 위임하지 않는다.
 
-`SUBAGENT`에서 Outer Main은:
+SUBAGENT 호출·입력·원본 인계·terminal fan-in·replacement settlement는 [entry caller contract](../SKILL.md#실행-topology)가 소유한다. 호출자는 그 계약을 적용하고, 실제 actor는 이 reference의 구현 core를 수행한다. 별도 실행 DB·lease·queue·checkpoint는 만들지 않는다.
 
-1. 한 명의 implementation worker를 시작할 capability와 같은 Project Root 접근, terminal result 회수 capability를 확인한다.
-2. exact Ticket, Project Root, current `plan_review_path`, 추가 사용자 지시와 `Delegated Worker: yes`를 하나의 완전한 assignment에 담는다.
-3. worker assignment에 exact targets, Scope/Non-Goals, 요구되는 observable evidence와 다음 communication contract를 포함한다.
-4. material method change terminal을 받으면 old worker를 resume하지 않고 affected Plan revision → current independent review를 실제로 수행한 뒤 fresh worker invocation으로만 재개한다.
-5. terminal `IMPLEMENT RESULT`를 수신해 exact Ticket identity와 필수 terminal fields를 확인한 뒤 caller-facing 결과를 작성한다.
-
-실제 caller는 현재 pinned IIS bundle의 [implement SKILL.md](../SKILL.md)와 [references/implement.md](implement.md)를 resolve하여 두 문서의 정확한 읽기 가능한 경로와 작업 전 직접 읽고 적용할 지시를 assignment에 포함한다. 부모의 문서 읽기·요약이나 역할명만으로 대체하지 않는다. `Delegated Worker: yes`를 유지하고, 이번 exact Ticket의 delegated implementation core와 self-check만 수행하며 기존 COMPLETE 조건 또는 PARTIAL/BLOCKED 반환 경계에서 terminal `IMPLEMENT RESULT`로 종료하도록 명시한다. 계획 재설계·독립 리뷰·최종 verification·후속 Ticket 수행 권한은 부여하지 않는다.
-
-Adaptive 호출에서는 [shared source assignment](../../../iis-adaptive-planning/templates/SHARED-SOURCE-ASSIGNMENT.template.md)의 Common original sources 블록을 변경 없이 전달받는다. 작업자는 역할 지시를 받아들이기 전에 연결된 원본을 직접 읽고, 할당의 축소나 현재 관측과의 불일치를 기존 반환 계약으로 드러낸다. 원본은 Ticket 범위 확대나 승인된 방법의 임의 변경 권한이 아니며 standalone 구현의 기존 입력 계약은 유지한다.
-
-```text
-# Communication
-
-- actual implementing actor가 첫 source mutation 전에 ready_contract check_plan_admission으로 현재 ADMIT을 직접 확인한다.
-- 현재 ADMIT과 load-bearing 전제 확인 뒤 검토된 범위에서 바로 시작한다. 정상 첫 source 변경의 PRE_ACTION 재심사는 없다.
-- 중요한 원인, owner, interface, persistence, authoritative readback 또는 non-idempotent effect strategy가 바뀌면 새 방향에 의존한 mutation을 멈추고 terminal PARTIAL/BLOCKED material-method result를 반환한다.
-- 정상 진행, 단순 tool activity, settled test failure, 스타일 또는 동등한 내부 리팩터링은 별도 checkpoint 사유가 아니다.
-- actual external effect의 response loss는 blind replay하지 않고 approved authoritative readback/cleanup/evidence로만 정착 여부를 판단한다.
-- 성공 또는 blocker는 반드시 terminal IMPLEMENT RESULT로 끝내며 COMPLETE 직전 같은 review로 admission을 재확인한다.
-```
-
-필요 capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`을 보고한다. `DIRECT`로 자동 전환하지 않는다.
-
-`Delegated Worker: yes`를 받은 worker는 아래 implementation core를 직접 수행하며 다시 위임하지 않는다.
-
-### SUBAGENT ownership and settlement
-
-`SUBAGENT`는 exact Ticket과 같은 mutable worktree에 한 시점에 하나의 implementation owner만 둔다. 이 규칙은 IIS execution DB나 lease가 아니라 caller/host process contract가 소유한다.
-
-1. delegated owner는 assignment에 전달된 exact Ticket/Project Root/`plan_review_path`로 첫 mutation 전 admission을 직접 확인한다.
-2. 정상 local failure/fix/retry는 worker가 같은 invocation 안에서 host-native tools로 수행한다.
-3. material method change는 continuation checkpoint가 아니라 terminal `PARTIAL | BLOCKED`로 current invocation을 끝낸다.
-4. old worker가 사라지거나 교체가 필요하면 host가 실제 process/session/work settlement를 확인하기 전에는 같은 mutable worktree에 replacement를 시작하지 않는다.
-5. cancel/stop request의 receipt, job/session ID 또는 단순 응답 유실만으로 old worker 종료를 추정하지 않는다.
-6. settlement를 증명할 수 없으면 current owner/caller가 `PARTIAL | BLOCKED`로 반환한다. 병렬 작업이 필요하면 caller가 별도 isolated worktree를 사용한다.
-7. fresh replacement는 current `plan_review_path`로 admission부터 다시 수행한다. `DIRECT`와 `SUBAGENT` 사이의 자동 fallback은 없다.
-
-### Passive terminal fan-in
-
-After one background implementation owner is successfully dispatched, Outer Main does not poll normal progress or completion. It does not call `hub wait`, `hub jobs`, `hub list` or `hub inbox`, send a status request, or duplicate repository inspection solely to observe that owner. It yields/stands by once and lets the host-delivered async terminal result wake the parent; only then does it validate and route the exact `IMPLEMENT RESULT`.
-
-A single bounded diagnostic snapshot is allowed only for an explicit current user status request, cancellation/stop request, host-reported timeout/failure, malformed or missing expected terminal delivery, or a real need to establish worker replacement/settlement. If the snapshot shows normal execution, do not start periodic monitoring; return to passive terminal fan-in. This changes no worker ownership: local test failure/fix/retry and ordinary progress remain inside the implementation invocation.
-
-Detached child, background delivery queue, polling controller 또는 persistent IIS execution scheduler로 ownership을 넘기지 않는다. IIS boundary tools는 worker/session/assignment state를 생성하거나 소비하지 않는다.
+위임 worker는 전달된 원본을 부모 framing과 독립적으로 읽고 exact Ticket/Project Root/plan_review_path를 사용한다. Adaptive 공통 원본은 변경 없이 유지하며 Ticket 범위를 넓히지 않는다. 정상 local failure/fix/retry는 같은 invocation에서 처리하고, material method change는 PARTIAL/BLOCKED terminal로 종료한다. COMPLETE 직전 current admission을 다시 확인한다.
 
 ### Ready contract admission과 host-native execution
 

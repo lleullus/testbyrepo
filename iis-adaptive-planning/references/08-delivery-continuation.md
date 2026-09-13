@@ -54,49 +54,13 @@ Do not invoke a disabled stage for stronger evidence. `Verification: yes` includ
 
 ### Caller-owned assignment content
 
-Before dispatch, use [the shared source assignment](../templates/SHARED-SOURCE-ASSIGNMENT.template.md). Outer Main binds the common original-source block once from current admitted inputs and approved lineage; every caller, including the preparation lead, forwards it unchanged to each child. Construct the role-specific assignment separately. A short request to review thoroughly, an AC checklist, or the caller's earlier skill read is not the handoff. Include the following decision-critical content without creating another project artifact, admission gate or required prompt length:
-
-- the exact role question, current pinned role-document paths and instruction to read and apply them before work;
-- exact Project Root, Ticket denominator, applicable original authority, exact recoverable Thesis source/binding through the existing Scope/Spec lineage, current plan/review or verification inputs, and role-owned output locations;
-- applicable current user decisions, selected mode/model, permitted actions, ownership and effect/cleanup boundaries;
-- established facts with primary-source pointers, unresolved assumptions and the decisions they affect, and exact known findings; on re-entry, identify what materially changed since the prior result;
-- the role's completion/evidence-limit boundary and next owner, using its existing terminal contract rather than an invented success label.
-
-Keep approved obligations, proposed methods and navigation summaries distinct. The worker reads the original source slices its judgment depends on, including causal behavior and false-success distinctions, rather than treating the Run Contract summary as product meaning. Read the exact bound revision; surface changed or unavailable meaning, never substitute a latest file or remembered summary. Full Thesis meaning does not enlarge the assigned Ticket/Increment. Existing owner boundaries and user approval remain authoritative; no additional reviewer, form or source dump is needed.
+Use [the shared source assignment](../templates/SHARED-SOURCE-ASSIGNMENT.template.md) for common originals and role-specific assignment data. Bind the common block once from admitted inputs and approved lineage; every actual caller forwards it unchanged, including downstream preparation children. Read the invoked skill's caller contract for exact required inputs, role-document paths and return handling. Do not replace originals with a summary, test count or caller-selected success condition.
 
 Specify whether a verification-related item asks for a method review, implementation self-check, or actual independent execution. Naming a live E2E smoke test does not itself authorize a preparation reviewer to execute the product or call a provider. Conversely, do not attach a blanket no-tests instruction that removes an implementer's required self-check or a verifier's required execution. Preserve existing exact external-action authority and role-specific restrictions.
 
 For actual multi-worker work, use the current host's shared Coordination map and complete per-child Communication contract. Do not mark overlapping acceptance surfaces independent merely because judgments are independent. These handoff rules neither authorize extra workers nor turn planning leaf ownership into a subagent topology.
 
-#### Planner
-
-Bind the exact requested Tickets, original parent/Behavior/UI obligations, current method/common-plan inputs, plan output and decision-relevant investigation evidence. For revision, include the original independent review and changed evidence, not only a rewritten finding summary. Resolve the owning `ready-ticket-plan` Planner reference as required above.
-
-Ask for a grounded execution method, not product re-planning: distinguish load-bearing EXISTING, PROPOSED and UNRESOLVED claims, preserve existing paths, and connect the first coherent work to its decisive observation and actual acceptance/readback. Use the existing conditional-first-work contract for safely implementation-time premises. Return the method, grounding and exact limits; do not implement, self-approve ADMIT or perform final verification. Do not reopen unrelated investigation without a material new clue.
-
-#### Independent Plan Reviewer
-
-Bind the complete original obligations, exact current plan/common-plan bytes, current product/evidence pointers, and exact outside-Project-Root JSON review output. Include the owning review reference and its required Planner reference for Code Grounding and conditional-start criteria, not as a writing assignment.
-
-Ask whether current method and evidence suffice for the exact start scope. Read original obligations and deciding paths independently of the Planner's diagnosis. Use ADMIT, REVISE or EVIDENCE_NEEDED according to the canonical contract; neither no findings nor a matching checklist establishes admission. Distinguish inadequate method from missing decisive evidence, and connect required changes to a concrete material failure path. Do not revise the plan, substitute a Markdown approval for the canonical JSON, or confuse planned smoke/regression checks with permission to execute them. Close the bounded review when applicable obligations and materially supported candidates are resolved, preserving exact evidence limits.
-
-#### Implementer
-
-Bind one exact ready Ticket, current outside-root plan_review_path, reviewed plan/start scope and conditional first work, source ownership, current user changes, permitted environment/effects, and actual self-check/readback expectations. Pass known contradictions and relevant same-cause evidence on corrective entry.
-
-Require the actual actor's existing start/end plan-admission checks. Ask for implementation and self-check, not an independent AC verdict or done. Distinguish permitted local discretion from a material cause/owner/interface/persistence/readback/effect change, which ends the affected invocation under the owning return contract. Preserve exact current target, performed checks, limits and settlement/cleanup evidence for subsequent navigation; do not promote an implementation report into final verification evidence.
-
-#### Verifier
-
-Bind the exact Ticket and applicable parent/Behavior/UI/user authority, candidate current target, implementation/self-check navigation, known findings and exact prior Coverage result when present, and available execution/readback/effect authority. Follow the owning single-verifier host profile and terminal contract without a caller schema override; the verifier resolves and captures its own stable/effect binding. Verification-only does not acquire a new plan-ADMIT prerequisite.
-
-Ask for the complete authored-flow adjudication using the smallest sufficient current discriminating evidence. In semantic preflight and derived scenarios alike, connect a counterexample's activation conditions to a valid instance of the approved obligation and conditions, not merely a similarly named failure category. Do not invent unsupported external conditions to create a contract defect or verdict blocker. Specific stimuli need not be individually enumerated when covered by the approved meaning; synthetic or complex conditions are not automatically excluded, and ordinary approved triggers may expose implementation-created compound states. Preserve parent-to-Ticket gap detection, known material finding disposition and required execution. Happy-path success never cancels a current attributable contract violation. Do not add the separate Coverage frontier search or authorize remediation, delegation or finalization by the verifier.
-
-#### Coverage Reviewer
-
-Bind the exact successful settled verifier report and primary-evidence locations, original authority, existing target/binding identities and currentness limits. Point to actual scenario state, trigger/order, observation window and authoritative readback. For follow-up, include the prior result and the correction/new-evidence impact span. Keep the opaque handle with Outer Main.
-
-Ask for read-only comparison of approved meaning, deciding implementation paths and what this exact verifier actually activated and observed. Primary-evidence inspection is required but targeted, not conditional on first finding suspicious code. Use the report as an index; inspect the slices needed to decide load-bearing assumptions and concrete candidates. Bounded evidence-location lookup is allowed; unrelated dump-tree or historical-run audits without a material clue are not. A branch not executed is not by itself a finding: explain how a reachable contract-violating state could pass the actual observations. Resolve candidates by evidence-backed dismissal, finding or exact limit; reopen only affected paths when new material evidence appears. Do not execute experiments/tests, modify state, issue another AC verdict, or convert unavailable evidence into Findings: None. Return the existing COMPLETE/PARTIAL/BLOCKED review and preserve any success-blocking material limitation.
+Preparation dispatch and Planner/Reviewer inputs belong to [ready-ticket-plan](../../companion-skills/ready-ticket-plan/SKILL.md); implementation dispatch belongs to [ready-ticket-implement](../../companion-skills/ready-ticket-implement/SKILL.md); verifier dispatch and success finalization belong to [ready-ticket-verify](../../companion-skills/ready-ticket-verify/SKILL.md); Coverage inputs and read-only result belong to [ready-ticket-coverage](../../companion-skills/ready-ticket-coverage/SKILL.md). Supply exact current targets, known findings and changed evidence through those contracts, without reconstructing the worker's procedure or prescribing its judgment.
 
 ## Invocation-local owner-return event loop
 
@@ -123,11 +87,7 @@ One bounded diagnostic snapshot is allowed only when the current user explicitly
 Worker/process replacement is host/caller lifecycle, not IIS state. Do not start a replacement on the same mutable worktree/effect surface until actual prior worker/process/service settlement is established. A cancel receipt alone is not settlement. Do not create a checkpoint ledger, worker lease, reservation, or persistent execution state.
 ## Invocation-local evidence economy
 
-Pass this bounded instruction through each enabled delivery skill's existing `Additional User Instructions` input:
-
-> Subject to the exact Ticket contract, the closed Run Contract, and current explicit user instructions, collect only evidence that can change admission, an authored flow result, target attribution/freshness, required cleanup/terminal closure, or the next authority route. Once those obligations are decidable at their actual approved boundaries, stop confidence-only duplicate collection and emit the owning terminal result.
-
-This does **not** weaken authored flows, independence, conditional boundaries, cleanup, or the assigned Goal/required scope. Apply `09-run-contract.md`'s actual-boundary evidence rule: replaced mock/seeded boundaries remain unproved, while actual artifact inspection and real authorized disposable execution keep their approved claims. Obtain reachable required evidence; economy is not permission to return a known readback gap without acting. Do not add evidence budgets, counters, quotas, report fields, or persistent state.
+Each role owns its evidence-sufficiency and materiality procedure. Main consumes the result at its actual approved boundary under [09-run-contract.md](09-run-contract.md), preserves attribution and limits, and routes missing evidence to its owner. Do not inject another common worker procedure or widen a limited result into success.
 
 ## Preparation handoff
 

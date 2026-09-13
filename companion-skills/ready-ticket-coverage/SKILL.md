@@ -13,6 +13,8 @@ Coverage owns the separate post-implementation counterexample search, after the 
 
 Coverage is read-only: inspect current contract, source/schema and existing primary evidence. Do not run the product, execute experiments or tests, prepare scenario state, call providers, start services, modify product/runtime/source/config/planning/evidence, write Ticket status, capture or amend a verification binding, call `ready_finalize`, or manufacture terminal authority. Return the review through existing host output/artifact delivery, not a new evidence store or registry.
 
+The caller reads Purpose, Invocation and inputs, and One terminal result to dispatch and consume this role; the actual reviewer reads the whole skill. The caller does not repeat Bounded investigation.
+
 ## Invocation and inputs
 
 The caller that owns finalization dispatches one independent Coverage worker after the exact successful verifier terminal has settled, only for semantic `VERIFIED` on the normal ready-to-done path. The worker performs this skill itself and never delegates. No concurrent verifier/Coverage, pause/resume, extra reviewer, consensus or hidden fan-out. Do not apply the Ready verifier authority profile to Coverage; it returns an ordinary terminal review, not a host verifier terminal.
@@ -41,6 +43,7 @@ If a required report, primary evidence, contract or target cannot be attributed,
 1. Establish the approved outcome and exact current Ticket/parent anchors. Compare parent meaning with its Ticket projection; do not invent supported conditions or new ACs.
 2. Trace the relevant implementation from entrypoint through deciding writers/readers and state/effect to authoritative readback. Read a dependency boundary further only when a material clue makes it relevant. This is not a repository-wide audit or standing fault checklist.
 3. Compare that path's load-bearing assumptions with what the verifier actually activated and observed: initial state, entity identity, trigger/order, observation window and readback. Inspect primary evidence, not only the final narrative.
+   Primary-evidence inspection is targeted but not conditional on first finding suspicious code. Use the report as an index and bounded evidence-location lookup as needed; an unexecuted branch alone is not a finding. Establish how a reachable contract-violating state could pass this run's actual observations.
 4. Resolve materially supported candidates through evidence-backed dismissal, a concrete finding, or an exact evidence limit. Do not discard a material gap merely because the next observation needs unavailable authority/environment.
 
 A material finding concisely connects:

@@ -48,20 +48,6 @@ class DecisionProvenanceContractTests(unittest.TestCase):
         self.assertIn("Non-Continuation Decision Provenance", to_tickets)
         self.assertIn("must not invent a new Ticket status", to_tickets)
 
-    def test_adaptive_distinguishes_owner_stop_from_whole_run_state(self) -> None:
-        terminal = (
-            ROOT / "iis-adaptive-planning" / "references" / "07-terminal-report.md"
-        ).read_text(encoding="utf-8")
-
-        for required in (
-            "## Decision provenance",
-            "Owner status:",
-            "Invocation status:",
-            "Returned to:",
-            "Planning owner result: STOP",
-            "Governing authority: iis-adaptive-planning / Terminal boundary + active Run Contract",
-        ):
-            self.assertIn(required, terminal)
 
 
 

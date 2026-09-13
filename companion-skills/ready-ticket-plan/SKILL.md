@@ -11,7 +11,7 @@ Prepare the method for one exact Ready Ticket or the Tickets affected by one imp
 
 The preparation lead binds the requested Ticket denominator, coordinates Planner → Independent Plan Review, preserves actual evidence and returns one terminal result. Planner owns grounded method writing and revision. The independent reviewer owns original-contract-first counterexample/unknown judgment and start sufficiency. The lead checks attribution/currentness and requested coverage, not a second substantive review. No finding is not admission; a plan file or structurally valid JSON is not proof that an independent review occurred.
 
-Read both references before preparation: [plan.md](references/plan.md) and [review.md](references/review.md). They are self-contained; an external investigation-method Skill is optional, never required.
+The preparation caller reads this entry contract for inputs, dispatch and terminal fan-in, not both worker procedures. The actual Planner reads [plan.md](references/plan.md); the independent Reviewer reads [review.md](references/review.md) and the Planner grounding/conditional-start criteria required by its assignment. Main performing a permitted DIRECT role reads that role's reference. An external investigation-method Skill remains optional.
 
 ## Inputs and entry
 
