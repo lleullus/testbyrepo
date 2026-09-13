@@ -77,11 +77,13 @@ When the current user/caller supplies one exact `repository-investigation` artif
 
 Do not search for or auto-select a repository-investigation artifact merely because one exists. Do not treat the artifact, its completion status, or its planning-relevance candidate labels as Scope/Run Contract/product authority, and do not use the artifact itself as a product authoritative readback. When no exact artifact is supplied, Adaptive behavior is unchanged.
 
+For every actual delegated role in this Adaptive invocation, use [the shared source assignment](templates/SHARED-SOURCE-ASSIGNMENT.template.md): bind the admitted Thesis, supplied investigation and explicitly activated Transition Baseline originals once, and forward that common block unchanged alongside role-specific inputs. This includes delegated planning/review roles and downstream children; it does not authorize new delegation. Original-source access is distinct from active execution scope and never replaces the owning role contract.
+
 ## Transition Baseline intake and Active Block Envelope
 
 Transition Baseline is optional and activates only when the current caller/user explicitly opts in, supplies the exact approved Baseline identity and revision, and authorizes its applicability to this invocation. The presence of a `BASELINE-NNN.md` file, a remembered transition, or a general request for unattended work never activates it. The approval may include inter-Block auto-continuation only within its stated ceiling; it does not grant deployment, credential, destructive-action, production, or other missing authority.
 
-Outer Main owns intake and projection. At intake it reconciles the approved Baseline with the current Mandate, newer explicit user instructions, applicable canonical authority, and measured actual entry state. It must read enough of the approved map to locate the eligible coarse Block, but must not place the whole map or a future work queue into the planning context. It projects exactly one Active Block Envelope and clears the prior projection before a new Block is presented.
+Outer Main owns intake and projection. At intake it reconciles the approved Baseline with the current Mandate, newer explicit user instructions, applicable canonical authority, and measured actual entry state. Preserve the exact approved original map reference in the common source block so children can check the projection independently; do not inline the whole map as assigned work or a future work queue. It projects exactly one Active Block Envelope and clears the prior projection before a new Block is presented.
 
 The single Active Block Envelope carries only the current Block's decision-critical slice:
 

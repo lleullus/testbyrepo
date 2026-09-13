@@ -33,6 +33,8 @@ DIRECT preparation uses current Main for the roles it performs, but the author c
 
 For actual delegated roles, the preparation caller resolves the following references from the current pinned IIS bundle and includes their exact readable paths and an instruction to read and apply them before work in each assignment. Include exact Ticket paths/Project Root, applicable authority and current plan/evidence inputs, role-specific output locations and these return boundaries; a role name or the caller's own read/summary does not replace this handoff.
 
+When invoked under Adaptive, receive and forward its unchanged Common original sources block to both Planner and Plan Reviewer, using [the shared source assignment](../../iis-adaptive-planning/templates/SHARED-SOURCE-ASSIGNMENT.template.md). Each role reads those originals independently before adopting the caller's method framing; retain the exact Ticket/start scope and existing return contract. Standalone preparation retains its existing inputs and does not require Adaptive activation.
+
 - Planner: [plan.md](references/plan.md). Write/revise the approved execution method and return the plan, grounding, any conditional first work and exact unresolved limits. Do not approve your own plan, implement the product or perform final verification.
 - Independent Plan Reviewer: [review.md](references/review.md) for the review procedure/result and [plan.md](references/plan.md) for Code Grounding and conditional-start criteria, not as a Planner assignment. Return the exact outside-Project-Root review artifact, `ADMIT | REVISE | EVIDENCE_NEEDED` judgment and evidence, then end this invocation. Do not write/revise the plan or take over the lead's revision loop.
 

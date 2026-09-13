@@ -54,7 +54,7 @@ Do not invoke a disabled stage for stronger evidence. `Verification: yes` includ
 
 ### Caller-owned assignment content
 
-Before dispatch, Outer Main or the existing preparation lead constructs the actual role assignment from current authority and evidence. A short request to review thoroughly, an AC checklist, or the caller's earlier skill read is not the handoff. Include the following decision-critical content in the existing shared context and role assignment; do not create another form, artifact, admission gate, or required prompt length:
+Before dispatch, use [the shared source assignment](../templates/SHARED-SOURCE-ASSIGNMENT.template.md). Outer Main binds the common original-source block once from current admitted inputs and approved lineage; every caller, including the preparation lead, forwards it unchanged to each child. Construct the role-specific assignment separately. A short request to review thoroughly, an AC checklist, or the caller's earlier skill read is not the handoff. Include the following decision-critical content without creating another project artifact, admission gate or required prompt length:
 
 - the exact role question, current pinned role-document paths and instruction to read and apply them before work;
 - exact Project Root, Ticket denominator, applicable original authority, exact recoverable Thesis source/binding through the existing Scope/Spec lineage, current plan/review or verification inputs, and role-owned output locations;

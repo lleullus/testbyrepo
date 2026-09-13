@@ -29,6 +29,8 @@ Top-level invocation은 `SUBAGENT`가 기본이다. 현재 사용자가 이 exac
 
 실제 caller는 현재 pinned IIS bundle의 [implement SKILL.md](../SKILL.md)와 [references/implement.md](implement.md)를 resolve하여 두 문서의 정확한 읽기 가능한 경로와 작업 전 직접 읽고 적용할 지시를 assignment에 포함한다. 부모의 문서 읽기·요약이나 역할명만으로 대체하지 않는다. `Delegated Worker: yes`를 유지하고, 이번 exact Ticket의 delegated implementation core와 self-check만 수행하며 기존 COMPLETE 조건 또는 PARTIAL/BLOCKED 반환 경계에서 terminal `IMPLEMENT RESULT`로 종료하도록 명시한다. 계획 재설계·독립 리뷰·최종 verification·후속 Ticket 수행 권한은 부여하지 않는다.
 
+Adaptive 호출에서는 [shared source assignment](../../../iis-adaptive-planning/templates/SHARED-SOURCE-ASSIGNMENT.template.md)의 Common original sources 블록을 변경 없이 전달받는다. 작업자는 역할 지시를 받아들이기 전에 연결된 원본을 직접 읽고, 할당의 축소나 현재 관측과의 불일치를 기존 반환 계약으로 드러낸다. 원본은 Ticket 범위 확대나 승인된 방법의 임의 변경 권한이 아니며 standalone 구현의 기존 입력 계약은 유지한다.
+
 ```text
 # Communication
 
