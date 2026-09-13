@@ -5,6 +5,29 @@ description: "Implement one existing IIS Ready Ticket and perform implementer se
 
 # Ready Ticket Implement
 
+## Caller: include in every delegated assignment
+
+Adaptive 호출자는 실제 shared context에서 역할별 Target/Change 지시 **앞에** 값이 채워진 Common original sources 블록을 넣는다. child에게 이 스킬이나 템플릿을 읽으라고 지시하는 것으로 실제 블록 전달을 대신하지 않는다.
+
+- Project Root: 정확한 절대 경로.
+- Thesis: 승인된 source-set 전체의 복구 가능한 정확한 경로, bound revision/identity와 기존 binding 참조. 승계 원본을 포함한 모든 bound source를 보존한다.
+- Repository investigation: 제공된 immutable artifact의 정확한 경로와 recorded identity, 또는 None supplied.
+- Transition Baseline: 적용되는 승인 원본의 정확한 경로, revision과 approval/applicability 참조, 또는 Not activated.
+
+child에게 **역할별 판단·편집 전에 바인딩된 원본을 직접 읽고 Thesis의 목적·핵심 완료 루프·거짓 성공 구분을 확인하라**고 명시한다. 요약으로 대신하거나 원본 선택·최신 파일 검색을 child에게 떠넘기지 않는다.
+받은 공통 블록은 변경 없이 전달하고 정확한 역할 문서·대상·출력·권한 경계는 그 뒤에 넣는다. 원본 접근은 Ticket 범위 확대 권한이 아니다.
+원본 변경과 허용되는 부재·사유는 기존 [shared source assignment](../../iis-adaptive-planning/templates/SHARED-SOURCE-ASSIGNMENT.template.md)를 따른다. standalone 구현의 기존 authority 입력은 유지하며 Adaptive 활성화나 새 Thesis 생성을 요구하지 않는다.
+
+### Evidence boundary — copy into the assignment
+
+standalone 구현을 포함한 모든 실제 위임에서 아래 블록 원문을 실제 shared context에 넣는다. 적용되는 Common original sources 뒤, 역할별 Target/Change 지시 앞에 배치한다. 이미 전달받은 동일 블록은 변경 없이 한 번만 유지한다. 스킬·템플릿 링크나 이 규칙을 읽으라는 지시로 실제 블록 전달을 대신하지 않는다.
+
+> **Evidence boundary — apply before role-specific work**
+> - Do not use mocks, stubs, canned responses, seeded success states or surrogate readbacks as completion or verification evidence for the actual acceptance boundary they replace.
+> - When the approved outcome requires real execution, state transitions or external effects, evidence must exercise the required real path and authoritative readback. Internal success or HTTP acceptance alone cannot prove the required external effect.
+> - A double for an ancillary dependency does not invalidate observation of an unrelated real boundary. Distinguish boundaries actually observed from those replaced by doubles and therefore not verified.
+> - If required evidence is unavailable, preserve the gap under your role's existing limitation/return rules. Do not infer success or obtain evidence through unauthorized actions. This instruction does not expand your role's execution authority.
+
 ## 목적과 권위
 
 이 스킬은 IIS Planning이 만든 하나의 Ready Ticket을 그 Ticket이 승인한 제품 자체에 구현한다. IIS Planning을 재개하거나 Ticket 의미를 다시 계획하지 않는다.
@@ -26,7 +49,7 @@ Top-level 기본 실행 모드는 `SUBAGENT`다. 현재 사용자가 이 exact i
 
 현재 pinned bundle의 이 SKILL.md와 references/implement.md의 정확한 읽기 가능한 경로를 resolve하여 작업 전 직접 읽고 적용하라는 지시와 함께 전달한다. 한 worker에게 exact Ticket/Project Root/`plan_review_path`, 검토된 범위와 conditional first work, 현재 사용자 지시·모드·모델, 원본 authority, source ownership, 알려진 finding/변경 증거와 허용된 효과·출력 경로를 바인딩한다. `Delegated Worker: yes` 및 현재 host Communication 계약을 포함하고, 구현/self-check만 수행한 뒤 terminal `IMPLEMENT RESULT`로 종료하도록 한다. worker는 재위임·계획 재설계·독립 판정·후속 Ticket을 수행하지 않는다.
 
-Adaptive에서는 [shared source assignment](../../iis-adaptive-planning/templates/SHARED-SOURCE-ASSIGNMENT.template.md)의 공통 원본 블록을 변경 없이 전달한다. 원본을 직접 읽는 것은 Ticket 범위 확대 권한이 아니다. 필요한 worker 실행·동일 Project Root 접근·terminal 회수 capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`과 실제 한계를 반환하며 DIRECT로 대체하지 않는다.
+공통 원본 전달은 이 스킬 상단의 caller 블록을 따른다. 필요한 worker 실행·동일 Project Root 접근·terminal 회수 capability가 없으면 `SUBAGENT CAPABILITY UNAVAILABLE`과 실제 한계를 반환하며 DIRECT로 대체하지 않는다.
 
 한 mutable worktree에는 하나의 구현 owner를 두고 정확한 terminal만 소비한다. 정상 실행 중 progress polling·status DM·중복 repository 검사를 하지 않는다. 사용자 status/stop 요청, host 실패, 누락/잘못된 terminal 또는 실제 replacement/settlement 진단에만 bounded snapshot을 사용한다. 취소 receipt만으로 종료를 추정하지 않으며 실제 settlement 뒤에만 fresh actor를 시작한다.
 

@@ -5,6 +5,29 @@ description: "Verify one existing IIS Ready Ticket against a stable current impl
 
 # Ready Ticket Verify
 
+## Caller: include in every delegated assignment
+
+Under Adaptive, put the populated Common original sources block in the actual shared context **before role-specific Target/Change instructions** for the verifier. Telling a child to read this skill or the assignment template is not a substitute for supplying the block.
+
+- Project Root: exact absolute path.
+- Thesis: exact recoverable approved source-set paths, bound revision/identity and existing binding reference; preserve every bound source, including inherited originals.
+- Repository investigation: exact supplied immutable artifact path and recorded identity, or None supplied.
+- Transition Baseline: exact applicable approved path, revision and approval/applicability reference, or Not activated.
+
+Include this instruction to the child: **Read the bound originals directly before role-specific judgment or editing, including Thesis purpose, core completion loop and false-success distinctions.** Do not substitute summaries or delegate source selection or latest-file discovery to the child.
+Forward the caller's existing block unchanged; put exact role documents, target, outputs and authority boundaries after it. Originals do not expand the assigned Ticket scope or permit verifier remediation.
+Use [the shared source assignment](../../iis-adaptive-planning/templates/SHARED-SOURCE-ASSIGNMENT.template.md) for source changes and permitted absence/reasons. Standalone verification retains its existing authority inputs; this block does not require Adaptive activation or new Thesis creation.
+
+### Evidence boundary — copy into the assignment
+
+For every actual delegated role, including standalone verification and its Coverage handoff, copy the following block verbatim into the actual shared context, after Common original sources when applicable and before role-specific Target/Change instructions. If already supplied, retain it unchanged once. A skill/template link or an instruction to read these rules is not a substitute for delivering the block.
+
+> **Evidence boundary — apply before role-specific work**
+> - Do not use mocks, stubs, canned responses, seeded success states or surrogate readbacks as completion or verification evidence for the actual acceptance boundary they replace.
+> - When the approved outcome requires real execution, state transitions or external effects, evidence must exercise the required real path and authoritative readback. Internal success or HTTP acceptance alone cannot prove the required external effect.
+> - A double for an ancillary dependency does not invalidate observation of an unrelated real boundary. Distinguish boundaries actually observed from those replaced by doubles and therefore not verified.
+> - If required evidence is unavailable, preserve the gap under your role's existing limitation/return rules. Do not infer success or obtain evidence through unauthorized actions. This instruction does not expand your role's execution authority.
+
 ## Purpose and readers
 
 Exactly one delegated verifier owns the exact Ticket's semantic preflight, authored Flow/AC adjudication and fresh discriminating evidence. Parent Main owns dispatch, passive terminal fan-in, post-success Coverage and finalization, not a second semantic verdict.
@@ -29,7 +52,7 @@ Delegated Verifier: yes
 
 Include required evidence/report locations and the current host Communication contract. Reports, suggested tests and target hints are navigation, not authority or proof. Verification-only needs no new implementation plan ADMIT; the verifier resolves its actual stable/effect target and captures its own binding.
 
-Under Adaptive, forward the unchanged Common original sources block from [the shared source assignment](../../iis-adaptive-planning/templates/SHARED-SOURCE-ASSIGNMENT.template.md). The verifier reads originals before accepting caller framing and reports a weaker Ticket projection through semantic preflight; access to the Thesis does not expand Ticket scope. Standalone verification retains its existing authority inputs.
+Apply the caller block at the top of this skill. The verifier reports a weaker Ticket projection through semantic preflight without expanding Ticket scope.
 
 Dispatch exactly one task with `authorityProfile: iis-ready-verifier/v1` and the current user-selected model/effort. Do not set caller `outputSchema` or `schemaMode`. There is no DIRECT verifier, fallback roster or nested verification delegation. If required capability is unavailable, return `SUBAGENT CAPABILITY UNAVAILABLE` with the observed capability limit and no product/runtime/status mutation.
 

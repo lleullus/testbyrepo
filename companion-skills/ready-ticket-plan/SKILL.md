@@ -5,6 +5,29 @@ description: "Prepare execution methods for exact existing IIS Ready Tickets thr
 
 # Ready Ticket Plan
 
+## Caller: include in every delegated assignment
+
+Under Adaptive, put the populated Common original sources block in the actual shared context **before role-specific Target/Change instructions** for both Planner and Plan Reviewer, including preparation-lead children. Telling a child to read this skill or the assignment template is not a substitute for supplying the block.
+
+- Project Root: exact absolute path.
+- Thesis: exact recoverable approved source-set paths, bound revision/identity and existing binding reference; preserve every bound source, including inherited originals.
+- Repository investigation: exact supplied immutable artifact path and recorded identity, or None supplied.
+- Transition Baseline: exact applicable approved path, revision and approval/applicability reference, or Not activated.
+
+Include this instruction to the child: **Read the bound originals directly before role-specific judgment or editing, including Thesis purpose, core completion loop and false-success distinctions.** Do not substitute summaries or delegate source selection or latest-file discovery to the child.
+Forward the caller's existing block unchanged; put exact role documents, target, outputs and authority boundaries after it. Originals do not expand the assigned Ticket/start scope.
+Use [the shared source assignment](../../iis-adaptive-planning/templates/SHARED-SOURCE-ASSIGNMENT.template.md) for source changes and permitted absence/reasons. Standalone preparation retains its existing authority inputs; this block does not require Adaptive activation or new Thesis creation.
+
+### Evidence boundary — copy into the assignment
+
+For every actual delegated role, including standalone preparation, copy the following block verbatim into the actual shared context, after Common original sources when applicable and before role-specific Target/Change instructions. Forward it unchanged to preparation children; if already supplied, retain it once. A skill/template link or an instruction to read these rules is not a substitute for delivering the block.
+
+> **Evidence boundary — apply before role-specific work**
+> - Do not use mocks, stubs, canned responses, seeded success states or surrogate readbacks as completion or verification evidence for the actual acceptance boundary they replace.
+> - When the approved outcome requires real execution, state transitions or external effects, evidence must exercise the required real path and authoritative readback. Internal success or HTTP acceptance alone cannot prove the required external effect.
+> - A double for an ancillary dependency does not invalidate observation of an unrelated real boundary. Distinguish boundaries actually observed from those replaced by doubles and therefore not verified.
+> - If required evidence is unavailable, preserve the gap under your role's existing limitation/return rules. Do not infer success or obtain evidence through unauthorized actions. This instruction does not expand your role's execution authority.
+
 ## Purpose and authority
 
 Prepare the method for one exact Ready Ticket or the Tickets affected by one important shared decision. This is a delivery-preparation companion, not IIS product planning and not a new Ticket lifecycle. Product `approved/ready/done`, Scope, Behavior/UI, Spec, ACs and authored Verification flows remain unchanged. Planning-only IIS ends at its existing Ready Ticket Set; a caller requesting preparation stops here; only a current implementation request authorizes a later implementation owner.
@@ -33,7 +56,7 @@ DIRECT preparation uses current Main for the roles it performs, but the author c
 
 For actual delegated roles, the preparation caller resolves the following references from the current pinned IIS bundle and includes their exact readable paths and an instruction to read and apply them before work in each assignment. Include exact Ticket paths/Project Root, applicable authority and current plan/evidence inputs, role-specific output locations and these return boundaries; a role name or the caller's own read/summary does not replace this handoff.
 
-When invoked under Adaptive, receive and forward its unchanged Common original sources block to both Planner and Plan Reviewer, using [the shared source assignment](../../iis-adaptive-planning/templates/SHARED-SOURCE-ASSIGNMENT.template.md). Each role reads those originals independently before adopting the caller's method framing; retain the exact Ticket/start scope and existing return contract. Standalone preparation retains its existing inputs and does not require Adaptive activation.
+Apply the caller block at the top of this skill; each preparation role retains its existing return contract.
 
 - Planner: [plan.md](references/plan.md). Write/revise the approved execution method and return the plan, grounding, any conditional first work and exact unresolved limits. Do not approve your own plan, implement the product or perform final verification.
 - Independent Plan Reviewer: [review.md](references/review.md) for the review procedure/result and [plan.md](references/plan.md) for Code Grounding and conditional-start criteria, not as a Planner assignment. Return the exact outside-Project-Root review artifact, `ADMIT | REVISE | EVIDENCE_NEEDED` judgment and evidence, then end this invocation. Do not write/revise the plan or take over the lead's revision loop.

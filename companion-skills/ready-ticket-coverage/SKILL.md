@@ -5,6 +5,29 @@ description: "Review one exact successful IIS Ready verification result read-onl
 
 # Ready Ticket Coverage
 
+## Caller: include in every delegated assignment
+
+Under Adaptive, put the populated Common original sources block in the actual shared context **before role-specific Target/Change instructions** for Coverage. Telling a child to read this skill or the assignment template is not a substitute for supplying the block.
+
+- Project Root: exact absolute path.
+- Thesis: exact recoverable approved source-set paths, bound revision/identity and existing binding reference; preserve every bound source, including inherited originals.
+- Repository investigation: exact supplied immutable artifact path and recorded identity, or None supplied.
+- Transition Baseline: exact applicable approved path, revision and approval/applicability reference, or Not activated.
+
+Include this instruction to the child: **Read the bound originals directly before role-specific judgment or editing, including Thesis purpose, core completion loop and false-success distinctions.** Do not substitute summaries or delegate source selection or latest-file discovery to the child.
+Forward the same unchanged block supplied to the verifier; put exact role documents, target, outputs and authority boundaries after it. Originals do not expand Ticket obligations or permit any mutation by Coverage.
+Use [the shared source assignment](../../iis-adaptive-planning/templates/SHARED-SOURCE-ASSIGNMENT.template.md) for source changes and permitted absence/reasons. Standalone Coverage retains its existing authority inputs; this block does not require Adaptive activation or new Thesis creation.
+
+### Evidence boundary — copy into the assignment
+
+For every actual Coverage assignment, including standalone Coverage, copy the following block verbatim into the actual shared context, after Common original sources when applicable and before role-specific Target/Change instructions. If already supplied, retain it unchanged once. A skill/template link or an instruction to read these rules is not a substitute for delivering the block.
+
+> **Evidence boundary — apply before role-specific work**
+> - Do not use mocks, stubs, canned responses, seeded success states or surrogate readbacks as completion or verification evidence for the actual acceptance boundary they replace.
+> - When the approved outcome requires real execution, state transitions or external effects, evidence must exercise the required real path and authoritative readback. Internal success or HTTP acceptance alone cannot prove the required external effect.
+> - A double for an ancillary dependency does not invalidate observation of an unrelated real boundary. Distinguish boundaries actually observed from those replaced by doubles and therefore not verified.
+> - If required evidence is unavailable, preserve the gap under your role's existing limitation/return rules. Do not infer success or obtain evidence through unauthorized actions. This instruction does not expand your role's execution authority.
+
 ## Purpose and ownership
 
 Answer: even if every observation in this exact verification is correct, can a reachable implementation path still violate the same approved outcome while passing those observations?
@@ -13,7 +36,7 @@ Coverage owns the separate post-implementation counterexample search, after the 
 
 Coverage is read-only: inspect current contract, source/schema and existing primary evidence. Do not run the product, execute experiments or tests, prepare scenario state, call providers, start services, modify product/runtime/source/config/planning/evidence, write Ticket status, capture or amend a verification binding, call `ready_finalize`, or manufacture terminal authority. Return the review through existing host output/artifact delivery, not a new evidence store or registry.
 
-The caller reads Purpose, Invocation and inputs, and One terminal result to dispatch and consume this role; the actual reviewer reads the whole skill. The caller does not repeat Bounded investigation.
+The caller reads Caller: include in every delegated assignment, Purpose, Invocation and inputs, and One terminal result to dispatch and consume this role; the actual reviewer reads the whole skill. The caller does not repeat Bounded investigation.
 
 ## Invocation and inputs
 
@@ -32,7 +55,7 @@ Required inputs:
 
 The actual caller resolves this Coverage `SKILL.md` from the current pinned IIS bundle and includes its exact readable path in the assignment, with an instruction to read and apply it before work. A role name or the caller's own read/summary is not a substitute. Bind the exact inputs above and the existing host terminal/artifact return path; instruct the worker to perform only this read-only review and end with `COVERAGE REVIEW RESULT` at the existing COMPLETE/PARTIAL/BLOCKED boundary, without product execution, tests, mutation, a second AC verdict or finalization.
 
-For an Adaptive invocation, receive the same unchanged Common original sources block supplied to the verifier, following [the shared source assignment](../../iis-adaptive-planning/templates/SHARED-SOURCE-ASSIGNMENT.template.md). Read the originals independently of caller/verifier framing and compare their applicable meaning with this exact run's evidence. Preserve the read-only scope and existing COMPLETE/PARTIAL/BLOCKED return; do not expand Ticket obligations or require Adaptive activation for standalone Coverage.
+Apply the caller block at the top of this skill. Compare the originals' applicable meaning with this exact run's evidence; preserve the read-only scope and existing COMPLETE/PARTIAL/BLOCKED return.
 
 Plan/review and implementation reports are optional navigation. Read original authority and deciding implementation paths yourself; never select a different run by `latest` naming. Do not take the verifier conclusion as proof of sufficiency. The opaque success handle stays with the caller and is neither an input nor report content.
 
