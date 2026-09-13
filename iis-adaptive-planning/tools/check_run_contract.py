@@ -183,6 +183,12 @@ class _Checker:
         if not section:
             return None
         content = [(number, line.strip()) for number, line in section[1] if line.strip()]
+        if len(content) == 1 and content[0][1].startswith("From source:"):
+            number, reference = content[0]
+            if not re.fullmatch(r"From source: /[^\n#<>]+#[^\n<>]+", reference):
+                self.add(name, number, "source reference requires an absolute path and exact section")
+                return None
+            return content
         if status == "USER_INPUT_REQUIRED" and len(content) == 1 and _unresolved(content[0][1]):
             return None
         sentinels = [number for number, line in content if line == sentinel]

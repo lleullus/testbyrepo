@@ -8,23 +8,10 @@ Source-Increment: None | <project-relative Scope Increment path>
 
 ## Product Meaning Binding
 
-Schema: iis-product-meaning/v1
+Schema: iis-product-meaning/v2
+Source: <exact canonical absolute saved Thesis path>
 Fingerprint: sha256:0000000000000000000000000000000000000000000000000000000000000000
 
-Core Utility:
-<product-level core utility>
-
-Core Completion Loop:
-<product-level causal completion loop>
-
-Required Outcomes / Means:
-- <explicitly required product outcome or means, or use exact None instead of a list>
-
-Truth / Causal Invariants:
-- <product-level truth or causal invariant, or use exact None instead of a list>
-
-Success Observation:
-<product-level observable success condition>
 
 ## Problem
 

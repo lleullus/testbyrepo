@@ -63,7 +63,9 @@ def prepare(case_id: str, arena: Path, variant: str, repetition: int) -> Path:
         + f"\n\nProject Root: {project}\n"
         + "Read the currently installed iis-workflow skill and only the skills to which that installed workflow routes. "
         + "Inspect evaluation-context.json, follow the installed routing contract, and return only the result that contract requires. "
-        + "Do not infer a stage or output schema from the evaluator. Do not mutate files or execute the downstream planning leaf."
+        + "Do not infer a stage or output schema from the evaluator. Save the Thesis source when the installed contract requires it; that write is authorized before Run closure and is not downstream approval. "
+        + ("Follow the user's exact downstream planning and stop authority; do not implement or verify a product. "
+           if case.get("downstream_planning") else "Do not execute the downstream planning leaf or write other planning artifacts. ")
     )
     metadata = {
         "schema": "iis-product-thesis-case/v1",

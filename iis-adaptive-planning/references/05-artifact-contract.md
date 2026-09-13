@@ -147,6 +147,6 @@ Never edit an old failure into PASS because the contract was later reshaped.
 
 ## No project root
 
-When current Baseline allows unrooted greenfield shaping, keep Mandate/provenance in the current conversation until one exact intended project root exists. Do not create an external fallback planning directory.
+When current Baseline allows unrooted greenfield shaping, keep Mandate/provenance in the current conversation until one exact intended project root exists. Do not create an external fallback Scope/Matt/Adaptive workspace. The independently authorized Thesis source alone uses the exact temporary location defined by product-thesis; it is not a Project Root and does not release downstream gates.
 
 When the root appears, write the companion artifacts and recheck actual evidence before treating prior provisional planning as durable.

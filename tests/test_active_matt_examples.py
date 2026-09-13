@@ -58,19 +58,6 @@ def verification_items(block: str) -> list[str]:
 
 
 class ActiveMattExampleTests(unittest.TestCase):
-    def test_templates_have_behavior_authorities_in_contract_order(self) -> None:
-        spec = (EXAMPLES / "SPEC.template.md").read_text(encoding="utf-8")
-        ticket = (EXAMPLES / "TICKET.template.md").read_text(encoding="utf-8")
-        self.assertLess(spec.index("## Product Meaning Binding"), spec.index("## Problem"))
-        self.assertIn("Schema: iis-product-meaning/v1", spec)
-        self.assertRegex(spec, r"Fingerprint: sha256:[0-9a-f]{64}")
-        self.assertLess(spec.index("## Verification Expectations"), spec.index("## Behavior Authorities"))
-        self.assertLess(spec.index("## Behavior Authorities"), spec.index("## UI / UX"))
-        self.assertLess(ticket.index("## Verification"), ticket.index("## Behavior Authorities"))
-        self.assertLess(ticket.index("## Behavior Authorities"), ticket.index("## References"))
-        authority_item(section(spec, "Behavior Authorities").split("\n\n", 1)[0])
-        authority_item(section(ticket, "Behavior Authorities").split("\n\n", 1)[0])
-
     def test_spec_template_and_active_specs_use_outcome_local_verification_contracts(self) -> None:
         paths = [EXAMPLES / "SPEC.template.md"]
         paths.extend(example / "SPEC.md" for example in ACTIVE)

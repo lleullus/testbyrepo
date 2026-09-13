@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Close the meaning of one explicit Adaptive invocation before planning mutation so that it preserves the user's assigned Goal Outcome and required work through every lower contract and completion claim, without treating candidates as obligations or substituted evidence as actual achievement.
+Close the meaning of one explicit Adaptive invocation before downstream planning mutation so that it preserves the user's assigned Goal Outcome and required work through every lower contract and completion claim, without treating candidates as obligations or substituted evidence as actual achievement.
 
 The Run Contract answers seven questions:
 
@@ -11,40 +11,40 @@ The Run Contract answers seven questions:
 3. which delivery stages the user authorized for this invocation;
 4. which execution boundary counts as whole-run completion;
 5. what observable evidence proves that boundary is satisfied;
-6. whether this exact closed contract requires direct user release before the first mutation; and
+6. whether this exact closed contract requires direct user release before the first downstream planning/delivery mutation; and
 7. which user-selected model and effort each enabled SUBAGENT delivery stage will use.
 
 It is a compact invocation contract, not a second Mandate, approval ceremony, workflow database, execution ledger, or roadmap.
 
 ## Admission rule
 
-Before the first Adaptive planning mutation:
+Before downstream Scope/Matt planning or delivery mutation (Thesis-source storage is already authorized and precedes this gate):
 
 1. inspect the current user instruction, applicable Mandate, applicable Product Thesis conclusion, canonical planning authority, and inspectable current facts;
 2. after Product Thesis has formed any newly required product meaning and the Mandate has been normalized or revalidated, normalize the current invocation into the form in [../templates/ADAPTIVE-RUN-CONTRACT.template.md](../templates/ADAPTIVE-RUN-CONTRACT.template.md), including the guide-backed delivery model selection below;
 3. set `Run Contract Approval Gate: required` only when the current user uses exact `/승인게이트` as an affirmative directive/modifier on the current explicitly active Adaptive invocation; otherwise set `not_required`. Quoted, explanatory, hypothetical, or negated mentions do not activate the gate, and `/승인게이트` does not activate Adaptive by itself;
 4. mark the form `CLOSED` only when every material field is determined by current authority, the Goal and required-item coverage invariant below holds, stage/ceiling meaning is consistent, and each applicable delivery model selection is user-specified or user-confirmed, not merely recommended;
 5. when one or more material fields remain unresolved, mark it `USER_INPUT_REQUIRED` and ask only for the smallest unresolved field whose different answers would change required scope, candidate freedom, delivery stages, delivery model/effort selection, success continuation, or completion meaning;
-6. when the form is `CLOSED` and `Run Contract Approval Gate: required`, render the exact current form and STOP before mutation until the user directly approves that rendered contract; and
+6. when the form is `CLOSED` and `Run Contract Approval Gate: required`, render the exact current form and STOP before downstream planning/delivery mutation until the user directly approves that rendered contract; and
 7. do not begin Scope, Behavior/UI, Spec, Ticket, implementation, or verification mutation until the contract is `CLOSED` and any required Run Contract Approval Gate has been directly satisfied.
 
-Read-only inspection needed to close inspectable facts is allowed. Do not ask the user to restate information that current authority already determines. A fully derived `CLOSED` form proceeds without another approval prompt only when `Run Contract Approval Gate: not_required`; the explicit gate is the only Run Contract-local pre-mutation approval exception.
+Read-only inspection and Thesis-source storage under product-thesis are allowed before closure. No storage permission branch is added. A saved unresolved Thesis does not resolve USER_INPUT_REQUIRED or authorize downstream work. Other planning/delivery writes still wait for CLOSED and any explicit Run Contract approval. Do not ask users to restate settled authority.
 
 ## Required fields
 
 ### Goal Outcome
 
-State the durable user/operator result assigned to this invocation as a faithful derivative of the current user's words, not background aspiration or a new source of authority. Applicable user instructions, constraints, and explicit stage/stop limits outrank this summary and every Boundary, Predicate, Increment, Spec, Ticket, method, and owner report. It may equal the Mandate's Desired Product Outcome or be a narrower current assignment; a broad long-term Mandate alone does not enlarge this invocation.
+Reference the exact source outcome assigned to this invocation; do not rewrite the Thesis as a second product goal. Use `From source: /absolute/source/path#Exact heading` for unchanged meaning and state only an explicit narrower assignment or current user-authorized delta when needed. A source reference imports meaning, not its whole product scope: applicable user constraints and stage/stop limits still govern. A broad Mandate alone does not enlarge the current assignment.
 
 When current product meaning was established through Product Thesis Design, keep Goal Outcome and named-item meaning faithful to that conclusion and current user authority. Run Contract closure preserves product meaning; it does not recreate the Reason to Exist, Core Utility, Core Completion Loop, truth/causal framing, or non-core classification. Newer explicit user authority takes precedence, and a narrower current assignment remains narrow.
 
 ### Required Named Items
 
-List every exact user-named capability, change, or outcome that must remain an obligation until successful run termination, or exact `None required`.
+Reference the source section containing the applicable nonempty required set with `From source: /absolute/source/path#Exact heading`; read its actual members rather than copying/reclassifying them. Use exact `None required` only when none apply. For an explicitly narrower or revised assignment, list only the exact selected source outcomes/means and the user authority for the selection. Explicit required means remain required, not candidates.
 
 ### Candidate Named Items
 
-List every exact user-named capability, change, or outcome offered as a candidate means that Adaptive may preserve, replace, defer, or drop under current Mandate authority, or exact `None named`.
+Reference the applicable nonempty candidate set with `From source: /absolute/source/path#Exact heading`, or use exact `None named`. Record only current user-authorized selection/classification changes instead of copying a second candidate catalogue. Candidate freedom does not remove required outcomes or means.
 
 Required and candidate lists may coexist. This is the normal representation for mixed instructions such as:
 
@@ -159,7 +159,7 @@ An implementation-only multi-Increment promise is not silently invented. If the 
 
 ### Completion Predicate
 
-Write one concise observable predicate whose satisfaction at the declared boundary is sufficient for the assigned Goal Outcome and every Required Named Item under the coverage invariant below, without adding unassigned outcomes or stronger acceptance. For a delivered current-Increment predicate, name both the complete canonical `done` denominator and closure of every applicable parent obligation through its existing acceptance owner and current attributable readback; do not make status aggregation the whole predicate.
+Apply the referenced source success meaning to this invocation’s exact scope and stage; do not replace it with a shorter product-success predicate. Reference the original Success Observation/final Baseline predicate and state only the execution-stage or explicit scope restriction. For delivered current-Increment completion, retain the complete canonical done denominator and every applicable parent obligation’s current attributable readback through its existing acceptance owner. Ticket aggregation and Block Exit cannot replace the full assigned result.
 
 Examples:
 
@@ -201,14 +201,14 @@ Use `Not yet established` only when establishing the readback is itself legitima
 
 ### Source Authority
 
-Record concise anchors to the relevant actual user instructions, constraints, explicit revisions, and applicable Mandate revision, not another copy of the derived Goal. Preserve enough source wording or an exact current-conversation reference to recover an omission in Goal/Required Named Items; do not fabricate a quote or copy the whole conversation downstream.
+Record exact saved Thesis path and source-byte fingerprint (or exact existing sufficient approved authority), applicable investigation path, optional explicitly approved Baseline identity/revision, Mandate revision and current user instruction/delta. Resolve every `From source:` section against these actual sources before CLOSED and at dependent judgment. Existing current-conversation authority may define a narrow non-product assignment, but may not replace a newly required saved Thesis. Source files are not automatically approved merely because they exist.
 
 ### Run Contract Approval Gate
 
 Use exactly one value:
 
 - `not_required` — default. No affirmative gate modifier applies to this exact Adaptive invocation, so a fully derived `CLOSED` contract proceeds under the normal Adaptive rules.
-- `required` — the current user explicitly applied `/승인게이트` as an affirmative directive/modifier to this exact Adaptive invocation. Render the complete current `CLOSED` Run Contract and STOP before the first planning or delivery mutation until the user directly approves that rendered contract.
+- `required` — the current user explicitly applied `/승인게이트` as an affirmative directive/modifier to this exact Adaptive invocation. Render the complete current `CLOSED` Run Contract and STOP before the first downstream planning or delivery mutation until the user directly approves that rendered contract.
 
 This gate is Run Contract-local execution release only. It is not Adaptive activation, a Mandate field, a product requirement, a Run Completion Boundary, a Return-to-User Boundary, a Baseline leaf approval, or a delivery approval. Do not infer it from risk, size, uncertainty, Required Named Items, enabled verification, or any other inference. Do not activate it from quoted, explanatory, hypothetical, or negated uses of `/승인게이트`.
 
@@ -222,7 +222,7 @@ Before marking the form `CLOSED`:
 
 At closure and when these structural fields materially change, pass the rendered current form to `../tools/check_run_contract.py` through stdin or exact `--file`. Do not rerun it on owner returns or ordinary product changes that leave the structure unchanged.
 
-`STRUCTURE_VALID` confirms only deterministic field, list, stage, and boundary consistency below. It is not Goal/Source Authority fidelity, user approval, delivery admission, verification, finalization, or run-completion evidence; those existing owners and checks remain authoritative.
+`STRUCTURE_VALID` confirms deterministic fields, reference syntax, stage and boundary consistency only. The checker does not open source files or expand referenced sets; a reference counts as a claimed nonempty set, not proof that the set is nonempty, complete or disjoint. Outer Main reads exact source sections and checks set membership, policy, fidelity and currentness before CLOSED. Missing, stale, empty or conflicting source meaning cannot be accepted through a syntactically valid reference. User approval, delivery admission and completion evidence remain separate.
 
 - apply the Goal and required-item coverage invariant below against relevant Source Authority, including on a supplied preclosed form; matching derived Goal/Predicate text or a `CLOSED` label is not proof of fidelity;
 
@@ -248,7 +248,7 @@ At closure and when these structural fields materially change, pass the rendered
 
 A form is `CLOSED` only when Goal Outcome and Required Named Items faithfully preserve the current user's actual assignment and satisfaction of the Completion Predicate at its declared boundary necessarily satisfies that Goal and every Required Named Item. `None required` waives no Goal obligation. Judge promised results, not word inclusion or agreement between two derived summaries; do not add unassigned outcomes or stronger acceptance to make the check conservative.
 
-At closure, post-shape/material reshape, and owner-return/final assessment, ask: **Could this contract count as successful while the result the user assigned is still unmet?** If yes, correct the derived Goal/items/Boundary/Predicate from already-clear current authority before proceeding; return `USER_INPUT_REQUIRED` only for an actual unresolved user-owned meaning. A Predicate that is true while the assigned Goal is false is contract mismatch, not success, including in a previously `CLOSED` form. Do not lower Goal/items to fit a chosen terminal. A material recovery is traced; leaf approval, Challenger agreement, Ticket `ready`/`done`, or Parent `CONTINUE` cannot withdraw the outer obligation.
+At closure, post-shape/material reshape and owner-return/final assessment, read the exact original source outcome and its causal/false-success distinctions: could this run count as successful while the assigned result is unmet? Resolve references rather than comparing two summaries. If yes, correct the execution restriction/predicate from already-clear authority; return USER_INPUT_REQUIRED only for a genuine user-owned ambiguity. Never lower source meaning to fit a terminal. Leaf approval, Ticket done and Parent CONTINUE do not withdraw outer obligations.
 
 For product or feature construction with an applicable Product Thesis conclusion, test preservation specifically: could every named feature be present and the Completion Predicate pass while the applicable Core Utility is still absent? If yes, the form is not `CLOSED`. Correct Goal/items/Boundary/Predicate from the current Product Thesis and Source Authority; return to the product-meaning owner only when those sources leave a genuine product-meaning conflict or fresh evidence invalidates the thesis. This fidelity check must not expand the invocation into the whole Core Completion Loop, unassigned strategy, polish, or adjacent features.
 
@@ -265,7 +265,7 @@ Ceiling checks use actual continuation requirements, not the boundary label alon
 - a named-item or bounded predicate that requires another Increment needs at least `BOUNDED_OUTCOME`;
 - `MANDATE_OUTCOME_SATISFIED` requires `MANDATE_OUTCOME`.
 
-The Mandate Continuation Authority is only the maximum success-continuation ceiling; the active Run Completion Boundary remains the invocation terminal. A broader ceiling does not silently upgrade a narrower assignment. If current user authority already assigns a broader outcome than the stored ceiling, revise/adopt the Mandate before mutation; if it fits the ceiling, correct the Run Contract. Natural-language outcome authority is sufficient. If completion meaning remains materially ambiguous, return only that meaning or authority gap, not a convenient current-Increment default. Never shrink Goal or Required Named Items to avoid the revision, or add an independent outcome under `EXACT_REQUIRED_SET` without current authority.
+The Mandate Continuation Authority is only the maximum success-continuation ceiling; the active Run Completion Boundary remains the invocation terminal. A broader ceiling does not silently upgrade a narrower assignment. If current user authority already assigns a broader outcome than the stored ceiling, revise/adopt the Mandate before downstream planning/delivery mutation; if it fits the ceiling, correct the Run Contract. Natural-language outcome authority is sufficient. If completion meaning remains materially ambiguous, return only that meaning or authority gap, not a convenient current-Increment default. Never shrink Goal or Required Named Items to avoid the revision, or add an independent outcome under `EXACT_REQUIRED_SET` without current authority.
 
 Concrete counterexample:
 

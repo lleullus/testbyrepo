@@ -18,6 +18,7 @@ from pathlib import Path, PurePosixPath
 
 
 SCHEMA = "iis-product-meaning/v1"
+SOURCE_SCHEMA = "iis-product-meaning/v2"
 SECTION = "Product Meaning Binding"
 FINGERPRINT_RE = re.compile(r"sha256:([0-9a-f]{64})\Z")
 SCOPE_INCREMENT_RE = re.compile(
@@ -57,11 +58,34 @@ class ProductMeaningBinding:
 
 
 @dataclass(frozen=True)
+class ProductMeaningSource:
+    schema: str
+    fingerprint: str
+    source: str
+
+    def computed_fingerprint(self) -> str:
+        path = Path(self.source)
+        if not path.is_absolute():
+            raise ProductMeaningBindingError("Source must be an exact absolute path")
+        path = _require_regular_non_symlink(path, "Product Thesis source")
+        try:
+            data = path.read_bytes()
+            text = data.decode("utf-8")
+        except OSError as exc:
+            raise ProductMeaningBindingError(f"Product Thesis source is not readable: {path}") from exc
+        except UnicodeError as exc:
+            raise ProductMeaningBindingError("Product Thesis source must be UTF-8") from exc
+        if not text.strip():
+            raise ProductMeaningBindingError("Product Thesis source must not be empty")
+        return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+@dataclass(frozen=True)
 class SpecBindingValidation:
     spec_path: Path
     mode: str
     source_revision: Path | None
-    binding: ProductMeaningBinding
+    binding: ProductMeaningBinding | ProductMeaningSource
 
 
 def _newlines(value: str) -> str:
@@ -151,8 +175,18 @@ def _parse_field_blocks(section: str) -> dict[str, str]:
     return result
 
 
-def parse_binding(text: str, *, verify_fingerprint: bool = True) -> ProductMeaningBinding:
-    raw = _parse_field_blocks(_extract_section(text))
+def parse_binding(text: str, *, verify_fingerprint: bool = True) -> ProductMeaningBinding | ProductMeaningSource:
+    section = _extract_section(text)
+    if _metadata(section, "Schema") == SOURCE_SCHEMA:
+        source = ProductMeaningSource(SOURCE_SCHEMA, _metadata(section, "Fingerprint"), _metadata(section, "Source"))
+        if re.sub(r"(?m)^(?:Schema|Fingerprint|Source):[^\n]*$", "", section).strip():
+            raise ProductMeaningBindingError("unexpected content in source binding")
+        if not FINGERPRINT_RE.fullmatch(source.fingerprint):
+            raise ProductMeaningBindingError("Fingerprint must be sha256:<64 lowercase hex>")
+        if verify_fingerprint and source.fingerprint != source.computed_fingerprint():
+            raise ProductMeaningBindingError("stale Product Meaning Binding fingerprint: source bytes changed")
+        return source
+    raw = _parse_field_blocks(section)
     core_utility = normalize_scalar(raw["Core Utility"])
     core_completion_loop = normalize_scalar(raw["Core Completion Loop"])
     success_observation = normalize_scalar(raw["Success Observation"])
@@ -205,7 +239,11 @@ def stamp_fingerprint(text: str) -> str:
     return stamped
 
 
-def binding_differences(source: ProductMeaningBinding, target: ProductMeaningBinding) -> tuple[str, ...]:
+def binding_differences(source: ProductMeaningBinding | ProductMeaningSource, target: ProductMeaningBinding | ProductMeaningSource) -> tuple[str, ...]:
+    if source.schema != target.schema:
+        return ("Schema",)
+    if isinstance(source, ProductMeaningSource) and isinstance(target, ProductMeaningSource):
+        return () if source.source == target.source else ("Source",)
     pairs = (
         ("Core Utility", source.core_utility, target.core_utility),
         ("Core Completion Loop", source.core_completion_loop, target.core_completion_loop),

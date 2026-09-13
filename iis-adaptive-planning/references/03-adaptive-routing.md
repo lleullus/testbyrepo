@@ -16,10 +16,12 @@ Apply the current Baseline leaf directly. Use the Adaptive Mandate only for genu
 
 ## Run Contract admission precedes routing
 
-Before the Starting route below can perform any planning mutation, Outer Main for the current explicit Adaptive invocation must close and render one Run Contract.
+The pre-closure write exception is the independent Thesis source defined by product-thesis. Save it before dependent investigation/Run closure, without a storage approval branch; saving unresolved meaning does not permit Scope/Matt mutation or resolve an approval gate. Resolve source references in the Run Contract against actual Thesis, investigation, applicable Baseline and Mandate, not another compressed product summary.
+
+Before the Starting route below can perform downstream planning mutation, Outer Main for the current explicit Adaptive invocation must close and render one Run Contract.
 
 - Apply every closure requirement in [09-run-contract.md](09-run-contract.md), including Goal/required-item coverage, actual Source Authority, model consent, and any explicit approval gate. Determined fields or a supplied `CLOSED` label alone do not establish a faithful sufficient contract.
-- If a material field remains unresolved, mark it `USER_INPUT_REQUIRED`, ask only for that smallest field, and hard STOP before mutation.
+- If a material field remains unresolved, mark it `USER_INPUT_REQUIRED`, ask only for that smallest field, and hard STOP before downstream planning/delivery mutation.
 - Read-only inspection needed to establish inspectable facts may precede closure.
 - A later leaf may expose a material contradiction requiring Run Contract correction; repair from already-clear user authority or return only the unresolved decision while preserving settled obligations.
 - A Run Completion Boundary broader than the Mandate's Continuation Authority ceiling cannot close unless the current user instruction explicitly revises/adopts that broader authority.
@@ -181,7 +183,7 @@ Soft under active Adaptive Mandate:
 Hard even in Adaptive:
 
 - status-only inspection STOP;
-- unresolved Run Contract field STOP before mutation;
+- unresolved Run Contract field STOP before downstream planning/delivery mutation;
 - unresolved user decision STOP;
 - special explicit-only gate STOP;
 - invalid/missing authority or validator failure STOP until the exact defect is resolved;

@@ -50,7 +50,7 @@ Use exactly one value:
 - `BOUNDED_OUTCOME` — after each fully delivered Increment, Adaptive may re-evaluate one exact bounded outcome and, while that outcome remains unsatisfied, may let Scope Shaper select another current Increment from fresh actual product state.
 - `MANDATE_OUTCOME` — after each fully delivered Increment, Adaptive may re-evaluate the Mandate's Desired Product Outcome and, while it remains unsatisfied, may let Scope Shaper select another current Increment from fresh actual product state.
 
-Continuation Authority is a **ceiling**, not the actual terminal of the current invocation. The invocation-local Run Completion Boundary and Completion Predicate in [09-run-contract.md](09-run-contract.md) define when that exact run succeeds.
+Continuation Authority is a **ceiling**, not this invocation’s terminal. Mandate retains decision priorities, constraints and delegated authority. Its product outcome refers to the saved Thesis or sufficient existing authority without replacing that meaning with a new summary. Run Contract applies the original success meaning to the current scope/stage inside this ceiling; it cannot independently enlarge the authority.
 
 A Run Completion Boundary must fit within this ceiling:
 
@@ -58,7 +58,7 @@ A Run Completion Boundary must fit within this ceiling:
 - `BOUNDED_OUTCOME` permits success continuation only as far as the exact bounded outcome authorized for the run.
 - `MANDATE_OUTCOME` permits success continuation as far as the Desired Product Outcome.
 
-If the current user assigns an outcome that requires broader continuation than the stored ceiling, revise or adopt the Mandate before the first mutation. Clear natural-language outcome authority is sufficient; the user need not name an enum or add `끝까지`. If the actual completion meaning is materially ambiguous or broader authority absent, return only that gap. Never close a smaller Goal/Run Contract to avoid revision or silently expand the Mandate.
+If the current user assigns an outcome that requires broader continuation than the stored ceiling, revise or adopt the Mandate before the first downstream planning/delivery mutation. Clear natural-language outcome authority is sufficient; the user need not name an enum or add `끝까지`. If the actual completion meaning is materially ambiguous or broader authority absent, return only that gap. Never close a smaller Goal/Run Contract to avoid revision or silently expand the Mandate.
 
 Do not infer `BOUNDED_OUTCOME` or `MANDATE_OUTCOME` merely because `Applies-To` names an initiative, Scope, or Work Package. `BOUNDED_OUTCOME` requires one exact bounded Completion Predicate in the Run Contract; applicability alone is not a completion test.
 

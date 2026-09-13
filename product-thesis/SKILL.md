@@ -98,7 +98,7 @@ Ask only still-unresolved or newly revealed core choices needed for the current 
 
 For example, “make and revise a comic through conversation” may mean revising the story before generation or editing selected generated panels while preserving the others. Ask about that product difference, not button placement or model choice. If the user chooses selective panel editing, preserve that loop rather than substituting full regeneration for implementation convenience. If the request already explicitly defines the result and revision boundary, do not ask it again.
 
-End this focused dialogue when the user result and core flow are concrete and no material user-owned choice about them remains. This is not yet `CALIBRATED`: complete the existing truth/causal, required/candidate, success-observation, and counterexample checks, resolving any remaining material user-owned meaning through the existing question rule. Unknown implementation feasibility remains unknown, not verified. Carry conclusions through the existing five binding values and Result contract; add no clarification field, conversation approval record, or new approval gate, and preserve existing explicit approval requirements.
+End this focused dialogue when the user result and core flow are concrete and no material user-owned choice about them remains. This is not yet `CALIBRATED`: complete the truth/causal, named-item, success-observation and counterexample checks. Preserve the actual core behaviors and causal explanations in the source document below, not just feature names. Unknown feasibility remains unknown. There is no additional clarification approval gate.
 
 ### Truth / Causal Invariants
 
@@ -148,19 +148,28 @@ If fresh evidence invalidates the Reason to Exist, Core Utility, or an essential
 
 ## Downstream Preservation
 
-After `CALIBRATED`, run normal next-increment admission. Product Thesis never selects Scope Shaper versus Ask Matt by itself.
+Persist the actual Thesis conclusion before subsequent investigation, Run Contract closure and Scope/Matt consumption. Thesis-source writing is authorized on entry to this phase, including before model selection and `/승인게이트` release; do not ask for separate storage permission or defer storage behind those conditions. This permission covers the Thesis source only, not Scope/Spec mutation, implementation or external effects. Save unresolved meaning honestly and retain `USER_INPUT_REQUIRED`; persistence is neither calibration nor product approval nor permission to continue.
 
-Record only the must-preserve product-level subset as one compact `Product Meaning Binding` in the next durable planning artifact. The binding contains exactly: Core Utility, Core Completion Loop, explicitly required Outcomes / Means, Truth / Causal Invariants, and Success Observation. Candidate / Supporting Means, Non-Core / Defer Candidates, detailed Behavior/UI policy, current Increment projection, Ticket decomposition, and implementation method are excluded. Do not add a separate required Product Thesis artifact, revision ledger, registry, conversation ledger, stable obligation ID, or reviewer lifecycle.
+Use [PRODUCT-THESIS.template.md](templates/PRODUCT-THESIS.template.md) as a content guide, in the user's language. Preserve Reason to Exist, concrete core behaviors and why they are necessary, plausible false successes, source authority/provenance, required/candidate/supporting/deferred meaning and unresolved decisions. Do not compress the conclusion into a five-value projection or copy private reasoning/transcripts. The existing five values can express causal meaning; source recoverability, not field count, is the reason for this change.
 
-Express the core behaviors through those existing five values: Core Utility states the user result; Core Completion Loop connects the essential inputs, judgments or transformations, and results; Required Outcomes / Means preserves explicitly required or duly adopted items with their actual provenance; Truth / Causal Invariants states the necessary product-level relationships; and Success Observation distinguishes fulfillment from plausible substitutes. Do not add a sixth `Core Behaviors` field. Feature names or artifact existence alone are insufficient when they do not establish the promised behavior.
+Use an exact canonical file under `<Project-Root>/docs/planning/product-thesis/<meaning-slug>/THESIS-NNN.md`, choosing the next unused ordinal. Preserve referenced revisions unchanged; changed meaning gets a new file, never an overwritten historical source. Reuse a sufficient existing recoverable source instead of recreating it. For unrooted greenfield use one exact `/tmp/iis-product-thesis-<unique>/THESIS-NNN.md` location and report it; this is not a Project Root and does not authorize Scope/Matt artifact writes. Before durable downstream binding, preserve the same bytes at a durable project source location and bind that exact path. Do not delete a source still referenced by an artifact.
 
-For a Scope path, write the binding once in `SCOPE-SHAPING-RESULT.md`; the normal byte-for-byte immutable `revisions/SHAPE-NNN.md` snapshot preserves the same binding. Do not copy the binding into `INC-NNN.md` or Tickets. For a direct Ask Matt path, `SPEC.md` is the first durable artifact and carries the binding once.
+New Scope results and direct Matt Specs use this source reference rather than copying the five values:
 
-Use schema `iis-product-meaning/v1`. After writing the five binding values, run `python3 tools/product_meaning_binding.py fingerprint <artifact>` to calculate the deterministic SHA-256 value, write that exact value to `Fingerprint:`, then run `python3 tools/product_meaning_binding.py validate <artifact>` before a durable artifact is treated as valid. The fingerprint is only equality/accidental-drift evidence; it is not authentication, signing, tamper-proofing, or proof of semantic correctness.
+```text
+## Product Meaning Binding
 
-The mechanical guarantee is deliberately narrow: once the planning owner records a binding, downstream validation can detect serialization/copy drift across the existing Scope -> Increment -> immutable Scope revision -> Spec chain. Product Thesis -> first binding semantic fidelity and binding -> actual Scope/Spec contract semantic fidelity remain responsibilities of the existing planning owner, faithful projection, and Mandatory contract audit. Do not add a mandatory LLM semantic reviewer for those responsibilities.
+Schema: iis-product-meaning/v2
+Source: /absolute/canonical/path/THESIS-NNN.md
+Fingerprint: sha256:<64 lowercase hex>
+```
 
-The binding is product-level meaning, not current delivery scope. A downstream owner may narrow delivery to its authorized current Increment but may not contradict or truncate the product-level binding merely because the Increment delivers only part of the loop. Conversely, the full binding never expands the current Increment or Spec obligation. New explicit user authority takes precedence.
+The fingerprint is SHA-256 of the full source UTF-8 bytes. Compute it with `python3 tools/product_meaning_binding.py fingerprint <binding-artifact>` and validate with `validate <binding-artifact>`. A source must remain readable and match its fingerprint. The immutable Scope revision preserves the same reference; Increment remains the existing reference hop, and Scope-shaped Spec preserves that exact binding. Direct Matt has no invented Scope hop. Do not copy Thesis or its binding into Tickets.
+
+Existing v1 bindings and sufficient legacy approved meaning remain usable without bulk migration or recalibration. A new direct artifact uses v2 when a source is available; faithful continuation of an existing v1 Scope keeps its exact binding and original authority. Broken v2 references must fail, never fall back to remembered or legacy meaning.
+
+The planning owner reads the actual source and applies its behavior/causal meaning to the current contract. Source hashing and exact Scope lineage establish recoverability and accidental-drift detection, not semantic fidelity or current user approval. Read the historical source actually bound to the artifact; if newer authority changes applicable meaning, expose and resolve the difference rather than silently substituting a latest file. The full source never expands the authorized current Increment. After `CALIBRATED`, continue normal next-increment admission; no new reviewer, registry or approval ceremony is added.
+
 
 ## Result
 
@@ -168,6 +177,8 @@ Report the smallest sufficient result:
 
 ```text
 PRODUCT THESIS
+
+Source: <exact saved Thesis path>
 
 Reason to Exist:
 <current shortfall and why the work matters>
@@ -202,4 +213,4 @@ CALIBRATED | USER_INPUT_REQUIRED
 
 Use `CALIBRATED` only when the counterexample gates close and no material product meaning remains unresolved. Continue directly to next-increment admission without a separate approval prompt when current authority fully determines the result.
 
-Use `USER_INPUT_REQUIRED` only when the available authority and inspectable evidence leave one material user-owned product meaning genuinely split. Ask only for that smallest decision and stop before planning mutation. Do not use missing implementation detail, preference among replaceable means, or an inspectable fact as a reason to ask.
+Use `USER_INPUT_REQUIRED` only for a material user-owned product meaning still split after available authority and evidence. Save the conclusion and exact unresolved choice, ask for that choice, and stop before downstream planning mutation. Do not delay Thesis storage or ask about inspectable facts and replaceable implementation details.

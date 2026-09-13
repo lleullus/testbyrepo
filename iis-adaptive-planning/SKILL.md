@@ -12,7 +12,7 @@ Run an **opt-in alternate operating mode** for IIS Planning without replacing or
 Preserve the current IIS product-planning semantics, authority owners, canonical artifact schemas, validators, and terminal Ready Ticket boundary. Add only these Adaptive behaviors:
 
 1. establish a user-authorized Planning Mandate;
-2. close one invocation-local Adaptive Run Contract that faithfully preserves the user's assigned Goal, required/candidate meaning, independent delivery-stage authority, and sufficient whole-run completion/readback before mutation;
+2. close one invocation-local Adaptive Run Contract that faithfully preserves the user's assigned Goal, required/candidate meaning, independent delivery-stage authority, and sufficient whole-run completion/readback before downstream planning/delivery mutation;
 3. satisfy eligible repeated planning confirmations through standing delegated confirmation when the mandate resolves the decision;
 4. reshape the current Increment and re-enter the correct planning leaf when new evidence makes the current shape materially worse;
 5. classify later verification problems by authority and route them to implementation, verification setup, or planning instead of forcing a test pass; and
@@ -45,7 +45,7 @@ Do not copy a remembered Baseline schema into this skill or treat an older packa
 Read these references before the corresponding work:
 
 - always: [references/00-baseline-coexistence.md](references/00-baseline-coexistence.md)
-- always before the first mutation and at every whole-run terminal decision: [references/09-run-contract.md](references/09-run-contract.md)
+- always before the first downstream planning/delivery mutation and at every whole-run terminal decision: [references/09-run-contract.md](references/09-run-contract.md)
 - mandate creation/update: [references/01-mandate-contract.md](references/01-mandate-contract.md)
 - delegated decisions and confirmations: [references/02-delegated-decision-policy.md](references/02-delegated-decision-policy.md)
 - routing and re-entry: [references/03-adaptive-routing.md](references/03-adaptive-routing.md)
@@ -104,18 +104,19 @@ The caller/host, not a planning leaf or an invented controller, owns the actual 
 
 ## Product Meaning Before Run Closure
 
-After explicit Adaptive activation and any authorized read-only evidence intake, inspect the applicable existing Mandate and current planning authority. Apply the current `iis-workflow` Product Meaning Admission before Run Contract closure. When new or materially revised product meaning is required, Outer Main directly reads and performs the current `product-thesis` skill as read-only calibration; otherwise reuse current applicable approved product meaning.
+After explicit Adaptive activation, inspect the applicable Mandate and current planning authority. Apply current iis-workflow Product Meaning Admission. When new meaning is needed, Outer Main performs product-thesis directly and saves its full source before Run Contract closure; storage authority is already given, including during model-selection or /승인게이트 waits. Reuse sufficient current sources without recalibration. Read authorized investigation evidence against that source, then reconcile any explicitly applicable approved Transition Baseline. Neither evidence nor a Block projection replaces the Thesis. An invalidated core premise returns to the product-meaning owner; ordinary implementation uncertainty does not.
 
 Use a `CALIBRATED` Product Thesis to normalize or revalidate Mandate meaning, then close the invocation-local Run Contract. The order is:
 
 ```text
 current explicit Adaptive instruction
 -> applicable existing Mandate and current authority
--> conditional read-only Product Thesis calibration
+-> conditional Product Thesis calibration and independent source storage
+-> authorized investigation / evidence reuse and optional approved Baseline reconciliation
 -> Mandate normalization or revalidation
 -> invocation-local Run Contract closure
 -> required /승인게이트 release when applicable
--> first planning or delivery mutation
+-> first downstream Scope/Matt planning or delivery mutation
 ```
 
 Product Thesis may describe broader long-term product meaning, but the Mandate ceiling and Run Contract cover only current authority. It does not widen an explicit stage stop, authorize implementation or verification, or turn the whole Core Completion Loop into the current Increment. Newer explicit user authority wins.
@@ -124,7 +125,7 @@ Do not recalibrate on ordinary Ticket progress, implementation detail, leaf-loca
 
 ## Adaptive Run Contract
 
-Before the first Adaptive planning mutation, after the conditional Product Thesis and Mandate normalization order above, close and render the compact invocation contract using [templates/ADAPTIVE-RUN-CONTRACT.template.md](templates/ADAPTIVE-RUN-CONTRACT.template.md). Apply [Goal and required-item coverage](references/09-run-contract.md#goal-and-required-item-coverage-invariant) against the relevant actual user instructions at closure, post-shape/material reshape, and owner-return/final assessment; a Goal string or preclosed label alone is insufficient.
+Before downstream Scope/Matt planning or delivery mutation, close and render the invocation execution contract under `references/09-run-contract.md`. Thesis source storage precedes and is exempt from this gate; it creates no approval or execution authority. Use exact source references for unchanged Goal/items/success meaning rather than reauthoring a product summary. Apply source fidelity at closure, reshape and final assessment; neither matching summaries nor a CLOSED label proves it.
 
 The Run Contract establishes:
 
@@ -141,13 +142,13 @@ The Run Contract establishes:
 - Run Contract Approval Gate: `required` | `not_required`; and
 - Source Authority.
 
-Auto-fill every field current user authority, the applicable Mandate, canonical planning authority, or inspectable facts determine. A fully derived `CLOSED` form normally proceeds without another approval prompt. The only Run Contract-local exception is an affirmative `/승인게이트` modifier on the current explicitly active Adaptive invocation: set `Run Contract Approval Gate: required`, render the exact `CLOSED` form, and STOP before the first planning or delivery mutation until the user directly approves that rendered contract. Without that modifier, set `Run Contract Approval Gate: not_required` and proceed normally.
+Auto-fill every field current user authority, the applicable Mandate, canonical planning authority, or inspectable facts determine. A fully derived `CLOSED` form normally proceeds without another approval prompt. The only Run Contract-local exception is an affirmative `/승인게이트` modifier on the current explicitly active Adaptive invocation: set `Run Contract Approval Gate: required`, render the exact `CLOSED` form, and STOP before the first downstream planning or delivery mutation until the user directly approves that rendered contract. Without that modifier, set `Run Contract Approval Gate: not_required` and proceed normally.
 
 `/승인게이트` does not activate Adaptive by itself and does not change Goal Outcome, required/candidate meaning, delivery stages, completion meaning, Mandate authority, or any Baseline leaf approval. Standing delegation cannot satisfy this gate. If the user materially revises the decision-critical Run Contract meaning while responding, re-close and re-render the revised contract before requesting direct approval again; leaf-local planning or delivery changes inside the approved contract do not create another approval gate.
 
 Before closing model choices, apply [Delivery Model Selection](references/09-run-contract.md#delivery-model-selection). Preserve explicit applicable user choices. For missing enabled SUBAGENT selections, read the replaceable model guide linked there, check current available configurations, recommend a workload-appropriate configuration with reasons, and ask for all missing choices together. A recommendation is not consent: keep `USER_INPUT_REQUIRED` until confirmed. Do not ask for child models for DIRECT or disabled stages, and do not treat model selection as a new `/승인게이트` approval gate. Confirmed choices carry through this invocation without automatic substitution or repeated per-Ticket questions.
 
-If a material field remains unresolved, mark the form `USER_INPUT_REQUIRED`, ask only for the smallest field whose different answers would change required scope, candidate freedom, delivery stages, delivery model/effort selection, success continuation, or completion meaning, and STOP before mutation. Do not ask the user to repeat settled fields or decide an inspectable fact.
+If a material field remains unresolved, mark the form `USER_INPUT_REQUIRED`, ask only for the smallest field whose different answers would change required scope, candidate freedom, delivery stages, delivery model/effort selection, success continuation, or completion meaning, and STOP before downstream planning/delivery mutation. Do not ask the user to repeat settled fields or decide an inspectable fact.
 
 Required Named Items and Candidate Named Items may coexist. Do not collapse a mixed assignment into one list-wide label, move a Required Named Item into the Candidate list, or treat a Candidate Named Item as a completion obligation without current user authority.
 
@@ -178,7 +179,7 @@ The mandate establishes:
 
 Do not demand a form-filling ceremony. If the user's natural-language instruction establishes these sufficiently, record the mandate and proceed. Ask only when a material product choice cannot be resolved from current authority and the mandate.
 
-The Mandate fixes how to judge a good plan and the **maximum authorized success-continuation ceiling**. The Run Contract fixes what this invocation must preserve and what exact predicate ends it. If the Run Completion Boundary needs broader continuation than the stored ceiling and the current instruction explicitly grants it, revise/adopt the Mandate before mutation. Otherwise return the exact authority gap. Never silently stop early or expand authority.
+The Mandate fixes how to judge a good plan and the **maximum authorized success-continuation ceiling**. The Run Contract fixes what this invocation must preserve and what exact predicate ends it. If the Run Completion Boundary needs broader continuation than the stored ceiling and the current instruction explicitly grants it, revise/adopt the Mandate before downstream planning/delivery mutation. Otherwise return the exact authority gap. Never silently stop early or expand authority.
 
 The mandate delegates **planning judgment only**. It never turns Adaptive Planning into implementation or verification authority and never grants deployment, credential, external-effect, destructive-action, worker-roster, or production authority. Under explicit Adaptive activation, Outer Main defaults `Implementation: yes` and `Verification: yes` unless the user independently overrides either field; execution remains owned by the delivery skills.
 

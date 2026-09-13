@@ -2,6 +2,8 @@
 
 ## Purpose
 
+For a new product-meaning request, use the saved Thesis as the meaning input to subsequent investigation; sufficient pre-existing evidence may be reused. Keep confirmed facts, unresolved premises and contradictions separate from product authority. A core-meaning contradiction returns to the Thesis owner; implementation uncertainty alone does not lower the goal. This intake adds no investigation stage or storage approval. After intake, Outer Main reads the Thesis and evidence together and reconciles an explicitly applicable Baseline, if any, before Run closure.
+
 Allow one exact independently produced `repository-investigation` artifact to improve an explicit Adaptive invocation without turning that artifact, its author, or its planning-relevance hints into IIS product authority.
 
 This is an optional evidence intake path. Adaptive behavior is unchanged when no exact investigation artifact is supplied by the current user/caller context.

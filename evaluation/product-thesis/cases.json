@@ -116,6 +116,27 @@
       "fixture": "current-scope-thesis",
       "required_observations": ["Current applicable product meaning is reused without a new Product Thesis run."],
       "forbidden_observations": ["A new session alone is treated as a reason to recalibrate product meaning."]
+    },
+    {
+      "id": "L-source-through-run-to-spec",
+      "entry": "adaptive",
+      "downstream_planning": true,
+      "prompt": "IIS Adaptive Planning으로 새 제품을 기획해. 사전 승인된 Baseline은 없다. 대화로 만화를 만드는 제품이며 사용자가 수정한 최신 이야기가 제작 계획에 반영되고, 사용자가 승인한 바로 그 계획이 생성 입력을 결정해야 한다. 생성된 그림도 승인된 이야기와 인물·사건 관계를 보존해야 하며 불일치를 숨긴 성공 표시는 안 된다. 기존 생성물 수정은 이번 범위가 아니다. 목표는 이 결과를 위한 Spec과 Ready Tickets까지이며 구현·검증은 하지 마. 기획상 명확한 권고 채택은 위임한다. Thesis 원본을 저장하고 현재 상태를 조사한 뒤 Run Contract, Scope, Matt와 Spec까지 기존 소유권으로 진행해. 미해결 사용자 선택이 실제로 있으면 그 지점에서 멈춰.",
+      "required_observations": [
+        "A recoverable Thesis source preserves revision-to-plan-to-generation causality and image fidelity, not just feature names.",
+        "Run Contract references source meaning and limits execution to planning without inventing a Transition Baseline.",
+        "If Scope/Spec is reached, its exact source binding is recoverable and its contract cannot pass by saving the revised conversation while generating from the old story.",
+        "Unresolved product choices stop progression without discarding the saved Thesis."
+      ],
+      "forbidden_observations": ["Run summary substitutes for source meaning; storage is deferred until Scope; planning authority silently enables implementation."]
+    },
+    {
+      "id": "M-storage-before-approval",
+      "entry": "adaptive",
+      "downstream_planning": true,
+      "prompt": "IIS Adaptive Planning /승인게이트. 새 제품은 사용자가 창을 닫아도 등록한 감시 조건을 유지하고 조건 충족 시 실제 알림을 전달해야 한다. 이번에는 기획까지만 하고 구현·검증은 하지 마. Thesis 파일 저장 권한은 지금 있다. Thesis를 정리하고 저장한 다음 Run Contract를 제시해. 계약 승인은 아직 하지 않았으니 Scope 이후 작업은 시작하지 마.",
+      "required_observations": ["Thesis is saved before Run approval without a separate storage question.", "Run Contract approval remains pending and no Scope/Spec is written.", "Stored meaning preserves the closed-browser monitoring-to-notification loop."],
+      "forbidden_observations": ["Approval wait prevents Thesis storage or Thesis storage is treated as approval to continue."]
     }
   ]
 }

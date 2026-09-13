@@ -4,6 +4,7 @@ IIS is the planning layer that turns user intent into approved product authority
 
 ## Components
 
+- `product-thesis/`: conditional product-meaning design with a saved full source before downstream planning. New `iis-product-meaning/v2` bindings reference exact source bytes; existing v1 authority remains supported without bulk migration.
 - `scope-shaper/`: connected outcome-landscape investigation plus selection of exactly one durable next product construction Increment from the actual current product state.
 - `scope-investigation-runner/`: optional read-only evidence investigation used only when the user explicitly authorizes Runner use and supplies the exact roster/concurrency binding.
 - `behavior-design-lead/`: canonical Behavior authority design performed inside planning.
@@ -29,6 +30,10 @@ python3 scripts/sync_installed_iis.py activate --store /absolute/iis-store --bun
 The default store is `${XDG_DATA_HOME:-~/.local/share}/iis`; `current` selects one complete release. `--host codex` selects the separate Codex install, not OMP. Existing unmanaged files/symlinks require explicit `--migrate`, which preserves exact previous entries in a recovery snapshot. Never declare hosts quiescent from a cancellation receipt: settle workers/services and unresolved effects first. Start a **fresh top-level host** and check actual loaded identity and behavior after activation. The installer reports `loaded_identity: NOT_CHECKED`.
 
 `rollback --confirm-quiescent` restores the preceding install snapshot only after candidate work/effects are contained. `remove --confirm-quiescent` restores original entries and preserves releases/runtime data; neither rolls back product or external effects. Intervening user changes stop recovery rather than being overwritten. Model configuration, credentials, the replaceable model guide, product Tickets and runtime state are not bundled. Observatory's independent installer remains `python3 scripts/sync_installed_observatory.py`.
+
+Thesis source storage is authorized before Run Contract/model/approval closure; it does not approve product meaning or release Scope/Matt/delivery gates. Sources normally live at `docs/planning/product-thesis/<meaning-slug>/THESIS-NNN.md`; preserve referenced revisions rather than overwriting them. Scope/Spec consumers validate and read the exact source through the existing immutable Scope lineage (or directly for direct Matt). Run Contract refers to unchanged source outcomes/items/success sections and adds only this invocation's scope/stage restrictions inside the Mandate ceiling. Optional Transition Baseline remains a transition map, not a replacement Thesis.
+
+For `iis-product-meaning/v2`, `product-thesis/tools/product_meaning_binding.py fingerprint <artifact>` computes SHA-256 of the source bytes; `validate` checks source availability/hash and `validate-spec` also checks the exact existing Scope lineage. Preserve or relocate source bytes and update references explicitly when moving projects; an absolute reference is not portable by itself. Neither hashing nor Run Contract `STRUCTURE_VALID` proves semantic fidelity. The planning owner must read source sections, resolve referenced required/candidate sets and apply the original causal meaning to the current outcome.
 
 ## Adaptive execution boundary
 

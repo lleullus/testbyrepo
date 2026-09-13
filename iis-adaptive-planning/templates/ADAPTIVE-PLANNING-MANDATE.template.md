@@ -59,6 +59,6 @@ Meaning: maximum authorized success-continuation ceiling after a delivered curre
 - This Mandate delegates IIS planning judgment only; it does not make Adaptive Planning the implementation or verification authority.
 - Continuation Authority is the maximum success-continuation ceiling. The invocation-local Adaptive Run Contract defines the actual Run Completion Boundary and Completion Predicate.
 - Explicit Adaptive activation separately supplies Outer Main's default current-Increment implementation/verification handoff unless the user opts out.
-- A Run Completion Boundary broader than this ceiling requires an explicit current Mandate revision/adoption before mutation; never silently stop early or expand authority.
+- A Run Completion Boundary broader than this ceiling requires an explicit current Mandate revision/adoption before downstream planning/delivery mutation; never silently stop early or expand authority.
 - Neither the Mandate nor Adaptive activation authorizes deployment, credentials, production/shared external mutation, destructive action, worker selection, or adversarial-consensus activation.
 - Canonical IIS artifacts remain governed by current Baseline schemas and validators.

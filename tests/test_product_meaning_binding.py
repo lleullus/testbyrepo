@@ -230,6 +230,50 @@ Example
         result = binding.validate_spec_binding(spec_path)
         self.assertEqual(result.mode, "scope")
 
+    def _source_project(self, *, direct=False):
+        td, spec, revision = self._make_project(direct=direct)
+        self.addCleanup(td.cleanup)
+        source = Path(td.name).resolve() / "THESIS-001.md"
+        source.write_text("# Product Thesis\n\nThe confirmed story determines the approved plan and generation input.\n", encoding="utf-8")
+        reference = binding.stamp_fingerprint(
+            f"## Product Meaning Binding\n\nSchema: iis-product-meaning/v2\nSource: {source}\nFingerprint: {ZERO_FINGERPRINT}\n"
+        )
+        for artifact in (spec, revision):
+            artifact.write_text(artifact.read_text().replace(binding_document(), reference), encoding="utf-8")
+        return spec, revision, source
+
+    def test_source_binding_recovers_original_thesis_through_scope_and_direct_paths(self):
+        for direct in (False, True):
+            with self.subTest(direct=direct):
+                spec, revision, source = self._source_project(direct=direct)
+                result = binding.validate_spec_binding(spec)
+                self.assertEqual(Path(result.binding.source).read_bytes(), source.read_bytes())
+                self.assertEqual(result.source_revision, None if direct else revision)
+
+    def test_changed_or_missing_source_cannot_fall_back_to_legacy(self):
+        spec, _, source = self._source_project(direct=True)
+        source.write_text("A feature list without the causal link.\n", encoding="utf-8")
+        with self.assertRaisesRegex(binding.ProductMeaningBindingError, "stale"):
+            binding.validate_spec_binding(spec)
+        source.unlink()
+        with self.assertRaisesRegex(binding.ProductMeaningBindingError, "not readable"):
+            binding.validate_spec_binding(spec)
+
+    def test_scope_rejects_rebound_source_even_when_new_hash_is_valid(self):
+        spec, _, source = self._source_project()
+        newer = source.with_name("THESIS-002.md")
+        newer.write_text("New product meaning.\n", encoding="utf-8")
+        spec.write_text(binding.stamp_fingerprint(spec.read_text().replace(str(source), str(newer))), encoding="utf-8")
+        with self.assertRaisesRegex(binding.ProductMeaningBindingError, "Source"):
+            binding.validate_spec_binding(spec)
+
+    def test_new_revision_does_not_change_historical_binding(self):
+        spec, _, source = self._source_project()
+        original = source.read_bytes()
+        source.with_name("THESIS-002.md").write_text("Newer explicit meaning.\n", encoding="utf-8")
+        result = binding.validate_spec_binding(spec)
+        self.assertEqual(Path(result.binding.source).read_bytes(), original)
+
 
 if __name__ == "__main__":
     unittest.main()

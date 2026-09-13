@@ -7,11 +7,15 @@ Run Contract Approval Gate: required | not_required
 
 ## Goal Outcome
 
-<faithful result assigned by the current user to this invocation, preserving explicit constraints and stage/stop limits; not a replacement for Source Authority>
+From source: /absolute/saved/source#Core Utility
+
+<Only an explicit current scope restriction or user-authorized delta; omit when the source outcome is assigned unchanged.>
 
 ## Required Named Items
 
-- <exact required user-named capability/change/outcome>
+From source: /absolute/saved/source#Required Outcomes / Means
+
+For an explicitly narrowed/revised set, use exact selected source-item bullets instead; do not duplicate an unchanged catalogue.
 
 or exact:
 
@@ -19,7 +23,9 @@ None required
 
 ## Candidate Named Items
 
-- <exact candidate capability/change/outcome>
+From source: /absolute/saved/source#Candidate / Supporting Means
+
+For an explicit classification delta, use exact affected source-item bullets instead. Reference only the applicable candidates, not required supporting work.
 
 or exact:
 
@@ -55,7 +61,9 @@ READY_TICKET_SET | READY_EXECUTION_PLANS | CURRENT_INCREMENT_IMPLEMENTED | CURRE
 
 ## Completion Predicate
 
-<one observable condition sufficient for the entire assigned Goal Outcome and every Required Named Item at the approved boundary, without adding unassigned outcomes>
+From source: /absolute/saved/source#Success Observation
+
+<Apply that meaning to the exact enabled stage and any explicit scope limit. Retain current-Increment done denominator plus applicable parent-obligation readback where required. Do not rewrite product success or substitute Block Exit.>
 
 ## Authoritative Readback
 
@@ -65,7 +73,7 @@ For READY_EXECUTION_PLANS: <exact required preparation Tickets, actual READY TIC
 
 ## Source Authority
 
-<relevant actual user instruction/constraint/revision anchors and applicable Mandate revision, sufficient to check the derived Goal/items for omissions; do not fabricate a quote>
+<Exact Thesis path and source-byte fingerprint or sufficient existing authority; exact applicable investigation, approved Baseline identity/revision and Mandate revision; current user instructions and explicit deltas. Resolve every referenced section from the actual source, not this form’s summaries.>
 
 ## Unresolved Field
 
@@ -81,10 +89,10 @@ or, only when `Status: USER_INPUT_REQUIRED`:
 - A recommendation from the model guide or a host default is not a user selection. Confirm missing active SUBAGENT model/effort choices together; do not ask again for choices already fixed by current user authority.
 - Required Named Items and Candidate Named Items may coexist; no item may appear in both.
 - Default `Run Contract Approval Gate` to `not_required`. Set it to `required` only when exact `/승인게이트` is an affirmative directive/modifier on the current explicitly active Adaptive invocation; quoted, explanatory, hypothetical, or negated mentions do not activate it, and the token does not activate Adaptive by itself.
-- A `CLOSED` form proceeds without redundant confirmation when the gate is `not_required`. When the gate is `required`, render this exact `CLOSED` form and STOP before the first planning or delivery mutation until direct user approval.
+- A `CLOSED` form proceeds without redundant confirmation when the gate is `not_required`. When the gate is `required`, render this exact `CLOSED` form and STOP before the first downstream planning or delivery mutation until direct user approval.
 - The gate is Run Contract-only. It does not add Mandate, Scope, Ask Matt, Spec, Ticket, implementation, or verification approval gates and cannot be satisfied through standing delegation.
 - If direct approval materially revises decision-critical Run Contract meaning, re-close and re-render the revised form before requesting approval again; downstream changes already allowed by the approved contract do not retrigger the gate.
-- Do not begin planning or delivery mutation while a material field remains unresolved.
+- Do not begin downstream planning or delivery mutation while a material field remains unresolved.
 - Implementation and Verification are independent invocation fields; preserve explicit `do not implement` and `do not verify` overrides.
 - With explicit Adaptive activation and no explicit stage/stop override, default to `CURRENT_INCREMENT_DELIVERED` only when it covers the entire current Goal and required scope within the Mandate ceiling. A clear broader natural-language assignment needs no enum or extra continuation phrase.
 - Continuation Authority is the Mandate ceiling; this form's Run Completion Boundary is the actual invocation terminal within that ceiling.

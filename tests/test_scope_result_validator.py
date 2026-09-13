@@ -44,6 +44,11 @@ class ValidatorTests(unittest.TestCase):
 
     def _render(self, name: str, replacements: dict[str, str]) -> str:
         text = (TEMPLATES / name).read_text(encoding="utf-8")
+        if "## Product Meaning Binding" in text:
+            base = Path(replacements["<absolute project root>"])
+            thesis = base / "THESIS-001.md"
+            thesis.write_text("# Product Thesis\n\nConfirmed revisions determine the approved generation input.\n", encoding="utf-8")
+            text = text.replace("<exact canonical absolute saved Thesis path>", str(thesis))
         for old, new in replacements.items():
             text = text.replace(old, new)
         text = text.replace("Lead Disposition: SELECT | REJECT", "Lead Disposition: SELECT")
@@ -136,11 +141,8 @@ class ValidatorTests(unittest.TestCase):
     def test_scope_binding_stale_fingerprint_fails(self) -> None:
         td, source, _ = self.make_bounded()
         self.addCleanup(td.cleanup)
-        text = source.read_text(encoding="utf-8").replace(
-            "Core Utility:\nExample",
-            "Core Utility:\nChanged after fingerprinting",
-        )
-        self._write_current_scope(source, text)
+        thesis = product_meaning_binding.parse_binding(source.read_text(encoding="utf-8")).source
+        Path(thesis).write_text("Changed product meaning after Scope confirmation.\n", encoding="utf-8")
         with self.assertRaisesRegex(validator.ValidationError, "stale Product Meaning Binding fingerprint"):
             validator.validate(source)
 

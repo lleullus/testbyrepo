@@ -59,7 +59,7 @@ Before next-increment admission for an ordinary IIS request or an explicit Scope
 
 Reuse current applicable product meaning from current conversation authority or existing confirmed Scope/Matt authority. Do not rerun Product Thesis because a later leaf or fresh session begins. Product Thesis is complete before the existing next-increment admission; it does not select Scope Shaper versus Ask Matt, create a separate agent or approval gate, or widen the current user instruction.
 
-If Product Thesis returns `USER_INPUT_REQUIRED`, ask only for its smallest unresolved user-owned meaning and stop before planning mutation. If it returns `CALIBRATED`, continue directly to Next-Increment Admission. A projection leaf that discovers a material product-meaning defect returns to its existing Scope/Matt product-planning owner instead of designing a thesis inside To Spec or To Tickets.
+If Product Thesis returns `USER_INPUT_REQUIRED`, preserve its source under the Thesis storage contract, ask only the unresolved product choice and stop before downstream planning mutation. If `CALIBRATED`, require the saved source to be available to the next owner and continue to Next-Increment Admission. Thesis storage is authorized before Run Contract/model/approval closure and is not permission to proceed. Projection leaves still return meaning defects to the existing product-planning owner rather than inventing a Thesis.
 
 ### Next-Increment Admission
 

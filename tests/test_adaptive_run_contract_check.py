@@ -220,6 +220,19 @@ class AdaptiveRunContractStructureTests(unittest.TestCase):
         )
         self.assertTrue(any("also appears" in message for message in messages(duplicate)))
 
+    def test_source_sets_preserve_policy_and_execution_restrictions(self):
+        reference = "From source: /project/THESIS-001.md#Required Outcomes / Means"
+        text = contract(required=reference, policy="EXACT_REQUIRED_SET")
+        self.assertEqual(CHECKER.check_run_contract(text), [])
+        self.assertTrue(messages(contract(required=reference, policy="NONE_REQUIRED")))
+        self.assertTrue(messages(contract(required=reference, candidate=reference, policy="EXACT_REQUIRED_SET")))
+        self.assertTrue(messages(contract(required=reference, policy="EXACT_REQUIRED_SET", boundary="NAMED_REQUIRED_ITEMS_DELIVERED")))
+
+    def test_source_set_requires_exact_path_and_section(self):
+        for value in ("From source: latest", "From source: /project/thesis.md", "From source: <source>#Required"):
+            with self.subTest(value=value):
+                self.assertTrue(messages(contract(required=value, policy="EXACT_REQUIRED_SET")))
+
     def test_duplicate_fields_sections_and_unknown_enums_are_rejected(self) -> None:
         duplicate_field = contract().replace(
             "Status: CLOSED", "Status: CLOSED\nStatus: CLOSED", 1

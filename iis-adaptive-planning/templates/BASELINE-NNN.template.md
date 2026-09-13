@@ -9,6 +9,8 @@ Applicability: `<project / transition scope and applicable authority>`
 ## Identity & Approval
 
 Source Authority:
+- Product meaning: `<exact saved Thesis source and fingerprint, or sufficient existing approved authority>`
+- Investigation: `<exact applicable current-state evidence or None>`
 - `<exact user instruction, Mandate revision, Spec/Scope authority, or other approved source>`
 
 Approval:
@@ -22,7 +24,7 @@ Activation is explicit and opt-in. Supplying, discovering, or having an old Base
 ## Transformation Outcome
 
 Goal:
-- `<full transformation result that remains an obligation across Blocks and invocations>`
+- `<reference the original product outcome and state only this approved transformation scope; do not rewrite or weaken the Thesis>`
 
 Required Named Items:
 - `<required outcome or None required>`
