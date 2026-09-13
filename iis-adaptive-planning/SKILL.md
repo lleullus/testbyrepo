@@ -53,7 +53,7 @@ Read these references before the corresponding work:
 - any durable artifact write: [references/05-artifact-contract.md](references/05-artifact-contract.md)
 - a verification result used as planning evidence: [references/06-verification-triage.md](references/06-verification-triage.md)
 - terminal or user-return report: [references/07-terminal-report.md](references/07-terminal-report.md)
-- current-Increment delivery/corrective handoff and explicit stop overrides: [references/08-delivery-continuation.md](references/08-delivery-continuation.md)
+- before delegated Planner, Plan Review, Implementer, Verifier or Coverage dispatch, and for current-Increment delivery/corrective handoff and explicit stop overrides: [references/08-delivery-continuation.md](references/08-delivery-continuation.md), including its caller-owned assignment content
 - when the current invocation supplies one exact repository-investigation artifact for evidence intake: [references/10-repository-evidence-intake.md](references/10-repository-evidence-intake.md)
 
 ## Activation
