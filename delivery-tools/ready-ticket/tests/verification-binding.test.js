@@ -37,7 +37,7 @@ test("verifier verdict records copy binding identity and are immutable outside P
     stableTargetPaths: [f.stable],
     bindingPath: path.join(f.base, "binding-for-verdict.json"),
     validatorPath: f.validatorPath,
-    bundleIdentity: "bundle-A",
+    bundleIdentity: "source",
   });
   const verdictPath = path.join(f.base, "verdicts", "verified.json");
   const sealed = sealVerificationVerdict({
@@ -51,7 +51,7 @@ test("verifier verdict records copy binding identity and are immutable outside P
   assert.equal(loaded.verdict.binding_path, binding.binding_path);
   assert.equal(loaded.verdict.binding_sha256, binding.binding_sha256);
   assert.equal(loaded.verdict.ticket_path, f.ticket);
-  assert.equal(loaded.verdict.bundle_identity, "bundle-A");
+  assert.equal(loaded.verdict.bundle_identity, "source");
   assert.equal(loaded.verdict.boundary_protocol, "iis-ready-boundary/v1");
   assert.equal(loaded.verdict.verification_verdict, "VERIFIED");
   await assert.rejects(async () => sealVerificationVerdict({

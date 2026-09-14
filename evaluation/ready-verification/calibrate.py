@@ -19,7 +19,7 @@ import time
 from typing import Any
 
 import score_result
-from run_agent import boundary_results, invoke, load_events, summarize
+from run_agent import boundary_results, host_ready_terminal_handles, invoke, load_events, summarize
 
 ROOT = Path(__file__).resolve().parent
 
@@ -95,10 +95,13 @@ def stage_prompt(stage: str, metadata: dict[str, Any], run_root: Path) -> str:
     if stage == "verify" and implementation_report is not None:
         target += f"Implementation Report / Evidence: {implementation_report}\n구현 보고는 navigation일 뿐이며 완료·판정 근거가 아니다. 보고의 제한과 실제 현재 제품을 각각 확인한다.\n"
     if stage == "verify":
+        target += (f"Verifier Primary Evidence Directory: {run_root / 'verify' / 'primary-evidence'}\n"
+                   "이 outside-Project-Root 디렉터리는 원시 command/readback evidence 저장에 허용된다. caller는 이 exact 경로를 verifier assignment에 포함한다. Verifier는 deciding command, exit, stdout/stderr와 target을 여기의 일반 파일에 보존하고 report에서 참조한다. Coverage에는 report뿐 아니라 그 원시 파일 경로를 전달한다. Binding과 report narration은 raw runtime output의 대체물이 아니다.\n")
         if metadata.get("plan_review_path"):
             target += f"Optional method navigation (not product admission): {metadata['plan_review_path']}\n"
         return common + target + ("read로 skill://ready-ticket-verify 를 호출하고 이 Ticket의 통합 최종 검증을 수행하라. "
-            "Parent Main은 verifier core를 직접 수행하지 말고 skill contract의 exact host authority profile로 한 cycle에 단 한 verifier를 dispatch하라. verifier와 후속 Coverage 모두 task call의 agent/effort를 지정하지 말고 이 실행에 configured된 selected task role을 그대로 사용하라. "
+            "Parent Main은 verifier core를 직접 수행하지 말고 skill contract의 exact host authority profile로 한 cycle에 단 한 verifier를 dispatch하라. "
+            + (f"Verifier와 Coverage의 task agent는 현재 선택된 {metadata['selected_agent']}를 정확히 지정한다. 다른 모델/effort로 대체하지 않는다. " if metadata.get("selected_agent") else "Verifier와 Coverage는 현재 configured selected task role을 사용하고 실제 model/effort가 사용자 선택과 맞는지 보존한다. ") +
             "Verifier는 current authority와 stable target/scenario effect 경계를 직접 확인하고 ready_contract capture_verification으로 immutable binding을 만든 뒤 원계약의 모든 authored flow를 실제 구현에 근거한 판별력 있는 시나리오로 검증한다. 별도 추가 구현 경로 탐색은 후속 Coverage가 맡으며 Verifier는 이미 알려진 중요한 반례를 무시하지 않는다. "
             "발견한 반례는 verifier-owned current evidence와 finding disposition으로 닫고, 실제 실행은 일반 host-native 도구를 사용하며 settled nonzero 결과를 global lock으로 승격하지 않는다. "
             "원래 source/authority를 고쳐 합격시키지 않는다. Verifier는 semantic terminal result를 한 번 반환하고, Parent Main은 VERIFIED from ready 뒤 skill://ready-ticket-coverage를 한 독립 read-only worker로 호출하고 exact authority/report/primary evidence와 target identity를 전달하라. opaque handle은 전달하지 않는다. COMPLETE와 중요한 미해결 공백 없음일 때만 원래 exact handle을 ready_finalize의 유일한 입력으로 사용하라. Coverage finding/PARTIAL/BLOCKED/도구 실패는 성공 반영 보류이며 semantic VERIFIED를 바꾸거나 finalizer 결과를 만들지 않는다. FAILED/INCONCLUSIVE는 Coverage 없이 기존 비진행 finalization을 따른다. 보충 판정이 현재 권한에서 가능하면 fresh verifier와 새 binding/terminal을 사용하고 모든 적용 의무를 판정한 뒤 새 성공 결과에 Coverage를 수행한다. 종료된 verifier를 재개하거나 이전 handle을 제출하지 않는다. 제품 수정은 이 verify 요청의 권한이 아니며 진전 없는 자동 반복을 하지 않는다. 실제 progression 또는 미호출 상태를 별도로 보고하라. verdict/path/SHA를 finalizer 입력으로 만들거나 재작성하지 않는다.\n")
@@ -187,7 +190,7 @@ def run_preparation(metadata: dict[str, Any], *, agent_dir: Path, payload: Path,
     review_before_lead = None
     if planner["clean_transport"] and planner.get("session_file") and not review.exists():
         reviewed_snapshot = product_snapshot(root, [])
-        reviewer = role("reviewer", f"작성자와 별도 독립 Plan Review다. 원계약 전체를 먼저 읽고 현재 제품 경로, current Plan bytes와 primary evidence를 직접 검토한다. Planner terminal: {output / 'planner/terminal.txt'}; Planner raw evidence: {output / 'planner/events.jsonl'}. wrong cause, ordinary-entry bypass, second writer/reader, producer/consumer mismatch, ordering/interruption/partial effect, weak readback, repair-induced path와 preserved behavior 손실을 현재 method의 load-bearing dependency에서 bounded하게 판단한다. 현재 bytes와 ready_contract inspect_authority를 사용하여 실제 판단의 iis-plan-review/v1 JSON을 {review}에 작성한다. review_origin.evidence_reference는 이 invocation의 {output / 'reviewer/events.jsonl'}이다. 계획/제품을 고쳐 허가하지 말고 정확한 ADMIT/REVISE/EVIDENCE_NEEDED와 근거를 반환한다. lead terminal은 내지 않는다.")
+        reviewer = role("reviewer", f"작성자와 별도 독립 Plan Review다. 원계약 전체, 실제 current Ticket Set의 수용 소유, 현재 제품 경로와 Plan bytes, primary evidence를 직접 검토한다. Planner terminal: {output / 'planner/terminal.txt'}; Planner raw evidence: {output / 'planner/events.jsonl'}. 현재 method의 load-bearing dependency와 원본 의무에서 판단한다. 현재 bytes와 ready_contract inspect_authority를 사용하여 실제 판단의 iis-plan-review/v2 JSON을 {review}에 작성한다. projection/findings/조건부 scope와 한계를 원문에 보존한다. review_origin.evidence_reference는 이 invocation의 {output / 'reviewer/events.jsonl'}이다. 계획/제품을 고쳐 허가하지 말고 정확한 ADMIT/REVISE/EVIDENCE_NEEDED와 근거, 원문 path와 실제 SHA256을 반환한다. lead terminal은 내지 않는다.")
         if reviewer["clean_transport"] and review.is_file() and product_snapshot(root, []) == reviewed_snapshot:
             review_before_lead = hashlib.sha256(review.read_bytes()).hexdigest()
             lead = role("lead", f"원래 준비 lead의 handoff fan-in이다. 실제 별도 reviewer 결과 {review}, raw {output / 'reviewer/events.jsonl'}와 Planner evidence의 귀속·currentness·원래 requested Tickets 분모를 대조한다. 두 번째 의미 검토/승인 단계가 아니다. reviewer가 REVISE/EVIDENCE_NEEDED이면 그 실제 준비 결과를 보존하고 COMPLETE로 승격하지 않는다. 어느 계획/review/제품 파일도 수정하지 말고 ready-ticket-plan의 canonical READY TICKET PLAN RESULT template을 정확히 따르며 `Plan Review: {review}`를 목록이 아닌 한 줄 field로 써서 terminal을 반환한다. 구현/최종 검증은 시작하지 않는다.", Path(planner["session_file"]))
@@ -227,6 +230,19 @@ def apply_challenge(metadata: dict[str, Any], run_root: Path, events: list[dict[
             or any(event.get("type") == "agent_end" for event in events)
             or boundary_results(events, "ready_finalize")):
         return None
+    if challenge.get("kind") == "withhold_primary_evidence":
+        if not host_ready_terminal_handles(events):
+            return None
+        evidence = run_root / "verify" / "primary-evidence"
+        if not evidence.is_dir():
+            raise ValueError("verifier supplied no primary-evidence directory to withhold")
+        archive = run_root.parent / f"held-evidence-{uuid.uuid4().hex}"
+        evidence.rename(archive)
+        applied = {"applied": True, "boundary": "host_verifier_terminal_delivery",
+                   "original_evidence": str(evidence), "preserved_evidence": str(archive),
+                   "attribution": "external evaluator; evidence retained, product unchanged"}
+        write_json(run_root / "challenge.json", applied)
+        return applied
     capture = next((entry["result"] for entry in boundary_results(events, "ready_contract", "capture_verification")
                     if entry["result"].get("binding_path") and entry["result"].get("binding_sha256")
                     and isinstance(entry["result"].get("binding"), dict)), None)
@@ -266,7 +282,11 @@ def run_stage(stage: str, metadata: dict[str, Any], *, agent_dir: Path, payload:
         wall_timeout_seconds = episode_deadline - time.monotonic()
         if wall_timeout_seconds <= 0:
             raise TimeoutError("episode timeout exhausted before invocation")
-    observation = invoke(project_root=root, prompt=stage_prompt(stage, metadata, run_root), output_dir=run_root / stage,
+    prompt = stage_prompt(stage, metadata, run_root)
+    for role in ("ready-ticket-verify", "ready-ticket-coverage", "ready-ticket-implement"):
+        prompt = prompt.replace(f"skill://{role}", str(payload.resolve() / "companion-skills" / role / "SKILL.md"))
+    prompt = (f"Selected canonical IIS release root: {payload.resolve()}\nSelected model: {model}; thinking: {thinking}. 모든 실제 위임 역할에도 이 선택을 유지한다. 명시된 release의 entry/reference/validator 경로를 그대로 전달하고 global skill/current 경로로 대체하지 않는다.\n" + prompt)
+    observation = invoke(project_root=root, prompt=prompt, output_dir=run_root / stage,
                          agent_dir=agent_dir, payload=payload, model=model, thinking=thinking, timeout=timeout,
                          stage=stage, wall_timeout_seconds=wall_timeout_seconds,
                          boundary_callback=(lambda events: apply_challenge(metadata, run_root, events)) if stage == "verify" and metadata.get("verification_challenge") else None)

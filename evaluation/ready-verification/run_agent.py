@@ -112,6 +112,12 @@ def host_ready_terminal_handles(events: list[dict[str, Any]]) -> list[str]:
             call = calls.get(event.get("toolCallId"), {})
             if call.get("toolName") == "task" and isinstance(event.get("result"), dict):
                 sources.append(text_content(event["result"]))
+            elif call.get("toolName") == "hub" and isinstance(event.get("result"), dict):
+                details = event["result"].get("details", {})
+                if details.get("op") in {"wait", "jobs"}:
+                    for job in details.get("jobs", []):
+                        if job.get("type") == "task" and job.get("status") == "completed":
+                            sources.append(str(job.get("resultText", "")))
     handles: list[str] = []
     for source in sources:
         handles.extend(re.findall(r"(?m)^Ready Verification Terminal: (ready-terminal-[0-9a-f-]+)$", source))

@@ -16,6 +16,7 @@ Skill reads and preparation artifact writing do not arm or enter execution. Afte
 
 
 1. Resolve the current pinned bundle's canonical To Tickets `validate_ticket.py`, the same validator identity used by Ready runtime. The discovered `iis-workflow` route is navigation within that bundle; never probe historical source or another client home for a substitute validator.
+   Use the exact supplied release root and readable role/validator paths, or this role's resolved bundle-relative path; never derive another release from a global latest pointer. Compare available loaded identity and preserve unknown autoload state as unknown. An observed release/validator mismatch is an environment admission failure, not a product verdict.
 2. Run that validator against the exact absolute Ticket path. Continue only when it returns exact `VALID`.
 3. If the route/validator is unavailable, return `VERIFICATION NOT STARTED: CANONICAL VALIDATOR UNAVAILABLE`. If validation fails, return `VERIFICATION NOT STARTED: CANONICAL TICKET INVALID`. Do not issue AC verdicts or start product/runtime work.
 4. After `VALID`, derive `Status`, `Parent-Spec`, `Project-Root`, `UI`, Acceptance Criteria, Scope, Non-Goals, Blockers, Verification flows, Behavior Authorities and References from the Ticket itself.
@@ -41,6 +42,8 @@ Next allowed action: <exact owner/caller action needed for a fresh valid verific
 AC verdicts: Not issued
 ```
 
+
+If the host cannot represent a pre-binding non-started result in its strict terminal, preserve this actual result through its existing error/non-progressing path and report the exact capability limit. Do not fabricate a binding, AC verdict or success handle to satisfy serialization. IIS does not change the host terminal schema or claim that unsupported delivery succeeded.
 The provenance fields explain the exact owner result, such as `CANONICAL TICKET INVALID` or `TICKET/PARENT PROJECTION MISMATCH`, rather than replacing it. If only a tool/transport/protocol failure is established, report that failure without inferring a missing file, permission or product condition.
 
 ## 3. Semantic contract check
@@ -48,6 +51,8 @@ The provenance fields explain the exact owner result, such as `CANONICAL TICKET 
 Before deriving or executing the runtime scenario, compare every current AC and mapped Verification flow against the approved parent outcome, applicable Behavior/UI meaning, and relevant current user instructions supplied through the existing handoff. Confirm that the authored observation/readback decides the material approved obligation rather than a weaker proxy or a fake replacing its required boundary. Ticket wording alone cannot authorize that substitution. Challenge concrete plausible false-positive or false-negative paths that could change the verdict; preserve the exact Ticket scope rather than importing unrelated outer Goal work.
 
 Do not treat approval, structural `VALID`, ordinal closure, matching wording, tests or implementation narration as proof that the flow is semantically sufficient. Do not invent new requirements or strengthen the approved contract.
+
+Compare applicable parent obligations into the current Ticket Set as well as ACs back to their parents. One ordinal can hide several obligations. Read the exact sibling when relying on its ownership and honor approved future/Non-Goal exclusions. A due-now ownerless obligation returns `TICKET/PARENT PROJECTION MISMATCH` to To Tickets, or To Spec/the existing meaning owner when parent meaning is wrong; AC absence is not a non-blocking justification.
 
 In semantic preflight and derived scenarios, connect a counterexample's activation conditions to a valid instance of the approved obligation, not merely a similarly named failure category. Do not invent unsupported external conditions to create a contract defect or verdict blocker. Specific stimuli need not be enumerated when covered by approved meaning; synthetic or complex conditions are not automatically excluded, and ordinary approved triggers may expose implementation-created compound states.
 
@@ -166,6 +171,10 @@ Do not replace exact authored labels with convenience aliases or silently drop f
 For runtime claims, ground `Nearest nonconforming state` in a concrete failure of a current implementation assumption, `Discriminating observation` in the actual result that differs between conforming and failing implementations, and `Sensitivity activation` in the initial state and execution that exposes that difference. Do not select only total non-operation when current evidence supports a material implementation that succeeds on the chosen happy path but fails during another reachable use covered by the same obligation. If that implementation would also pass the proposed observation, choose the smallest authorized activation and readback that distinguishes it. Do not invent a counterexample quota or require speculative cases without a current contract and implementation anchor.
 
 Use the existing Derived Execution Plan fields to make clear why the selected current observation or real execution is sufficient to distinguish the flow's `SATISFIED`, `CONTRADICTED`, and `INCONCLUSIVE` conditions. Choose that evidence from the authored obligation and current changes to code, data volume or distribution, configuration, runtime, shared state, owners, and read paths; do not turn this choice into a separate exhaustive independence audit. Common setup and same-cycle verifier-owned evidence may support multiple flows only when each flow's initial conditions, contract-required actions, observation window, and decision boundary are actually satisfied. If later scenario work changes shared state or another premise on which earlier evidence depended, refresh the affected observation under the existing target-attribution and cross-AC rules.
+
+For real runtime outcomes, do not replace the required boundary with source strings, helper invocation, hand-written events, seeded terminal state or a surrogate readback. Ancillary doubles are acceptable only for the other boundary actually exercised; artifact-only contracts may be established by canonical artifact inspection. Treat unavailable required execution as an exact evidence limit, not success or an unauthorized permission to execute.
+
+Make each load-bearing report claim recoverable from existing primary files: exact path and line/range or key, target identity, action/initial state, actual readback, observation window and meaning. Preserve raw values and distinguish measured facts from interpretation; no extra evidence ledger is required. For deletion, record existence before the trigger and absence afterward, plus any required preserved asset. For timing, identify onset versus settlement and use the authored threshold. For event delivery, distinguish publisher emission, subscriber receipt and rendered change. A summary or passing count cannot substitute for these observations.
 
 ## 7. Coverage matrices
 

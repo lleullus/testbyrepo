@@ -18,6 +18,7 @@ Thesis carries approved meaning. Investigation is evidence, not approval or proo
 ## Role-specific assignment — caller supplies separately
 
 - Role and exact pinned role-document paths: <read and apply before work>
+- Selected canonical IIS release root and validator: <exact readable paths; observed loaded identity or unknown, never inferred from current/latest>
 - Current target: <exact Increment/Spec/Ticket/plan/report and current binding as applicable>
 - Active Block Envelope: <existing current projection | Not activated>
 - Role question and outputs: <existing role contract>
@@ -25,5 +26,7 @@ Thesis carries approved meaning. Investigation is evidence, not approval or proo
 - Navigation and known findings: <primary evidence/report locations; explicitly separate suggestions from obligations>
 - Permitted actions and effect/cleanup boundaries: <existing authority>
 - Terminal and next owner: <existing role return contract>
+
+Keep review questions neutral: ask what the original contract and actual primary evidence establish, without prescribing approval, no findings or a failure count. Preserve exact returned artifacts, findings, limits and conditional scope when forwarding; a summary never replaces admission input. Relative evidence references resolve from their owning report/artifact directory.
 
 The common originals do not expand this role's Ticket/Increment or confer external-action authority. A narrower assigned task cannot redefine approved success. If role framing or a projected contract omits required meaning, identify the exact source and mismatch through the role's existing correction/evidence-limit return; do not silently repair product authority, obey a weaker success condition, or implement the whole Thesis. Keep existing Communication requirements and host profiles unchanged.

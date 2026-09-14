@@ -116,11 +116,44 @@ function resolveUiAuthority(ticketText, ticketPath, parentSpecPath, behaviorAuth
 }
 
 function repoRootFromModule() {
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+  return path.resolve(path.dirname(fs.realpathSync(fileURLToPath(import.meta.url))), "..", "..", "..");
 }
 
 export function resolveCanonicalValidator(validatorPath) {
   return existingRealpath(validatorPath ?? path.join(repoRootFromModule(), "matt/skills/to-tickets/validate_ticket.py"), "Ticket validator");
+}
+
+function bundleNavigation(validator, bundleIdentity) {
+  const root = repoRootFromModule();
+  const documents = [
+    "iis-workflow/SKILL.md",
+    "matt/skills/to-spec/SKILL.md",
+    "matt/skills/to-tickets/SKILL.md",
+    "companion-skills/ready-ticket-plan/SKILL.md",
+    "companion-skills/ready-ticket-plan/references/plan.md",
+    "companion-skills/ready-ticket-plan/references/review.md",
+    "companion-skills/ready-ticket-implement/SKILL.md",
+    "companion-skills/ready-ticket-implement/references/implement.md",
+    "companion-skills/ready-ticket-verify/SKILL.md",
+    "companion-skills/ready-ticket-verify/references/verify.md",
+    "companion-skills/ready-ticket-coverage/SKILL.md",
+  ];
+  if (bundleIdentity !== "source") {
+    const invalid = detail => { throw new Error(`READY_BUNDLE_INVALID: ${detail}`); };
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, "bundle.json"), "utf8"));
+    if (manifest.schema !== "iis-bundle/v2" || manifest.protocol !== 2 || manifest.family !== "ready-boundary-tools" ||
+        manifest.bundle_id !== bundleIdentity || path.basename(root) !== bundleIdentity) invalid("loaded release identity mismatch");
+    const relativeValidator = "matt/skills/to-tickets/validate_ticket.py";
+    if (validator !== path.join(root, relativeValidator)) invalid("validator must belong to the loaded release");
+    for (const relative of [relativeValidator, ...documents]) {
+      const file = path.join(root, relative);
+      const expected = manifest.files?.[relative];
+      const stat = fs.lstatSync(file);
+      if (!stat.isFile() || stat.isSymbolicLink() || fs.realpathSync(file) !== file || !expected ||
+          sha256File(file) !== expected.sha256 || (stat.mode & 0o777) !== expected.mode) invalid(`role/validator file drift: ${relative}`);
+    }
+  }
+  return { bundle_root: root, role_document_paths: documents.map(relative => path.join(root, relative)) };
 }
 
 export async function validateTicket(validator, ticketPath, projectRoot, executeArgv) {
@@ -151,6 +184,7 @@ export async function bindAuthority({
   if (authoredProjectRoot !== canonicalRoot) throw new Error(`Ticket Project-Root does not match requested Project Root: ${authoredProjectRoot ?? "missing"}`);
 
   const validator = resolveCanonicalValidator(validatorPath);
+  const navigation = bundleNavigation(validator, bundleIdentity);
   await validateTicket(validator, canonicalTicket, canonicalRoot, executeArgv);
   const parentValue = metadataValue(ticketText, "Parent-Spec");
   if (!parentValue) throw new Error("Ticket Parent-Spec metadata is missing");
@@ -179,6 +213,7 @@ export async function bindAuthority({
     validator_sha256: sha256File(validator),
     boundary_protocol: boundaryProtocol,
     bundle_identity: bundleIdentity,
+    ...navigation,
     authority_digest: authorityDigest,
     protected_artifacts: protectedArtifacts,
   };

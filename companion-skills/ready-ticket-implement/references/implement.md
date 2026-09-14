@@ -29,6 +29,7 @@ Skill/reference 조회, read-only `ready_contract inspect_authority`, 준비 art
 
 - `DIRECT`와 `SUBAGENT` 모두 actual implementing actor가 exact Ticket/Project Root/`plan_review_path`로 `check_plan_admission`을 직접 호출한다. Parent가 execution/assignment/reservation을 만들지 않는다.
 - 누락 `PLAN_REVIEW_REQUIRED`, stale `PLAN_REVIEW_STALE`, 미허가 `PLAN_NOT_ADMITTED`를 실제 결과 그대로 보존한다. field 존재나 fixture JSON은 독립 검토의 의미 증거가 아니며 worker는 결과를 합성/승격하지 않는다.
+- 원 reviewer의 v2 파일과 전달된 digest를 그대로 대조하고 `projection`, `findings`, `start_scope`, `conditions`를 읽는다. 요약본으로 machine review를 재작성하거나 unresolved finding을 삭제하지 않는다. Hash/currentness 검사는 실제 독립 검토나 의미적 충분성을 증명하지 않는다.
 - admission 뒤에는 host-native read/search/edit/write/test/build/lint/CLI를 사용한다. IIS가 shell/argv grammar나 일반 tool dispatch를 재구현하지 않는다. settled nonzero는 command failure일 뿐 generic effect uncertainty가 아니며, worker는 결과를 읽고 Plan 범위 안에서 수정·재실행할 수 있다.
 - ephemeral service가 필요하면 host-native service/process surface를 사용하고 실제 handle/generation/readiness/settlement를 직접 확인한다. shared/pre-existing service를 임의로 adoption/stop하지 않으며 start timeout이나 cancel receipt를 settlement로 과대해석하지 않는다.
 - actual non-idempotent/external effect가 timeout/abort/response loss로 불명확하면 같은 effect를 blind replay하지 않는다. Ticket/Plan이 승인한 authoritative readback을 수행하고 cleanup/log/evidence 작성은 막지 않는다. readback으로 applied/not-applied가 확인되면 그 사실에 맞춰 계속한다. 확인 불가이면 그 effect에 의존하는 후속 mutation을 멈추고 exact evidence gap과 함께 `PARTIAL | BLOCKED`로 반환한다.
@@ -50,6 +51,8 @@ Skill/reference 조회, read-only `ready_contract inspect_authority`, 준비 art
 8. 첫 source change가 observable product outcome 또는 승인된 invariant와 직접 연결되는지 확인한다.
 
 실질적 authority 충돌이나 canonical source 부재로 faithful implementation direction을 확정할 수 없으면 임의 선택하지 않고 `Completion: BLOCKED`로 종료한다.
+
+부모 outcome ordinal 일부만 AC에 남은 경우도 actual sibling Ticket의 수용 소유와 approved future/Non-Goal 제외를 직접 구별한다. 적용되는 ownerless 의무는 AC 밖이라는 이유로 non-blocking 처리하지 않고 To Tickets로 반환한다. 부모 의미 자체의 변경은 To Spec/원 의미 소유자로 반환하며 worker가 authority를 고치거나 Scope를 확대하지 않는다.
 
 자격증명·운영자 동작은 승인된 기존 경로만 사용한다. 필수 외부 조건이 없으면 정확한 미확인 경계와 허용된 다음 행동을 기존 preflight record에 남긴다. 그 조건에 의존하지 않는 안전한 내부 구현은 계속할 수 있지만, Mock·권한 우회·내부 성공으로 미확인을 닫거나 최종 제품 성공을 주장하지 않는다.
 

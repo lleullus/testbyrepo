@@ -175,6 +175,20 @@ class ReadyAgentCaptureTests(unittest.TestCase):
         self.assertEqual(finalized["progression_basis"], "WRITE_PERFORMED_THIS_CALL")
         self.assertEqual(finalized["ticket_status_after"], "done")
 
+        job_delivery = [
+            {"type": "tool_execution_start", "toolCallId": "wait", "toolName": "hub", "args": {"op": "wait"}},
+            {"type": "tool_execution_end", "toolCallId": "wait", "isError": False,
+             "result": {"details": {"op": "wait", "jobs": [{"type": "task", "status": "completed",
+                 "resultText": f"Ready Verification Terminal: {handle}"}]}}},
+        ]
+        settled = self.capture.summarize(job_delivery + events[1:])
+        self.assertEqual(settled["ticket_progression"], "COMPLETED")
+        self.assertEqual(settled["host_verifier_terminal_delivery_count"], 1)
+        job_delivery[1]["result"]["details"]["jobs"][0]["type"] = "bash"
+        untrusted = self.capture.summarize(job_delivery + events[1:])
+        self.assertIsNone(untrusted["host_verifier_terminal_handle"])
+        self.assertIsNone(untrusted["ticket_progression"])
+
         # A held success (including a failed/incomplete Coverage review) is not progression.
         held = self.capture.summarize(events[:1] + [
             message("stop", terminal + "\nCoverage: BLOCKED — primary evidence unavailable\nFinalization: not called"),

@@ -84,7 +84,7 @@ test("a host-accepted INCONCLUSIVE verdict cannot progress", async t => {
 test("a stale boundary bundle cannot finalize an accepted terminal", async t => {
   const f = await fixture(t);
   const before = fs.readFileSync(f.ticket);
-  const binding = await capture(f, "bundle-a-binding.json", executeArgvNode, "bundle-A");
+  const binding = await capture(f, "source-binding.json", executeArgvNode, "source");
   const result = await finalizeVerification(input(f, binding, "VERIFIED", "bundle", { bundleIdentity: "bundle-B" }));
   assert.equal(result.ticket_progression, "FAILED");
   assert.equal(result.progression_basis, "NONE");

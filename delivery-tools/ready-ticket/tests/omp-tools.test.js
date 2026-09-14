@@ -87,10 +87,10 @@ const context = { agentId: "Main", sessionId: "session-1" };
 
 async function installFromBundle(f, pi, options = {}) {
   const loaded = await materializeReadyBundle(f.base);
-  const authority = await bindAuthority({
+  const authority = await loaded.core.bindAuthority({
     projectRoot: f.root,
     ticketPath: f.ticket,
-    validatorPath: f.validatorPath,
+    validatorPath: loaded.validatorPath,
     executeArgv: executeArgvNode,
     bundleIdentity: loaded.bundleId,
   });
@@ -102,7 +102,7 @@ async function installFromBundle(f, pi, options = {}) {
   fs.writeFileSync(f.review, JSON.stringify(f.reviewData));
   loaded.module.installReadyBoundaryTools(pi, {
     executeArgv: executeArgvNode,
-    validatorPath: f.validatorPath,
+    validatorPath: loaded.validatorPath,
     ...options,
   });
   return loaded;

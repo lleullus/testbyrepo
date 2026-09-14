@@ -48,6 +48,8 @@ Ask whether the failing Ticket/Verification requirement is an exact valid projec
 
 If **no**, classify `CONTRACT_OVERREACH` (or projection distortion) even if implementation could be changed to satisfy it.
 
+Projection distortion includes omission: a parent outcome ordinal may contain an applicable obligation with no current Ticket/AC/Flow owner. Read the exact sibling before relying on its ownership; retain approved future/Non-Goal exclusions. A correct parent with a defective Set returns to To Tickets; an incorrect parent returns to To Spec/the existing meaning owner. Missing AC wording is not grounds to downgrade that gap to advisory.
+
 Outer Main also applies the Goal/required-item coverage invariant to the active Run Contract. A weak outer Predicate or omitted source obligation returns to Outer Main for faithful contract recovery, not to implementation as an invented defect. If the gap is in Scope/parent/Ticket projection, return to that exact existing owner. A valid current Increment covering only part of a broader Goal is not itself a defect: preserve it and the outer continuation obligation.
 
 ### 2. Current-INC appropriateness check

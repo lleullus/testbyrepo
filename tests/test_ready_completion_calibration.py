@@ -108,7 +108,7 @@ class ReadyCompletionCalibrationTests(unittest.TestCase):
         metadata_path, metadata = self.completion.prepare("preparation-current", self.root / "plans", "candidate", 1)
         output = Path(metadata["run_root"]) / "prepare"
         output.mkdir()
-        (output / "plan-review.json").write_text(json.dumps({"schema": "iis-plan-review/v1", "decisions": [{"decision": "ADMIT"}]}))
+        (output / "plan-review.json").write_text(json.dumps({"schema": "iis-plan-review/v2", "decisions": [{"decision": "ADMIT"}]}))
         (output / "record.json").write_text(json.dumps({"parsed_completion": "COMPLETE", "roles": []}))
         with self.assertRaises(ValueError):
             self.completion.run(metadata_path, agent_dir=self.root, payload=self.root,
@@ -118,7 +118,7 @@ class ReadyCompletionCalibrationTests(unittest.TestCase):
         metadata_path, metadata = self.completion.prepare("preparation-current", self.root / "legacy-roles", "candidate", 1)
         output = Path(metadata["run_root"]) / "prepare"
         output.mkdir()
-        (output / "plan-review.json").write_text(json.dumps({"schema": "iis-plan-review/v1", "decisions": [{"decision": "ADMIT"}]}))
+        (output / "plan-review.json").write_text(json.dumps({"schema": "iis-plan-review/v2", "decisions": [{"decision": "ADMIT"}]}))
         roles = [{"role": role} for role in ("planner", "heuristic", "revision", "reviewer", "lead")]
         (output / "record.json").write_text(json.dumps({"parsed_completion": "COMPLETE", "roles": roles}))
         with self.assertRaises(ValueError):

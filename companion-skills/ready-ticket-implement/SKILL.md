@@ -41,7 +41,7 @@ standalone 구현을 포함한 모든 실제 위임에서 아래 블록 원문�
 - Ticket: `<TICKET_PATH>`
 - Project Root: `<PROJECT_ROOT>`
 - 추가 사용자 지시: `<ADDITIONAL_USER_INSTRUCTIONS>`
-- Plan Review: `<exact outside-Project-Root iis-plan-review/v1 path>`; 없거나 stale이면 source mutation/assignment 전에 [ready-ticket-plan](../ready-ticket-plan/SKILL.md)으로 필요한 준비부터 수행/요청한다. 실제 독립 reviewer의 current ADMIT 없이 착수하지 않는다.
+- Plan Review: `<exact outside-Project-Root iis-plan-review/v2 path>`; 없거나 stale이면 source mutation/assignment 전에 [ready-ticket-plan](../ready-ticket-plan/SKILL.md)으로 필요한 준비부터 수행/요청한다. 실제 독립 reviewer의 current ADMIT 없이 착수하지 않는다.
 
 ## 실행 topology
 

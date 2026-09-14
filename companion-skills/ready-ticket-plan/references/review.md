@@ -4,6 +4,8 @@
 
 Use an actual review invocation separate from the method writer. Read the complete applicable original Ticket/Spec/Behavior/UI obligations, current product path, current plan/common-plan bytes and primary evidence before accepting the Planner's diagnosis as a frame. A writer's self-check, agreement, finding count, JSON schema pass or runtime binding pass does not establish independent semantic review. Preserve actual reviewer identity and raw invocation/evidence provenance without inventing reviewer authentication or another approval gate.
 
+Compare parent obligations to actual acceptance ownership in the current Ticket Set, not only Ticket clauses back to the parent. A covered outcome ordinal may still omit one obligation within that outcome. Read an exact sibling Ticket when relying on its ownership; exclude approved future/Non-Goal work. An applicable ownerless obligation is a projection gap, never a non-blocking observation merely because this AC omits it. Return REVISE to To Tickets when parent meaning is correct, or to To Spec/the existing meaning owner when it is not; uncertain applicability returns EVIDENCE_NEEDED. Do not repair product authority in the method.
+
 For each Ticket decide whether the current method is sufficient to start within its stated scope. Derive a bounded check frontier from the proposed method and its load-bearing dependencies rather than a fixed quota. Directly judge purpose and preserved behavior, wrong/competing cause, ordinary-entry bypass, second writers/readers or external owners, shared interfaces/callers, producer/consumer mismatch, ordering/interruption/partial effects, stale identity or weak proxy readback, repair-induced state/order/ownership paths, prerequisite/effect boundaries, actual self-check and final readback, and local/material return conditions. Distinguish observed contradiction, inference and missing evidence. Reject a method that defers a currently cheap load-bearing discriminating check to the final verifier, or treats unit/helper/source/mock success as product success while bypassing the approved acceptance path/readback. When several reported findings exist, ensure each finding or evidence-supported common-cause group is present in the start scope and self-check. Judge required shared decisions before their first dependent implementation; do not block unrelated Tickets behind whole-Set planning.
 
 ## Decisions
@@ -26,7 +28,7 @@ Write one JSON artifact at the exact invocation-supplied outside-Project-Root pa
 
 ```json
 {
-  "schema": "iis-plan-review/v1",
+  "schema": "iis-plan-review/v2",
   "project_root": "<canonical absolute root>",
   "plans": [{"path": "<exact absolute plan/common-plan path>", "sha256": "<actual bytes sha256>"}],
   "contracts": [{"ticket_path": "<exact canonical Ticket>", "ticket_sha256": "<actual bytes sha256>", "authority_digest": "<inspect_authority result>"}],
@@ -36,6 +38,8 @@ Write one JSON artifact at the exact invocation-supplied outside-Project-Root pa
     "decision": "ADMIT",
     "rationale": "<substantive basis against all applicable obligations>",
     "start_scope": "<exact work this Ticket may start>",
+    "projection": {"status": "preserved", "basis": "<parent clauses and actual current Ticket/AC/Flow ownership or exact gap>"},
+    "findings": [],
     "conditions": [{
       "plan_anchor": "<exact plan section>",
       "permitted_initial_work": "<bounded first work>",
@@ -49,14 +53,16 @@ Write one JSON artifact at the exact invocation-supplied outside-Project-Root pa
 
 This is a shape illustration, not a completed review. Use `conditions: []` when no conditional start exists; use the actual decision enum and substantive explanation. Include every reviewed Ticket exactly once in contracts/decisions and every used common plan in plans; per-Ticket decisions may differ. Do not fill examples or fixture JSON and claim semantic success.
 
-Use `review_origin.evidence_reference`, primary evidence references and each decision's `rationale` to preserve current Grounding observations, material findings/unknowns/dismissals and their semantic disposition. No additional schema fields, fingerprint database, evidence ledger or verdict artifact is required.
+Preserve every material finding and non-material advisory in `findings`, not only in caller prose. Each item contains `kind` (`contract_gap | method | evidence_limit`), `anchor`, `observation`, boolean `material`, `disposition` (`unresolved | dismissed | resolved`), `basis` (evidence and disposition reason), and `next_owner` (exact owner/action or `None`). Optional `evidence_refs` contains ordinary file `{path, sha256, locator}` references; resolve relative paths from the review directory and hash actual bytes. Missing/changed referenced files are stale evidence, not no finding. Do not require a file when the deciding evidence is the directly readable authority already bound by contracts/plans.
+
+Read evidence at the exact path authored in its owning plan/report; absolute outside-project evidence paths stay absolute. Before reporting a missing file, compare the attempted path with that original reference and correct any transcription or resolution error. A failed lookup at a different path is not evidence that the referenced observation is unavailable.
+
+`projection.status` is `preserved | gap | unknown` and always includes substantive `basis`. ADMIT cannot coexist with gap/unknown projection, an unresolved contract_gap, or an unresolved material finding. A genuine non-material advisory may remain unresolved without blocking; preserve it rather than erase it. Resolved/dismissed findings require current evidence, not a change of label. These fields replace a second verdict artifact or evidence ledger; they do not authenticate the reviewer or prove semantic truth.
 
 Calculate hashes from bytes actually reviewed. Obtain `authority_digest` via read-only `ready_contract inspect_authority` (exact Ticket/root, current pinned canonical validator/bundle) or the same core API. Do not synthesize that digest from a guessed schema, trust a caller's copied hash, or begin implementation first. Before writing, recheck that reviewed bytes and load-bearing source/search/runtime premises remain current; if changed, inspect the impact and revise only the necessary review.
 
 If a material method or source/search/runtime premise changes, the current reviewer must judge the affected scope and evidence again before ADMIT. Preserve directly checked non-material carry-forward evidence rather than relabeling old work; a matching plan hash alone does not establish unchanged premises.
 
-`rationale`, `start_scope` and `conditions` express semantic judgment; the stateless boundary check does not score their length or infer sufficiency from string presence. `ready_contract check_plan_admission` independently recomputes plan/review/Ticket/authority identity and checks selected ADMIT without creating execution/session state. Missing review yields `PLAN_REVIEW_REQUIRED`, stale links `PLAN_REVIEW_STALE`, non-admitted Ticket `PLAN_NOT_ADMITTED`; these are admission outcomes, not product verdicts.
+`rationale`, `projection`, `findings`, `start_scope` and `conditions` express semantic judgment. The file checker verifies current plan/review/Ticket/authority bytes, declared evidence files and ADMIT consistency, not source meaning, reviewer identity or observation truth. Missing review yields `PLAN_REVIEW_REQUIRED`, malformed/stale links `PLAN_REVIEW_STALE`, and non-admitted or contradictory ADMIT `PLAN_NOT_ADMITTED`. These are admission outcomes, not product verdicts. No host session lookup or new terminal protocol is required.
 
-These Grounding and revision obligations are semantic review requirements, not a claim that the current stateless checker automatically verifies source meaning or observation truth. Do not infer a new machine-enforced gate, schema version or admission error from this document change.
-
-Return the actual artifact and raw evidence to the preparation lead. The lead may report COMPLETE only for its entire required current ADMIT denominator. Lost/stale artifacts cannot be repaired by relabeling an old conversation or changing REVISE to ADMIT; the owning reviewer must perform the needed current judgment.
+Return this exact artifact, its actual SHA256 and primary evidence to the preparation lead. The lead reads and forwards it unchanged, including findings, limitations and conditional scope; a user-facing summary never becomes a replacement machine review. A digest detects change relative to the supplied original, not a caller rewriting both file and claimed digest. The lead may report COMPLETE only for its entire required current ADMIT denominator. Lost/stale artifacts require the owning review, not reconstruction from an old conversation or caller conversion of v1 to v2.

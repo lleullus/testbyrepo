@@ -8,12 +8,18 @@ The OMP extension registers exactly two IIS tools and does not install global to
 
 - `ready_contract`
   - `inspect_authority`: validate and bind the current Ticket/product authority bytes.
-  - `check_plan_admission`: require an exact current independent `iis-plan-review/v1` ADMIT before implementation work.
+  - `check_plan_admission`: require an exact current `iis-plan-review/v2` ADMIT before implementation work; reject declared projection/material-finding contradictions and changed evidence files. Independent execution and semantic truth remain role responsibilities.
   - `capture_verification`: create one immutable verifier binding outside Project Root.
 - `ready_finalize`
   - accept only `{ "terminal_handle": "<opaque host-delivered handle>" }` for a successful delegated Ready Verify worker;
   - consume host-owned binding/verdict provenance and verify current loaded bundle/protocol identities before mutation;
   - perform at most the narrow canonical Ticket `ready -> done` status progression without interpreting semantic verification.
+
+Implementation admission now requires the independent reviewer's original `iis-plan-review/v2` artifact. Historical v1 reviews remain evidence only; callers must not convert them into current approval. V2 preserves projection, findings, conditional scope and optional ordinary-file evidence references. Hash checks detect supplied-byte mismatch, not authorship or runtime truth.
+
+Authority inspection and admission expose the module's canonical `bundle_root` and explicit `role_document_paths`. Installed execution rejects a validator outside that release and drift in required role/validator files; source mode remains explicitly `source`. This does not pin a host's autoload resolver or prove which other documents it loaded. Preserve unavailable loaded identity as unknown.
+
+The ordinary Node CLI can inspect authority and check admission without OMP. Protected finalization still requires its supported host. Coverage findings and material evidence limits require caller withholding, not a new finalizer argument or machine Coverage gate.
 
 The optional CLI exposes `ready_contract`; its `ready_finalize` name fails with `CAPABILITY_UNAVAILABLE` because only the live OMP host can resolve terminal authority.
 

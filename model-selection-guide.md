@@ -2,33 +2,38 @@
 
 이 문서는 현재 IIS 역할별 모델·effort 선택을 위한 운영 가이드다.
 
+역할 정합성 교정: 2026-09-13. 기존 모델·effort 및 수치 자료는 재평가·재산정하지 않았다.
+
 단순 벤치마크 1위 모델을 모든 역할에 배치하지 않는다. **현재 IIS의 책임 분리, 작업 난이도, failure cost, 모델군별 실패 패턴, 비용을 함께 보고 최소 충분 모델을 고르는 것**이 목적이다.
 
 ---
 
 ## 1. 현재 역할 구조
 
-현재 모델 선택은 다음 6개 역할을 기준으로 한다.
+실행 준비의 책임은 [ready-ticket-plan](companion-skills/ready-ticket-plan/SKILL.md)을 따른다. 아래는 모델 수나 추가 invocation을 정하는 고정 roster가 아니다.
 
 ```text
-Outer Main / Ready Ticket Plan
-  -> Adversarial Challenger (optional)
-  -> Pre-Implementation Probe
-  -> Plan Verifier
-  -> Implementation Worker
-  -> Final Verifier
+Preparation Lead
+  -> Grounded Planner
+  -> Independent Plan Reviewer
+  -> Lead fan-in
+  -> Implementation Worker (구현이 허용된 경우)
+  -> Final Verification (검증이 허용된 경우)
 ```
 
 역할 의미는 다음과 같다.
 
 | 역할 | 현재 책임 |
 |---|---|
-| **Outer Main / Ready Ticket Plan** | Run Contract, routing, completion fan-in과 함께 실행 방법의 cause/owner/interface/effect/readback 구조를 닫는다. |
-| **Adversarial Challenger** | planning candidate의 전제·누락·counterexample·trade-off를 read-only로 공격한다. 명시적으로 활성화된 경우에만 존재한다. |
-| **Pre-Implementation Probe** | 구현 전 current path와 counterpath를 독립적으로 조사하고 최소 discriminating check를 만든다. |
-| **Plan Verifier** | 실제 제품 성공이 아니라 **구현 착수 적합성**을 `ADMIT / REVISE / EVIDENCE_NEEDED`로 판정한다. |
+| **Outer Main** | Adaptive invocation의 Run Contract, routing과 전체 완료 판단을 소유한다. 실행 방법 작성은 실제 Planner 역할의 책임이다. |
+| **Preparation Lead / Lead fan-in** | Ticket 분모와 역할을 조율하고 독립 review의 귀속·currentness·완료 범위를 확인한다. fan-in은 방법 작성이나 재판정이 아니다. |
+| **Grounded Planner** | 원계약·현재 근거에서 실행 방법을 작성하고 material method revision을 소유한다. |
+| **Independent Plan Reviewer** | 원계약·현재 primary evidence와 bounded counterpath를 직접 확인해 exact `start_scope`의 `ADMIT / REVISE / EVIDENCE_NEEDED`를 판정한다. |
+| **Adversarial Challenger** | 명시적으로 활성화된 제품 계획 단계에서 candidate의 전제·누락·counterexample·trade-off를 read-only로 공격한다. 실행 준비의 필수 중간 단계가 아니다. |
 | **Implementation Worker** | 이미 review된 방법을 bounded하게 실행하고 self-check/readback을 닫는다. 중요한 방법 변경은 스스로 재설계하지 않고 upstream으로 반환한다. |
-| **Final Verifier** | 구현 후 integrated discovery, fresh evidence, Flow/AC adjudication, final verdict와 guarded `ready -> done`을 소유한다. |
+| **Final Verifier** | 구현 후 fresh evidence, Flow/AC adjudication과 semantic verdict를 소유한다. 성공 후 Coverage와 `ready_finalize` 호출은 기존 계약에 따라 finalization caller가 맡는다. |
+
+Writer와 Reviewer의 invocation은 분리한다. 하나의 사용자 선택이 두 역할을 포괄할 수 있으며 Lead fan-in은 새 모델 선택 행을 만들지 않는다.
 
 ### 가장 중요한 구조 변화
 
@@ -46,15 +51,14 @@ Implementation Worker는 더 이상 broad diagnosis·architecture·root-cause �
 이 경우:
 
 ```text
-Implementation
-  -> Ready Ticket Plan
-  -> Pre-Implementation Probe
-  -> Plan Verifier
-  -> fresh ADMIT
-  -> Implementation resume/re-entry
+Implementation의 material method change
+  -> affected Plan revision (Planner)
+  -> current independent review
+  -> 해당 Ticket의 current ADMIT
+  -> fresh implementation actor
 ```
 
-을 따른다.
+을 따른다. 이전 worker/process가 실제로 종료된 뒤에만 새 구현자를 시작하며, 제품 의미 변경은 원래 planning authority로 반환한다.
 
 ---
 
@@ -117,13 +121,10 @@ Terminal v4는 일상적 구현의 평균 난이도를 대표하는 benchmark로
 - `max` effort가 유리하게 보이는 workload 특성이 있다.
 - 따라서 routine Implementation에서 높은 비중으로 사용하면 Max/hard-debugging 모델을 과대평가할 수 있다.
 
-이 때문에 Terminal v4는:
+기존 산정에서 Terminal v4 비중은 다음과 같다.
 
-- Outer / Challenger / Plan Verifier: **0%**
+- Outer Main·Planner / Challenger / Plan Reviewer: **0%**
 - Implementation / Final Verifier: **10%**
-- Pre-Implementation Probe: **20%**
-
-만 사용한다.
 
 ### Max effort 해석
 
@@ -137,31 +138,30 @@ Max는 다음 성격에 가깝다.
 
 - Luna Max: 저비용 최대 effort이지만 base ceiling은 낮다.
 - Terra Max: Terminal v4에서 XHigh 대비 매우 큰 hard-tail jump가 있으므로 execution-heavy 특수 대안이다.
-- Sol Max: broad pre-implementation investigation에서 의미가 있다.
 - Astra Max: XHigh 대비 일반적 monotonic gain이 확인되지 않으므로 특수 override다.
 
 ---
 
 ## 4. 역할별 benchmark 조합
 
+아래 가중치와 §7 점수는 **2026-09-09 산정값**이다. `Outer Main·Planner`는 종전 공통 집계이며 역할 통합을 뜻하지 않는다. `Plan Reviewer` 수치도 종전 Plan Verifier 산정을 보존했을 뿐, 현행 직접 조사·판정 능력을 검증한 값은 아니다.
+
 | 역할 | Automation | Terminal v4 | SciCode | Omni norm | Briefcase norm | LCR |
 |---|---:|---:|---:|---:|---:|---:|
-| **Outer Main / Ready Ticket Plan** | 15% | 0% | 15% | 15% | **35%** | 20% |
+| **Outer Main·Planner (종전 공통 집계)** | 15% | 0% | 15% | 15% | **35%** | 20% |
 | **Adversarial Challenger** | 0% | 0% | 15% | 20% | **40%** | 25% |
-| **Pre-Implementation Probe** | 20% | **20%** | **25%** | 15% | 10% | 10% |
-| **Plan Verifier** | 10% | 0% | 15% | 20% | **35%** | 20% |
+| **Plan Reviewer** | 10% | 0% | 15% | 20% | **35%** | 20% |
 | **Implementation Worker** | **25%** | **10%** | **50%** | 0% | 0% | 15% |
 | **Final Verifier** | 10% | **10%** | 20% | 20% | **30%** | 10% |
 
-### 4.1 Outer Main / Ready Ticket Plan
+### 4.1 Outer Main과 Grounded Planner
 
-중심 능력:
+중심 능력은 책임별로 구별한다.
 
-- 현재 product/code 구조 이해
-- 근거와 contract 통합
-- owner/interface/effect/readback 계획
-- long context 유지
-- final fan-in에서 completion 과대주장 방지
+- Planner: 현재 product/code 구조 이해, 근거와 contract 통합
+- Planner: owner/interface/effect/readback 방법 작성과 material revision
+- Outer Main: Run Contract·routing·전체 완료 판단
+- 양쪽 모두: long context에서 해당 책임과 원권위 유지
 
 Terminal hard-tail 완주 능력은 직접적인 주 평가 대상이 아니다.
 
@@ -177,29 +177,18 @@ Terminal hard-tail 완주 능력은 직접적인 주 평가 대상이 아니다.
 
 실행 성능보다 reasoning·evidence integration을 더 크게 본다.
 
-### 4.3 Pre-Implementation Probe
+### 4.3 Independent Plan Reviewer
 
 중심 능력:
 
-- current path / alternate path 조사
-- cause hypothesis 반증
-- minimal discriminating observation
-- runtime/state counterpath 실행
+- 원래 Ticket/Spec/Behavior/UI와 현재 product path·primary evidence 직접 확인
+- Planner diagnosis에 종속되지 않은 load-bearing dependency와 bounded counterpath 판단
+- 확인된 모순·미확인 근거·제안된 방법을 구별하여 false ADMIT과 불필요한 거절 억제
+- exact start scope와 conditional first work의 관측·의존 작업 제한·반환 경계 판단
 
-6개 역할 중 Terminal v4를 가장 높게 주지만 20%로 제한한다.
+Plan 작성·수정이나 최종 제품 판정은 담당하지 않는다.
 
-### 4.4 Plan Verifier
-
-중심 능력:
-
-- false ADMIT 억제
-- 원래 Ticket/Spec/Behavior/UI와 plan 대조
-- Probe finding/unknown 처분의 충분성 확인
-- conditional start가 실제로 bounded한지 판단
-
-제품의 final correctness를 판정하는 역할이 아니다.
-
-### 4.5 Implementation Worker
+### 4.4 Implementation Worker
 
 중심 능력:
 
@@ -221,7 +210,7 @@ Terminal hard-tail 완주 능력은 직접적인 주 평가 대상이 아니다.
 
 Implementation의 default는 **Luna Max**다.
 
-### 4.6 Final Verifier
+### 4.5 Final Verifier
 
 중심 능력:
 
@@ -245,7 +234,7 @@ Verifier가 어려운 구현을 대신 해결하는 역할은 아니므로 Termi
 |---|---|---|
 | **SWE-Bench Pro** | 실제 repository implementation | family-level sanity check |
 | **DeepSWE** | coding-agent implementation | effort coverage가 있는 모델만 overlay |
-| **SWE-Atlas Codebase QnA** | repo 이해·경로·원인 조사 | Plan/Probe/Verifier overlay |
+| **SWE-Atlas Codebase QnA** | repo 이해·경로·원인 조사 | Planner/Plan Reviewer/Final Verifier overlay |
 | **SWE-Atlas Test Writing** | 정상/비정상 구현을 구별하는 검증 설계 | Final Verifier overlay |
 
 현재 공개 SWE-Bench Pro family-level 참고값:
@@ -327,7 +316,7 @@ AA task cost와 output token 정보가 공개 화면에서 반올림되어 있�
 
 이 표는 참고용이다. **운영 기본 선택은 아래 난이도 프리셋을 우선한다.**
 
-### 7.1 Outer Main / Ready Ticket Plan
+### 7.1 Outer Main·Planner — 종전 공통 집계
 
 | 순위 | 구성 | P | C | F20 |
 |---:|---|---:|---:|---:|
@@ -357,20 +346,7 @@ Gemini는 점수와 무관하게 Outer Main 운영 후보에서 제외한다.
 
 운영 preset에서는 model-family independence와 latency를 위해 Gemini High를 Challenger 기본값으로 사용한다.
 
-### 7.3 Pre-Implementation Probe
-
-| 순위 | 구성 | P | C | F20 |
-|---:|---|---:|---:|---:|
-| 1 | **Astra XHigh** | 139.89 | 12.83× | **114.10** |
-| 2 | Astra Max | 140.42 | 18.11× | 113.89 |
-| 3 | Astra High | 136.41 | 9.56× | 111.99 |
-| 4 | Astra Medium | 131.96 | 8.56× | 108.65 |
-| 5 | Sol Max | 125.26 | 14.63× | 101.92 |
-| 6 | Luna Max | 100.00 | 1.00× | 100.00 |
-| 7 | Terra Max | 116.48 | 7.78× | 96.18 |
-| 8 | Sol XHigh | 115.37 | 8.75× | 94.93 |
-
-### 7.4 Plan Verifier
+### 7.3 Plan Reviewer — 기존 산정값
 
 | 순위 | 구성 | P | C | F20 |
 |---:|---|---:|---:|---:|
@@ -383,7 +359,7 @@ Gemini는 점수와 무관하게 Outer Main 운영 후보에서 제외한다.
 | 7 | Sol XHigh | 109.95 | 8.75× | 90.47 |
 | 8 | Sol High | 107.62 | 5.99× | 89.69 |
 
-### 7.5 Implementation Worker
+### 7.4 Implementation Worker
 
 | 순위 | 구성 | P | C | F20 |
 |---:|---|---:|---:|---:|
@@ -398,7 +374,7 @@ Gemini는 점수와 무관하게 Outer Main 운영 후보에서 제외한다.
 
 **운영 기본값은 Luna Max다.**
 
-### 7.6 Final Verifier
+### 7.5 Final Verifier
 
 | 순위 | 구성 | P | C | F20 |
 |---:|---|---:|---:|---:|
@@ -417,7 +393,7 @@ Astra Max와 XHigh의 차이는 매우 작으므로 Max를 자동 기본값으�
 
 ## 8. 난이도별 운영 프리셋
 
-단순 Top 8 순위보다 이 표를 우선한다.
+단순 Top 8 순위보다 이 표를 우선한다. 기존 공통 행의 모델·effort는 Planner 추천으로 보존한다. Outer Main을 별도 추천할 때도 같은 값을 참고하되 현재 세션·사용자 선택은 바꾸지 않는다. 실제 선택은 [Run Contract](iis-adaptive-planning/references/09-run-contract.md#delivery-model-selection)를 따른다.
 
 ### P0 — Lean / Routine
 
@@ -425,19 +401,17 @@ Astra Max와 XHigh의 차이는 매우 작으므로 Max를 자동 기본값으�
 
 | 역할 | 모델 |
 |---|---|
-| Outer / Ready Plan | **Luna Max** |
+| Planner | **Luna Max** |
 | Challenger* | Gemini 3.8 Flash High |
-| Pre-Impl Probe | Sol High |
-| Plan Verifier | Gemini 3.8 Flash High |
+| Plan Reviewer | Gemini 3.8 Flash High |
 | Implementation | **Luna Max** |
 | Final Verifier | Gemini 3.8 Flash High |
 
 특징:
 
 - Astra 없이 시작한다.
-- 구현과 Outer는 Luna.
+- 구현과 Planner는 Luna.
 - reasoning/verification은 Gemini.
-- counterpath 실행은 Sol.
 
 ### P1 — Non-Astra Standard
 
@@ -445,10 +419,9 @@ Astra Max와 XHigh의 차이는 매우 작으므로 Max를 자동 기본값으�
 
 | 역할 | 모델 |
 |---|---|
-| Outer / Ready Plan | **Sol High** |
+| Planner | **Sol High** |
 | Challenger* | Gemini 3.8 Flash High |
-| Pre-Impl Probe | Sol XHigh |
-| Plan Verifier | Gemini 3.8 Flash High |
+| Plan Reviewer | Gemini 3.8 Flash High |
 | Implementation | **Luna Max** |
 | Final Verifier | Gemini 3.8 Flash High |
 
@@ -465,17 +438,15 @@ planning/verification의 failure cost가 의미 있게 커지는 중상 난이�
 
 | 역할 | 모델 |
 |---|---|
-| Outer / Ready Plan | **Astra Medium** |
+| Planner | **Astra Medium** |
 | Challenger* | Gemini 3.8 Flash High |
-| Pre-Impl Probe | Sol XHigh |
-| Plan Verifier | Astra Medium |
+| Plan Reviewer | Astra Medium |
 | Implementation | **Luna Max** |
 | Final Verifier | Astra High |
 
 특징:
 
-- Astra는 planning authority와 verification에 먼저 투입한다.
-- Probe는 Sol로 다른 execution 관점을 유지한다.
+- Astra는 실행 방법 준비와 검증에 먼저 투입한다.
 - Implementation은 여전히 Luna Max다.
 
 ### P3 — High Reliability
@@ -484,10 +455,9 @@ multi-service/state, 중요한 persistence/readback, false ADMIT/PASS 비용이 
 
 | 역할 | 모델 |
 |---|---|
-| Outer / Ready Plan | **Astra High** |
+| Planner | **Astra High** |
 | Challenger* | Gemini 3.8 Flash High |
-| Pre-Impl Probe | Sol Max |
-| Plan Verifier | Astra High |
+| Plan Reviewer | Astra High |
 | Implementation | **Luna Max** |
 | Final Verifier | Astra XHigh |
 
@@ -495,7 +465,6 @@ multi-service/state, 중요한 persistence/readback, false ADMIT/PASS 비용이 
 
 - 계획·착수 검증·최종 검증을 premium으로 올린다.
 - Challenger는 Gemini를 유지해 Astra monoculture를 줄인다.
-- broad runtime counterpath가 실제로 필요한 Probe에만 Sol Max를 쓴다.
 - Implementation은 plan이 current한 한 Luna Max를 유지한다.
 
 ### P4 — Critical / Astra-heavy
@@ -504,10 +473,9 @@ cross-authority, shared/external effect, 복구가 어렵고 false completion �
 
 | 역할 | 모델 |
 |---|---|
-| Outer / Ready Plan | **Astra XHigh** |
+| Planner | **Astra XHigh** |
 | Challenger* | Gemini 3.8 Flash High |
-| Pre-Impl Probe | Astra XHigh |
-| Plan Verifier | Astra XHigh |
+| Plan Reviewer | Astra XHigh |
 | Implementation | **Astra Medium** |
 | Final Verifier | Astra XHigh |
 
@@ -515,7 +483,7 @@ cross-authority, shared/external effect, 복구가 어렵고 false completion �
 
 - Astra-dominant ceiling.
 - Implementation까지 XHigh로 올리지 않는다.
-- XHigh compute는 plan/probe/final verification에 우선 사용한다.
+- XHigh compute는 Plan/Plan Review/final verification에 우선 사용한다.
 
 `* Challenger`는 adversarial consensus가 활성화된 경우에만 존재한다.
 
@@ -525,10 +493,9 @@ cross-authority, shared/external effect, 복구가 어렵고 false completion �
 
 | 역할 | 기본 escalation |
 |---|---|
-| **Outer / Ready Plan** | `Luna Max -> Sol High -> Astra Medium -> Astra High -> Astra XHigh` |
+| **Planner** | `Luna Max -> Sol High -> Astra Medium -> Astra High -> Astra XHigh` |
 | **Challenger** | `Gemini 3.8 Flash High` 유지가 기본 |
-| **Pre-Impl Probe** | `Sol High -> Sol XHigh -> Sol Max -> Astra XHigh` |
-| **Plan Verifier** | `Gemini High -> Astra Medium -> Astra High -> Astra XHigh` |
+| **Plan Reviewer** | `Gemini High -> Astra Medium -> Astra High -> Astra XHigh` |
 | **Implementation** | **`Luna Max` 기본 고정**; 예외만 `Terra Max` 또는 `Astra Medium` |
 | **Final Verifier** | `Gemini High -> Astra High -> Astra XHigh` |
 
@@ -587,7 +554,7 @@ Luna Max -> Astra Medium
 주 용도:
 
 - routine Implementation
-- Lean Outer / Ready Plan
+- Lean Planner
 - deterministic하고 실패 복구 쉬운 작업
 
 일반 coding capability가 상향평준화된 현재 세대에서는 낮은 비용이 매우 큰 장점이다.
@@ -599,7 +566,7 @@ Luna Max -> Astra Medium
 주 용도:
 
 - Challenger
-- low/mid Plan Verifier
+- low/mid Plan Reviewer
 - low/mid Final Verifier
 
 제약:
@@ -612,24 +579,8 @@ Luna Max -> Astra Medium
 
 주 용도:
 
-- P1 Outer / Ready Plan
-- P0 Probe
+- P1 Planner
 - 저중난도 independent execution/reasoning
-
-### Sol XHigh
-
-**standard pre-implementation Probe.**
-
-- Sol High보다 hard-tail/runtime 조사 여유가 필요할 때
-- P1/P2 Probe
-
-### Sol Max
-
-**broad pre-implementation investigation 전용 escalation.**
-
-Terminal v4에서는 강하지만 비할인가 기준 비용이 매우 높다.
-
-일반 Implementation 기본값으로 쓰지 않는다.
 
 ### Terra Max
 
@@ -647,14 +598,14 @@ Terra XHigh는 현재 roster에서 우선순위가 낮다.
 
 **value premium planning/verification + high-consequence implementation.**
 
-- P2 Outer/Plan Verify
+- P2 Planner/Plan Review
 - Implementation reliability override
 
 ### Astra High
 
 **default premium planner/verifier.**
 
-- P3 Outer/Plan Verify
+- P3 Planner/Plan Review
 - P2 Final Verify
 - failure cost가 높은 reasoning/authority 작업
 
@@ -694,7 +645,6 @@ Terra XHigh는 현재 roster에서 우선순위가 낮다.
 | 일반 Implementation | **Luna Max** |
 | 실행만 유난히 까다로운 Implementation | Terra Max override |
 | high-consequence Implementation | Astra Medium override |
-| broad pre-implementation runtime 조사 | Sol Max Probe |
 | critical verification | Astra XHigh |
 | Outer Main | Gemini 사용 금지 |
 
@@ -711,7 +661,7 @@ Terra XHigh는 현재 roster에서 우선순위가 낮다.
 5. Terra Max Terminal v4 jump -> Terra가 일반적으로 Sol보다 좋은 reasoning 모델이다.
 6. Max -> 같은 family에서 항상 더 좋은 quality tier.
 7. Omniscience -> 실제 IIS false-PASS율.
-8. Briefcase -> 실제 Plan Verifier 정확도.
+8. Briefcase -> 실제 Plan Reviewer 정확도.
 9. 비용계수 -> 실제 end-to-end Ticket 비용.
 10. SWE-Pro family score -> 모든 effort의 SWE-Pro 점수.
 
@@ -721,7 +671,7 @@ Terra XHigh는 현재 roster에서 우선순위가 낮다.
 
 공개 benchmark보다 IIS 자체 로그가 충분히 쌓이면 다음을 우선한다.
 
-### Outer / Ready Plan
+### Planner
 
 - plan review에서 발견된 material method defect
 - implementation material-turn으로 되돌아온 계획 오류율
@@ -733,19 +683,12 @@ Terra XHigh는 현재 roster에서 우선순위가 낮다.
 - non-material objection rate
 - 실제 candidate 수정으로 이어진 objection 비율
 
-### Pre-Implementation Probe
-
-- unique material finding rate
-- false hypothesis dismissal 정확도
-- discriminating observation 도달률
-- Plan Reviewer가 실제로 사용한 finding 비율
-
-### Plan Verifier
+### Plan Reviewer
 
 - false ADMIT
 - false REVISE
 - EVIDENCE_NEEDED 적정성
-- 구현 시작 후 즉시 드러난 계획 결함률
+- 준비 시점에 판단할 수 있었는데 구현 착수 후 드러난 계획 결함률
 
 ### Implementation
 
@@ -768,14 +711,12 @@ Terra XHigh는 현재 roster에서 우선순위가 낮다.
 
 ---
 
-## 14. 현재 권장 최소 roster
+## 14. 역할별 참고 구성
 
 ```text
 Luna Max                 : default Implementation / lean execution
 Gemini 3.8 Flash High    : Challenger / low-mid verification
-Sol High                 : non-Astra Outer / light Probe
-Sol XHigh                : standard Probe
-Sol Max                  : broad Probe escalation
+Sol High                 : non-Astra Planner
 Terra Max                : execution-heavy Implementation override
 Astra Medium             : value premium planning/verification
 Astra High               : default premium planning/verification

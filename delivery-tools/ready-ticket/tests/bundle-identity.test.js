@@ -72,3 +72,23 @@ test("loaded boundary file drift fails closed even when the module was already i
     /READY_BUNDLE_INVALID: boundary file drift: delivery-tools\/ready-ticket\/src\/core\.js/,
   );
 });
+
+test("canonical release survives pointer movement and rejects another release validator", async t => {
+  const f = await fixture(t);
+  const first = await materializeReadyBundle(f.base);
+  const second = await materializeReadyBundle(f.base);
+  const pointer = path.join(f.base, "current");
+  fs.symlinkSync(first.release, pointer);
+  const input = { projectRoot: f.root, ticketPath: f.ticket, bundleIdentity: first.bundleId };
+  const before = await first.core.inspectAuthority(input);
+  fs.unlinkSync(pointer);
+  fs.symlinkSync(second.release, pointer);
+  const after = await first.core.inspectAuthority(input);
+  assert.equal(after.bundle_root, first.release);
+  assert.equal(after.authority_digest, before.authority_digest);
+  await assert.rejects(first.core.inspectAuthority({ ...input, validatorPath: second.validatorPath }), /READY_BUNDLE_INVALID: validator must belong to the loaded release/);
+  const role = path.join(first.release, "companion-skills/ready-ticket-plan/references/review.md");
+  fs.chmodSync(role, 0o600);
+  fs.appendFileSync(role, "\nchanged\n");
+  await assert.rejects(first.core.inspectAuthority(input), /READY_BUNDLE_INVALID: role\/validator file drift/);
+});

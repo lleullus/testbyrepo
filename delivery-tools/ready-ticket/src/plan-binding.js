@@ -13,6 +13,37 @@ function exactFile(file) {
   return canonical;
 }
 
+function bindFindings(decision, reviewPath) {
+  const projection = decision.projection;
+  if (!projection || !["preserved", "gap", "unknown"].includes(projection.status) || typeof projection.basis !== "string" || !projection.basis.trim()) {
+    fail("PLAN_REVIEW_STALE", "missing projection judgment");
+  }
+  if (!Array.isArray(decision.findings)) fail("PLAN_REVIEW_STALE", "missing findings");
+  const evidence = [];
+  let unresolved = projection.status !== "preserved";
+  for (const finding of decision.findings) {
+    if (!finding || !["contract_gap", "method", "evidence_limit"].includes(finding.kind) ||
+        typeof finding.material !== "boolean" || !["unresolved", "dismissed", "resolved"].includes(finding.disposition)) {
+      fail("PLAN_REVIEW_STALE", "malformed finding disposition");
+    }
+    for (const field of ["anchor", "observation", "basis", "next_owner"]) {
+      if (typeof finding[field] !== "string" || !finding[field].trim()) fail("PLAN_REVIEW_STALE", `malformed finding: ${field}`);
+    }
+    unresolved ||= finding.disposition === "unresolved" && (finding.material || finding.kind === "contract_gap");
+    if (finding.evidence_refs !== undefined && !Array.isArray(finding.evidence_refs)) fail("PLAN_REVIEW_STALE", "malformed evidence references");
+    for (const ref of finding.evidence_refs ?? []) {
+      if (!ref || typeof ref.path !== "string" || !ref.path.trim() || !/^[0-9a-f]{64}$/.test(ref.sha256) || typeof ref.locator !== "string" || !ref.locator.trim()) {
+        fail("PLAN_REVIEW_STALE", "malformed evidence reference");
+      }
+      const file = exactFile(path.resolve(path.dirname(reviewPath), ref.path));
+      if (hashBytes(fs.readFileSync(file)) !== ref.sha256) fail("PLAN_REVIEW_STALE", `evidence changed: ${file}`);
+      evidence.push({ path: file, sha256: ref.sha256 });
+    }
+  }
+  if (decision.decision === "ADMIT" && unresolved) fail("PLAN_NOT_ADMITTED", "ADMIT contradicts unresolved projection or material findings");
+  return evidence;
+}
+
 // This verifies exact current byte pairing. Reviewer independence and semantic sufficiency
 // remain properties of the planning/review workflow rather than this boundary check.
 export function bindPlanReview({ planReviewPath, authority, requireAdmit = true }) {
@@ -22,7 +53,7 @@ export function bindPlanReview({ planReviewPath, authority, requireAdmit = true 
     if (isInsideProject(authority.project_root, reviewPath)) fail("PLAN_REVIEW_STALE", "review must be outside Project Root");
     const bytes = fs.readFileSync(reviewPath);
     const review = JSON.parse(bytes);
-    if (review.schema !== "iis-plan-review/v1" || review.project_root !== authority.project_root) fail("PLAN_REVIEW_STALE", "schema/root mismatch");
+    if (review.schema !== "iis-plan-review/v2" || review.project_root !== authority.project_root) fail("PLAN_REVIEW_STALE", "schema/root mismatch");
     if (!Array.isArray(review.plans) || !review.plans.length || !Array.isArray(review.contracts) || !Array.isArray(review.decisions)) fail("PLAN_REVIEW_STALE", "missing bindings");
     if (!review.review_origin?.reviewer || !review.review_origin?.evidence_reference) fail("PLAN_REVIEW_STALE", "missing review origin");
     const plans = review.plans.map(plan => {
@@ -46,11 +77,13 @@ export function bindPlanReview({ planReviewPath, authority, requireAdmit = true 
         if (typeof condition[field] !== "string") fail("PLAN_REVIEW_STALE", `malformed condition: ${field}`);
       }
     }
+    const evidence = bindFindings(decision, reviewPath);
     if (requireAdmit && decision.decision !== "ADMIT") fail("PLAN_NOT_ADMITTED", decision.decision);
     return {
       review_path: reviewPath,
       review_sha256: hashBytes(bytes),
       plans,
+      evidence,
       authority_digest: authority.authority_digest,
       decision,
     };
@@ -62,7 +95,7 @@ export function bindPlanReview({ planReviewPath, authority, requireAdmit = true 
 
 export function checkPlanCurrentness(binding) {
   const changed = [];
-  for (const item of [{ path: binding.review_path, sha256: binding.review_sha256 }, ...(binding.plans || [])]) {
+  for (const item of [{ path: binding.review_path, sha256: binding.review_sha256 }, ...(binding.plans || []), ...(binding.evidence || [])]) {
     try {
       if (hashBytes(fs.readFileSync(item.path)) !== item.sha256) changed.push(item.path);
     } catch {

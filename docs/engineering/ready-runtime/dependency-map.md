@@ -2,7 +2,7 @@
 
 ## Contract producer and consumer
 
-Product Scope/Behavior/Spec/Ticket remain the approved authority. `ready-ticket-plan` produces a project-local method Plan and an outside-root `iis-plan-review/v1` result from actual independent review. Plan byte pairing does not prove semantic sufficiency.
+Product Scope/Behavior/Spec/Ticket remain the approved authority. `ready-ticket-plan` produces a project-local method Plan and an outside-root `iis-plan-review/v2` result from actual independent review. Projection, findings, limits and conditional scope travel in that original artifact; current file pairing and declared consistency do not prove independent execution or semantic sufficiency.
 
 The actual implementing actor calls `ready_contract check_plan_admission` before the first source mutation and immediately before COMPLETE. Between those checks it uses ordinary host-native tools. No IIS execution/session/assignment state is created.
 

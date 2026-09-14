@@ -347,6 +347,8 @@ changed product meaning, return to Ask Matt or Scope Shaper instead of looping
 on the draft. Never use `approved` while any unresolved decision remains in
 `## Open Questions`.
 
+Audit the source meaning into the Spec as well as each Spec clause back to its source. A heading or outcome ordinal can contain several obligations; covering its name is not evidence that every applicable obligation survived. Correct an omitted approved obligation here; a change in meaning returns to its upstream owner. Preserve explicitly future/Non-Goal exclusions rather than silently importing them.
+
 Adoption also requires one complete outcome-local `## Verification
 Expectations` item for every independently acceptable observable outcome. Keep
 the Spec draft when a runtime outcome lacks its acceptance boundary or

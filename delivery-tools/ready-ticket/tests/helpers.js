@@ -26,12 +26,12 @@ export async function fixture(t) {
   const validatorPath = fileURLToPath(new URL("../../../matt/skills/to-tickets/validate_ticket.py", import.meta.url));
   const authority = await bindAuthority({ projectRoot: root, ticketPath: ticket, validatorPath, executeArgv: executeArgvNode });
   const reviewData = {
-    schema: "iis-plan-review/v1",
+    schema: "iis-plan-review/v2",
     project_root: root,
     plans: [{ path: plan, sha256: hashBytes(fs.readFileSync(plan)) }],
     contracts: [{ ticket_path: ticket, ticket_sha256: authority.ticket_sha256, authority_digest: authority.authority_digest }],
     review_origin: { reviewer: "fixture-independent-invocation", evidence_reference: "fixture-byte-pairing-only" },
-    decisions: [{ ticket_path: ticket, decision: "ADMIT", rationale: "fixture", start_scope: "cli.js", conditions: [] }],
+    decisions: [{ ticket_path: ticket, decision: "ADMIT", rationale: "fixture", start_scope: "cli.js", projection: { status: "preserved", basis: "CLI outcome is owned by this Ticket." }, findings: [], conditions: [] }],
   };
   fs.writeFileSync(review, JSON.stringify(reviewData));
   return { base, root, work, ticket, plan, review, behavior, stable, effect, validatorPath, authority, reviewData };
@@ -57,6 +57,25 @@ export async function materializeReadyBundle(base, mutate = () => {}) {
     fs.chmodSync(target, mode);
     files[`delivery-tools/ready-ticket/${packageRelative}`] = { sha256: hashBytes(bytes), mode };
   }
+  const repository = path.resolve(sourceRoot, "../..");
+  function copyMember(relative) {
+    const source = path.join(repository, relative);
+    const stat = fs.statSync(source);
+    if (stat.isDirectory()) {
+      for (const entry of fs.readdirSync(source)) {
+        if (entry !== "__pycache__") copyMember(`${relative}/${entry}`);
+      }
+      return;
+    }
+    const target = path.join(release, relative);
+    const bytes = fs.readFileSync(source);
+    const mode = stat.mode & 0o555;
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, bytes, { mode });
+    fs.chmodSync(target, mode);
+    files[relative] = { sha256: hashBytes(bytes), mode };
+  }
+  for (const relative of ["matt", "product-thesis", "scope-shaper", "iis_path_contract.py", "iis-workflow/SKILL.md", "companion-skills/ready-ticket-plan", "companion-skills/ready-ticket-implement", "companion-skills/ready-ticket-verify", "companion-skills/ready-ticket-coverage"]) copyMember(relative);
   const manifest = {
     schema: "iis-bundle/v2",
     protocol: 2,
@@ -69,5 +88,5 @@ export async function materializeReadyBundle(base, mutate = () => {}) {
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o444 });
   fs.chmodSync(manifestPath, 0o444);
   const specifier = pathToFileURL(path.join(release, "delivery-tools/ready-ticket/omp.js")).href;
-  return { bundleId, release, module: await import(`${specifier}?fixture=${crypto.randomUUID()}`) };
+  return { bundleId, release, validatorPath: path.join(release, "matt/skills/to-tickets/validate_ticket.py"), core: await import(pathToFileURL(path.join(release, "delivery-tools/ready-ticket/src/core.js")).href), module: await import(`${specifier}?fixture=${crypto.randomUUID()}`) };
 }
