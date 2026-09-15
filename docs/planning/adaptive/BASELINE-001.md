@@ -359,9 +359,327 @@ cut_current = desired_revision == realized_revision
 * 편집 캔버스는 `Interactive Projection`이다.
 * 승인 대상은 materialized immutable `Canonical Review Artifact`이다.
 * release path는 승인된 artifact를 다시 조판해서는 안 된다.
-* 허용되는 downstream transformation4
-[…319ln elided…]
-료
+* 허용되는 downstream transformation은 composition-preserving encoding 또는 uniform scaling뿐이다.
+* reflow, font 재해석, bubble 재배치, crop, cut reorder는 금지한다.
+
+### INV-5 — Immediate Authorization Revocation by Release Closure
+
+다음 receiver-visible authoritative change가 서버에 accepted 되는 즉시 기존 Release Authorization은 무효화된다.
+
+* 픽셀
+* text
+* bubble geometry
+* typography
+* cut order
+* cut gap
+* 최종 결과에 영향을 주는 기타 authoritative composition field
+
+클라이언트에만 존재하는 unsaved draft는 아직 accepted authoritative intent가 아니므로 과거 승인을 승계하거나 새로운 승인을 창조하지 않는다.
+
+### INV-6 — Complete Release & Honest Delivery Outcome
+
+* 정확히 5컷 모두 Current이고 authorized Release Closure와 일치해야 release 가능
+* silent `continue` 기반 partial release 금지
+* compositor 오류 발생 시 전체 release 차단
+* delivery truth는 최소 다음을 분리한다.
+
+  * Confirmed Success
+  * Confirmed Failure
+  * Unknown / Unresolved
+* 통신 불명확성을 local 추정으로 성공 또는 실패로 변환하지 않는다.
+
+### INV-7 — Durable Intent Across Interruption
+
+* STOP, crash, restart는 물리적 실행을 종료할 수 있다.
+* 이미 accepted 된 desired intent를 묵시적으로 철회할 수 없다.
+* 이전 realization은 보존할 수 있으나 최신 desired revision과 다르면 `STALE`
+* 재시작 후 가짜 running 상태를 유지하지 않는다.
+* 사용자의 명시적 새 intent 없이 과거 intent로 되돌아가지 않는다.
+
+### INV-8 — Single Durable Local Authority & External Evidence Boundary
+
+* 현재 intent
+* realization attribution
+* Structural Baseline
+* composition identity
+* authorization
+* job/attempt facts
+* delivery attempt/outcome readback
+
+위 로컬 진실은 단 하나의 durable SQLite transactional authority에 기록한다.
+
+프로세스 메모리, client state, JSON sidecar, lock file은 경쟁 authority가 될 수 없다.
+
+외부 Blogger의 실제 상태는 SQLite transaction으로 창조할 수 없다. 외부 truth는 destination readback으로 관측된 사실만 기록한다.
+
+---
+
+## 8. Path Invariants
+
+다음 제약은 Block 내부뿐 아니라 Block 경계, 재진입, 중단 후 재개에도 계속 적용한다.
+
+### PATH-1 — Exactly Five Forever
+
+Transition Path 전체에서 canonical 작품은 정확히 5개의 stable cut slot을 유지한다. 임시 구현 편의를 위해 N-cut domain을 만들었다가 나중에 5컷으로 제한하는 우회 경로도 허용하지 않는다.
+
+### PATH-2 — One Local Authority
+
+새 Block이 새로운 JSON authority, 메모리 approval flag, 독립 queue file 또는 lock registry를 추가해서는 안 된다.
+
+### PATH-3 — Monotonic Acceptance
+
+authoritative mutation은 새로운 revision/domain revision으로 수용한다. 이미 accepted 된 intent를 조용히 삭제하거나 revision을 역행시키지 않는다.
+
+### PATH-4 — Commit-Time Currency Check
+
+생성 결과를 canonical realization으로 승격하는 모든 경로는 최종 DB commit 시점에 현재 desired revision을 검증해야 한다. 실행 시작 시점 검증만으로는 충분하지 않다.
+
+### PATH-5 — Presence Is Not Currency
+
+이전 image bytes가 남아 있다는 이유로 Current, Complete, Reviewable, Releasable로 판정해서는 안 된다.
+
+### PATH-6 — Release Closure
+
+receiver-visible authoritative change의 accepted transaction과 기존 release authorization revocation은 논리적으로 분리될 수 없다. 변경은 수용되었는데 approval이 살아 있는 중간 권위 상태를 만들지 않는다.
+
+### PATH-7 — Review Artifact Identity
+
+review, authorization, export, publish가 서로 다른 composition reconstruction을 가져서는 안 된다. 하나의 immutable artifact identity를 공유한다.
+
+### PATH-8 — Honest Client Projection
+
+Pinia `drafts`와 transient pointer state는 server authority가 아니다. 실패한 저장이 성공한 것처럼 보이는 상태를 금지한다.
+
+### PATH-9 — SSE Does Not Invent Domain Truth
+
+SSE는 authoritative change의 전달 수단이다.
+
+* job completed event만으로 cut Current를 추론하지 않는다.
+* late/superseded result만으로 realization을 변경하지 않는다.
+* event gap/reconnect 시 authoritative snapshot readback을 수행한다.
+
+### PATH-10 — Immediate STOP without Intent Loss
+
+STOP은 confirmation으로 지연시키지 않는다. 실행 termination을 즉시 요청하되 UI는 authoritative terminal readback 이전에 임의로 `interrupted`를 선언하지 않는다.
+
+### PATH-11 — One Canonical Compositor
+
+interactive projection과 release truth를 분리하되 geometry schema를 공유한다. export/Blogger에 두 번째 조판 엔진을 도입하지 않는다.
+
+### PATH-12 — Single Production Serve Boundary
+
+production runtime은 `comic-new serve` 단일 Python process이다. frontend build toolchain은 production daemon이 아니다.
+
+### PATH-13 — No Silent Omission
+
+5컷 중 어느 하나라도 decode/render/compose/load에 실패하면 review/release 전체가 실패한다. 일부만 생략하여 성공하는 경로는 없다.
+
+### PATH-14 — External Truth Requires External Evidence
+
+Blogger request 전송 사실과 Blogger 게시 성공 사실을 구분한다. 응답 불명확성은 `Unknown`으로 남긴다.
+
+---
+
+## 9. Counterexample Gates
+
+### Gate 1 — Currency Gate
+
+**반례**
+
+5개의 정상 PNG가 존재하지만 cut 3의 상태가 다음과 같다.
+
+```text
+cut 3:
+desired_revision = 7
+realized_revision = 6
+```
+
+**차단 조건**
+
+다음이 모두 성립해야 한다.
+
+* cut 3 = `STALE`
+* Realization Complete = false
+* Review materialization = blocked
+* Release authorization = blocked
+* Delivery = blocked
+* 기존 rev 6 픽셀은 표시할 수 있으나 최신본으로 위장하지 않음
+
+### Gate 2 — Identity Gate
+
+**반례**
+
+사용자가 artifact `A`를 검토하고 승인한 후 말풍선 text 1글자 또는 gap 1px에 해당하는 authoritative 변경을 수용한다.
+
+**차단 조건**
+
+같은 accepted transaction/closure에서 기존 `A`의 Release Authorization이 사용할 수 없게 되어야 한다.
+
+이후:
+
+* 새 composition으로 artifact `B` materialization 필요
+* `B` 재검토 필요
+* `B` 신규 authorization 필요
+* `A` authorization으로 PNG/Blogger release 불가
+
+### Gate 3 — Interruption Gate
+
+**반례**
+
+현재 desired revision 생성 도중 STOP 또는 server process 중단이 발생한다.
+
+**차단 조건**
+
+재조회/재시작 후:
+
+* accepted `desired_revision` 보존
+* 실행 중이던 물리 프로세스 종료
+* 완료되지 않은 job이 더 이상 가짜 Running 상태가 아님
+* interrupted/terminal execution truth가 정직하게 기록됨
+* 이전 realization bytes는 보존 가능
+* `desired_revision != realized_revision`이면 반드시 STALE
+* 이전 intent로 rollback되지 않음
+
+### Gate 4 — External Truth Gate
+
+**반례**
+
+Blogger request 이후 연결이 끊겨 응답을 확정할 수 없다.
+
+**차단 조건**
+
+* local state = `Unknown` / `Unresolved`
+* `Published`, `Confirmed Success` 등으로 승격 금지
+* authorization은 delivery success와 별도 truth로 유지
+* destination readback이 성공 증거를 제공할 때만 Confirmed Success 가능
+
+---
+
+# 10. Transition Blocks
+
+각 Block은 독립 기능 목록이 아니라 5-Truth Chain의 다음 인과 경계를 안전하게 획득하기 위한 전이 단계이다.
+
+선행 Block의 Exit가 실측되지 않은 상태에서 후행 Block 구현이 일부 존재하더라도 후행 Block에 진입한 것으로 간주하지 않는다.
+
+---
+
+## BLOCK-01 — Core Domain & Single Transactional Authority
+
+* **ID:** `BLOCK-01`
+* **Name:** Core Domain & Single Transactional Authority
+
+### Meaning Contribution
+
+5-Truth Chain 전체가 의존할 단 하나의 영속 권위와 정확히 5컷의 정체성을 확립한다.
+
+이 Block의 핵심 결과는 “무엇이 현재 진실인가?”라는 질문에 파일, 메모리, UI 캐시가 아니라 하나의 transaction readback으로 답할 수 있게 만드는 것이다.
+
+### Order / Dependencies
+
+* 최초 Block
+* 선행 Block 없음
+
+### Entry
+
+* `comic_new` clean rebuild project
+* 승인된 `THESIS-001`
+* 승인된 `FRONTEND-ARCH-001`
+* 과거 `comic` runtime state를 호환 authority로 가져오지 않은 상태
+
+### Required Construction Boundary
+
+최소 domain authority는 다음 진실을 표현할 수 있어야 한다.
+
+* project / structural baseline
+* exactly five cuts
+* desired revision
+* realized revision + canonical asset identity
+* accepted cut intent
+* composition revision/state
+* generation job/attempt facts
+* canonical review artifact identity
+* release authorization
+* delivery attempt/outcome
+
+구체적인 table 분할은 구현 세부이지만 하나의 SQLite transactional authority를 깨뜨릴 수 없다.
+
+### Exit — Measured Predicate
+
+다음을 모두 실측해야 한다.
+
+1. 신규 프로젝트 생성 후 authoritative query 결과에 정확히 `cut_id = 1,2,3,4,5`만 존재한다.
+2. cut 추가/삭제/reindex를 통한 5컷 contract 위반 경로가 없다.
+3. Structural Baseline 승인과 5개 cut intent가 transaction 후 재조회된다.
+4. 동일 cut에서 intent 변경을 두 번 수용하면 `desired_revision`이 역행 없이 증가한다.
+5. 과거 내용을 복구해도 revision 감소가 아니라 새 revision으로 기록된다.
+6. receiver-visible composition 변경이 accepted 될 때 composition revision이 증가한다.
+7. process restart 후 동일 DB readback으로 intent/baseline/composition truth가 복구된다.
+8. approval/job/delivery truth가 process-local variable에만 존재하지 않는다.
+9. application-managed lock file이 생성되지 않는다.
+10. concurrent write 시험에서 DB transaction/constraint를 통해 충돌이 정직하게 처리되고 split-brain authority가 발생하지 않는다.
+11. `Current` 판정 함수가 오직 desired/realized revision equality에 기초한다.
+12. 5개의 오래된 image file 존재만으로 Complete를 만들 수 없다.
+
+### Invariants
+
+* INV-1
+* INV-2
+* INV-3
+* INV-5
+* INV-7
+* INV-8
+* 모든 Path Invariants 중 domain/state 관련 항목
+
+### Continuation
+
+Exit Predicate가 실측되면 `BLOCK-02`로 진행한다.
+
+후속 generation engine은 반드시 이 Block의 DB authority를 사용하며 별도 queue authority 또는 lock registry를 만들 수 없다.
+
+### Abort
+
+다음 중 하나가 발생하면 Block 전이를 중단한다.
+
+* 동일 개념의 mutable truth가 DB와 sidecar file에 이중 기록되어 둘 다 authority가 됨
+* 5컷 identity가 가변 구조로 구현됨
+* monotonic revision을 transaction으로 보장할 수 없음
+* restart 후 accepted intent가 소실됨
+* approval 또는 realization attribution이 휘발성 메모리에만 존재함
+* application lock file이 다시 필요해짐
+
+Abort 시 손상된 schema를 후행 Block이 우회하여 보정하지 않는다. 먼저 authority 모델을 복구한다.
+
+### Insufficient for Exit
+
+다음은 Exit 증거가 아니다.
+
+* ORM model이 존재함
+* migration이 실행됨
+* DB 파일이 생성됨
+* unit test mock만 통과함
+* 이미지 파일 5개가 존재함
+* 메모리 상태와 DB가 우연히 동일함
+* “향후 transaction으로 보강 예정”인 상태
+
+---
+
+## BLOCK-02 — Single Unified Generation Engine & Runner
+
+* **ID:** `BLOCK-02`
+* **Name:** Single Unified Generation Engine & Runner
+
+### Meaning Contribution
+
+accepted intent를 현재 realization으로 실현하는 단 하나의 실행 경로를 구축하고, 전체 생성/개별 생성 간 권위 분열과 Stale Overwrite를 구조적으로 제거한다.
+
+### Order / Dependencies
+
+* `BLOCK-01` 완료 필수
+
+### Entry
+
+* Exactly-five domain schema 존재
+* monotonic desired revision 검증 완료
 * SQLite authority 재시작 readback 검증 완료
 
 ### Required Construction Boundary
@@ -1086,6 +1404,3 @@ external confirmed outcome
 
 **Block progress is not product truth.
 Code presence is not completion.
-Asset presence is not currency.
-Authorization is not delivery.
-Local delivery intent is not external success.**
