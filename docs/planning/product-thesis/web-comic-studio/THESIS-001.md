@@ -137,6 +137,21 @@ STOP 조작, 시스템 충돌, 서버 재시작은 현재 실행 중인 물리�
   - UI는 에러를 콘솔에만 남기거나 저장된 척 위장하는 것을 엄격히 금지한다.
   - 즉각 사용자에게 "저장 실패" 토스트 및 경고 상태를 노출하고, 해당 변경분이 아직 정본 의도로 수용되지 않았음을 시각적으로 식별 가능하게 격리한다.
 
+### 6.4 3열 스튜디오 레이아웃 & 5대 상호작용 축 경계 (`FRONTEND-ARCH-001`)
+- **Header (`StudioHeader`)**: 상단 영구 고정. 프로젝트 상태 요약, 큐 상태 요약, 즉시 `STOP` 명령 버튼을 항상 노출하며 스크롤이나 선택 상태에 가려지지 않는다.
+- **Left Rail (`CutRail`)**: 좌측 영구 고정(데스크톱). 정확히 5개 컷 슬롯의 썸네일, 의도/실현 revision, STALE 상태를 상시 표시한다.
+- **Center Canvas (`CompositionCanvas`)**: 중앙 영구 고정. 5컷 전체 조판 투영 및 말풍선 시각 인터랙션을 담당한다.
+- **Right Inspector (`InspectorPanel`)**: 우측 영구 고정(데스크톱, 비모달). 선택된 컷의 프롬프트/대사 상세 폼을 제공한다. 캔버스 작업 조작을 차단하는 모달 대화상자로 구현하는 것을 엄격히 금지한다.
+- **작업 큐 상세 (`QueuePopover`)**: 비모달 트리거 팝오버. 헤더 큐 버튼에 앵커되어 세부 작업 목록과 개별 취소를 제공한다.
+- **최종 검토 및 승인 (`ReviewModal`)**: **유일한 포커스 트랩 모달**. 백엔드에서 실체화된 `Canonical Review Artifact`를 검토하고 2차 승인을 내릴 때만 캔버스를 차단하는 전용 모달을 사용한다.
+
+### 6.5 캔버스 식자 기하 모델 & 조작 규격
+- 말풍선 위치와 크기는 브라우저 뷰포트나 개별 컷 이미지가 아닌 **Canonical Composition Surface 기준 백분율 좌표 (`x_pct`, `y_pct`, `w_pct`, `h_pct`)**로 엄격히 정규화된다. 뷰포트 줌, 리사이즈, 화면 해상도 변화에도 기하는 불변이다.
+- 거대 서드파티 캔버스 라이브러리를 배제하고 네이티브 `PointerEvent` + SVG/DOM 오버레이로 구현하며, 포인터 캡처(`setPointerCapture`) 및 `pointercancel` 자동 복구, 키보드 미세 이동(Nudge: 0.5%, Shift: 2.0%)을 지원한다.
+
+### 6.6 단일 서빙 배포 계약 (Single-Serving Deployment Boundary)
+- 웹 프론트엔드는 빌드되어 백엔드 패키지 데이터(`src/comic_new/static/`)로 단일 배포된다.
+- 프로덕션 런타임은 오직 `comic-new serve` 단일 Python 프로세스만 구동되며, 별도의 Node 데몬, SSR 서버, 외부 웹 서버를 요구하지 않는다.
 ---
 
 ## 7. Banned False Successes (영구 금지된 거짓 성공 반례)
@@ -190,7 +205,7 @@ STOP 조작, 시스템 충돌, 서버 재시작은 현재 실행 중인 물리�
 - **웹 서버 및 통신 프레임워크**: FastAPI, Starlette, SSE 프로토콜 세부 필드명 및 엔드포인트 URL 네이밍.
 - **이미지 생성기 연동 방식**: ima2 CLI subprocess 호출, HTTP 데몬 연동, 워커 풀 크기(concurrency limit) 및 프로세스 시그널(SIGTERM/SIGKILL).
 - **조판 렌더러 구현 라이브러리**: Python PIL, Skia, Canvas 라이브러리 선택 및 픽셀 블렌딩 알고리즘.
-- **프론트엔드 프레임워크**: Vue, React, Svelte, 컴포넌트 아키텍처 및 번들러(Vite/Bun) 설정.
+- **프론트엔드 아키텍처 및 구현 스택**: Vue 3 + TypeScript + Vite 단일 SPA 및 번들링 배포로 확정 (`docs/planning/frontend-architecture/FRONTEND-ARCH-001.md`에 결속).
 
 ### 10.2 잔여 제품 제약 (Open Product Meaning)
 - 본 문서에 명시된 5컷 만화 창작·수정·검토·발행의 닫힌 인과 루프에 대한 미결정 제품 의미는 **없음 (None)**.
