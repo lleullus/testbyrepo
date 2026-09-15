@@ -1,0 +1,49 @@
+/* Design tokens — Plan §7 exact values */
+:root {
+  /* Surfaces */
+  --surface-white: #FFFFFF;
+  --surface-light: #F7F8FA;
+  --surface-bg: #EEF1F5;
+  --canvas-bg: #16181D;
+
+  /* Text */
+  --text-primary: #17191D;
+  --text-secondary: #5E6572;
+
+  /* Border */
+  --border: #D7DCE3;
+
+  /* Accent */
+  --accent: #2563EB;
+  --accent-hover: #1D4ED8;
+
+  /* Semantic */
+  --color-current: #18794E;
+  --color-stale: #A15C00;
+  --color-error: #B42318;
+  --color-error-bg: #FEF3F2;
+
+  /* Spacing */
+  --sp-4: 4px;
+  --sp-8: 8px;
+  --sp-12: 12px;
+  --sp-16: 16px;
+  --sp-24: 24px;
+
+  /* Radius */
+  --radius-inner: 4px;
+  --radius-sm: 6px;
+  --radius-panel: 8px;
+
+  /* Typography */
+  --font-family: 'Pretendard Variable', Pretendard, SUIT, 'Noto Sans KR', system-ui, sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-body: 14px;
+  --font-size-heading: 20px;
+  --line-height: 1.6;
+
+  /* Layout */
+  --header-height: 52px;
+  --breakpoint-narrow: 1100px;
+}

@@ -9,13 +9,15 @@ description = "Web Comic Studio - Single Transactional Authority"
 requires-python = ">=3.10"
 dependencies = [
     "Pillow>=10.0.0",
+    "fastapi==0.136.3",
+    "uvicorn==0.48.0",
 ]
 
 [project.scripts]
 comic-new = "comic_new.cli:main"
 
 [tool.setuptools.package-data]
-comic_new = ["schema.sql", "migrations/*.sql"]
+comic_new = ["schema.sql", "migrations/*.sql", "static/*", "static/**/*"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

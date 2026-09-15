@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from comic_new.generation import GenerationRunner, GenerationService
+from comic_new.server import ServerPreflightError, serve
 from comic_new.store import (
     ProjectAlreadyExistsError,
     ProjectNotFoundError,
@@ -76,6 +77,21 @@ def main(argv: list[str] | None = None) -> int:
         help="Stop all active generation jobs and cancel queued ones (global stop)",
     )
     stop_parser.add_argument("project_dir", type=str, help="Path to the project directory")
+
+    # comic-new serve <project_dir> --font <absolute-font-file>
+    serve_parser = subparsers.add_parser(
+        "serve",
+        help="Serve the generated production Studio and same-origin API from one Python process",
+    )
+    serve_parser.add_argument("project_dir", type=str, help="Path to the project directory")
+    serve_parser.add_argument(
+        "--font",
+        required=True,
+        type=str,
+        help="Absolute path to the canonical TrueType/OpenType font file",
+    )
+    serve_parser.add_argument("--host", default="127.0.0.1", help="Listen host")
+    serve_parser.add_argument("--port", type=int, default=8000, help="Listen port")
     args = parser.parse_args(argv)
 
     try:
@@ -139,6 +155,16 @@ def main(argv: list[str] | None = None) -> int:
             receipt = service.stop_all()
             print(json.dumps(receipt.to_dict(), indent=2))
             return 0
+        elif args.command == "serve":
+            if not 1 <= args.port <= 65535:
+                raise ValidationError("port must be between 1 and 65535")
+            serve(
+                project_dir=Path(args.project_dir),
+                font_path=Path(args.font),
+                host=args.host,
+                port=args.port,
+            )
+            return 0
         else:
             parser.print_help(sys.stderr)
             return 2
@@ -149,6 +175,7 @@ def main(argv: list[str] | None = None) -> int:
         RunnerAlreadyActiveError,
         ValidationError,
         TransactionalStoreError,
+        ServerPreflightError,
     ) as e:
         sys.stderr.write(f"Error: {e}\n")
         return 1
