@@ -131,6 +131,8 @@ Compare the decision-relevant current sources that claim to describe the same be
 
 Record a contradiction when they disagree materially. Do not choose the most convenient source merely to create a single narrative.
 
+Select operational/history sources only when they could change the current answer: Git history, issue/ticket, ADR, incident record, logs, observability, error tracking, analytics or relevant conversation records within current read access. For a guard introduced after an incident, compare the historical failure and rationale with current code/runtime constraints; evidence that a past decision existed does not establish its present validity or a permanent product requirement. Reuse the existing anchors and `FACT`/`INFERENCE`/`UNKNOWN` distinction to record source, query scope, observation/retrieval time, contradictions and limits. No new connector, evidence kind or obligatory source matrix is needed; skip sources irrelevant to the objective.
+
 ## 5. Evidence anchors
 
 Every load-bearing fact references one or more named anchors. Use compact anchor records:

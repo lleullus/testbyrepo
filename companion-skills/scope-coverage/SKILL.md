@@ -65,6 +65,7 @@ Dismiss unrelated risks, unreachable candidates, approved Non-Goals and already-
 - Disposable accumulated state can be evidence only when it already exists and the Scope authorizes the history/transition; Coverage must not seed a terminal state or run the product to create it.
 - A controlled dependency failure may show application failure handling, not the external provider's behavior. Do not exhaust quota or demand unapproved fallback policy.
 - Current source/schema inspection can dismiss a reachable hypothesis, but cannot substitute for a verifier-owned real boundary that the Scope requires.
+- A verification script may pass while observing an old API route instead of the current UI, or checking display text without distinguishing a wrong identity's persisted result. Follow the actual mechanism, action and raw readback to establish a reachable violation or exact evidence limit; tool presence alone proves neither weakness nor sufficiency. Report the next discriminating observation without executing or repairing the product/tool.
 
 ## Terminal result
 

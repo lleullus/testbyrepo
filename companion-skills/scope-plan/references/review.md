@@ -19,9 +19,9 @@ For this exact Scope, derive a bounded frontier from the method and its load-bea
 - stale identity, weak proxy readback, cleanup and settlement;
 - failure/recovery, late or duplicate response and preservation paths;
 - implementation prerequisites, self-check and final authoritative readback;
-- conditional first work, prohibited expansion and return conditions.
+- probe evidence's observed boundaries and limits, conditional first work, prohibited expansion and return conditions.
 
-Distinguish observed contradiction, inference and missing evidence. Reject a method that defers a currently cheap load-bearing choice into implementation. Accept conditional first work only when its permitted work, discriminating readback, forbidden expansion and refutation owner are all explicit. Do not require fixed counts, a repository-wide audit or a new approval ceremony.
+Distinguish observed contradiction, inference and missing evidence. Reject deferral of a cheap load-bearing choice only when it can be discriminated in the current authorized environment. Do not pressure the Planner to perform an effectful experiment before review or treat scratch results as deployed/provider evidence. Accept conditional first work only when its required authority/environment, permitted work, discriminating readback, forbidden expansion and refutation owner are explicit; effectful initial work remains with the implementation owner after `ADMIT` and the necessary user authorization. Do not require fixed counts, a repository-wide audit or a new approval ceremony.
 
 For each material candidate, preserve:
 

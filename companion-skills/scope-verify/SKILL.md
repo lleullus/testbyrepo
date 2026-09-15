@@ -43,6 +43,8 @@ Normal delivery verification requires exact `Status: ready`. `draft`, `blocked` 
 
 Resolve `scope-verify/SKILL.md`, `scope-verify/references/verify.md` and the canonical Scope validator from the same supplied source or installed skills snapshot and pass exact readable paths. Reports, Plan Reviews and implementation reports are navigation only; the verifier resolves actual stable implementation targets and scenario-effect paths itself. Verification-only does not require a Plan or Plan Review.
 
+Known project verification-tool paths and usage may travel with existing implementation evidence/navigation; they are not new required inputs or proof. Reuse them under `references/verify.md` when they observe the required real boundary.
+
 Arrange **exactly one** separate independent invocation with the selected verifier model/effort, using the available delegation or session facilities. `SUBAGENT` is a role arrangement, not a requirement for a particular tool, profile or patched host. There is no DIRECT self-verification, nested verifier, fallback roster or hidden fan-out. If a genuinely independent invocation or necessary execution capability is unavailable, return the exact limitation without product/runtime/status mutation; do not silently substitute Main or the implementer.
 
 Preserve the actual completed invocation's identity, unchanged result and primary evidence references. A copied report, field set, file digest or success label alone cannot establish independence or truth. This is a skill-governed procedure, not host-enforced authentication or a portable completion credential.
@@ -52,6 +54,8 @@ Preserve the actual completed invocation's identity, unchanged result and primar
 Before any product/runtime scenario action, use ordinary read/search/hash/CLI tools to record the exact Project Root, Scope and bound Thesis/applicable Transition paths and actual-byte SHA-256, current ready status, actual stable implementation targets and their byte/runtime identities, declared scenario-effect paths and authorized effects. Record these in the invocation's report/evidence, not a new binding store or protocol. Separate mutable scenario state from stable source/config/authority; do not allow scenario paths to conceal edits to those stable inputs.
 
 Use ordinary inspection/read/CLI/service/runtime tools. Recheck authority and stable target identity after execution and cleanup, including relevant runtime identity; only declared authorized scenario effects may differ. Unexplained drift, missing attribution or unknown settlement prevents successful progression. Do not edit product source/config/planning/prior evidence to obtain a pass. Settled nonzero commands are evidence for that command, not generic workflow uncertainty.
+
+Apply this same identity/currentness discipline to verification scripts, configuration and execution mechanisms that materially determine the verdict. Bind what actually ran and its target in existing evidence, not the tool's entire dependency tree; use the reference's mechanism-drift and return rules.
 
 The verifier checks every authored Acceptance scenario and every product success/failure/preservation condition that the Scope makes applicable. A happy path, test count, source shape, internal state or implementation report cannot replace a required real boundary. If a material contract gap prevents the Scope Acceptance from deciding its own result, return a non-started/non-progressing result with the exact Scope/Thesis owner; do not author a substitute obligation.
 

@@ -60,6 +60,8 @@ A Transition Baseline (`BASELINE-NNN.md`) is an optional approved transition con
 
 Do not create Matt shared understanding, Spec, Ticket Set or an extra Increment carrying the same Scope contract. Optional behavior/UI references and visual assets belong to the Thesis source set, not a separate approval lifecycle. Future candidates are not preapproved ready Scopes or an execution queue.
 
+Within existing role authority and current user instructions, the current owner may selectively use bounded empirical investigation (`repository-investigation`), discriminating probes and alternative-method exploration (`scope-plan`), and reusable real-boundary verification (`scope-verify`). Follow those owning skills for the method; these techniques create no new stage, authority, verdict, fixed roster or continuation owner, and no mandatory prototype before every Plan.
+
 ## Main and delegated owners
 
 When Main performs a planning role directly, read its execution contract. When delegating, read its caller contract and forward exact original Thesis paths/revisions, supplied investigation, applicable transition contract, exact target, role documents, current stage/model/stop authority and required outputs. Do not delegate original-source selection or substitute summaries for originals. Main need not reread and rewrite a worker's whole procedure merely to dispatch it.

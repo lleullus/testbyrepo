@@ -18,6 +18,12 @@ Before presenting a method as ready for independent review, classify each load-b
 
 Keep concise claim-to-evidence references beside the method or in an exact shared section. Reuse supplied evidence only while target, scope, relevant bytes and premises remain current. Git revision alone neither invalidates all evidence nor proves runtime state.
 
+When an unresolved premise can be decided within current authority, use the smallest discriminating experiment: premise -> inputs and reproducible action -> observed support/refutation -> remaining limits. Classify a CLI by its actual reads, writes, processes and external effects, not by being an existing tool. Pure computation or local-library comparisons confined to disposable scratch may use the Planner permission in `../SKILL.md`; record evidence before cleanup. Scratch observations do not establish deployed behavior, real-data behavior or provider semantics. If execution is unavailable or effects are unclear, retain `UNRESOLVED`.
+
+An experiment affecting product source/data/schema, shared runtime, a provider or the real Acceptance surface belongs in `UNRESOLVED` and the conditional-first-work bundle below. State the required environment and authority alongside permitted initial work, discriminating readback, prohibited dependent work and refutation owner. The implementation owner performs such initial work only after independent Review and `ADMIT`; admission does not supply user permission for external effects or credentials.
+
+Compare alternative methods only for a real fork where a wrong choice materially matters, not every obvious local change. Candidates share the same Scope, constraints and discriminating criteria; the existing owner checks primary evidence and converges on one Plan. A synthesis of candidate parts is itself the final method to review, not automatically supported by candidate agreement or individual results. Preserve current user selection, invocation authority, no-hidden-fan-out and Planner/Reviewer nested-delegation limits; this technique creates no Arena/Swarm runner or extra role.
+
 ## Required method substance
 
 Include only what is necessary to implement and self-check this Scope:

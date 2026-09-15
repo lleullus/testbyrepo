@@ -92,6 +92,8 @@ For every load-bearing conclusion:
 - do not treat a failed search as proof of global absence; and
 - keep unverified gaps explicit.
 
+When operational or historical context outside code can change the answer, investigate it under the same evidence discipline and current read access; use the selective source guidance in `references/investigation.md` rather than a mandatory source inventory.
+
 Prefer the smallest investigation that decides the objective. Do not inventory the whole repository, create a generic architecture encyclopedia, or continue searching solely for confidence once every material frontier question is closed.
 
 ## Durable artifact

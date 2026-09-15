@@ -30,7 +30,7 @@ Forward the source assignment unchanged to both the Planner and the independent 
 
 ## Purpose and authority
 
-This companion prepares the method for one exact ready Scope. It is not Thesis design, Scope shaping, implementation, verification, or delivery finalization. The Scope remains the product authority: its `Outcome`, `Acceptance`, `Product Authority`, `Open Decisions` and `Non-Goals` are read as written. This role may write a method Plan and one outside-Project-Root review artifact only; it must not change Thesis or Scope bytes, product source, runtime state, or Scope status.
+This companion prepares the method for one exact ready Scope. It is not Thesis design, Scope shaping, implementation, verification, or delivery finalization. The Scope remains the product authority: its `Outcome`, `Acceptance`, `Product Authority`, `Open Decisions` and `Non-Goals` are read as written. Preparation may write the method Plan and one outside-Project-Root review artifact. Only the Planner may additionally run bounded disposable scratch experiments under the current request's execution authority; the Reviewer's authority is unchanged. Neither role may change Thesis or Scope bytes, product source/data, shared runtime, external systems or Scope status.
 
 The preparation lead binds one Scope, coordinates a method writer and an independent reviewer, preserves primary evidence and returns one result. The Planner owns grounded method writing. The independent Reviewer reads the original Thesis and Scope first and owns the ADMIT/REVISE/EVIDENCE_NEEDED judgment. The lead checks exact paths, currentness and requested coverage; it is not a second semantic reviewer. A valid file or an absence of findings is not an admission by itself.
 
@@ -64,7 +64,7 @@ The Planner reads `references/plan.md`. The independent Reviewer reads `referenc
 4. The Reviewer writes exactly one JSON artifact at the supplied outside-root path using schema `iis-scope-plan-review/v2`. Preserve its bytes, digest, findings, limits and conditional start scope unchanged; do not rewrite it into a prose approval.
 5. `ADMIT` is valid only for the exact current Scope method and start scope, with no unresolved material finding or unresolved contract gap. `REVISE` returns the method to the Planner. A product-meaning gap returns to Scope or the exact Thesis owner; missing evidence returns to the authority/environment owner. Repeat affected work only after substantive change and a current independent review.
 
-Preparation may inspect sources and write Plan/review artifacts only. It does not mutate product source, data, runtime, external systems or Scope status.
+Preparation may inspect sources and write Plan/review artifacts. Planner experiments may change only a temporary scratch area isolated from product originals, the project working tree, shared services, real data and external systems. Preserve inputs, reproduction method, observations and limits in Plan evidence, then clean up temporary outputs. This permission never overrides current read-only, stage-only or no-execution instructions; return work outside current authority to its existing owner. Apply `references/plan.md` for scratch grounding and effectful conditional first work, not product mutation during preparation.
 
 ## Plan Review artifact contract
 

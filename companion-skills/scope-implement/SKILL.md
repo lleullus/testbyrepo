@@ -72,6 +72,8 @@ If a material meaning/authority conflict or missing canonical source prevents fa
 
 Implement the smallest reviewed change that satisfies the Scope's `Outcome`, all applicable `Acceptance` obligations and preservation/failure conditions. Preserve existing behavior already satisfying the Scope. Do not add speculative telemetry, fallback, persistence, recovery guarantees, interfaces or tests without a direct contract anchor or a concrete necessary failure path.
 
+Apply the reuse, deletion and consolidation choices in `references/implement.md` before adding structure; smallest means coherent and easier to understand, not merely fewer lines. These choices remain within the reviewed method and existing revision boundary.
+
 For each finding supplied by the caller or discovered in scope, identify it before claiming completion and give it one disposition: directly fixed, fixed with the same evidenced cause group, separately fixed, or returned at a Scope/Thesis/material-method boundary with exact next owner. Do not pass known related findings to the verifier as if they were closed. Connect each change to its Acceptance scenario, impact span, cheapest discriminating check, real acceptance readback and external-condition limit.
 
 A material change to cause, owner, shared interface, persistence meaning, acceptance/readback, target identity or external-effect strategy changes the reviewed method. Stop mutation that depends on the new direction and return:

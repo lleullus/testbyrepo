@@ -34,6 +34,8 @@ After canonical and semantic preflight, before any scenario action, record in th
 
 For directories, identify the relevant file set as well as file bytes so additions/removals cannot hide behind unchanged existing-file hashes. Record applicable modes/links or runtime identities where they affect this Scope; a Git revision or source digest alone does not establish which artifact/service actually executed. Keep the evidence attributable to this independent invocation. Do not create a binding schema, special capture tool, credential or registry.
 
+For a load-bearing verification mechanism, record the actual files, version/bytes, relevant configuration and their connection to the executed target in the same evidence. Capture only identities that can materially affect the observation, not an entire dependency tree or separate registry. If the mechanism materially changes, do not reinterpret old evidence as observations by the new mechanism: re-establish validity and currentness of the affected observations under the existing cycle/re-entry rules.
+
 The stable implementation remains unchanged for attribution. Authored scenarios may mutate only declared authorized effect paths, not source/config/planning/authority or prior evidence. Separate stable and effect surfaces explicitly; overlapping declarations cannot authorize protected edits. Recheck the recorded source/target identities after scenarios and cleanup. Drift or an unavailable required check makes affected evidence non-current and prevents progression; do not carry a prior PASS across drift. Plan-only navigation drift need not invalidate product evidence unless the Plan is itself an approved product target.
 
 ## 4. Semantic contract and scenario plan
@@ -124,6 +126,12 @@ Obtain the smallest sufficient fresh attributable evidence for every authored Ac
 5. source/diff/unit checks and ancillary doubles only as supporting explanation.
 
 A mock, stub, canned response, seeded terminal state, hand-written event or surrogate readback cannot prove the real boundary it replaces. An ancillary double does not invalidate a separate real boundary; never claim the doubled boundary was verified. Internal success or HTTP acceptance is not proof of an external effect.
+
+Reuse existing project launch, readiness/doctor, UI/CLI/E2E drive, raw-evidence and cleanup methods when they exercise the required path under current authority. Inspect what the tool actually does, then connect its actions and raw authoritative readbacks to the existing scenario evidence, distinguishing observed boundaries from substituted or omitted ones. No common command interface or feature-map format is required. PASS or exit status proves only its observed boundary: when the approved Acceptance is the CLI's exit code itself, that code is direct evidence; internal PASS cannot replace storage, identity or external settlement readback.
+
+If selector/route drift or another mechanism limit prevents observation of the required path, identity or readback, return an evidence/mechanism gap to the caller for the authorized correction owner, not an inferred product failure. The verifier does not repair the tool and manufacture success in the same cycle. An attributable product contradiction remains a product failure even when the harness reports PASS.
+
+Launchers, selectors, CLI commands, provider readbacks and cleanup code belong to the product project, not a generic IIS harness. When an approved product change makes an existing tool stale, update it within that authorized implementation work. A missing tool is not a verification blocker if direct real-path execution/readback is sufficient; create reusable project tooling only when repeated use justifies it, through authorized implementation rather than verifier repair.
 
 For absence or retirement, define the bounded active-surface universe from the Scope, Thesis and current entrypoints/config/package/runtime/storage authority. Directly inspect the relevant identities and suspicious survivors; state the universe and limits. For deletion, observe existence before the trigger and absence after it, plus required preservation. For timing, measure the authored milestone (onset versus settlement). For event delivery, distinguish publisher emission, subscriber receipt and rendered change.
 

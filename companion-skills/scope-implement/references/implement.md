@@ -55,6 +55,8 @@ Next allowed action: revise affected Plan -> independent review -> fresh actor
 
 Work from observable result to smallest coherent change. Preserve existing behavior that already satisfies the Scope. For each meaningful change, perform a cheap discriminating check and the minimum real acceptance-path readback available under authority. Do not add a broad hardening layer, speculative fallback, telemetry, persistence or recovery operation without a direct contract anchor or a concrete plausible failure path.
 
+Before adding a layer or branch, consider whether reusing, deleting or consolidating existing paths achieves the same approved result. Prefer coherence, fewer concepts/branches/duplicates and lower reader load over raw LOC reduction; forced compression, giant functions or removal of necessary failure handling is not a smaller coherent change. Remove code made obsolete by this change where appropriate, without unrelated cleanup or speculative refactoring. Reconsidering the problem from first principles is a thinking technique, not permission to change cause, owner, shared interface, persistence, readback or effect strategy; those changes return through the Plan revision boundary above.
+
 Group findings only when current evidence shows the same falsified assumption, writer/reader, owner, interface, token, state or invariant. Trace the bounded impact span through relevant definitions, callers, writers/readers, resets, completion/release and external boundaries; do not expand to every historical or similarly named path. Every supplied or self-discovered in-scope finding is dispositioned as:
 
 - directly resolved at the current target;
