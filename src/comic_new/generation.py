@@ -348,8 +348,15 @@ class GenerationService:
             token = att_info.get("process_start_token")
             staging_path = att_info.get("staging_path")
 
+            terminated = True
             if pid:
-                terminate_process_tree(pid, pgid, token)
+                terminated = terminate_process_tree(pid, pgid, token)
+
+            if not terminated:
+                failed_ident = f"job={job_id},attempt={att_info.get('attempt_id')},pid={pid}"
+                raise TransactionalStoreError(
+                    f"Cancel failed to terminate running process tree for {failed_ident}; job remains running"
+                )
 
             if staging_path:
                 stg = Path(staging_path)
@@ -377,6 +384,7 @@ class GenerationService:
         """Global STOP: advance stop_epoch, cancel queued, terminate running process trees."""
         stop_epoch, running_procs = self.store.stop_all_and_cancel_queued()
         items_to_mark: list[tuple[str, str]] = []
+        failed_procs: list[dict[str, Any]] = []
 
         for proc_info in running_procs:
             pid = proc_info.get("process_pid")
@@ -384,8 +392,13 @@ class GenerationService:
             token = proc_info.get("process_start_token")
             staging = proc_info.get("staging_path")
 
+            terminated = True
             if pid:
-                terminate_process_tree(pid, pgid, token)
+                terminated = terminate_process_tree(pid, pgid, token)
+
+            if not terminated:
+                failed_procs.append(proc_info)
+                continue
 
             if staging:
                 stg = Path(staging)
@@ -402,6 +415,15 @@ class GenerationService:
         if items_to_mark:
             self.store.mark_attempts_and_jobs_interrupted(items_to_mark, reason="global_stop")
 
+        if failed_procs:
+            failed_idents = [
+                f"job={p.get('job_id')},attempt={p.get('attempt_id')},pid={p.get('process_pid')}"
+                for p in failed_procs
+            ]
+            raise TransactionalStoreError(
+                f"Global STOP failed to terminate running process trees: {', '.join(failed_idents)}; affected rows remain running"
+            )
+
         snap = self.store.snapshot()
         cancelled_queued = sum(
             1 for j in snap["jobs"] if j["status"] == "cancelled" and j.get("terminal_detail") == "global_stop"
@@ -412,6 +434,7 @@ class GenerationService:
             cancelled_queued_count=cancelled_queued,
             interrupted_running_count=len(running_procs),
         )
+
 
 
 class GenerationRunner:
@@ -430,8 +453,9 @@ class GenerationRunner:
         self.project_dir = Path(project_dir or store.db_path.parent).resolve()
         self._claimed_job_ids: set[str] = set()
         self._claimed_lock = threading.Lock()
-        self.concurrency = 2
+        self._worker_exceptions: list[Exception] = []
         self._active_workers = 0
+
         self._worker_cond = threading.Condition()
         self.ima2_binary = ima2_binary or os.environ.get(
             "COMIC_NEW_IMA2_BIN", "/home/user01/.nvm/versions/node/v24.18.0/bin/ima2"
@@ -480,13 +504,18 @@ class GenerationRunner:
             # Startup orphan reconciliation
             orphans = self.store.reconcile_startup_orphans()
             orphan_items_to_mark: list[tuple[str, str]] = []
+            failed_orphans: list[dict[str, Any]] = []
             for orphan in orphans:
                 pid = orphan.get("process_pid")
                 pgid = orphan.get("process_group_id")
                 token = orphan.get("process_start_token")
                 staging = orphan.get("staging_path")
+                terminated = True
                 if pid:
-                    terminate_process_tree(pid, pgid, token)
+                    terminated = terminate_process_tree(pid, pgid, token)
+                if not terminated:
+                    failed_orphans.append(orphan)
+                    continue
                 if staging:
                     stg = Path(staging)
                     stg.unlink(missing_ok=True)
@@ -503,11 +532,20 @@ class GenerationRunner:
                     self._claimed_job_ids.add(jid)
                 self.store.mark_startup_orphans_interrupted(orphan_items_to_mark)
 
+            if failed_orphans:
+                failed_idents = [
+                    f"job={o.get('job_id')},attempt={o.get('attempt_id')},pid={o.get('process_pid')}"
+                    for o in failed_orphans
+                ]
+                raise TransactionalStoreError(
+                    f"Startup recovery failed to terminate orphan process trees: {', '.join(failed_idents)}; affected rows remain running"
+                )
+
             # Worker pool execution
             stop_event = threading.Event()
             threads: list[threading.Thread] = []
 
-            for worker_idx in range(self.concurrency):
+            for worker_idx in range(2):
                 t = threading.Thread(
                     target=self._worker_loop,
                     args=(runner_id, runner_pid, runner_start_token, stop_epoch, stop_event),
@@ -518,6 +556,11 @@ class GenerationRunner:
 
             for t in threads:
                 t.join()
+
+            if self._worker_exceptions:
+                exc = self._worker_exceptions[0]
+                raise exc
+
 
         finally:
             self.store.release_runner_ownership(runner_id)
@@ -547,7 +590,22 @@ class GenerationRunner:
         stop_epoch: int,
         stop_event: threading.Event,
     ) -> None:
+        try:
+            self._worker_loop_impl(runner_id, runner_pid, runner_start_token, stop_epoch, stop_event)
+        except Exception as e:
+            self._worker_exceptions.append(e)
+            stop_event.set()
+
+    def _worker_loop_impl(
+        self,
+        runner_id: str,
+        runner_pid: int,
+        runner_start_token: str,
+        stop_epoch: int,
+        stop_event: threading.Event,
+    ) -> None:
         while not stop_event.is_set():
+
             claim = self.store.claim_next_generation_job(
                 runner_id=runner_id,
                 runner_pid=runner_pid,
@@ -644,11 +702,15 @@ class GenerationRunner:
                         os.close(w_fd)
                     except OSError:
                         pass
-                    terminate_process_tree(proc_pid, proc_pgid, proc_token)
+                    terminated = terminate_process_tree(proc_pid, proc_pgid, proc_token)
                     try:
                         proc.wait(timeout=2.0)
                     except subprocess.TimeoutExpired:
                         pass
+                    if not terminated:
+                        raise TransactionalStoreError(
+                            f"Attach failed and process termination failed for job {job_id} attempt {attempt_id} (pid {proc_pid})"
+                        )
                     continue
 
                 # Open gate: write exactly 1 byte
@@ -669,11 +731,15 @@ class GenerationRunner:
                         timeout=self.watchdog_timeout,
                     )
                 except subprocess.TimeoutExpired:
-                    terminate_process_tree(proc_pid, proc_pgid, proc_token)
+                    terminated = terminate_process_tree(proc_pid, proc_pgid, proc_token)
                     try:
                         stdout_bytes, stderr_bytes = proc.communicate(timeout=2.0)
                     except Exception:
                         stdout_bytes, stderr_bytes = b"", b""
+                    if not terminated:
+                        raise TransactionalStoreError(
+                            f"Process timed out and termination failed for job {job_id} attempt {attempt_id} (pid {proc_pid})"
+                        )
                     self.store.fail_job_and_attempt(
                         runner_id=runner_id,
                         job_id=job_id,

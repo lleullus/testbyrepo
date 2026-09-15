@@ -34,6 +34,7 @@ from comic_new.store import (
     RunnerAlreadyActiveError,
     StoreCorruptionError,
     TransactionalStore,
+    TransactionalStoreError,
     ValidationError,
 )
 
@@ -888,3 +889,119 @@ def test_v1_to_v2_migration_preservation(tmp_path: Path) -> None:
     jobs_after = {j["job_id"]: j for j in snap_after["jobs"]}
     assert jobs_after["job-2"]["status"] == "interrupted"
     assert jobs_after["job-3"]["status"] == "succeeded"
+
+def test_regression_public_concurrency_assignment_invariant(tmp_path: Path) -> None:
+    """Verify that public runner.concurrency = 3 does NOT produce 3 live roots."""
+    project_dir = tmp_path / "proj_concurrency_invariant"
+    store, rev = _init_five_cut_project(project_dir)
+    service = GenerationService(store)
+    service.enqueue(cut_id=None, expected_authority_revision=rev)
+
+    gate_file = tmp_path / "gate_concurrency.txt"
+
+    def cmd_factory(cut_id: int, staging_path: Path, target_rev: int) -> list[str]:
+        return _provider_cmd(
+            cut_id,
+            staging_path,
+            target_rev,
+            mock_sleep=2.0,
+            mock_gate_file=str(gate_file),
+        )
+
+    runner = GenerationRunner(store, provider_cmd_factory=cmd_factory)
+    runner.concurrency = 3  # Arbitrary public assignment probe
+
+    sampled_roots: list[int] = []
+    stop_monitor = threading.Event()
+
+    def monitor() -> None:
+        while not stop_monitor.is_set():
+            with store._connect() as con:
+                rows = con.execute("SELECT process_pid FROM generation_attempts WHERE status = 'running'").fetchall()
+                live_pids = [r["process_pid"] for r in rows if r["process_pid"] is not None]
+                sampled_roots.append(len(live_pids))
+            time.sleep(0.02)
+
+    mon_t = threading.Thread(target=monitor, daemon=True)
+    mon_t.start()
+
+    runner_thread = threading.Thread(target=runner.run_until_idle)
+    runner_thread.start()
+
+    # Wait until 2 workers are active
+    for _ in range(50):
+        if 2 in sampled_roots:
+            break
+        time.sleep(0.05)
+
+    gate_file.touch()
+    runner_thread.join()
+    stop_monitor.set()
+    mon_t.join()
+
+    assert max(sampled_roots, default=0) <= 2, f"Observed more than 2 roots: {max(sampled_roots)}"
+    assert 2 in sampled_roots
+
+
+def test_regression_stop_settlement_failure_truth(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed process settlement must leave execution truth running."""
+    project_dir = tmp_path / "proj_stop_settlement_failure"
+    store, rev = _init_five_cut_project(project_dir)
+    service = GenerationService(store)
+    service.enqueue(cut_id=1, expected_authority_revision=rev)
+
+    gate_file = tmp_path / "gate_stop_fail.txt"
+
+    def cmd_factory(cut_id: int, staging_path: Path, target_rev: int) -> list[str]:
+        return _provider_cmd(
+            cut_id,
+            staging_path,
+            target_rev,
+            mock_sleep=10.0,
+            mock_gate_file=str(gate_file),
+        )
+
+    runner = GenerationRunner(store, provider_cmd_factory=cmd_factory)
+    runner_thread = threading.Thread(target=runner.run_until_idle)
+    runner_thread.start()
+
+    # Wait until cut 1 worker is running in DB
+    pid = None
+    for _ in range(50):
+        with store._connect() as con:
+            row = con.execute("SELECT process_pid FROM generation_attempts WHERE status = 'running'").fetchone()
+            if row and row["process_pid"] is not None:
+                pid = row["process_pid"]
+                break
+        time.sleep(0.05)
+
+    assert pid is not None
+    assert is_pid_non_zombie_alive(pid)
+
+    # Inject false termination into terminate_process_tree
+    import comic_new.generation as gen_mod
+    orig_terminate = gen_mod.terminate_process_tree
+    monkeypatch.setattr(gen_mod, "terminate_process_tree", lambda *args, **kwargs: False)
+
+    try:
+        with pytest.raises(TransactionalStoreError) as exc_info:
+            service.stop_all()
+        assert "Global STOP failed to terminate" in str(exc_info.value)
+
+        # DB attempt and job must remain running!
+        snap = store.snapshot()
+        job_1 = next(j for j in snap["jobs"] if j["cut_id"] == 1)
+        assert job_1["status"] == "running"
+        assert job_1["attempts"][0]["status"] == "running"
+
+        # Controlled process is still alive under fault
+        assert is_pid_non_zombie_alive(pid)
+    finally:
+        # Test cleanup must kill controlled process
+        monkeypatch.undo()
+        gate_file.touch()
+        orig_terminate(pid, pid, None)
+        runner_thread.join(timeout=3.0)
+        assert not is_pid_non_zombie_alive(pid)
