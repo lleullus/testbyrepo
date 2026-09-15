@@ -1,26 +1,28 @@
 # IIS Workflow Integration
 
-Observatory should become the shared deterministic read model beneath human and agent views. Until the router is changed to invoke it directly, use the JSON output as the machine-readable equivalent of a Current Planning State Check:
+Observatory is the shared deterministic read model for the unified Thesis → Scope → Plan path. It reads the exact repository-local `docs/planning/work/<slug>/SCOPE.md` (`Schema: iis-scope/v1`) and bound source bytes:
 
 ```bash
 iis-observatory scan /absolute/project/path --format json
+iis-observatory doctor /absolute/project/path
 ```
 
 The integration boundary is deliberately narrow:
 
-- The scanner may read planning artifacts and Git history.
-- `overview`, `scan`, and `doctor` do not write project planning files. `snapshot --write` is the sole durable projection writer and may write only `docs/planning/observatory/**`; those files are explicitly non-canonical.
-- `next_work.leaf` is a pointer, not authorization to execute that leaf.
-- When the current delivery unit is complete, `follow_up.next_candidate_work_packages` and `follow_up.deferred_work_packages` preserve the current Scope's authored horizon without choosing among candidates.
-- `delivery outside IIS` never selects an implementation agent or verifier.
-- An `INCONSISTENT` result should be shown to the user rather than guessed around.
+- The scanner reads Markdown planning artifacts, bound Thesis/Transition sources and optional Git history; it writes no planning authority.
+- `overview`, `scan`, `doctor` and `history` are read-only. `snapshot --write` may write only derived `docs/planning/observatory/**` files.
+- `scope.status` is `draft`, `ready`, `done` or `superseded`; the current Scope is never inferred from legacy Increment/Spec/Ticket metadata.
+- `draft` points to Scope Shaper. `ready` does not establish the next delivery stage without current method/target/terminal evidence. A done Scope with unassessed named requirements points to current-state reconciliation, not automatic further construction or whole-result completion.
+- Existing Scope Shaping/Increment/Spec/Ticket artifacts are preserved under `legacy.history`. Unfinished ones are `legacy.transition_required`; no automatic migration or old Matt/Ticket pointer is emitted.
+- `next_work.leaf` is always a read-only pointer, not authorization to execute Plan, Scope Shaper, implementation, verification, transition, or delivery.
+- Optional `Transition Authority` is validated and displayed only when authored in the current Scope. It does not infer mandate activation or create a transition mode.
+- `INCONSISTENT` (including stale bound source or duplicate active Scope) is reported rather than guessed around.
 
 For a portfolio view:
 
 ```bash
 iis-observatory overview /home/user01/project --format json
+iis-observatory overview /home/user01/project --format markdown
 ```
 
-A future Web UI should consume this JSON instead of implementing independent state-selection rules.
-
-For a durable repository-local projection, use `snapshot --write`. The resulting `PROJECT-OVERVIEW.md` and `project-state.json` are derived read models, not IIS authority. Exact-ratio progress bars are presentation-only; the machine-readable measurement remains the numerator/denominator/percent record. Adaptive Mandate/Trace files may be surfaced as provenance but never activate Adaptive Planning or replace canonical Scope/Increment navigation.
+A future Web UI should consume this JSON instead of implementing independent Scope-selection rules. Durable snapshots remain derived read models and never select among future Scopes or execute the reported pointer.

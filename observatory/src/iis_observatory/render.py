@@ -89,6 +89,8 @@ def _pad(value: str, width: int) -> str:
 
 def _current_position(state: ProjectState, lang: str) -> str:
     stage = STAGE_LABELS.get(lang, STAGE_LABELS["ko"])[state.stage.value]
+    if state.direct_scope_mode and state.current_scope is not None:
+        return f"Scope/{state.current_scope.work_slug or 'unknown'} / {stage}"
     if state.current_increment and state.current_increment.identifier:
         return f"{state.current_increment.identifier} / {stage}"
     if state.current_work_package and state.current_work_package.identifier:
@@ -101,6 +103,9 @@ def _current_position(state: ProjectState, lang: str) -> str:
 
 
 def _current_unit(state: ProjectState) -> str:
+    if state.direct_scope_mode and state.current_scope is not None:
+        title = (state.current_scope.title or state.current_scope.work_slug or "").strip()
+        return f"Scope · {title}" if title else "Scope"
     if state.current_increment and state.current_increment.identifier:
         return _authored_unit_label(state.current_increment.identifier, state.current_increment.title)
     if state.current_work_package and state.current_work_package.identifier:
@@ -113,6 +118,8 @@ def _current_unit(state: ProjectState) -> str:
     if state.current_scope:
         title = (state.current_scope.title or "").strip()
         return f"Scope · {title}" if title else "Scope"
+    if state.legacy_history:
+        return "legacy history"
     return "—"
 
 
@@ -146,10 +153,12 @@ def _next_label(state: ProjectState, lang: str) -> str:
             NextWorkKind.TICKET_REVIEW: f"Ready review {target}",
             NextWorkKind.TO_TICKETS: "To Tickets",
             NextWorkKind.TO_SPEC: "To Spec",
+            NextWorkKind.TO_PLAN: "Plan",
             NextWorkKind.ASK_MATT: "Ask Matt",
             NextWorkKind.SCOPE_SHAPER: "Scope Shaper",
+            NextWorkKind.TRANSITION_REQUIRED: "Transition required",
             NextWorkKind.CONSISTENCY_CHECK: "Check consistency",
-            NextWorkKind.NONE: "No next unit",
+            NextWorkKind.NONE: "None established",
         }
     else:
         labels = {
@@ -158,10 +167,12 @@ def _next_label(state: ProjectState, lang: str) -> str:
             NextWorkKind.TICKET_REVIEW: f"{target} Ready 전환",
             NextWorkKind.TO_TICKETS: "To Tickets",
             NextWorkKind.TO_SPEC: "To Spec",
+            NextWorkKind.TO_PLAN: "Plan",
             NextWorkKind.ASK_MATT: "Ask Matt",
             NextWorkKind.SCOPE_SHAPER: "Scope Shaper",
+            NextWorkKind.TRANSITION_REQUIRED: "전환 필요",
             NextWorkKind.CONSISTENCY_CHECK: "정합성 확인",
-            NextWorkKind.NONE: "다음 단위 없음",
+            NextWorkKind.NONE: "확정된 다음 작업 없음",
         }
     return labels[work.kind].strip()
 
@@ -274,6 +285,10 @@ def render_overview_markdown(states: Iterable[ProjectState], *, lang: str = "ko"
 
 
 def render_state(state: ProjectState, *, lang: str = "ko", color: bool = False) -> str:
+    if state.direct_scope_mode:
+        return _render_direct_scope_state(state, lang=lang, color=color)
+    if state.legacy_history:
+        return _render_legacy_history_state(state, lang=lang, color=color)
     completed = ", ".join(ticket.identifier or ticket.relative_path for ticket in state.completed_tickets) or "None"
     remaining = ", ".join(
         f"{ticket.identifier or ticket.relative_path} ({ticket.status or 'missing'})"
@@ -283,10 +298,8 @@ def render_state(state: ProjectState, *, lang: str = "ko", color: bool = False) 
     lines = [
         "IIS CURRENT PLANNING STATE",
         f"Repository: {state.repository} ({state.repository_path})",
+        "Authority mode: no direct Scope",
         f"Current Scope: {_artifact_label(state.current_scope)}",
-        f"Current Work Package: {_artifact_label(state.current_work_package)}",
-        f"Current Increment: {_artifact_label(state.current_increment)}",
-        f"Current Spec: {_artifact_label(state.current_spec)}",
     ]
     if state.health in {Health.READY, Health.BLOCKED, Health.COMPLETE} and state.tickets:
         lines.append(f"Derived Delivery State: {_paint(_health_label(state.health), state.health, color)}")
@@ -325,6 +338,114 @@ def render_state(state: ProjectState, *, lang: str = "ko", color: bool = False) 
     lines.append("STOP")
     return "\n".join(lines) + "\n"
 
+
+def _render_direct_scope_state(state: ProjectState, *, lang: str, color: bool) -> str:
+    scope = state.current_scope
+    health = _paint(_health_label(state.health), state.health, color)
+    lines = [
+        "IIS CURRENT PLANNING STATE",
+        f"Repository: {state.repository} ({state.repository_path})",
+        "Authority mode: direct Thesis → Scope",
+        f"Current Scope: {_artifact_label(scope)}",
+        f"Scope Status: {scope.status if scope is not None else 'None'}",
+    ]
+    if scope is not None:
+        lines.extend(
+            [
+                "Bound Thesis:",
+                *[
+                    f"- {item['path']} sha256:{item['sha256']} ({item.get('current', 'unknown')})"
+                    for item in state.scope_authority
+                ],
+            ]
+        )
+        if state.transition_authority:
+            lines.append("Transition Authority:")
+            lines.extend(
+                f"- {item['path']} sha256:{item['sha256']} ({item.get('current', 'unknown')})"
+                for item in state.transition_authority
+            )
+        lines.append("Outcome:")
+        lines.extend(f"  {line}" for line in (scope.metadata.get("section_outcome") or "None").splitlines())
+        lines.append("Acceptance:")
+        lines.extend(f"  {line}" for line in (scope.metadata.get("section_acceptance") or "None").splitlines())
+    lines.append("Required Outcomes:")
+    if state.required_outcomes:
+        lines.extend(f"- [{item['status']}] {item['text']}" for item in state.required_outcomes)
+    else:
+        lines.append("- None observed in bound Thesis")
+    lines.append("Required Outcomes — fulfillment not established:")
+    if state.remaining_required_outcomes:
+        lines.extend(f"- {item['text']} ({item['source']})" for item in state.remaining_required_outcomes)
+    else:
+        lines.append("- None observed")
+    if state.active_scopes and len(state.active_scopes) > 1:
+        lines.append("Active Scopes:")
+        lines.extend(f"- {_artifact_label(item)}" for item in state.active_scopes)
+    if state.scope_history:
+        lines.append("Scope History (read-only):")
+        lines.extend(f"- {_artifact_label(item)}" for item in state.scope_history)
+    if state.legacy_history:
+        lines.append("Legacy History (read-only):")
+        lines.extend(f"- {_artifact_label(item)}" for item in state.legacy_history)
+    lines.append("Transition Required:")
+    if state.transition_required:
+        lines.extend(f"- {_artifact_label(item)}" for item in state.transition_required)
+        lines.append("- No automatic migration is performed.")
+    else:
+        lines.append("- None")
+    lines.extend(
+        [
+            f"Next Work: {_next_label(state, lang)}",
+            f"Next leaf: {state.next_work.leaf}",
+            f"Health: {health}",
+            f"Reason: {state.next_work.reason}",
+        ]
+    )
+    if state.last_activity:
+        lines.append(f"Last activity: {state.last_activity.isoformat(timespec='seconds')}")
+    _append_issues(lines, state)
+    lines.append("STOP")
+    return "\n".join(lines) + "\n"
+
+
+def _render_legacy_history_state(state: ProjectState, *, lang: str, color: bool) -> str:
+    health = _paint(_health_label(state.health), state.health, color)
+    lines = [
+        "IIS CURRENT PLANNING STATE",
+        f"Repository: {state.repository} ({state.repository_path})",
+        "Authority mode: legacy history only",
+        "Current Scope: None",
+        "Legacy History (read-only):",
+    ]
+    lines.extend(f"- {_artifact_label(item)}" for item in state.legacy_history)
+    lines.append("Transition Required:")
+    if state.transition_required:
+        lines.extend(f"- {_artifact_label(item)}" for item in state.transition_required)
+    else:
+        lines.append("- None")
+    lines.extend(
+        [
+            "- No automatic migration is performed.",
+            f"Next Work: {_next_label(state, lang)}",
+            f"Next leaf: {state.next_work.leaf}",
+            f"Health: {health}",
+            f"Reason: {state.next_work.reason}",
+        ]
+    )
+    _append_issues(lines, state)
+    lines.append("STOP")
+    return "\n".join(lines) + "\n"
+
+
+def _append_issues(lines: list[str], state: ProjectState) -> None:
+    if state.issues:
+        lines.append("Issues:")
+        for issue in state.issues:
+            suffix = f" [{issue.path}]" if issue.path else ""
+            lines.append(f"- {issue.severity.upper()} {issue.code}: {issue.message}{suffix}")
+    else:
+        lines.append("Issues: None")
 
 def render_doctor(states: Iterable[ProjectState]) -> str:
     states = list(states)

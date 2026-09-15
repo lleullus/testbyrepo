@@ -2,77 +2,59 @@
 
 ## Authority
 
-IIS Observatory is a read-only projection. It does not own or mutate planning state. The source of truth remains the project-local Markdown artifacts under:
+IIS Observatory is a read-only projection. The current authority is the repository-local direct Scope:
 
 ```text
-docs/planning/scope-shaping/**
-docs/planning/work/**
+docs/planning/work/<slug>/SCOPE.md
 ```
 
-Every state calculation rescans those files. No controller database, workflow ledger, delivery roster, attempt history, or completion database is created. `snapshot --write` may persist only the derived read model under `docs/planning/observatory/**`; that directory and `docs/planning/adaptive/**` are excluded from canonical artifact selection.
+The artifact must declare `Schema: iis-scope/v1`, the canonical `Project-Root`, one or more exact `Product Authority` Thesis sources, `Outcome`, `Acceptance`, and `Status: draft|ready|done|superseded`. An optional `Transition Authority` section binds an applicable project-local approved transition source by path and SHA-256. File presence never activates a mandate or baseline.
 
-## Selection precedence
+Observatory never creates a state database, workflow ledger, delivery roster, attempt history, or completion database. `snapshot --write` may persist only the derived read model under `docs/planning/observatory/**`.
 
-1. Prefer the newest canonical `SCOPE-SHAPING-RESULT.md`, favoring `confirmed`/`approved` status.
-2. Prefer an explicit `Selected-Increment` or `Current-Increment` field.
-3. Otherwise use a unique Scope reference to an Increment, favoring `ready-for-matt`.
-4. Otherwise use the unique `ready-for-matt` Increment inside the selected Scope lineage.
-5. Otherwise use a unique Spec `Source-Increment`.
-6. Direct work with `Source-Increment: None` is associated by `Suggested-Work-Slug` or the unique current `docs/planning/work/<slug>` area.
+## Current Scope selection
 
-Increment and Work Package identifiers are interpreted within the selected Scope lineage. Sibling or historical Scope lineages may legitimately reuse identifiers such as `INC-001` and retain their own historical `ready-for-matt` artifacts without making the current lineage inconsistent. Multiple `ready-for-matt` Increments inside the selected current lineage are reported as inconsistent because IIS admits only one current Scope-shaped handoff there.
+1. Scan only canonical `docs/planning/work/*/SCOPE.md` files as direct Scope candidates.
+2. `draft` and `ready` are active. Exactly one active Scope is required.
+3. Multiple active Scopes produce `IIS502` / `INCONSISTENT`; Observatory does not choose among them.
+4. If no active Scope exists, the newest `done` Scope is current read-only history.
+5. If only `superseded` Scopes remain, report `STALE` and `transition required`; do not resume or create a replacement.
+
+A direct Scope is not inferred from a Work Package, Increment, Spec, Ticket, filename heading, or latest mtime. Legacy artifacts are retained separately as history.
+
+## Bound source checks
+
+For the selected direct Scope:
+
+- `Product Authority` paths must be project-local files under `docs/planning/product-thesis/**`; their full UTF-8 SHA-256 must match.
+- `Transition Authority`, when present, must be project-local regular files and its digest must match.
+- Missing, malformed, duplicated, self-referential, out-of-root, or changed sources are consistency errors.
+- `ready` and `done` Scopes cannot retain non-`None` `Open Decisions`.
+
+A changed Thesis is stale bound authority, not a reason to silently read the latest Thesis. A changed transition source is likewise reported as stale; no transition is activated.
+
+## Required outcomes
+
+Observatory displays named requirements from the bound Thesis with `status: unassessed`. Text appearing in Scope Outcome/Acceptance, including an exclusion, is not evidence of fulfillment. The `remaining` projection retains these unassessed items; it does not claim that each is actually unfinished. Whole-request completion requires attributable completion evidence outside this text-only projection.
 
 ## Next-work precedence
 
 The first matching rule wins:
 
-1. Artifact error → `consistency_check` / `INCONSISTENT`.
-2. Blocked current Ticket → `ticket_unblock` / `BLOCKED`.
-3. Ready current Ticket → `ticket_implement` / `READY`.
-4. Draft or non-terminal current Ticket → `ticket_review` / `PLANNING`.
-5. All current Tickets `done` and the current Scope has authored `Outcome Horizon > Expansion` Work Packages → current unit stays `COMPLETE`, preserve every authored Expansion candidate in Scope order, set `Next Increment` to not yet shaped, and report `Scope Shaper` as the next leaf.
-6. All current Tickets `done` with no authored Expansion candidate → current unit `COMPLETE` and no next unit established. `Deferred` Work Packages remain visible but are not promoted to next-work candidates.
-7. Approved Spec without Tickets → `To Tickets` / `PLANNING`.
-8. Non-approved Spec → `To Spec` / `PLANNING`.
-9. Current Increment without Spec → `Ask Matt` / `PLANNING`.
-10. Scope or Work Package without an admitted Increment → `Scope Shaper` / `NEEDS_SCOPE`.
+1. Structural/authority error → `consistency_check` / `INCONSISTENT`.
+2. Active direct Scope `draft` → `scope_shaper`, leaf `Scope Shaper`.
+3. Active direct Scope `ready` → no exact delivery stage established: ready persists through planning, implementation and pending verification; inspect current method/target/terminal evidence rather than automatically re-planning.
+4. Current direct Scope `done` with unassessed named outcomes → Scope Shaper for current-state reconciliation, not automatic further construction or whole-result completion.
+5. Current direct Scope `done` with no remaining observed outcome → `none`.
+6. Unfinished legacy planning or only superseded direct history → transition assessment. Completed legacy history alone → no migration or execution pointer.
+7. Empty planning root → `scope_shaper` / `NEEDS_SCOPE`.
 
-Outcome-horizon classification is read from the authored `Outcome Horizon` section. Observatory never uses WP numbering to infer ordering or promotion. A reported delivery or planning action is a pointer only; Observatory does not perform it.
+Every next-work value is a read-only pointer. It never executes Plan, Scope Shaper, implementation, verification, transition, or delivery.
 
-Authored statuses such as `scoped`, `ready-for-matt`, and `approved` remain properties of their planning artifacts. The detailed text renderer may additionally show `Derived Delivery State: READY|BLOCKED|COMPLETE` when current Tickets establish a delivery state; this derived label does not rewrite or supersede artifact status.
+## Legacy history
 
-## Recognized statuses
-
-Tickets use the canonical statuses:
-
-```text
-draft
-ready
-blocked
-done
-```
-
-Common terminal aliases such as `complete`, `completed`, `closed`, and `verified` normalize to `done`. Unknown current Ticket statuses are errors so the dashboard does not silently invent lifecycle semantics.
-
-## Health values
-
-| Health | Meaning |
-|---|---|
-| `READY` | A current Ready Ticket can be consumed by delivery outside IIS. |
-| `BLOCKED` | A current Ticket is blocked. |
-| `PLANNING` | Ask Matt, To Spec, To Tickets, or Ticket readiness work remains. |
-| `NEEDS_SCOPE` | Scope Shaper must establish the next Increment. |
-| `INCONSISTENT` | Required artifacts disagree or required state is missing. |
-| `COMPLETE` | The current selected delivery unit's associated Tickets are all `done`. Authored follow-up Scope candidates may still exist and can point to `Scope Shaper`. |
-| `STALE` | Only a superseded lineage can be identified. |
-| `NO_IIS` | The repository has no `docs/planning` directory. |
-
-## Durable snapshot boundary
-
-`docs/planning/observatory/PROJECT-OVERVIEW.md` and `project-state.json` are generated projections only. Snapshot freshness uses a content fingerprint of current canonical state inputs plus displayed Adaptive provenance, never Git HEAD alone. The snapshot output directory is excluded from its own fingerprint. A stored Adaptive Mandate status is provenance and must not be interpreted as current Adaptive-mode activation.
-
-Built-in progress visualization is derived only from typed exact-ratio measurements. The visual bar never changes `Health`, current-unit selection, or `next_work` precedence, and the exact numerator/denominator/percent remains the authoritative measurement representation inside the projection.
+Existing `scope-shaping/**`, Work Package, Increment, Spec, and Ticket files remain visible under `legacy.history` / `Legacy History`. Unfinished legacy items are listed under `transition_required`; Observatory does not auto-migrate them and does not propose their old `ready-for-matt`, Ask Matt, To Spec, To Tickets, or Ticket implementation routes as current work.
 
 ## JSON stability
 
-JSON output contains `schema_version: "1.0"`. Consumers should ignore unknown fields and treat enum strings as case-sensitive. A future incompatible change will increment the major schema version.
+Live scan JSON uses `schema_version: "2.0"` and direct fields (`authority_mode`, `scope`, `required_outcomes`, `legacy`, `next_work`). Snapshot schema is independent. Consumers should ignore unknown fields and treat enum strings as case-sensitive.

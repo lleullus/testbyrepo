@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scope Coverage"
+  short_description: "Read-only counterexample review after successful Scope verification"
+  default_prompt: "Use $scope-coverage for one completed successful independent Scope verification. Read exact Thesis/Scope originals, actual implementation paths and unchanged verifier primary evidence. Search reachable counterexamples and observation gaps under the same Outcome and Acceptance. Do not execute product/tests/experiments, mutate files or runtime, issue Acceptance verdicts, record Scope completion or delegate. Return SCOPE COVERAGE REVIEW RESULT with exact result/target references, completion, causal findings and limits. Preserve selected model/effort; Main owns any subsequent status recording through ordinary file tools."

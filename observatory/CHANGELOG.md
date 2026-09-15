@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- Read canonical `docs/planning/work/<slug>/SCOPE.md` artifacts using `iis-scope/v1` and bound Thesis SHA-256 sources.
+- Display direct Scope `draft`, `ready`, `done`, and `superseded` state, required outcomes, optional Transition Authority, and exact read-only next pointers.
+- Preserve legacy Scope Shaping/Increment/Spec/Ticket artifacts as history; report unfinished legacy work as `transition required` without automatic migration or old Matt/Ticket routing.
+- Detect stale bound sources and duplicate active Scopes as consistency errors in `scan` and `doctor`.
+
 ## 0.2.1
 
 - Add deterministic progress-bar rendering for exact-ratio snapshot measurements while always preserving the exact numerator, denominator, and percentage beside the bar.

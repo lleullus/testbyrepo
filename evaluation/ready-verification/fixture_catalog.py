@@ -1,6 +1,7 @@
 """Executable, disposable calibration products. Oracle data stays outside them."""
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -347,7 +348,7 @@ def prepared(value):
 def ordinary(command, value):
     return {{'value': {value!r}, 'input': value}}
 ''', None, None
-    if family == 'ticket-regression':
+    if family == 'scope-regression':
         legacy = 'stable-value' if variant == 'normal-core' else 'regressed-value'
         return f'''
 def prepared(value):
@@ -407,55 +408,103 @@ def _contracts(family: str, app: Path, endpoint: str, kind: str | None) -> list[
     if kind and family != 'finding-retention':
         readback = f'Actual HTTP GET {endpoint}/readback/{kind}; python3 {app} readback sample forwards that HTTP response. Request acknowledgement alone is not completion.'
     flows = [{'outcome': expected, 'trigger': trigger, 'readback': readback}]
-    if family == 'ticket-regression':
+    if family == 'scope-regression':
         flows.append({'outcome': 'The previously delivered legacy input still returns value=stable-value and input=legacy after the current change.',
                       'trigger': f'Run python3 {app} run legacy.', 'readback': readback})
     return flows
 
-
 def _documents(project: Path, flows: list[dict[str, str]], *, app: Path, engine: Path, family: str, variant: str, endpoint: str, external: bool) -> tuple[Path, Path]:
-    directory = 'docs/planning/work/runtime-boundary'
-    operator = family == 'operator-assisted'
-    condition = 'None'
+    work_slug = "runtime-boundary"
+    thesis_path = _put(project, "docs/planning/product-thesis/runtime-boundary/THESIS-001.md", "")
+    operator = family == "operator-assisted"
+    condition = "None"
     if external:
-        condition = f'Existing loopback authority {endpoint}, outside product ownership; it may be unavailable. Do not edit or replace that authority.'
-    if family == 'auth-boundary' and variant.startswith('unavailable'):
-        condition += ' The operator has not supplied a credential; do not invent or extract one.'
+        condition = f"Existing loopback authority {endpoint}, outside product ownership; it may be unavailable. Do not edit or replace that authority."
+    if family == "auth-boundary" and variant.startswith("unavailable"):
+        condition += " The operator has not supplied a credential; do not invent or extract one."
     if operator:
-        condition += ' Only the operator can grant approval. Product source has no operator credential. Missing approval limits the result.'
-    if family == 'unknown-preservation':
-        condition += ' Prior investigation could not establish upstream availability; this unresolved condition remains required for the whole result.'
-    disposition = 'Operator-assisted' if operator else 'Independent'
-    independent = 'no' if operator else 'yes'
-    surface = 'Operator-owned | current approval for product request alpha' if operator else 'Ticket Scope creates | ordinary CLI request and authoritative result'
-    behavior = _put(project, 'docs/planning/behavior/contexts/runtime-boundary.md',
-                    '# Runtime boundary\n\n' + '\n'.join(f'- {flow["outcome"]}' for flow in flows) +
-                    '\n- Request acceptance and completion readback are distinct.\n- Unavailable external evidence does not imply either product success or an observed product defect.\n')
-    spec = '# Runtime boundary change\n\nStatus: approved\nOwner: evaluation planning owner\nSource-Increment: None\n\n## Problem\n\nThe user needs the specified current runtime result.\n\n## Desired Outcome\n\n'
-    spec += '\n'.join(f'- {flow["outcome"]}' for flow in flows)
-    spec += '\n\n## Requirements\n\n- Use the ordinary user entrypoint and the required current readback.\n- Preserve all specified earlier outcomes.\n\n## Non-Goals\n\n- UI changes\n- Changes to the external authority or other products\n\n## Implementation Constraints\n\nProduct writes stay within the entrypoint and its direct support code.\n\n## Verification Expectations\n\n'
-    ticket = f'# TICKET-001: Runtime boundary change\n\nStatus: ready\nParent-Spec: ../SPEC.md\nProject-Root: {project}\nWorker:\nUI: no\n\n## Goal\n\n' + ' '.join(flow['outcome'] for flow in flows)
-    ticket += '\n\n## Acceptance Criteria\n\n' + '\n'.join(f'- {flow["outcome"]}' for flow in flows)
-    ticket += '\n\n## Scope\n\nThe ordinary CLI request and authoritative result for every outcome listed in Acceptance Criteria.\n\n## Non-Goals\n\n- UI changes\n- Changes to the external authority or other products\n\n## Blockers\n\nNone\n\n## Verification\n\n'
+        condition += " Only the operator can grant approval. Product source has no operator credential. Missing approval limits the result."
+    if family == "unknown-preservation":
+        condition += " Prior investigation could not establish upstream availability; this unresolved condition remains required for the whole result."
+    surface = "Operator-owned | current approval for product request alpha" if operator else "Existing | ordinary CLI request and authoritative result"
+    thesis = """# Runtime boundary product Thesis
+
+Status: adopted
+Owner: evaluation product owner
+
+## Product Promise
+
+The user receives the requested current runtime result through the ordinary product entrypoint, with preserved earlier outcomes and a truthful authoritative readback. Internal helpers, acknowledgements and source constants cannot substitute for the promised boundary.
+
+## Behavior and Truth Boundary
+
+""" + "\n".join(f"- {flow['outcome']}" for flow in flows) + f"""
+- Request acceptance and completion readback are distinct.
+- Unavailable external evidence does not imply either product success or an observed product defect.
+- External authority remains separately owned; product work never invents credentials, operator approval or external success.
+
+## Success and Failure
+
+The ordinary entrypoint and its authoritative readback establish success, contradiction or an evidence limit. Definite failures remain failures without manufactured state; unknown external settlement remains unknown.
+
+## Non-Goals
+
+- UI or unrelated future candidates
+- Changes to external authorities or other products
+
+## Open Decisions
+
+None
+"""
+    thesis_path.write_text(thesis, encoding="utf-8")
+    thesis_sha = hashlib.sha256(thesis_path.read_bytes()).hexdigest()
+    acceptance = []
     for ordinal, flow in enumerate(flows, 1):
-        fields = f'  Trigger or inspection target: {flow["trigger"]}\n  Acceptance boundary: ordinary product CLI and required current result\n  Expected observable result: {flow["outcome"]}\n  Authoritative readback: {flow["readback"]}\n  Disposition: {disposition}\n  Independent verification required: {independent}\n  Acceptance surface: {surface}\n  External condition: {condition}\n'
-        spec += f'- Outcome: {flow["outcome"]}\n  Acceptance boundary: ordinary product CLI and required current result\n' + fields.replace('  Acceptance boundary: ordinary product CLI and required current result\n', '')
-        ticket += f'- Parent outcome ordinal: {ordinal}\n  AC ordinals: {ordinal}\n  Behavior authority ordinals: 1\n  Initial state: The current product is available; external conditions are as declared below.\n'
-        ticket_fields = fields.replace('  Disposition:', '  Decision boundary: The current readback establishes the expected result, contradicts it, or leaves it inconclusive when required evidence is unavailable.\n  Disposition:')
-        if family == 'weak-authored-flow':
-            weak = ticket_fields.replace(flow['trigger'], f'Inspect DECLARED_VALUE in {engine}.').replace(flow['readback'], f'DECLARED_VALUE in {engine}; do not execute the CLI.')
-            ticket += weak
-        else:
-            ticket += ticket_fields
-    authorities = '\n## Behavior Authorities\n\n- docs/planning/behavior/contexts/runtime-boundary.md | Scope: current runtime result and required evidence\n'
-    spec += authorities + '\n## UI / UX\n\nNot applicable\n\n## Open Questions\n\nNone\n'
-    ticket += authorities + '\n## References\n\n- ../SPEC.md\n'
-    spec_path = _put(project, f'{directory}/SPEC.md', spec)
-    ticket_path = _put(project, f'{directory}/tickets/TICKET-001.md', ticket)
-    if family in {'unknown-preservation', 'ticket-regression'}:
-        note = 'Prior investigation: the upstream surface could not be exercised. Availability remains unconfirmed; do not replace this condition with source or helper success.' if family == 'unknown-preservation' else 'Previous delivery obligation: legacy input returns stable-value. A later change must preserve that current behavior; prior completion alone does not prove preservation.'
-        _put(project, 'investigation.txt', note + '\n')
-    return spec_path, ticket_path
+        trigger = flow["trigger"]
+        readback = flow["readback"]
+        if family == "weak-authored-flow":
+            trigger = f"Inspect DECLARED_VALUE in {engine}; do not execute the CLI."
+            readback = f"DECLARED_VALUE in {engine}; this source proxy is intentionally insufficient for the real boundary."
+        acceptance.append(
+            f"### Scenario {ordinal}\n"
+            f"Initial state: The current product is available; external conditions are as declared below.\n"
+            f"Action or inspection: {trigger}\n"
+            f"Expected observable result: {flow['outcome']}\n"
+            f"Acceptance boundary: ordinary product CLI and required current result\n"
+            f"Authoritative readback: {readback}\n"
+            f"Decision boundary: Current readback establishes the outcome, contradicts it, or remains unresolved when required evidence is unavailable.\n"
+            f"External condition: {condition}\n"
+            f"Acceptance surface: {surface}\n"
+        )
+    scope_path = _put(project, f"docs/planning/work/{work_slug}/SCOPE.md", f"""# Runtime boundary Scope
+
+Schema: iis-scope/v1
+Project-Root: {project}
+Status: ready
+
+## Product Authority
+
+- {thesis_path} sha256:{thesis_sha}
+
+## Outcome
+
+The current product must provide: {' '.join(flow['outcome'] for flow in flows)}. The Scope covers the ordinary entrypoint, authoritative readback and applicable preservation/failure boundaries only; it excludes unrelated future candidates and separately owned external authorities.
+
+## Acceptance
+
+{chr(10).join(acceptance)}
+## Non-Goals
+
+- UI or unrelated future candidates
+- Changes to external authorities or other products
+- Internal implementation topology
+""")
+    if family in {"unknown-preservation", "scope-regression"}:
+        note = ("Prior investigation: the upstream surface could not be exercised. Availability remains unconfirmed; do not replace this condition with source or helper success."
+                if family == "unknown-preservation" else
+                "Previous delivery obligation: legacy input returns stable-value. A later change must preserve that current behavior; prior completion alone does not prove preservation.")
+        _put(project, "investigation.txt", note + "\n")
+    return thesis_path, scope_path
 
 
 def materialize(case: dict, project_root: Path, support_root: Path, *, port: int) -> dict:
@@ -501,7 +550,7 @@ from {module} import prepared
 assert {assertion}
 ''')
     flows = _contracts(family, app, endpoint, kind)
-    spec, ticket = _documents(project, flows, app=app, engine=engine, family=family, variant=variant, endpoint=endpoint, external=kind is not None)
+    thesis, scope = _documents(project, flows, app=app, engine=engine, family=family, variant=variant, endpoint=endpoint, external=kind is not None)
     service_argv = reset_argv = observer_argv = None
     product_state = authority_state = request_log = implementation_report = None
     if family == 'finding-retention':
@@ -534,22 +583,19 @@ assert {assertion}
         ''')
     challenge = None
     if family == 'verification-drift':
-        paths = [str(ticket), str(spec), str(project / 'docs/planning/behavior/contexts/runtime-boundary.md')] if variant == 'authority' else [str(engine)]
+        paths = [str(scope), str(thesis)] if variant == 'authority' else [str(engine)]
         challenge = {'paths': paths, 'before': 'revised-value', 'after': 'next-value'}
-    planning_prompt = '사용자 요구: ' + ' '.join(flow['outcome'] for flow in flows) + f'\n현재 사용자 진입점: {app}. 제공된 investigation.txt가 있으면 현재 사실과 미확인의 근거로 사용한다. 승인된 결과를 내부 helper나 성공 응답으로 축소하지 않는다.'
+    planning_prompt = '사용자 요구: ' + ' '.join(flow['outcome'] for flow in flows) + f'\n현재 사용자 진입점: {app}. 정확한 Product Thesis {thesis}와 Scope {scope}를 직접 읽고, 제공된 investigation.txt가 있으면 현재 사실과 미확인의 근거로 사용한다. 승인된 결과를 내부 helper나 성공 응답으로 축소하지 않는다.'
     if kind:
         planning_prompt += f' 외부 경계는 이미 제공된 loopback authority {endpoint}이며 제품 소유가 아니다. 실제 readback과 사용할 수 없는 증거를 구분한다.'
     allowed_output_paths = []
     trigger_argv = [sys.executable, str(app), 'run', 'sample']
     readback_argv = [sys.executable, str(app), 'readback', 'sample'] if kind else [sys.executable, str(app), 'run', 'sample']
-    additional_trigger_argv = [[sys.executable, str(app), 'run', 'legacy']] if family == 'ticket-regression' else []
+    additional_trigger_argv = [[sys.executable, str(app), 'run', 'legacy']] if family == 'scope-regression' else []
     if family == 'feedback-loop':
         identifier = 'org:west:item-42'
         trigger_argv = [sys.executable, str(app), 'lookup', identifier]
-        additional_trigger_argv = [
-            [sys.executable, str(app), 'display', identifier],
-            [sys.executable, str(app), 'remote', 'gamma'],
-        ]
+        additional_trigger_argv = [[sys.executable, str(app), 'display', identifier], [sys.executable, str(app), 'remote', 'gamma']]
         readback_argv = [sys.executable, str(app), 'readback', 'gamma']
     if family == 'minimal-input-frontier':
         additional_trigger_argv = [[sys.executable, str(app), 'run', 'sample ']]
@@ -558,11 +604,12 @@ assert {assertion}
         trigger_argv = [sys.executable, str(app), 'run-sequence', 'approved']
         additional_trigger_argv = []
         readback_argv = [sys.executable, str(app), 'readback', 'all']
-    metadata = {'project_root': str(project), 'ticket_path': str(ticket), 'target_paths': [str(app), str(engine)],
-                'allowed_output_paths': allowed_output_paths, 'trigger_argv': trigger_argv,
-                'readback_argv': readback_argv, 'additional_trigger_argv': additional_trigger_argv,
-                'observer_argv': observer_argv, 'service_argv': service_argv, 'reset_argv': reset_argv, 'verification_challenge': challenge,
-                'planning_prompt': planning_prompt, 'implementation_prompt': (f'Implement only the exact ready Ticket {ticket}. Preserve its outcome and actual readback, and self-check the ordinary entrypoint.' if family != 'feedback-loop' else f'Implement only the exact ready Ticket {ticket}. Current reported failures are: lookup and display both reject org:west:item-42 through their shared parser assumption; remote returns a local acknowledgement without settling key=gamma through the loopback service. Account for all three, group only evidence-supported common causes, fix them within the reviewed scope, run cheap regressions and the minimum actual CLI/readback paths, and do not start final verification.'),
+    metadata = {'project_root': str(project), 'scope_path': str(scope), 'thesis_paths': [str(thesis)],
+                'target_paths': [str(app), str(engine)], 'allowed_output_paths': allowed_output_paths,
+                'trigger_argv': trigger_argv, 'readback_argv': readback_argv, 'additional_trigger_argv': additional_trigger_argv,
+                'observer_argv': observer_argv, 'service_argv': service_argv, 'reset_argv': reset_argv,
+                'verification_challenge': challenge, 'planning_prompt': planning_prompt,
+                'implementation_prompt': (f'Implement only the exact ready Scope {scope}. Preserve the Thesis outcome and actual readback, and perform the minimum real self-check through the ordinary entrypoint.' if family != 'feedback-loop' else f'Implement only the exact ready Scope {scope}. Current reported failures are: lookup and display both reject org:west:item-42 through their shared parser assumption; remote returns a local acknowledgement without settling key=gamma through the loopback service. Account for all three, group only evidence-supported common causes, fix them within the reviewed Scope, run cheap regressions and the minimum actual CLI/readback paths, and do not start final verification.'),
                 'service_port': port if kind else None}
     if implementation_report:
         metadata['implementation_report_path'] = str(implementation_report)

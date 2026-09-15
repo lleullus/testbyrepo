@@ -1,4 +1,0 @@
-interface:
-  display_name: "Ready Ticket Coverage"
-  short_description: "Read-only gaps review after successful verification"
-  default_prompt: "Use $ready-ticket-coverage for the exact completed verification assigned by the finalization-owning caller. Read current approved authority, actual implementation paths and the exact verifier primary evidence; compare what was activated and observed with material reachable counterexamples under the same obligation. Do not execute the product or experiments, modify any product/runtime/evidence/planning state, issue AC verdicts, call ready_finalize, request a verifier authority profile, or delegate. Return one bounded COVERAGE REVIEW RESULT with exact report/target references, completion, causal findings and evidence limits. Do not turn tool failure or incomplete investigation into no-finding. Preserve existing selected model/effort policy and scope; the caller alone handles progression or fresh-verifier routing."

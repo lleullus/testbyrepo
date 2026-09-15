@@ -3,10 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
+import hashlib
 import re
 from urllib.parse import unquote
 
-from .markdown import canonical_id, metadata_id, metadata_value, parse_artifact
+from .markdown import extract_sections, parse_artifact
 from .model import (
     Artifact,
     ArtifactKind,
@@ -14,12 +15,10 @@ from .model import (
     Issue,
     ProjectState,
     Stage,
-    natural_id_key,
     newest_timestamp,
     utc_now,
 )
 from .next_work import evaluate_next_work
-
 
 @dataclass(frozen=True)
 class ScanOptions:
@@ -55,110 +54,343 @@ def scan_repository(
     artifacts = _load_artifacts(planning_root, options, state)
     state.last_activity = newest_timestamp(artifacts)
     by_kind = _group_by_kind(artifacts)
-
     scopes = by_kind[ArtifactKind.SCOPE]
-    work_packages = by_kind[ArtifactKind.WORK_PACKAGE]
-    increments = by_kind[ArtifactKind.INCREMENT]
-    specs = by_kind[ArtifactKind.SPEC]
-    tickets = by_kind[ArtifactKind.TICKET]
+    direct_scopes = [item for item in scopes if _is_direct_scope(item, planning_root)]
 
-    state.current_scope = _select_scope(scopes)
-    lineage_increments = _scope_lineage_items(increments, state.current_scope)
-    lineage_work_packages = _scope_lineage_items(work_packages, state.current_scope)
-    current_increment_id, selection_source = _selected_increment_id(
-        state.current_scope, lineage_increments, specs
-    )
-    state.evidence["increment_selection"] = selection_source
-    if state.current_scope is not None:
-        state.evidence["scope_lineage"] = state.current_scope.path.parent.relative_to(planning_root).as_posix()
-
-    ready_increments = [item for item in lineage_increments if item.status == "ready-for-matt"]
-    if len(ready_increments) > 1:
-        state.issues.append(
-            Issue(
-                "IIS102",
-                "More than one Increment is marked ready-for-matt: "
-                + ", ".join(item.identifier or item.relative_path for item in ready_increments),
-                "error",
-            )
+    if direct_scopes:
+        _scan_direct_scope(
+            state,
+            artifacts,
+            by_kind,
+            direct_scopes,
+            planning_root,
+            check_links=options.check_links,
         )
-
-    if current_increment_id:
-        state.current_increment = _find_by_id(lineage_increments, current_increment_id)
-        if state.current_increment is None:
-            state.issues.append(
-                Issue(
-                    "IIS101",
-                    f"The current Scope selects {current_increment_id}, but no matching Increment artifact exists.",
-                    "error",
-                    state.current_scope.relative_path if state.current_scope else None,
-                )
-            )
-    elif ready_increments:
-        state.current_increment = _newest(ready_increments)
-        state.evidence["increment_selection"] = "unique ready-for-matt Increment"
     else:
-        active_increments = [
-            item
-            for item in lineage_increments
-            if item.status in {"active", "confirmed", "approved"}
-        ]
-        if len(active_increments) == 1:
-            state.current_increment = active_increments[0]
-            state.evidence["increment_selection"] = "unique active Increment"
+        # Legacy Scope/Increment/Spec/Ticket artifacts are retained as history.
+        # They never establish current authority or an automatic Matt/Ticket
+        # pointer after the Thesis → Scope cutover.
+        state.legacy_history = [item for item in artifacts if item.kind != ArtifactKind.UNKNOWN]
+        state.transition_required = _legacy_transition_candidates(state.legacy_history)
+        if options.check_links:
+            _validate_planning_links(state.legacy_history, planning_root, state)
+        state.evidence.update(
+            {
+                "authority_mode": "legacy-history" if state.legacy_history else "none",
+                "artifact_counts": {kind.value: len(items) for kind, items in by_kind.items()},
+                "transition_required": [item.relative_path for item in state.transition_required],
+            }
+        )
 
-    if state.current_increment and state.current_increment.status == "superseded":
+    evaluate_next_work(state)
+    return state
+
+
+def _is_direct_scope(artifact: Artifact, planning_root: Path) -> bool:
+    """Recognize only docs/planning/work/<slug>/SCOPE.md as direct Scope."""
+    if artifact.kind != ArtifactKind.SCOPE or artifact.path.name.upper() != "SCOPE.MD":
+        return False
+    try:
+        relative = artifact.path.relative_to(planning_root.parent.parent)
+    except ValueError:
+        return False
+    return len(relative.parts) == 5 and relative.parts[:3] == ("docs", "planning", "work")
+
+
+def _scan_direct_scope(
+    state: ProjectState,
+    artifacts: list[Artifact],
+    by_kind: dict[ArtifactKind, list[Artifact]],
+    direct_scopes: list[Artifact],
+    planning_root: Path,
+    *,
+    check_links: bool,
+) -> None:
+    state.direct_scope_mode = True
+    state.active_scopes = sorted(
+        [item for item in direct_scopes if item.status in {"draft", "ready"}],
+        key=lambda item: (item.modified_at or utc_now(), item.relative_path),
+    )
+    state.scope_history = sorted(
+        [item for item in direct_scopes if item.status not in {"draft", "ready"}],
+        key=lambda item: (item.modified_at or utc_now(), item.relative_path),
+        reverse=True,
+    )
+    state.legacy_history = [item for item in artifacts if item not in direct_scopes and item.kind != ArtifactKind.UNKNOWN]
+    state.transition_required = _legacy_transition_candidates(state.legacy_history)
+
+    if len(state.active_scopes) > 1:
         state.issues.append(
             Issue(
-                "IIS103",
-                f"The selected current Increment {state.current_increment.identifier or state.current_increment.relative_path} is superseded.",
+                "IIS502",
+                "More than one active direct Scope exists: "
+                + ", ".join(item.relative_path for item in state.active_scopes),
                 "error",
-                state.current_increment.relative_path,
             )
         )
 
-    state.current_work_package = _select_work_package(
-        lineage_work_packages, state.current_scope, state.current_increment
-    )
-    expansion_ids, deferred_ids = _scope_horizon_ids(state.current_scope)
-    state.next_candidate_work_packages = _resolve_work_packages(lineage_work_packages, expansion_ids)
-    state.deferred_work_packages = _resolve_work_packages(lineage_work_packages, deferred_ids)
-    state.evidence["outcome_horizon"] = {
-        "expansion": expansion_ids,
-        "deferred": deferred_ids,
-    }
-    state.current_work_slug = _select_work_slug(
-        state.current_scope, state.current_increment, specs, tickets
-    )
-    state.current_spec = _select_spec(
-        specs, state.current_increment, state.current_work_slug
-    )
-    if state.current_work_slug is None and state.current_spec is not None:
-        state.current_work_slug = state.current_spec.work_slug
+    candidates = state.active_scopes or [item for item in state.scope_history if item.status == "done"]
+    if not candidates:
+        candidates = [item for item in state.scope_history if item.status != "superseded"]
+    state.current_scope = _newest(candidates) if candidates else None
+    if state.current_scope is None and state.scope_history:
+        state.issues.append(
+            Issue(
+                "IIS503",
+                "Only superseded direct Scope history is present; a new current Scope is required.",
+                "warning",
+                state.scope_history[0].relative_path,
+            )
+        )
 
-    state.tickets = _select_tickets(
-        tickets,
-        current_increment=state.current_increment,
-        current_work_slug=state.current_work_slug,
-        current_spec=state.current_spec,
-    )
-    state.tickets.sort(key=lambda item: (natural_id_key(item.identifier), item.relative_path))
+    if state.current_scope is not None:
+        state.current_work_slug = state.current_scope.work_slug
+        state.scope_authority, state.transition_authority = _validate_direct_scope(
+            state, state.current_scope
+        )
+        state.required_outcomes, state.remaining_required_outcomes = _required_outcomes(
+            state.scope_authority,
+        )
 
-    _validate_tickets(state)
-    if options.check_links:
+    if check_links:
         _validate_planning_links(artifacts, planning_root, state)
-    _validate_association(state, specs, tickets)
-
     state.evidence.update(
         {
-            "artifact_counts": {
-                kind.value: len(items) for kind, items in by_kind.items()
-            },
+            "authority_mode": "direct-scope",
+            "artifact_counts": {kind.value: len(items) for kind, items in by_kind.items()},
+            "active_scopes": [item.relative_path for item in state.active_scopes],
+            "scope_history": [item.relative_path for item in state.scope_history],
+            "transition_required": [item.relative_path for item in state.transition_required],
             "current_work_slug": state.current_work_slug,
         }
     )
-    evaluate_next_work(state)
-    return state
+
+
+def _validate_direct_scope(
+    state: ProjectState,
+    scope: Artifact,
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """Validate the observable direct Scope boundary and bound source bytes."""
+    allowed_statuses = {"draft", "ready", "done", "superseded"}
+    if scope.status not in allowed_statuses:
+        state.issues.append(
+            Issue(
+                "IIS504",
+                f"Direct Scope status '{scope.status or 'missing'}' is not draft, ready, done, or superseded.",
+                "error",
+                scope.relative_path,
+            )
+        )
+    if scope.metadata.get("schema") != "iis-scope/v1":
+        state.issues.append(
+            Issue("IIS505", "Direct Scope does not declare Schema: iis-scope/v1.", "error", scope.relative_path)
+        )
+
+    project_root = scope.metadata.get("project_root")
+    if not project_root:
+        state.issues.append(Issue("IIS506", "Direct Scope has no Project-Root metadata.", "error", scope.relative_path))
+    else:
+        try:
+            declared_root = Path(project_root).expanduser().resolve()
+        except (OSError, RuntimeError, ValueError):
+            declared_root = None
+        if declared_root != state.repository_path:
+            state.issues.append(
+                Issue(
+                    "IIS507",
+                    f"Direct Scope Project-Root does not match the scanned repository: {project_root}",
+                    "error",
+                    scope.relative_path,
+                )
+            )
+
+    for key, label in (
+        ("section_product_authority", "Product Authority"),
+        ("section_outcome", "Outcome"),
+        ("section_acceptance", "Acceptance"),
+    ):
+        if not scope.metadata.get(key, "").strip():
+            state.issues.append(Issue("IIS508", f"Direct Scope has no nonempty {label} section.", "error", scope.relative_path))
+
+    open_decisions = scope.metadata.get("section_open_decisions", "").strip()
+    if scope.status in {"ready", "done"} and open_decisions and open_decisions.lower() != "none":
+        state.issues.append(
+            Issue(
+                "IIS509",
+                "Ready/done direct Scope has unresolved Open Decisions.",
+                "error",
+                scope.relative_path,
+            )
+        )
+
+    authority_lines = scope.metadata.get("section_product_authority", "").splitlines()
+    authorities: list[dict[str, str]] = []
+    seen: set[Path] = set()
+    for line in authority_lines:
+        line = line.strip()
+        if not line:
+            continue
+        match = re.fullmatch(r"-\s+(/.+)\s+sha256:([0-9a-fA-F]{64})", line)
+        if not match:
+            state.issues.append(
+                Issue(
+                    "IIS510",
+                    "Product Authority must use '- /canonical/path sha256:<64-hex-digest>'.",
+                    "error",
+                    scope.relative_path,
+                )
+            )
+            continue
+        raw_path, expected = match.groups()
+        source = Path(raw_path).expanduser()
+        try:
+            resolved = source.resolve()
+            resolved.relative_to(state.repository_path / "docs" / "planning" / "product-thesis")
+        except (OSError, RuntimeError, ValueError):
+            state.issues.append(
+                Issue("IIS511", f"Product Authority is not a project-local Thesis source: {raw_path}", "error", scope.relative_path)
+            )
+            continue
+        if resolved == scope.path or resolved in seen or not resolved.is_file():
+            state.issues.append(
+                Issue("IIS512", f"Product Authority source is missing or duplicated: {raw_path}", "error", scope.relative_path)
+            )
+            continue
+        seen.add(resolved)
+        actual = hashlib.sha256(resolved.read_bytes()).hexdigest()
+        current = actual == expected.lower()
+        authorities.append({"path": str(resolved), "sha256": expected.lower(), "current": str(current).lower()})
+        if not current:
+            state.issues.append(
+                Issue(
+                    "IIS513",
+                    f"Bound Thesis source is stale: {raw_path} (expected {expected.lower()}, found {actual}).",
+                    "error",
+                    scope.relative_path,
+                )
+            )
+    if not authorities:
+        state.issues.append(Issue("IIS514", "Direct Scope needs at least one bound Thesis source.", "error", scope.relative_path))
+    transition = _parse_transition_authority(state, scope)
+    return authorities, transition
+
+
+def _parse_transition_authority(state: ProjectState, scope: Artifact) -> list[dict[str, str]]:
+    """Read an optional approved transition source without activating it."""
+    body = scope.metadata.get("section_transition_authority")
+    if body is None:
+        return []
+    values: list[dict[str, str]] = []
+    seen: set[Path] = set()
+    for line in body.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        match = re.fullmatch(r"-\s+(/.+)\s+sha256:([0-9a-fA-F]{64})", line)
+        if not match:
+            state.issues.append(
+                Issue(
+                    "IIS515",
+                    "Transition Authority must use '- /canonical/path sha256:<64-hex-digest>'.",
+                    "error",
+                    scope.relative_path,
+                )
+            )
+            continue
+        raw_path, expected = match.groups()
+        source = Path(raw_path).expanduser()
+        try:
+            resolved = source.resolve()
+            resolved.relative_to(state.repository_path)
+        except (OSError, RuntimeError, ValueError):
+            state.issues.append(
+                Issue("IIS516", f"Transition Authority is not project-local: {raw_path}", "error", scope.relative_path)
+            )
+            continue
+        if resolved == scope.path or resolved in seen or not resolved.is_file():
+            state.issues.append(
+                Issue("IIS517", f"Transition Authority source is missing or duplicated: {raw_path}", "error", scope.relative_path)
+            )
+            continue
+        seen.add(resolved)
+        actual = hashlib.sha256(resolved.read_bytes()).hexdigest()
+        values.append({"path": str(resolved), "sha256": expected.lower(), "current": str(actual == expected.lower()).lower()})
+        if actual != expected.lower():
+            state.issues.append(
+                Issue(
+                    "IIS518",
+                    f"Bound Transition Authority source is stale: {raw_path} (expected {expected.lower()}, found {actual}).",
+                    "error",
+                    scope.relative_path,
+                )
+            )
+    if not values:
+        state.issues.append(Issue("IIS519", "Transition Authority section needs at least one exact source.", "error", scope.relative_path))
+    return values
+
+
+def _required_outcomes(
+    authorities: list[dict[str, str]],
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    all_outcomes: list[dict[str, str]] = []
+    for authority in authorities:
+        if authority.get("current") != "true":
+            continue
+        source = Path(authority["path"])
+        if not source.is_file():
+            continue
+        try:
+            thesis = source.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+        sections = extract_sections(thesis)
+        body = next(
+            (value for heading, value in sections.items() if _normalize_match_text(heading) in {"required outcomes means", "required outcomes"}),
+            "",
+        )
+        if not body or body.strip().lower() == "none":
+            continue
+        bullets = [
+            re.sub(r"^\s*[-*+]\s+", "", line).strip()
+            for line in body.splitlines()
+            if re.match(r"^\s*[-*+]\s+", line)
+        ]
+        values = bullets or [paragraph.strip() for paragraph in re.split(r"\n\s*\n", body) if paragraph.strip()]
+        for value in values:
+            if value.lower() == "none":
+                continue
+            entry = {
+                "text": value,
+                "source": str(source),
+                "status": "unassessed",
+            }
+            all_outcomes.append(entry)
+    return all_outcomes, list(all_outcomes)
+
+
+def _normalize_match_text(value: str) -> str:
+    return re.sub(r"[^a-z0-9가-힣]+", " ", value.lower()).strip()
+
+
+def _legacy_transition_candidates(artifacts: list[Artifact]) -> list[Artifact]:
+    candidates: list[Artifact] = []
+    for artifact in artifacts:
+        status = artifact.status
+        if artifact.kind == ArtifactKind.TICKET:
+            needed = status != "done"
+        elif artifact.kind == ArtifactKind.SPEC:
+            needed = status not in {"approved", "done", "superseded"}
+        elif artifact.kind == ArtifactKind.INCREMENT:
+            needed = status not in {"done", "superseded", "complete", "closed", "verified"}
+        elif artifact.kind == ArtifactKind.WORK_PACKAGE:
+            needed = status not in {"done", "complete", "closed", "verified", "deferred", "rejected"}
+        elif artifact.kind == ArtifactKind.SCOPE:
+            needed = status not in {"confirmed", "approved", "done", "superseded", "complete", "closed", "verified"}
+        else:
+            needed = False
+        if needed:
+            candidates.append(artifact)
+    return sorted(candidates, key=lambda item: (item.relative_path, item.status or ""))
 
 
 def _load_artifacts(planning_root: Path, options: ScanOptions, state: ProjectState) -> list[Artifact]:
@@ -202,332 +434,6 @@ def _newest(items: list[Artifact]) -> Artifact | None:
     return max(items, key=lambda item: (item.modified_at or utc_now(), item.relative_path))
 
 
-def _scope_lineage_items(items: list[Artifact], scope: Artifact | None) -> list[Artifact]:
-    """Limit Scope-owned artifacts to the currently selected Scope lineage.
-
-    Increment and Work Package identifiers are local to a shaping lineage and
-    may repeat in sibling or historical Scope trees. Repository-wide uniqueness
-    would therefore turn valid parallel/history lineages into false failures.
-    """
-    if scope is None:
-        return items
-    lineage_root = scope.path.parent
-    selected: list[Artifact] = []
-    for item in items:
-        try:
-            item.path.relative_to(lineage_root)
-        except ValueError:
-            continue
-        selected.append(item)
-    return selected
-
-
-def _scope_horizon_ids(scope: Artifact | None) -> tuple[list[str], list[str]]:
-    """Read explicit Expansion and Deferred WP bullets from `## Outcome Horizon`.
-
-    The authored section classification is planning authority. WP numbers are
-    identifiers only and are never used to infer ordering or promotion.
-    """
-    if scope is None:
-        return [], []
-
-    heading_pattern = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
-    bullet_pattern = re.compile(r"^\s*[-*+]\s+(.+?)\s*$")
-    wp_pattern = re.compile(r"(?i)\bWP[-_]\d{1,6}\b")
-    lines = scope.raw_text.splitlines()
-    horizon_level: int | None = None
-    category: str | None = None
-    expansion: list[str] = []
-    deferred: list[str] = []
-
-    for line in lines:
-        heading = heading_pattern.match(line.strip())
-        if heading:
-            level = len(heading.group(1))
-            title = re.sub(r"[`*_]", "", heading.group(2)).strip().lower()
-            if horizon_level is None:
-                if title == "outcome horizon":
-                    horizon_level = level
-                continue
-            if level <= horizon_level:
-                break
-            if title == "expansion":
-                category = "expansion"
-            elif title == "deferred":
-                category = "deferred"
-            elif title == "foundation":
-                category = "foundation"
-            else:
-                category = None
-            continue
-
-        if horizon_level is None or category not in {"expansion", "deferred"}:
-            continue
-        bullet = bullet_pattern.match(line)
-        if not bullet:
-            continue
-        match = wp_pattern.search(bullet.group(1))
-        identifier = canonical_id(match.group(0)) if match else None
-        if not identifier:
-            continue
-        target = expansion if category == "expansion" else deferred
-        if identifier not in target:
-            target.append(identifier)
-
-    return expansion, deferred
-
-
-def _resolve_work_packages(work_packages: list[Artifact], identifiers: list[str]) -> list[Artifact]:
-    resolved: list[Artifact] = []
-    for identifier in identifiers:
-        found = _find_by_id(work_packages, identifier)
-        if found is not None:
-            resolved.append(found)
-    return resolved
-
-
-def _select_scope(scopes: list[Artifact]) -> Artifact | None:
-    if not scopes:
-        return None
-    canonical = [item for item in scopes if item.path.name.upper() == "SCOPE-SHAPING-RESULT.MD"]
-    candidates = canonical or scopes
-    status_rank = {"confirmed": 4, "approved": 3, "active": 2, "draft": 1, None: 0}
-    return max(
-        candidates,
-        key=lambda item: (
-            status_rank.get(item.status, 0),
-            item.modified_at or utc_now(),
-            item.relative_path,
-        ),
-    )
-
-
-def _selected_increment_id(
-    scope: Artifact | None,
-    increments: list[Artifact],
-    specs: list[Artifact],
-) -> tuple[str | None, str]:
-    if scope is not None:
-        direct = metadata_id(
-            scope,
-            "selected_increment",
-            "selected_increment_id",
-            "current_increment",
-            "increment_id",
-        )
-        if direct:
-            return direct, f"{scope.relative_path} metadata"
-
-        label_match = re.search(
-            r"(?im)^\s*(?:[-*]\s*)?(?:Selected[- ]Increment|Current[- ]Increment)\s*:\s*.*?\b(INC[-_]\d+)\b",
-            scope.raw_text,
-        )
-        if label_match:
-            return canonical_id(label_match.group(1)), f"{scope.relative_path} selected-increment field"
-
-        referenced = [item for item in increments if item.identifier in scope.references]
-        ready_referenced = [item for item in referenced if item.status == "ready-for-matt"]
-        if len(ready_referenced) == 1:
-            return ready_referenced[0].identifier, f"{scope.relative_path} ready-for-matt reference"
-        if len(referenced) == 1:
-            return referenced[0].identifier, f"{scope.relative_path} unique Increment reference"
-
-    ready = [item for item in increments if item.status == "ready-for-matt"]
-    if len(ready) == 1:
-        return ready[0].identifier, "unique ready-for-matt Increment"
-
-    sourced_ids = {
-        metadata_id(spec, "source_increment", "parent_increment")
-        for spec in specs
-        if metadata_id(spec, "source_increment", "parent_increment")
-    }
-    if len(sourced_ids) == 1:
-        return next(iter(sourced_ids)), "unique Spec Source-Increment"
-    return None, "none"
-
-
-def _find_by_id(items: list[Artifact], identifier: str | None) -> Artifact | None:
-    if not identifier:
-        return None
-    normalized = canonical_id(identifier)
-    matches = [item for item in items if item.identifier == normalized]
-    return _newest(matches)
-
-
-def _select_work_package(
-    work_packages: list[Artifact],
-    scope: Artifact | None,
-    increment: Artifact | None,
-) -> Artifact | None:
-    explicit: str | None = None
-    if increment is not None:
-        explicit = metadata_id(
-            increment,
-            "parent_work_package",
-            "source_work_package",
-            "work_package",
-            "work_package_id",
-        )
-        if explicit is None:
-            referenced = [item for item in work_packages if item.identifier in increment.references]
-            if len(referenced) == 1:
-                return referenced[0]
-    if explicit is None and scope is not None:
-        explicit = metadata_id(
-            scope,
-            "selected_work_package",
-            "current_work_package",
-            "work_package",
-            "work_package_id",
-        )
-    if explicit:
-        found = _find_by_id(work_packages, explicit)
-        if found:
-            return found
-    active = [item for item in work_packages if item.status in {"scoped", "active", "confirmed"}]
-    if len(active) == 1:
-        return active[0]
-    if scope is not None:
-        referenced = [item for item in work_packages if item.identifier in scope.references]
-        if referenced:
-            return sorted(referenced, key=lambda item: natural_id_key(item.identifier))[0]
-    return _newest(active) if active else None
-
-
-def _clean_slug(value: str | None) -> str | None:
-    if not value:
-        return None
-    clean = value.strip().strip("`/ ")
-    clean = clean.replace("\\", "/")
-    if clean.startswith("docs/planning/work/"):
-        clean = clean[len("docs/planning/work/") :]
-    return clean.split("/", 1)[0] or None
-
-
-def _select_work_slug(
-    scope: Artifact | None,
-    increment: Artifact | None,
-    specs: list[Artifact],
-    tickets: list[Artifact],
-) -> str | None:
-    for artifact in (increment, scope):
-        if artifact is None:
-            continue
-        value = metadata_value(artifact, "suggested_work_slug", "work_slug")
-        if value:
-            return _clean_slug(value)
-
-    if increment is not None and increment.identifier:
-        matching_specs = [
-            spec
-            for spec in specs
-            if metadata_id(spec, "source_increment", "parent_increment") == increment.identifier
-        ]
-        if matching_specs:
-            selected = _newest(matching_specs)
-            return selected.work_slug if selected else None
-
-    slugs = {item.work_slug for item in [*specs, *tickets] if item.work_slug}
-    if len(slugs) == 1:
-        return next(iter(slugs))
-    if slugs:
-        newest = _newest([item for item in [*specs, *tickets] if item.work_slug])
-        return newest.work_slug if newest else None
-    return None
-
-
-def _select_spec(
-    specs: list[Artifact],
-    increment: Artifact | None,
-    work_slug: str | None,
-) -> Artifact | None:
-    candidates: list[Artifact] = []
-    if increment is not None and increment.identifier:
-        source_matches = [
-            spec
-            for spec in specs
-            if metadata_id(spec, "source_increment", "parent_increment") == increment.identifier
-        ]
-        if work_slug:
-            candidates = [spec for spec in source_matches if spec.work_slug == work_slug]
-        else:
-            candidates = source_matches
-    if not candidates and work_slug:
-        candidates = [spec for spec in specs if spec.work_slug == work_slug]
-    if not candidates and increment is None and len({spec.work_slug for spec in specs if spec.work_slug}) <= 1:
-        candidates = specs
-    if not candidates:
-        return None
-    rank = {"approved": 3, "confirmed": 2, "draft": 1, None: 0}
-    return max(
-        candidates,
-        key=lambda item: (rank.get(item.status, 0), item.modified_at or utc_now(), item.relative_path),
-    )
-
-
-def _select_tickets(
-    tickets: list[Artifact],
-    *,
-    current_increment: Artifact | None,
-    current_work_slug: str | None,
-    current_spec: Artifact | None,
-) -> list[Artifact]:
-    selected: list[Artifact] = []
-    if current_increment is not None and current_increment.identifier:
-        source_matches = [
-            ticket
-            for ticket in tickets
-            if metadata_id(ticket, "source_increment", "parent_increment") == current_increment.identifier
-        ]
-        if current_work_slug:
-            selected = [ticket for ticket in source_matches if ticket.work_slug == current_work_slug]
-        else:
-            selected = source_matches
-    if not selected and current_work_slug:
-        selected = [ticket for ticket in tickets if ticket.work_slug == current_work_slug]
-    if not selected and current_spec is not None and current_spec.work_slug:
-        selected = [ticket for ticket in tickets if ticket.work_slug == current_spec.work_slug]
-    if not selected and current_increment is None:
-        slugs = {ticket.work_slug for ticket in tickets if ticket.work_slug}
-        if len(slugs) <= 1:
-            selected = tickets
-    return selected
-
-
-def _validate_tickets(state: ProjectState) -> None:
-    seen: dict[str, Artifact] = {}
-    allowed = {"done", "ready", "blocked", "draft"}
-    for ticket in state.tickets:
-        if ticket.identifier is None:
-            state.issues.append(
-                Issue("IIS200", "A current Ticket has no recognizable TKT/TICKET identifier.", "error", ticket.relative_path)
-            )
-        elif ticket.identifier in seen:
-            state.issues.append(
-                Issue(
-                    "IIS202",
-                    f"Duplicate current Ticket identifier {ticket.identifier}.",
-                    "error",
-                    ticket.relative_path,
-                )
-            )
-        else:
-            seen[ticket.identifier] = ticket
-        if ticket.status is None:
-            state.issues.append(
-                Issue("IIS201", "A current Ticket has no Status field.", "error", ticket.relative_path)
-            )
-        elif ticket.status not in allowed:
-            state.issues.append(
-                Issue(
-                    "IIS203",
-                    f"Current Ticket status '{ticket.status}' is not one of done, ready, blocked, or draft.",
-                    "error",
-                    ticket.relative_path,
-                )
-            )
-
-
 def _validate_planning_links(
     artifacts: list[Artifact], planning_root: Path, state: ProjectState
 ) -> None:
@@ -559,39 +465,3 @@ def _validate_planning_links(
                     )
 
 
-def _validate_association(
-    state: ProjectState,
-    specs: list[Artifact],
-    tickets: list[Artifact],
-) -> None:
-    if state.current_increment is not None and state.current_spec is not None:
-        source = metadata_id(state.current_spec, "source_increment", "parent_increment")
-        if source and source != state.current_increment.identifier:
-            state.issues.append(
-                Issue(
-                    "IIS401",
-                    f"Current Spec Source-Increment {source} does not match selected {state.current_increment.identifier}.",
-                    "error",
-                    state.current_spec.relative_path,
-                )
-            )
-    if state.current_work_slug and not state.current_spec and any(
-        spec.work_slug == state.current_work_slug for spec in specs
-    ):
-        state.issues.append(
-            Issue(
-                "IIS402",
-                f"Specs exist under work slug '{state.current_work_slug}' but none could be associated with the current unit.",
-                "warning",
-            )
-        )
-    if not state.tickets and state.current_work_slug and any(
-        ticket.work_slug == state.current_work_slug for ticket in tickets
-    ):
-        state.issues.append(
-            Issue(
-                "IIS403",
-                f"Tickets exist under work slug '{state.current_work_slug}' but none could be associated with the current unit.",
-                "warning",
-            )
-        )

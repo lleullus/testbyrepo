@@ -1,445 +1,57 @@
 ---
 name: scope-shaper
-description: "Use when the user explicitly requests Scope Shaper or when an IIS request is not yet one current durable observable increment. Investigate the connected planning landscape, preserve the long-term intent, establish the actual current product state, decompose independently acceptable outcomes when needed, and select exactly one smallest durable next construction Increment for Ask Matt. Future construction remains provisional until later re-entry against the actual delivered state."
-compatibility: "Codebase-backed shaping and all durable artifact writing require one exact existing project root. Genuinely unrooted greenfield work may be shaped from supplied evidence before a root exists, but cannot write artifacts or enter Ask Matt until the root is supplied. Investigation Runners require explicit user authorization, an exact roster, a readable project root, and a host subagent invocation mechanism."
+description: "Select one current durable IIS Scope from actual product state and adopted Thesis, preserving required outcomes and any applicable transition contract. Produce the direct implementation/verification contract without Matt, Spec or Tickets."
 ---
 
-# Scope Shaper
+# Scoping
 
-Write findings, recommendations, questions, and artifacts in the user's conversation language.
+The current IIS Main performs Scoping inside the current request's authority. A role return is not automatically the end of a broader request. An explicit Scope-only request stops with the Scope result.
 
-## Purpose
+## Inputs
 
-Scope Shaper does two related jobs before detailed product planning begins:
+Read the latest user assignment and exact applicable Thesis originals. Inspect actual current product state, reusing supplied current investigation where sufficient. Read any explicitly applicable approved Transition Baseline and the current measured Block. No source is created merely to fill an input field.
 
-1. understand the connected outcome landscape so one visible feature is not optimized in isolation and unrelated strategy is not pulled in; and
-2. choose exactly one durable next product construction Increment from the actual current product state.
+Distinguish evidence from product authority. A past report or a candidate name is not a current product observation. Re-establish only load-bearing facts whose changes could alter the choice. Do not investigate every subsystem or re-run already reported failures just to confirm the user's observation.
 
-The second job is mandatory whenever Scope Shaper runs. A broad outcome may be coherent yet still contain foundation, intermediate, and mature product states that should not all be planned now. Scope Shaper must therefore distinguish the user's long-term intent from the one product state transition that becomes normative for the current IIS cycle.
+## Choose the current result
 
-The selected Increment is not a technical scaffold, temporary mock, or arbitrary small slice. It is the smallest durable, dependency-closed product state change that produces an observable result and can remain as a real foundation for later product capability. Future capability and maturity may be recorded as a provisional horizon, but they are not current delivery authority.
+Understand the connected product landscape before choosing: delivered capabilities, unmet required outcomes/means, candidate means, actual constraints and independently acceptable sibling outcomes. Preserve long-term intent without preapproving a future execution queue. For a small change this can be a short explanation, not a Work Package document hierarchy.
 
-Scope Shaper may inspect implementation surfaces deeply enough to understand the landscape and current state. Its normative result stops at observable outcome scope, unavoidable constraints, and the selected Increment. Detailed product policy, semantic Behavior, rendered interaction, internal design, and implementation sequence remain with their later IIS owners.
+Select the smallest durable observable state change that advances the assigned result without severing necessary behavior. Actor, trigger/inspection, current→target result and authoritative readback must be identifiable in the explanation, not repeated as mandatory fields. Technical layers and file count do not define product scope. One Scope may require several internal technical tasks. Split only independently acceptable outcomes; keep inseparable preservation/integration obligations with the outcome they qualify.
 
-## Position In IIS
+A narrow current Scope must not erase the broader assigned Goal or required named items. Keep their original references and actual remaining state available to Main. Candidate removal does not waive the outcome it supported. If the user assigned only this stage or a narrow result, do not import the entire Thesis as extra work.
 
-```text
-explicit Scope Shaper request
-or IIS request not yet next-increment-ready
--> Scope Shaping Lead
--> direct current-state and landscape investigation
--> optional bounded Investigation Runners when materially useful
--> verified outcome landscape
--> Work Package decomposition when independent outcome areas exist
--> construction-candidate comparison
--> exactly one Selected Next Increment
--> one user confirmation
--> confirmed Scope result and one ready-for-matt Increment
--> later explicit Ask Matt continuation from that exact Increment
-```
+## Product gaps
 
-An ordinary IIS request may bypass Scope Shaper only when the IIS router and Ask Matt admission can already establish one current durable observable increment. Technical depth, file count, or implementation layers alone never decide whether Scope Shaper is required.
+Read relevant Thesis behavior, failure/recovery, UI, identity and truth boundaries. If a material product choice changes candidate selection or the current result, return to its exact Thesis section for resolution under current authority. Resolve determinable choices without another ceremony. Ask only for genuinely unresolved user-owned alternatives. Do not introduce policy in Scope merely because implementation would be convenient.
 
-### Product Thesis Input
+## Transition contract
 
-Before shaping a new or materially revised product meaning, the current Lead directly reads and performs `../product-thesis/SKILL.md`. This applies to an explicit Scope Shaper request as well as a router-directed entry. If a current applicable Product Thesis conclusion is already recoverable from current conversation authority or confirmed Scope/Matt authority and fresh evidence does not invalidate it, reuse it without recalibration.
+When an approved BASELINE-NNN applies, select within the current measured Block. Carry applicable global/path invariants, entry/exit conditions, readback, continuation/abort limits and remaining Goal obligations. HARD_ATOMIC requires one Scope with internal implementation steps. Other Blocks may allow several safe Scopes. Block exit is not final transformation completion. A narrower user stage request remains narrow despite broader Baseline continuation authority.
 
-Product Thesis supplies the Reason to Exist, Core Utility, high-level Core Completion Loop, truth/causal invariants, named-item meaning, and success claim boundary. Scope Shaper does not reinvent those conclusions, and Product Thesis does not choose the next Increment. `USER_INPUT_REQUIRED` stops before shaping mutation; `CALIBRATED` continues into normal current-state and landscape investigation.
+## Scope source
 
-Preserve applicable Product Thesis meaning in Intent Horizon, Verified Material Claims, Planning Boundary and Planning Constraints by reading the actual saved source, including core behaviors, causal necessity and false-success distinctions. New applicable Scope results use the `iis-product-meaning/v2` source binding defined in `../product-thesis/SKILL.md`; the immutable SHAPE revision preserves it byte-for-byte. Validate source availability/hash with the existing binding utility before closure. INC remains a reference hop, not another copy. Existing v1/legacy authority remains usable without bulk migration; a broken v2 source never falls back to legacy meaning.
+Write `docs/planning/work/<kebab-case-slug>/SCOPE.md` under the exact canonical Project Root. The direct artifact uses `Schema: iis-scope/v1`, `Project-Root` and `Status`. Use `draft` while current product decisions remain unresolved, `ready` once meaning and executable observation are sufficient. `done` is Main's completion record after independent verification, Coverage and currentness checks under `scope-verify`, not a planning or implementer write. `superseded` records a replaced unconsumed contract without rewriting delivered history.
 
-The selected Increment may establish one durable product state that materially advances the Core Completion Loop; it need not complete the whole loop. Use the thesis's concrete core behaviors when comparing candidates under Candidate Rule and Smallest Durable Choice below. Reject a candidate that contributes only technical preparation or does not materially advance the Core Utility, but do not expand the current Increment with future capability merely to complete the long-term thesis. Preserve remaining core behavior obligations in the existing Intent Horizon and applicable planning constraints; partial delivery is not whole-product success, and emphasizing the core does not make other approved requirements optional. Leave detailed Behavior/UI policy and exact completion semantics to Matt.
+Include:
+- `## Product Authority`: one line per exact project-local Thesis source, `- /absolute/path sha256:<full UTF-8 digest>`. Reuse original revisions; do not create a per-Scope copy.
+- `## Transition Authority` only when an approved transition contract applies: bind its exact project-local original with the same path/SHA-256 syntax. Record applicability, selected Block and relevant conditions in Outcome/Acceptance; a file hash does not grant approval or continuation authority.
+- `## Outcome`: actual current state and evidence, the selected result, includes/excludes and relevant dependencies in ordinary prose.
+- `## Acceptance`: observable scenarios sufficient to distinguish the promised result and applicable preservation/failure boundaries. Use meaningful subheadings when several scenarios are genuinely distinct.
+- `## Open Decisions` only when needed; any material current choice must be resolved before ready.
 
-Return to the product-meaning owner only when fresh actual evidence invalidates the Reason to Exist, Core Utility, or an essential truth, identity, or ownership premise. Ordinary delivery progress, implementation detail, or a changed construction ordering decision does not trigger Product Thesis recalibration.
+Add transition, migration, external conditions or re-entry notes only when they change what can be promised or done. Do not require Owner/Workstreams/None filler for a single simple result. Do not copy full Thesis policies into Scope; explain their current application and reference the originals. Some repetition needed to express a concrete observation is not a second policy authority.
 
-## Required Inputs And Preflight
+Use `tools/validate_scope.py /absolute/path/to/SCOPE.md` for structural validation. Exact `VALID` proves canonical structure and source bytes, not semantic completeness or user approval. Check semantic fidelity directly: could this Scope pass while its adopted current product obligation is false? Resolve omissions without inventing unassigned requirements. Existing user-directed approval gates remain at their owning boundaries; faithful serialization adds no new approval.
 
-For every new shaping pass require one proposed change, product direction, or request. Use one of two evidence modes:
+## Acceptance and verification feasibility
 
-- **Codebase-backed** — one exact existing project root is available. Verify that it is readable and is the intended product root, then establish Current Product State from direct repository, document, test, and runtime evidence as applicable.
-- **Unrooted greenfield** — the product is genuinely new and no intended project root exists yet. Scope Shaper may still investigate the user brief, supplied references, external contracts, and the absence of an existing product baseline, then compare and present construction candidates. Do not invent repository facts or treat a hypothetical future implementation as Current Product State.
+Describe initial observable state, action/inspection, expected product result and authoritative readback wherever needed to distinguish success from a plausible failure. Include actual failure, late/duplicate response, identity and preservation cases that are material, not a fixed checklist. Do not prescribe implementation files, mocks, framework assertions or worker topology. A real artifact result can be checked by inspecting that artifact; an external-effect promise requires that effect's actual boundary. Mark unavailable evidence or permission honestly instead of substituting a surrogate.
 
-A Lead-only shaping pass requires no Investigation Runner roster. Scope Shaper may invoke a Runner only when the user has explicitly authorized Runner use for the current shaping pass and designated the exact roster. Never infer, select, substitute, expand, or reorder Runner identities on the user's behalf.
+The verifier judges all applicable authored obligations against the stable implementation. A product-meaning gap goes to Thesis; an omitted projection goes back here. Do not add ad hoc ACs during verification, weaken requirements to force PASS or regard internal test success as product completion.
 
-When Runner use is authorized, require:
+## Reshaping and return
 
-```text
-Investigation Runners:
-- Slot: <stable slot id>
-  Configured Agent Or Model: <exact user-designated value>
-Maximum Concurrency: <positive integer>
-```
+New actual evidence may split, merge, replace or reorder the current construction choice within delegated authority. Preserve the assigned Goal, required items and source history. Changing method alone returns to Plan, not to product redefinition. Do not overwrite a delivered Scope or treat an unchanged historical success as current integration evidence.
 
-Every slot must be unique and available, and the concurrency limit must fit the supplied roster. If the user explicitly requests Runner use but the exact roster or concurrency is missing or ambiguous, return `SCOPE SHAPING: WAITING FOR INPUT` with only that binding defect. If the user did not authorize Runners, continue Lead-only rather than suggesting, auto-selecting, or blocking on a roster. The canonical Runner currently requires a readable Project Root, so unrooted greenfield shaping remains Lead-only until a root exists.
-
-Before investigation, verify that the request is internally consistent enough to form material questions. In codebase-backed mode also verify the root. In unrooted greenfield mode record the exact baseline as `no existing project root or product implementation available for inspection` plus any user-supplied product facts that can be treated as intent or constraints rather than observed repository behavior.
-
-An ambiguous product request returns `SCOPE SHAPING: WAITING FOR INPUT` with the smallest clarification needed. A supplied but unavailable project root returns `SCOPE SHAPING: BLOCKED`; do not silently reinterpret it as greenfield. A genuinely unrooted greenfield request is not blocked merely because the root does not exist yet.
-
-Scope Shaper may take an unrooted greenfield proposal through evidence analysis, construction-candidate comparison, and the normal single user confirmation. After that confirmation, return `SCOPE SHAPING: PROJECT ROOT REQUIRED FOR ARTIFACTS` instead of writing files or entering Ask Matt. When the caller later supplies one exact newly created project root, verify that it is the intended root and recheck whether its actual contents materially change the confirmed Current Product State or construction choice. If nothing material changed, write the already confirmed Scope and Increment artifacts without a second approval ceremony. If material evidence appeared, reopen only the affected shaping decisions and obtain fresh confirmation before writing.
-
-IIS does not create the project root or bootstrap product source as part of planning. Creating an empty project root is host/caller preparation, not a product construction Increment and not permission to invent a technical scaffold as the first product outcome.
-
-Whenever the caller-facing result is `SCOPE SHAPING: WAITING FOR INPUT`, `SCOPE SHAPING: BLOCKED`, `SCOPE SHAPING: PROJECT ROOT REQUIRED FOR ARTIFACTS`, or another non-continuation that returns/redirects instead of completing the requested shaping pass, read and apply the current `iis-workflow` [Non-Continuation Decision Provenance](../iis-workflow/SKILL.md#non-continuation-decision-provenance) section. Preserve the existing Scope Shaper result label and report only the decision-triggering condition, governing rule, effect, and exact next allowed action. Do not add provenance ceremony to the normal proposal, confirmation, or successful Scope result.
-
-## Legacy Scope Artifact Compatibility
-
-Older IIS Scope artifacts may predate `Scope-Revision` and `INC-NNN.md` and may contain `work-packages/WP-NNN.md` with `Status: ready-for-matt` plus `Next Planning Units`. Treat those files as **legacy planning context**, not as current Ask Matt admission and not as automatically valid construction Increments.
-
-Do not restore direct legacy Work Package admission merely for compatibility: doing so would bypass Current Product State reinspection and the durable-Increment selection rules this Scope Shaper now owns. Do not run the current Scope validator and interpret its expected schema failure as evidence that the old product decision was wrong.
-
-When the user names a legacy Scope result or ready Work Package for continuation:
-
-1. verify the exact legacy source and package paths are local, readable, non-symlink files under the stated existing Project Root;
-2. before rewriting the active Scope directory, run the canonical `tools/prepare_scope_workspace.py` helper, preserve the legacy source byte-for-byte as `<legacyImport>/SCOPE-SHAPING-RESULT.md`, and preserve every referenced legacy Work Package byte-for-byte under the returned `legacyWorkPackages` directory with its original `WP-NNN.md` basename; if any archive destination already exists with different bytes, block rather than overwrite history;
-3. treat the legacy confirmed boundary, constraints, package outcome, includes/excludes, dependencies, and reserved decisions as prior approved planning evidence, while treating old `MVP`, `Next`, `Deferred`, `Next Planning Units`, and `ready-for-matt` status as legacy workflow state rather than current admission authority;
-4. directly re-establish the actual Current Product State and any material external constraints now;
-5. run the current Work Package/dependency and Construction Increment Shaping rules. A legacy package may be proposed unchanged as the selected candidate only when the Lead verifies that its whole boundary still forms one smallest durable observable Increment under the current evidence. Otherwise narrow, split, defer, or reshape it normally; and
-6. present the resulting current Scope proposal and one Selected Next Increment for the normal explicit confirmation. Prior legacy approval is evidence and must not be silently reinterpreted as approval of a materially changed Increment or of the new construction-selection judgment.
-
-This is a semantic migration, not a mechanical file-format conversion. No converter may automatically turn every legacy ready Work Package into an Increment. After current confirmation, write the normal `SCOPE-SHAPING-RESULT.md`, immutable `SHAPE-NNN` revision, `Status: scoped` Work Package records when applicable, and exactly one `Status: ready-for-matt` Increment. The preserved `legacy-import/` files remain historical context only.
-
-## Roles And Authority
-
-### Scope Shaping Lead
-
-The current main agent is the Lead. The Lead owns:
-
-- preservation of the user's long-term intent without turning all of it into current scope;
-- direct establishment of the actual current product state;
-- the material-question map and optional Runner assignments;
-- direct first-hand inspection and evidence challenge;
-- the connected outcome landscape and unavoidable Planning Constraints;
-- split/merge, Work Package, and product dependency decisions;
-- product-capability dependency analysis relevant to construction order;
-- comparison and selection of the one next durable Increment;
-- explicit identification of future decisions deferred until re-entry;
-- the user-facing proposal and one confirmation; and
-- confirmed Scope, Work Package, and selected Increment artifacts.
-
-The Lead reaches its own conclusion from primary evidence. Runner agreement is neither required nor sufficient.
-
-### Investigation Runner
-
-Each used Runner receives one bounded read-only assignment and follows the canonical `scope-investigation-runner` skill. A Runner supplies evidence and advisory planning relevance. It does not choose the planning boundary, Work Package, construction order, selected Increment, approval, or continuation.
-
-The user owns the exact Runner roster, configured identities, and maximum concurrency. Scope Shaper may choose bounded evidence-domain questions and map them only onto those supplied slots; it owns the assignment envelope, assignment ledger, and use of returned material. The host owns invocation transport, scheduling within the user-supplied concurrency ceiling, background execution, retry, resume, timeout, and communication.
-
-## IIS Decision Boundaries
-
-| Decision | Owner |
-| --- | --- |
-| Long-term Intent preservation | Scope Shaper |
-| Actual current product state relevant to shaping | Scope Shaper |
-| Verified material claims and connected planning boundary | Scope Shaper |
-| Unavoidable external or preserved-product Planning Constraints | Scope Shaper |
-| Candidate outcome areas and Work Package split/merge | Scope Shaper |
-| Product-capability dependencies that determine what can meaningfully exist next | Scope Shaper |
-| Selected next durable construction Increment | Scope Shaper |
-| Detailed observable contract and product-policy choices inside that Increment | Ask Matt |
-| Semantic states, transitions, recovery, ordering, concurrency | Behavior Design within Matt |
-| Rendered interaction and presentation | Matt's Central UI / UX Routing |
-| Internal design, mutation surface, mechanism, and implementation sequence | Later Ticket delivery |
-| Spec and Tickets for the selected Increment | IIS Planning |
-
-Delivery Context is evidence for later owners. It is not planning authority by itself.
-
-## Scope Depth Boundary
-
-Scope Shaper investigates broadly enough to understand the connected landscape and construction choice, but its normative result has a fixed depth.
-
-A statement belongs in the current normative frame only when removing it would change the selected observable outcome, make the selected Increment non-durable or product-dependency-incomplete, violate an unavoidable external contract, or fail to preserve an explicitly adopted existing observable behavior.
-
-Apply these tests before recording a Lead finding.
-
-### Observable Necessity Test
-
-Ask whether the proposed statement changes what a user or operator can complete, observe, or rely on in the assessed outcome or selected Increment. A useful implementation detail that leaves the same observable result is not Scope authority.
-
-### Product-Policy Replaceability Test
-
-Try two reasonable user-visible policies or presentations that both satisfy the current boundary and selected Increment. When both remain valid, record the unresolved choice under `Decisions Reserved For Matt` rather than selecting one here.
-
-### Implementation Replaceability Test
-
-Try two materially different internal implementations that satisfy the same selected outcome and Planning Constraints. When both remain valid, the choice is Implementation-owned. Scope Shaper may preserve the supporting repository fact in Delivery Context, but does not turn one implementation path into a requirement.
-
-### Constraint Test
-
-A current repository or runtime fact becomes a Planning Constraint only when it is an unavoidable external, public, persisted, safety, authority, or deliberately preserved observable boundary. Other current-code facts remain Delivery Context.
-
-These tests govern the result, not the depth of inspection. The Lead may inspect files, symbols, tests, and runtime behavior in detail while keeping the planning output at the correct authority level.
-
-## Lead-First Investigation Frame
-
-Before any Runner dispatch, inspect enough of the available authoritative evidence to establish:
-
-- the user's long-term intended outcome without assuming every mature capability belongs now;
-- the actual current baseline: directly observed product behavior for codebase-backed work, or the confirmed absence of an existing product implementation for unrooted greenfield work;
-- which requested capabilities already exist, partly exist, or do not exist when direct evidence can establish that fact;
-- whether the request contains independently acceptable outcome areas;
-- which observable product capabilities genuinely depend on earlier product results;
-- what belongs inside or outside the connected landscape;
-- which verified constraints cannot be chosen away by later planning;
-- which product-policy, Behavior, or rendered decisions remain for Matt; and
-- which smaller candidate Increment could become a durable product foundation rather than a temporary preparation step.
-
-Investigate only the connected landscape. For codebase-backed work this may include current user or operator flow, relevant existing behavior, extension and state boundaries, permissions, external contracts, tests, documentation, and reusable capabilities. For unrooted greenfield work use the user brief, supplied references, examples, and external contracts, and explicitly mark implementation facts as unavailable rather than hypothesizing them. In both modes investigate concrete omissions that can make the selected Increment incomplete or force redesign of the same boundary.
-
-Product-wide strategy, market positioning, unrelated roadmap work, and possibilities without an evidenced connection remain outside this assessment.
-
-## Optional Runner Dispatch
-
-Runner dispatch is explicit-user-authority only. When no exact authorized roster is current, do not invoke a Runner. When one is current, split assignments by evidence domain rather than desired conclusion. Independent questions may run in parallel only within the user's supplied concurrency ceiling; dependent questions remain sequential. Use only the exact supplied slot and configured identity values.
-
-Every assignment states the canonical Runner fields exactly:
-
-```text
-Assignment ID:
-Runner Slot:
-Configured Agent Or Model:
-Question:
-Why the answer can change the planning boundary:
-Project Root:
-Allowed Evidence:
-Required Source Anchors:
-Explicit Exclusions:
-```
-
-The same slot and configured identity must appear in the returned report. Maintain one in-session ledger:
-
-```text
-Assignment ID:
-Runner Slot:
-Configured Agent Or Model:
-Terminal Status: COMPLETED | BLOCKED | FAILED | TIMEOUT | INVALID_REPORT
-Question Resolution: VERIFIED_FROM_REPORT | LEAD_DIRECT | NO_LONGER_MATERIAL | UNRESOLVED
-```
-
-`COMPLETED` means only that a report returned. The exact question becomes `VERIFIED_FROM_REPORT` only when the report establishes the answer, material gaps and counterevidence are resolved, anchors are sufficient, and the Lead directly reopens or reproduces the primary evidence.
-
-`Answer: Not established`, a material `Unverified` item, conflicting evidence, insufficient anchors, identity mismatch, or a failed/blocked/timed-out Runner keeps the question `UNRESOLVED` unless the Lead closes that exact question directly or verified boundary change makes it `NO_LONGER_MATERIAL`. Runner consensus never upgrades unresolved evidence.
-
-A material `UNRESOLVED` question blocks normal Scope confirmation. Report the unresolved question and the smallest evidence action that can close it; do not replace or add Runner identities to work around the failure without new explicit user authorization.
-
-## Evidence And Lead Challenge
-
-Normalize findings as:
-
-- **Fact** — directly supported by an inspectable primary source.
-- **Inference** — an interpretation connecting verified facts.
-- **Proposal** — a suggested boundary, package, construction candidate, or direction.
-- **Unknown** — not established by current evidence.
-
-For each material claim used in a boundary, package, dependency, or Increment decision, the Lead:
-
-1. uses primary evidence already directly established for this project in the current conversation, or opens/reproduces the missing or changed load-bearing evidence;
-2. checks that it belongs to the current project, a user-supplied greenfield brief/reference, or a current external contract as applicable;
-3. distinguishes observed current-state facts from user intent, adopted constraints, and proposals so an unrooted brief never masquerades as repository behavior;
-4. matches the strength of the claim to the evidence;
-5. tests a plausible conflicting explanation or counterexample;
-6. applies the Scope Depth Boundary tests; and
-7. records only the finding that survives those checks at the correct authority level.
-
-Changing planning leaves does not by itself invalidate directly established facts. Reuse them only within their attributable evidence boundary: recheck a changed file/config anchor, a changed registration or expanded search universe behind an absence claim, and fresh mutable runtime or external-version facts when those are load-bearing. A historical artifact or another agent's prose is navigation, not a substitute for this first-hand check. Investigate a new material question or counterexample, not the same broad landscape again for confidence; Scope still owns every shaping decision.
-
-A material claim records one planning relevance:
-
-- `BOUNDARY` — necessary observable outcome scope;
-- `PLANNING_CONSTRAINT` — an unavoidable or deliberately preserved boundary;
-- `RESERVED_FOR_MATT` — a material product, Behavior, or UI decision that Scope does not settle;
-- `OUTCOME_CANDIDATE` — a connected result that may be independently accepted;
-- `CONSTRUCTION` — evidence that can change product-capability ordering or the selected Increment;
-- `DELIVERY_CONTEXT` — a verified implementation or environment fact with no automatic normative force;
-- `DECOMPOSITION` — evidence used for split/merge, Work Package dependency, or release grouping; or
-- `NONE` — no material planning effect.
-
-Runner prose and consensus locate questions and evidence; they do not establish final planning facts.
-
-## Planning Landscape
-
-The confirmed Scope result separates these meanings.
-
-### Intent Horizon
-
-The user's larger product direction that should remain recognizable across later IIS cycles. It constrains interpretation of the initiative but is not current delivery scope merely because it is desired eventually.
-
-### Current Product State
-
-The evidence-grounded baseline from which construction begins. For codebase-backed work, record what users or operators can currently complete and read back, which relevant concepts or capabilities exist, and what material requested capability is absent from direct evidence. For genuinely unrooted greenfield work, record the confirmed absence of an existing product implementation and keep user-desired future behavior under Intent Horizon or later product decisions rather than pretending it already exists. Do not substitute a previously predicted future state for direct inspection on a later re-entry.
-
-### Planning Boundary
-
-The connected observable product or operating landscape relevant to the request. `Includes` and `Excludes` bound what must be understood together; they do not make every included mature capability part of the current Increment.
-
-### Planning Constraints
-
-Verified external, public, persisted, safety, authority, or deliberately preserved observable boundaries that later planning must honor. Current implementation facts enter this section only when the Constraint Test succeeds.
-
-When an approved Transition Baseline applies, every applicable Global/Path Invariant must be carried into Scope's Planning Constraints and the selected Increment's existing Preserved Foundations/constraint fields, with its exact Baseline identity/revision source. Re-entry must re-establish those invariants against fresh actual state before selecting another Increment or Block. A changed construction order, reshape, or context slice may narrow to the applicable path but must not silently drop, weaken, or reinterpret a carried invariant; material conflict returns to its owning authority. Do not copy the whole future Baseline map or treat its Blocks as a ready-work queue.
-
-
-
-### Candidate Outcome Areas
-
-Connected results that may be independently acceptable. They remain candidates until split/merge analysis decides whether they belong in separate Work Packages.
-
-### Product Capability Dependencies
-
-Product-level prerequisite relationships used only when an earlier observable product result must exist for a later result to be meaningful or coherently accepted under any reasonable internal design. Shared code, likely database order, implementation convenience, and technical scaffolding are not product-capability dependencies.
-
-### Decisions Reserved For Matt
-
-Material product-policy, semantic Behavior, or rendered-interaction decisions inside the selected Increment that are not fixed by user intent, adopted authority, or unavoidable contract. Their presence is not an unresolved Scope question when Ask Matt is the correct owner.
-
-### Delivery Context
-
-Verified repository, runtime, migration, build, tool, test, or external facts later IIS owners may need. Delivery Context does not prescribe mutation surface, component choice, state placement, reuse decision, mechanism, or implementation sequence.
-
-### Outside The Assessed Landscape
-
-Nearby possibilities that lack a verified connection to the current request. This means only that they are outside this investigation.
-
-## Work Package Decomposition
-
-Use `references/initiative-decomposition-rules.md` when several candidate outcome areas may be independently accepted, deferred, or rejected. A Work Package is a horizontal product-outcome boundary, not a construction step and not an Ask Matt handoff.
-
-Create the largest Work Package that remains independently plannable and acceptable. Split and merge on observable product meaning, not technical layers. Product dependencies between Work Packages remain product-level counterfactuals, not anticipated implementation order.
-
-Work Package files are durable decomposition records with `Status: scoped`. They are never `ready-for-matt`. Selecting a Work Package only identifies the outcome area in which the next Increment is shaped. When a candidate Increment belongs to a Work Package that depends on another Work Package, select it only if the dependency's observable product result is directly verified in Current Product State. Otherwise shape the earliest missing dependency outcome first; do not absorb an independently acceptable sibling Work Package into the current Increment merely to satisfy ordering.
-
-A coherent bounded outcome may omit Work Package decomposition entirely and proceed directly to construction Increment shaping.
-
-## Construction Increment Shaping
-
-After the outcome landscape and any Work Packages are understood, compare plausible next construction states. Do not forward the whole bounded outcome or Work Package to Matt merely because it is coherent.
-
-### Candidate Rule
-
-Each candidate must describe a transition from the verified Current Product State to a product state that can actually exist after one IIS delivery cycle. Give every candidate one local `Candidate <label>` heading and record exactly one Outcome Area (`None` for bounded shaping or one `WP-NNN`), Current Product State, Target Product State, Actor Or Operator, Trigger Or Inspection Target, Observable Result, Authoritative Readback, Durable Foundation, Future Policy Avoided, `Lead Disposition: SELECT | REJECT`, and Reason. These fields make alternatives auditable; they do not turn product judgment into a scoring engine.
-
-Use each candidate's existing Reason to explain which core behavior it establishes or directly makes observable, grounded in the current product state and the applicable Product Thesis meaning. Compare that contribution rather than treating a smaller or independently useful peripheral result as sufficient reason to go first. If core behavior remains unestablished or unconfirmed and a peripheral candidate is selected, explain the current-goal reason, such as a necessary preceding product outcome or an explicit user delivery priority. Apply current Mandate priorities and explicit user constraints; do not introduce scores or new candidate fields.
-
-Do not generate technical preparation candidates such as database setup, an abstraction, an adapter, a service layer, a test seam, or a refactor unless that artifact is itself the externally consumed product outcome. Exactly one candidate is `SELECT`. The Selected Next Increment names that local candidate and copies its Current Product State, Target Product State, and four-part observable contract exactly. The validator checks only this structural closure and single-selection property; it never decides whether the Lead's chosen candidate is substantively the best or smallest durable product state.
-
-### Durable Increment Tests
-
-A selected candidate must pass all applicable tests:
-
-1. **Observable Completeness** — state the actor or operator, trigger or canonical inspection target, observable result, and authoritative readback. The result cannot be only "ready for later work".
-2. **Durable Foundation** — the product concepts, identity, ownership, lifecycle, capability, persistence meaning, or readback established by the Increment can remain as a real basis for later capability instead of being an intentionally disposable miniature.
-3. **Product-Dependency Closure** — include every earlier observable product capability required for this result to be meaningful. Do not include technical prerequisites merely because one implementation is likely to need them.
-4. **Future-Policy Deferral** — exclude product policy, maturity, scale, sharing, automation, or other later capability that is not necessary for this Increment's observable result. Record it as deferred rather than resolving it prematurely.
-5. **Smallest Durable Choice** — among candidates satisfying the first four tests and current user authority, constraints, and applicable Mandate priorities, first prefer those that establish or most directly reveal whether the core behaviors hold. Within that comparison, prefer the least additional product surface and policy that still creates a durable usable foundation and moves toward the Intent Horizon. Do not force a different choice when the core is already established and current evidence supports a narrow change.
-
-### Atomic Exception
-
-Do not force an artificially small Increment. A broader Increment is justified when verified evidence shows that a smaller candidate cannot produce a safe, meaningful, independently readable product state, or when an unavoidable compatibility, migration, external-contract, or atomic lifecycle boundary requires the broader state. Record the smaller candidate tested and the exact reason it fails.
-
-When the Baseline marks a cutover `HARD_ATOMIC`, the indivisible transition is limited to one selected Scope Increment. Internal execution units may exist inside that Increment, but they are not separately accepted Increments and do not permit a Block handoff mid-cutover. If a proposed smaller boundary lacks a safe, durable, independently readable state, reject the split under this exception and preserve the atomic boundary.
-
-
-### Provisional Construction Horizon
-
-The Lead may record likely later capability ordering to explain why the selected Increment is foundational. This horizon is explicitly non-normative. Do not create future ready Increment files, pre-approve their product policy, or let Matt import them into the current Spec.
-
-### Selected Next Increment
-
-Select exactly one Increment for the current Scope confirmation. It contains:
-
-- Suggested Work Slug — one project-wide unique lowercase kebab-case slug for the later `docs/planning/work/<slug>/` workspace; it must never be reused by another Scope Increment, including a superseded one;
-- Selected Candidate — the exact local `Candidate <label>` whose disposition is `SELECT`;
-- Current Product State;
-- Target Product State;
-- Observable Outcome — exact Actor Or Operator, Trigger Or Inspection Target, Observable Result, and Authoritative Readback copied from the selected candidate;
-- Includes;
-- Excludes;
-- Required Product Dependencies;
-- Preserved Foundations;
-- Decisions Reserved For Matt;
-- Deferred Until Re-entry;
-- Verification Boundary;
-- Re-entry Contract; and
-- Delivery Context.
-
-
-The `Re-entry Contract` states what actual delivered product state must be inspected before a later Scope Shaping pass chooses another Increment. For an applicable Transition Baseline it must also name the Safe Continuation Predicate, the actual facts/readbacks and owner required to prove that another Increment or Block is safe, and the approved Safe Abort boundary (trigger, target state, owner/action boundary, and authoritative readback) when continuation cannot be established. Re-entry is a new shaping decision against fresh reality, not automatic continuation of the provisional horizon or approval of a future Increment.
-
-Exactly one selected Increment may have `Status: ready-for-matt` in one confirmed Scope result. Future increments do not exist as ready artifacts yet. On a later re-entry in the same Scope directory, assign the next unused `INC-NNN` ordinal and change every earlier `ready-for-matt` Increment to exact `Status: superseded` before the newly confirmed Increment becomes ready. `superseded` is planning-admission state only; it does not claim that delivery completed.
-
-## User Confirmation And Corrections
-
-Present the complete current proposal once: Intent Horizon, Current Product State, verified claims, Planning Boundary, Planning Constraints, candidate outcome areas, Work Package decomposition when present, Product Capability Dependencies, construction candidates and tradeoffs, the one Selected Next Increment, Deferred Until Re-entry, Decisions Reserved For Matt, Delivery Context, and the provisional construction horizon when useful. Ask the user to confirm or correct that whole result.
-
-Confirmation approves the Scope-owned landscape, decomposition, and selected next Increment. It acknowledges that listed Matt decisions remain open and that provisional future construction is not approved current scope.
-
-A correction reopens only affected evidence, boundaries, constraints, package decisions, product dependencies, construction candidates, and the selected Increment. Recalculate affected descendants before presenting the complete proposal again. After explicit confirmation, write the confirmed artifacts. There is no second shaping approval.
-
-## Confirmed Artifacts
-
-Before writing or updating any durable Scope artifact, resolve `tools/prepare_scope_workspace.py` from this skill's canonical physical directory and run it with the exact Project Root and Scope `Work-Slug`. Use only the returned `scopeWorkspace`, `workPackages`, `revisions`, `increments`, `legacyImport`, and `legacyWorkPackages` directories. The helper creates missing directories with safe ownership/permissions and rejects symlinked, noncanonical, foreign-owned, or unsafe existing paths. Do not manually create an alternate Scope directory after helper failure. `--repair-owned-permissions` is an explicit maintenance option limited to IIS-owned `scope-shaping/**` artifact directories; it never repairs shared `docs/` or `planning/` permissions, and ordinary shaping does not silently change existing directory permissions.
-
-A confirmed shaping pass is not durable until its complete artifact chain exists and validates. For a new revision, write the new immutable `revisions/SHAPE-NNN.md`, the new selected `increments/INC-NNN.md`, every required Work Package update, and the required prior-Increment `superseded` metadata before treating the new `SCOPE-SHAPING-RESULT.md` navigation state as complete. Prefer writing the immutable revision and selected Increment before replacing current navigation so an interruption cannot leave a current Scope result pointing only to nonexistent authority. After the current result is replaced, immediately run both canonical Scope and selected-Increment validators. If either validator fails, report Scope artifact closure as incomplete and do not report a confirmed handoff or continue to Ask Matt. A later entry encountering such an incomplete current artifact chain repairs or completes that exact confirmed pass before any new shaping decision.
-
-### Source Authority And Immutable Revision
-
-Maintain one current Scope navigation/authority file and one immutable revision snapshot for each confirmed shaping pass:
-
-```text
-<Project-Root>/docs/planning/scope-shaping/<work-slug>/SCOPE-SHAPING-RESULT.md
-<Project-Root>/docs/planning/scope-shaping/<work-slug>/revisions/SHAPE-NNN.md
-```
-
-`SCOPE-SHAPING-RESULT.md` represents the latest confirmed shaping state. Its exact `Scope-Revision: SHAPE-NNN` snapshot must be written byte-for-byte to the matching revision path at confirmation. That revision owns the historical evidence, Intent Horizon, Current Product State, Planning Boundary, Planning Constraints, candidate outcome areas, Product Capability Dependencies, Decisions Reserved For Matt, Delivery Context, split/merge and Work Package definitions when applicable, construction comparison, provisional construction horizon, selected Increment reference, deferred future scope, and confirmation record that produced that Increment.
-
-Never rewrite an earlier `revisions/SHAPE-NNN.md`. On re-entry, inspect the actual current product state, prepare the next confirmed Scope state under the next revision ordinal, then update `SCOPE-SHAPING-RESULT.md` and create only that new immutable revision after confirmation. Every Increment records its own `Source-Scope-Revision` and continues to point to that revision even after the current Scope result advances.
-
-Use `templates/SCOPE-SHAPING-RESULT.bounded.template.md` for a bounded landscape and `templates/SCOPE-SHAPING-RESULT.initiative.template.md` when Work Package decomposition is present. Write the selected template only after user confirmation with `Status: confirmed`, one exact `Scope-Revision: SHAPE-NNN`, and `Unresolved Material Questions: None`.
-
-### Work Package Records
-
-For an initiative, create one thin file per proposed Work Package:
-
-```text
-<Project-Root>/docs/planning/scope-shaping/<work-slug>/work-packages/WP-NNN.md
-```
-
-Use `templates/WORK-PACKAGE.template.md`. Every Work Package has `Status: scoped`. It carries only the horizontal package boundary and dependencies from the source result. It is not an Ask Matt admission artifact and must not contain `ready-for-matt` status.
-
-### Selected Increment
-
-For the current shaping pass, create exactly one new selected Increment file. Earlier Increment files from prior passes remain only as `Status: superseded` records:
-
-```text
-<Project-Root>/docs/planning/scope-shaping/<work-slug>/increments/INC-NNN.md
-```
-
-Use `templates/INCREMENT.template.md`. It has `Status: ready-for-matt`, keeps `Source-Scope-Result` only as current navigation, references the exact immutable `Source-Scope-Revision` that approved it, references one Work Package when the landscape is initiative-shaped or `None` for a bounded landscape, and contains only the selected current construction contract. Do not duplicate the investigation record or provisional future horizon into the Increment.
-
-Run:
-
-```text
-python3 <scope-shaper-directory>/tools/validate_scope_result.py \
-  <absolute-SCOPE-SHAPING-RESULT.md-path>
-python3 <scope-shaper-directory>/tools/validate_increment.py \
-  <absolute-INC-NNN.md-path>
-```
-
-The validators check structural integrity, canonical path ownership, source confirmation, exactly one selected ready Increment, Work Package/source drift, Increment/source drift, and strict `Product Meaning Binding` schema/fingerprint consistency whenever that section is present. New applicable Scope artifacts emitted by this skill must contain the binding; legacy artifacts are not bulk-migrated merely to satisfy this addition. The validators do not grade Product Thesis correctness, semantic adoption into Scope prose, product judgment, or implementation design.
-
-## Handoff
-
-After confirmation, report:
-
-```text
-Confirmed Scope Result:
-- <absolute path>
-
-Selected Next Increment:
-- <absolute INC-NNN path>
-
-Deferred Until Re-entry:
-- <non-normative summary>
-```
-
-Stop there. Ask Matt begins only from a later explicit user action naming the exact selected Increment, or from a direct ordinary request that independently passes Ask Matt's next-increment admission without Scope Shaper. Never continue automatically into a future provisional Increment.
+Return the exact Scope path, bound originals, chosen outcome, validation result and material open limits. A ready Scope goes directly to execution planning when the current request permits it. No shared-understanding document, Spec, Ticket Set, ready-for-matt transition or duplicate Increment handoff is generated.

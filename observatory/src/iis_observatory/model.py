@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Any, Iterable
 import re
 
-__version__ = "0.2.1"
-SCHEMA_VERSION = "1.0"
+__version__ = "0.3.0"
+SCHEMA_VERSION = "2.0"
 SNAPSHOT_SCHEMA_VERSION = "1.0"
 
 
@@ -47,8 +47,10 @@ class NextWorkKind(str, Enum):
     TICKET_REVIEW = "ticket_review"
     TO_TICKETS = "to_tickets"
     TO_SPEC = "to_spec"
+    TO_PLAN = "to_plan"
     ASK_MATT = "ask_matt"
     SCOPE_SHAPER = "scope_shaper"
+    TRANSITION_REQUIRED = "transition_required"
     CONSISTENCY_CHECK = "consistency_check"
     NONE = "none"
 
@@ -140,6 +142,17 @@ class ProjectState:
     issues: list[Issue] = field(default_factory=list)
     last_activity: datetime | None = None
     evidence: dict[str, Any] = field(default_factory=dict)
+    # Direct Thesis → Scope projection. Legacy artifacts remain available as
+    # read-only history and are deliberately not copied into these fields.
+    direct_scope_mode: bool = False
+    active_scopes: list[Artifact] = field(default_factory=list)
+    scope_history: list[Artifact] = field(default_factory=list)
+    scope_authority: list[dict[str, Any]] = field(default_factory=list)
+    transition_authority: list[dict[str, Any]] = field(default_factory=list)
+    required_outcomes: list[dict[str, Any]] = field(default_factory=list)
+    remaining_required_outcomes: list[dict[str, Any]] = field(default_factory=list)
+    legacy_history: list[Artifact] = field(default_factory=list)
+    transition_required: list[Artifact] = field(default_factory=list)
 
     @property
     def ticket_counts(self) -> dict[str, int]:
@@ -165,6 +178,23 @@ class ProjectState:
         return any(issue.severity == "error" for issue in self.issues)
 
     def to_dict(self) -> dict[str, Any]:
+        scope = self.current_scope
+        scope_details = None
+        if scope is not None and self.direct_scope_mode:
+            scope_details = {
+                "path": scope.relative_path,
+                "status": scope.status,
+                "work_slug": scope.work_slug,
+                "title": scope.title,
+                "outcome": scope.metadata.get("section_outcome"),
+                "acceptance": scope.metadata.get("section_acceptance"),
+                "open_decisions": scope.metadata.get("section_open_decisions"),
+                "product_authority": list(self.scope_authority),
+                "transition_authority": list(self.transition_authority),
+            }
+        authority_mode = "direct-scope" if self.direct_scope_mode else (
+            "legacy-history" if self.legacy_history else "none"
+        )
         return {
             "schema_version": SCHEMA_VERSION,
             "repository": self.repository,
@@ -174,12 +204,32 @@ class ProjectState:
             "last_activity": isoformat(self.last_activity),
             "stage": self.stage.value,
             "health": self.health.value,
+            "authority_mode": authority_mode,
             "current": {
                 "scope": self.current_scope.ref() if self.current_scope else None,
                 "work_package": self.current_work_package.ref() if self.current_work_package else None,
                 "increment": self.current_increment.ref() if self.current_increment else None,
                 "spec": self.current_spec.ref() if self.current_spec else None,
                 "work_slug": self.current_work_slug,
+            },
+            "scope": {
+                "current": scope_details,
+                "status": scope.status if scope is not None and self.direct_scope_mode else None,
+                "active": [item.ref() for item in self.active_scopes],
+                "history": [item.ref() for item in self.scope_history],
+                "bound_thesis": list(self.scope_authority),
+                "transition_authority": list(self.transition_authority),
+                "required_outcomes": list(self.required_outcomes),
+                "remaining_required_outcomes": list(self.remaining_required_outcomes),
+            },
+            "required_outcomes": {
+                "all": list(self.required_outcomes),
+                "remaining": list(self.remaining_required_outcomes),
+            },
+            "legacy": {
+                "history": [item.ref() for item in self.legacy_history],
+                "transition_required": [item.ref() for item in self.transition_required],
+                "automatic_migration": False,
             },
             "tickets": {
                 "counts": self.ticket_counts,

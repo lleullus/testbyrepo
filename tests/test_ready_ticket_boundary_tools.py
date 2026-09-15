@@ -5,8 +5,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import shutil
-import stat
 import subprocess
 import sys
 import tempfile
@@ -14,27 +12,8 @@ import unittest
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-BOUNDARY = ROOT / "delivery-tools/ready-ticket"
 SYNC = ROOT / "scripts/sync_installed_iis.py"
 
-
-class ReadyTicketBoundaryContractTests(unittest.TestCase):
-    def test_boundary_unit_and_omp_integration_suite(self) -> None:
-        node = shutil.which("node")
-        self.assertIsNotNone(node, "Ready boundary-tool tests require node")
-        tests = sorted(str(path) for path in (BOUNDARY / "tests").glob("*.test.js"))
-        self.assertTrue(tests)
-        result = subprocess.run([node, "--test", *tests], cwd=ROOT,
-                                text=True, capture_output=True, check=False)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-    def test_retired_runtime_surface_is_absent_from_active_boundary_package(self) -> None:
-        self.assertFalse((ROOT / "delivery-runtime/ready-ticket-implement").exists())
-        text = "\n".join(path.read_text(encoding="utf-8", errors="ignore")
-                         for path in BOUNDARY.rglob("*") if path.is_file())
-        self.assertNotIn("IIS_READY_RUNTIME_DATA", text)
-        self.assertNotIn("ready_argv", text)
-        self.assertNotIn("ready_guard", text)
 
 
 
@@ -46,7 +25,7 @@ class BundleInstallTests(unittest.TestCase):
         spec.loader.exec_module(cls.installer)
 
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="iis-boundary-install-")
+        self.directory = tempfile.TemporaryDirectory(prefix="iis-skills-install-")
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
         self.source = self.root / "source"
@@ -64,7 +43,7 @@ class BundleInstallTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("# candidate payload\n")
         self.router = self.source / "iis-workflow/SKILL.md"
-        self.router.write_text(f"Read {self.source}/matt/skills/to-tickets/validate_ticket.py\n"
+        self.router.write_text(f"Read {self.source}/scope-shaper/tools/validate_scope.py\n"
                                f"Guide {self.source}/model-selection-guide.md\n")
 
     def prepare(self) -> dict:
@@ -75,12 +54,13 @@ class BundleInstallTests(unittest.TestCase):
                                        quiescent=True, **kwargs)
 
     def _legacy_release(self) -> tuple[str, Path]:
-        bundle_id = hashlib.sha256(b"legacy-ready-runtime-v2").hexdigest()
+        family = "scope-boundary-tools"
+        bundle_id = hashlib.sha256(family.encode()).hexdigest()
         release = self.store / "releases" / bundle_id
         files = {
             "iis-workflow/SKILL.md": b"# legacy router\n",
-            "delivery-runtime/ready-ticket-implement/index.js": b"export default function legacy() {}\n",
-            "delivery-runtime/ready-ticket-implement/src/core.js": b"export const legacy = true;\n",
+            "repo-snapshot/SKILL.md": b"# legacy repo snapshot\n",
+            "delivery-tools/scope/index.js": b"export default function legacy() {}\n",
         }
         entries = {}
         for relative, data in files.items():
@@ -89,63 +69,37 @@ class BundleInstallTests(unittest.TestCase):
             path.write_bytes(data)
             path.chmod(0o444)
             entries[relative] = {"sha256": hashlib.sha256(data).hexdigest(), "mode": 0o444}
-        release.mkdir(parents=True, exist_ok=True)
-        manifest = {"schema": self.installer.SCHEMA, "protocol": 2,
-                    "bundle_id": bundle_id, "files": entries}
-        (release / "bundle.json").write_text(json.dumps(manifest, indent=2) + "\n")
-        (release / "bundle.json").chmod(0o444)
-        self.store.mkdir(parents=True, exist_ok=True)
+        manifest = {"schema": "iis-bundle/v3", "protocol": 3,
+                    "family": family, "bundle_id": bundle_id, "files": entries,
+                    "boundary_protocol": "iis-scope-boundary/v1",
+                    "host_profile": "iis-scope-verifier/v1",
+                    "terminal_schema": "iis-scope-verifier-terminal/v1"}
+        self.installer.atomic_json(release / "bundle.json", manifest)
         (self.store / "current").symlink_to(release, target_is_directory=True)
-        skill = self.host / "skills/iis-workflow"
-        skill.parent.mkdir(parents=True, exist_ok=True)
-        skill.symlink_to(self.store / "current/iis-workflow", target_is_directory=True)
-        old_extension = self.host / "extensions" / self.installer.OLD_EXTENSION_NAME
-        old_extension.parent.mkdir(parents=True, exist_ok=True)
-        old_extension.symlink_to(self.store / "current/delivery-runtime/ready-ticket-implement", target_is_directory=True)
+        links = {}
+        originals = {}
+        for index, (name, relative) in enumerate((
+            ("skills/iis-workflow", "iis-workflow"),
+            ("skills/repo-snapshot", "repo-snapshot"),
+            ("extensions/scope-boundary-tools", "delivery-tools/scope"),
+        )):
+            path = self.host / name
+            target = str(self.store / "current" / relative)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.symlink_to(target, target_is_directory=True)
+            links[str(path)] = target
+            originals[str(path)] = {"path": str(path), "before": {"kind": "absent"},
+                                    "after": {"kind": "symlink", "target": target},
+                                    "backup": str(self.store / "snapshots/legacy" / str(index))}
         state = {
-            "schema": "iis-install/v2", "bundle_id": bundle_id,
-            "hosts": {"omp": str(self.host)},
-            "links": {str(skill): str(self.store / "current/iis-workflow"),
-                      str(old_extension): str(self.store / "current/delivery-runtime/ready-ticket-implement")},
-            "originals": {}, "snapshot": str(self.root / "legacy-snapshot.json"),
-            "loaded_identity": "NOT_CHECKED",
+            "schema": "iis-install/v3", "bundle_id": bundle_id,
+            "family": family, "hosts": {"omp": str(self.host)}, "originals": originals,
+            "links": links, "snapshot": str(self.store / "snapshots/legacy/snapshot.json"),
+            "boundary_protocol": "iis-scope-boundary/v1", "host_profile": "iis-scope-verifier/v1",
+            "terminal_schema": "iis-scope-verifier-terminal/v1",
         }
         self.installer.atomic_json(self.store / "installed.json", state)
-        return bundle_id, old_extension
-
-    def _runtime_record(self, phase: str = "ACTIVE") -> tuple[Path, Path, dict]:
-        runtime_root = (self.root / "retired-runtime").resolve()
-        record = runtime_root / "executions/execution-1.json"
-        record.parent.mkdir(parents=True, exist_ok=True)
-        value = {
-            "schema_version": 2, "kind": "execution", "execution_id": "execution-1",
-            "session_id": "worker-1", "reservation_id": "reservation-1", "phase": phase,
-            "active_operation": None, "owned_service": None, "uncertainty": None,
-        }
-        record.write_text(json.dumps(value, indent=2) + "\n")
-        return runtime_root, record, value
-
-    def _retirement_evidence(self, runtime_root: Path, record: Path, *, live_work: str = "absent",
-                             effect: str = "none") -> Path:
-        evidence = (self.root / "retirement-evidence.json").resolve()
-        relative = record.relative_to(runtime_root).as_posix()
-        data = {
-            "schema": self.installer.RETIREMENT_EVIDENCE_SCHEMA,
-            "runtime_root": str(runtime_root),
-            "records": {
-                relative: {
-                    "record_sha256": hashlib.sha256(record.read_bytes()).hexdigest(),
-                    "record_kind": "execution", "owner_session": "worker-1",
-                    "live_work": live_work, "live_service": "absent",
-                    "ownership_disposition": "terminated_or_withdrawn",
-                    "effect_disposition": effect,
-                    "live_work_absence_evidence": "host process/service inventory: none",
-                    "readback_reference": "operator readback: no unresolved product effect",
-                }
-            },
-        }
-        evidence.write_text(json.dumps(data, indent=2) + "\n")
-        return evidence
+        return bundle_id, self.host / "extensions/scope-boundary-tools"
 
     def test_prepare_never_activates_and_rebases_only_internal_references(self) -> None:
         manifest = self.prepare()
@@ -154,7 +108,7 @@ class BundleInstallTests(unittest.TestCase):
         self.assertFalse(self.host.exists())
         release = self.store / "releases" / manifest["bundle_id"]
         router = (release / "iis-workflow/SKILL.md").read_text()
-        self.assertIn(str(release / "matt/skills/to-tickets/validate_ticket.py"), router)
+        self.assertIn(str(release / "scope-shaper/tools/validate_scope.py"), router)
         self.assertIn(str(self.source / "model-selection-guide.md"), router)
         self.router.write_text("new candidate\n")
         self.assertEqual((release / "iis-workflow/SKILL.md").read_text(), router)
@@ -164,7 +118,7 @@ class BundleInstallTests(unittest.TestCase):
         retired = self.source / "delivery-runtime/ready-ticket-implement/index.js"
         retired.parent.mkdir(parents=True, exist_ok=True)
         retired.write_text("legacy\n")
-        with self.assertRaisesRegex(ValueError, "retired payload"):
+        with self.assertRaises(ValueError):
             self.prepare()
 
     def test_explicit_migration_and_remove_restore_user_entries(self) -> None:
@@ -179,11 +133,7 @@ class BundleInstallTests(unittest.TestCase):
         self.assertEqual((original / "SKILL.md").read_text(), "user's existing install\n")
         state = self.activate(manifest, migrate=True)
         self.assertEqual(state["family"], self.installer.NEW_FAMILY)
-        new_extension = self.host / "extensions" / self.installer.NEW_EXTENSION_NAME
-        old_extension = self.host / "extensions" / self.installer.OLD_EXTENSION_NAME
-        self.assertTrue(new_extension.is_symlink())
-        self.assertEqual(os.readlink(new_extension), str(self.store / "current/delivery-tools/ready-ticket"))
-        self.assertFalse(old_extension.exists() or old_extension.is_symlink())
+        self.assertFalse((self.host / "extensions").exists())
         self.installer.remove(self.store, quiescent=True)
         self.assertFalse(original.is_symlink())
         self.assertEqual((original / "SKILL.md").read_text(), "user's existing install\n")
@@ -210,7 +160,7 @@ class BundleInstallTests(unittest.TestCase):
         self.assertFalse((self.store / "current").exists())
         self.assertFalse((self.store / "pending.json").exists())
 
-    def test_rollback_restores_previous_boundary_release_and_rejects_intervening_user_changes(self) -> None:
+    def test_rollback_restores_previous_release_and_rejects_intervening_user_changes(self) -> None:
         first = self.prepare()
         self.activate(first)
         self.router.write_text("second revision\n")
@@ -238,72 +188,68 @@ class BundleInstallTests(unittest.TestCase):
             self.activate(manifest)
         self.assertFalse(self.host.exists())
 
-    def test_cli_check_reports_candidate_family_without_loading_host(self) -> None:
+    def test_cli_inspect_reports_candidate_contract_without_loading_host(self) -> None:
         manifest = self.prepare()
-        result = subprocess.run([sys.executable, str(SYNC), "check", "--store", str(self.store),
+        result = subprocess.run([sys.executable, str(SYNC), "inspect", "--store", str(self.store),
                                  "--bundle", manifest["bundle_id"]], text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         parsed = json.loads(result.stdout)
         self.assertEqual(parsed["family"], self.installer.NEW_FAMILY)
+        self.assertEqual(parsed["protocol"], 4)
+        self.assertTrue({"boundary_protocol", "host_profile", "terminal_schema"}.isdisjoint(parsed))
         self.assertEqual(parsed["loaded_identity"], "NOT_CHECKED")
         self.assertFalse(self.host.exists())
 
-    def test_old_release_is_checked_by_its_own_manifest_and_cutover_rolls_back_exact_old_identity(self) -> None:
+    def test_v3_cutover_preserves_history_and_unrelated_entries_and_can_rollback(self) -> None:
         old_bundle, old_extension = self._legacy_release()
-        checked = self.installer.check_install(self.store)
-        self.assertEqual(checked["family"], self.installer.OLD_FAMILY)
-        self.assertEqual(checked["bundle_id"], old_bundle)
-        runtime_root, record, _ = self._runtime_record("COMPLETE")
-        history = runtime_root / "outputs/execution-1/evidence.json"
-        history.parent.mkdir(parents=True, exist_ok=True)
-        history.write_text(json.dumps({"stdout": "historical execution evidence"}) + "\n")
-        before_runtime = record.read_bytes()
+        old_state = (self.store / "installed.json").read_bytes()
+        history = self.store / "snapshots/legacy/observation.json"
+        history.parent.mkdir(parents=True)
+        history.write_bytes(b"historical observation\n")
+        private = self.store / "private-verifier-state/terminal.json"
+        private.parent.mkdir()
+        private.write_bytes(b"historical private state\n")
+        user_extension = self.host / "extensions/user-extension"
+        user_extension.symlink_to(self.root / "user-extension-source")
+        user_skill = self.host / "skills/user-skill"
+        user_skill.mkdir()
+        (user_skill / "SKILL.md").write_bytes(b"user skill\n")
+        preserved = [history, private, user_extension, user_skill, self.store / "releases" / old_bundle]
+        identities = {path: self.installer.entry_identity(path) for path in preserved}
+        with self.assertRaises(ValueError):
+            self.installer.inspect(self.store, old_bundle)
         candidate = self.prepare()
-        state = self.activate(candidate, retired_ready_runtime_root=runtime_root)
-        self.assertEqual(state["family"], self.installer.NEW_FAMILY)
-        self.assertFalse(old_extension.exists() or old_extension.is_symlink())
-        new_extension = self.host / "extensions" / self.installer.NEW_EXTENSION_NAME
-        self.assertTrue(new_extension.is_symlink())
-        retirement = state["retired_ready_runtime"]
-        self.assertEqual(retirement["summary"]["blockers"], 0)
-        self.assertEqual(retirement["summary"]["history_files"], 1)
-        self.assertEqual(retirement["summary"]["terminal_history"], 1)
-        self.assertTrue(Path(retirement["archive"]["path"]).is_dir())
-        self.assertEqual(record.read_bytes(), before_runtime)
+        state = self.activate(candidate)
+        self.assertEqual(state["schema"], "iis-install/v4")
+        self.assertFalse(old_extension.is_symlink() or old_extension.exists())
+        self.assertEqual((self.host / "skills/iis-workflow/SKILL.md").read_text(),
+                         (self.store / "releases" / candidate["bundle_id"] / "iis-workflow/SKILL.md").read_text())
+        self.assertEqual({path: self.installer.entry_identity(path) for path in preserved}, identities)
         self.installer.rollback(self.store, quiescent=True)
-        restored = self.installer.check_install(self.store)
-        self.assertEqual(restored["bundle_id"], old_bundle)
-        self.assertEqual(restored["family"], self.installer.OLD_FAMILY)
-        self.assertTrue(old_extension.is_symlink())
-        self.assertFalse(new_extension.exists() or new_extension.is_symlink())
-        self.assertEqual(record.read_bytes(), before_runtime)
+        self.assertEqual((self.store / "installed.json").read_bytes(), old_state)
+        self.assertEqual(os.readlink(old_extension), str(self.store / "current/delivery-tools/scope"))
+        self.assertEqual((self.store / "current").resolve(), self.store / "releases" / old_bundle)
+        self.assertEqual({path: self.installer.entry_identity(path) for path in preserved}, identities)
 
-    def test_old_runtime_cutover_requires_exact_root_and_blocks_unattributed_nonterminal_record(self) -> None:
-        self._legacy_release()
-        candidate = self.prepare()
-        with self.assertRaisesRegex(ValueError, "retired Ready runtime root is required"):
-            self.activate(candidate)
-        runtime_root, _, _ = self._runtime_record("ACTIVE")
-        with self.assertRaisesRegex(ValueError, "live/unsettled/unattributed"):
-            self.activate(candidate, retired_ready_runtime_root=runtime_root)
-        self.assertEqual(self.installer.check_install(self.store)["family"], self.installer.OLD_FAMILY)
+    def test_v3_cutover_refuses_user_modified_managed_extension(self) -> None:
+        old_bundle, extension = self._legacy_release()
+        extension.unlink()
+        extension.mkdir()
+        (extension / "user.js").write_bytes(b"user modification\n")
+        with self.assertRaisesRegex(ValueError, "drift"):
+            self.activate(self.prepare())
+        self.assertEqual((extension / "user.js").read_bytes(), b"user modification\n")
+        self.assertEqual((self.store / "current").resolve(), self.store / "releases" / old_bundle)
 
-    def test_retirement_evidence_distinguishes_live_blocker_from_settled_stale_record(self) -> None:
-        self._legacy_release()
+    def test_remove_after_v3_cutover_keeps_extension_retired_and_history_intact(self) -> None:
+        old_bundle, extension = self._legacy_release()
         candidate = self.prepare()
-        runtime_root, record, _ = self._runtime_record("PAUSED")
-        live = self._retirement_evidence(runtime_root, record, live_work="present")
-        with self.assertRaisesRegex(ValueError, "live/unsettled/unattributed"):
-            self.activate(candidate, retired_ready_runtime_root=runtime_root,
-                          retired_ready_runtime_evidence=live)
-        settled = self._retirement_evidence(runtime_root, record, live_work="absent", effect="none")
-        state = self.activate(candidate, retired_ready_runtime_root=runtime_root,
-                              retired_ready_runtime_evidence=settled)
-        records = state["retired_ready_runtime"]["records"]
-        self.assertEqual(records[0]["disposition"], "retired_stale_record")
-        self.assertEqual(records[0]["owner_session"], "worker-1")
-        self.assertEqual(state["retired_ready_runtime"]["summary"]["retired_stale_record"], 1)
-        self.assertEqual(state["retired_ready_runtime"]["summary"]["blockers"], 0)
+        self.activate(candidate)
+        self.installer.remove(self.store, quiescent=True)
+        self.assertFalse(extension.is_symlink() or extension.exists())
+        self.assertFalse((self.host / "skills/iis-workflow").is_symlink())
+        self.assertTrue((self.store / "releases" / old_bundle / "bundle.json").is_file())
+        self.assertTrue((self.store / "releases" / candidate["bundle_id"] / "bundle.json").is_file())
 
 
 if __name__ == "__main__":

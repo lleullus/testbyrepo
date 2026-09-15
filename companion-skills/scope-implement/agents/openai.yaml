@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scope Implement"
+  short_description: "Implement one ready IIS Scope from a reviewed method"
+  default_prompt: "Use $scope-implement for one exact ready Scope. Read all bound originals and the current iis-scope-plan-review/v2 artifact. Preserve user-selected mode/model. Before source mutation and before COMPLETE, use ordinary tools to confirm exact current sources, reviewed Plan bytes and an attributable independent ADMIT decision with no unresolved material gap. Implement and self-check only the reviewed method, preserve unrelated changes, and do not blindly replay uncertain effects. Return SCOPE IMPLEMENT RESULT; keep the Scope ready and do not issue a semantic verification verdict or record completion."

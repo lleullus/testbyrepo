@@ -36,6 +36,8 @@ STATUS_ALIASES = {
     "rejected": "rejected",
 }
 KNOWN_KEYS = {
+    "schema",
+    "project_root",
     "status",
     "id",
     "identifier",
@@ -57,6 +59,29 @@ KNOWN_KEYS = {
     "name",
     "revision",
 }
+
+
+def extract_sections(text: str) -> dict[str, str]:
+    """Return top-level Markdown sections without treating fenced headings as sections."""
+    result: dict[str, str] = {}
+    current: str | None = None
+    body: list[str] = []
+    fenced = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(("```", "~~~")):
+            fenced = not fenced
+        match = re.match(r"^(##)\s+(.+?)\s*$", line) if not fenced else None
+        if match:
+            if current is not None:
+                result[current] = "\n".join(body).strip()
+            current = match.group(2).strip()
+            body = []
+        elif current is not None:
+            body.append(line)
+    if current is not None:
+        result[current] = "\n".join(body).strip()
+    return result
 
 
 def normalize_key(value: str) -> str:
@@ -129,6 +154,11 @@ def _consume_metadata_line(line: str, metadata: dict[str, str], front_matter: bo
 def _classify(path: Path, text: str) -> ArtifactKind:
     upper_name = path.name.upper()
     upper_parts = "/".join(part.upper() for part in path.parts)
+    # The unified IIS contract has exactly one Scope artifact per work slug.
+    # Keep legacy shaping results recognizable for read-only history, but never
+    # let them masquerade as the direct contract.
+    if upper_name == "SCOPE.MD" and "/WORK/" in f"/{upper_parts}/":
+        return ArtifactKind.SCOPE
     if "SCOPE-SHAPING-RESULT" in upper_name or re.fullmatch(r"SHAPE-\d+\.MD", upper_name):
         return ArtifactKind.SCOPE
     if "WORK-PACKAGE" in upper_name or re.search(r"\bWP-\d+", upper_name):
@@ -230,7 +260,12 @@ def parse_artifact(path: Path, planning_root: Path, max_bytes: int = 2_000_000) 
     text = raw.decode("utf-8", errors="replace").lstrip("\ufeff")
     metadata = _extract_metadata(text)
     kind = _classify(path, text)
-    references = tuple(dict.fromkeys(canonical_id(value) for value in ID_PATTERN.findall(text) if canonical_id(value)))
+    if kind == ArtifactKind.SCOPE and path.name.upper() == "SCOPE.MD":
+        for heading, body in extract_sections(text).items():
+            metadata[f"section_{normalize_key(heading)}"] = body
+    references = tuple(
+        dict.fromkeys(canonical_id(value) for value in ID_PATTERN.findall(text) if canonical_id(value))
+    )
     link_targets = tuple(dict.fromkeys(match.strip() for match in LINK_PATTERN.findall(text)))
     modified_at = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
     return Artifact(

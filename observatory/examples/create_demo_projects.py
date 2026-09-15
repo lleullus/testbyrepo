@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 import shutil
 import sys
 
@@ -10,55 +11,54 @@ def write(path: Path, text: str) -> None:
     path.write_text(text.strip() + "\n", encoding="utf-8")
 
 
-def scope(repo: Path, inc: str | None, slug: str | None, wp: str = "WP-001") -> None:
-    selected = f"Selected-Increment: {inc}\n" if inc else ""
-    suggested = f"Suggested-Work-Slug: {slug}\n" if slug else ""
+def direct_scope(repo: Path, slug: str, status: str, outcome: str, *, remaining: str | None = None) -> None:
+    (repo / ".git").mkdir(parents=True, exist_ok=True)
+    thesis = repo / "docs/planning/product-thesis" / slug / "THESIS-001.md"
     write(
-        repo / "docs/planning/scope-shaping/current/SCOPE-SHAPING-RESULT.md",
-        f"""
-# Scope Shaping Result
+        thesis,
+        f"""# {slug} Product Thesis
+
+## Required Outcomes / Means
+- {outcome}
+{f'- {remaining}' if remaining else ''}
+""",
+    )
+    digest = hashlib.sha256(thesis.read_bytes()).hexdigest()
+    write(
+        repo / "docs/planning/work" / slug / "SCOPE.md",
+        f"""# {slug.replace('-', ' ').title()}
+Schema: iis-scope/v1
+Project-Root: {repo}
+Status: {status}
+
+## Product Authority
+- {thesis} sha256:{digest}
+
+## Outcome
+{outcome}
+
+## Acceptance
+Observe the authoritative result for {outcome.lower()}.
+
+## Open Decisions
+None
+""",
+    )
+
+
+def legacy_history(repo: Path) -> None:
+    (repo / ".git").mkdir(parents=True, exist_ok=True)
+    write(
+        repo / "docs/planning/scope-shaping/old/SCOPE-SHAPING-RESULT.md",
+        """# Historical Scope
 Status: confirmed
-Work-Package: {wp}
-{selected}{suggested}
+Selected-Increment: INC-001
 """,
     )
     write(
-        repo / f"docs/planning/scope-shaping/current/WORK-PACKAGE-{wp.split('-')[-1]}.md",
-        f"""
-# {wp} Demo outcome
-Status: scoped
-""",
-    )
-    if inc:
-        write(
-            repo / f"docs/planning/scope-shaping/current/INCREMENT-{inc.split('-')[-1]}.md",
-            f"""
-# {inc} Demo increment
-Status: ready-for-matt
-Parent-Work-Package: {wp}
-Suggested-Work-Slug: {slug}
-""",
-        )
-
-
-def spec(repo: Path, slug: str, inc: str, status: str = "approved") -> None:
-    write(
-        repo / f"docs/planning/work/{slug}/SPEC.md",
-        f"""
-# Demo Spec
-Status: {status}
-Source-Increment: {inc}
-""",
-    )
-
-
-def ticket(repo: Path, slug: str, number: int, status: str, inc: str) -> None:
-    write(
-        repo / f"docs/planning/work/{slug}/tickets/TICKET-{number:03d}.md",
-        f"""
-# TKT-{number:03d} Demo ticket
-Status: {status}
-Source-Increment: {inc}
+        repo / "docs/planning/work/legacy-cleanup/tickets/TICKET-001.md",
+        """# TKT-001 Historical Ticket
+Status: ready
 """,
     )
 
@@ -70,32 +70,20 @@ def main() -> int:
     root.mkdir(parents=True)
 
     tax = root / "tax"
-    scope(tax, "INC-004", "vat-readback", "WP-002")
-    spec(tax, "vat-readback", "INC-004")
-    for number in (1, 2, 3):
-        ticket(tax, "vat-readback", number, "done", "INC-004")
-    ticket(tax, "vat-readback", 4, "ready", "INC-004")
-    ticket(tax, "vat-readback", 5, "ready", "INC-004")
+    direct_scope(tax, "vat-readback", "ready", "Preserve VAT authoritative readback", remaining="Expose operator reconciliation")
 
     ima2 = root / "ima2"
-    scope(ima2, "INC-012", "job-inspection", "WP-003")
+    direct_scope(ima2, "job-inspection", "draft", "Inspect a submitted job")
 
     oracle = root / "oracle"
-    scope(oracle, None, None, "WP-003")
+    (oracle / ".git").mkdir(parents=True)
+    (oracle / "docs/planning").mkdir(parents=True)
 
     watcher = root / "watcher"
-    scope(watcher, "INC-007", "release-alert", "WP-002")
-    spec(watcher, "release-alert", "INC-007")
-    ticket(watcher, "release-alert", 1, "done", "INC-007")
-    ticket(watcher, "release-alert", 2, "done", "INC-007")
-    ticket(watcher, "release-alert", 3, "blocked", "INC-007")
-    ticket(watcher, "release-alert", 4, "ready", "INC-007")
+    direct_scope(watcher, "release-alert", "done", "Preserve release alert identity")
 
     legacy = root / "legacy-api"
-    scope(legacy, "INC-002", "legacy-cleanup", "WP-001")
-    spec(legacy, "legacy-cleanup", "INC-002")
-    for number in range(1, 5):
-        ticket(legacy, "legacy-cleanup", number, "done", "INC-002")
+    legacy_history(legacy)
 
     print(root)
     return 0

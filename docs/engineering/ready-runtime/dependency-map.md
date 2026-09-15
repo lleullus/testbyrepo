@@ -1,36 +1,26 @@
-# Ready boundary-tools dependency map
+# Current IIS dependency map
 
-## Contract producer and consumer
+The containing directory also retains historical Ready runtime design records. This file describes the current skill/document workflow; dated reports describe only their original versions.
 
-Product Scope/Behavior/Spec/Ticket remain the approved authority. `ready-ticket-plan` produces a project-local method Plan and an outside-root `iis-plan-review/v2` result from actual independent review. Projection, findings, limits and conditional scope travel in that original artifact; current file pairing and declared consistency do not prove independent execution or semantic sufficiency.
+## Contract producers and consumers
 
-The actual implementing actor calls `ready_contract check_plan_admission` before the first source mutation and immediately before COMPLETE. Between those checks it uses ordinary host-native tools. No IIS execution/session/assignment state is created.
+Thesis owns product meaning. Scope references exact project-local Thesis and applicable Transition originals and owns Outcome/Acceptance. Plan owns implementation methods; a separate reviewer records the current decision and actual-byte source identities in `iis-scope-plan-review/v2`. The implementer checks those originals and review evidence with ordinary tools before mutation and completion.
 
-`ready-ticket-verify` is always exactly one delegated verifier. It captures one immutable outside-root verification binding over current product authority, stable implementation targets, declared scenario-effect paths, and optional method navigation; owns full Flow/AC semantic judgment; and returns one successful strict terminal with readable binding identity and verdict. It does not write Ticket status or mint a portable verdict credential. OMP accepts that exact designated-worker terminal, validates its structured/readable/binding facts, persists it privately, and delivers an opaque `terminal_handle`. The caller submits only that handle to `ready_finalize`.
+An independent verifier records exact originals, stable implementation identities, declared scenario effects, actual Acceptance observations, before/after currentness, settlement and one semantic verdict. Main obtains a separate read-only Coverage review after successful verification. Only attributable completed results, no unresolved material gap, current originals/target and settled effects permit Main to edit the Scope's status and read back the exact change. This is a procedural responsibility, not host authentication or a software-enforced lock.
 
-Adaptive/caller consumers keep preparation COMPLETE, implementation COMPLETE, readable verifier semantic verdict/binding, host terminal provenance, status progression/basis, and actual Ticket status separate. A current `done` string without attributable caller finalization is not completion proof.
+## Remaining executable helpers
 
-## Modules
+- `scope-shaper/tools/validate_scope.py` and `iis_path_contract.py`: standard-library Python structure, canonical-path and bound-source checks.
+- `companion-skills/repository-investigation/tools/`: independent investigation artifact validation.
+- `scripts/sync_installed_iis.py`: immutable skill packaging and optional client-directory links; no agent execution or completion engine.
+- `observatory/`: read-only project inspection.
+- `repo-snapshot/`: independent Git snapshot utility.
+- `evaluation/`: case data, disposable fixture/prompt preparation, historical observations and an offline label scorer. See its README for exact remaining capabilities.
 
-- `delivery-tools/ready-ticket/src/core.js`: host-neutral public boundary API plus the ordinary Node argv executor used by CLI/tests.
-- `authority-binding.js`: canonical Ticket/product/validator bytes and authority digest.
-- `plan-binding.js`: exact outside-root independent review, Plan/current-product byte pairing and per-Ticket ADMIT decision.
-- `verification-binding.js`: immutable stable-target snapshot, separate scenario-effect paths, optional method navigation, outside-root binding creation/currentness, and private verdict/binding record validation helpers.
-- `finalization.js`: host-record consumer, binding/current bundle/protocol gate, exact status-only compare-and-swap, canonical post-validation, and conditional restoration of this call's exact candidate.
-- `omp.js`: registers exactly `ready_contract` and `ready_finalize`; resolves the caller/session-bound OMP terminal handle, threads current bundle/protocol identity into finalization, records the exact result through the OMP replay ledger, and installs no global tool-dispatch interception.
-- `cli.js`: optional direct `ready_contract` integration for non-OMP testing/diagnostics; protected `ready_finalize` fails because CLI has no OMP terminal authority.
-- `index.js`: package exports.
+The Scope boundary plugin, its execution CLI and its host-specific evaluator are retired. No replacement execution runtime, terminal registry or controller is introduced. Ordinary clients can read the same skill sources and use standard file/command/delegation tools; OMP and Codex installation paths are optional adapters only.
 
-There is no command proxy, general observation ledger, retry latch, worker lease, active-Ticket reservation database, service supervisor, mutation recovery database, pause/release workflow, or persistent execution state in this package.
+## Installation boundary
 
-OMP host modules own the narrow cross-restart provenance boundary: `task/authority-profile.ts` fixes the verifier prompt/schema/topology, `task/ready-verifier-terminal.ts` validates and privately persists accepted terminals plus exact finalization results, and the Task tool attaches the opaque handle only after a clean strict result. This is terminal/finalization idempotency state, not IIS execution/session/assignment state.
+Current payloads use `iis-bundle/v4`, `iis-install/v4`, packaging protocol 4 and family `iis-skills`. They contain no mandatory delivery extension or host verifier API. Managed v3 Scope installations may be read only to migrate their links: old extension links are removed, and unrelated user files plus historical releases, snapshots and private state remain intact.
 
-## Host and release boundary
-
-The immutable `ready-boundary-tools` release contains the boundary package, producer/consumer Skills and canonical validator. `bundle.json` supplies protocol/family/bundle identity; boundary-enabled host stages receive exact `IIS_READY_VALIDATOR_PATH` and `IIS_READY_BUNDLE_ID`. There is no IIS runtime-data root for the new family.
-
-Candidate packaging rejects retired delivery payloads and scans all payload roots for retired delivery dependencies. An installed older protocol-2 release is validated against its own manifest/signature rather than the new candidate file set.
-
-When an installation still manages the previous delivery extension, old-to-new activation requires an exact retired runtime root. A read-only retirement scan distinguishes terminal history, evidence-backed stale records and blockers. Live or unattributed workers/processes/services/effects block activation. Accepted old state bytes are copied into the activation snapshot before host links switch; rollback restores the previous release/link identity.
-
-Historical `baseline.md`, dated 2026-09-05 preparation/roadmap records and Click feature-selection notes describe earlier implementations and are not evidence for the current boundary-tools protocol.
+Rollback restores installation entries, not product effects or host source. A historical v3 rollback would require its corresponding host source before use. Installed bytes do not prove an existing client session reloaded; loaded identity remains unverified until observed in that session.

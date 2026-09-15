@@ -176,22 +176,13 @@ def collect_snapshot_inputs(
             raise SnapshotError(f"Snapshot input symlink escapes repository: {path}") from exc
         paths[path] = category
 
-    # Scope lineage is the authored navigation and horizon authority. Include the
-    # full current lineage so immutable revisions and reshaping relationships are
-    # part of freshness without treating unrelated historical lineages as current.
+    # The current direct Scope and its work directory are canonical inputs.
+    # Bound Thesis/Transition sources are added explicitly below. Legacy
+    # planning history is not promoted into current authority.
     if state.current_scope is not None:
-        lineage_root = state.current_scope.path.parent
-        for path in sorted(lineage_root.rglob("*.md")):
-            add_file(path, "canonical-scope-lineage")
-
-    # Include the complete current work area rather than only SPEC/Ticket files so
-    # current Behavior/UI and adjacent projection authorities can invalidate a
-    # durable read model when they change.
-    if state.current_work_slug:
-        work_root = repository / "docs" / "planning" / "work" / state.current_work_slug
-        if work_root.is_dir():
-            for path in sorted(work_root.rglob("*.md")):
-                add_file(path, "canonical-current-work")
+        work_root = state.current_scope.path.parent
+        for path in sorted(work_root.rglob("*.md")):
+            add_file(path, "canonical-scope-work")
 
     direct_artifacts: Iterable[Artifact | None] = (
         state.current_scope,
@@ -206,6 +197,10 @@ def collect_snapshot_inputs(
         if artifact is not None:
             add_file(artifact.path, "canonical-state-input")
 
+    for authority in [*state.scope_authority, *state.transition_authority]:
+        path_value = authority.get("path")
+        if path_value:
+            add_file(Path(path_value), "scope-authority")
     adaptive = adaptive or collect_adaptive_provenance(repository)
     for item in [*adaptive.get("mandates", []), *adaptive.get("traces", [])]:
         path_value = item.get("path")
@@ -517,6 +512,34 @@ def render_project_overview(payload: dict[str, Any]) -> str:
     next_work = planning["nextWork"]
     git = projection["git"]
 
+    direct_scope = planning.get("scope") if planning.get("authorityMode") == "direct-scope" else None
+    if direct_scope:
+        current_scope = direct_scope.get("current") or {}
+        position = [
+            f"- Stage: {planning['stage']}",
+            f"- Health: {planning['health']}",
+            f"- Current Scope: `{current_scope.get('path') or 'None'}`",
+            f"- Scope Status: {current_scope.get('status') or 'None'}",
+            f"- Work Slug: {current_scope.get('workSlug') or 'None'}",
+            f"- Next Work: {next_work.get('kind')}"
+            + (f" / {next_work.get('targetId')}" if next_work.get('targetId') else ""),
+            f"- Next Leaf: {next_work.get('leaf')}",
+            f"- Reason: {next_work.get('reason')}",
+        ]
+    else:
+        position = [
+            f"- Stage: {planning['stage']}",
+            f"- Health: {planning['health']}",
+            f"- Current Scope: {_snapshot_artifact_label(current.get('scope'))}",
+            f"- Current Work Package: {_snapshot_artifact_label(current.get('workPackage'))}",
+            f"- Current Increment: {_snapshot_artifact_label(current.get('increment'))}",
+            f"- Current Spec: {_snapshot_artifact_label(current.get('spec'))}",
+            f"- Work Slug: {current.get('workSlug') or 'None'}",
+            f"- Next Work: {next_work.get('kind')}"
+            + (f" / {next_work.get('targetId')}" if next_work.get('targetId') else ""),
+            f"- Next Leaf: {next_work.get('leaf')}",
+            f"- Reason: {next_work.get('reason')}",
+        ]
     lines = [
         "# IIS Project Overview",
         "",
@@ -538,17 +561,7 @@ def render_project_overview(payload: dict[str, Any]) -> str:
         "",
         "## Current Position",
         "",
-        f"- Stage: {planning['stage']}",
-        f"- Health: {planning['health']}",
-        f"- Current Scope: {_snapshot_artifact_label(current.get('scope'))}",
-        f"- Current Work Package: {_snapshot_artifact_label(current.get('workPackage'))}",
-        f"- Current Increment: {_snapshot_artifact_label(current.get('increment'))}",
-        f"- Current Spec: {_snapshot_artifact_label(current.get('spec'))}",
-        f"- Work Slug: {current.get('workSlug') or 'None'}",
-        f"- Next Work: {next_work.get('kind')}"
-        + (f" / {next_work.get('targetId')}" if next_work.get("targetId") else ""),
-        f"- Next Leaf: {next_work.get('leaf')}",
-        f"- Reason: {next_work.get('reason')}",
+        *position,
         "",
         "## Delivery Progress",
         "",
@@ -561,6 +574,36 @@ def render_project_overview(payload: dict[str, Any]) -> str:
                 lines.append(rendered)
     else:
         lines.append("- No exact Ticket denominator is available for the current unit.")
+    if direct_scope:
+        lines.extend(["", "## Scope", ""])
+        current_scope = direct_scope.get("current") or {}
+        lines.append(f"- Status: {current_scope.get('status') or 'None'}")
+        lines.append(f"- Path: `{current_scope.get('path') or 'None'}`")
+        lines.append("- Bound Thesis:")
+        lines.extend(
+            f"  - {item.get('path')} sha256:{item.get('sha256')}"
+            for item in direct_scope.get("boundThesis", [])
+        )
+        transition = direct_scope.get("transitionAuthority", [])
+        if transition:
+            lines.append("- Transition Authority:")
+            lines.extend(
+                f"  - {item.get('path')} sha256:{item.get('sha256')}"
+                for item in transition
+            )
+        lines.append("- Required Outcomes — fulfillment not established:")
+        remaining_outcomes = direct_scope.get("remainingRequiredOutcomes", [])
+        if remaining_outcomes:
+            lines.extend(f"  - {item.get('text')} ({item.get('source')})" for item in remaining_outcomes)
+        else:
+            lines.append("  - None observed")
+        legacy = planning.get("legacy", {})
+        if legacy.get("history"):
+            lines.append("- Legacy history is read-only; automatic migration: no")
+        if legacy.get("transitionRequired"):
+            lines.append("- Legacy transition required:")
+            lines.extend(f"  - {_snapshot_artifact_label(item)}" for item in legacy["transitionRequired"])
+
 
     lines.extend(["", "## Tickets", ""])
     if tickets["items"]:
@@ -721,6 +764,13 @@ def _snapshot_payload(
                 "spec": _stable_artifact_ref(state.current_spec),
                 "workSlug": state.current_work_slug,
             },
+            "authorityMode": "direct-scope" if state.direct_scope_mode else ("legacy-history" if state.legacy_history else "none"),
+            "scope": _stable_scope_details(state),
+            "legacy": {
+                "history": [_stable_artifact_ref(item) for item in state.legacy_history],
+                "transitionRequired": [_stable_artifact_ref(item) for item in state.transition_required],
+                "automaticMigration": False,
+            },
             "tickets": {
                 "counts": ticket_counts,
                 "items": [_stable_artifact_ref(item) for item in state.tickets],
@@ -772,6 +822,28 @@ def _stable_artifact_ref(artifact: Artifact | None) -> dict[str, Any] | None:
         "title": artifact.title,
         "path": artifact.relative_path,
         "workSlug": artifact.work_slug,
+    }
+def _stable_scope_details(state: ProjectState) -> dict[str, Any] | None:
+    scope = state.current_scope
+    if not state.direct_scope_mode or scope is None:
+        return None
+    return {
+        "current": {
+            "path": scope.relative_path,
+            "status": scope.status,
+            "workSlug": scope.work_slug,
+            "title": scope.title,
+            "outcome": scope.metadata.get("section_outcome"),
+            "acceptance": scope.metadata.get("section_acceptance"),
+            "openDecisions": scope.metadata.get("section_open_decisions"),
+        },
+        "status": scope.status,
+        "active": [_stable_artifact_ref(item) for item in state.active_scopes],
+        "history": [_stable_artifact_ref(item) for item in state.scope_history],
+        "boundThesis": list(state.scope_authority),
+        "transitionAuthority": list(state.transition_authority),
+        "requiredOutcomes": list(state.required_outcomes),
+        "remainingRequiredOutcomes": list(state.remaining_required_outcomes),
     }
 
 

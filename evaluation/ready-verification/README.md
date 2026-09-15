@@ -1,86 +1,36 @@
-# Ready preparation and integrated verification evaluation
+# IIS evaluation materials and standalone tools
 
-This directory captures actual isolated model invocations. It is not a second product verifier. Label scores, a JSON review, source hashes, clean process exit, and `semantic_review` fields never establish semantic success. No candidate quality result is claimed by these source changes.
+This directory retains case definitions, disposable product fixtures, a label-only scorer and historical observations. It does not execute agents, authenticate verifier reports, advance Scope status or prove current workflow success. IIS now uses skills and ordinary host tools; no OMP extension, private terminal store or custom host profile is required.
 
-## Current execution path
+## Available tools and data
 
-`plan` remains product planning through the existing IIS owners. `prepare` runs actual Planner → separate independent reviewer → original lead fan-in invocations. `implement` consumes the exact current review. `verify` uses one host-designated `iis-ready-verifier/v1` subagent to bind the actual implementation directly and perform discriminating scenario execution and all authored Flow/AC adjudication. After VERIFIED from ready, Parent Main receives the opaque terminal handle and dispatches one independent read-only `ready-ticket-coverage` worker against that exact report, primary evidence and current implementation. Only COMPLETE with no unresolved material finding/evidence gap permits submitting the original handle to `ready_finalize`. FAILED/INCONCLUSIVE retain non-progressing finalization without Coverage. Coverage failure or incomplete investigation withholds progression without rewriting semantic VERIFIED. A needed supplementary cycle uses a fresh verifier/binding/terminal and a new associated Coverage review, not an amended old result. Verification-only does not require a new plan. Preparation does not implement or change approved product authority.
-
-There is one current verifier path. Historical releases must be executed from their own pinned snapshots; no profile value selects a different lifecycle in this candidate. `baseline-observations.json` and the dated observations below are historical, unmodified evidence—not candidate results or current CLI instructions.
-
-The existing raw capture retains Coverage task calls and terminal output; `inspect_run.py` exposes task dispatches and raw async owner returns with event ordinals so their order can be inspected without parsing Coverage prose; independent causal review checks exact report/target association, verifier → Coverage → finalizer ordering, unresolved findings and any supplementary cycle. No Coverage prose parser, verdict schema or caller engine is introduced. Mechanical finalizer provenance alone is not proof that Coverage ran or that its judgment was sufficient. `summarize` associates current verdict/binding/progression only with the latest uniquely delivered host handle and its matching finalizer, while retaining total delivery count and raw history. An older finalizer cannot complete a newer held result; multiple distinct sequential verifier terminals no longer invalidate a legitimate final result merely by count. Historical captures are not rewritten or retroactively claimed to include Coverage.
-
-## Complete private payload
-
-```text
-python3 -B evaluation/ready-verification/prepare_environment.py --source <complete-candidate-checkout> --arena <new-private-directory> --models <selected-models.yml>
-```
-
-The helper calls the candidate's coherent installer prepare API, snapshots current candidate bytes, and returns `environment.json` with a protocol-2 immutable payload and private host. It does not activate a live installation. Partial overlays are unsupported. Model credentials/config remain private (0600); do not publish them. Custom discovery uses parent directories; user/project discovery and fallback chains are disabled.
-
-`run_agent.py --stage` is mandatory. Only `prepare`, `implement`, `verify`, and `adaptive` load the Ready boundary extension. Product `plan` and read-only completion assessment do not create delivery execution/session state. Boundary-enabled stages receive the exact bundle `IIS_READY_VALIDATOR_PATH` and `IIS_READY_BUNDLE_ID`; there is no IIS runtime-data directory. The host privately persists accepted verifier terminals and finalization results, and the evaluator requires the observed host terminal handle → `ready_finalize` handle chain. Requested extension/bundle identity is recorded separately from actual loaded-host evidence; source identity is not claimed as a host load check.
-
-## Disposable products and commands
+- `score_result.py`: standard-library Python scorer for externally supplied record arrays against `manifest.json`. It checks labels, duplicates, missing cases, repetitions and reported target mutation. `release_pass` is the historical label-score field, **not** semantic acceptance, Coverage completion or permission to mark a Scope done. Review actual evidence independently.
+- `fixture_catalog.py`: importable builder of disposable local products and loopback-service fixtures via `materialize(case, project, support, port=...)`. It returns commands and paths; it does not launch services or agents. The caller owns initialization, readiness and shutdown of each exact service. Never substitute production credentials/services or manufacture operator approval.
+- `implementation_fixtures.py`: importable implementation/preparation fixtures using the same product builder helpers. These are synthetic starting states, not successful execution evidence.
+- `manifest.json`, `planning-cases.json`, `completion-cases.json`, `goal-cases.json`: case definitions and reviewer oracles. Keep expected outcomes outside actor inputs. A manual experiment must freeze its own exact inputs, model, repetitions and observation boundaries before execution; these files alone are not a runnable cohort.
+- `../product-thesis/cases.json` and `../product-thesis/run.py prepare`: retained prompt/metadata preparation only, without model invocation or automatic semantic grading.
+- `baseline-observations.json` and the dated sections below: immutable historical evidence, not candidate results.
 
 ```text
-python3 -B evaluation/ready-verification/calibrate.py prepare runtime-correct-core --arena <cases> --port <unused-port>
-python3 -B evaluation/ready-verification/calibrate.py prepare ordinary-entry-not-helper/helper-only-correct --kind implementation --arena <cases> --port <unused-port>
-python3 -B evaluation/ready-verification/calibrate.py prepare prepare-competing-cause --kind preparation --arena <cases> --port <unused-port>
-python3 -B evaluation/ready-verification/calibrate.py run prepare --metadata <metadata.json> --agent-dir <environment-agent_dir> --payload <environment-payload> --model <selected-provider/model> --thinking <selected-effort>
-python3 -B evaluation/ready-verification/calibrate.py run implement --metadata <metadata.json> --agent-dir <environment-agent_dir> --payload <environment-payload> --model <selected-provider/model> --thinking <selected-effort>
-python3 -B evaluation/ready-verification/calibrate.py run verify --metadata <metadata.json> --agent-dir <environment-agent_dir> --payload <environment-payload> --model <selected-provider/model> --thinking <selected-effort>
+python3 -B evaluation/ready-verification/score_result.py <external-record-array.json> --manifest evaluation/ready-verification/manifest.json
+python3 -B evaluation/product-thesis/run.py prepare <case-id> --arena <new-private-directory> --variant <declared-variant> --repetition <declared-repetition>
+python3 -B scripts/sync_installed_iis.py prepare --source <complete-checkout> --store <private-store>
+python3 -B scripts/sync_installed_iis.py inspect --store <private-store> --bundle <bundle-id>
 ```
 
-`run delivery` connects preparation, implementation and verification, stopping at any incomplete required stage. Reusing an output directory fails rather than overwriting a prior attempt. `implementation.py` likewise performs actual preparation before its implementation cohort. The existing `planning.py` request/turn/session capture remains product planning, not execution preparation.
+The installer prepares a protocol-4 skills-only payload without loading Node or activating an installation. Protocol 4 describes packaging, not an execution or verifier protocol. OMP and Codex are optional installation-path adapters.
 
-Preparation roles explicitly reuse the current selected model/effort and run DIRECT in separate top-level invocations, not hidden subagent fan-out. The reviewer is a separate invocation and never resumes the writer; the lead resumes the original Planner session only for attribution/currentness/denominator fan-in. The reviewer writes the actual outside-root `prepare/plan-review.json`; the lead cannot repair that JSON or the Plan. Candidate core binding is rechecked for every required Ticket. All current ADMIT plus an attributable lead terminal is necessary but not sufficient for semantic evaluation acceptance. Raw role evidence must be reviewed independently.
+## Retired execution paths
 
-The normal preparation path captures three invocations: Planner and independent reviewer are the two substantive roles, followed by lead fan-in on the original writer session. There is no fixed pre-review challenge or unconditional writer-revision turn. A reviewer `REVISE` or `EVIDENCE_NEEDED` remains the actual preparation result rather than being promoted to `COMPLETE`; any later revision requires substantive method/evidence change and a fresh independent reviewer invocation.
+`run_agent.py`, `prepare_environment.py`, `calibrate.py`, `planning.py`, `completion.py`, `goal.py`, `implementation.py`, `topology.py` and `inspect_run.py` were retired with the Scope boundary extension. Their OMP capture, private verifier terminal, automated finalization and dependent aggregation paths are no longer current commands. Product Thesis's former `run` command was also removed. Historical commands below require their own pinned historical source and environment; no compatibility execution mode or replacement runner is provided.
 
-`planning-cases.json.preparation_cases` connects V1–V6 to real disposable products and unreviewed initial methods. Only the method and relevant navigation enter actor inputs; oracle case IDs, expected behavior and scoring internals do not. Conditional support/refutation/unavailable cases retain actual loopback authorization boundaries. They do not claim complete interleaving/worker-replacement coverage: boundary-tool regressions and Main's actual V/U scenarios cover those distinct boundaries.
+## Current observation boundary
 
-Use neutral opaque directories for every actor-visible path, including all ancestors of Project Root and handoff/output paths. A random leaf beneath a case-named directory still exposes the case. Keep descriptive case IDs and expected outcomes only in evaluator-owned indexes outside actor inputs. Preserve any label-exposed capture as execution evidence, not blind sensitivity evidence; reruns after correcting exposure are separate recorded attempts, never replacements for the original result.
+Use the current IIS skills for independent Plan Review, implementation, independent verification and independent read-only Coverage. A verifier reports the exact Scope/Thesis and actual target paths, scenario-effect paths, real observations/evidence, before/after currentness and its original `VERIFIED`, `FAILED` or `INCONCLUSIVE` judgment. Main checks attribution/currentness and complete Coverage without unresolved material gaps before editing only the ready-to-done status and reading it back. These are procedural responsibilities, not host-enforced authentication.
 
-The caller owns service initialization, readiness and shutdown through native host supervision. Start the returned `service_argv`, verify `service_port`, and close that exact service after the case. Do not substitute production services, real credentials, or a product-created replacement authority. External providers and permissions are real loopback fixture interactions; these establish no compatibility with a production provider.
+Keep verdict, completion eligibility and observed Scope status distinct. Synthetic history, a matching label, clean process exit, source digest or an old runner's success cannot establish current delivery. Preserve failed/partial attempts and evidence limits; never repair a case or retry selectively into success.
 
-## Currentness and attributable effects
-
-`verification-authority-drift-core` advances Ticket/Spec/adopted Behavior together only after an actual successful `begin_verify` result. `verification-target-drift-core` changes current source at that boundary. The runner watches raw native/device guard events during the real invocation and records exact before/after identities in `challenge.json`. An unobserved/failed bind or finished actor does not trigger mutation. The 50ms event polling observes a boundary; it cannot promise suspension precisely between bind and the next actor instruction. Require actual ordering in raw evidence; an unapplied or late/inappropriate trigger cannot pass causal acceptance.
-
-External challenge changes are recorded separately from actor mutation only while their exact before/after bytes match. The evaluator never repairs candidate source to obtain success. Exact status-only change is classified as guarded progression only with an attributable successful `ready_finalize` result whose sole caller input matches one host-delivered verifier terminal handle. Verdict, progression, and actual Ticket status remain separate; `VERIFIED` plus `FAILED` progression is not completed delivery even if the file says done.
-
-The retention product keeps its actual operation history in an exact outside-root runtime-output file. Source/authority remain protected; this path is a declared execution output, not a blanket Project Root exception. Parent readback never replays its duplicate-sensitive trigger or resets away an earlier failure.
-
-## Fixed cohorts and read-only reports
-
-```text
-python3 -B evaluation/ready-verification/topology.py --protocol <fixed-protocol.json> --output <new-results.json>
-python3 -B evaluation/ready-verification/implementation.py --protocol <fixed-protocol.json> --output <new-results.json>
-python3 -B evaluation/ready-verification/inspect_run.py <run-root> verify
-python3 -B evaluation/ready-verification/calibrate.py report --cohort <metadata-path-array.json> --results <record-array.json> --reviews <review-array.json> --manifest <manifest.json>
-```
-
-Verification protocol fields are `model`, `thinking`, `episode_timeout_seconds`, `concurrency`, `source_hashes`, `runs`. Each run binds `metadata`, `metadata_sha256`, `environment`, a nonempty payload-label `profile`, `profile_hashes`, `initial_snapshot`, `protected_hashes`. Implementation uses `timeout_seconds` instead of episode timeout. Protect fixed payload/config/model files, not mutable host SQLite/WAL/runtime caches. Preserve all settled and setup-failed attempts; never retry until pass or drop failed coordinates.
-
-Before parent observations, captures retain actor product/protected identities, external authority state and request history. Parent readback/observer output is corroboration, never actor-owned trigger/evidence. `topology.py` does not execute `additional_trigger_argv`; implementation captures any parent trigger separately. All authored obligations, normal twins, nearest-nonconforming cases, under-run/duplicate/foreign records, provider failures, quoted/intermediate/conflicting terminals and target mutation remain independent report concerns.
-
-Report review rows contain `case_id`, `run_id`, `causal_evidence_sufficient`, `reason`, and `evidence_refs: [{path, sha256}]`, including the exact run's `verify/events.jsonl`. Coverage/hash checks do not judge the truth of the reason. The source-only weak-flow cases must return a planning gap rather than alter the approved flow to become easy to pass. Missing operator/provider evidence and observed contradictions must remain distinguishable.
-
-Current execution handoffs resolve Ready role entry paths from the supplied immutable payload, not a global `skill://` lookup. For delegated evaluation roles, provide the currently user-selected named agent through prepared metadata `selected_agent` and confirm its actual model/effort in host task delivery; the parent's `--thinking` and a temporary default-task definition alone did not establish child effort in the observed host. Host terminal capture accepts settled task results delivered by `hub wait/jobs` as well as inline task and async-result delivery; shell output and caller narration remain non-authoritative. A capture-format failure must not relabel a real guarded status write as an agent source edit, and correcting the parser does not retroactively satisfy an incorrect model selection. The verifier receives an explicit outside-root primary-evidence directory; Coverage must read the resulting raw observations, not treat the report or identity binding as runtime output.
-
-## Completion assessment
-
-`completion.py prepare/run/report` retains its read-only Outer Main assessment. `verification-current` requires a real integrated verifier setup with `VERIFIED/COMPLETED/done`; `implementation-ready-no-verification` cannot promote a working product into delivered completion. Seeded history in other cases is explicitly synthetic, never actual model execution evidence. Complete all required current obligations, not only the last successful Ticket.
-
-## Validation and limits
-
-After all concurrent source work has settled, Main runs the existing repository suite and actual selected-model scenarios. Exact scoped regression command:
-
-```text
-python3 -B -m unittest tests.test_ready_agent_capture tests.test_ready_verification_calibration tests.test_ready_verification_fixture_boundaries tests.test_ready_completion_calibration
-```
-
-Provider access, native/device guard dispatch, service readiness/settlement, semantic V1–V6/V10–V13/U6 evidence and actual loaded bundle identity need fresh Main-owned execution. No formatter, linter, build or test suite was run during this parallel cutover. Native host cancellation does not prove escaped descendants or external effects settled; preserve the exact limit and do not claim COMPLETE from local hashes.
+The standalone document validators remain in their owning skill directories. They check structure and source references, not semantic verification or actual product success.
 
 ## Historical observations (old releases only)
 

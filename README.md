@@ -1,82 +1,63 @@
 # IIS Planning Skills
 
-IIS is the planning layer that turns user intent into approved product authority and a validated Ready Ticket Set for one current construction Increment. Baseline IIS remains the default and ends at Ready Tickets. Spec and Ticket projection use leaf-local defect-first self-review by default; separate per-artifact user/planning-owner approval is an explicit option. IIS itself does not implement Tickets, independently verify them, orchestrate delivery agents, or declare product completion.
+IIS is a host-independent skill/document workflow: Thesis → Scope → Plan → implementation → independent verification → read-only Coverage → Main's completion record. It requires ordinary file, command and independent-invocation facilities, not a patched OMP, a delivery plugin or a dedicated execution CLI. Product meaning belongs to Thesis, acceptance to Scope, methods to Plan, and the semantic verdict to the independent verifier.
 
 ## Components
 
-- `product-thesis/`: conditional product-meaning design with a saved full source before downstream planning. New `iis-product-meaning/v2` bindings reference exact source bytes; existing v1 authority remains supported without bulk migration.
-- `scope-shaper/`: connected outcome-landscape investigation plus selection of exactly one durable next product construction Increment from the actual current product state.
-- `scope-investigation-runner/`: optional read-only evidence investigation used only when the user explicitly authorizes Runner use and supplies the exact roster/concurrency binding.
-- `behavior-design-lead/`: canonical Behavior authority design performed inside planning.
-- `matt/`: one-Increment product/Behavior/UI planning, optional explicit adversarial consensus, approved Spec creation, and reviewed Ready Ticket decomposition.
-- `planning-workspace/`: project-local planning workspace support.
-- `observatory/`: read-only IIS state scanner and CLI for cross-repository overview, repository health, next-work pointers, consistency checks, and planning history.
-- `iis-observatory/`: Codex skill wrapper for Observatory. The globally installed copy lives at `~/.codex/skills/iis-observatory/` and routes status inspection to the read-only CLI.
-- `iis-workflow/`: canonical planning-only entry router. A generic IIS request goes to Ask Matt only when it is already next-increment-ready; otherwise Scope Shaper first selects the Increment.
-- `iis-adaptive-planning/`: explicit opt-in planning mode. Outer Main routes enabled execution preparation, implementation, semantic verification and post-success Coverage without becoming a second product authority.
-- `repo-snapshot/`: independent Git working-tree snapshot skill.
-- `companion-skills/`: repository investigation, purpose-first review, execution-plan preparation, Ready Ticket implementation, verification and read-only post-success Coverage outside IIS Planning authority.
+- `product-thesis/`: product meaning, Behavior/UI, failure/recovery and success observations.
+- `scope-shaper/`: selection and definition of one durable current product outcome.
+- `companion-skills/scope-plan/`: method preparation and independent Plan Review.
+- `companion-skills/scope-implement/`, `scope-verify/`, `scope-coverage/`: implementation, independent semantic verification and read-only post-success review.
+- `iis-workflow/`: current-request routing, continuation and completion responsibility.
+- `iis-observatory/`, `observatory/bin/`, `observatory/src/`: optional read-only project state inspection.
+- `repo-snapshot/`: independent Git working-tree snapshot utility.
+- `companion-skills/repository-investigation/` and `purpose-first-review/`: supporting investigation and review skills.
+- `scope-shaper/tools/validate_scope.py` and `iis_path_contract.py`: standalone Python structure/path/source-reference checks, not semantic acceptance or completion authorization.
+- `evaluation/`: retained case descriptions, disposable fixture preparation, historical observations and offline scoring. The host-specific delivery runner is retired; see its existing README for the remaining commands and their limits.
 
-## Coherent bundle installation
+## Optional skill installation
 
-IIS planning/companion skills, their helpers and the Ready runtime install from one immutable source snapshot. Live skills no longer point into a changing source worktree. Prepare and check are not evidence of loaded code or permission to interrupt an active host.
+Skills can be read directly from this source tree. The existing installer packages one immutable snapshot and optionally links it into a supported client's skill directory; it does not execute IIS work.
 
 ```bash
-python3 scripts/sync_installed_iis.py prepare --source /absolute/candidate --store /absolute/iis-store
-python3 scripts/sync_installed_iis.py check --store /absolute/iis-store --bundle <reported-sha256>
+python3 scripts/sync_installed_iis.py prepare --source /absolute/source --store /absolute/iis-store
+python3 scripts/sync_installed_iis.py inspect --store /absolute/iis-store --bundle <reported-sha256>
 python3 scripts/sync_installed_iis.py activate --store /absolute/iis-store --bundle <reported-sha256> --host omp --confirm-quiescent
 ```
 
-The default store is `${XDG_DATA_HOME:-~/.local/share}/iis`; `current` selects one complete release. `--host codex` selects the separate Codex install, not OMP. Existing unmanaged files/symlinks require explicit `--migrate`, which preserves exact previous entries in a recovery snapshot. Never declare hosts quiescent from a cancellation receipt: settle workers/services and unresolved effects first. Start a **fresh top-level host** and check actual loaded identity and behavior after activation. The installer reports `loaded_identity: NOT_CHECKED`.
+Use `--host codex` for that optional path adapter, or include both installed hosts when they share `current`. Neither adapter is a workflow requirement. The payload uses `iis-bundle/v4`, installation metadata uses `iis-install/v4`, and family is `iis-skills`. Protocol `4` versions packaging only; there is no host profile, boundary-tool protocol or host terminal schema.
 
-`rollback --confirm-quiescent` restores the preceding install snapshot only after candidate work/effects are contained. `remove --confirm-quiescent` restores original entries and preserves releases/runtime data; neither rolls back product or external effects. Intervening user changes stop recovery rather than being overwritten. Model configuration, credentials, the replaceable model guide, product Tickets and runtime state are not bundled. Observatory's independent installer remains `python3 scripts/sync_installed_observatory.py`.
+`prepare` does not change installation links. `inspect` checks release bytes and required skill files. `activate` requires affected IIS work and effects to be settled, not shutdown of unrelated services. A cancellation receipt alone is not settlement. Previously managed v3 Scope installs are accepted only as a migration source: their managed Scope extension link is removed, while unrelated user skills/extensions, private historical state, releases and snapshots are preserved. `--migrate` is needed for an unmanaged entry and preserves a recovery snapshot.
 
-Thesis source storage is authorized before Run Contract/model/approval closure; it does not approve product meaning or release Scope/Matt/delivery gates. Sources normally live at `docs/planning/product-thesis/<meaning-slug>/THESIS-NNN.md`; preserve referenced revisions rather than overwriting them. Scope/Spec consumers validate and read the exact source through the existing immutable Scope lineage (or directly for direct Matt). Run Contract refers to unchanged source outcomes/items/success sections and adds only this invocation's scope/stage restrictions inside the Mandate ceiling. Optional Transition Baseline remains a transition map, not a replacement Thesis.
+`rollback --confirm-quiescent` and `remove --confirm-quiescent` preserve history and refuse intervening user changes. They change installation entries, not product effects or OMP source. Restoring a historical v3 installation would also require its matching host source; it is not an alternate current operating mode. Installation does not restart clients or prove existing sessions reloaded the skills; `loaded_identity: NOT_CHECKED` remains explicit.
 
-For `iis-product-meaning/v2`, `product-thesis/tools/product_meaning_binding.py fingerprint <artifact>` computes SHA-256 of the source bytes; `validate` checks source availability/hash and `validate-spec` also checks the exact existing Scope lineage. Preserve or relocate source bytes and update references explicitly when moving projects; an absolute reference is not portable by itself. Neither hashing nor Run Contract `STRUCTURE_VALID` proves semantic fidelity. The planning owner must read source sections, resolve referenced required/candidate sets and apply the original causal meaning to the current outcome.
+Model configuration, credentials, the replaceable model guide and product planning/evidence are not bundled. Observatory's independent data installer remains `python3 scripts/sync_installed_observatory.py`.
 
-## Adaptive execution boundary
+## Product and planning contracts
 
-`IIS Adaptive Planning` remains an explicit opt-in skill. Outer Main carries the invocation-local Run Contract and routes exact owner results. Product planning still stops at the reviewed Ready Ticket Set. Enabled implementation first consumes a current independent execution-plan review, then performs implementation and actual self-check. Enabled verification directly binds the current implemented target and owns every authored Flow/AC, discriminating scenarios, fresh evidence and cleanup. After VERIFIED from ready, the finalization-owning caller obtains one independent read-only Coverage review of actual implementation paths against that exact evidence. Only COMPLETE with no unresolved material gaps permits the original opaque handle's submission to ready_finalize. An already implemented `ready` Ticket can be verified without requiring a new implementation plan. Stage-specific execution mode and confirmed model choices are preserved; DIRECT uses current Main and never promotes self-check evidence into an unexamined final verdict. Material method changes return to preparation; verification has no pause/release checkpoints and supplementary adjudication uses a fresh verifier invocation. Default current-Increment delivery and broader named/outcome completion obligations are unchanged.
+Thesis source storage is authorized before model/approval closure but does not approve product meaning or implementation. Sources normally live at `docs/planning/product-thesis/<meaning-slug>/THESIS-NNN.md`; preserve referenced revisions. Optional Transition Baseline remains a transition map, not a replacement Thesis or a second operating mode.
 
-The delivery skills keep their own authority and only caller-owned `ready_finalize` performs guarded `ready -> done`; the verifier owns the immutable semantic verdict. Outer Main reads self-contained caller contracts for original-source binding, selected modes/models, dispatch and terminal consumption; actual workers read their execution references. Main performing a permitted DIRECT role reads that role's core. Worker procedures and evidence-economy instructions are not copied into Adaptive assignments. Main retains whole-run meaning and completion responsibility without a second role verdict, scheduler, retry ledger or new lifecycle.
+Scope lives at `docs/planning/work/<kebab-case-slug>/SCOPE.md`, using `Schema: iis-scope/v1`, `Project-Root`, `Status`, `## Product Authority`, `## Outcome`, `## Acceptance`, and optional `## Open Decisions`/`## Transition Authority`. `draft` preserves unresolved meaning, `ready` admits reviewed work, `done` records completed verification/Coverage and Main's confirmed status change, and `superseded` marks an unconsumed replaced contract. The standalone validator checks structure and exact bound sources; it does not decide semantic completeness.
 
-### Adaptive model recommendations
+Plan chooses implementation methods without redefining Scope acceptance. Its independent review records exact reviewed files and actual-byte hashes with `iis-scope-plan-review/v2`; no host-generated authority digest is required. Recommendations in [model-selection-guide.md](model-selection-guide.md) never override user-selected models/effort or introduce a hidden roster. The guide remains outside the immutable release.
 
-The replaceable recommendation source is [model-selection-guide.md](model-selection-guide.md) at the repository root (`~/project/iis-skills/model-selection-guide.md`), initially the user-supplied v4.3 guide. Expand `~` against the current user's home directory. The repository Skill and its installed copy read this file directly from the repository root; it is not bundled in the Skill payload. To update recommendation data, edit or replace only that file; no Skill synchronization is needed for guide-only changes. Skill prompts and templates do not maintain copies of its model rankings. [Run Contract model selection](iis-adaptive-planning/references/09-run-contract.md#delivery-model-selection) preserves supplied model/effort choices, recommends a workload-appropriate configuration for missing enabled SUBAGENT stages using current available configurations, and asks the user to confirm those choices together. A recommendation is not consent. DIRECT/disabled stages need no child-model question; confirmed choices carry across the invocation without per-Ticket reconfirmation or automatic model/effort substitution.
-
-## Planning boundary
-
-The canonical Scope-shaped flow is:
+## Verification and completion
 
 ```text
-Long-term intent + actual current product state
-  -> Scope Shaper
-  -> horizontal Work Package decomposition when needed
-  -> exactly one ready-for-matt INC-NNN
-  -> Ask Matt
-  -> Behavior/UI authority
-  -> optional explicit adversarial consensus
-  -> self-reviewed approved Spec for that Increment
-  -> To Tickets
-  -> self-reviewed, validated Ready Ticket Set for that Increment
-  -> Baseline IIS ends
+Current user intent + actual product state
+  → Thesis when meaning needs definition or revision
+  → Scope → Plan and independent Plan Review
+  → Implementation → independent Verification
+  → independent read-only Coverage after VERIFIED
+  → Main records ready → done with ordinary file tools and readback
 ```
 
-A Work Package is a horizontal outcome boundary with `Status: scoped`; it is not an Ask Matt handoff. Future construction can be described provisionally, but only the current selected `INC-NNN.md` is `ready-for-matt`. Every confirmed shaping pass has an immutable `revisions/SHAPE-NNN.md` snapshot, and its Increment keeps that exact revision as historical planning authority even after the current `SCOPE-SHAPING-RESULT.md` advances. After delivery, a later Scope Shaping cycle inspects the actual resulting product state before selecting another Increment; prior ready Increments become `superseded` so only one Scope-shaped handoff remains admissible.
+The verifier records every authored Acceptance result, actual observations and evidence, exact original/target identities, declared scenario effects, currentness and settlement. Main preserves the original verdict; it does not issue a second semantic verdict. Completion requires attributable completed independent verification, complete Coverage with no unresolved material gap, current authority/target, settled effects and current user permission. Main then edits only the Scope status and reads back the actual result. Failed, inconclusive, missing or stale evidence cannot become completion.
 
-Construction candidates use a small auditable structure: outcome area, current/target state, actor, trigger or inspection target, observable result, authoritative readback, durable foundation, future policy avoided, disposition, and reason. Exactly one candidate is selected and must close structurally into the Selected Increment. The validator checks that closure only; it does not score product judgment or decide which candidate is substantively best.
+These are procedural responsibilities, not host-enforced authentication or locks. Hashes, report fields and process exits do not by themselves prove independent judgment or success. No replacement runtime, opaque credential store or execution CLI is introduced. Scope completion is not automatically completion of the user's whole request.
 
-A Scope-shaped Spec records `Source-Increment` and To Spec revalidates that Increment immediately before writing. Direct next-increment-ready Ask Matt work records `Source-Increment: None`. The trace does not import deferred or provisional future scope into the Spec.
+Read-only and stage-only requests stop at their requested boundary. Historical planning revisions and completed evidence are not rewritten to claim a new completion. IIS has no controller database, persistent Goal state, execution roster, attempt ledger, evidence cache, event/replay engine or generic workflow DSL.
 
-A direct ordinary request may enter Ask Matt without Scope Shaper only when the current baseline and one durable observable current-to-next state transition are already clear and no construction-stage, foundation, product-capability-ordering, or split/merge decision remains. A genuinely unrooted greenfield request may be shaped from the brief before a repository exists, but durable artifacts and Ask Matt admission wait for one exact project root; IIS does not bootstrap product source as a planning side effect.
+## Optional future host integration
 
-Legacy `ready-for-matt` Work Packages are not directly re-admitted. Scope Shaper treats them as preserved historical planning context, re-inspects the actual current product state, and performs semantic migration into the current one-Increment contract. This avoids restoring the old bypass while preserving prior approved evidence.
-
-Ticket Verification flows use current positional `Parent outcome ordinal`, `AC ordinals`, and `Behavior authority ordinals` so observable delivery obligations remain traceable to their parent outcome and semantic authorities without persistent IDs or a trace database.
-
-Ready Tickets retain their product-contract meaning. `ready-ticket-plan` owns a separate method plan and a current per-Ticket `ADMIT | REVISE | EVIDENCE_NEEDED` review result, not a new Ticket status. A preparation-only request closes at `READY_EXECUTION_PLANS` only when every required Ticket has current ADMIT. Direct/assigned/resumed/replacement implementation consumes that review at the common admission boundary. Reading a Skill or inspecting authority alone does not arm an execution. `Verification: yes` includes semantic verification and post-success read-only Coverage, not another delivery switch. Coverage has no AC/status authority, and the unchanged finalizer does not mechanically enforce the caller protocol. FAILED/INCONCLUSIVE keep non-progressing finalization without Coverage. Only ready_finalize may complete guarded `ready -> done`; a done string without successful progression and the current obligation denominator is not a delivery result.
-
-When the user explicitly asks IIS only for the current state or next planning item, the router performs a read-only Current Planning State Check over the existing Scope/Work Package/Increment/Spec/Ticket artifacts. `done` Tickets are treated as completed, non-`done` Tickets in the current Increment are reported as remaining work, superseded historical Increments do not block the current pointer, and the already-authored Scope is used to report the next Work Package/Increment and which leaf would be used next. The check stops after reporting; it never executes Scope Shaper, Ask Matt, To Spec, or To Tickets on the user's behalf.
-
-IIS does not use a controller database, persistent Goal state, implementation roster, verification roster, attempt ledger, evidence cache, event/replay engine, or generic workflow DSL.
+See the [host integration reintroduction guide](docs/engineering/host-integration-reintroduction.md) for the archived Scope tools and separate OMP source references, selective reintroduction steps, and current contract boundaries. This is reference material, not a planned or required runtime dependency.

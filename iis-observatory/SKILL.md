@@ -1,6 +1,6 @@
 ---
 name: iis-observatory
-description: Use when the user asks to inspect, summarize, compare, or visualize IIS planning state across one or more repositories, including IIS PROJECT OVERVIEW, repository health, current planning position, remaining Tickets, blockers, inconsistencies, history, or the next planning/delivery pointer. Use the read-only IIS Observatory CLI and never treat status inspection as permission to execute the reported next work.
+description: Use for read-only IIS project/portfolio state, current Scope, remaining required outcomes, source drift, history and next-work inspection. A reported next pointer never authorizes execution.
 ---
 
 # IIS Observatory
@@ -28,7 +28,7 @@ For a durable repository-local derived snapshot, run:
 /home/user01/project/iis-skills/observatory/bin/iis-observatory snapshot <repo> --check
 ```
 
-`--write` may write only `docs/planning/observatory/PROJECT-OVERVIEW.md` and `project-state.json`. These are derived read models, never canonical IIS artifacts. Built-in progress bars render only an already-derived exact Ticket ratio and always preserve the exact numerator, denominator, and percent; the bar does not affect health or next-work routing.
+`--write` may refresh only the derived `docs/planning/observatory/PROJECT-OVERVIEW.md` and `project-state.json`, never source authority. Current Scope state and incomplete required outcomes remain distinct from archived Ticket/Increment history; historical ratios do not prove current product completion.
 
 For artifact consistency checks, run:
 
@@ -46,8 +46,8 @@ Use `--format json` when machine-readable state is more useful than terminal ren
 
 ## Boundary
 
-Treat Observatory output as a read-only projection of existing `docs/planning/**` artifacts. Do not modify Scope, Work Package, Increment, Spec, or Ticket artifacts as part of inspection. The explicit `snapshot --write` exception may refresh only the derived `docs/planning/observatory/**` files. Do not start Scope Shaper, Ask Matt, To Spec, To Tickets, implementation, or verification merely because Observatory reports that leaf as next. Adaptive companion artifacts may be reported as provenance, but their presence or recorded `Status: active` never establishes current Adaptive activation.
+Treat Observatory as a read model of existing `docs/planning/**` artifacts. Do not change Thesis, transition contracts, Scope or historical Spec/Ticket/Increment sources. The explicit `snapshot --write` exception writes derived Observatory files only. Do not select a Scope, plan, implement or verify from a next-work suggestion. Legacy incomplete work requires an explicit current transition decision, not automatic execution; an old Mandate or active marker is not a new request.
 
-For an explicit request to continue or execute the reported next work, leave Observatory and route the new request through the appropriate planning or delivery skill.
+An explicit continuation request leaves read-only Observatory and enters the same IIS Main under the user's current scope and stop instructions.
 
-If the CLI cannot run, fall back to the `iis-workflow` Current Planning State Check contract rather than inventing state.
+If the CLI cannot run, inspect the exact sources read-only and state the CLI limitation. Do not invent current state or invoke a removed planning fallback.

@@ -1,35 +1,35 @@
 {
   "schema": "iis-completion-cases/v1",
-  "experiment_boundary": "Read-only final completion assessment by a real OMP Outer Main explicitly invoking iis-adaptive-planning over disposable current product state.",
-  "fixture_history_limit": "Most cases use explicitly synthetic starting history. The current verification control requires actual integrated Ready Verify with guarded progression before separate Outer Main assessment; no seeded verdict substitutes for that run.",
+  "experiment_boundary": "Read-only final completion assessment by a real current IIS Main over disposable product state.",
+  "fixture_history_limit": "Most cases use explicitly synthetic starting history. The current verification control requires actual independent Scope verification, independent read-only Coverage and Main's currentness check, status-only completion edit and readback before the separate Main assessment; no seeded verdict substitutes for that work.",
   "service_requirement": "none; all authoritative surfaces are local files and the ordinary local CLI",
   "required_repetitions": [1, 2],
   "cases": [
     {
       "case_id": "preparation-current",
       "family": "preparation-only",
-      "state": "Actual independent current ADMIT review covers every required Ticket; product remains ready",
+      "state": "Actual independent current ADMIT review covers the exact ready Scope; product remains ready",
       "expected_completion": true,
       "review_focus": "READY_EXECUTION_PLANS closes preparation only, without implementation or verification claims"
     },
     {
       "case_id": "parent-obligation-owned",
       "family": "current-parent-obligation",
-      "state": "applicable parent obligations have existing Ticket acceptance ownership and current readback",
+      "state": "applicable parent obligations have existing Scope acceptance ownership and current readback",
       "expected_completion": true,
       "review_focus": "actual current CLI and acceptance-ownership evidence close both applicable obligations"
     },
     {
       "case_id": "parent-obligation-unowned",
       "family": "current-parent-obligation",
-      "state": "all Tickets are done but one applicable preservation obligation has no acceptance owner or current evidence",
+      "state": "all Scopes are done but one applicable preservation obligation has no acceptance owner or current evidence",
       "expected_completion": false,
-      "review_focus": "whole completion is withheld and the exact existing To Tickets or upstream planning ownership gap is returned"
+      "review_focus": "whole completion is withheld and the exact current Scope or upstream planning ownership gap is returned"
     },
     {
       "case_id": "later-change-preserved",
       "family": "later-integration-regression",
-      "state": "the integrating Ticket owns preservation and the current ordinary legacy entrypoint remains stable",
+      "state": "the integrating Scope owns preservation and the current ordinary legacy entrypoint remains stable",
       "expected_completion": true,
       "review_focus": "current legacy CLI output, not the seeded earlier done state, establishes preservation"
     },
@@ -85,7 +85,7 @@
     {
       "case_id": "implementation-only-supported",
       "family": "implementation-only",
-      "state": "Verification is no, every current Ticket is ready, and its attributable implementation result is COMPLETE with current evidence",
+      "state": "Verification is no, every current Scope is ready, and its attributable implementation result is COMPLETE with current evidence",
       "expected_completion": true,
       "review_focus": "only the implementation boundary is reported with no verification or done claim"
     },
@@ -99,14 +99,14 @@
     {
       "case_id": "verification-current",
       "family": "verification-versus-ready",
-      "state": "Actual current integrated verifier result and current product readback exist",
+      "state": "Actual current independent verifier result, complete independent Coverage without unresolved material gaps, Main's status-only completion record and current product readback exist",
       "expected_completion": true,
-      "review_focus": "completion requires current verification, guarded progression, and actual done"
+      "review_focus": "completion requires attributable current verification, complete Coverage, Main's currentness check and actual done readback"
     },
     {
       "case_id": "implementation-ready-no-verification",
       "family": "verification-versus-ready",
-      "state": "Current product returns the requested result but no verifier verdict exists and Ticket remains ready",
+      "state": "Current product returns the requested result but no verifier verdict exists and Scope remains ready",
       "expected_completion": false,
       "review_focus": "a working implementation is not promoted to VERIFIED, done, or whole delivery"
     },
@@ -127,30 +127,30 @@
     {
       "case_id": "implementation-complete-verification-pending",
       "family": "owner-return-routing",
-      "state": "The implementation owner returned COMPLETE, the current product works, Verification is enabled, and the Ticket remains ready",
+      "state": "The implementation owner returned COMPLETE, the current product works, Verification is enabled, and the Scope remains ready",
       "expected_completion": false,
       "review_focus": "implementation COMPLETE routes to the verifier rather than becoming whole-run success"
     },
     {
       "case_id": "verifier-terminal-finalization-pending",
       "family": "owner-return-routing",
-      "state": "The verifier returned VERIFIED with one opaque host terminal handle and the Ticket remains ready pending caller finalization",
+      "state": "The independent verifier returned VERIFIED with exact source/target identities and primary evidence, but the Scope remains ready pending independent Coverage and Main's completion record",
       "expected_completion": false,
-      "review_focus": "the exact host terminal result routes once to ready_finalize and is not itself progression"
+      "review_focus": "Main checks attribution/currentness and independent Coverage before editing only ready to done and reading it back; VERIFIED alone is not progression"
     },
     {
       "case_id": "verified-progression-failed",
       "family": "owner-return-routing",
-      "state": "The verifier result is VERIFIED but ready_finalize reports FAILED with no progression and the Ticket remains ready",
+      "state": "The verifier result is VERIFIED but Main's completion edit did not succeed or its readback did not establish done; the Scope remains ready",
       "expected_completion": false,
-      "review_focus": "semantic success cannot override finalizer failure or current Ticket state"
+      "review_focus": "semantic success cannot override an unsuccessful completion record or actual current Scope state"
     },
     {
       "case_id": "current-increment-delivered-goal-remaining",
       "family": "success-reentry",
-      "state": "The current Increment is done but one required broader Goal result remains missing within the Mandate ceiling",
+      "state": "The current Scope is done but one required broader Goal result remains missing within the current request ceiling",
       "expected_completion": false,
-      "review_focus": "current-Increment success re-enters planning from actual state rather than returning whole-run success"
+      "review_focus": "current Scope success re-enters planning from actual state rather than returning whole-request success"
     },
     {
       "case_id": "no-progress-unchanged-owner-return",
@@ -162,7 +162,7 @@
     {
       "case_id": "verification-disabled-delivery-boundary",
       "family": "disabled-stage-resume",
-      "state": "Implementation returned COMPLETE, Verification is explicitly disabled, the Ticket remains ready, and the requested boundary is delivered completion",
+      "state": "Implementation returned COMPLETE, Verification is explicitly disabled, the Scope remains ready, and the requested boundary is delivered completion",
       "expected_completion": false,
       "review_focus": "the disabled stage is not invoked and its missing result is not silently claimed"
     }

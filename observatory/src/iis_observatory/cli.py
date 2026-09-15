@@ -13,9 +13,9 @@ from .discovery import (
     is_git_repository,
 )
 from .history import HistoryError, collect_history, render_history
-from .model import Health, __version__
-from .render import render_doctor, render_overview, render_overview_markdown, render_state
+from .model import Health, SCHEMA_VERSION, __version__
 from .scanner import ScanOptions, scan_repository
+from .render import render_doctor, render_overview, render_overview_markdown, render_state
 from .snapshot import (
     SnapshotError,
     SnapshotFreshness,
@@ -148,7 +148,8 @@ def _overview(args: argparse.Namespace) -> int:
     if args.format == "json":
         output = json.dumps(
             {
-                "schema_version": "1.0",
+                "schema_version": SCHEMA_VERSION,
+                "authority_model": "direct-scope-or-legacy-history",
                 "root": str(root),
                 "projects": [state.to_dict() for state in states],
             },

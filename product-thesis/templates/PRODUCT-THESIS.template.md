@@ -18,6 +18,14 @@ Result: CALIBRATED | USER_INPUT_REQUIRED
 
 <Intent/input → necessary system judgment, transformation or preservation → observable result → user outcome. Explain the essential causal links and why omitting each material behavior would break the promise. No fixed behavior count.>
 
+## Behavior and Product Policy
+
+<Product-significant identity, states, transitions, failure/recovery, repetition and preservation. Include only relevant distinctions; current-Scope policy must not be deferred to implementation.>
+
+## UI and Interaction
+
+<Include only when a user-visible interaction or rendered state matters to the promise. Reuse existing assets and authority; omit this section when irrelevant.>
+
 ## Required Outcomes / Means
 
 <Explicitly required or duly adopted results/means, with actual provenance; exact None when absent. Keep derived necessities in the causal explanation rather than presenting them as user approval.>
@@ -40,4 +48,4 @@ Result: CALIBRATED | USER_INPUT_REQUIRED
 
 ## Open Product Meaning
 
-None | <Exact unresolved user-owned choice and consequences. Saving this document does not resolve it.>
+None | <Unresolved choice, material consequences and when it must be resolved. Distinguish unresolved core/current-Scope meaning from future capability details. Saving does not resolve it.>

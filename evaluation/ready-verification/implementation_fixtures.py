@@ -1,12 +1,12 @@
-"""Disposable product fixtures for bounded Ready Ticket implementation observations.
+"""Disposable product fixtures for bounded IIS Scope implementation observations.
 
-Oracle expectations and comparison labels remain in the evaluator.  Generated
-product and support trees contain only approved product authority, executable
-surfaces, and the external conditions that an implementation worker may
-legitimately observe.
+Oracle expectations and comparison labels remain in the evaluator. Generated
+product and support trees contain only approved Thesis/Scope authority, executable
+surfaces, and external conditions that an implementation worker may legitimately observe.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import shlex
@@ -242,146 +242,65 @@ def _flow(
         "external": external,
     }
 
-
-def _documents(project: Path, flows: list[dict[str, str]]) -> tuple[Path, Path, Path]:
-    behavior = _put(
+def _documents(project: Path, flows: list[dict[str, str]]) -> tuple[Path, Path]:
+    thesis = _put(
         project,
-        "docs/planning/behavior/contexts/delivery.md",
-        "# Delivery behavior\n\n"
+        "docs/planning/product-thesis/delivery/THESIS-001.md",
+        "# Bounded product delivery Thesis\n\n"
+        "Status: adopted\nOwner: product planning owner\n\n"
+        "## Product Promise\n\n"
+        "The requested bounded product result is available through its approved current observation boundary, while preserving every listed outcome and distinguishing acknowledgement from authoritative readback.\n\n"
+        "## Behavior and Truth Boundary\n\n"
         + "\n".join(f"- {flow['outcome']}" for flow in flows)
-        + "\n- Acknowledgement, source inspection, and authoritative current result are distinct observations.\n"
-        + "- Product-owned work does not alter an external authority, fabricate credentials, or manufacture operator approval.\n",
+        + "\n- Product-owned work does not alter an external authority, fabricate credentials or manufacture operator approval.\n"
+        "- Internal helpers and source inspection are supporting evidence only when the Scope promises a real product boundary.\n\n"
+        "## Non-Goals\n\n"
+        "- Changes to external services, credentials or operator approvals\n- Unrelated product expansion\n- Verification or finalization during implementation\n\n"
+        "## Open Decisions\n\nNone\n",
     )
-    outcomes = "\n".join(f"- {flow['outcome']}" for flow in flows)
-    verification = ""
-    for flow in flows:
-        verification += (
-            f"- Outcome: {flow['outcome']}\n"
-            f"  Acceptance boundary: {flow['boundary']}\n"
-            f"  Trigger or inspection target: {flow['trigger']}\n"
-            f"  Expected observable result: {flow['outcome']}\n"
-            f"  Authoritative readback: {flow['readback']}\n"
-            f"  Disposition: {flow['disposition']}\n"
-            f"  Independent verification required: {flow['independent']}\n"
-            f"  Acceptance surface: {flow['surface']}\n"
-            f"  External condition: {flow['external']}\n"
-        )
-    spec = _put(
-        project,
-        "docs/planning/work/delivery/SPEC.md",
-        f"""
-# Bounded product delivery
-
-Status: approved
-Owner: product planning owner
-Source-Increment: None
-
-## Problem
-
-The requested bounded product result must be available through its approved current observation boundary.
-
-## Desired Outcome
-
-{outcomes}
-
-## Requirements
-
-- Use each ordinary entrypoint or canonical artifact named by the approved observation flow.
-- Preserve every listed outcome and distinguish request acknowledgement from authoritative readback.
-- Keep product changes inside Ticket Scope and leave external authorities unchanged.
-
-## Non-Goals
-
-- Changes to external services, credentials, or operator approvals
-- Unrelated product expansion
-- Independent verification or Ticket status changes during implementation
-
-## Implementation Constraints
-
-Only paths named in the implementation handoff may be changed or created. Approved planning authority is read-only.
-
-## Verification Expectations
-
-{verification}
-## Behavior Authorities
-
-- docs/planning/behavior/contexts/delivery.md | Scope: bounded product result and current readback
-
-## UI / UX
-
-Not applicable
-
-## Open Questions
-
-None
-""",
-    )
-    scope_details = "; ".join(flow["surface"].split(" | ", 1)[1] for flow in flows)
-    criteria = "\n".join(f"- {flow['outcome']}" for flow in flows)
-    ticket_verification = ""
+    thesis_sha = hashlib.sha256(thesis.read_bytes()).hexdigest()
+    scenarios = []
     for ordinal, flow in enumerate(flows, 1):
-        ticket_verification += (
-            f"- Parent outcome ordinal: {ordinal}\n"
-            f"  AC ordinals: {ordinal}\n"
-            "  Behavior authority ordinals: 1\n"
-            "  Initial state: Inspect the current product and declared readback directly; prior or preparatory observations are not current completion evidence.\n"
-            f"  Trigger or inspection target: {flow['trigger']}\n"
-            f"  Acceptance boundary: {flow['boundary']}\n"
-            f"  Expected observable result: {flow['outcome']}\n"
-            f"  Authoritative readback: {flow['readback']}\n"
-            "  Decision boundary: Current authoritative readback establishes the outcome, contradicts it, or leaves it unresolved when required evidence is unavailable.\n"
-            f"  Disposition: {flow['disposition']}\n"
-            f"  Independent verification required: {flow['independent']}\n"
-            f"  Acceptance surface: {flow['surface']}\n"
-            f"  External condition: {flow['external']}\n"
+        scenarios.append(
+            f"### Scenario {ordinal}\n"
+            "Initial state: Inspect the current product and declared readback directly; prior or preparatory observations are not current evidence.\n"
+            f"Action or inspection: {flow['trigger']}\n"
+            f"Expected observable result: {flow['outcome']}\n"
+            f"Acceptance boundary: {flow['boundary']}\n"
+            f"Authoritative readback: {flow['readback']}\n"
+            "Decision boundary: Current authoritative readback establishes the outcome, contradicts it, or leaves it unresolved when required evidence is unavailable.\n"
+            f"External condition: {flow['external']}\n"
+            f"Acceptance surface: {flow['surface']}\n"
         )
-    ticket = _put(
+    scope = _put(
         project,
-        "docs/planning/work/delivery/tickets/TICKET-001.md",
-        f"""
-# TICKET-001: Bounded product delivery
+        "docs/planning/work/delivery/SCOPE.md",
+        f"""# Bounded product delivery Scope
 
-Status: ready
-Parent-Spec: ../SPEC.md
+Schema: iis-scope/v1
 Project-Root: {project}
-Worker:
-UI: no
+Status: ready
 
-## Goal
+## Product Authority
 
-{outcomes}
+- {thesis} sha256:{thesis_sha}
 
-## Acceptance Criteria
+## Outcome
 
-{criteria}
+The current product provides the bounded result represented by all authored Acceptance scenarios below. Only the handed-off product paths and their actual current readback are in scope; external service source/state, credentials and operator approval remain separately owned.
 
-## Scope
+## Acceptance
 
-Create or modify only the handed-off product paths needed for these acceptance surfaces: {scope_details}.
-
+{chr(10).join(scenarios)}
 ## Non-Goals
 
-- Changes to approved planning authority
-- Changes to external service source, state, credentials, or operator approval
-- Final verification, deployment, or unrelated product work
-
-## Blockers
-
-None
-
-## Verification
-
-{ticket_verification}
-## Behavior Authorities
-
-- docs/planning/behavior/contexts/delivery.md | Scope: bounded product result and current readback
-
-## References
-
-- ../SPEC.md
+- Changes to approved Thesis authority
+- Changes to external service source, state, credentials or operator approval
+- Final verification, deployment or unrelated product work
+- Internal implementation topology
 """,
     )
-    return behavior, spec, ticket
+    return thesis, scope
 
 
 def _observer_command(support: Path, argv: list[str]) -> tuple[Path, list[str]]:
@@ -635,7 +554,7 @@ print(json.dumps(request("/readback/surface"), sort_keys=True))
                 trigger=trigger,
                 readback=f"The CLI JSON and actual HTTP GET {endpoint}/readback/surface; absence of the owned CLI and unavailability of the external surface are distinct conditions.",
                 boundary="owned ordinary CLI and required upstream current readback",
-                surface=f"Ticket Scope creates | {surface_detail}" if state == "owned-path-absent" else f"Existing | {surface_detail}",
+                surface=f"Scope creates | {surface_detail}" if state == "owned-path-absent" else f"Existing | {surface_detail}",
                 external=_external_context(endpoint),
             )
         ]
@@ -668,7 +587,7 @@ print(json.dumps(result, sort_keys=True))
                 disposition="Operator-assisted",
                 independent="no",
                 surface="Operator-owned | current approval linked to product request alpha",
-                external=_external_context(endpoint) + " Only the operator can grant approval; this Ticket authorizes no new human action.",
+                external=_external_context(endpoint) + " Only the operator can grant approval; this Scope authorizes no new human action.",
             )
         ]
         targets = [app, client]
@@ -819,7 +738,7 @@ print(json.dumps(result, sort_keys=True))
                 trigger=trigger,
                 readback=f"Direct bytes and parsed JSON at {artifact}, plus the ordinary local inspection command; external delivery is not inferred from this artifact.",
                 boundary="canonical local release artifact and local inspection interface",
-                surface=f"Ticket Scope creates | {artifact_surface}",
+                surface=f"Scope creates | {artifact_surface}",
             )
         ]
         targets = [app, artifact]
@@ -873,7 +792,7 @@ def materialize(case_key: str, project_root: Path, support_root: Path, *, port: 
 
     endpoint = f"http://127.0.0.1:{port}"
     blueprint = _blueprint(case_key, project, support, endpoint)
-    behavior, spec, ticket = _documents(project, blueprint["flows"])
+    thesis, scope = _documents(project, blueprint["flows"])
 
     service_argv = reset_argv = None
     service_path: Path | None = None
@@ -887,7 +806,7 @@ def materialize(case_key: str, project_root: Path, support_root: Path, *, port: 
     else:
         _observer, observer_argv = _observer_command(support, blueprint["readback_argv"])
 
-    protected = [behavior, spec, ticket, _observer]
+    protected = [thesis, scope, _observer]
     if service_path is not None:
         protected.append(service_path)
     if blueprint["credential"] is not None:
@@ -898,16 +817,15 @@ def materialize(case_key: str, project_root: Path, support_root: Path, *, port: 
         protected.append(blueprint["precheck_output"])
 
     implementation_prompt = (
-        f"Implement only the exact ready Ticket {ticket}. "
-        "Approved planning files and the separate support root are read-only. "
-        "Product writes are limited to the handed-off target paths. Do not start final verification."
+        f"Implement only the exact ready Scope {scope}. "
+        "Approved Thesis/Scope and the separate support root are read-only. "
+        "Product writes are limited to the handed-off target paths. Perform the minimum actual self-check and do not start final verification."
     )
 
     return {
-        "authority_state": str(support / "state.json") if service_path is not None else None,
         "project_root": str(project),
-        "ticket_path": str(ticket),
-        "target_paths": [str(path) for path in blueprint["targets"]],
+        "scope_path": str(scope),
+        "thesis_paths": [str(thesis)],
         "allowed_output_paths": [],
         "implementation_prompt": implementation_prompt,
         "trigger_argv": blueprint["trigger_argv"],

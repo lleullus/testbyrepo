@@ -32,7 +32,7 @@ Exit codes are `0`, `6`, `7`, and `3` respectively.
 
 ## Source fingerprint
 
-Freshness is content-based, not Git-HEAD-based. The fingerprint includes current canonical Scope-lineage and current-work planning files needed by the projection, plus Adaptive companion provenance that is displayed by the snapshot.
+Freshness is content-based, not Git-HEAD-based. The fingerprint includes the current direct `SCOPE.md`, its bound Thesis sources, optional bound Transition Authority sources, the current work area (including `PLAN.md`), and displayed Adaptive provenance.
 
 It excludes `docs/planning/observatory/**`. Therefore committing a generated snapshot, or committing unrelated repository files, does not by itself make the snapshot stale.
 
@@ -58,11 +58,11 @@ Observatory does not synthesize product-wide completion percentages, capability 
 
 ## Adaptive Planning boundary
 
-`docs/planning/adaptive/**` is provenance, not canonical current-state authority for Observatory. A recorded Adaptive Mandate may say `Status: active`, but the presence or content of that file does not establish that the current user request activated IIS Adaptive Planning.
+`docs/planning/adaptive/**` is provenance, not canonical current-state authority for Observatory. A recorded Adaptive Mandate may say `Status: active`, but the presence or content of that file does not establish current mandate activation or a Transition Baseline.
 
 Snapshot output may report that Adaptive companion provenance exists, its recorded revision/status, and its paths. It must also state that current Adaptive activation inference was not performed.
 
-Adaptive and Observatory directories are excluded from canonical artifact scanning. Adaptive reshape remains visible through the canonical Scope/Increment lineage it creates, including replacement Increment selection and historical `superseded` Increments.
+Adaptive and Observatory directories are excluded from canonical artifact scanning. Legacy Scope/Increment/Spec/Ticket history remains visible but never becomes current direct Scope authority.
 
 ## History
 

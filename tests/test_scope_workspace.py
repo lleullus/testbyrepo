@@ -1,83 +1,83 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
-import os
-import stat
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).parents[1]
-MODULE_PATH = ROOT / "scope-shaper" / "tools" / "prepare_scope_workspace.py"
-spec = importlib.util.spec_from_file_location("scope_workspace", MODULE_PATH)
-scope_workspace = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = scope_workspace
-assert spec.loader is not None
-spec.loader.exec_module(scope_workspace)
+ROOT = Path(__file__).resolve().parents[1]
+MODULE_PATH = ROOT / "scope-shaper" / "tools" / "validate_scope.py"
+SPEC = importlib.util.spec_from_file_location("validate_scope", MODULE_PATH)
+assert SPEC and SPEC.loader
+validate_scope = importlib.util.module_from_spec(SPEC)
+assert SPEC.loader is not None
+SPEC.loader.exec_module(validate_scope)
 
 
-class ScopeWorkspaceTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.original_umask = os.umask(0o002)
+class ScopeValidatorFilesystemTests(unittest.TestCase):
+    def _fixture(self) -> tuple[tempfile.TemporaryDirectory, Path, Path]:
+        temporary = tempfile.TemporaryDirectory(dir=Path.home())
+        project = Path(temporary.name).resolve()
+        thesis = project / "docs" / "planning" / "product-thesis" / "reservation-flow" / "THESIS-001.md"
+        scope = project / "docs" / "planning" / "work" / "reservation-flow" / "SCOPE.md"
+        thesis.parent.mkdir(parents=True)
+        scope.parent.mkdir(parents=True)
+        thesis.write_text("# Thesis\n\nCore utility.\n", encoding="utf-8")
+        digest = hashlib.sha256(thesis.read_bytes()).hexdigest()
+        scope.write_text(
+            f"""# Reservation flow
+Schema: iis-scope/v1
+Project-Root: {project}
+Status: ready
 
-    def tearDown(self) -> None:
-        os.umask(self.original_umask)
+## Product Authority
+- {thesis} sha256:{digest}
 
-    def test_prepare_creates_safe_scope_artifact_directories(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            root = Path(raw).resolve()
-            result = scope_workspace.prepare(str(root), "example-scope")
-            for key in (
-                "scopeRoot",
-                "scopeWorkspace",
-                "workPackages",
-                "revisions",
-                "increments",
-                "legacyImport",
-                "legacyWorkPackages",
-            ):
-                path = Path(result[key])
-                mode = stat.S_IMODE(path.stat().st_mode)
-                self.assertEqual(mode & (stat.S_IWGRP | stat.S_IWOTH), 0, (key, oct(mode)))
+## Outcome
+A durable reservation result.
 
-    def test_unsafe_existing_scope_directory_blocks_without_explicit_repair(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            root = Path(raw).resolve()
-            result = scope_workspace.prepare(str(root), "example-scope")
-            increments = Path(result["increments"])
-            increments.chmod(0o775)
-            with self.assertRaisesRegex(scope_workspace.ScopeWorkspaceError, "unsafe group/other write"):
-                scope_workspace.prepare(str(root), "example-scope")
-            repaired = scope_workspace.prepare(str(root), "example-scope", repair_owned_permissions=True)
-            self.assertEqual(stat.S_IMODE(Path(repaired["increments"]).stat().st_mode), 0o755)
+## Acceptance
+Read the canonical reservation state.
 
-    def test_repair_option_never_changes_shared_docs_or_planning_permissions(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            root = Path(raw).resolve()
-            docs = root / "docs"
-            docs.mkdir(mode=0o755)
-            docs.chmod(0o775)
-            with self.assertRaisesRegex(scope_workspace.ScopeWorkspaceError, "unsafe group/other write"):
-                scope_workspace.prepare(str(root), "example-scope", repair_owned_permissions=True)
-            self.assertEqual(stat.S_IMODE(docs.stat().st_mode), 0o775)
+## Open Decisions
+None
+""",
+            encoding="utf-8",
+        )
+        return temporary, scope, thesis
 
-    def test_symlinked_scope_component_is_rejected_even_with_repair(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            root = Path(raw).resolve()
-            docs = root / "docs"
-            docs.mkdir(mode=0o755)
-            elsewhere = root / "elsewhere"
-            elsewhere.mkdir(mode=0o755)
-            (docs / "planning").symlink_to(elsewhere, target_is_directory=True)
-            with self.assertRaisesRegex(scope_workspace.ScopeWorkspaceError, "non-symlink directory"):
-                scope_workspace.prepare(str(root), "example-scope", repair_owned_permissions=True)
+    def test_accepts_canonical_scope_and_binds_thesis_bytes(self) -> None:
+        temporary, scope, thesis = self._fixture()
+        self.addCleanup(temporary.cleanup)
 
-    def test_invalid_scope_work_slug_is_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            with self.assertRaises(scope_workspace.ScopeWorkspaceError):
-                scope_workspace.prepare(str(Path(raw).resolve()), "BAD/slug")
+        result = validate_scope.validate(scope)
+
+        self.assertEqual(result["schema"], "iis-scope/v1")
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["scope_path"], str(scope))
+        self.assertEqual(result["product_authorities"], [{
+            "path": str(thesis),
+            "sha256": hashlib.sha256(thesis.read_bytes()).hexdigest(),
+        }])
+
+    def test_rejects_changed_thesis_bytes(self) -> None:
+        temporary, scope, thesis = self._fixture()
+        self.addCleanup(temporary.cleanup)
+        thesis.write_text("# Thesis\n\nChanged utility.\n", encoding="utf-8")
+
+        with self.assertRaisesRegex(validate_scope.ScopeValidationError, "authority changed"):
+            validate_scope.validate(scope)
+
+    def test_rejects_scope_outside_canonical_work_path(self) -> None:
+        temporary, scope, _thesis = self._fixture()
+        self.addCleanup(temporary.cleanup)
+        outside = scope.parents[3] / "SCOPE.md"
+        outside.write_text(scope.read_text(encoding="utf-8"), encoding="utf-8")
+
+        with self.assertRaisesRegex(validate_scope.ScopeValidationError, "docs/planning/work/<slug>/SCOPE.md"):
+            validate_scope.validate(outside)
 
 
 if __name__ == "__main__":

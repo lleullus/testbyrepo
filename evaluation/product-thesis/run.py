@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
-"""Prepare and capture fixed Product Thesis model cases without auto-grading semantics."""
+"""Prepare fixed Product Thesis prompts and metadata; no agent runner or semantic grading."""
 from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib.util
 import json
 from pathlib import Path
 import uuid
 
-ROOT = Path(__file__).resolve().parents[1]
 CASES = Path(__file__).with_name("cases.json")
-RUN_AGENT = ROOT / "ready-verification/run_agent.py"
 
 
 def read_json(path: Path) -> dict:
@@ -61,9 +58,9 @@ def prepare(case_id: str, arena: Path, variant: str, repetition: int) -> Path:
     prompt = (
         case["prompt"]
         + f"\n\nProject Root: {project}\n"
-        + "Read the currently installed iis-workflow skill and only the skills to which that installed workflow routes. "
-        + "Inspect evaluation-context.json, follow the installed routing contract, and return only the result that contract requires. "
-        + "Do not infer a stage or output schema from the evaluator. Save the Thesis source when the installed contract requires it; that write is authorized before Run closure and is not downstream approval. "
+        + "Read the supplied iis-workflow skill source and only the skills to which it routes. "
+        + "Inspect evaluation-context.json, follow that routing contract, and return only the result it requires. "
+        + "Do not infer a stage or output schema from the evaluator. Save the Thesis source when the supplied contract requires it; that write is authorized before request closure and is not downstream approval. "
         + ("Follow the user's exact downstream planning and stop authority; do not implement or verify a product. "
            if case.get("downstream_planning") else "Do not execute the downstream planning leaf or write other planning artifacts. ")
     )
@@ -78,7 +75,7 @@ def prepare(case_id: str, arena: Path, variant: str, repetition: int) -> Path:
         "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
         "case_file": str(CASES),
         "case_file_sha256": sha(CASES),
-        "runner_sha256": sha(Path(__file__)),
+        "fixture_builder_sha256": sha(Path(__file__)),
         "model": protocol["model"],
         "thinking": protocol["thinking"],
         "required_observations": case["required_observations"],
@@ -88,55 +85,6 @@ def prepare(case_id: str, arena: Path, variant: str, repetition: int) -> Path:
     write_json(path, metadata)
     return path
 
-
-def load_runner():
-    spec = importlib.util.spec_from_file_location("product_thesis_run_agent", RUN_AGENT)
-    if spec is None or spec.loader is None:
-        raise RuntimeError("cannot load shared isolated runner")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def run(metadata_path: Path, agent_dir: Path, payload: Path, output: Path, timeout: int) -> dict:
-    metadata = read_json(metadata_path.resolve(strict=True))
-    if metadata.get("schema") != "iis-product-thesis-case/v1":
-        raise ValueError("unsupported metadata")
-    if sha(CASES) != metadata["case_file_sha256"] or sha(Path(__file__)) != metadata["runner_sha256"]:
-        raise ValueError("evaluation definition changed after preparation")
-    if hashlib.sha256(metadata["prompt"].encode()).hexdigest() != metadata["prompt_sha256"]:
-        raise ValueError("prepared prompt drift")
-    runner = load_runner()
-    result = runner.invoke(
-        project_root=Path(metadata["project_root"]),
-        prompt=metadata["prompt"],
-        output_dir=output,
-        agent_dir=agent_dir,
-        payload=payload,
-        model=metadata["model"],
-        thinking=metadata["thinking"],
-        timeout=timeout,
-        stage="plan",
-    )
-    record = {
-        "schema": "iis-product-thesis-observation/v1",
-        "metadata": str(metadata_path.resolve()),
-        "metadata_sha256": sha(metadata_path.resolve()),
-        "case_id": metadata["case_id"],
-        "variant": metadata["variant"],
-        "repetition": metadata["repetition"],
-        "required_observations": metadata["required_observations"],
-        "forbidden_observations": metadata["forbidden_observations"],
-        "automatic_semantic_acceptance": False,
-        "raw_events": result["raw_events"],
-        "terminal_text": result["terminal_text"],
-        "clean_transport": result["clean_transport"],
-        "actual_models": result["actual_models"],
-    }
-    write_json(output / "product-thesis-observation.json", record)
-    return record
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -145,19 +93,9 @@ def main() -> int:
     prepare_parser.add_argument("--arena", required=True, type=Path)
     prepare_parser.add_argument("--variant", required=True)
     prepare_parser.add_argument("--repetition", required=True, type=int)
-    run_parser = commands.add_parser("run")
-    run_parser.add_argument("--metadata", required=True, type=Path)
-    run_parser.add_argument("--agent-dir", required=True, type=Path)
-    run_parser.add_argument("--payload", required=True, type=Path)
-    run_parser.add_argument("--output", required=True, type=Path)
-    run_parser.add_argument("--timeout", type=int, default=600)
     args = parser.parse_args()
-    if args.command == "prepare":
-        print(prepare(args.case_id, args.arena, args.variant, args.repetition))
-        return 0
-    record = run(args.metadata, args.agent_dir, args.payload, args.output, args.timeout)
-    print(json.dumps({key: record[key] for key in ("case_id", "variant", "repetition", "clean_transport", "actual_models")}, ensure_ascii=False))
-    return 0 if record["clean_transport"] else 1
+    print(prepare(args.case_id, args.arena, args.variant, args.repetition))
+    return 0
 
 
 if __name__ == "__main__":

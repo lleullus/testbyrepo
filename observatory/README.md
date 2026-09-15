@@ -4,27 +4,27 @@ IIS Observatory는 여러 저장소의 IIS planning 아티팩트를 읽어 현�
 
 ```text
 IIS PROJECT OVERVIEW
-────────────────────────────────────────────────────────────────────────────────────────────
-Repository         Unit                                  Tkts   State      Next
-────────────────────────────────────────────────────────────────────────────────────────────
-tax                INC-004 · VAT authoritative readback  3/5    READY      TKT-005 구현
-ima2               INC-012 · Job inspection              —      PLANNING   Ask Matt
-oracle             WP-003 · Browser slot expansion       —      NEEDS SCOPE Scope Shaper
-legacy-api         work · Legacy cleanup                 4/4    COMPLETE   —
-dc-ai-tier         INC-004 · CN bounded batch 평가       1/1    COMPLETE   Scope Shaper [WP-002, WP-003]
-────────────────────────────────────────────────────────────────────────────────────────────
-Ready 1   Blocked 0   Planning 2   Inconsistent 0   Complete 2
+────────────────────────────────────────────────────────────────────────────
+Repository         Unit                         State       Next
+────────────────────────────────────────────────────────────────────────────
+tax                Scope · VAT readback        PLANNING    Plan
+ima2               Scope · Job inspection      COMPLETE    Scope Shaper
+legacy-api         legacy history              STALE       transition required
+oracle              Scope · Browser slot        INCONSISTENT Check consistency
+────────────────────────────────────────────────────────────────────────────
+Planning 2   Inconsistent 1   Complete 1   Stale 1
 ```
 
 `Unit`은 별도 요약을 생성하지 않습니다. Increment가 있으면 `INC-NNN · <Increment authored heading>`, Work Package만 있으면 `WP-NNN · <Work Package authored heading>`, direct-work이면 `work · <Spec authored heading>`을 사용하고 터미널 폭에서만 잘라냅니다.
 
 ## 설계 원칙
 
-- 상태의 원본은 각 저장소의 `docs/planning/**` Markdown 파일입니다.
-- Observatory는 상태 DB나 workflow ledger를 만들지 않습니다.
-- 파일을 변경하지 않고 매 실행마다 현재 상태를 다시 계산합니다.
-- 에이전트용 JSON과 사람용 Overview가 동일한 판정 로직을 사용합니다.
-- `delivery outside IIS`는 다음 포인터일 뿐, 구현이나 검증을 실행하지 않습니다.
+- 현재 권위는 각 저장소의 `docs/planning/work/<slug>/SCOPE.md` (`Schema: iis-scope/v1`)입니다.
+- Scope는 exact project-local Thesis 원본과 UTF-8 SHA-256을 `Product Authority`에 바인딩합니다. 승인된 전환 계약이 현재 Scope에 실제 적용될 때만 선택적인 `Transition Authority`를 같은 방식으로 표시합니다.
+- Scope 상태는 `draft`, `ready`, `done`, `superseded`입니다. `superseded`는 소비되지 않은 대체 계약의 기록이며 자동 재개하지 않습니다.
+- Observatory는 상태 DB나 workflow ledger를 만들지 않고 매 실행마다 Markdown을 다시 계산합니다.
+- 기존 Scope Shaping/Increment/Spec/Ticket은 read-only 역사입니다. 직접 Scope가 있으면 현재 권위나 Matt/Ticket 다음 작업으로 재사용하지 않으며, 미완료 항목은 `transition required`로만 표시합니다.
+- 에이전트용 JSON과 사람용 Overview는 동일한 판정 로직을 사용합니다. 모든 `Next`/`Next leaf`는 조회 포인터이며 구현·Plan·검증·전환을 실행하거나 허가하지 않습니다.
 
 ## 요구 사항
 
@@ -119,16 +119,14 @@ iis-observatory scan ~/project/tax
 ```text
 IIS CURRENT PLANNING STATE
 Repository: tax
-Current Scope: ...
-Current Work Package: WP-002 / scoped [...]
-Current Increment: INC-004 / ready-for-matt [...]
-Current Spec: SPEC.md / approved [...]
-Derived Delivery State: READY
-Completed: TKT-001, TKT-002, TKT-003
-Remaining: TKT-004 (ready), TKT-005 (ready)
-Next Work: TKT-004 구현
-Next leaf: delivery outside IIS
-Health: READY
+Authority mode: direct Thesis → Scope
+Current Scope: VAT readback [docs/planning/work/vat-readback/SCOPE.md]
+Scope Status: ready
+Bound Thesis: ... sha256:<digest>
+Required Outcomes — fulfillment not established: <unassessed named requirements>
+Next Work: none established
+Next leaf: delivery state not established
+Health: PLANNING
 ...
 STOP
 ```
@@ -193,13 +191,12 @@ iis-observatory doctor ~/project
 
 다음 문제를 탐지합니다.
 
-- Scope가 선택한 Increment 파일이 없음
-- `ready-for-matt` Increment가 둘 이상임
-- 현재 Ticket의 ID나 `Status`가 없음
-- 현재 Ticket ID가 중복됨
-- 알 수 없는 Ticket 상태
-- 현재 Spec의 `Source-Increment` 불일치
+- `SCOPE.md`의 Schema/Project-Root/필수 섹션 누락
+- Thesis 또는 optional Transition Authority 경로·digest가 stale/중복/범위 밖임
+- `draft|ready` direct Scope가 둘 이상임 (`IIS502`)
+- `ready`/`done` Scope의 unresolved Open Decisions
 - 존재하지 않는 로컬 planning Markdown 링크
+- legacy Scope/Increment/Spec/Ticket 미완료 항목 (`Transition Required`, 자동 이행 없음)
 
 CI나 자동화에서 오류 상태를 exit code로 받고 싶다면:
 
@@ -232,72 +229,68 @@ iis-observatory version
 ```bash
 iis-observatory overview --help
 ```
-
 ## 판정 개요
 
-현재 단위는 다음 순서로 찾습니다.
+현재 Scope는 `docs/planning/work/*/SCOPE.md` 중 다음 규칙으로 찾습니다.
 
-1. 최신 canonical `SCOPE-SHAPING-RESULT.md`
-2. 명시된 `Selected-Increment` 또는 `Current-Increment`
-3. Scope가 유일하게 참조하는 Increment
-4. 유일한 `ready-for-matt` Increment
-5. 유일한 Spec `Source-Increment`
-6. direct work인 경우 `Suggested-Work-Slug` 또는 유일한 work slug
+1. `Status: draft|ready`인 active Scope가 하나면 그것을 current로 표시합니다.
+2. active Scope가 둘 이상이면 `IIS502`와 `INCONSISTENT`를 표시하며 어느 것도 자동 선택하지 않습니다.
+3. active Scope가 없으면 최신 `done` Scope를 read-only current로 표시합니다.
+4. `superseded`만 남으면 `STALE`/`transition required`로 표시하고 새 Scope를 자동 생성·승격하지 않습니다.
 
-다음 작업은 정합성 오류 → blocked Ticket → ready Ticket → draft Ticket → 현재 delivery unit 완료 후 authored Scope horizon → Spec → Increment → Scope 순서로 판정합니다. 현재 Ticket이 모두 `done`이어도 `Outcome Horizon > Expansion` 후보가 있으면 현재 unit의 `COMPLETE`는 유지하면서 후보를 그대로 표시하고 `Scope Shaper`를 다음 leaf로 가리킵니다. `Deferred`는 표시만 하고 자동 승격하지 않습니다. 세부 계약은 [`docs/STATE-CONTRACT.md`](docs/STATE-CONTRACT.md)에 있습니다.
+`draft`는 Scope Shaper를 가리킵니다. `ready`만으로는 Plan 전인지 구현 후 검증 대기인지 알 수 없으므로 정확한 다음 단계는 미확정으로 표시합니다. `done`은 그 Scope의 기록일 뿐입니다. 필수 결과의 충족 여부는 문구 일치로 추측하지 않고 `unassessed`로 남기며 현재 증거와의 대조가 필요함을 표시합니다. 조회는 실행 허가가 아닙니다.
 
-`scoped`, `ready-for-matt`, `approved` 같은 값은 원본 planning artifact의 authored status입니다. 상세 `scan`에서 Ticket 기반 delivery 상태가 성립하면 `Derived Delivery State: READY|BLOCKED|COMPLETE`를 별도 줄로 표시해 authored planning status와 Observatory의 계산 결과를 구분합니다.
+`Product Authority`의 Thesis 경로가 없거나 digest가 바뀌면 `IIS513`/`INCONSISTENT`, active Scope 중복은 `IIS502`/`INCONSISTENT`입니다. optional `Transition Authority`는 파일 경로와 digest를 검증해 표시하지만 존재만으로 mandate·baseline 활성화를 추론하지 않습니다.
+
+기존 `SCOPE-SHAPING-RESULT.md`, Work Package, Increment, Spec, Ticket은 `Legacy History`로만 표시합니다. 미완료 legacy 항목에는 `Transition Required`를 붙이고 자동 이행하지 않습니다. 기존 artifact의 `ready-for-matt`, `Ask Matt`, `To Spec`, `To Tickets`, Ticket 구현 pointer는 direct Scope 모드에서 제안하지 않습니다.
 
 ## 인식하는 기본 구조
 
 ```text
 <repository>/
-└── docs/
-    └── planning/
-        ├── scope-shaping/
-        │   ├── .../SCOPE-SHAPING-RESULT.md
-        │   ├── .../WORK-PACKAGE-001.md
-        │   └── .../INCREMENT-001.md
-        └── work/
-            └── <work-slug>/
-                ├── SPEC.md
-                └── tickets/
-                    ├── TICKET-001.md
-                    └── TICKET-002.md
+└── docs/planning/
+    ├── product-thesis/<meaning-slug>/THESIS-NNN.md
+    ├── work/<work-slug>/
+    │   ├── SCOPE.md
+    │   └── PLAN.md                 # methods only; Observatory does not execute it
+    └── ... legacy planning ...     # read-only history during cutover
 ```
 
-다음과 같은 metadata 표기 방식을 모두 읽습니다.
+`SCOPE.md`의 최소 canonical 형태는 다음과 같습니다.
 
 ```markdown
----
-status: ready
-source_increment: INC-004
----
+# <현재 완성할 결과>
+Schema: iis-scope/v1
+Project-Root: /absolute/project/root
+Status: draft | ready | done | superseded
+
+## Product Authority
+- /absolute/project/root/docs/planning/product-thesis/example/THESIS-001.md sha256:<64-hex-digest>
+
+## Transition Authority       # approved transition contract가 적용될 때만
+- /absolute/project/root/docs/planning/transition/BASELINE-001.md sha256:<64-hex-digest>
+
+## Outcome
+...
+
+## Acceptance
+...
 ```
 
-```markdown
-Status: ready
-Source-Increment: INC-004
-```
+`Product Authority`는 하나 이상의 project-local Thesis 원본이어야 합니다. `Transition Authority`는 선택적이며, 경로가 있을 때만 project-local 파일과 digest를 확인합니다. `Open Decisions`는 `ready`/`done` Scope에서 `None`이어야 합니다.
 
-```markdown
-| Status | ready |
-| Source-Increment | INC-004 |
-```
-
-`TICKET-005`는 내부적으로 `TKT-005`로 정규화됩니다.
+구 `scope-shaping/**`, `SPEC.md`, `tickets/**`는 새 권위 구조로 자동 변환하지 않습니다. 필요하면 `scan`/`doctor` 결과의 `Transition Required`를 읽고 별도 Scope를 작성합니다.
 
 ## 상태 의미
 
 | Health | 의미 |
 |---|---|
-| `READY` | 구현 가능한 Ready Ticket이 있음. Delivery는 IIS 외부임. |
-| `BLOCKED` | 현재 Ticket에 blocker가 있음. |
-| `PLANNING` | Ask Matt, To Spec, To Tickets 또는 Ticket readiness 작업이 남음. |
-| `NEEDS SCOPE` | Scope Shaper가 다음 Increment를 만들어야 함. |
-| `INCONSISTENT` | 아티팩트가 서로 모순되거나 필수 상태가 빠짐. |
-| `COMPLETE` | 현재 선택된 delivery unit의 연관 Ticket이 모두 done임. 후속 Scope 후보가 존재해도 현재 unit은 COMPLETE일 수 있음. |
-| `STALE` | 현재로 식별되는 계보가 superseded 상태임. |
+| `PLANNING` | direct Scope가 draft/ready이거나 done 이후에도 필수 결과 충족 여부가 미확정입니다. ready의 정확한 전달 단계는 별도 현재 증거가 필요합니다. |
+| `NEEDS SCOPE` | canonical planning root에는 direct Scope가 없고 새 Scope가 필요합니다. |
+| `INCONSISTENT` | Scope schema/authority/digest가 깨졌거나 active Scope가 중복됩니다. |
+| `COMPLETE` | current Scope가 done이고 명시된 미확정 필수 결과가 관찰되지 않았습니다. 전체 사용자 요청 완료를 뜻하지 않습니다. |
+| `STALE` | 현행 Scope가 없는 역사 기록입니다. 미완료 legacy 작업이나 superseded-only 상태는 전환 판단이 필요하지만 완료 역사만으로는 이행을 요구하지 않습니다. |
+| `NO_IIS` | 저장소에 `docs/planning`이 없습니다. |
 
 ## 테스트
 
