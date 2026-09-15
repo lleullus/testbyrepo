@@ -328,10 +328,35 @@ def test_acceptance_c_composition_and_auth_revocation_atomicity(tmp_path: Path) 
     # Now, accept receiver-visible composition change:
     # This must increment composition revision AND revoke active authorization in the EXACT same transaction!
     current_auth_rev = snap["authority_revision"]
+    valid_state_1 = {
+        "schema_version": 1,
+        "gap_px": 20,
+        "font_sha256": "acb6440a713d880a13a21b468ba7cd43f5a2b2934972e51be791c880730777b8",
+        "bubbles": [
+            {
+                "bubble_id": "b-1",
+                "cut_id": 1,
+                "shape": "ellipse",
+                "x_pct": 10.0,
+                "y_pct": 5.0,
+                "w_pct": 30.0,
+                "h_pct": 8.0,
+                "text": "new bubble",
+                "font_size_pct": 2.5,
+                "line_spacing_pct": 20.0,
+                "text_align": "center",
+                "text_rgba": "#000000FF",
+                "fill_rgba": "#FFFFFFFF",
+                "outline_rgba": "#000000FF",
+                "outline_width_pct": 0.2,
+                "padding_pct": 5.0,
+            }
+        ],
+    }
     new_auth_rev, new_comp_rev = store.accept_composition(
         expected_authority_revision=current_auth_rev,
         expected_composition_revision=0,
-        state={"bubbles": [{"cut_id": 1, "text": "new bubble", "x": 10, "y": 10}]},
+        state=valid_state_1,
     )
     assert new_comp_rev == 1
     assert new_auth_rev == current_auth_rev + 1
@@ -349,11 +374,17 @@ def test_acceptance_c_composition_and_auth_revocation_atomicity(tmp_path: Path) 
     assert history_auth["revoked_authority_revision"] == new_auth_rev
 
     # Stale CAS writer test on composition
+    valid_state_stale = {
+        "schema_version": 1,
+        "gap_px": 0,
+        "font_sha256": "acb6440a713d880a13a21b468ba7cd43f5a2b2934972e51be791c880730777b8",
+        "bubbles": [],
+    }
     with pytest.raises(ConflictError) as exc_info:
         store.accept_composition(
             expected_authority_revision=current_auth_rev,  # STALE authority revision
             expected_composition_revision=1,
-            state={"bubbles": []},
+            state=valid_state_stale,
         )
     assert exc_info.value.expected == current_auth_rev
     assert exc_info.value.actual == new_auth_rev
@@ -495,7 +526,13 @@ def test_acceptance_e_restart_authoritative_persistence(tmp_path: Path) -> None:
     rev = store.approve_structural_baseline(0, "BASE-E", {"meta": "data"}, intents)
 
     # 2. Composition
-    rev, _ = store.accept_composition(rev, 0, {"layers": [1, 2, 3]})
+    canonical_comp_e = {
+        "schema_version": 1,
+        "gap_px": 10,
+        "font_sha256": "acb6440a713d880a13a21b468ba7cd43f5a2b2934972e51be791c880730777b8",
+        "bubbles": [],
+    }
+    rev, _ = store.accept_composition(rev, 0, canonical_comp_e)
 
     # 3. Realizations
     closure = []

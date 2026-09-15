@@ -1,5 +1,22 @@
 """Web Comic Studio - Core Domain & Single Transactional Authority."""
 
+from comic_new.composition import (
+    CompositionError,
+    CompositionRenderError,
+    CompositionValidationError,
+    RenderedArtifactBytes,
+    SourceAssetError,
+    TypographyError,
+    normalize_state,
+    render_canonical,
+)
+from comic_new.composition_service import (
+    ArtifactNoLongerCurrentError,
+    ArtifactReadbackError,
+    CompositionService,
+    CompositionServiceError,
+    MaterializedArtifact,
+)
 from comic_new.generation import (
     CancelReceipt,
     EnqueueReceipt,
@@ -46,4 +63,17 @@ __all__ = [
     "CancelReceipt",
     "StopReceipt",
     "RunReceipt",
+    "CompositionService",
+    "MaterializedArtifact",
+    "RenderedArtifactBytes",
+    "CompositionError",
+    "CompositionValidationError",
+    "CompositionRenderError",
+    "SourceAssetError",
+    "TypographyError",
+    "CompositionServiceError",
+    "ArtifactReadbackError",
+    "ArtifactNoLongerCurrentError",
+    "normalize_state",
+    "render_canonical",
 ]

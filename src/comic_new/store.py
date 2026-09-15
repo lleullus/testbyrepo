@@ -99,6 +99,10 @@ class TransactionalStore:
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path).resolve()
 
+    @property
+    def project_dir(self) -> Path:
+        return self.db_path.parent
+
     def _connect(self) -> sqlite3.Connection:
         con = sqlite3.connect(
             str(self.db_path),
@@ -653,11 +657,13 @@ class TransactionalStore:
         self,
         expected_authority_revision: int,
         expected_composition_revision: int,
-        state: dict[str, Any] | str,
+        state: dict[str, Any],
     ) -> tuple[int, int]:
-        state_json = json.dumps(state, sort_keys=True) if isinstance(state, dict) else str(state)
-        now_iso = datetime.now(timezone.utc).isoformat()
+        from comic_new.composition import canonical_json_dumps, normalize_state
 
+        norm_state = normalize_state(state)
+        state_json = canonical_json_dumps(norm_state)
+        now_iso = datetime.now(timezone.utc).isoformat()
         con = self._connect()
         try:
             new_rev = self._begin_mutation(con, expected_authority_revision)
