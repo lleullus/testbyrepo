@@ -7,13 +7,15 @@ name = "comic-new"
 version = "0.1.0"
 description = "Web Comic Studio - Single Transactional Authority"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "Pillow>=10.0.0",
+]
 
 [project.scripts]
 comic-new = "comic_new.cli:main"
 
 [tool.setuptools.package-data]
-comic_new = ["schema.sql"]
+comic_new = ["schema.sql", "migrations/*.sql"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

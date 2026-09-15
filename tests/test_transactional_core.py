@@ -8,6 +8,8 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from datetime import datetime, timezone
+from uuid import uuid4
 
 import pytest
 
@@ -33,6 +35,42 @@ def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
         check=False,
     )
 
+
+def _seed_test_realization(
+    store: TransactionalStore,
+    expected_auth_rev: int,
+    cut_id: int,
+    asset_id: str,
+    asset_path: str,
+    content_hash: str,
+    job_id: str | None = None,
+) -> int:
+    """Test fixture helper for seeding realizations in transactional core tests."""
+    jid = job_id or f"test-job-{cut_id}-{uuid4().hex[:6]}"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    with store._connect() as con:
+        con.execute("BEGIN IMMEDIATE;")
+        cur_rev = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()[0]
+        if cur_rev != expected_auth_rev:
+            raise ConflictError(expected=expected_auth_rev, actual=cur_rev)
+        new_rev = cur_rev + 1
+        d_rev = con.execute("SELECT desired_revision FROM cuts WHERE cut_id = ?", (cut_id,)).fetchone()[0]
+        con.execute(
+            "INSERT OR REPLACE INTO generation_jobs (job_id, cut_id, target_desired_revision, status, created_at, updated_at) VALUES (?, ?, ?, 'succeeded', ?, ?)",
+            (jid, cut_id, d_rev or 1, now_iso, now_iso),
+        )
+        con.execute(
+            "INSERT OR REPLACE INTO generation_attempts (attempt_id, job_id, ordinal, status, started_at, finished_at, detail) VALUES (?, ?, 1, 'succeeded', ?, ?, 'Test seed')",
+            (f"att-{jid}", jid, now_iso, now_iso),
+        )
+        con.execute(
+            "UPDATE cuts SET realized_revision = ?, realized_asset_id = ?, realized_asset_path = ?, realized_content_hash = ? WHERE cut_id = ?",
+            (d_rev or 1, asset_id, asset_path, content_hash, cut_id),
+        )
+        store._revoke_active_authorization(con, new_rev, now_iso)
+        con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,))
+        con.execute("COMMIT;")
+        return new_rev
 
 # ---------------------------------------------------------------------------
 # Acceptance A: Exactly five cuts, immutable cuts table, no sidecar authority
@@ -60,7 +98,7 @@ def test_acceptance_a_init_and_exactly_five_cuts(tmp_path: Path) -> None:
     assert res_snap.returncode == 0, res_snap.stderr
     snap = json.loads(res_snap.stdout)
 
-    assert snap["schema_version"] == 1
+    assert snap["schema_version"] == 2
     assert snap["authority_revision"] == 0
     cuts = snap["cuts"]
     assert len(cuts) == 5
@@ -271,11 +309,8 @@ def test_acceptance_c_composition_and_auth_revocation_atomicity(tmp_path: Path) 
 
     closure = []
     for cid in range(1, 6):
-        job_id = f"job-{cid}"
-        rev = store.enqueue_generation_job(rev, job_id, cid, target_desired_revision=1)
-        rev = store.start_generation_attempt(rev, f"att-{cid}", job_id)
-        rev = store.commit_realization(
-            rev, job_id, asset_id=f"asset-{cid}", asset_path=f"/img/{cid}.png", content_hash=f"hash-{cid}"
+        rev = _seed_test_realization(
+            store, rev, cid, asset_id=f"asset-{cid}", asset_path=f"/img/{cid}.png", content_hash=f"hash-{cid}"
         )
         closure.append({"cut_id": cid, "realized_revision": 1, "asset_id": f"asset-{cid}"})
 
@@ -400,11 +435,8 @@ def test_acceptance_d_currency_and_complete_truth(tmp_path: Path) -> None:
 
     # Realize cuts 1 through 4 (desired_revision=1, realized_revision=1)
     for cid in range(1, 5):
-        job_id = f"job-{cid}"
-        rev = store.enqueue_generation_job(rev, job_id, cid, target_desired_revision=1)
-        rev = store.start_generation_attempt(rev, f"att-{cid}", job_id)
-        rev = store.commit_realization(
-            rev, job_id, f"asset-{cid}", str(asset_files[cid - 1]), f"hash-{cid}"
+        rev = _seed_test_realization(
+            store, rev, cid, f"asset-{cid}", str(asset_files[cid - 1]), f"hash-{cid}"
         )
 
     # Cut 5 is NOT realized (desired_revision=1, realized_revision=None)
@@ -414,11 +446,8 @@ def test_acceptance_d_currency_and_complete_truth(tmp_path: Path) -> None:
     assert snap_partial["realization_complete"]["status"] == "UNRESOLVED"
 
     # Now realize cut 5 as well
-    job5 = "job-5"
-    rev = store.enqueue_generation_job(rev, job5, 5, target_desired_revision=1)
-    rev = store.start_generation_attempt(rev, "att-5", job5)
-    rev = store.commit_realization(
-        rev, job5, "asset-5", str(asset_files[4]), "hash-5"
+    rev = _seed_test_realization(
+        store, rev, 5, "asset-5", str(asset_files[4]), "hash-5"
     )
 
     # Now all 5 cuts have desired_revision == realized_revision == 1
@@ -440,11 +469,8 @@ def test_acceptance_d_currency_and_complete_truth(tmp_path: Path) -> None:
     assert snap_stale["realization_complete"]["status"] == "UNRESOLVED"
 
     # Finally, realize cut 3 rev 2:
-    job3_v2 = "job-3-v2"
-    rev = store.enqueue_generation_job(rev, job3_v2, 3, target_desired_revision=2)
-    rev = store.start_generation_attempt(rev, "att-3-v2", job3_v2)
-    rev = store.commit_realization(
-        rev, job3_v2, "asset-3-v2", str(asset_files[2]), "hash-3-v2"
+    rev = _seed_test_realization(
+        store, rev, 3, "asset-3-v2", str(asset_files[2]), "hash-3-v2"
     )
 
     snap_complete_again = store.snapshot()
@@ -474,11 +500,8 @@ def test_acceptance_e_restart_authoritative_persistence(tmp_path: Path) -> None:
     # 3. Realizations
     closure = []
     for cid in range(1, 6):
-        jid = f"job-e-{cid}"
-        rev = store.enqueue_generation_job(rev, jid, cid, target_desired_revision=1)
-        rev = store.start_generation_attempt(rev, f"att-e-{cid}", jid)
-        rev = store.commit_realization(
-            rev, jid, f"asset-e-{cid}", f"/path/e/{cid}.png", f"hash-e-{cid}"
+        rev = _seed_test_realization(
+            store, rev, cid, f"asset-e-{cid}", f"/path/e/{cid}.png", f"hash-e-{cid}"
         )
         closure.append({"cut_id": cid, "realized_revision": 1, "asset_id": f"asset-e-{cid}"})
 
@@ -532,17 +555,27 @@ def test_acceptance_f_interrupted_job_does_not_revoke_desired_intent(tmp_path: P
     project_dir = tmp_path / "proj_f1"
     store = TransactionalStore.create_project(project_dir)
 
-    intents = {i: {"text": f"panel {i}"} for i in range(1, 6)}
+    intents = {i: {"text": f"panel {i}", "prompt": f"prompt for panel {i}"} for i in range(1, 6)}
     rev = store.approve_structural_baseline(0, "BASE-F", {}, intents)
 
-    # Start job for cut 1
-    jid = "job-f-1"
-    rev = store.enqueue_generation_job(rev, jid, cut_id=1, target_desired_revision=1)
-    rev = store.start_generation_attempt(rev, "att-f-1", jid)
+    from comic_new.generation import GenerationService
+    svc = GenerationService(store)
+    enq = svc.enqueue(cut_id=1, expected_authority_revision=rev)
+    jid = enq.jobs[0]["job_id"]
+    att_id = f"att-{jid}-1"
+
+    # Start attempt
+    with store._connect() as con:
+        con.execute("BEGIN IMMEDIATE;")
+        con.execute("UPDATE generation_jobs SET status = 'running' WHERE job_id = ?", (jid,))
+        con.execute(
+            "INSERT INTO generation_attempts (attempt_id, job_id, ordinal, status, started_at, runner_id) VALUES (?, ?, 1, 'running', '2026-09-15T00:00:00Z', 'runner-test')",
+            (att_id, jid),
+        )
+        con.execute("COMMIT;")
 
     # Simulate interruption (STOP / system crash)
-    rev = store.finish_generation_attempt(rev, "att-f-1", status="interrupted", detail="Worker cancelled")
-    rev = store.set_job_terminal(rev, jid, status="interrupted", terminal_detail="Subprocess interrupted")
+    store.mark_attempts_and_jobs_interrupted([(jid, att_id)], reason="Subprocess interrupted")
 
     # Authoritative readback:
     snap = store.snapshot()
@@ -553,7 +586,7 @@ def test_acceptance_f_interrupted_job_does_not_revoke_desired_intent(tmp_path: P
     # Accepted desired intent is preserved and NOT retracted:
     cut1 = [c for c in snap["cuts"] if c["cut_id"] == 1][0]
     assert cut1["desired_revision"] == 1
-    assert cut1["effective_intent"] == {"text": "panel 1"}
+    assert cut1["effective_intent"] == {"text": "panel 1", "prompt": "prompt for panel 1"}
     assert cut1["currency"] == "STALE"
 
 
@@ -561,28 +594,38 @@ def test_acceptance_f_stale_realization_commit_rejection(tmp_path: Path) -> None
     project_dir = tmp_path / "proj_f2"
     store = TransactionalStore.create_project(project_dir)
 
-    intents = {i: {"text": f"panel {i}"} for i in range(1, 6)}
+    intents = {i: {"text": f"panel {i}", "prompt": f"prompt for panel {i}"} for i in range(1, 6)}
     rev = store.approve_structural_baseline(0, "BASE-F2", {}, intents)
 
-    # Job queued for cut 2 at revision 1
-    jid = "job-f-stale"
-    rev = store.enqueue_generation_job(rev, jid, cut_id=2, target_desired_revision=1)
-    rev = store.start_generation_attempt(rev, "att-f-stale", jid)
+    from comic_new.generation import GenerationService
+    svc = GenerationService(store)
+    enq = svc.enqueue(cut_id=2, expected_authority_revision=rev)
+    jid = enq.jobs[0]["job_id"]
+    staging_dir = project_dir / ".generation-staging"
+    store.acquire_runner_ownership("runner-test", 9999, "9999:0")
+    claimed = store.claim_next_generation_job("runner-test", 9999, "9999:0", 0, staging_dir)
+    assert claimed is not None
 
     # User modifies cut 2 intent to revision 2 before the job completes!
-    rev = store.accept_cut_intent(rev, cut_id=2, intent_payload={"text": "panel 2 revised"})
+    rev = store.accept_cut_intent(
+        store.snapshot()["authority_revision"],
+        cut_id=2,
+        intent_payload={"text": "panel 2 revised", "prompt": "revised prompt"},
+    )
 
-    # Stale job finishes attempt and attempts to commit realization at rev 1:
-    # Must be rejected with StaleRealizationError!
-    with pytest.raises(StaleRealizationError):
-        store.commit_realization(
-            expected_authority_revision=rev,
-            job_id=jid,
-            asset_id="asset-stale",
-            asset_path="/img/stale.png",
-            content_hash="hash-stale",
-        )
+    cand_path = Path(claimed["staging_path"])
+    cand_path.parent.mkdir(parents=True, exist_ok=True)
+    cand_path.write_bytes(b"cand")
 
+    # Stale candidate rejected by commit gate:
+    res = store.commit_candidate(
+        runner_id="runner-test",
+        job_id=jid,
+        attempt_id=claimed["attempt_id"],
+        candidate_png_path=cand_path,
+        content_hash="hash-stale",
+    )
+    assert res["status"] == "superseded"
     # Verify that job is recorded as superseded, authority revision incremented, and cuts.realized_* untouched
     snap = store.snapshot()
     job = [j for j in snap["jobs"] if j["job_id"] == jid][0]
@@ -605,10 +648,7 @@ def test_acceptance_f_delivery_truth_separation(tmp_path: Path) -> None:
 
     closure = []
     for cid in range(1, 6):
-        jid = f"job-{cid}"
-        rev = store.enqueue_generation_job(rev, jid, cid, target_desired_revision=1)
-        rev = store.start_generation_attempt(rev, f"att-{cid}", jid)
-        rev = store.commit_realization(rev, jid, f"a-{cid}", f"/p/{cid}", f"h-{cid}")
+        rev = _seed_test_realization(store, rev, cid, f"a-{cid}", f"/p/{cid}", f"h-{cid}")
         closure.append({"cut_id": cid, "realized_revision": 1, "asset_id": f"a-{cid}"})
 
     rev = store.register_review_artifact(rev, "ART-F3", "hash-f3", 0, closure)

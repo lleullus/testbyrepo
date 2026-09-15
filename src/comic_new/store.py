@@ -61,11 +61,14 @@ class ValidationError(TransactionalStoreError):
     """Raised when input parameters fail domain validation rules."""
 
 
+class RunnerAlreadyActiveError(TransactionalStoreError):
+    """Raised when another runner is already active for this project."""
+
 class TransactionalStore:
     """Concrete single SQLite transactional authority for comic_new."""
 
     APPLICATION_ID: int = 0x434F4D43  # 'COMC'
-    SCHEMA_VERSION: int = 1
+    SCHEMA_VERSION: int = 2
     DB_FILENAME: str = "comic-new.sqlite3"
     BUSY_TIMEOUT_MS: int = 5000
 
@@ -78,6 +81,7 @@ class TransactionalStore:
         "composition",
         "generation_jobs",
         "generation_attempts",
+        "generation_control",
         "review_artifacts",
         "artifact_cuts",
         "release_authorizations",
@@ -90,6 +94,7 @@ class TransactionalStore:
     })
     REQUIRED_INDEXES: frozenset[str] = frozenset({
         "idx_active_release_authorization",
+        "idx_generation_jobs_queued",
     })
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path).resolve()
@@ -177,8 +182,47 @@ class TransactionalStore:
         if not db_path.is_file():
             raise ProjectNotFoundError(f"No comic-new database found at {db_path}")
         store = cls(db_path)
+        store._check_and_apply_migrations()
         store.verify_schema()
         return store
+
+    def _check_and_apply_migrations(self) -> None:
+        with self._connect() as con:
+            app_id_row = con.execute("PRAGMA application_id;").fetchone()
+            app_id = app_id_row[0] if app_id_row else 0
+            if app_id != self.APPLICATION_ID:
+                raise StoreCorruptionError(f"Expected application_id {self.APPLICATION_ID}, got {app_id}")
+
+            user_ver_row = con.execute("PRAGMA user_version;").fetchone()
+            user_ver = user_ver_row[0] if user_ver_row else 0
+            if user_ver == 1:
+                master_rows = con.execute("SELECT type, name FROM sqlite_master;").fetchall()
+                existing_tables = {row["name"] for row in master_rows if row["type"] == "table"}
+                v1_missing = (self.REQUIRED_TABLES - {"generation_control"}) - existing_tables
+                if v1_missing:
+                    raise StoreCorruptionError(f"Missing required tables: {sorted(v1_missing)}")
+                existing_triggers = {row["name"] for row in master_rows if row["type"] == "trigger"}
+                missing_triggers = self.REQUIRED_TRIGGERS - existing_triggers
+                if missing_triggers:
+                    raise StoreCorruptionError(f"Missing required triggers: {sorted(missing_triggers)}")
+                mig_path = Path(__file__).parent / "migrations" / "v1_to_v2.sql"
+                if not mig_path.is_file():
+                    raise StoreCorruptionError(f"Missing migration script at {mig_path}")
+                mig_sql = mig_path.read_text(encoding="utf-8")
+                statements = [s.strip() for s in mig_sql.split(";") if s.strip()]
+                try:
+                    con.execute("BEGIN IMMEDIATE;")
+                    for stmt in statements:
+                        con.execute(stmt)
+                    con.execute("COMMIT;")
+                except Exception as e:
+                    if con.in_transaction:
+                        con.execute("ROLLBACK;")
+                    raise StoreCorruptionError(f"Migration from v1 to v2 failed: {e}") from e
+            elif user_ver == 2:
+                pass
+            else:
+                raise StoreCorruptionError(f"Unrecognized schema version: {user_ver}")
 
     def verify_schema(self) -> None:
         with self._connect() as con:
@@ -223,6 +267,20 @@ class TransactionalStore:
             comp = comp_row[0] if comp_row else 0
             if comp != 1:
                 raise StoreCorruptionError("Missing composition singleton")
+
+            ctrl_row = con.execute("SELECT count(*) FROM generation_control WHERE singleton_id = 1;").fetchone()
+            ctrl = ctrl_row[0] if ctrl_row else 0
+            if ctrl != 1:
+                raise StoreCorruptionError("Missing generation_control singleton")
+
+            att_cols = {row["name"] for row in con.execute("PRAGMA table_info(generation_attempts);").fetchall()}
+            expected_att_cols = {
+                "attempt_id", "job_id", "ordinal", "status", "started_at", "finished_at", "detail",
+                "runner_id", "process_pid", "process_group_id", "process_start_token", "staging_path", "provider_request_id"
+            }
+            missing_att_cols = expected_att_cols - att_cols
+            if missing_att_cols:
+                raise StoreCorruptionError(f"generation_attempts missing columns: {sorted(missing_att_cols)}")
     def _begin_mutation(self, con: sqlite3.Connection, expected_authority_revision: int) -> int:
         con.execute("BEGIN IMMEDIATE;")
         row = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()
@@ -364,6 +422,12 @@ class TransactionalStore:
                                 "started_at": a["started_at"],
                                 "finished_at": a["finished_at"],
                                 "detail": a["detail"],
+                                "runner_id": a["runner_id"],
+                                "process_pid": a["process_pid"],
+                                "process_group_id": a["process_group_id"],
+                                "process_start_token": a["process_start_token"],
+                                "staging_path": a["staging_path"],
+                                "provider_request_id": a["provider_request_id"],
                             }
                             for a in att_rows
                         ],
@@ -446,6 +510,17 @@ class TransactionalStore:
                     }
                 )
 
+            ctrl_row = con.execute(
+                "SELECT stop_epoch, runner_id, runner_pid, runner_start_token, runner_started_at FROM generation_control WHERE singleton_id = 1"
+            ).fetchone()
+            ctrl_data = {
+                "stop_epoch": ctrl_row["stop_epoch"] if ctrl_row else 0,
+                "runner_id": ctrl_row["runner_id"] if ctrl_row else None,
+                "runner_pid": ctrl_row["runner_pid"] if ctrl_row else None,
+                "runner_start_token": ctrl_row["runner_start_token"] if ctrl_row else None,
+                "runner_started_at": ctrl_row["runner_started_at"] if ctrl_row else None,
+            }
+
             con.execute("COMMIT;")
             return {
                 "schema_version": user_ver,
@@ -461,6 +536,7 @@ class TransactionalStore:
                     "history": revoked_auths,
                 },
                 "delivery_attempts": delivery_data,
+                "generation_control": ctrl_data,
             }
 
     def approve_structural_baseline(
@@ -614,33 +690,55 @@ class TransactionalStore:
         finally:
             con.close()
 
-    def enqueue_generation_job(
+    def enqueue_generation_jobs(
         self,
         expected_authority_revision: int,
-        job_id: str,
-        cut_id: int,
-        target_desired_revision: int,
-    ) -> int:
-        if cut_id not in (1, 2, 3, 4, 5):
+        cut_id: int | None = None,
+    ) -> tuple[int, list[dict[str, Any]]]:
+        if cut_id is not None and cut_id not in (1, 2, 3, 4, 5):
             raise ValidationError(f"Invalid cut_id {cut_id}; must be between 1 and 5")
-        if target_desired_revision <= 0:
-            raise ValidationError("target_desired_revision must be greater than 0")
-        if not job_id:
-            raise ValidationError("job_id must be a non-empty string")
+        target_cuts = [1, 2, 3, 4, 5] if cut_id is None else [cut_id]
         now_iso = datetime.now(timezone.utc).isoformat()
 
         con = self._connect()
         try:
             new_rev = self._begin_mutation(con, expected_authority_revision)
-            con.execute(
-                "INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, status, created_at, updated_at) VALUES (?, ?, ?, 'queued', ?, ?)",
-                (job_id, cut_id, target_desired_revision, now_iso, now_iso),
-            )
-            con.execute(
-                "UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,)
-            )
+
+            # Pre-validate all target cuts have desired intent and non-empty prompt
+            cuts_to_enqueue: list[tuple[int, int]] = []
+            for cid in target_cuts:
+                cut_row = con.execute("SELECT desired_revision FROM cuts WHERE cut_id = ?", (cid,)).fetchone()
+                if not cut_row or cut_row["desired_revision"] is None:
+                    raise ValidationError(f"Cut {cid} has no desired intent to generate")
+                d_rev = cut_row["desired_revision"]
+                intent_row = con.execute(
+                    "SELECT payload_json FROM cut_intents WHERE cut_id = ? AND revision = ?",
+                    (cid, d_rev),
+                ).fetchone()
+                if not intent_row:
+                    raise ValidationError(f"Cut {cid} revision {d_rev} intent record not found")
+                payload = json.loads(intent_row["payload_json"])
+                prompt_str = payload if isinstance(payload, str) else (payload.get("prompt") or payload.get("text") if isinstance(payload, dict) else None)
+                if not prompt_str or not isinstance(prompt_str, str) or not prompt_str.strip():
+                    raise ValidationError(f"Cut {cid} revision {d_rev} intent payload does not contain a non-empty prompt")
+                cuts_to_enqueue.append((cid, d_rev))
+
+            created_jobs: list[dict[str, Any]] = []
+            for cid, d_rev in cuts_to_enqueue:
+                job_id = f"job-{cid}-r{d_rev}-{uuid4().hex[:8]}"
+                con.execute(
+                    "INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, status, created_at, updated_at) VALUES (?, ?, ?, 'queued', ?, ?)",
+                    (job_id, cid, d_rev, now_iso, now_iso),
+                )
+                created_jobs.append({
+                    "job_id": job_id,
+                    "cut_id": cid,
+                    "target_desired_revision": d_rev,
+                })
+
+            con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,))
             con.execute("COMMIT;")
-            return new_rev
+            return (new_rev, created_jobs)
         except Exception:
             if con.in_transaction:
                 con.execute("ROLLBACK;")
@@ -648,77 +746,238 @@ class TransactionalStore:
         finally:
             con.close()
 
-    def start_generation_attempt(
-        self, expected_authority_revision: int, attempt_id: str, job_id: str
-    ) -> int:
-        if not attempt_id or not job_id:
-            raise ValidationError("attempt_id and job_id must be non-empty strings")
-        now_iso = datetime.now(timezone.utc).isoformat()
-
-        con = self._connect()
-        try:
-            new_rev = self._begin_mutation(con, expected_authority_revision)
-            job = con.execute("SELECT status FROM generation_jobs WHERE job_id = ?", (job_id,)).fetchone()
-            if not job:
-                raise ValidationError(f"Job {job_id} not found")
-            if job["status"] not in ("queued", "running"):
-                raise InvalidJobStateError(f"Cannot start attempt for job in status {job['status']}")
-
-            max_ord_row = con.execute(
-                "SELECT max(ordinal) FROM generation_attempts WHERE job_id = ?", (job_id,)
-            ).fetchone()
-            max_ord = max_ord_row[0] if max_ord_row else None
-            next_ord = (max_ord or 0) + 1
-
-            con.execute(
-                "UPDATE generation_jobs SET status = 'running', updated_at = ? WHERE job_id = ?",
-                (now_iso, job_id),
-            )
-            con.execute(
-                "INSERT INTO generation_attempts (attempt_id, job_id, ordinal, status, started_at) VALUES (?, ?, ?, 'running', ?)",
-                (attempt_id, job_id, next_ord, now_iso),
-            )
-            con.execute(
-                "UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,)
-            )
-            con.execute("COMMIT;")
-            return new_rev
-        except Exception:
-            if con.in_transaction:
-                con.execute("ROLLBACK;")
-            raise
-        finally:
-            con.close()
-
-    def finish_generation_attempt(
+    def acquire_runner_ownership(
         self,
-        expected_authority_revision: int,
+        runner_id: str,
+        runner_pid: int,
+        runner_start_token: str,
+        is_pid_alive_fn: Any = None,
+    ) -> int:
+        if is_pid_alive_fn is None:
+            from comic_new.generation import is_process_alive_with_token
+            is_pid_alive_fn = is_process_alive_with_token
+        now_iso = datetime.now(timezone.utc).isoformat()
+        con = self._connect()
+        try:
+            con.execute("BEGIN IMMEDIATE;")
+            row = con.execute(
+                "SELECT stop_epoch, runner_id, runner_pid, runner_start_token FROM generation_control WHERE singleton_id = 1"
+            ).fetchone()
+            if not row:
+                raise StoreCorruptionError("Missing generation_control singleton")
+
+            if row["runner_pid"] is not None:
+                if is_pid_alive_fn(row["runner_pid"], row["runner_start_token"]):
+                    raise RunnerAlreadyActiveError(
+                        f"Runner {row['runner_id']} (pid {row['runner_pid']}) is currently active"
+                    )
+
+            con.execute(
+                "UPDATE generation_control SET runner_id = ?, runner_pid = ?, runner_start_token = ?, runner_started_at = ? WHERE singleton_id = 1",
+                (runner_id, runner_pid, runner_start_token, now_iso),
+            )
+            stop_epoch = row["stop_epoch"]
+            con.execute("COMMIT;")
+            return stop_epoch
+        except Exception:
+            if con.in_transaction:
+                con.execute("ROLLBACK;")
+            raise
+        finally:
+            con.close()
+
+    def release_runner_ownership(self, runner_id: str) -> None:
+        con = self._connect()
+        try:
+            con.execute("BEGIN IMMEDIATE;")
+            con.execute(
+                "UPDATE generation_control SET runner_id = NULL, runner_pid = NULL, runner_start_token = NULL, runner_started_at = NULL WHERE singleton_id = 1 AND runner_id = ?",
+                (runner_id,),
+            )
+            con.execute("COMMIT;")
+        except Exception:
+            if con.in_transaction:
+                con.execute("ROLLBACK;")
+            raise
+        finally:
+            con.close()
+
+    def reconcile_startup_orphans(self) -> list[dict[str, Any]]:
+        con = self._connect()
+        try:
+            con.execute("BEGIN IMMEDIATE;")
+            rows = con.execute(
+                """
+                SELECT a.attempt_id, a.job_id, a.runner_id, a.process_pid, a.process_group_id, a.process_start_token, a.staging_path
+                FROM generation_attempts a
+                JOIN generation_jobs j ON a.job_id = j.job_id
+                WHERE a.status = 'running'
+                """
+            ).fetchall()
+            con.execute("COMMIT;")
+            return [dict(r) for r in rows]
+        except Exception:
+            if con.in_transaction:
+                con.execute("ROLLBACK;")
+            raise
+        finally:
+            con.close()
+
+    def mark_startup_orphans_interrupted(self, running_items: list[tuple[str, str]]) -> None:
+        if not running_items:
+            return
+        now_iso = datetime.now(timezone.utc).isoformat()
+        con = self._connect()
+        try:
+            con.execute("BEGIN IMMEDIATE;")
+            for job_id, attempt_id in running_items:
+                con.execute(
+                    "UPDATE generation_attempts SET status = 'interrupted', finished_at = ?, detail = 'startup_recovery' WHERE attempt_id = ? AND status = 'running'",
+                    (now_iso, attempt_id),
+                )
+                con.execute(
+                    "UPDATE generation_jobs SET status = 'interrupted', terminal_detail = 'startup_recovery', updated_at = ? WHERE job_id = ? AND status = 'running'",
+                    (now_iso, job_id),
+                )
+            auth_row = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()
+            new_rev = auth_row[0] + 1
+            con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,))
+            con.execute("COMMIT;")
+        except Exception:
+            if con.in_transaction:
+                con.execute("ROLLBACK;")
+            raise
+        finally:
+            con.close()
+
+    def claim_next_generation_job(
+        self,
+        runner_id: str,
+        runner_pid: int,
+        runner_start_token: str,
+        captured_stop_epoch: int,
+        staging_base_dir: Path,
+    ) -> dict[str, Any] | None:
+        con = self._connect()
+        try:
+            con.execute("BEGIN IMMEDIATE;")
+            ctrl_row = con.execute(
+                "SELECT stop_epoch, runner_id, runner_pid, runner_start_token FROM generation_control WHERE singleton_id = 1"
+            ).fetchone()
+            if not ctrl_row:
+                con.execute("ROLLBACK;")
+                return None
+            if ctrl_row["stop_epoch"] != captured_stop_epoch:
+                con.execute("ROLLBACK;")
+                return None
+            if ctrl_row["runner_id"] != runner_id:
+                con.execute("ROLLBACK;")
+                return None
+
+            while True:
+                row = con.execute(
+                    "SELECT job_id, cut_id, target_desired_revision FROM generation_jobs WHERE status = 'queued' ORDER BY created_at ASC, job_id ASC LIMIT 1"
+                ).fetchone()
+                if not row:
+                    con.execute("COMMIT;")
+                    return None
+
+                job_id = row["job_id"]
+                cut_id = row["cut_id"]
+                target_rev = row["target_desired_revision"]
+
+                cut_row = con.execute("SELECT desired_revision FROM cuts WHERE cut_id = ?", (cut_id,)).fetchone()
+                cur_desired = cut_row["desired_revision"] if cut_row else None
+                now_iso = datetime.now(timezone.utc).isoformat()
+
+                if cur_desired != target_rev:
+                    # Stale: supersede immediately without spawning
+                    con.execute(
+                        "UPDATE generation_jobs SET status = 'superseded', terminal_detail = 'Target revision superseded before claim', updated_at = ? WHERE job_id = ?",
+                        (now_iso, job_id),
+                    )
+                    auth_row = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()
+                    new_rev = auth_row[0] + 1
+                    con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,))
+                    # Loop to check next queued job
+                    continue
+
+                # Intent matches current desired: claim this job
+                intent_row = con.execute(
+                    "SELECT payload_json FROM cut_intents WHERE cut_id = ? AND revision = ?",
+                    (cut_id, target_rev),
+                ).fetchone()
+                payload = json.loads(intent_row["payload_json"])
+                prompt = payload if isinstance(payload, str) else (payload.get("prompt") or payload.get("text"))
+
+                attempt_id = f"att-{job_id}-1"
+                staging_dir = staging_base_dir / job_id
+                staging_dir.mkdir(parents=True, exist_ok=True)
+                candidate_path = staging_dir / "candidate.png"
+
+                con.execute(
+                    "UPDATE generation_jobs SET status = 'running', updated_at = ? WHERE job_id = ?",
+                    (now_iso, job_id),
+                )
+                con.execute(
+                    """
+                    INSERT INTO generation_attempts (
+                        attempt_id, job_id, ordinal, status, started_at, runner_id, staging_path
+                    ) VALUES (?, ?, 1, 'running', ?, ?, ?)
+                    """,
+                    (attempt_id, job_id, now_iso, runner_id, str(candidate_path)),
+                )
+                auth_row = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()
+                new_rev = auth_row[0] + 1
+                con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,))
+                con.execute("COMMIT;")
+                return {
+                    "job_id": job_id,
+                    "cut_id": cut_id,
+                    "target_desired_revision": target_rev,
+                    "attempt_id": attempt_id,
+                    "prompt": prompt,
+                    "staging_path": str(candidate_path),
+                }
+        except Exception:
+            if con.in_transaction:
+                con.execute("ROLLBACK;")
+            raise
+        finally:
+            con.close()
+
+    def attach_attempt_process(
+        self,
+        job_id: str,
         attempt_id: str,
-        status: str,
-        detail: str | None = None,
-    ) -> int:
-        if status not in ("succeeded", "failed", "interrupted", "cancelled"):
-            raise ValidationError(f"Invalid attempt status: {status}")
-        now_iso = datetime.now(timezone.utc).isoformat()
-
+        runner_id: str,
+        pid: int,
+        pgid: int,
+        start_token: str,
+        captured_stop_epoch: int,
+    ) -> bool:
         con = self._connect()
         try:
-            new_rev = self._begin_mutation(con, expected_authority_revision)
+            con.execute("BEGIN IMMEDIATE;")
+            ctrl_row = con.execute("SELECT stop_epoch FROM generation_control WHERE singleton_id = 1").fetchone()
+            if not ctrl_row or ctrl_row["stop_epoch"] != captured_stop_epoch:
+                con.execute("ROLLBACK;")
+                return False
+
             att = con.execute(
-                "SELECT attempt_id FROM generation_attempts WHERE attempt_id = ?", (attempt_id,)
+                "SELECT status, runner_id FROM generation_attempts WHERE attempt_id = ?",
+                (attempt_id,),
             ).fetchone()
-            if not att:
-                raise ValidationError(f"Attempt {attempt_id} not found")
+            if not att or att["status"] != "running" or att["runner_id"] != runner_id:
+                con.execute("ROLLBACK;")
+                return False
 
             con.execute(
-                "UPDATE generation_attempts SET status = ?, finished_at = ?, detail = ? WHERE attempt_id = ?",
-                (status, now_iso, detail, attempt_id),
-            )
-            con.execute(
-                "UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,)
+                "UPDATE generation_attempts SET process_pid = ?, process_group_id = ?, process_start_token = ? WHERE attempt_id = ?",
+                (pid, pgid, start_token, attempt_id),
             )
             con.execute("COMMIT;")
-            return new_rev
+            return True
         except Exception:
             if con.in_transaction:
                 con.execute("ROLLBACK;")
@@ -726,100 +985,168 @@ class TransactionalStore:
         finally:
             con.close()
 
-    def set_job_terminal(
+    def commit_candidate(
         self,
-        expected_authority_revision: int,
+        runner_id: str,
         job_id: str,
-        status: str,
-        terminal_detail: str | None = None,
-    ) -> int:
-        if status not in ("succeeded", "failed", "cancelled", "interrupted", "superseded"):
-            raise ValidationError(f"Invalid terminal job status: {status}")
-        now_iso = datetime.now(timezone.utc).isoformat()
-
-        con = self._connect()
-        try:
-            new_rev = self._begin_mutation(con, expected_authority_revision)
-            job = con.execute("SELECT job_id FROM generation_jobs WHERE job_id = ?", (job_id,)).fetchone()
-            if not job:
-                raise ValidationError(f"Job {job_id} not found")
-
-            con.execute(
-                "UPDATE generation_jobs SET status = ?, terminal_detail = ?, updated_at = ? WHERE job_id = ?",
-                (status, terminal_detail, now_iso, job_id),
-            )
-            con.execute(
-                "UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,)
-            )
-            con.execute("COMMIT;")
-            return new_rev
-        except Exception:
-            if con.in_transaction:
-                con.execute("ROLLBACK;")
-            raise
-        finally:
-            con.close()
-
-    def commit_realization(
-        self,
-        expected_authority_revision: int,
-        job_id: str,
-        asset_id: str,
-        asset_path: str,
+        attempt_id: str,
+        candidate_png_path: Path,
         content_hash: str,
-    ) -> int:
-        if not asset_id or not asset_path or not content_hash:
-            raise ValidationError("asset_id, asset_path, and content_hash must be non-empty strings")
+        provider_request_id: str | None = None,
+    ) -> dict[str, Any]:
         now_iso = datetime.now(timezone.utc).isoformat()
-
         con = self._connect()
+        created_canonical: Path | None = None
         try:
-            new_rev = self._begin_mutation(con, expected_authority_revision)
-            job = con.execute(
-                "SELECT cut_id, target_desired_revision, status FROM generation_jobs WHERE job_id = ?",
-                (job_id,),
-            ).fetchone()
-            if not job:
-                raise ValidationError(f"Job {job_id} not found")
-            if job["status"] in ("cancelled", "interrupted", "superseded"):
-                raise InvalidJobStateError(f"Job {job_id} is already in terminal state {job['status']}")
+            con.execute("BEGIN IMMEDIATE;")
+            job = con.execute("SELECT cut_id, target_desired_revision, status FROM generation_jobs WHERE job_id = ?", (job_id,)).fetchone()
+            att = con.execute("SELECT status, runner_id FROM generation_attempts WHERE attempt_id = ?", (attempt_id,)).fetchone()
+
+            if not job or not att or job["status"] != "running" or att["status"] != "running" or att["runner_id"] != runner_id:
+                con.execute("ROLLBACK;")
+                candidate_png_path.unlink(missing_ok=True)
+                return {"status": "discarded", "job_status": job["status"] if job else "unknown"}
 
             cut_id = job["cut_id"]
             target_rev = job["target_desired_revision"]
-            cut_row = con.execute(
-                "SELECT desired_revision FROM cuts WHERE cut_id = ?", (cut_id,)
-            ).fetchone()
+            cut_row = con.execute("SELECT desired_revision FROM cuts WHERE cut_id = ?", (cut_id,)).fetchone()
             cur_desired = cut_row["desired_revision"] if cut_row else None
 
             if cur_desired != target_rev:
-                # Target is stale: mark job superseded, advance authority revision, commit, and raise
+                # Target revision is stale: attempt succeeded, job superseded, cut unchanged
+                con.execute(
+                    "UPDATE generation_attempts SET status = 'succeeded', finished_at = ?, provider_request_id = ?, detail = 'Process succeeded but target revision superseded' WHERE attempt_id = ?",
+                    (now_iso, provider_request_id, attempt_id),
+                )
                 con.execute(
                     "UPDATE generation_jobs SET status = 'superseded', terminal_detail = ?, updated_at = ? WHERE job_id = ?",
-                    (f"Target revision {target_rev} superseded by current desired {cur_desired}", now_iso, job_id),
+                    (f"Target revision {target_rev} superseded by current desired revision {cur_desired}", now_iso, job_id),
                 )
-                con.execute(
-                    "UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,)
-                )
+                auth_row = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()
+                new_rev = auth_row[0] + 1
+                con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,))
                 con.execute("COMMIT;")
-                raise StaleRealizationError(
-                    f"Stale realization: job {job_id} target revision {target_rev} does not match current desired revision {cur_desired}"
-                )
+                candidate_png_path.unlink(missing_ok=True)
+                return {"status": "superseded"}
 
-            # Target is current: commit realization, mark job succeeded, revoke active authorization
+            # Target revision matches current desired: promote candidate to canonical asset
+            canonical_rel = f"assets/realizations/cut-{cut_id}/rev-{target_rev}-{job_id}.png"
+            canonical_abs = (self.db_path.parent / canonical_rel).resolve()
+            canonical_abs.parent.mkdir(parents=True, exist_ok=True)
+            asset_id = f"asset-cut-{cut_id}-rev-{target_rev}-{job_id}"
+
+            os.replace(candidate_png_path, canonical_abs)
+            created_canonical = canonical_abs
+
             con.execute(
                 "UPDATE cuts SET realized_revision = ?, realized_asset_id = ?, realized_asset_path = ?, realized_content_hash = ? WHERE cut_id = ?",
-                (target_rev, asset_id, asset_path, content_hash, cut_id),
+                (target_rev, asset_id, str(canonical_abs), content_hash, cut_id),
+            )
+            con.execute(
+                "UPDATE generation_attempts SET status = 'succeeded', finished_at = ?, provider_request_id = ?, detail = 'Realization committed' WHERE attempt_id = ?",
+                (now_iso, provider_request_id, attempt_id),
             )
             con.execute(
                 "UPDATE generation_jobs SET status = 'succeeded', terminal_detail = 'Realization committed', updated_at = ? WHERE job_id = ?",
                 (now_iso, job_id),
             )
+            auth_row = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()
+            new_rev = auth_row[0] + 1
             self._revoke_active_authorization(con, new_rev, now_iso)
-            con.execute(
-                "UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,)
-            )
+            con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,))
             con.execute("COMMIT;")
-            return new_rev
+        except Exception:
+            if con.in_transaction:
+                con.execute("ROLLBACK;")
+            if created_canonical is not None:
+                created_canonical.unlink(missing_ok=True)
+            raise
+        finally:
+            con.close()
+
+        # Step 7: Fresh connection readback to ensure committed receipt
+        with self._connect() as con2:
+            check_cut = con2.execute("SELECT realized_revision, realized_asset_path, realized_content_hash FROM cuts WHERE cut_id = ?", (cut_id,)).fetchone()
+            check_job = con2.execute("SELECT status FROM generation_jobs WHERE job_id = ?", (job_id,)).fetchone()
+            if not check_cut or check_cut["realized_revision"] != target_rev or check_job["status"] != "succeeded":
+                raise StoreCorruptionError(f"Post-commit readback failed for cut {cut_id} job {job_id}")
+            if not canonical_abs.is_file():
+                raise StoreCorruptionError(f"Canonical file missing after commit: {canonical_abs}")
+
+        return {
+            "status": "committed",
+            "asset_id": asset_id,
+            "canonical_path": str(canonical_abs),
+            "content_hash": content_hash,
+        }
+
+    def fail_job_and_attempt(
+        self,
+        runner_id: str,
+        job_id: str,
+        attempt_id: str,
+        detail: str,
+        provider_request_id: str | None = None,
+    ) -> None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        con = self._connect()
+        try:
+            con.execute("BEGIN IMMEDIATE;")
+            job = con.execute("SELECT status FROM generation_jobs WHERE job_id = ?", (job_id,)).fetchone()
+            if not job or job["status"] != "running":
+                con.execute("ROLLBACK;")
+                return
+
+            con.execute(
+                "UPDATE generation_attempts SET status = 'failed', finished_at = ?, detail = ?, provider_request_id = ? WHERE attempt_id = ? AND status = 'running'",
+                (now_iso, detail, provider_request_id, attempt_id),
+            )
+            con.execute(
+                "UPDATE generation_jobs SET status = 'failed', terminal_detail = ?, updated_at = ? WHERE job_id = ? AND status = 'running'",
+                (detail, now_iso, job_id),
+            )
+            auth_row = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()
+            new_rev = auth_row[0] + 1
+            con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,))
+            con.execute("COMMIT;")
+        except Exception:
+            if con.in_transaction:
+                con.execute("ROLLBACK;")
+            raise
+        finally:
+            con.close()
+    def cancel_job_in_store(self, job_id: str) -> tuple[str, dict[str, Any] | None]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        con = self._connect()
+        try:
+            con.execute("BEGIN IMMEDIATE;")
+            job = con.execute("SELECT status FROM generation_jobs WHERE job_id = ?", (job_id,)).fetchone()
+            if not job:
+                raise ValidationError(f"Job {job_id} not found")
+
+            status = job["status"]
+            if status == "queued":
+                con.execute(
+                    "UPDATE generation_jobs SET status = 'cancelled', terminal_detail = 'Cancelled by user', updated_at = ? WHERE job_id = ?",
+                    (now_iso, job_id),
+                )
+                auth_row = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()
+                new_rev = auth_row[0] + 1
+                con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,))
+                con.execute("COMMIT;")
+                return ("cancelled_queued", None)
+
+            if status == "running":
+                att = con.execute(
+                    "SELECT attempt_id, process_pid, process_group_id, process_start_token, staging_path FROM generation_attempts WHERE job_id = ? AND status = 'running'",
+                    (job_id,),
+                ).fetchone()
+                att_dict = dict(att) if att else None
+                con.execute("COMMIT;")
+                return ("running", att_dict)
+
+            con.execute("COMMIT;")
+            return (status, None)
         except Exception:
             if con.in_transaction:
                 con.execute("ROLLBACK;")
@@ -827,6 +1154,91 @@ class TransactionalStore:
         finally:
             con.close()
 
+    def mark_job_and_attempt_cancelled(self, job_id: str, attempt_id: str | None, detail: str = "Cancelled by user") -> None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        con = self._connect()
+        try:
+            con.execute("BEGIN IMMEDIATE;")
+            if attempt_id:
+                con.execute(
+                    "UPDATE generation_attempts SET status = 'cancelled', finished_at = ?, detail = ? WHERE attempt_id = ?",
+                    (now_iso, detail, attempt_id),
+                )
+            con.execute(
+                "UPDATE generation_jobs SET status = 'cancelled', terminal_detail = ?, updated_at = ? WHERE job_id = ?",
+                (detail, now_iso, job_id),
+            )
+            auth_row = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()
+            new_rev = auth_row[0] + 1
+            con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,))
+            con.execute("COMMIT;")
+        except Exception:
+            if con.in_transaction:
+                con.execute("ROLLBACK;")
+            raise
+        finally:
+            con.close()
+
+    def stop_all_and_cancel_queued(self) -> tuple[int, list[dict[str, Any]]]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        con = self._connect()
+        try:
+            con.execute("BEGIN IMMEDIATE;")
+            con.execute("UPDATE generation_control SET stop_epoch = stop_epoch + 1 WHERE singleton_id = 1")
+            epoch_row = con.execute("SELECT stop_epoch FROM generation_control WHERE singleton_id = 1").fetchone()
+            new_epoch = epoch_row["stop_epoch"]
+
+            con.execute(
+                "UPDATE generation_jobs SET status = 'cancelled', terminal_detail = 'global_stop', updated_at = ? WHERE status = 'queued'",
+                (now_iso,),
+            )
+            running_rows = con.execute(
+                """
+                SELECT a.attempt_id, a.job_id, a.process_pid, a.process_group_id, a.process_start_token, a.staging_path
+                FROM generation_attempts a
+                JOIN generation_jobs j ON a.job_id = j.job_id
+                WHERE a.status = 'running'
+                """
+            ).fetchall()
+
+            auth_row = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()
+            new_rev = auth_row[0] + 1
+            con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,))
+            con.execute("COMMIT;")
+            return (new_epoch, [dict(r) for r in running_rows])
+        except Exception:
+            if con.in_transaction:
+                con.execute("ROLLBACK;")
+            raise
+        finally:
+            con.close()
+
+    def mark_attempts_and_jobs_interrupted(self, running_items: list[tuple[str, str]], reason: str = "global_stop") -> None:
+        if not running_items:
+            return
+        now_iso = datetime.now(timezone.utc).isoformat()
+        con = self._connect()
+        try:
+            con.execute("BEGIN IMMEDIATE;")
+            for job_id, attempt_id in running_items:
+                con.execute(
+                    "UPDATE generation_attempts SET status = 'interrupted', finished_at = ?, detail = ? WHERE attempt_id = ? AND status = 'running'",
+                    (now_iso, reason, attempt_id),
+                )
+                con.execute(
+                    "UPDATE generation_jobs SET status = 'interrupted', terminal_detail = ?, updated_at = ? WHERE job_id = ? AND status = 'running'",
+                    (reason, now_iso, job_id),
+                )
+            auth_row = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()
+            new_rev = auth_row[0] + 1
+            con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,))
+            con.execute("COMMIT;")
+        except Exception:
+            if con.in_transaction:
+                con.execute("ROLLBACK;")
+            raise
+        finally:
+            con.close()
     def register_review_artifact(
         self,
         expected_authority_revision: int,

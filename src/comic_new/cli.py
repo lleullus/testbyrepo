@@ -7,9 +7,11 @@ import json
 import sys
 from pathlib import Path
 
+from comic_new.generation import GenerationRunner, GenerationService
 from comic_new.store import (
     ProjectAlreadyExistsError,
     ProjectNotFoundError,
+    RunnerAlreadyActiveError,
     StoreCorruptionError,
     TransactionalStore,
     TransactionalStoreError,
@@ -38,6 +40,42 @@ def main(argv: list[str] | None = None) -> int:
     )
     snapshot_parser.add_argument("project_dir", type=str, help="Path to the project directory")
 
+
+    # comic-new generate <project_dir> [--cut {1,2,3,4,5}]
+    gen_parser = subparsers.add_parser(
+        "generate",
+        help="Enqueue and run image generation for all cuts or a single cut",
+    )
+    gen_parser.add_argument("project_dir", type=str, help="Path to the project directory")
+    gen_parser.add_argument(
+        "--cut",
+        type=int,
+        choices=[1, 2, 3, 4, 5],
+        default=None,
+        help="Single cut_id to generate (defaults to all 1..5)",
+    )
+
+    # comic-new run-generation <project_dir>
+    run_parser = subparsers.add_parser(
+        "run-generation",
+        help="Drain existing queued generation jobs using single runner with startup recovery",
+    )
+    run_parser.add_argument("project_dir", type=str, help="Path to the project directory")
+
+    # comic-new cancel-generation <project_dir> <job_id>
+    cancel_parser = subparsers.add_parser(
+        "cancel-generation",
+        help="Cancel a queued or running generation job",
+    )
+    cancel_parser.add_argument("project_dir", type=str, help="Path to the project directory")
+    cancel_parser.add_argument("job_id", type=str, help="Job ID to cancel")
+
+    # comic-new stop-generation <project_dir>
+    stop_parser = subparsers.add_parser(
+        "stop-generation",
+        help="Stop all active generation jobs and cancel queued ones (global stop)",
+    )
+    stop_parser.add_argument("project_dir", type=str, help="Path to the project directory")
     args = parser.parse_args(argv)
 
     try:
@@ -52,6 +90,55 @@ def main(argv: list[str] | None = None) -> int:
             snap = store.snapshot()
             print(json.dumps(snap, indent=2))
             return 0
+        elif args.command == "generate":
+            p = Path(args.project_dir)
+            store = TransactionalStore.open_project(p)
+            snap = store.snapshot()
+            service = GenerationService(store)
+            enq_receipt = service.enqueue(
+                cut_id=args.cut,
+                expected_authority_revision=snap["authority_revision"],
+            )
+            runner = GenerationRunner(store)
+            run_receipt = runner.run_until_idle()
+            result = {
+                "enqueue": enq_receipt.to_dict(),
+                "run": run_receipt.to_dict(),
+            }
+            print(json.dumps(result, indent=2))
+            # Nonzero exit if any job was failed/cancelled/interrupted/superseded
+            bad_counts = sum(
+                count
+                for st, count in run_receipt.terminal_counts.items()
+                if st in ("failed", "cancelled", "interrupted", "superseded")
+            )
+            return 1 if bad_counts > 0 else 0
+        elif args.command == "run-generation":
+            p = Path(args.project_dir)
+            store = TransactionalStore.open_project(p)
+            runner = GenerationRunner(store)
+            run_receipt = runner.run_until_idle()
+            print(json.dumps(run_receipt.to_dict(), indent=2))
+            bad_counts = sum(
+                count
+                for st, count in run_receipt.terminal_counts.items()
+                if st in ("failed", "cancelled", "interrupted", "superseded")
+            )
+            return 1 if bad_counts > 0 else 0
+        elif args.command == "cancel-generation":
+            p = Path(args.project_dir)
+            store = TransactionalStore.open_project(p)
+            service = GenerationService(store)
+            receipt = service.cancel(args.job_id)
+            print(json.dumps(receipt.to_dict(), indent=2))
+            return 0
+        elif args.command == "stop-generation":
+            p = Path(args.project_dir)
+            store = TransactionalStore.open_project(p)
+            service = GenerationService(store)
+            receipt = service.stop_all()
+            print(json.dumps(receipt.to_dict(), indent=2))
+            return 0
         else:
             parser.print_help(sys.stderr)
             return 2
@@ -59,6 +146,7 @@ def main(argv: list[str] | None = None) -> int:
         ProjectAlreadyExistsError,
         ProjectNotFoundError,
         StoreCorruptionError,
+        RunnerAlreadyActiveError,
         ValidationError,
         TransactionalStoreError,
     ) as e:

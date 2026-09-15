@@ -1,4 +1,4 @@
--- comic-new v1 schema: Single Transactional Authority
+-- comic-new v2 schema: Single Transactional Authority with Unified Generation
 
 CREATE TABLE authority (
     singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
@@ -62,6 +62,9 @@ CREATE TABLE generation_jobs (
     updated_at TEXT NOT NULL
 );
 
+CREATE INDEX idx_generation_jobs_queued
+ON generation_jobs (status, created_at, job_id);
+
 CREATE TABLE generation_attempts (
     attempt_id TEXT PRIMARY KEY,
     job_id TEXT NOT NULL REFERENCES generation_jobs(job_id) ON DELETE CASCADE,
@@ -70,7 +73,30 @@ CREATE TABLE generation_attempts (
     started_at TEXT NOT NULL,
     finished_at TEXT NULL,
     detail TEXT NULL,
-    UNIQUE (job_id, ordinal)
+    runner_id TEXT NULL,
+    process_pid INTEGER NULL,
+    process_group_id INTEGER NULL,
+    process_start_token TEXT NULL,
+    staging_path TEXT NULL,
+    provider_request_id TEXT NULL,
+    UNIQUE (job_id, ordinal),
+    CHECK (
+        (process_pid IS NULL AND process_group_id IS NULL AND process_start_token IS NULL) OR
+        (process_pid IS NOT NULL AND process_group_id IS NOT NULL AND process_start_token IS NOT NULL)
+    )
+);
+
+CREATE TABLE generation_control (
+    singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+    stop_epoch INTEGER NOT NULL DEFAULT 0 CHECK (stop_epoch >= 0),
+    runner_id TEXT NULL,
+    runner_pid INTEGER NULL,
+    runner_start_token TEXT NULL,
+    runner_started_at TEXT NULL,
+    CHECK (
+        (runner_id IS NULL AND runner_pid IS NULL AND runner_start_token IS NULL AND runner_started_at IS NULL) OR
+        (runner_id IS NOT NULL AND runner_pid IS NOT NULL AND runner_start_token IS NOT NULL AND runner_started_at IS NOT NULL)
+    )
 );
 
 CREATE TABLE review_artifacts (
@@ -132,6 +158,9 @@ INSERT INTO composition (singleton_id, revision, state_json, updated_at)
 VALUES (1, 0, '{}', '2026-09-15T00:00:00Z');
 
 INSERT INTO cuts (cut_id) VALUES (1), (2), (3), (4), (5);
+
+INSERT INTO generation_control (singleton_id, stop_epoch, runner_id, runner_pid, runner_start_token, runner_started_at)
+VALUES (1, 0, NULL, NULL, NULL, NULL);
 
 -- Exactly five cuts triggers: protect table cuts from row insertion, deletion, and cut_id changes
 CREATE TRIGGER trg_cuts_no_insert BEFORE INSERT ON cuts
