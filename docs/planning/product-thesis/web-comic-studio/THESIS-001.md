@@ -10,16 +10,16 @@ Authored-On: 2026-09-15
 Planning-Owner: Main  
 Consultation: Oracle Browser Slot 3 (3-Round CodexPro Mode Calibration)  
 Diagnostic-Evidence: /home/user01/project/comic (THESIS-008, INV-001, src/comic)  
+UI-Architecture-Source: docs/planning/frontend-architecture/FRONTEND-ARCH-001.md (sha256:8eea9545d82b40e64791cd0d6b3340e848b72923d36373bae6425cc39badac9b)  
 Invocation-Boundary: 본 문서는 comic_new의 유일한 제품 의미 규범 원본이다. 기술적 구현 세부(Plan/Implementation)를 침범하지 않으며 하위의 파편화된 Spec/Ticket 문서를 양산하지 않는다.
-
 ---
 
 ## 1. Source Authority & Anti-Bloat Governance
 
 ### 1.1 배경 및 작성 경위
 본 문서는 과거 `~/project/comic`에서 누적된 심각한 난개발, 생성 엔진 이원화로 인한 덮어쓰기(Stale Overwrite), 1,800줄 스파게티 프론트엔드의 상태 불일치, WYSIWYG 파괴, 파일 락 난립, 그리고 8회에 걸친 테시즈 개정과 산더미 같은 SPEC/TICKET 문서 비대화(Bloat)의 교훈을 바탕으로 작성되었다.  
-기존 `~/project/comic`의 코드와 문서는 결함 진단과 반례 도출을 위한 참고 증거(Diagnostic Evidence)일 뿐이며, `~/project/comic_new`에 대한 구현 호환성 권위를 갖지 않는다.
-
+기존 `~/project/comic`의 코드와 문서는 결함 진단과 반례 도출을 위한 참고 증거(Diagnostic Evidence)일 뿐이며, `~/project/comic_new`에 대한 구현 호환성 권위를 갖지 않는다.  
+UI 및 인터랙션 경계는 '디자인' 스킬 원칙(ZERO_FETCH, 5대 상호작용 축 분석, 안티-블로트)을 준수하여 작성된 `docs/planning/frontend-architecture/FRONTEND-ARCH-001.md`를 원천으로 하여 본 테시스에 정식 결속(Bound)되었다.
 ### 1.2 단일 규범 권위 (Sole Normative Authority)
 - `THESIS-001`은 `comic_new`의 제품 의미, 사용자 효용, 인과적 루프, 불변식을 정의하는 **유일한 규범적 권위(Sole Normative Authority)**이다.
 - 구현을 보조하는 하위 계획이나 실행 아티팩트가 필요할 경우 파생 투영(Derived Projection)으로 존재할 수 있으나, 본 문서의 제품 의미를 수정, 재정의, 우회할 수 없다.
