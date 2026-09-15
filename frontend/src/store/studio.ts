@@ -120,15 +120,33 @@ export const useStudioStore = defineStore('studio', () => {
   })
 
   const canAuthorize = computed(() => {
-    if (!ui.review || !server.value) return false
-    // The displayed artifact identity must match what server knows
+    if (!ui.review || !server.value || !hasCurrentSnapshot.value || hasBlockingEdit.value) {
+      return false
+    }
     const displayed = ui.review
-    const latestArtifacts = server.value.review_artifacts
-    return latestArtifacts.some(
-      (a) =>
-        a.artifact_id === displayed.artifact.artifact_id &&
-        a.content_hash === displayed.displayedByteHash,
+    const artifact = displayed.artifact
+    const registered = server.value.review_artifacts.some(
+      (candidate) =>
+        candidate.artifact_id === artifact.artifact_id &&
+        candidate.content_hash === displayed.displayedByteHash &&
+        candidate.composition_revision === artifact.composition_revision,
     )
+    if (
+      !registered ||
+      displayed.displayedByteHash !== artifact.content_hash ||
+      server.value.composition.revision !== artifact.composition_revision
+    ) {
+      return false
+    }
+    return artifact.cuts.every((artifactCut) => {
+      const current = server.value!.cuts.find((cut) => cut.cut_id === artifactCut.cut_id)
+      return (
+        current?.currency === 'CURRENT' &&
+        current.desired_revision === artifactCut.desired_revision &&
+        current.realized_revision === artifactCut.realized_revision &&
+        current.realized_asset_id === artifactCut.asset_id
+      )
+    })
   })
 
   // --- Internal helpers ---

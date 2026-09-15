@@ -6,6 +6,7 @@ import type {
   CompositionStateDTO,
   CutDTO,
   CutId,
+  ReviewArtifactDTO,
   StudioSnapshotDTO,
 } from '../src/api/contracts'
 
@@ -97,6 +98,46 @@ describe('authoritative snapshot monotonicity', () => {
     expect(store.server.authority_revision).toBe(11)
     expect(store.drafts.intents[1]?.value.prompt).toBe('local')
     expect(store.saves['intent-1']?.state).toBe('base-changed')
+  })
+})
+
+describe('review authorization identity', () => {
+  it('disables approval when the displayed artifact no longer matches current composition', () => {
+    const store = useStudioStore()
+    const contentHash = 'a'.repeat(64)
+    const artifact: ReviewArtifactDTO = {
+      artifact_id: `artifact-${contentHash}`,
+      content_hash: contentHash,
+      composition_revision: 1,
+      created_at: '2026-01-01T00:00:00Z',
+      cuts: ([1, 2, 3, 4, 5] as CutId[]).map((cutId) => ({
+        cut_id: cutId,
+        desired_revision: 1,
+        realized_revision: 1,
+        asset_id: `asset-${cutId}`,
+        source_content_hash: '0'.repeat(64),
+      })),
+      asset_url: `/api/review-artifacts/artifact-${contentHash}/content`,
+    }
+    const summary = {
+      ...artifact,
+      cuts: artifact.cuts.map(({ cut_id, realized_revision, asset_id }) => ({
+        cut_id,
+        realized_revision,
+        asset_id,
+      })),
+    }
+    store.server = makeSnapshot({ review_artifacts: [summary] })
+    store.ui.review = { artifact, displayedByteHash: contentHash, zoom: 1 }
+    expect(store.canAuthorize).toBe(true)
+
+    store.applySnapshot(makeSnapshot({
+      authority_revision: 2,
+      composition: { revision: 2, state: DEFAULT_COMPOSITION, updated_at: '2026-01-01T00:01:00Z' },
+      review_artifacts: [summary],
+    }))
+
+    expect(store.canAuthorize).toBe(false)
   })
 })
 
