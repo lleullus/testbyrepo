@@ -126,6 +126,41 @@ def find_descendant_pids(root_pid: int) -> set[int]:
                 queue.append(p)
     return descendants
 
+def find_session_or_group_pids(pgid: int, root_start_token: str | None = None) -> set[int]:
+    """Find all alive non-zombie PIDs belonging to session or process group pgid."""
+    if pgid <= 0:
+        return set()
+    root_start_tick = int(root_start_token) if (root_start_token and root_start_token.isdigit()) else None
+    matching: set[int] = set()
+    try:
+        for entry in os.scandir("/proc"):
+            if not entry.name.isdigit():
+                continue
+            p = int(entry.name)
+            try:
+                with open(f"/proc/{p}/stat", "r", encoding="utf-8") as f:
+                    content = f.read()
+                rparen = content.rfind(")")
+                if rparen == -1:
+                    continue
+                fields = content[rparen + 2:].split()
+                state = fields[0]
+                if state == "Z":
+                    continue
+                pgrp = int(fields[2])
+                session = int(fields[3])
+                if pgrp == pgid or session == pgid:
+                    if root_start_tick is not None:
+                        starttime = int(fields[19])
+                        if starttime < root_start_tick:
+                            continue
+                    matching.add(p)
+            except (OSError, IndexError, ValueError):
+                continue
+    except OSError:
+        pass
+    return matching
+
 
 def terminate_process_tree(
     pid: int | None,
@@ -133,22 +168,33 @@ def terminate_process_tree(
     start_token: str | None,
     timeout: float = 3.0,
 ) -> bool:
-    """Bounded process-tree TERM -> bounded wait -> KILL -> reap with PID reuse protection."""
+    """Bounded process-tree TERM -> bounded wait -> KILL -> reap with PID reuse protection.
+
+    Handles surviving reparented session descendants even after recorded root has exited.
+    """
     if pid is None or pid <= 0:
         return True
 
-    # If start token provided, verify identity before sending any signal
-    if start_token and not is_process_alive_with_token(pid, start_token):
-        return True
+    # Check root identity if root PID is currently alive
+    root_alive = is_process_alive(pid)
+    if root_alive:
+        if start_token and not is_process_alive_with_token(pid, start_token):
+            # PID was reused by an unrelated process! Never signal it.
+            return True
 
     # Collect target PIDs
-    descendants = find_descendant_pids(pid)
-    all_pids = {pid} | descendants
+    session_id = pgid if (pgid is not None and pgid > 0) else pid
+    descendants = find_descendant_pids(pid) if root_alive else set()
+    session_pids = find_session_or_group_pids(session_id, start_token)
+    all_pids = ({pid} if root_alive else set()) | descendants | session_pids
+
+    if not all_pids:
+        return True
 
     # Phase 1: SIGTERM
-    if pgid is not None and pgid > 0:
+    if session_id is not None and session_id > 0:
         try:
-            os.killpg(pgid, signal.SIGTERM)
+            os.killpg(session_id, signal.SIGTERM)
         except (ProcessLookupError, PermissionError):
             pass
     for p in all_pids:
@@ -166,13 +212,14 @@ def terminate_process_tree(
         time.sleep(0.05)
 
     # Phase 2: SIGKILL if still alive
-    descendants = find_descendant_pids(pid)
-    all_pids = {pid} | descendants
+    re_desc = find_descendant_pids(pid) if is_process_alive(pid) else set()
+    re_sess = find_session_or_group_pids(session_id, start_token)
+    all_pids = ({pid} if is_process_alive(pid) else set()) | re_desc | re_sess
     alive = [p for p in all_pids if is_process_alive(p)]
     if alive:
-        if pgid is not None and pgid > 0:
+        if session_id is not None and session_id > 0:
             try:
-                os.killpg(pgid, signal.SIGKILL)
+                os.killpg(session_id, signal.SIGKILL)
             except (ProcessLookupError, PermissionError):
                 pass
         for p in alive:
@@ -189,9 +236,10 @@ def terminate_process_tree(
             time.sleep(0.05)
 
     # Re-check liveness
-    remaining = [p for p in all_pids if is_process_alive(p)]
+    final_desc = find_descendant_pids(pid) if is_process_alive(pid) else set()
+    final_pids = ({pid} if is_process_alive(pid) else set()) | final_desc | find_session_or_group_pids(session_id, start_token)
+    remaining = [p for p in final_pids if is_process_alive(p)]
     return len(remaining) == 0
-
 
 def validate_staging_png(staging_path: Path) -> tuple[int, int, str]:
     """Validate that staging candidate is a non-empty, fully decodable PNG."""
@@ -373,7 +421,6 @@ class GenerationRunner:
         self,
         store: TransactionalStore,
         project_dir: Path | str | None = None,
-        concurrency: int = 2,
         ima2_binary: str | None = None,
         provider_cmd_factory: Callable[..., list[str]] | None = None,
         provider_timeout: float = 60.0,
@@ -383,7 +430,9 @@ class GenerationRunner:
         self.project_dir = Path(project_dir or store.db_path.parent).resolve()
         self._claimed_job_ids: set[str] = set()
         self._claimed_lock = threading.Lock()
-        self.concurrency = concurrency
+        self.concurrency = 2
+        self._active_workers = 0
+        self._worker_cond = threading.Condition()
         self.ima2_binary = ima2_binary or os.environ.get(
             "COMIC_NEW_IMA2_BIN", "/home/user01/.nvm/versions/node/v24.18.0/bin/ima2"
         )
@@ -507,190 +556,210 @@ class GenerationRunner:
                 staging_base_dir=self.staging_base_dir,
             )
             if claim is None:
-                # No more jobs or stop epoch mismatch
-                break
-
-            with self._claimed_lock:
-                self._claimed_job_ids.add(claim["job_id"])
-            job_id = claim["job_id"]
-            attempt_id = claim["attempt_id"]
-            staging_file = Path(claim["staging_path"])
-            staging_file.parent.mkdir(parents=True, exist_ok=True)
-            prompt = claim["prompt"]
-
-            # Determine provider command
-            if self.provider_cmd_factory:
-                provider_cmd = self.provider_cmd_factory(
-                    claim["cut_id"], staging_file, claim["target_desired_revision"]
-                )
-            else:
-                provider_cmd = self.default_provider_cmd(
-                    job_id, staging_file, int(self.provider_timeout)
-                )
-
-            # Set up synchronization pipe gate
-            r_fd, w_fd = os.pipe()
-            launcher_cmd = [sys.executable, str(self._exec_script), str(r_fd)] + provider_cmd
-
-            try:
-                proc = subprocess.Popen(
-                    launcher_cmd,
-                    pass_fds=(r_fd,),
-                    start_new_session=True,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
-            except Exception as e:
-                os.close(r_fd)
-                os.close(w_fd)
-                self.store.fail_job_and_attempt(
-                    runner_id=runner_id,
-                    job_id=job_id,
-                    attempt_id=attempt_id,
-                    detail=f"Failed to spawn subprocess: {e}",
-                )
-                staging_file.unlink(missing_ok=True)
-                continue
-            finally:
-                try:
-                    os.close(r_fd)
-                except OSError:
-                    pass
-
-            proc_pid = proc.pid
-            proc_pgid = proc.pid
-            proc_token = get_process_start_token(proc_pid) or str(proc_pid)
-
-            # Attach process identity to DB before opening gate
-            attached = self.store.attach_attempt_process(
-                job_id=job_id,
-                attempt_id=attempt_id,
-                runner_id=runner_id,
-                pid=proc_pid,
-                pgid=proc_pgid,
-                start_token=proc_token,
-                captured_stop_epoch=stop_epoch,
-            )
-
-            if not attached:
-                # Attach failed: close w_fd without start byte, terminate child
-                try:
-                    os.close(w_fd)
-                except OSError:
-                    pass
-                terminate_process_tree(proc_pid, proc_pgid, proc_token)
-                try:
-                    proc.wait(timeout=2.0)
-                except subprocess.TimeoutExpired:
-                    pass
-                continue
-
-            # Open gate: write exactly 1 byte
-            try:
-                os.write(w_fd, b"\x01")
-            except OSError:
-                pass
-            finally:
-                try:
-                    os.close(w_fd)
-                except OSError:
-                    pass
-
-            # Write prompt bytes to child stdin and wait with timeout
-            try:
-                stdout_bytes, stderr_bytes = proc.communicate(
-                    input=prompt.encode("utf-8"),
-                    timeout=self.watchdog_timeout,
-                )
-            except subprocess.TimeoutExpired:
-                terminate_process_tree(proc_pid, proc_pgid, proc_token)
-                try:
-                    stdout_bytes, stderr_bytes = proc.communicate(timeout=2.0)
-                except Exception:
-                    stdout_bytes, stderr_bytes = b"", b""
-                self.store.fail_job_and_attempt(
-                    runner_id=runner_id,
-                    job_id=job_id,
-                    attempt_id=attempt_id,
-                    detail=f"Process timed out after {self.watchdog_timeout}s",
-                )
-                staging_file.unlink(missing_ok=True)
-                continue
-
-            # Process completed and reaped
-            if proc.returncode != 0:
-                # Check if stop_epoch changed or job is already interrupted/cancelled
                 with self.store._connect() as chk_con:
                     ctrl = chk_con.execute(
                         "SELECT stop_epoch FROM generation_control WHERE singleton_id = 1"
                     ).fetchone()
                     cur_epoch = ctrl["stop_epoch"] if ctrl else 0
-                    j_row = chk_con.execute(
-                        "SELECT status FROM generation_jobs WHERE job_id = ?", (job_id,)
-                    ).fetchone()
-                    j_status = j_row["status"] if j_row else None
+                if cur_epoch != stop_epoch or stop_event.is_set():
+                    break
 
-                if cur_epoch != stop_epoch or j_status in ("interrupted", "cancelled"):
+                with self._worker_cond:
+                    if self._active_workers > 0 and not stop_event.is_set():
+                        self._worker_cond.wait(timeout=0.05)
+                        continue
+                    else:
+                        self._worker_cond.notify_all()
+                        break
+
+            with self._worker_cond:
+                self._active_workers += 1
+            try:
+                with self._claimed_lock:
+                    self._claimed_job_ids.add(claim["job_id"])
+                job_id = claim["job_id"]
+                attempt_id = claim["attempt_id"]
+                staging_file = Path(claim["staging_path"])
+                staging_file.parent.mkdir(parents=True, exist_ok=True)
+                prompt = claim["prompt"]
+
+                # Determine provider command
+                if self.provider_cmd_factory:
+                    provider_cmd = self.provider_cmd_factory(
+                        claim["cut_id"], staging_file, claim["target_desired_revision"]
+                    )
+                else:
+                    provider_cmd = self.default_provider_cmd(
+                        job_id, staging_file, int(self.provider_timeout)
+                    )
+
+                # Set up synchronization pipe gate
+                r_fd, w_fd = os.pipe()
+                launcher_cmd = [sys.executable, str(self._exec_script), str(r_fd)] + provider_cmd
+
+                try:
+                    proc = subprocess.Popen(
+                        launcher_cmd,
+                        pass_fds=(r_fd,),
+                        start_new_session=True,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                    )
+                except Exception as e:
+                    os.close(r_fd)
+                    os.close(w_fd)
+                    self.store.fail_job_and_attempt(
+                        runner_id=runner_id,
+                        job_id=job_id,
+                        attempt_id=attempt_id,
+                        detail=f"Failed to spawn subprocess: {e}",
+                    )
+                    staging_file.unlink(missing_ok=True)
+                    continue
+                finally:
+                    try:
+                        os.close(r_fd)
+                    except OSError:
+                        pass
+
+                proc_pid = proc.pid
+                proc_pgid = proc.pid
+                proc_token = get_process_start_token(proc_pid) or str(proc_pid)
+
+                # Attach process identity to DB before opening gate
+                attached = self.store.attach_attempt_process(
+                    job_id=job_id,
+                    attempt_id=attempt_id,
+                    runner_id=runner_id,
+                    pid=proc_pid,
+                    pgid=proc_pgid,
+                    start_token=proc_token,
+                    captured_stop_epoch=stop_epoch,
+                )
+
+                if not attached:
+                    # Attach failed: close w_fd without start byte, terminate child
+                    try:
+                        os.close(w_fd)
+                    except OSError:
+                        pass
+                    terminate_process_tree(proc_pid, proc_pgid, proc_token)
+                    try:
+                        proc.wait(timeout=2.0)
+                    except subprocess.TimeoutExpired:
+                        pass
+                    continue
+
+                # Open gate: write exactly 1 byte
+                try:
+                    os.write(w_fd, b"\x01")
+                except OSError:
+                    pass
+                finally:
+                    try:
+                        os.close(w_fd)
+                    except OSError:
+                        pass
+
+                # Write prompt bytes to child stdin and wait with timeout
+                try:
+                    stdout_bytes, stderr_bytes = proc.communicate(
+                        input=prompt.encode("utf-8"),
+                        timeout=self.watchdog_timeout,
+                    )
+                except subprocess.TimeoutExpired:
+                    terminate_process_tree(proc_pid, proc_pgid, proc_token)
+                    try:
+                        stdout_bytes, stderr_bytes = proc.communicate(timeout=2.0)
+                    except Exception:
+                        stdout_bytes, stderr_bytes = b"", b""
+                    self.store.fail_job_and_attempt(
+                        runner_id=runner_id,
+                        job_id=job_id,
+                        attempt_id=attempt_id,
+                        detail=f"Process timed out after {self.watchdog_timeout}s",
+                    )
                     staging_file.unlink(missing_ok=True)
                     continue
 
-                err_msg = stderr_bytes.decode("utf-8", errors="replace").strip()[:200]
-                detail = f"Process exited with code {proc.returncode}: {err_msg}"
-                self.store.fail_job_and_attempt(
-                    runner_id=runner_id,
-                    job_id=job_id,
-                    attempt_id=attempt_id,
-                    detail=detail,
-                )
-                staging_file.unlink(missing_ok=True)
-                continue
+                # Process completed and reaped
+                if proc.returncode != 0:
+                    # Check if stop_epoch changed or job is already interrupted/cancelled
+                    with self.store._connect() as chk_con:
+                        ctrl = chk_con.execute(
+                            "SELECT stop_epoch FROM generation_control WHERE singleton_id = 1"
+                        ).fetchone()
+                        cur_epoch = ctrl["stop_epoch"] if ctrl else 0
+                        j_row = chk_con.execute(
+                            "SELECT status FROM generation_jobs WHERE job_id = ?", (job_id,)
+                        ).fetchone()
+                        j_status = j_row["status"] if j_row else None
 
-            # Extract provider request ID if present
-            provider_req_id = None
-            try:
-                out_str = stdout_bytes.decode("utf-8", errors="replace").strip()
-                if out_str:
-                    out_json = json.loads(out_str)
-                    if isinstance(out_json, dict) and "request_id" in out_json:
-                        provider_req_id = str(out_json["request_id"])
-            except Exception:
-                pass
+                    if cur_epoch != stop_epoch or j_status in ("interrupted", "cancelled"):
+                        staging_file.unlink(missing_ok=True)
+                        continue
 
-            # Validate staging PNG
-            try:
-                width, height, content_hash = validate_staging_png(staging_file)
-            except Exception as e:
-                err_str = str(e)
-                if "Candidate file does not exist" in err_str or "empty" in err_str:
-                    detail = f"Validation failed: {err_str}"
-                else:
-                    detail = f"PNG decoding failed: {err_str}"
+                    err_msg = stderr_bytes.decode("utf-8", errors="replace").strip()[:200]
+                    detail = f"Process exited with code {proc.returncode}: {err_msg}"
+                    self.store.fail_job_and_attempt(
+                        runner_id=runner_id,
+                        job_id=job_id,
+                        attempt_id=attempt_id,
+                        detail=detail,
+                    )
+                    staging_file.unlink(missing_ok=True)
+                    continue
 
-                self.store.fail_job_and_attempt(
-                    runner_id=runner_id,
-                    job_id=job_id,
-                    attempt_id=attempt_id,
-                    detail=detail,
-                    provider_request_id=provider_req_id,
-                )
-                staging_file.unlink(missing_ok=True)
-                continue
+                # Extract provider request ID if present
+                provider_req_id = None
+                try:
+                    out_str = stdout_bytes.decode("utf-8", errors="replace").strip()
+                    if out_str:
+                        out_json = json.loads(out_str)
+                        if isinstance(out_json, dict) and "request_id" in out_json:
+                            provider_req_id = str(out_json["request_id"])
+                except Exception:
+                    pass
 
-            # Atomic commit gate
-            try:
-                self.store.commit_candidate(
-                    runner_id=runner_id,
-                    job_id=job_id,
-                    attempt_id=attempt_id,
-                    candidate_png_path=staging_file,
-                    content_hash=content_hash,
-                    provider_request_id=provider_req_id,
-                )
+                # Validate staging PNG
+                try:
+                    width, height, content_hash = validate_staging_png(staging_file)
+                except Exception as e:
+                    err_str = str(e)
+                    if "Candidate file does not exist" in err_str or "empty" in err_str:
+                        detail = f"Validation failed: {err_str}"
+                    else:
+                        detail = f"PNG decoding failed: {err_str}"
+
+                    self.store.fail_job_and_attempt(
+                        runner_id=runner_id,
+                        job_id=job_id,
+                        attempt_id=attempt_id,
+                        detail=detail,
+                        provider_request_id=provider_req_id,
+                    )
+                    staging_file.unlink(missing_ok=True)
+                    continue
+
+                # Atomic commit gate
+                try:
+                    self.store.commit_candidate(
+                        runner_id=runner_id,
+                        job_id=job_id,
+                        attempt_id=attempt_id,
+                        candidate_png_path=staging_file,
+                        content_hash=content_hash,
+                        provider_request_id=provider_req_id,
+                    )
+                finally:
+                    staging_file.unlink(missing_ok=True)
+                    if staging_file.parent.exists() and not any(staging_file.parent.iterdir()):
+                        try:
+                            staging_file.parent.rmdir()
+                        except OSError:
+                            pass
             finally:
-                staging_file.unlink(missing_ok=True)
-                if staging_file.parent.exists() and not any(staging_file.parent.iterdir()):
-                    try:
-                        staging_file.parent.rmdir()
-                    except OSError:
-                        pass
+                with self._worker_cond:
+                    self._active_workers -= 1
+                    self._worker_cond.notify_all()

@@ -15,6 +15,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+import threading
 
 import pytest
 from PIL import Image
@@ -22,6 +23,8 @@ from PIL import Image
 from comic_new.generation import (
     GenerationRunner,
     GenerationService,
+    find_descendant_pids,
+    find_session_or_group_pids,
     get_process_start_token,
     is_pid_non_zombie_alive,
     is_process_alive_with_token,
@@ -145,35 +148,53 @@ def test_scenario_b_success_and_concurrency_two(tmp_path: Path) -> None:
     store, rev = _init_five_cut_project(project_dir)
     service = GenerationService(store)
 
-    # Enqueue 3 jobs
-    rec = service.enqueue(cut_id=None, expected_authority_revision=rev)
+    service.enqueue(cut_id=None, expected_authority_revision=rev)
 
-    # Record stdin prompts passed to helper
     stdin_record_dir = tmp_path / "stdin_records"
     stdin_record_dir.mkdir()
 
-    # Track maximum concurrent running helpers
     def cmd_factory(cut_id: int, staging_path: Path, target_rev: int) -> list[str]:
         record_file = stdin_record_dir / f"cut_{cut_id}.txt"
         return _provider_cmd(
             cut_id,
             staging_path,
             target_rev,
-            mock_sleep=0.3,  # Slight delay to ensure worker concurrency overlap
+            mock_sleep=0.25,
             mock_record_stdin=str(record_file),
         )
 
+    # Polling monitor during run_until_idle to measure live generation helper PIDs in /proc
+    sampled_counts: list[int] = []
+    stop_monitor = threading.Event()
+
+    def monitor_live_roots() -> None:
+        while not stop_monitor.is_set():
+            with store._connect() as con:
+                rows = con.execute("SELECT process_pid FROM generation_attempts WHERE status = 'running'").fetchall()
+                running_pids = [r["process_pid"] for r in rows if r["process_pid"] is not None]
+            live = [p for p in running_pids if is_pid_non_zombie_alive(p)]
+            sampled_counts.append(len(live))
+            time.sleep(0.02)
+
+    mon_t = threading.Thread(target=monitor_live_roots, daemon=True)
+    mon_t.start()
+
     runner = GenerationRunner(
         store,
-        concurrency=2,
         provider_cmd_factory=cmd_factory,
     )
     receipt = runner.run_until_idle()
+    stop_monitor.set()
+    mon_t.join()
+
+    assert max(sampled_counts, default=0) <= 2
+    assert 2 in sampled_counts
+
+    with pytest.raises(TypeError):
+        GenerationRunner(store, concurrency=3)
 
     # Verify all jobs succeeded
     assert receipt.terminal_counts.get("succeeded") == 5
-
-    # Check that stdin prompt received by mock helper equals accepted historical prompt
     snap = store.snapshot()
     for cut in snap["cuts"]:
         cid = cut["cut_id"]
@@ -236,7 +257,6 @@ def test_scenario_b_failures(tmp_path: Path) -> None:
 
     runner = GenerationRunner(
         store,
-        concurrency=2,
         provider_cmd_factory=fail_factory,
         provider_timeout=0.4,  # Fast timeout for test
     )
@@ -282,16 +302,18 @@ def test_scenario_c_stale_revision_race(tmp_path: Path) -> None:
             return _provider_cmd(cut_id, staging_path, target_rev, mock_gate_file=str(gate_file))
         return _provider_cmd(cut_id, staging_path, target_rev)
 
-    runner_a = GenerationRunner(store, concurrency=1, provider_cmd_factory=cmd_factory)
+    runner = GenerationRunner(store, provider_cmd_factory=cmd_factory)
 
-    # Start runner_a in a separate thread so Job A blocks on the gate
-    import threading
+    t_runner = threading.Thread(target=runner.run_until_idle, daemon=True)
+    t_runner.start()
 
-    t_a = threading.Thread(target=runner_a.run_until_idle)
-    t_a.start()
-
-    # Wait until Job A is running in DB
-    time.sleep(0.3)
+    # Wait until Job A is running in DB and held at mock_gate_file
+    for _ in range(50):
+        with store._connect() as con:
+            r = con.execute("SELECT status FROM generation_jobs WHERE job_id = ?", (job_a_id,)).fetchone()
+            if r and r["status"] == "running":
+                break
+        time.sleep(0.05)
     with store._connect() as con:
         r = con.execute("SELECT status FROM generation_jobs WHERE job_id = ?", (job_a_id,)).fetchone()
         assert r["status"] == "running"
@@ -300,38 +322,50 @@ def test_scenario_c_stale_revision_race(tmp_path: Path) -> None:
     rev = store.snapshot()["authority_revision"]
     rev = store.accept_cut_intent(rev, cut_id=1, intent_payload={"prompt": "Panel 1 Revised v2"})
 
-    # User immediately enqueues and commits Job B for revision 2
-    # We run Job B to completion using a second runner after runner_a releases ownership or directly
-    # Notice: runner_a holds the singleton ownership in DB!
-    # Let's release gate file so Job A proceeds to commit gate
-    gate_file.touch()
-    t_a.join()
-
-    # Job A reached commit_candidate: since cut 1 desired_revision is now 2, Job A must be superseded!
-    snap = store.snapshot()
-    job_a = [j for j in snap["jobs"] if j["job_id"] == job_a_id][0]
-    assert job_a["status"] == "superseded"
-    assert "superseded" in job_a["terminal_detail"]
-    assert job_a["attempts"][0]["status"] == "succeeded"  # Attempt succeeded honestly
-
-    # Now enqueue and run Job B for rev 2
-    rec_b = service.enqueue(cut_id=1, expected_authority_revision=snap["authority_revision"])
+    # Enqueue Job B for revision 2 while Job A is still running and blocked on gate
+    rec_b = service.enqueue(cut_id=1, expected_authority_revision=rev)
     job_b_id = rec_b.jobs[0]["job_id"]
 
-    runner_b = GenerationRunner(store, concurrency=1, provider_cmd_factory=cmd_factory)
-    runner_b.run_until_idle()
+    # Sibling worker claims and finishes Job B while Job A is STILL BLOCKED on gate_file
+    for _ in range(50):
+        with store._connect() as con:
+            rb = con.execute("SELECT status FROM generation_jobs WHERE job_id = ?", (job_b_id,)).fetchone()
+            if rb and rb["status"] == "succeeded":
+                break
+        time.sleep(0.05)
 
-    snap2 = store.snapshot()
-    cut1 = snap2["cuts"][0]
-    assert cut1["realized_revision"] == 2
-    canonical_b_path = Path(cut1["realized_asset_path"])
+    # Verify Job B committed and canonical bytes/hash are present while Job A is STILL running
+    with store._connect() as con:
+        ra = con.execute("SELECT status FROM generation_jobs WHERE job_id = ?", (job_a_id,)).fetchone()
+        rb = con.execute("SELECT status FROM generation_jobs WHERE job_id = ?", (job_b_id,)).fetchone()
+        assert ra["status"] == "running", "Job A must still be running while B is completed"
+        assert rb["status"] == "succeeded", "Job B must have completed first"
+
+    snap_mid = store.snapshot()
+    cut1_mid = snap_mid["cuts"][0]
+    assert cut1_mid["realized_revision"] == 2
+    canonical_b_path = Path(cut1_mid["realized_asset_path"])
     assert canonical_b_path.is_file()
     canonical_b_bytes = canonical_b_path.read_bytes()
+    canonical_b_hash = cut1_mid["realized_content_hash"]
 
-    # If Job A candidate was written, verify it did not overwrite or corrupt B's canonical file
-    assert cut1["realized_content_hash"] == snap2["cuts"][0]["realized_content_hash"]
+    # Now release gate file so late Job A proceeds to its commit gate
+    gate_file.touch()
+    t_runner.join(timeout=10.0)
+    assert not t_runner.is_alive()
 
+    # Job A reached commit_candidate: cut 1 desired_revision is 2, so Job A (target rev 1) is superseded!
+    snap_final = store.snapshot()
+    job_a = [j for j in snap_final["jobs"] if j["job_id"] == job_a_id][0]
+    assert job_a["status"] == "superseded"
+    assert "superseded" in job_a["terminal_detail"]
+    assert job_a["attempts"][0]["status"] == "succeeded"  # Attempt executed honestly
 
+    # Late Job A must NOT overwrite or alter Job B's canonical file, bytes, or content hash!
+    cut1_final = snap_final["cuts"][0]
+    assert cut1_final["realized_revision"] == 2
+    assert cut1_final["realized_content_hash"] == canonical_b_hash
+    assert Path(cut1_final["realized_asset_path"]).read_bytes() == canonical_b_bytes
 # ---------------------------------------------------------------------------
 # Scenario D / Exit 7: Pending and running cancellation
 # ---------------------------------------------------------------------------
@@ -371,8 +405,7 @@ def test_scenario_d_cancel_pending_and_running(tmp_path: Path) -> None:
     rec2 = service.enqueue(cut_id=2, expected_authority_revision=snap["authority_revision"])
     job2_id = rec2.jobs[0]["job_id"]
 
-    runner = GenerationRunner(store, concurrency=1, provider_cmd_factory=cmd_factory)
-    import threading
+    runner = GenerationRunner(store, provider_cmd_factory=cmd_factory)
 
     t = threading.Thread(target=runner.run_until_idle)
     t.start()
@@ -427,8 +460,7 @@ def test_scenario_e_global_stop(tmp_path: Path) -> None:
             mock_gate_file=str(gate_file),
         )
 
-    runner = GenerationRunner(store, concurrency=2, provider_cmd_factory=cmd_factory)
-    import threading
+    runner = GenerationRunner(store, provider_cmd_factory=cmd_factory)
 
     t = threading.Thread(target=runner.run_until_idle)
     t.start()
@@ -505,7 +537,7 @@ def cmd_factory(cut_id, staging_path, target_rev):
     ]
 
 store = TransactionalStore.open_project({repr(str(project_dir))})
-runner = GenerationRunner(store, concurrency=2, provider_cmd_factory=cmd_factory)
+runner = GenerationRunner(store, provider_cmd_factory=cmd_factory)
 runner.run_until_idle()
 """
     runner_proc = subprocess.Popen(
@@ -516,35 +548,36 @@ runner.run_until_idle()
 
     # Wait until attempts are marked running in DB
     pids = []
+    tree_pids = set()
     for _ in range(50):
         with store._connect() as con:
-            rows = con.execute("SELECT process_pid FROM generation_attempts WHERE status = 'running'").fetchall()
+            rows = con.execute("SELECT process_pid, process_group_id FROM generation_attempts WHERE status = 'running'").fetchall()
             pids = [r["process_pid"] for r in rows if r["process_pid"] is not None]
             if len(pids) >= 1:
                 break
         time.sleep(0.1)
 
     assert len(pids) >= 1
-
+    for p in pids:
+        tree_pids.add(p)
+        tree_pids.update(find_descendant_pids(p))
+        tree_pids.update(find_session_or_group_pids(p))
     # SIGKILL the runner process (simulating hard power loss or OOM kill)
     os.kill(runner_proc.pid, signal.SIGKILL)
     runner_proc.wait()
 
     # Now open project and start official runner (which runs startup reconciliation)
-    # Runner should clean up orphan processes, mark running attempts/jobs interrupted, and drain remaining queued jobs
     recovered_store = TransactionalStore.open_project(project_dir)
 
     def normal_cmd(cut_id: int, staging_path: Path, target_rev: int) -> list[str]:
         return _provider_cmd(cut_id, staging_path, target_rev)
 
-    new_runner = GenerationRunner(recovered_store, concurrency=2, provider_cmd_factory=normal_cmd)
+    new_runner = GenerationRunner(recovered_store, provider_cmd_factory=normal_cmd)
     new_receipt = new_runner.run_until_idle()
+    # Verify all orphaned processes (recorded root AND reparented descendants) are dead
+    for p in tree_pids:
+        assert not is_pid_non_zombie_alive(p), f"Process {p} is still alive after startup recovery!"
 
-    # Verify old orphaned worker processes were killed
-    for p in pids:
-        assert not is_pid_non_zombie_alive(p)
-
-    # Verify old running rows became 'interrupted' and were NOT auto-retried
     snap = recovered_store.snapshot()
     interrupted_jobs = [j for j in snap["jobs"] if j["status"] == "interrupted"]
     assert len(interrupted_jobs) >= 1
@@ -572,7 +605,7 @@ def test_scenario_g_queue_vs_completion_truth(tmp_path: Path) -> None:
     def cmd_factory(cut_id: int, staging_path: Path, target_rev: int) -> list[str]:
         return _provider_cmd(cut_id, staging_path, target_rev)
 
-    runner = GenerationRunner(store, concurrency=1, provider_cmd_factory=cmd_factory)
+    runner = GenerationRunner(store, provider_cmd_factory=cmd_factory)
     receipt = runner.run_until_idle()
 
     assert receipt.terminal_counts.get("succeeded") == 1
@@ -592,11 +625,9 @@ def test_scenario_g_queue_vs_completion_truth(tmp_path: Path) -> None:
     rev2 = snap["authority_revision"]
     for cid in range(2, 6):
         service.enqueue(cut_id=cid, expected_authority_revision=rev2)
-        runner2 = GenerationRunner(store, concurrency=1, provider_cmd_factory=cmd_factory)
+        runner2 = GenerationRunner(store, provider_cmd_factory=cmd_factory)
         runner2.run_until_idle()
         rev2 = store.snapshot()["authority_revision"]
-
-    # Now exact five cuts are current -> COMPLETE
     snap_final = store.snapshot()
     for cut in snap_final["cuts"]:
         assert cut["currency"] == "CURRENT"
@@ -609,17 +640,223 @@ def test_scenario_g_queue_vs_completion_truth(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _create_v1_fixture_project(project_dir: Path) -> Path:
+    """Create an exact reproducible v1 project fixture directly inside project_dir."""
+    import sqlite3
+    from PIL import Image
+    import hashlib
+
+    project_dir.mkdir(parents=True, exist_ok=True)
+    db_path = project_dir / "comic-new.sqlite3"
+    con = sqlite3.connect(str(db_path))
+    con.execute("PRAGMA foreign_keys = ON;")
+    con.execute("PRAGMA application_id = 0x434f4d43;")
+    con.execute("PRAGMA user_version = 1;")
+
+    v1_sql = """
+    CREATE TABLE authority (
+        singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+        authority_revision INTEGER NOT NULL CHECK (authority_revision >= 0),
+        current_baseline_id TEXT NULL REFERENCES structural_baselines(baseline_id)
+    );
+
+    CREATE TABLE structural_baselines (
+        baseline_id TEXT PRIMARY KEY,
+        structure_json TEXT NOT NULL CHECK (json_valid(structure_json)),
+        authority_revision INTEGER NOT NULL CHECK (authority_revision >= 0),
+        created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE cut_intents (
+        cut_id INTEGER NOT NULL CHECK (cut_id BETWEEN 1 AND 5),
+        revision INTEGER NOT NULL CHECK (revision > 0),
+        baseline_id TEXT NULL REFERENCES structural_baselines(baseline_id),
+        payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
+        authority_revision INTEGER NOT NULL CHECK (authority_revision >= 0),
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (cut_id, revision)
+    );
+
+    CREATE TABLE cuts (
+        cut_id INTEGER PRIMARY KEY CHECK (cut_id BETWEEN 1 AND 5),
+        desired_revision INTEGER NULL CHECK (desired_revision IS NULL OR desired_revision > 0),
+        realized_revision INTEGER NULL CHECK (realized_revision IS NULL OR realized_revision > 0),
+        realized_asset_id TEXT NULL,
+        realized_asset_path TEXT NULL,
+        realized_content_hash TEXT NULL,
+        CHECK (
+            (realized_revision IS NULL AND realized_asset_id IS NULL AND realized_asset_path IS NULL AND realized_content_hash IS NULL) OR
+            (realized_revision IS NOT NULL AND realized_asset_id IS NOT NULL AND realized_asset_path IS NOT NULL AND realized_content_hash IS NOT NULL)
+        ),
+        FOREIGN KEY (cut_id, desired_revision) REFERENCES cut_intents(cut_id, revision)
+    );
+
+    CREATE TABLE baseline_intents (
+        baseline_id TEXT NOT NULL REFERENCES structural_baselines(baseline_id) ON DELETE CASCADE,
+        cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id BETWEEN 1 AND 5),
+        intent_revision INTEGER NOT NULL CHECK (intent_revision > 0),
+        PRIMARY KEY (baseline_id, cut_id),
+        FOREIGN KEY (cut_id, intent_revision) REFERENCES cut_intents(cut_id, revision)
+    );
+
+    CREATE TABLE composition (
+        singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+        revision INTEGER NOT NULL CHECK (revision >= 0),
+        state_json TEXT NOT NULL CHECK (json_valid(state_json)),
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE generation_jobs (
+        job_id TEXT PRIMARY KEY,
+        cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id BETWEEN 1 AND 5),
+        target_desired_revision INTEGER NOT NULL CHECK (target_desired_revision > 0),
+        status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted', 'superseded')),
+        terminal_detail TEXT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE generation_attempts (
+        attempt_id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL REFERENCES generation_jobs(job_id) ON DELETE CASCADE,
+        ordinal INTEGER NOT NULL CHECK (ordinal >= 1),
+        status TEXT NOT NULL CHECK (status IN ('running', 'succeeded', 'failed', 'interrupted', 'cancelled')),
+        started_at TEXT NOT NULL,
+        finished_at TEXT NULL,
+        detail TEXT NULL,
+        UNIQUE (job_id, ordinal)
+    );
+
+    CREATE TABLE review_artifacts (
+        artifact_id TEXT PRIMARY KEY,
+        content_hash TEXT NOT NULL UNIQUE,
+        composition_revision INTEGER NOT NULL CHECK (composition_revision >= 0),
+        created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE artifact_cuts (
+        artifact_id TEXT NOT NULL REFERENCES review_artifacts(artifact_id) ON DELETE CASCADE,
+        cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id BETWEEN 1 AND 5),
+        realized_revision INTEGER NOT NULL CHECK (realized_revision > 0),
+        asset_id TEXT NOT NULL,
+        PRIMARY KEY (artifact_id, cut_id)
+    );
+
+    CREATE TABLE release_authorizations (
+        authorization_id TEXT PRIMARY KEY,
+        artifact_id TEXT NOT NULL REFERENCES review_artifacts(artifact_id),
+        artifact_content_hash TEXT NOT NULL,
+        authorized_authority_revision INTEGER NOT NULL CHECK (authorized_authority_revision >= 0),
+        revoked_authority_revision INTEGER NULL CHECK (revoked_authority_revision IS NULL OR revoked_authority_revision >= 0),
+        created_at TEXT NOT NULL,
+        revoked_at TEXT NULL
+    );
+
+    CREATE UNIQUE INDEX idx_active_release_authorization
+    ON release_authorizations ((1))
+    WHERE revoked_authority_revision IS NULL;
+
+    CREATE TABLE delivery_attempts (
+        attempt_id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL CHECK (kind IN ('png', 'blogger')),
+        authorization_id TEXT NOT NULL REFERENCES release_authorizations(authorization_id),
+        artifact_id TEXT NOT NULL REFERENCES review_artifacts(artifact_id),
+        request_id TEXT NOT NULL,
+        outcome TEXT NOT NULL CHECK (outcome IN ('unknown', 'confirmed_success', 'confirmed_failure')),
+        destination_id TEXT NULL,
+        destination_url TEXT NULL,
+        evidence_json TEXT NULL CHECK (evidence_json IS NULL OR json_valid(evidence_json)),
+        observed_authority_revision INTEGER NULL CHECK (observed_authority_revision IS NULL OR observed_authority_revision >= 0),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        CHECK (
+            outcome != 'confirmed_success' OR (
+                destination_id IS NOT NULL AND
+                destination_url IS NOT NULL AND
+                evidence_json IS NOT NULL
+            )
+        )
+    );
+
+    INSERT INTO authority (singleton_id, authority_revision, current_baseline_id) VALUES (1, 0, NULL);
+    INSERT INTO composition (singleton_id, revision, state_json, updated_at) VALUES (1, 0, '{}', '2026-09-15T00:00:00Z');
+    INSERT INTO cuts (cut_id) VALUES (1), (2), (3), (4), (5);
+
+    CREATE TRIGGER trg_cuts_no_insert BEFORE INSERT ON cuts
+    BEGIN
+        SELECT RAISE(ABORT, 'exactly five cuts are immutable');
+    END;
+
+    CREATE TRIGGER trg_cuts_no_delete BEFORE DELETE ON cuts
+    BEGIN
+        SELECT RAISE(ABORT, 'exactly five cuts are immutable');
+    END;
+
+    CREATE TRIGGER trg_cuts_no_update_cut_id BEFORE UPDATE OF cut_id ON cuts
+    BEGIN
+        SELECT RAISE(ABORT, 'exactly five cuts are immutable');
+    END;
+    """
+    con.executescript(v1_sql)
+
+    con.execute(
+        "INSERT INTO structural_baselines (baseline_id, structure_json, authority_revision, created_at) VALUES ('BASE-V1', '{}', 1, '2026-09-15T00:00:00Z');"
+    )
+    con.execute(
+        "UPDATE authority SET authority_revision = 3, current_baseline_id = 'BASE-V1' WHERE singleton_id = 1;"
+    )
+    for c in range(1, 6):
+        con.execute(
+            "INSERT INTO cut_intents (cut_id, revision, baseline_id, payload_json, authority_revision, created_at) VALUES (?, 1, 'BASE-V1', ?, 1, '2026-09-15T00:00:00Z');",
+            (c, json.dumps({"prompt": f"Dramatic panel {c} description"}))
+        )
+        con.execute(
+            "INSERT INTO baseline_intents (baseline_id, cut_id, intent_revision) VALUES ('BASE-V1', ?, 1);",
+            (c,)
+        )
+        con.execute(
+            "UPDATE cuts SET desired_revision = 1 WHERE cut_id = ?;",
+            (c,)
+        )
+
+    asset_dir = project_dir / "assets" / "realizations" / "cut-1"
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    asset_file = asset_dir / "rev-1-job-1.png"
+    im = Image.new("RGB", (100, 100), color=(10, 20, 30))
+    im.save(str(asset_file), format="PNG")
+    h = hashlib.sha256(asset_file.read_bytes()).hexdigest()
+
+    con.execute(
+        "UPDATE cuts SET realized_revision = 1, realized_asset_id = 'asset-1', realized_asset_path = ?, realized_content_hash = ? WHERE cut_id = 1;",
+        (str(asset_file), h)
+    )
+
+    con.execute(
+        "INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, status, terminal_detail, created_at, updated_at) VALUES ('job-1', 1, 1, 'succeeded', 'done', '2026-09-15T00:00:00Z', '2026-09-15T00:00:00Z');"
+    )
+    con.execute(
+        "INSERT INTO generation_attempts (attempt_id, job_id, ordinal, status, started_at, finished_at, detail) VALUES ('att-1', 'job-1', 1, 'succeeded', '2026-09-15T00:00:00Z', '2026-09-15T00:00:00Z', 'done');"
+    )
+
+    con.execute(
+        "INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, status, terminal_detail, created_at, updated_at) VALUES ('job-2', 2, 1, 'running', NULL, '2026-09-15T00:00:00Z', '2026-09-15T00:00:00Z');"
+    )
+    con.execute(
+        "INSERT INTO generation_attempts (attempt_id, job_id, ordinal, status, started_at, finished_at, detail) VALUES ('att-2', 'job-2', 1, 'running', '2026-09-15T00:00:00Z', NULL, NULL);"
+    )
+
+    con.execute(
+        "INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, status, terminal_detail, created_at, updated_at) VALUES ('job-3', 3, 1, 'queued', NULL, '2026-09-15T00:00:00Z', '2026-09-15T00:00:00Z');"
+    )
+
+    con.commit()
+    con.close()
+    return project_dir
+
+
 def test_v1_to_v2_migration_preservation(tmp_path: Path) -> None:
-    import shutil
-
-    # Copy the scratch v1 project we created before any code changes
-    scratch_v1 = Path("/home/user01/tmp/scratch_v1_baseline")
-    assert scratch_v1.exists()
-
     migrated_dir = tmp_path / "migrated_project"
-    shutil.copytree(scratch_v1, migrated_dir)
-
-    # Open the v1 project using TransactionalStore.open_project
+    _create_v1_fixture_project(migrated_dir)
     # It must detect user_version == 1, apply v1_to_v2.sql in BEGIN IMMEDIATE, and verify schema
     store = TransactionalStore.open_project(migrated_dir)
 
@@ -644,7 +881,7 @@ def test_v1_to_v2_migration_preservation(tmp_path: Path) -> None:
     assert jobs_by_id["job-3"]["status"] == "queued"
 
     # Now, runner startup reconciles orphan running job-2 into interrupted without auto-retry!
-    runner = GenerationRunner(store, concurrency=1, provider_cmd_factory=_provider_cmd)
+    runner = GenerationRunner(store, provider_cmd_factory=_provider_cmd)
     runner.run_until_idle()
 
     snap_after = store.snapshot()
