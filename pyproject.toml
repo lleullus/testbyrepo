@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "comic-new"
+version = "0.1.0"
+description = "Web Comic Studio - Single Transactional Authority"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+comic-new = "comic_new.cli:main"
+
+[tool.setuptools.package-data]
+comic_new = ["schema.sql"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
