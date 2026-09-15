@@ -4,8 +4,8 @@
 - Project Root: `/home/user01/project/comic_new`
 - Scope: `/home/user01/project/comic_new/docs/planning/work/studio-frontend/SCOPE.md`
 - Selected transition: `BASELINE-001`의 `BLOCK-04`만
-- Prepared against commit: `3675652bab323bbf53631039bea15bcc82ac98dc`
-- Prepared working tree: `git status --short` 출력 없음. 이 Plan 생성 전 clean이었다.
+- Prepared against commit: `91f3fa7d968855bd87a5ee3d9953cbd6c928b738`
+- Prepared working tree: 이 revision 전 `git status --short` 출력 없음. Main의 CFW scratch는 repository 밖 `/home/user01/tmp/comic-new-block04-cfw/`에만 있으며 이 Plan 외 제품/source/config 상태를 바꾸지 않았다.
 - Repository investigation: None supplied; 아래 current source 직접 판독을 사용했다.
 - Remote retrieval: 0회
 - Visual concept/image generation: 생략. 이 표면은 새 마케팅/브랜드 페이지가 아니라 기존에 방향이 확정된 D4 반복 작업용 creative workstation이며, 사용자 지시와 `디자인` 스킬의 `IMAGE_GEN_TRIGGER = EXPLICIT_ONLY`에 따라 concept image는 부적절하다.
@@ -82,10 +82,16 @@ python3 skill://scope-shaper/tools/validate_scope.py --json /home/user01/project
    - runtime dependency는 `Pillow>=10.0.0`, package data는 schema/migrations뿐이다.
    - 현재 `frontend/`, `src/comic_new/static/`, FastAPI app/static serve 구현은 실제로 없다.
 
-9. **현재 환경 관찰**
+9. **현재 환경과 CFW-1 frontend 조합 관찰**
    - Python `3.12.3`, Bun `1.3.14`, Node `v24.18.0`, npm `12.0.2`, Pillow `12.2.0`.
-   - 현재 interpreter에는 FastAPI `0.136.3`, uvicorn `0.48.0`이 import 가능하지만 `pyproject.toml`에는 선언되지 않았다.
-   - `wheel` Python distribution은 현재 interpreter에서 발견되지 않았다. 이는 wheel 생성 불가능의 단정이 아니라 §11 조건부 첫 작업 대상이다.
+   - Main이 repository 밖 `/home/user01/tmp/comic-new-block04-cfw/frontend`에서 unbounded `latest`를 해석했을 때 Vue `3.5.42`, Pinia `4.0.3`, Vite `8.3.0`, `@vitejs/plugin-vue 6.0.9`, `vue-tsc 3.3.11`, TypeScript `7.0.2`가 설치됐지만 `vue-tsc --noEmit`은 `ERR_PACKAGE_PATH_NOT_EXPORTED`, TypeScript subpath `./lib/tsc`로 실패했다. 따라서 `latest` 호환성 premise는 refuted다.
+   - 같은 scratch에서 TypeScript만 `5.9.3`으로 포함한 exact six-package pin(Vue `3.5.42`, Pinia `4.0.3`, Vite `8.3.0`, `@vitejs/plugin-vue 6.0.9`, `vue-tsc 3.3.11`, TypeScript `5.9.3`)은 `vue-tsc --noEmit`과 Vite production build exit `0`, 21 modules, hashed JS+CSS를 관찰했다. 두 번째 `bun install --frozen-lockfile`도 변경 없이 성공했다.
+   - evidence bytes: `package.json` `cda5badd0671ac66b5751a0cf685245257b234aadae4591297a3ce9a73150914`; `bun.lock` `b117914b5ad612aac5ed7a56fc89ed19750477fba1fd0727638f5c93666d94db`; `dist/index.html` `aa2fa1592054fbec3712bb102b4239e5b99e428b763af9b9dede5a0db3d3cfbd`; `dist/assets/index-BwUgsyUe.css` `7726cec509bcd47f9b96f3b184700bdccd481e5adfd86259161f4f3f501a1f3b`; `dist/assets/index-6xL9AdZ1.js` `4c0274c73e777a3d727aca5bf3de3f6b04e4c7d1c83f7046c9856dde37554fcf`.
+
+10. **CFW-2 Python resolver/import 관찰**
+   - Main이 repository 밖 isolated venv `/home/user01/tmp/comic-new-block04-cfw/venv`에 `fastapi==0.136.3`와 `uvicorn==0.48.0`을 exact install했고 resolver/install과 import가 성공했다. import readback은 FastAPI `0.136.3`, uvicorn `0.48.0`; observed transitive versions는 Starlette `1.6.0`, Pydantic `2.13.5`다.
+   - 이는 exact direct pins의 Python 3.12 resolver/import support만 세운다. 현재 제품에는 app factory/lifespan/static serve가 없으므로 실제 app startup, missing-static refusal, stream response, graceful shutdown을 증명하지 않는다.
+   - 현재 interpreter에서 `wheel` Python distribution은 발견되지 않았다. 이는 wheel 생성 불가능의 단정이 아니라 CFW-3 대상이다.
 
 ### 2.2 PROPOSED — 최소 새 경계
 
@@ -95,14 +101,14 @@ python3 skill://scope-shaper/tools/validate_scope.py --json /home/user01/project
 - Vue는 `useStudioStore` 하나만 domain transition을 소유한다. pointer gesture의 transient rect만 component-local이다.
 - `frontend/**`는 source, `src/comic_new/static/**`는 reproducible Vite output이자 Python package data다.
 
-### 2.3 UNRESOLVED — 구현 때 먼저 판별할 premise
+### 2.3 UNRESOLVED — 구현/통합에서 남은 실제 관찰
 
-1. 현재 저장소에 frontend lock이 없으므로 실제 Vue/Pinia/Vite/plugin/vue-tsc/TypeScript의 고정 버전과 Bun frozen install/build 조합은 아직 증명되지 않았다.
-2. `FastAPI 0.136.3`/`uvicorn 0.48.0`은 현재 host 관찰일 뿐 wheel metadata의 지원 범위와 isolated install을 아직 증명하지 않는다.
-3. setuptools wheel 조립이 generated nested static assets와 frontend source/lock을 의도대로 포함하는지 실제 wheel 설치 전에는 증명되지 않는다.
-4. canonical materialization proof에 쓸 font file의 exact bytes/path/hash는 disposable verification project를 만들 때 선택해야 한다. 임의 fallback font로 성공을 추정하지 않는다.
+1. CFW-3: setuptools wheel 조립이 generated nested static assets와 frontend source/lock을 의도대로 포함·제외하고 installed package가 이를 실제 serve하는지는 아직 증명되지 않았다.
+2. CFW-4: canonical materialization proof에 쓸 font file의 exact bytes/path/hash는 disposable verification project를 만들 때 선택해야 한다. 임의 fallback font로 성공을 추정하지 않는다.
+3. CFW-1은 exact dependency 조합의 빈 strict app support를 세웠지만 제품 `frontend/**` 전체의 fresh `bun install --frozen-lockfile`, `vue-tsc --noEmit`, production build와 `src/comic_new/static/**` 출력은 아직 없다. scratch output은 product build/Acceptance 증거가 아니다.
+4. CFW-2는 exact resolver/import support를 세웠지만 아직 존재하지 않는 실제 product app의 startup/lifespan, missing-static negative, SSE/stream response, runner shutdown settlement은 구현 자기점검에서 관찰해야 한다.
 
-각 항목의 완전한 conditional-first-work bundle은 §11에 있다. 그 밖의 endpoint/state/interaction 의미는 Scope와 existing interface로 결정되어 있어 구현자 재협상 대상이 아니다.
+CFW-1/2의 지원 관찰과 CFW-3/4의 완전한 bundle은 §11에 있다. 그 밖의 endpoint/state/interaction 의미는 Scope와 existing interface로 결정되어 있어 구현자 재협상 대상이 아니다.
 
 ## 3. 고정 wire contract
 
@@ -110,8 +116,8 @@ python3 skill://scope-shaper/tools/validate_scope.py --json /home/user01/project
 
 - JSON UTF-8, same origin, `/api` prefix. CORS, GraphQL, WebSocket, Axios, query cache를 추가하지 않는다.
 - success는 endpoint별 DTO를 직접 반환한다. error만 아래 한 shape를 사용한다.
-- 모든 authoritative mutation request는 관찰한 `expected_authority_revision`을 보낸다. composition은 `expected_composition_revision`도 보낸다.
-- mutation id는 client save correlation이지 DB authority가 아니다. 서버가 그대로 echo하되 snapshot/readback 대신 사용하지 않는다.
+- baseline/rebaseline, 모든 cut-intent save, composition save는 모두 관찰한 SQLite global `expected_authority_revision`을 보내고 §5의 client authoritative edit lane 하나를 공유한다. composition은 `expected_composition_revision`도 보낸다.
+- 이 edit mutation들의 `mutation_id`는 client save correlation이지 DB authority가 아니다. 서버가 그대로 echo하되 snapshot/readback 대신 사용하지 않는다.
 - integer cut identity는 `1|2|3|4|5`; add/delete/reindex DTO는 존재하지 않는다.
 
 ```ts
@@ -217,11 +223,10 @@ Materialization/read response의 richer `ReviewArtifactDTO.cuts`는 `Composition
 ### 3.3 Mutation/read endpoints와 의미
 
 1. `POST /api/baselines`
-   - request: `{expected_authority_revision, baseline_id, structure:BaselineStructureDTO, intents:[{cut_id, intent:CutIntentDTO} × exact 5]}`.
+   - request: `{expected_authority_revision, mutation_id, baseline_id, structure:BaselineStructureDTO, intents:[{cut_id, intent:CutIntentDTO} × exact 5]}`.
    - 새 프로젝트에서는 explicit 1차 승인, 기존 baseline에서는 ReviewModal과 별도인 consequential `RebaselineDialog` 확인 뒤 호출한다.
-   - server는 array를 exact key 1..5 dict로 바꾸고 기존 `approve_structural_baseline` 한 번만 호출한다. success는 fresh `StudioSnapshotDTO`.
+   - server는 array를 exact key 1..5 dict로 바꾸고 기존 `approve_structural_baseline` 한 번만 호출한다. success는 `{accepted_mutation_id, snapshot}`.
    - approved baseline 뒤 Source Brief 편집은 store의 `baselineDraft.structure.source_brief`에 “현재 작품에 반영 안 됨”으로 남고 current intent/composition/release를 바꾸지 않는다. 반영 action은 이 endpoint의 explicit Re-baseline뿐이다. 별도 source-brief authority/table/localStorage를 만들지 않는다.
-
    - baseline 수용은 composition을 암묵 초기화하지 않는다. `composition.state:null`이면 UI가 `render_contract.default_composition`으로 같은 `PUT /api/composition`을 명시적으로 실행하고, 그 실제 acceptance 전에는 Canvas를 saved/ready로 표시하지 않는다.
 2. `POST /api/cuts/{cut_id}/intent`
    - request: `{expected_authority_revision, mutation_id, intent:CutIntentDTO}`.
@@ -262,6 +267,8 @@ Materialization/read response의 richer `ReviewArtifactDTO.cuts`는 `Composition
     - request: `{expected_authority_revision, content_hash}`. URL artifact id, body full hash와 modal이 표시 중인 identity/hash가 같아야 한다.
     - server가 `authorization_id`를 생성하고 기존 `authorize_release(...)`를 실제 호출한 뒤 `{authorization_id, submitted_artifact_id, submitted_content_hash, snapshot}`을 반환한다.
     - 이 endpoint는 no-op handoff가 아니다. 그러나 BLOCK-04 proof는 captured request의 pre/effect identity와 exact displayed byte hash, 기존 call 실행까지만 기록한다. row durability/restart/revocation/release/delivery 판정은 하지 않는다.
+
+Baseline/rebaseline·cut intent·composition만 §5의 edit draft/lane semantics를 가진다. Generation, review materialization, approval은 lane에 enqueue하거나 edit draft/mutation clear로 취급하지 않되, client는 fresh current snapshot과 `hasBlockingEdit == false`일 때만 호출한다. Global/per-job STOP은 이 gate와 lane을 우회해 pending edit가 있어도 즉시 요청한다.
 
 ### 3.4 SSE wire와 gap 규칙
 
@@ -323,24 +330,32 @@ Graceful shutdown의 exact 순서:
 
 강제 SIGKILL은 app이 cleanup을 주장할 수 없는 외부 interruption이다. 다음 start의 existing runner orphan reconciliation과 fresh snapshot이 authoritative recovery를 수행한다.
 
-## 5. Frontend state machine과 save serializer
+## 5. Frontend state machine과 authoritative edit lane
 
 ### 5.1 정확히 하나인 domain store
 
 `frontend/src/store/studio.ts`의 `useStudioStore`만 아래 mutable domain/application state를 갖는다.
 
 ```ts
+type EditKind = 'baseline'|'intent'|'composition'
+interface EditDraft<T> {
+  mutationId:string
+  baseAuthorityRevision:number
+  localVersion:number
+  value:T
+}
 interface StudioClientState {
   server: StudioSnapshotDTO|null
   drafts: {
-    composition: null|{mutationId:string; baseAuthorityRevision:number;
-      baseCompositionRevision:number; localVersion:number; patch:CompositionDraftPatch}
-    intents: Partial<Record<CutId,{mutationId:string; baseAuthorityRevision:number;
-      localVersion:number; value:CutIntentDTO}>>
-    baseline: BaselineDraft|null
+    composition: null|(EditDraft<CompositionDraftPatch> & {baseCompositionRevision:number})
+    intents: Partial<Record<CutId,EditDraft<CutIntentDTO>>>
+    baseline: null|EditDraft<BaselineDraft>
   }
   saves: Record<string,{state:'idle'|'pending'|'failed'|'conflict'|'base-changed';
     mutationId?:string; message?:string}>
+  authoritativeEditLane: {
+    inFlight:null|{kind:EditKind; draftKey:string; mutationId:string}
+  }
   jobsUi: Record<string,{stopRequested:boolean}>
   selection: {cutId:CutId; bubbleId?:string}
   stream: {state:'connecting'|'open'|'reconnecting'; lastEventId?:string;
@@ -351,19 +366,23 @@ interface StudioClientState {
 }
 ```
 
-`realizationComplete`, Current/STALE, projected composition, has blocking unsaved/save failures, active/stoppable count, canMaterialize, canAuthorize는 computed selectors다. Mutable duplicate fields로 저장하지 않는다. Components는 store actions/selectors만 사용한다. pointer capture rect/delta/active handle과 local focus는 해당 component에만 둔다.
+`realizationComplete`, Current/STALE, projected composition, `hasCurrentSnapshot`, `hasBlockingEdit`, active/stoppable count, canGenerate, canMaterialize, canAuthorize는 computed selectors다. `hasCurrentSnapshot`은 initial/fresh GET 또는 newer accepted HTTP/SSE snapshot이 있고 gap recovery가 pending이 아닌 상태다. `hasBlockingEdit`는 baseline/intent/composition draft나 pending/failed/conflict/base-changed save 또는 edit lane in-flight가 있으면 true다. Components는 store actions/selectors만 사용한다. Mutable duplicate fields로 저장하지 않는다. pointer capture rect/delta/active handle과 local focus만 해당 component에 둔다.
 
-### 5.2 composition serializer와 직렬 save
+### 5.2 한 authoritative edit mutation lane
 
-- `serializeCompositionSave()`는 latest `server.composition.state`에 current composition draft를 deterministic하게 적용하고 existing `CompositionStateDTO` full object만 만든다. derived/currency/job/auth/delivery/UI field를 넣지 않는다.
-- 한 composition request만 in-flight다. 첫 request 중 edit는 새 `localVersion/mutationId`로 같은 draft record를 갱신하되 전송 payload는 immutable capture다.
-- 2xx: response snapshot을 server에 적용한 뒤 현재 draft의 mutation id가 accepted id와 같을 때만 clear한다. 더 최신이면 유지하고 다음 save를 즉시 serialize한다.
-- network/500: payload와 local input을 보존하고 `failed`; alert toast `저장 실패 — 변경 내용은 이 브라우저에만 남아 있습니다.` 후에도 affected bubble/field와 Canvas에 `저장 안 됨` marker를 남긴다.
-- 409: `current_snapshot`을 server layer에 적용하고 draft를 `conflict`; `서버 값 보기`는 authoritative 값을 read-only로 비교하고 `최신본에 다시 적용`은 same local content를 new mutation/base revision으로 재직렬화한다. 자동 overwrite/last-write-wins를 하지 않는다.
-- dirty 중 newer SSE: server만 갱신하고 draft save state를 `base-changed`; review는 계속 disabled.
-- retry/reconcile success도 exact accepted mutation만 clear하고 fresh HTTP/SQLite readback과 saved marker를 맞춘다.
+- SQLite의 `authority_revision`이 baseline/rebaseline, 모든 cut-intent 수용, composition 수용 사이의 global CAS이므로 client도 이 세 edit type 전체에 exactly one authoritative edit lane을 둔다. cut별/composition별 별도 동시 lane은 금지하며 self-originated 두 accepted edit가 같은 base revision으로 race하지 않게 한다.
+- lane은 현재 draft에서 request를 한 번 serialize할 때 body, `mutation_id`, `expected_authority_revision`과 composition의 `expected_composition_revision`을 immutable capture한다. request 중 새 edit는 해당 draft의 새 `localVersion/mutationId`로 남지만 이미 전송한 capture를 바꾸지 않는다.
+- `serializeCompositionSave()`는 captured base의 latest authoritative `server.composition.state`에 해당 composition draft를 deterministic하게 적용하고 existing `CompositionStateDTO` full object만 만든다. derived/currency/job/auth/delivery/UI field를 넣지 않는다. Baseline/rebaseline은 exact-five full payload, intent는 one-cut full intent를 같은 lane에서 capture한다.
+- 2xx: response snapshot을 server에 먼저 적용한다. `accepted_mutation_id`가 해당 draft의 **현재** mutation id와 같을 때만 그 draft/save를 clear한다. 더 최신 draft이면 유지하고, fresh response snapshot을 base로 lane의 다음 request를 serialize한다.
+- network/500: captured payload와 local input을 보존하고 `failed`; alert toast `저장 실패 — 변경 내용은 이 브라우저에만 남아 있습니다.` 후에도 affected baseline/cut/bubble/field와 Canvas에 `저장 안 됨` marker를 남긴다. 사용자가 retry/reconcile하기 전 다른 authoritative edit는 같은 lane에서 진행하지 않는다.
+- 409: `current_snapshot`을 server layer에 적용하고 해당 draft를 `conflict`로 보존한다. `서버 값 보기`는 authoritative 값을 read-only로 비교하고 `최신본에 다시 적용`만 same local content를 new mutation id와 current authority/composition base로 명시 재직렬화한다. 자동 overwrite/last-write-wins/implicit rebase를 하지 않는다.
+- dirty 중 newer SSE는 server만 갱신하고 affected draft save state를 `base-changed`; edit/review/generation/approval gating은 유지한다. retry/reconcile success도 exact accepted current mutation만 clear하고 fresh HTTP/SQLite readback과 saved marker를 맞춘다.
+- Baseline draft는 explicit approve/rebaseline 전 authority가 아니다. Accepted baseline 뒤 default composition save가 필요하면 baseline response의 fresh snapshot을 base로 **다음 lane item**으로만 실행한다.
 
-Intent save도 mutation id로 draft를 보존하지만 cut별 요청을 동시에 남발하지 않는다. 해당 cut에 one in-flight, global authority 409이면 snapshot을 적용하고 explicit reapply로 간다. Baseline draft는 explicit approve/rebaseline까지 authority가 아니다.
+### 5.3 edit가 아닌 command 경계
+
+- Generation, review materialization, approval은 `hasCurrentSnapshot == true`, `hasBlockingEdit == false`이며 각 endpoint의 canonical precondition이 성립할 때만 enabled다. 이들은 authoritative edit lane에 넣지 않고 local edit draft나 mutation clear semantics를 공유하지 않는다; response의 fresh snapshot만 monotonic하게 적용한다.
+- Global/per-job STOP은 safety/control command다. current snapshot 여부, `hasBlockingEdit`, lane in-flight, save failure/conflict와 무관하게 즉시 fetch하며 lane의 순서를 기다리지 않는다. STOP response/SSE terminal readback은 edit draft를 clear하지 않고 accepted intent를 바꾸지 않는다.
 
 ## 6. Canvas interaction, shell과 접근성
 
@@ -419,11 +438,11 @@ src/comic_new/static/**   # generated, owner는 frontend 한 명뿐
 ```
 
 - Vue 3 Composition API `<script setup>`, TS strict, Pinia one store, native fetch/EventSource, plain scoped CSS.
-- runtime deps는 `vue`, `pinia`; build deps는 `vite`, `typescript`, `vue-tsc`, `@vitejs/plugin-vue`만. router/component/canvas/DnD/state/query/test-browser package를 추가하지 않는다.
+- CFW-1에서 support가 관찰된 여섯 package를 range/caret/tilde 없이 exact pin한다: runtime `vue: "3.5.42"`, `pinia: "4.0.3"`; build `vite: "8.3.0"`, `typescript: "5.9.3"`, `vue-tsc: "3.3.11"`, `@vitejs/plugin-vue: "6.0.9"`. router/component/canvas/DnD/state/query/test-browser package를 추가하지 않는다.
 - `bun run build`는 `vue-tsc --noEmit && vite build`이며 Vite `base:'/'`, `outDir:'../src/comic_new/static'`, `emptyOutDir:true`.
 - generated `index.html`이 content-hashed JS와 imported CSS를 `/assets/...`로 참조해야 한다. source map은 production package에 넣지 않는다.
 
-Backend owner는 `pyproject.toml`에서 FastAPI/uvicorn runtime dependency와 `static/**` package data를 선언한다. wheel assembly의 canonical sequence는 repository root에서 다음 하나다.
+Backend owner는 `pyproject.toml` runtime dependency를 range 없이 exact `fastapi==0.136.3`, `uvicorn==0.48.0`으로 선언하고 `static/**` package data를 선언한다. Starlette/Pydantic의 scratch transitive 관찰값을 direct dependency로 승격하거나 pin하지 않는다. wheel assembly의 canonical sequence는 repository root에서 다음 하나다.
 
 ```text
 (cd frontend && bun install --frozen-lockfile && bun run build)
@@ -434,21 +453,21 @@ wheel은 clean temp venv에 설치하고 source tree 밖에서 `comic-new serve`
 
 ## 9. 두 구현 owner와 exact 시작 범위
 
-독립 Plan Review가 exact Plan hash에 `ADMIT`을 내린 뒤 아래 두 owner를 동시에 시작할 수 있다. shared-file edit는 금지한다.
+이 revision 전 review `/home/user01/tmp/comic-new-block04-plan-review.json`(SHA-256 `4ec4d1c025b82145f3d00bafd9cab26f184425d28fc9cb73565c8b8c914eac15`)의 `ADMIT`은 old Plan SHA-256 `fe658f2ac72209068a3704c423d1787d9f1b44a43da769bb5f6d20fa0f416d0d`만 대상으로 하므로 stale이며 구현을 승인하지 않는다. 이 exact revised Plan hash에 대한 fresh independent Plan Review가 `ADMIT`한 뒤 아래 두 owner를 동시에 시작할 수 있다. shared-file edit는 금지한다.
 
 ### Backend owner
 
 소유: `pyproject.toml`, `src/comic_new/server.py` 및 필요한 새 Python web module(가급적 추가 없음), `src/comic_new/cli.py`, Python package-data/build config, backend-focused test file. `frontend/**`와 `src/comic_new/static/**`는 수정하지 않는다. Existing `store.py`, `generation.py`, `composition*.py`, schema/migrations는 본 방법에서 수정하지 않는다; route는 existing service를 호출한다.
 
-첫 결과: §3 DTO/error/endpoint, §4 lifespan/static/supervisor/SSE 구현. Empty static 때문에 product serve acceptance를 가짜로 통과시키지 말고 route/app의 scoped checks만 수행한 뒤 Main integration에 넘긴다.
+첫 결과: exact `fastapi==0.136.3`/`uvicorn==0.48.0` 선언, §3 DTO/error/endpoint와 global authority CAS echo, §4 lifespan/static/supervisor/SSE 구현. Scratch resolver/import를 app proof로 대체하지 말고 empty static 때문에 product serve acceptance를 가짜로 통과시키지 않으며 route/app의 scoped lifecycle·missing-static checks 후 Main integration에 넘긴다.
 
 ### Frontend owner
 
 소유: `frontend/**`, `src/comic_new/static/**`, frontend reducer/geometry tests와 lockfile. Python/pyproject/tests Python 파일은 수정하지 않는다.
 
-첫 결과: §3 contract를 그대로 소비하는 types/client/EventSource decoder, one store transition/serializer, shell/canvas/inspector/queue/review UI, production build. Backend가 아직 없을 때 fixture는 reducer/component 개발에만 쓸 수 있으며 Acceptance/real boundary 증거로 제출하지 않는다.
+첫 결과: §8 exact six pins/lock과 full app frozen install/typecheck/build, §3 contract를 그대로 소비하는 types/client/EventSource decoder, §5 one authoritative edit lane, shell/canvas/inspector/queue/review UI, production static. Backend가 아직 없을 때 fixture는 reducer/component 개발에만 쓸 수 있으며 Acceptance/real boundary 증거로 제출하지 않는다.
 
-영구 test는 plausible regression을 직접 잡는 것만 둔다. Frontend: (a) older/equal SSE가 server/draft를 역전하지 않음, (b) accepted mutation id가 newer draft를 clear하지 않음, (c) gap signal이 one in-flight snapshot recovery로 collapse됨, (d) pointer/keyboard percentage clamp·0.5/2.0·cancel reducer. Backend: lifespan shutdown이 disposable SQLite의 real controlled child process tree를 settle하고 intent를 보존하는 경계, missing-static startup refusal. Route 존재/status/field copy/mock echo/snapshot markup test는 추가하지 않고 §12 actual smoke로 증명한다.
+영구 test는 plausible regression을 직접 잡는 것만 둔다. Frontend: (a) older/equal SSE가 server/draft를 역전하지 않음, (b) cross-type edit lane의 immutable capture와 accepted mutation id가 newer draft를 clear하지 않음, (c) gap signal이 one in-flight snapshot recovery로 collapse됨, (d) pointer/keyboard percentage clamp·0.5/2.0·cancel reducer, (e) pending edit 중 STOP은 즉시 lane을 우회함. Backend: lifespan shutdown이 disposable SQLite의 real controlled child process tree를 settle하고 intent를 보존하는 경계, missing-static startup refusal. Route 존재/status/field copy/mock echo/snapshot markup test는 추가하지 않고 §12 actual smoke로 증명한다.
 
 ### 변경 재분배 규칙
 
@@ -466,27 +485,28 @@ DTO field, endpoint, persistence/effect owner, artifact identity, approval seman
 
 Partial failure: build 실패면 serve proof로 진행하지 않는다; startup 실패면 browser proof로 진행하지 않는다; process termination 미확인이면 STOP proof를 실패로 남긴다; artifact identity/hash 불일치면 승인 endpoint를 호출하지 않는다. Safe unrelated checks만 계속한다.
 
-## 11. Conditional-first-work bundles
+## 11. Conditional-first-work와 남은 support 경계
 
-### CFW-1 — frontend dependency/lock 실행 가능성
+CFW scratch는 repository 밖 `/home/user01/tmp/comic-new-block04-cfw/`에 fresh Review가 끝날 때까지 보존한다. 이는 dependency 선택의 primary local evidence이지 product source/build/runtime/Acceptance evidence가 아니다.
+
+### CFW-1 — frontend dependency/lock: support 관찰 완료
 
 - `plan_anchor`: `§8 Build, package와 wheel 규칙`
-- `premise`: Bun 1.3.14/Node 24 환경에서 고정한 Vue/Pinia/Vite/plugin/vue-tsc/TS 조합이 strict production build를 재현한다.
-- `permitted_initial_work`: Frontend owner가 명시된 여섯 package만 exact version으로 `frontend/package.json`에 두고 `bun.lock`을 생성한 뒤 빈 entry의 `bun install --frozen-lockfile`, `vue-tsc --noEmit`, `vite build`를 실행한다.
-- `discriminating_observation`: frozen reinstall이 lock을 변경하지 않고 exit 0, strict typecheck exit 0, generated index가 실제 hashed JS/CSS를 참조하며 source map/node_modules가 static에 없음.
-- `dependent_work_not_yet_permitted`: 실패한 Vite/plugin 조합 위에서 store/components 전체 작성, 대체 bundler/SSR/Tailwind/component suite 추가.
-- `response_if_refuted`: frontend dependent mutation을 중단하고 실제 error/version bytes를 Main/Planner에게 반환한다. 제품 stack 변경은 Thesis/Scope owner, 동등 버전 pin 조정은 Plan owner가 재검토한다.
+- `premise/outcome`: unbounded `latest`는 Vue `3.5.42`, Pinia `4.0.3`, Vite `8.3.0`, plugin-vue `6.0.9`, vue-tsc `3.3.11`, TypeScript `7.0.2`를 resolve했지만 `vue-tsc --noEmit`의 TypeScript `./lib/tsc` export error로 refuted됐다. TypeScript `5.9.3`을 포함한 §8 exact six pins는 같은 Bun/Node 환경의 empty strict app에서 supported로 관찰됐다.
+- `executed_commands`: cwd `/home/user01/tmp/comic-new-block04-cfw/frontend`에서 먼저 six package 값을 `latest`로 쓴 `package.json`에 `bun install && bun run build && sha256sum bun.lock && bun install --frozen-lockfile && sha256sum bun.lock && bun pm ls`를 실행해 TypeScript `7.0.2`/vue-tsc failure를 관찰했다. 그 뒤 `package.json`을 §8 exact pins로 교체하고 같은 command를 재실행해 21 modules, typecheck/build exit `0`, unchanged frozen lock과 hashed JS+CSS를 관찰했다. `build` script의 exact command는 `vue-tsc --noEmit && vite build`다.
+- `evidence`: `/home/user01/tmp/comic-new-block04-cfw/frontend`; manifest/lock/index/CSS/JS hashes는 §2.1.9 exact 값.
+- `remaining_limit`: product의 full `frontend/**`가 생긴 뒤 동일 pins/lock으로 fresh `bun install --frozen-lockfile && bun run build`를 실행해 strict typecheck와 production static을 다시 관찰해야 한다. scratch output을 복사하거나 Acceptance A로 세지 않는다.
+- `response_if_full_app_refutes`: frontend dependent mutation을 중단하고 actual full-app error와 manifest/lock bytes를 Main/Plan owner에게 반환한다. 대체 bundler/SSR/Tailwind/component suite를 추가하지 않는다; pin/stack 변경은 fresh Plan Review 대상이다.
 
-### CFW-2 — Python runtime dependency와 app import
+### CFW-2 — Python runtime dependency: resolver/import support 관찰 완료
 
-- `plan_anchor`: `§4 Python server, lifespan, runner와 single-serving`
-- `premise`: 선언할 FastAPI/uvicorn 범위가 supported Python에서 app import/lifespan/stream response를 제공한다.
-- `permitted_initial_work`: Backend owner가 observed versions를 기준으로 bounded dependency metadata를 선언하고 disposable venv에서 package install, `create_app` import, one startup/shutdown smoke를 수행한다.
-- `discriminating_observation`: resolver/install 성공, exact installed versions 기록, import/start/shutdown exit 0; app startup이 missing static을 명시적으로 거부함.
-- `dependent_work_not_yet_permitted`: framework 교체, ASGI abstraction, separate server, CORS/auth/observability 확장.
-- `response_if_refuted`: server implementation의 framework-dependent 부분을 중단하고 resolver/import error를 Plan owner에게 반환한다. FastAPI boundary 변경은 Plan 재검토 대상이다.
+- `plan_anchor`: `§4 Python server, lifespan, runner와 single-serving`, `§8 Build, package와 wheel 규칙`
+- `premise/outcome`: isolated Python 3.12 venv에서 exact `fastapi==0.136.3`, `uvicorn==0.48.0` resolver/install/import가 supported로 관찰됐다. transitive readback은 Starlette `1.6.0`, Pydantic `2.13.5`였다.
+- `executed_commands`: cwd `/home/user01/tmp`에서 `python3 -m venv /home/user01/tmp/comic-new-block04-cfw/venv && /home/user01/tmp/comic-new-block04-cfw/venv/bin/pip install fastapi==0.136.3 uvicorn==0.48.0 && /home/user01/tmp/comic-new-block04-cfw/venv/bin/python -c "import fastapi,uvicorn; print(fastapi.__version__, uvicorn.__version__)"`; final stdout `0.136.3 0.48.0`.
+- `remaining_limit`: product app/lifespan/static implementation이 아직 없으므로 `create_app` import/startup, missing-static refusal, SSE/stream response, actual runner settlement/graceful shutdown은 §12 product path에서 증명한다.
+- `response_if_product_app_refutes`: framework-dependent 구현을 중단하고 actual import/lifespan/static/shutdown error를 Plan owner에게 반환한다. framework boundary 변경은 fresh Plan Review 대상이다.
 
-### CFW-3 — wheel의 generated static 포함
+### CFW-3 — wheel의 generated static 포함: UNRESOLVED
 
 - `plan_anchor`: `§8 Build, package와 wheel 규칙`
 - `premise`: 현재 setuptools package-data 규칙으로 nested hashed assets가 wheel에 들어가고 installed resource path에서 serve된다.
@@ -495,9 +515,9 @@ Partial failure: build 실패면 serve proof로 진행하지 않는다; startup 
 - `dependent_work_not_yet_permitted`: release artifact/Block 완료 선언, empty-shell fallback, wheel 안에 frontend source/node_modules 포함.
 - `response_if_refuted`: packaging fan-in을 중단하고 Backend owner가 package-data/MANIFEST 범위만 고친 뒤 같은 observation을 반복한다. custom build hook/packager가 필요해지면 Plan owner에게 재검토한다.
 
-### CFW-4 — canonical font identity
+### CFW-4 — canonical font identity: UNRESOLVED
 
-- `plan_anchor`: `§3.3 Mutation/read endpoints와 의미`의 review materialization, `§12.8 H`
+- `plan_anchor`: `§3.3 Mutation/read endpoints와 의미`의 review materialization, `§12.9 H`
 - `premise`: verifier가 허가된 local font file을 갖고 그 SHA-256을 composition `font_sha256`과 동일하게 설정할 수 있다.
 - `permitted_initial_work`: disposable project 전용 font path를 regular-file read하고 hash를 계산한 뒤 initial composition save에 exact hash를 사용한다.
 - `discriminating_observation`: server가 same font bytes로 materialize하고 artifact embedded `font_sha256`, composition state, file hash가 일치한다. mismatch control은 409/validation failure이며 artifact를 만들지 않는다.
@@ -531,12 +551,14 @@ Partial failure: build 실패면 serve proof로 진행하지 않는다; startup 
 
 ### 12.4 C — Exit 11-20 save isolation/failure/conflict
 
+- Baseline/rebaseline, two different cut-intent saves와 composition save를 연속 발생시켜 browser request log에서 **cross-type max authoritative edit in-flight = 1**을 확인한다. 첫 response를 hold한 동안 다른 type을 편집해도 이미 captured URL/body/mutation/base revisions는 불변이고, 첫 accepted response가 더 최신 draft를 clear하지 않으며 fresh response snapshot으로 다음 item만 serialize한다.
 - Inspector text와 Canvas pointer commit에서 draft 즉시 표시, acceptance 전 HTTP snapshot과 별도 SQLite unchanged, persistent unsaved marker.
-- 첫 composition PUT response를 browser network에서 hold한 동안 두 번째 edit를 만든다. server request log에서 max in-flight save=1, 첫 accepted mutation 뒤 두 번째 draft/value가 남고 다음 save로 진행함을 확인.
+- 첫 composition PUT response를 browser network에서 hold한 동안 두 번째 composition edit를 만든다. 첫 accepted mutation 뒤 두 번째 draft/value가 남고 global lane의 다음 save로 진행함을 확인한다.
 - real network failure는 browser request abort로 만들고 local draft retention/UI만 증명하며 server effect 성공을 주장하지 않는다.
 - real FastAPI 500은 별도 SQLite connection/process가 `BEGIN EXCLUSIVE`를 busy timeout보다 오래 유지한 동안 save하여 실제 server I/O failure를 발생시킨다. lock release 후 fresh readback unchanged, toast 후 persistent marker와 retry를 확인한다.
-- 두 browser client가 same base에서 edit; A 실제 수용 후 B가 409/current snapshot을 받는다. B draft, server compare, explicit reapply, review-disabled 확인. reconcile success 뒤 exact mutation clear와 fresh SQLite match.
-- dirty B에 A change SSE를 보내 server revision만 update하고 draft/base-changed 유지.
+- 두 browser client가 same base에서 baseline/intent/composition 중 각각 충돌 가능한 edit를 수행한다. A 실제 수용 후 B가 409/current snapshot을 받고 B의 exact local draft가 남으며, read-only server compare 뒤 explicit `최신본에 다시 적용`만 new mutation/current base로 요청함을 확인한다. implicit rebase/overwrite는 없어야 한다.
+- dirty B에 A change SSE를 보내 server revision만 update하고 draft/base-changed 유지. reconcile success 뒤 exact matching current mutation만 clear하고 fresh SQLite와 match한다.
+- lane pending/failed/conflict/base-changed 동안 generation/review/approval이 disabled이고 lane item이나 edit draft로 생성되지 않음을 확인한다. Fresh current snapshot과 no blocking edit 뒤에만 각 canonical precondition대로 enabled된다.
 
 ### 12.5 D — Exit 21-27 SSE
 
@@ -549,7 +571,7 @@ Partial failure: build 실패면 serve proof로 진행하지 않는다; startup 
 ### 12.6 E — Exit 28-33 actual STOP
 
 - controlled local provider가 descendant child를 포함해 오래 실행하도록 하고 running + queued jobs를 만든다. Header/QueuePopover에 cut/revision/status와 STOP 접근성을 확인한다; fake %는 없어야 한다.
-- global/per-job STOP 클릭 직후 confirmation 없음, `stopRequested`만 표시. HTTP/SSE terminal 전 상태는 running.
+- authoritative edit lane request를 실제 hold한 상태에서도 global/per-job STOP 클릭은 confirmation 없이 즉시 별도 HTTP 요청으로 나가며 lane completion을 기다리지 않는다. `stopRequested`만 표시하고 HTTP/SSE terminal 전 상태는 running이다. STOP response가 held edit draft를 clear하거나 captured payload를 바꾸지 않음을 확인한다.
 - server existing STOP path가 PID/start-token/process-group을 종료한 후에만 terminal snapshot/UI. `/proc`/OS process observation에서 root와 descendant 부재.
 - fresh SQLite에서 desired intent unchanged, old pixel preserved, mismatch STALE/UNRESOLVED, release/delivery truth unchanged.
 
@@ -612,4 +634,4 @@ Acceptance A-J와 Exit 1-44 전부에 fresh discriminating evidence가 있고 un
 
 Abort 상태에서는 accepted intent와 valid old pixels를 보존하고 mismatch는 STALE, running process는 실제 settle, authorization/delivery를 승격하지 않는다. lock file, JSON sidecar, local approval boolean, fake event progress, client polling으로 결함을 봉합하지 않는다.
 
-현재 남는 evidence limit는 §11 네 premise뿐이다. 이 Plan은 아직 frontend/server/wheel/runtime/browser/SQLite/provider process를 구현하거나 실행하지 않았고, BLOCK-04 semantic verdict·Coverage·completion·BLOCK-05 진입을 주장하지 않는다. Plan Review의 독립성/ADMIT은 별도 Gemini Flash reviewer와 Main 소유다.
+현재 unresolved evidence는 CFW-3 wheel, CFW-4 font와 §2.3에 명시한 full-app production build/runtime 관찰뿐이다. CFW-1 exact pins와 CFW-2 resolver/import support는 scratch에서 관찰됐지만 제품 Acceptance를 세우지 않는다. 이 revision은 제품 frontend/server/wheel/runtime/browser/SQLite/provider path를 구현하거나 실행하지 않았고, BLOCK-04 semantic verdict·Coverage·completion·BLOCK-05 진입을 주장하지 않는다. 이전 review `/home/user01/tmp/comic-new-block04-plan-review.json`의 old-hash `ADMIT`은 stale하며, exact revised Plan hash에 대한 fresh independent Gemini Flash Plan Review와 ADMIT은 Main 소유다.
