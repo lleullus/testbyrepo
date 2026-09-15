@@ -16,6 +16,7 @@ from comic_new.store import (
     ConflictError,
     InvalidArtifactClosureError,
     ProjectAlreadyExistsError,
+    ProjectNotFoundError,
     RealizationIncompleteError,
     StaleRealizationError,
     StoreCorruptionError,
@@ -98,6 +99,88 @@ def test_acceptance_a_init_and_exactly_five_cuts(tmp_path: Path) -> None:
     assert res_reinit.returncode != 0
     assert "already initialized" in res_reinit.stderr
 
+
+def test_acceptance_a_incomplete_schema_and_failed_init_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 1. Deliberately partial database (user_version=1, authority singleton, 5 cuts, but missing tables and triggers)
+    # reproduces the exact Coverage finding / verifier probe condition.
+    proj_partial = tmp_path / "proj_partial"
+    proj_partial.mkdir()
+    db_partial = proj_partial / "comic-new.sqlite3"
+    con = sqlite3.connect(str(db_partial))
+    con.execute(f"PRAGMA application_id = {TransactionalStore.APPLICATION_ID};")
+    con.execute("PRAGMA user_version = 1;")
+    con.execute(
+        "CREATE TABLE authority (singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1), authority_revision INTEGER NOT NULL CHECK (authority_revision >= 0), current_baseline_id TEXT NULL);"
+    )
+    con.execute("INSERT INTO authority (singleton_id, authority_revision) VALUES (1, 0);")
+    con.execute("CREATE TABLE cuts (cut_id INTEGER PRIMARY KEY CHECK (cut_id BETWEEN 1 AND 5));")
+    con.executemany("INSERT INTO cuts (cut_id) VALUES (?);", [(i,) for i in range(1, 6)])
+    con.commit()
+    con.close()
+
+    # Authoritative readback: open_project rejects incomplete schema as StoreCorruptionError
+    with pytest.raises(StoreCorruptionError, match="Missing required tables"):
+        TransactionalStore.open_project(proj_partial)
+
+    # CLI snapshot rejects incomplete schema with non-zero exit and StoreCorruptionError message
+    res_snap = run_cli("snapshot", str(proj_partial))
+    assert res_snap.returncode != 0
+    assert "Missing required tables" in res_snap.stderr
+
+    # Re-initialization on this corrupted/partial database fails with StoreCorruptionError, not ProjectAlreadyExistsError
+    with pytest.raises(StoreCorruptionError, match="Unrecognized or partially initialized database"):
+        TransactionalStore.create_project(proj_partial)
+
+    # 2. Database missing required exact-five triggers is rejected before cuts can be illegally mutated
+    proj_notriggers = tmp_path / "proj_notriggers"
+    proj_notriggers.mkdir()
+    db_notriggers = proj_notriggers / "comic-new.sqlite3"
+    schema_sql_path = Path(__file__).parent.parent / "src" / "comic_new" / "schema.sql"
+    sql_text = schema_sql_path.read_text(encoding="utf-8")
+    sql_without_triggers = sql_text.split("-- Exactly five cuts triggers")[0]
+    con2 = sqlite3.connect(str(db_notriggers))
+    con2.execute(f"PRAGMA application_id = {TransactionalStore.APPLICATION_ID};")
+    con2.execute("PRAGMA user_version = 1;")
+    con2.executescript(sql_without_triggers)
+    con2.commit()
+    con2.close()
+
+    with pytest.raises(StoreCorruptionError, match="Missing required triggers"):
+        TransactionalStore.open_project(proj_notriggers)
+
+    # 3. Fault-injected interrupted initialization is atomic: rollback leaves no valid or partial DB
+    proj_fault = tmp_path / "proj_fault"
+    orig_read_text = Path.read_text
+
+    def broken_read_text(self: Path, *args: object, **kwargs: object) -> str:
+        content = orig_read_text(self, *args, **kwargs)
+        if self.name == "schema.sql":
+            return content + "\nSYNTAX ERROR INTERRUPTING INITIALIZATION;\n"
+        return content
+
+    monkeypatch.setattr(Path, "read_text", broken_read_text)
+
+    with pytest.raises(StoreCorruptionError, match="Database initialization failed"):
+        TransactionalStore.create_project(proj_fault)
+
+    # The project database was not published in an incomplete state
+    assert not (proj_fault / "comic-new.sqlite3").exists()
+    with pytest.raises(ProjectNotFoundError):
+        TransactionalStore.open_project(proj_fault)
+
+    # 4. Empty crashed placeholder recovery is preserved
+    monkeypatch.undo()
+    proj_placeholder = tmp_path / "proj_placeholder"
+    proj_placeholder.mkdir()
+    placeholder_db = proj_placeholder / "comic-new.sqlite3"
+    placeholder_db.touch()
+    assert placeholder_db.stat().st_size == 0
+
+    store_recovered = TransactionalStore.create_project(proj_placeholder)
+    snap = store_recovered.snapshot()
+    assert [c["cut_id"] for c in snap["cuts"]] == [1, 2, 3, 4, 5]
 
 # ---------------------------------------------------------------------------
 # Acceptance B: Approved Baseline, monotonic intent, rollback-as-new

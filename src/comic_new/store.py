@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
 from typing import Any
+from uuid import uuid4
 
 
 class TransactionalStoreError(Exception):
@@ -67,6 +69,28 @@ class TransactionalStore:
     DB_FILENAME: str = "comic-new.sqlite3"
     BUSY_TIMEOUT_MS: int = 5000
 
+    REQUIRED_TABLES: frozenset[str] = frozenset({
+        "authority",
+        "structural_baselines",
+        "cut_intents",
+        "cuts",
+        "baseline_intents",
+        "composition",
+        "generation_jobs",
+        "generation_attempts",
+        "review_artifacts",
+        "artifact_cuts",
+        "release_authorizations",
+        "delivery_attempts",
+    })
+    REQUIRED_TRIGGERS: frozenset[str] = frozenset({
+        "trg_cuts_no_insert",
+        "trg_cuts_no_delete",
+        "trg_cuts_no_update_cut_id",
+    })
+    REQUIRED_INDEXES: frozenset[str] = frozenset({
+        "idx_active_release_authorization",
+    })
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path).resolve()
 
@@ -91,41 +115,56 @@ class TransactionalStore:
 
         if db_path.exists():
             try:
-                con = sqlite3.connect(str(db_path))
-                cur = con.cursor()
-                user_ver = cur.execute("PRAGMA user_version").fetchone()[0]
-                tbl_row = cur.execute(
-                    "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='authority'"
-                ).fetchone()
-                tbl_count = tbl_row[0] if tbl_row else 0
-                con.close()
-                if user_ver == cls.SCHEMA_VERSION and tbl_count > 0:
-                    raise ProjectAlreadyExistsError(f"Project already initialized at {p}")
-                if user_ver == 0 and tbl_count == 0 and db_path.stat().st_size == 0:
+                if db_path.stat().st_size == 0:
                     pass  # Empty crashed placeholder, safe to reinitialize
                 else:
-                    raise StoreCorruptionError(f"Unrecognized or partially initialized database at {db_path}")
-            except ProjectAlreadyExistsError:
+                    try:
+                        cls(db_path).verify_schema()
+                        raise ProjectAlreadyExistsError(f"Project already initialized at {p}")
+                    except ProjectAlreadyExistsError:
+                        raise
+                    except Exception as e:
+                        raise StoreCorruptionError(
+                            f"Unrecognized or partially initialized database at {db_path}: {e}"
+                        ) from e
+            except (ProjectAlreadyExistsError, StoreCorruptionError):
                 raise
             except Exception as e:
-                if not isinstance(e, StoreCorruptionError):
-                    raise StoreCorruptionError(f"Cannot inspect existing database at {db_path}: {e}") from e
-                raise
+                raise StoreCorruptionError(f"Cannot inspect existing database at {db_path}: {e}") from e
 
         schema_sql_path = Path(__file__).parent / "schema.sql"
         if not schema_sql_path.is_file():
             raise StoreCorruptionError(f"Missing schema definition at {schema_sql_path}")
         sql_text = schema_sql_path.read_text(encoding="utf-8")
 
-        con = sqlite3.connect(str(db_path), timeout=cls.BUSY_TIMEOUT_MS / 1000.0)
+        tmp_db_path = p / f".{cls.DB_FILENAME}.tmp.{uuid4().hex}"
+        con = sqlite3.connect(str(tmp_db_path), timeout=cls.BUSY_TIMEOUT_MS / 1000.0)
         try:
             con.execute("PRAGMA foreign_keys = ON;")
-            con.execute(f"PRAGMA application_id = {cls.APPLICATION_ID};")
-            con.execute(f"PRAGMA user_version = {cls.SCHEMA_VERSION};")
-            con.executescript(sql_text)
-            con.commit()
-        finally:
+            init_script = (
+                "BEGIN IMMEDIATE;\n"
+                f"PRAGMA application_id = {cls.APPLICATION_ID};\n"
+                f"PRAGMA user_version = {cls.SCHEMA_VERSION};\n"
+                f"{sql_text}\n"
+                "COMMIT;\n"
+            )
+            con.executescript(init_script)
             con.close()
+            cls(tmp_db_path).verify_schema()
+            os.replace(tmp_db_path, db_path)
+        except Exception as e:
+            try:
+                con.rollback()
+            except Exception:
+                pass
+            try:
+                con.close()
+            except Exception:
+                pass
+            tmp_db_path.unlink(missing_ok=True)
+            if not isinstance(e, StoreCorruptionError):
+                raise StoreCorruptionError(f"Database initialization failed: {e}") from e
+            raise
 
         store = cls(db_path)
         store.verify_schema()
@@ -143,16 +182,47 @@ class TransactionalStore:
 
     def verify_schema(self) -> None:
         with self._connect() as con:
-            user_ver = con.execute("PRAGMA user_version").fetchone()[0]
+            app_id_row = con.execute("PRAGMA application_id;").fetchone()
+            app_id = app_id_row[0] if app_id_row else 0
+            if app_id != self.APPLICATION_ID:
+                raise StoreCorruptionError(f"Expected application_id {self.APPLICATION_ID}, got {app_id}")
+
+            user_ver_row = con.execute("PRAGMA user_version;").fetchone()
+            user_ver = user_ver_row[0] if user_ver_row else 0
             if user_ver != self.SCHEMA_VERSION:
                 raise StoreCorruptionError(f"Expected schema version {self.SCHEMA_VERSION}, got {user_ver}")
-            cut_count = con.execute("SELECT count(*) FROM cuts").fetchone()[0]
-            if cut_count != 5:
-                raise StoreCorruptionError(f"Expected exactly 5 cuts, found {cut_count}")
-            auth = con.execute("SELECT count(*) FROM authority WHERE singleton_id = 1").fetchone()[0]
+
+            master_rows = con.execute("SELECT type, name FROM sqlite_master;").fetchall()
+            existing_tables = {row["name"] for row in master_rows if row["type"] == "table"}
+            existing_triggers = {row["name"] for row in master_rows if row["type"] == "trigger"}
+            existing_indexes = {row["name"] for row in master_rows if row["type"] == "index"}
+
+            missing_tables = self.REQUIRED_TABLES - existing_tables
+            if missing_tables:
+                raise StoreCorruptionError(f"Missing required tables: {sorted(missing_tables)}")
+
+            missing_triggers = self.REQUIRED_TRIGGERS - existing_triggers
+            if missing_triggers:
+                raise StoreCorruptionError(f"Missing required triggers: {sorted(missing_triggers)}")
+
+            missing_indexes = self.REQUIRED_INDEXES - existing_indexes
+            if missing_indexes:
+                raise StoreCorruptionError(f"Missing required indexes: {sorted(missing_indexes)}")
+
+            cut_rows = con.execute("SELECT cut_id FROM cuts ORDER BY cut_id;").fetchall()
+            cut_ids = [row[0] for row in cut_rows]
+            if cut_ids != [1, 2, 3, 4, 5]:
+                raise StoreCorruptionError(f"Expected cuts [1, 2, 3, 4, 5], found {cut_ids}")
+
+            auth_row = con.execute("SELECT count(*) FROM authority WHERE singleton_id = 1;").fetchone()
+            auth = auth_row[0] if auth_row else 0
             if auth != 1:
                 raise StoreCorruptionError("Missing authority singleton")
 
+            comp_row = con.execute("SELECT count(*) FROM composition WHERE singleton_id = 1;").fetchone()
+            comp = comp_row[0] if comp_row else 0
+            if comp != 1:
+                raise StoreCorruptionError("Missing composition singleton")
     def _begin_mutation(self, con: sqlite3.Connection, expected_authority_revision: int) -> int:
         con.execute("BEGIN IMMEDIATE;")
         row = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()
