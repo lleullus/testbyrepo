@@ -2,7 +2,7 @@
 
 Schema: iis-scope/v1
 Project-Root: /home/user01/project/comic_new
-Status: ready
+Status: done
 
 ## Product Authority
 
