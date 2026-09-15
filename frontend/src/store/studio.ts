@@ -186,7 +186,7 @@ export const useStudioStore = defineStore('studio', () => {
         stream.gapFetchPending = true
         fetchSnapshot()
           .then((snap) => {
-            server.value = snap // full replacement for gap recovery
+            applySnapshot(snap)
             stream.gapFetchPending = false
           })
           .catch(() => {

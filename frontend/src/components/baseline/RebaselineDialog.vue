@@ -80,7 +80,7 @@ defineExpose({ open })
 
 <template>
   <dialog ref="dialogRef" class="rebaseline-dialog" aria-label="Baseline 설정" @close="close">
-    <div class="rebaseline-content" v-if="isOpen" @input="updateDraft">
+    <div class="rebaseline-content" v-if="isOpen">
       <h2 class="rebaseline-title">{{ hasBaseline ? 'Re-baseline' : '1차 승인 — Baseline 설정' }}</h2>
 
       <label class="field-label">

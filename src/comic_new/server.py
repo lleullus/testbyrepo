@@ -375,7 +375,7 @@ class SnapshotBroadcaster:
             ring = list(self._ring)
             current_revision = ring[-1].data["authority_revision"] if ring else 0
             if last_event_id is None:
-                replay: list[_Event] = []
+                replay = ring[-1:]
             elif not last_event_id.startswith(f"{self.boot_id}:"):
                 replay = [self._required_event("boot-changed", current_revision)]
             else:

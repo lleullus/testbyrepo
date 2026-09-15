@@ -2,7 +2,7 @@
 import { ref, computed, type CSSProperties } from 'vue'
 import type { BubbleDTO } from '@/api/contracts'
 import type { PercentageRect } from '@/domain/geometry'
-import { applyNudge } from '@/domain/geometry'
+import { applyNudge, applyResizeDelta, NUDGE_SHIFT_STEP, NUDGE_STEP } from '@/domain/geometry'
 import { useBubblePointer } from '@/composables/useBubblePointer'
 
 const props = defineProps<{
@@ -92,6 +92,27 @@ function onKeyDown(e: KeyboardEvent) {
   emit('commit', rect)
 }
 
+function onResizeKeyDown(
+  e: KeyboardEvent,
+  handle: 'se' | 'sw' | 'ne' | 'nw' | 'e' | 'w' | 'n' | 's',
+) {
+  const step = e.shiftKey ? NUDGE_SHIFT_STEP : NUDGE_STEP
+  const delta = {
+    ArrowLeft: [-step, 0],
+    ArrowRight: [step, 0],
+    ArrowUp: [0, -step],
+    ArrowDown: [0, step],
+  }[e.key]
+  if (!delta) return
+  e.preventDefault()
+  emit('commit', applyResizeDelta(
+    { x_pct: props.bubble.x_pct, y_pct: props.bubble.y_pct, w_pct: props.bubble.w_pct, h_pct: props.bubble.h_pct },
+    handle,
+    delta[0],
+    delta[1],
+  ))
+}
+
 const HANDLES = ['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'] as const
 const bubbleTextStyle = computed((): CSSProperties => ({
   textAlign: props.bubble.text_align,
@@ -115,6 +136,9 @@ const bubbleStyle = computed((): CSSProperties => ({
     class="bubble-overlay"
     :class="{ selected }"
     :style="bubbleStyle"
+    role="group"
+    tabindex="0"
+    :aria-label="`말풍선: ${bubble.text}`"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
@@ -129,11 +153,13 @@ const bubbleStyle = computed((): CSSProperties => ({
 
     <!-- Resize handles (visible only when selected) -->
     <template v-if="selected">
-      <div
+      <button
         v-for="h in HANDLES"
         :key="h"
+        type="button"
         :class="['resize-handle', `handle-${h}`]"
         @pointerdown="(e: PointerEvent) => onResizeDown(e, h)"
+        @keydown.stop="(e: KeyboardEvent) => onResizeKeyDown(e, h)"
         :aria-label="`크기 조절 ${h}`"
       />
     </template>
@@ -180,6 +206,7 @@ const bubbleStyle = computed((): CSSProperties => ({
   border: 1px solid #fff;
   border-radius: 2px;
   z-index: 1;
+  padding: 0;
 }
 .handle-nw { top: -5px; left: -5px; cursor: nw-resize; }
 .handle-ne { top: -5px; right: -5px; cursor: ne-resize; }

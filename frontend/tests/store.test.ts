@@ -246,7 +246,7 @@ describe('cross-type authoritative edit lane', () => {
 })
 
 describe('SSE gap recovery', () => {
-  it('collapses repeated snapshot-required events into one authoritative GET', async () => {
+  it('collapses repeated gap fetches and ignores a late older recovery snapshot', async () => {
     class MockEventSource {
       static latest: MockEventSource | null = null
       onopen: (() => void) | null = null
@@ -290,9 +290,16 @@ describe('SSE gap recovery', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(store.stream.gapFetchPending).toBe(true)
+    eventSource.emit('studio.snapshot', {
+      schema: 'studio-event/v1',
+      boot_id: 'boot-new',
+      authority_revision: 8,
+      snapshot: makeSnapshot({ authority_revision: 8 }),
+    })
+    expect(store.server?.authority_revision).toBe(8)
     resolveGap(jsonResponse(makeSnapshot({ authority_revision: 7 })))
     await vi.waitFor(() => expect(store.stream.gapFetchPending).toBe(false))
-    expect(store.server?.authority_revision).toBe(7)
+    expect(store.server?.authority_revision).toBe(8)
     store.dispose()
   })
 })

@@ -50,6 +50,19 @@ def _approve_baseline(store: TransactionalStore) -> int:
     return store.approve_structural_baseline(0, "baseline-server-test", structure, intents)
 
 
+def test_initial_sse_subscription_replays_latest_snapshot(tmp_path: Path) -> None:
+    store = TransactionalStore.create_project(tmp_path / "project")
+    broadcaster = server_module.SnapshotBroadcaster(store, "font-hash")
+    initial = {"authority_revision": 0, "cuts": []}
+    broadcaster.publish(initial)
+
+    _queue, replay = broadcaster.subscribe(None)
+
+    assert len(replay) == 1
+    assert replay[0].event == "studio.snapshot"
+    assert replay[0].data["snapshot"] == initial
+
+
 @pytest.mark.parametrize("failure", ["missing-index", "missing-referenced-asset"])
 def test_create_app_refuses_incomplete_generated_static(
     tmp_path: Path,
