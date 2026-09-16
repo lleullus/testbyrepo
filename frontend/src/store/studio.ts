@@ -22,6 +22,8 @@ import {
   postGlobalStop,
   postMaterializeReview,
   postAuthorize,
+  postExportPng,
+  postBloggerRelease,
   fetchArtifactMetadata,
 } from '@/api/client'
 import { createStudioEventSource } from '@/api/events'
@@ -147,6 +149,17 @@ export const useStudioStore = defineStore('studio', () => {
         current.realized_asset_id === artifactCut.asset_id
       )
     })
+  })
+
+  const canRelease = computed(() => {
+    if (!server.value || !hasCurrentSnapshot.value || hasBlockingEdit.value) {
+      return false
+    }
+    const activeAuth = server.value.release_authorization?.active
+    if (!activeAuth || activeAuth.revoked_authority_revision != null) {
+      return false
+    }
+    return server.value.cuts.every((cut) => cut.currency === 'CURRENT')
   })
 
   // --- Internal helpers ---
@@ -653,6 +666,62 @@ export const useStudioStore = defineStore('studio', () => {
     }
   }
 
+  async function exportPng() {
+    if (!canRelease.value || !server.value) {
+      if (hasBlockingEdit.value) {
+        addToast('저장되지 않은 편집 내용이 있어 내보낼 수 없습니다.', 'alert')
+      } else {
+        addToast('릴리즈 권한이 없거나 컷이 최신 상태가 아닙니다.', 'alert')
+      }
+      return
+    }
+    try {
+      const result = await postExportPng({
+        expected_authority_revision: server.value.authority_revision,
+      })
+      applySnapshot(result.snapshot)
+      addToast(`PNG 파일이 성공적으로 내보내졌습니다 (${result.bytes_written} bytes)`, 'status')
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.currentSnapshot) applySnapshot(err.currentSnapshot)
+        addToast(`내보내기 실패: ${err.body.message}`, 'alert')
+      } else {
+        addToast('PNG 내보내기 실패', 'alert')
+      }
+    }
+  }
+
+  async function releaseBlogger() {
+    if (!canRelease.value || !server.value) {
+      if (hasBlockingEdit.value) {
+        addToast('저장되지 않은 편집 내용이 있어 발행할 수 없습니다.', 'alert')
+      } else {
+        addToast('릴리즈 권한이 없거나 컷이 최신 상태가 아닙니다.', 'alert')
+      }
+      return
+    }
+    try {
+      const result = await postBloggerRelease({
+        expected_authority_revision: server.value.authority_revision,
+      })
+      applySnapshot(result.snapshot)
+      if (result.outcome === 'confirmed_success') {
+        addToast(`Blogger 발행 성공: ${result.destination_url || result.destination_id}`, 'status')
+      } else if (result.outcome === 'unknown') {
+        addToast('Blogger 발행 결과 미확인 (Unknown): 외부 서비스 응답 타임아웃', 'alert')
+      } else {
+        addToast('Blogger 발행 거절 또는 실패', 'alert')
+      }
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.currentSnapshot) applySnapshot(err.currentSnapshot)
+        addToast(`Blogger 발행 실패: ${err.body.message}`, 'alert')
+      } else {
+        addToast('Blogger 발행 실패', 'alert')
+      }
+    }
+  }
+
   function closeReview() {
     ui.review = null
   }
@@ -711,6 +780,7 @@ export const useStudioStore = defineStore('studio', () => {
     canMaterializeReview,
     canGenerate,
     canAuthorize,
+    canRelease,
     // Actions
     loadStudio,
     setIntentDraft,
@@ -727,6 +797,8 @@ export const useStudioStore = defineStore('studio', () => {
     generateCut,
     materializeReview,
     authorizeReview,
+    exportPng,
+    releaseBlogger,
     closeReview,
     selectCut,
     selectBubble,

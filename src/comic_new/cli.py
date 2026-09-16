@@ -78,6 +78,23 @@ def main(argv: list[str] | None = None) -> int:
     )
     stop_parser.add_argument("project_dir", type=str, help="Path to the project directory")
 
+
+    # comic-new export-png <project_dir> <output_file>
+    export_parser = subparsers.add_parser(
+        "export-png",
+        help="Export approved canonical review artifact to a standalone PNG file without reflow",
+    )
+    export_parser.add_argument("project_dir", type=str, help="Path to the project directory")
+    export_parser.add_argument("output_file", type=str, help="Target path for the exported PNG file")
+
+    # comic-new release-blogger <project_dir> [--blog-id <id>] [--title <title>]
+    blogger_parser = subparsers.add_parser(
+        "release-blogger",
+        help="Publish approved comic to Blogger with destination readback",
+    )
+    blogger_parser.add_argument("project_dir", type=str, help="Path to the project directory")
+    blogger_parser.add_argument("--blog-id", type=str, default=None, help="Blogger blog ID")
+    blogger_parser.add_argument("--title", type=str, default=None, help="Post title")
     # comic-new serve <project_dir> --font <absolute-font-file>
     serve_parser = subparsers.add_parser(
         "serve",
@@ -141,6 +158,72 @@ def main(argv: list[str] | None = None) -> int:
                 if st in ("failed", "cancelled", "interrupted", "superseded")
             )
             return 1 if bad_counts > 0 else 0
+        elif args.command == "export-png":
+            from comic_new.delivery import DeliveryService
+            from comic_new.composition import CANONICAL_HEIGHT, CANONICAL_WIDTH
+            p = Path(args.project_dir)
+            store = TransactionalStore.open_project(p)
+            snap = store.snapshot()
+            delivery_svc = DeliveryService(store)
+            dest_file = Path(args.output_file).resolve()
+            try:
+                result = delivery_svc.export_png(snap["authority_revision"], output_path=dest_file)
+                output = {
+                    "status": "success",
+                    "attempt_id": result.attempt_id,
+                    "authorization_id": result.authorization_id,
+                    "artifact_id": result.artifact_id,
+                    "output_file": str(dest_file),
+                    "content_hash": result.content_hash,
+                    "bytes_written": result.bytes_written,
+                    "dimensions": [CANONICAL_WIDTH, CANONICAL_HEIGHT],
+                }
+                print(json.dumps(output, indent=2))
+                return 0
+            except Exception as exc:
+                sys.stderr.write(f"export-png error: {exc}\n")
+                return 1
+        elif args.command == "release-blogger":
+            from comic_new.delivery import DeliveryService
+            p = Path(args.project_dir)
+            store = TransactionalStore.open_project(p)
+            snap = store.snapshot()
+            delivery_svc = DeliveryService(store)
+            try:
+                result = delivery_svc.deliver_blogger(
+                    snap["authority_revision"],
+                    blog_id=args.blog_id,
+                    title=args.title,
+                )
+                if result.outcome == "confirmed_success":
+                    output = {
+                        "status": "confirmed_success",
+                        "attempt_id": result.attempt_id,
+                        "authorization_id": result.authorization_id,
+                        "post_id": result.destination_id,
+                        "destination_url": result.destination_url,
+                    }
+                    print(json.dumps(output, indent=2))
+                    return 0
+                elif result.outcome == "unknown":
+                    output = {
+                        "status": "unknown",
+                        "attempt_id": result.attempt_id,
+                        "message": "발행 결과 미확인: 외부 서비스 응답 타임아웃",
+                    }
+                    print(json.dumps(output, indent=2))
+                    return 1
+                else:
+                    output = {
+                        "status": "confirmed_failure",
+                        "attempt_id": result.attempt_id,
+                        "evidence": result.evidence,
+                    }
+                    print(json.dumps(output, indent=2))
+                    return 1
+            except Exception as exc:
+                sys.stderr.write(f"release-blogger error: {exc}\n")
+                return 1
         elif args.command == "cancel-generation":
             p = Path(args.project_dir)
             store = TransactionalStore.open_project(p)

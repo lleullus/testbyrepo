@@ -3,9 +3,13 @@
 import type {
   ApiErrorDTO,
   BaselineStructureDTO,
+  BloggerReleaseRequest,
+  BloggerReleaseResponse,
   CutId,
   CutIntentDTO,
   CompositionStateDTO,
+  ExportPngRequest,
+  ExportPngResponse,
   JobDTO,
   ReviewArtifactDTO,
   StudioSnapshotDTO,
@@ -162,6 +166,26 @@ export function postAuthorize(
   return request<AuthorizeResponse>(
     'POST',
     `/api/review-artifacts/${artifactId}/authorize`,
+    payload,
+  )
+}
+
+export function postExportPng(
+  payload: ExportPngRequest,
+): Promise<ExportPngResponse> {
+  return request<ExportPngResponse>(
+    'POST',
+    '/api/release/export-png',
+    payload,
+  )
+}
+
+export function postBloggerRelease(
+  payload: BloggerReleaseRequest,
+): Promise<BloggerReleaseResponse> {
+  return request<BloggerReleaseResponse>(
+    'POST',
+    '/api/release/blogger',
     payload,
   )
 }

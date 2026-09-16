@@ -473,7 +473,9 @@ class TransactionalStore:
                     "artifact_id": active_auth_row["artifact_id"],
                     "artifact_content_hash": active_auth_row["artifact_content_hash"],
                     "authorized_authority_revision": active_auth_row["authorized_authority_revision"],
+                    "revoked_authority_revision": active_auth_row["revoked_authority_revision"],
                     "created_at": active_auth_row["created_at"],
+                    "revoked_at": active_auth_row["revoked_at"],
                 }
 
             revoked_auth_rows = con.execute(
@@ -1306,6 +1308,7 @@ class TransactionalStore:
                     (artifact_id, item["cut_id"], item["realized_revision"], item["asset_id"]),
                 )
 
+            self._revoke_active_authorization(con, new_rev, now_iso)
             con.execute(
                 "UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,)
             )
@@ -1417,6 +1420,18 @@ class TransactionalStore:
                 raise AuthorizationRevokedError(f"Authorization {authorization_id} has been revoked")
 
             art_id = auth["artifact_id"]
+            art_row = con.execute(
+                "SELECT artifact_id, composition_revision FROM review_artifacts WHERE artifact_id = ?",
+                (art_id,),
+            ).fetchone()
+            comp_row = con.execute("SELECT revision FROM composition WHERE singleton_id = 1").fetchone()
+            if not comp_row or not art_row or comp_row["revision"] != art_row["composition_revision"]:
+                cur_comp = comp_row["revision"] if comp_row else None
+                art_comp = art_row["composition_revision"] if art_row else None
+                raise InvalidArtifactClosureError(
+                    f"Composition has changed (current {cur_comp} != artifact {art_comp})"
+                )
+
             art_cuts = con.execute(
                 "SELECT cut_id, realized_revision, asset_id FROM artifact_cuts WHERE artifact_id = ? ORDER BY cut_id ASC",
                 (art_id,),
@@ -1424,7 +1439,6 @@ class TransactionalStore:
             art_closure = {
                 ac["cut_id"]: (ac["realized_revision"], ac["asset_id"]) for ac in art_cuts
             }
-
             cuts_rows = con.execute(
                 "SELECT cut_id, desired_revision, realized_revision, realized_asset_id FROM cuts ORDER BY cut_id ASC"
             ).fetchall()

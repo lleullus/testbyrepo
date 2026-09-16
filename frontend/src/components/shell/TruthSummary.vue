@@ -19,14 +19,17 @@ const authLabel = computed(() => {
   return auth ? `승인됨` : '미승인'
 })
 
-const deliveryLabel = computed(() => {
+const latestAttempt = computed(() => {
   const attempts = props.snapshot.delivery_attempts
-  if (attempts.length === 0) return '미시도'
-  const latest = attempts[attempts.length - 1]
-  switch (latest.outcome) {
+  return attempts.length > 0 ? attempts[attempts.length - 1] : null
+})
+
+const deliveryLabel = computed(() => {
+  if (!latestAttempt.value) return '미시도'
+  switch (latestAttempt.value.outcome) {
     case 'confirmed_success': return '전달 성공'
     case 'confirmed_failure': return '전달 실패'
-    default: return '결과 미확인'
+    default: return '결과 미확인 (Unknown)'
   }
 })
 </script>
@@ -53,7 +56,24 @@ const deliveryLabel = computed(() => {
     <span class="truth-sep" aria-hidden="true">|</span>
     <span class="truth-dim">
       <span class="truth-label">전달</span>
-      <span class="truth-value">{{ deliveryLabel }}</span>
+      <span
+        class="truth-value"
+        :class="{
+          'truth-current': latestAttempt?.outcome === 'confirmed_success',
+          'truth-stale': latestAttempt?.outcome === 'unknown',
+          'truth-alert': latestAttempt?.outcome === 'confirmed_failure',
+        }"
+      >
+        <a
+          v-if="latestAttempt?.outcome === 'confirmed_success' && latestAttempt.destination_url"
+          :href="latestAttempt.destination_url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="destination-link"
+          :title="`목적지 열기: ${latestAttempt.destination_url}`"
+        >{{ deliveryLabel }} ↗</a>
+        <span v-else>{{ deliveryLabel }}</span>
+      </span>
     </span>
   </nav>
 </template>

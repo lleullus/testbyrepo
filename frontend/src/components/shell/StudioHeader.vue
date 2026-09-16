@@ -68,6 +68,22 @@ const hasStoppable = computed(() => activeCount.value > 0)
         @click="store.materializeReview()"
       >검토</button>
 
+      <!-- Export PNG -->
+      <button
+        class="header-btn export-btn"
+        :disabled="!store.canRelease"
+        :aria-label="store.hasBlockingEdit ? '미저장 편집이 있어 내보낼 수 없음' : 'PNG 내보내기'"
+        @click="store.exportPng()"
+      >내보내기</button>
+
+      <!-- Release Blogger -->
+      <button
+        class="header-btn blogger-btn"
+        :disabled="!store.canRelease"
+        :aria-label="store.hasBlockingEdit ? '미저장 편집이 있어 발행할 수 없음' : 'Blogger 발행'"
+        @click="store.releaseBlogger()"
+      >발행</button>
+
       <!-- SSE connection indicator -->
       <span
         class="stream-indicator"

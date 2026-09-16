@@ -169,3 +169,36 @@ export interface StudioSnapshotDTO {
   delivery_attempts: DeliveryAttemptDTO[]
   generation_control: GenerationControlDTO
 }
+
+export interface ExportPngRequest {
+  expected_authority_revision: number
+  output_path?: string
+}
+
+export interface ExportPngResponse {
+  attempt_id: string
+  kind: 'png'
+  authorization_id: string
+  artifact_id: string
+  output_path: string
+  content_hash: Sha256
+  bytes_written: number
+  snapshot: StudioSnapshotDTO
+}
+
+export interface BloggerReleaseRequest {
+  expected_authority_revision: number
+  blog_id?: string
+  title?: string
+}
+
+export interface BloggerReleaseResponse {
+  attempt_id: string
+  kind: 'blogger'
+  authorization_id: string
+  artifact_id: string
+  outcome: DeliveryOutcome
+  destination_id: string | null
+  destination_url: string | null
+  snapshot: StudioSnapshotDTO
+}

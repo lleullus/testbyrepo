@@ -44,6 +44,14 @@ from comic_new.composition_service import (
     CompositionService,
     MaterializedArtifact,
 )
+from comic_new.delivery import (
+    BloggerAdapter,
+    DeliveryError,
+    DeliveryService,
+    GoogleBloggerAdapter,
+    ReleasePreflightError,
+    SourceAssetMissingError,
+)
 from comic_new.generation import (
     GenerationRunner,
     GenerationService,
@@ -51,6 +59,7 @@ from comic_new.generation import (
     is_process_alive_with_token,
 )
 from comic_new.store import (
+    AuthorizationRevokedError,
     ConflictError,
     InvalidArtifactClosureError,
     RealizationIncompleteError,
@@ -59,7 +68,6 @@ from comic_new.store import (
     TransactionalStoreError,
     ValidationError,
 )
-
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 _HASHED_ASSET_RE = re.compile(r"^/assets/[^/?#]+-[A-Za-z0-9_-]{8,}\.(?:js|css)$")
 _EVENT_RING_SIZE = 64
@@ -184,6 +192,16 @@ class AuthorizeRequest(WireModel):
     expected_authority_revision: NonNegativeInt
     content_hash: Sha256
 
+
+class ExportPngRequest(WireModel):
+    expected_authority_revision: NonNegativeInt
+    output_path: str | None = None
+
+
+class BloggerReleaseRequest(WireModel):
+    expected_authority_revision: NonNegativeInt
+    blog_id: str | None = None
+    title: str | None = None
 
 class _AssetReferenceParser(HTMLParser):
     def __init__(self) -> None:
@@ -632,13 +650,19 @@ def _assert_no_live_generation_process(snapshot: dict[str, Any]) -> None:
         raise RuntimeError(f"Generation process tree remains alive: {sorted(remaining)}")
 
 
-def create_app(project_dir: Path | str, font_path: Path | str) -> FastAPI:
+def create_app(
+    project_dir: Path | str,
+    font_path: Path | str,
+    blogger_adapter: BloggerAdapter | None = None,
+) -> FastAPI:
     """Create one production app after strict project/font/static preflight."""
     store = _preflight_project(project_dir)
     resolved_font, font_sha256 = _preflight_font(font_path)
     index_path = _preflight_static(STATIC_DIR)
     generation_service = GenerationService(store)
     composition_service = CompositionService(store, resolved_font)
+    effective_blogger_adapter = blogger_adapter or GoogleBloggerAdapter()
+    delivery_service = DeliveryService(store, composition_service, effective_blogger_adapter)
     broadcaster = SnapshotBroadcaster(store, font_sha256)
     supervisor = RunnerSupervisor(store)
 
@@ -1034,6 +1058,86 @@ def create_app(project_dir: Path | str, font_path: Path | str) -> FastAPI:
             "authorization_id": authorization_id,
             "submitted_artifact_id": artifact_id,
             "submitted_content_hash": body.content_hash,
+            "snapshot": fresh_and_publish(),
+        }
+
+    @app.post("/api/release/export-png")
+    async def release_export_png(body: ExportPngRequest) -> dict[str, Any]:
+        _ensure_accepting(app)
+        current = store.snapshot()
+
+        # Confine output path if provided
+        dest_path: Path | None = None
+        if body.output_path:
+            candidate_path = Path(body.output_path)
+            dest_path = (candidate_path if candidate_path.is_absolute() else store.project_dir / candidate_path).resolve()
+            project_root = store.project_dir.resolve()
+            if not dest_path.is_relative_to(project_root):
+                raise ApiProblem(400, "invalid_path", "output_path must be confined within the project directory")
+
+        try:
+            result = await asyncio.to_thread(
+                delivery_service.export_png,
+                body.expected_authority_revision,
+                dest_path,
+            )
+        except AuthorizationRevokedError as exc:
+            raise ApiProblem(409, "authorization_revoked", str(exc), current_snapshot=dto(store.snapshot())) from exc
+        except RealizationIncompleteError as exc:
+            raise ApiProblem(409, "realization_stale", str(exc), current_snapshot=dto(store.snapshot())) from exc
+        except InvalidArtifactClosureError as exc:
+            raise ApiProblem(409, "invalid_closure", str(exc), current_snapshot=dto(store.snapshot())) from exc
+        except ConflictError as exc:
+            raise ApiProblem(409, "conflict", str(exc), current_snapshot=dto(store.snapshot())) from exc
+        except SourceAssetMissingError as exc:
+            raise ApiProblem(500, "asset_missing", str(exc), current_snapshot=dto(store.snapshot())) from exc
+        except Exception as exc:
+            raise ApiProblem(500, "delivery_failed", str(exc), current_snapshot=dto(store.snapshot())) from exc
+
+        return {
+            "attempt_id": result.attempt_id,
+            "kind": result.kind,
+            "authorization_id": result.authorization_id,
+            "artifact_id": result.artifact_id,
+            "output_path": result.output_path,
+            "content_hash": result.content_hash,
+            "bytes_written": result.bytes_written,
+            "snapshot": fresh_and_publish(),
+        }
+
+    @app.post("/api/release/blogger")
+    async def release_blogger(body: BloggerReleaseRequest) -> dict[str, Any]:
+        _ensure_accepting(app)
+        current = store.snapshot()
+
+        try:
+            result = await asyncio.to_thread(
+                delivery_service.deliver_blogger,
+                body.expected_authority_revision,
+                body.blog_id,
+                body.title,
+            )
+        except AuthorizationRevokedError as exc:
+            raise ApiProblem(409, "authorization_revoked", str(exc), current_snapshot=dto(store.snapshot())) from exc
+        except RealizationIncompleteError as exc:
+            raise ApiProblem(409, "realization_stale", str(exc), current_snapshot=dto(store.snapshot())) from exc
+        except InvalidArtifactClosureError as exc:
+            raise ApiProblem(409, "invalid_closure", str(exc), current_snapshot=dto(store.snapshot())) from exc
+        except ConflictError as exc:
+            raise ApiProblem(409, "conflict", str(exc), current_snapshot=dto(store.snapshot())) from exc
+        except SourceAssetMissingError as exc:
+            raise ApiProblem(500, "asset_missing", str(exc), current_snapshot=dto(store.snapshot())) from exc
+        except Exception as exc:
+            raise ApiProblem(500, "delivery_failed", str(exc), current_snapshot=dto(store.snapshot())) from exc
+
+        return {
+            "attempt_id": result.attempt_id,
+            "kind": result.kind,
+            "authorization_id": result.authorization_id,
+            "artifact_id": result.artifact_id,
+            "outcome": result.outcome,
+            "destination_id": result.destination_id,
+            "destination_url": result.destination_url,
             "snapshot": fresh_and_publish(),
         }
 
