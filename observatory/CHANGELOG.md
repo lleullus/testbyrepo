@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Include displayed Scope and legacy history in snapshot freshness so additions, edits and removals refresh stored projections without promoting history into current authority. Unrelated product-code changes still leave snapshots unchanged.
+
 ## 0.3.0
 
 - Read canonical `docs/planning/work/<slug>/SCOPE.md` artifacts using `iis-scope/v1` and bound Thesis SHA-256 sources.

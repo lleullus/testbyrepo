@@ -81,6 +81,8 @@ Use the least costly valid evidence consistent with the boundary:
 
 A mock, stub, canned response, seeded terminal state or surrogate readback cannot prove the real boundary it replaces. State environment, identity, initial conditions, observation window, cleanup and limits. A test pass or internal variable is not an external effect readback.
 
+Retain the smallest repeatable, inexpensive check that catches the actual falsified assumption in the existing project test/build/CI path when it protects against a plausible regression. Do not mandate every test layer, a test-only API or a new framework. If a durable check is unsuitable, retain the exact reproduction/evidence locator and limit in the existing result. A regression check does not replace independent real-boundary verification.
+
 Before completion, repeat the same ordinary-tool admission and currentness check against the exact `plan_review_path`. Then verify all of the following against the latest load-bearing source/runtime identity:
 
 - every Scope obligation and Non-Goal boundary remains unchanged;

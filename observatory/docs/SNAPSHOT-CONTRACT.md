@@ -24,7 +24,7 @@ iis-observatory snapshot <repo> --check
 Freshness outcomes:
 
 - `CURRENT` — stored source fingerprint equals the current source fingerprint and the Markdown checksum matches the JSON record.
-- `STALE` — canonical inputs or displayed Adaptive provenance changed after generation.
+- `STALE` — canonical inputs, displayed Scope/legacy history, or displayed Adaptive provenance changed after generation.
 - `MISSING` — neither durable snapshot file exists.
 - `INCONSISTENT` — canonical planning is inconsistent, the pair is incomplete/corrupt, or the stored projection contract is invalid.
 
@@ -32,7 +32,7 @@ Exit codes are `0`, `6`, `7`, and `3` respectively.
 
 ## Source fingerprint
 
-Freshness is content-based, not Git-HEAD-based. The fingerprint includes the current direct `SCOPE.md`, its bound Thesis sources, optional bound Transition Authority sources, the current work area (including `PLAN.md`), and displayed Adaptive provenance.
+Freshness is content-based, not Git-HEAD-based. The fingerprint includes the current direct `SCOPE.md`, its bound Thesis sources, optional bound Transition Authority sources, the current work area (including `PLAN.md`), displayed Scope/legacy history files, and displayed Adaptive provenance. Adding, changing or removing a displayed history artifact invalidates the snapshot; historical files remain read-only projection inputs, not current product or runtime authority. `CURRENT` establishes projection freshness, not continued runtime correctness of a done Scope.
 
 It excludes `docs/planning/observatory/**`. Therefore committing a generated snapshot, or committing unrelated repository files, does not by itself make the snapshot stale.
 

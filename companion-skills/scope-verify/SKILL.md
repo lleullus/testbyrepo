@@ -75,6 +75,8 @@ Only Coverage `COMPLETE` with no unresolved material finding/evidence gap permit
 
 When these conditions hold, Main uses ordinary file-edit tools to change only the exact Scope's single `Status: ready` item to `Status: done`, then reads it back and confirms the intended status-only change and canonical validity. Preserve the original verifier verdict, Coverage result, pre-write Scope identity and actual write/readback evidence in the completion response or existing result artifact. Do not rewrite either independent result or create a new completion store. If the edit/readback is unavailable or unexpected, report completion recording as blocked/uncertain, not done; inspect current bytes before any correction and never overwrite unrelated changes. Already-done historical bytes are not a new completion event. These checks provide procedural accountability, not atomic locking or host-enforced authorization; if concurrent mutation prevents current attribution, withhold the write.
 
+When an existing project result location is available, preserve the completion references there with the exact Scope revision and original report/primary-evidence paths so later work can discover them. If references are session-local or retention is unavailable, state that limit instead of claiming durable retrieval. Do not copy a second verdict, modify the completed Scope or introduce a new evidence store.
+
 Scope completion remains distinct from the entire approved request: Main checks all remaining required outcomes and the requested stop boundary under `iis-workflow`.
 
 ## Required result report

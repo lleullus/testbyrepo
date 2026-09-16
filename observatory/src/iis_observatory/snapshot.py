@@ -201,6 +201,9 @@ def collect_snapshot_inputs(
         path_value = authority.get("path")
         if path_value:
             add_file(Path(path_value), "scope-authority")
+    for artifact in (*state.scope_history, *state.legacy_history):
+        if artifact.path not in paths:
+            add_file(artifact.path, "displayed-history")
     adaptive = adaptive or collect_adaptive_provenance(repository)
     for item in [*adaptive.get("mandates", []), *adaptive.get("traces", [])]:
         path_value = item.get("path")
@@ -432,7 +435,7 @@ def check_snapshot(
         markdown_path,
         current_fingerprint,
         stored_fingerprint,
-        "Canonical planning or displayed Adaptive provenance changed after snapshot generation.",
+        "Planning inputs, displayed history or Adaptive provenance changed after snapshot generation.",
         tuple(changes),
     )
 

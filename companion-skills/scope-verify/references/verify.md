@@ -64,7 +64,7 @@ Purpose/success condition -> observation(s)
 Failure/recovery/preservation condition -> observation(s)
 ```
 
-These are navigation aids, not a second schema or evidence store. Every authored Acceptance scenario remains in the adjudication denominator. A real artifact/document promise may use canonical inspection; a runtime, state-transition, ordering, persistence, UI or external-effect promise requires its real boundary and authoritative readback.
+These are navigation aids, not a second schema or evidence store. Link each obligation to the scenario block and primary evidence that discriminate it; keep observation limits in that block so Coverage can find what was and was not established without a second matrix. Every authored Acceptance scenario remains in the adjudication denominator. A real artifact/document promise may use canonical inspection; a runtime, state-transition, ordering, persistence, UI or external-effect promise requires its real boundary and authoritative readback.
 
 ## 5. Integrated scenario blocks
 
@@ -103,6 +103,8 @@ Derived execution:
 
 Ground `Nearest nonconforming state` in a real failure of a current implementation assumption. Ground `Discriminating observation` in the result that differs between conforming and failing behavior. Ground `Sensitivity activation` in the initial state and authorized action that exposes that difference. A happy path that would also pass the failing implementation is insufficient.
 
+For a reachable ordering/race failure, activate the relevant competing writer or controlled interleaving within authorized effects and inspect the authoritative final state/invariant; repeated sequential happy paths do not discriminate that failure.
+
 For every material finding supplied by navigation or discovered while grounding/executing, assign one verifier-owned disposition:
 
 ```text
@@ -127,6 +129,8 @@ Obtain the smallest sufficient current-target primary evidence for every authore
 5. source/diff/unit checks and ancillary doubles only as supporting explanation.
 
 A mock, stub, canned response, seeded terminal state, hand-written event or surrogate readback cannot prove the real boundary it replaces. An ancillary double does not invalidate a separate real boundary; never claim the doubled boundary was verified. Internal success or HTTP acceptance is not proof of an external effect.
+
+Preserve conflicting observations across retries. A later successful run does not erase an attributable product contradiction; an unexplained conflict in mechanism, target or attribution leaves the affected evidence INCONCLUSIVE rather than authorizing retry-until-PASS. Use the smallest observation that separates those causes, retain both raw results and apply the existing verdicts; add no flaky verdict or automatic retry loop.
 
 ### Corrective re-entry and evidence breadth
 

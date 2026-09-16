@@ -85,6 +85,8 @@ Route by the decision that must change, not by words such as owner, persistence 
 
 Corrective re-entry preserves the current implementation actor/model/effort/mode, including after material method revision. Only an applicable explicit user change changes that selection; unavailability does not authorize silent substitution or DIRECT fallback. A fresh invocation preserves the selection, not the prior worker's lifetime, and waits for prior effects to settle or be safely contained. Continuity never overrides stage-only, stop, no-reentry or external-effect limits.
 
+If a later change breaks behavior recorded by a done Scope, preserve that historical completion and connect its relevant contract/evidence to the current repair or preservation Scope. For example, a shared serializer regression does not reopen every earlier done Scope or carry their PASS forward; apply the current obligations and route the actual changed decision above. Historical evidence alone creates no new current requirement.
+
 Main may dispatch verifier follow-up and forward impact statements, but must not declare an obligation unaffected, carry forward a prior PASS or decide that reduced observations suffice for VERIFIED. The independent verifier owns evidence sufficiency; Coverage owns whether its subsequent read-only search can be targeted. Apply their existing reports and continuation rules, not a new controller or approval layer.
 
 Do not repeat the same owner with materially unchanged target, authority, evidence and route. An available discriminating observation not yet attempted is useful work, not a retry loop. Respect disabled stages and no-reentry instructions. Unknown evidence remains unknown; failed user requirements are not candidates merely because they are expensive.

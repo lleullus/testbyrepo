@@ -43,7 +43,7 @@ Contains projection metadata only:
 - `sourceFingerprint`, `sourceFingerprintAlgorithm`;
 - `freshness`: `current-at-generation` in newly written files;
 - `consistency`: `consistent` for accepted writes;
-- `inputs`: repository-relative source file identities and hashes, including bound Thesis/Transition sources;
+- `inputs`: repository-relative source file identities and hashes, including bound Thesis/Transition sources and displayed Scope/legacy history; history is a projection dependency, not current authority;
 - informational generation-time `git` metadata;
 - snapshot filenames and the Markdown SHA-256.
 

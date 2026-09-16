@@ -39,7 +39,7 @@ Include:
 - `## Product Authority`: one line per exact project-local Thesis source, `- /absolute/path sha256:<full UTF-8 digest>`. Reuse original revisions; do not create a per-Scope copy.
 - `## Transition Authority` only when an approved transition contract applies: bind its exact project-local original with the same path/SHA-256 syntax. Record applicability, selected Block and relevant conditions in Outcome/Acceptance; a file hash does not grant approval or continuation authority.
 - `## Outcome`: actual current state and evidence, the selected result, includes/excludes and relevant dependencies in ordinary prose.
-- `## Acceptance`: observable scenarios sufficient to distinguish the promised result and applicable preservation/failure boundaries. Use meaningful subheadings when several scenarios are genuinely distinct.
+- `## Acceptance`: observable scenarios sufficient to distinguish the promised result and applicable preservation/failure boundaries. Use meaningful subheadings when several scenarios are genuinely distinct; reuse those headings with the exact Scope path/revision as local Plan and evidence anchors, without a global ID scheme.
 - `## Open Decisions` only when needed; any material current choice must be resolved before ready.
 
 Add transition, migration, external conditions or re-entry notes only when they change what can be promised or done. Do not require Owner/Workstreams/None filler for a single simple result. Do not copy full Thesis policies into Scope; explain their current application and reference the originals. Some repetition needed to express a concrete observation is not a second policy authority.

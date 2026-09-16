@@ -164,7 +164,7 @@ Delivery Progress
 iis-observatory snapshot ~/project/tax --check
 ```
 
-결과는 `CURRENT`, `STALE`, `MISSING`, `INCONSISTENT` 중 하나입니다. Freshness는 Git HEAD가 아니라 canonical planning 입력과 표시되는 Adaptive provenance의 content fingerprint로 판정하며 `docs/planning/observatory/**` 자체는 fingerprint에서 제외합니다.
+결과는 `CURRENT`, `STALE`, `MISSING`, `INCONSISTENT` 중 하나입니다. Freshness는 Git HEAD가 아니라 canonical planning 입력, 표시되는 Scope/legacy 이력 파일과 Adaptive provenance의 content fingerprint로 판정합니다. 표시 이력의 추가·수정·삭제도 갱신 대상이며, `docs/planning/observatory/**` 자체와 무관한 제품 코드는 제외합니다. `CURRENT`는 이 파생 상태판의 최신성이지 과거 `done` Scope의 현재 runtime 정상 동작 보장이 아닙니다.
 
 Adaptive Mandate/Trace가 존재하면 provenance로만 표시합니다. 파일에 `Status: active`가 기록돼 있어도 현재 요청의 Adaptive 활성화를 추론하지 않습니다. 세부 계약은 [`docs/SNAPSHOT-CONTRACT.md`](docs/SNAPSHOT-CONTRACT.md), JSON 계약은 [`docs/PROJECT-STATE-SCHEMA.md`](docs/PROJECT-STATE-SCHEMA.md)를 참고합니다.
 
