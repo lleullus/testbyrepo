@@ -10,6 +10,38 @@ const emit = defineEmits<{ rebaseline: [] }>()
 const snap = computed(() => store.server)
 const activeCount = computed(() => store.activeJobCount)
 const hasStoppable = computed(() => activeCount.value > 0)
+
+const statusLabel = computed(() => {
+  if (store.stream.status === 'DEGRADED') return 'DEGRADED / 재동기화 필요'
+  if (store.stream.status === 'CONNECTING') return 'CONNECTING'
+  return 'OPEN'
+})
+
+const genAriaLabel = computed(() => {
+  if (!store.hasCurrentSnapshot) return '재동기화 필요: 전체 생성 비활성화됨'
+  if (store.hasBlockingEdit) return '미저장 편집이 있어 생성할 수 없음'
+  if (!store.server?.baseline) return '기준(Baseline) 설정 필요'
+  return '전체 생성'
+})
+
+const reviewAriaLabel = computed(() => {
+  if (!store.hasCurrentSnapshot) return '재동기화 필요: 검토물 생성 비활성화됨'
+  if (!store.realizationComplete) return '컷 실체화 미완료'
+  if (store.hasBlockingEdit) return '미저장 편집이 있어 검토물을 생성할 수 없음'
+  return '검토물 생성'
+})
+
+const exportAriaLabel = computed(() => {
+  if (!store.hasCurrentSnapshot) return '재동기화 필요: PNG 내보내기 비활성화됨'
+  if (store.hasBlockingEdit) return '미저장 편집이 있어 내보낼 수 없음'
+  return 'PNG 내보내기'
+})
+
+const bloggerAriaLabel = computed(() => {
+  if (!store.hasCurrentSnapshot) return '재동기화 필요: Blogger 발행 비활성화됨'
+  if (store.hasBlockingEdit) return '미저장 편집이 있어 발행할 수 없음'
+  return 'Blogger 발행'
+})
 </script>
 
 <template>
@@ -56,7 +88,7 @@ const hasStoppable = computed(() => activeCount.value > 0)
       <button
         class="header-btn gen-btn"
         :disabled="!store.canGenerate"
-        aria-label="전체 생성"
+        :aria-label="genAriaLabel"
         @click="store.generateAll()"
       >생성</button>
 
@@ -64,7 +96,7 @@ const hasStoppable = computed(() => activeCount.value > 0)
       <button
         class="header-btn review-btn"
         :disabled="!store.canMaterializeReview"
-        aria-label="검토물 생성"
+        :aria-label="reviewAriaLabel"
         @click="store.materializeReview()"
       >검토</button>
 
@@ -72,7 +104,7 @@ const hasStoppable = computed(() => activeCount.value > 0)
       <button
         class="header-btn export-btn"
         :disabled="!store.canRelease"
-        :aria-label="store.hasBlockingEdit ? '미저장 편집이 있어 내보낼 수 없음' : 'PNG 내보내기'"
+        :aria-label="exportAriaLabel"
         @click="store.exportPng()"
       >내보내기</button>
 
@@ -80,17 +112,20 @@ const hasStoppable = computed(() => activeCount.value > 0)
       <button
         class="header-btn blogger-btn"
         :disabled="!store.canRelease"
-        :aria-label="store.hasBlockingEdit ? '미저장 편집이 있어 발행할 수 없음' : 'Blogger 발행'"
+        :aria-label="bloggerAriaLabel"
         @click="store.releaseBlogger()"
       >발행</button>
 
       <!-- SSE connection indicator -->
       <span
         class="stream-indicator"
-        :class="store.stream.state"
-        :aria-label="`연결: ${store.stream.state}`"
+        :class="store.stream.status.toLowerCase()"
+        :aria-label="`연결: ${statusLabel}`"
         role="status"
-      >●</span>
+      >
+        <span class="stream-dot" aria-hidden="true">●</span>
+        <span class="stream-label">{{ statusLabel }}</span>
+      </span>
 
       <button
         class="header-toggle inspector-toggle"
@@ -217,12 +252,17 @@ const hasStoppable = computed(() => activeCount.value > 0)
 }
 
 .stream-indicator {
-  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
   line-height: 1;
+  white-space: nowrap;
 }
 .stream-indicator.open { color: var(--color-current); }
-.stream-indicator.connecting, .stream-indicator.reconnecting { color: var(--color-stale); }
-
+.stream-indicator.connecting { color: var(--color-stale); }
+.stream-indicator.degraded { color: var(--color-stale); }
 @media (max-width: 1099px) {
   .header {
     display: grid;
@@ -258,6 +298,7 @@ const hasStoppable = computed(() => activeCount.value > 0)
   .gen-btn { grid-area: generate; }
   .review-btn { grid-area: review; }
   .stream-indicator { grid-area: stream; align-self: center; justify-self: center; }
+  .stream-indicator .stream-label { display: none; }
   .inspector-toggle { grid-area: right; }
   .header-btn,
   .header-toggle {

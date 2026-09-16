@@ -5,6 +5,7 @@ import type { CutDTO, StudioSnapshotDTO, CutId } from '@/api/contracts'
 /** A cut is CURRENT only when desired == realized and both are non-null. */
 export function isCutCurrent(cut: CutDTO): boolean {
   return (
+    cut.currency === 'CURRENT' &&
     cut.desired_revision !== null &&
     cut.realized_revision !== null &&
     cut.desired_revision === cut.realized_revision

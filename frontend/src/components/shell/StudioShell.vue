@@ -28,7 +28,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="studio-shell" v-if="store.hasCurrentSnapshot">
+  <div class="studio-shell" v-if="store.server !== null">
     <StudioHeader class="studio-header" @rebaseline="openBaseline" />
     <aside
       class="left-panel"

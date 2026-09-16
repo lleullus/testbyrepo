@@ -1,6 +1,6 @@
 /** EventSource lifecycle and decoding — Plan §3.4 */
 
-import type { StudioSnapshotDTO } from './contracts'
+import { type StudioSnapshotDTO, isStudioSnapshotDTO } from './contracts'
 
 export interface StudioSnapshotEvent {
   type: 'studio.snapshot'
@@ -17,9 +17,11 @@ export interface SnapshotRequiredEvent {
 
 export type StudioEvent = StudioSnapshotEvent | SnapshotRequiredEvent
 
+export type StudioStreamTransportState = 'connecting' | 'open' | 'reconnecting'
+
 export interface StudioEventSourceOptions {
   onEvent: (event: StudioEvent) => void
-  onStateChange: (state: 'connecting' | 'open' | 'reconnecting') => void
+  onStateChange: (state: StudioStreamTransportState) => void
 }
 
 export function createStudioEventSource(opts: StudioEventSourceOptions): {
@@ -48,7 +50,22 @@ export function createStudioEventSource(opts: StudioEventSourceOptions): {
           schema: string
           boot_id: string
           authority_revision: number
-          snapshot: StudioSnapshotDTO
+          snapshot: unknown
+        }
+        if (
+          !data ||
+          typeof data !== 'object' ||
+          data.schema !== 'studio-event/v1' ||
+          typeof data.boot_id !== 'string' ||
+          data.boot_id.length === 0 ||
+          !Number.isSafeInteger(data.authority_revision) ||
+          data.authority_revision < 0 ||
+          !data.snapshot ||
+          typeof data.snapshot !== 'object' ||
+          !isStudioSnapshotDTO(data.snapshot) ||
+          data.snapshot.authority_revision !== data.authority_revision
+        ) {
+          return
         }
         opts.onEvent({
           type: 'studio.snapshot',
@@ -68,6 +85,16 @@ export function createStudioEventSource(opts: StudioEventSourceOptions): {
           schema: string
           reason: 'boot-changed' | 'replay-miss' | 'revision-gap'
           authority_revision: number
+        }
+        if (
+          !data ||
+          typeof data !== 'object' ||
+          data.schema !== 'studio-event/v1' ||
+          (data.reason !== 'boot-changed' && data.reason !== 'replay-miss' && data.reason !== 'revision-gap') ||
+          !Number.isSafeInteger(data.authority_revision) ||
+          data.authority_revision < 0
+        ) {
+          return
         }
         opts.onEvent({
           type: 'snapshot-required',

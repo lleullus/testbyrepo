@@ -2,14 +2,15 @@
 
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
-import type {
-  CutId,
-  CutIntentDTO,
-  CompositionStateDTO,
-  BaselineStructureDTO,
-  ReviewArtifactDTO,
-  Sha256,
-  StudioSnapshotDTO,
+import {
+  type CutId,
+  type CutIntentDTO,
+  type CompositionStateDTO,
+  type BaselineStructureDTO,
+  type ReviewArtifactDTO,
+  type Sha256,
+  type StudioSnapshotDTO,
+  isStudioSnapshotDTO,
 } from '@/api/contracts'
 import {
   ApiError,
@@ -61,9 +62,14 @@ export const useStudioStore = defineStore('studio', () => {
   const jobsUi = reactive<Record<string, { stopRequested: boolean }>>({})
   const selection = reactive<StudioClientState['selection']>({ cutId: 1 as CutId })
   const stream = reactive<StudioClientState['stream']>({
-    state: 'connecting',
-    gapFetchPending: false,
+    status: 'CONNECTING',
+    resyncPending: false,
+    lastEventId: undefined,
   })
+  const resyncRequired = ref(false)
+  const transportOpen = ref(false)
+  let minRequiredRevision = 0
+  let inFlightResync: Promise<void> | null = null
   const narrowMedia = typeof window === 'undefined'
     ? null
     : window.matchMedia('(max-width: 1099px)')
@@ -78,9 +84,14 @@ export const useStudioStore = defineStore('studio', () => {
 
   // --- Computed selectors ---
   const hasCurrentSnapshot = computed(
-    () => server.value !== null && !stream.gapFetchPending,
+    () =>
+      server.value !== null &&
+      stream.status === 'OPEN' &&
+      !resyncRequired.value &&
+      !stream.resyncPending,
   )
 
+  const canMutateAuthority = computed(() => hasCurrentSnapshot.value)
   const realizationComplete = computed(() => {
     if (!server.value) return false
     return isRealizationComplete([...server.value.cuts])
@@ -111,18 +122,17 @@ export const useStudioStore = defineStore('studio', () => {
 
   const canMaterializeReview = computed(() => {
     return (
-      hasCurrentSnapshot.value &&
+      canMutateAuthority.value &&
       realizationComplete.value &&
       !hasBlockingEdit.value
     )
   })
 
   const canGenerate = computed(() => {
-    return hasCurrentSnapshot.value && !hasBlockingEdit.value && server.value?.baseline !== null
+    return canMutateAuthority.value && !hasBlockingEdit.value && Boolean(server.value?.baseline)
   })
-
   const canAuthorize = computed(() => {
-    if (!ui.review || !server.value || !hasCurrentSnapshot.value || hasBlockingEdit.value) {
+    if (!ui.review || !server.value || !canMutateAuthority.value || hasBlockingEdit.value) {
       return false
     }
     const displayed = ui.review
@@ -152,7 +162,7 @@ export const useStudioStore = defineStore('studio', () => {
   })
 
   const canRelease = computed(() => {
-    if (!server.value || !hasCurrentSnapshot.value || hasBlockingEdit.value) {
+    if (!server.value || !canMutateAuthority.value || hasBlockingEdit.value) {
       return false
     }
     const activeAuth = server.value.release_authorization?.active
@@ -164,9 +174,17 @@ export const useStudioStore = defineStore('studio', () => {
 
   // --- Internal helpers ---
 
-  function applySnapshot(snap: StudioSnapshotDTO) {
-    if (server.value && snap.authority_revision <= server.value.authority_revision) {
-      return // monotonic — ignore older/equal
+  function applySnapshot(snap: unknown): boolean {
+    if (!isStudioSnapshotDTO(snap)) {
+      return false
+    }
+    if (server.value) {
+      if (snap.authority_revision < server.value.authority_revision) {
+        return false // monotonic — ignore older
+      }
+      if (snap.authority_revision === server.value.authority_revision) {
+        return true // acceptable/current, do not reapply or change drafts
+      }
     }
     server.value = snap
     // Mark any affected draft as base-changed if the server moved ahead
@@ -195,6 +213,7 @@ export const useStudioStore = defineStore('studio', () => {
         }
       }
     }
+    return true
   }
 
   function addToast(text: string, role: 'status' | 'alert' = 'status') {
@@ -206,23 +225,87 @@ export const useStudioStore = defineStore('studio', () => {
     }, 6000)
   }
 
-  // --- SSE ---
+  // --- Recovery & SSE ---
   let eventSource: { close(): void } | null = null
+
+  function requestResync(): Promise<void> {
+    if (inFlightResync) return inFlightResync
+
+    stream.resyncPending = true
+    inFlightResync = (async () => {
+      try {
+        const snap = await fetchSnapshot()
+        if (snap.authority_revision < minRequiredRevision) {
+          return
+        }
+        const accepted = applySnapshot(snap)
+        if (accepted && snap.authority_revision >= minRequiredRevision) {
+          minRequiredRevision = Math.max(minRequiredRevision, snap.authority_revision)
+          if (transportOpen.value) {
+            resyncRequired.value = false
+            stream.status = 'OPEN'
+          }
+        }
+      } catch {
+        // recovery failure: clear only resyncPending; remain DEGRADED and latched
+      } finally {
+        stream.resyncPending = false
+        inFlightResync = null
+      }
+    })()
+
+    return inFlightResync
+  }
 
   function handleEvent(event: StudioEvent) {
     if (event.type === 'studio.snapshot') {
-      applySnapshot(event.snapshot)
+      const snap = event.snapshot
+      if (
+        !snap ||
+        !isStudioSnapshotDTO(snap) ||
+        event.authority_revision !== snap.authority_revision
+      ) {
+        return
+      }
+      const currentRev = server.value?.authority_revision ?? 0
+      if (snap.authority_revision < currentRev || snap.authority_revision < minRequiredRevision) {
+        return
+      }
+      const accepted = applySnapshot(snap)
+      if (accepted) {
+        minRequiredRevision = Math.max(minRequiredRevision, snap.authority_revision)
+        if (transportOpen.value) {
+          resyncRequired.value = false
+          stream.status = 'OPEN'
+        }
+      }
     } else if (event.type === 'snapshot-required') {
-      if (!stream.gapFetchPending) {
-        stream.gapFetchPending = true
-        fetchSnapshot()
-          .then((snap) => {
-            applySnapshot(snap)
-            stream.gapFetchPending = false
-          })
-          .catch(() => {
-            stream.gapFetchPending = false
-          })
+      stream.status = 'DEGRADED'
+      resyncRequired.value = true
+      minRequiredRevision = Math.max(minRequiredRevision, event.authority_revision)
+      requestResync()
+    }
+  }
+
+  function handleTransportState(s: 'connecting' | 'open' | 'reconnecting') {
+    if (s === 'open') {
+      transportOpen.value = true
+      if (resyncRequired.value) {
+        stream.status = 'DEGRADED'
+        requestResync()
+      } else {
+        stream.status = 'OPEN'
+      }
+    } else if (s === 'reconnecting') {
+      transportOpen.value = false
+      stream.status = 'DEGRADED'
+      resyncRequired.value = true
+    } else if (s === 'connecting') {
+      transportOpen.value = false
+      if (resyncRequired.value) {
+        stream.status = 'DEGRADED'
+      } else {
+        stream.status = 'CONNECTING'
       }
     }
   }
@@ -230,15 +313,16 @@ export const useStudioStore = defineStore('studio', () => {
   function connectSSE() {
     eventSource = createStudioEventSource({
       onEvent: handleEvent,
-      onStateChange: (s) => {
-        stream.state = s
-      },
+      onStateChange: handleTransportState,
     })
   }
 
   function disconnectSSE() {
     eventSource?.close()
     eventSource = null
+    transportOpen.value = false
+    stream.status = 'DEGRADED'
+    resyncRequired.value = true
   }
 
   let responsiveListenerAttached = false
@@ -253,6 +337,7 @@ export const useStudioStore = defineStore('studio', () => {
   async function loadStudio() {
     const snap = await fetchSnapshot()
     server.value = snap
+    minRequiredRevision = snap.authority_revision
     if (narrowMedia && !responsiveListenerAttached) {
       narrowMedia.addEventListener('change', handleResponsiveChange)
       responsiveListenerAttached = true
@@ -268,6 +353,10 @@ export const useStudioStore = defineStore('studio', () => {
     mutationId: string,
     execute: () => Promise<{ accepted_mutation_id: string; snapshot: StudioSnapshotDTO }>,
   ) {
+    if (!canMutateAuthority.value) {
+      addToast('재동기화가 필요합니다. 연결 및 스냅샷 복구 후 다시 시도하세요.', 'alert')
+      return
+    }
     if (authoritativeEditLane.inFlight) return // max in-flight = 1
 
     authoritativeEditLane.inFlight = { kind, draftKey, mutationId }
@@ -388,6 +477,7 @@ export const useStudioStore = defineStore('studio', () => {
   }
 
   function processNextLaneItem() {
+    if (!canMutateAuthority.value) return
     if (authoritativeEditLane.inFlight) return
     if (!server.value) return
 
@@ -463,6 +553,10 @@ export const useStudioStore = defineStore('studio', () => {
   function saveBaselineDraft() {
     const draft = drafts.baseline
     if (!draft || !server.value || saveIsBlocked('baseline')) return
+    if (!canMutateAuthority.value) {
+      addToast('재동기화가 필요합니다. 연결 및 스냅샷 복구 후 다시 시도하세요.', 'alert')
+      return
+    }
     const mid = draft.mutationId
     const baselineId = `bl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     dispatchEdit('baseline', 'baseline', mid, () =>
@@ -479,6 +573,10 @@ export const useStudioStore = defineStore('studio', () => {
   function saveIntentDraft(cutId: CutId) {
     const draft = drafts.intents[cutId]
     if (!draft || !server.value || saveIsBlocked(`intent-${cutId}`)) return
+    if (!canMutateAuthority.value) {
+      addToast('재동기화가 필요합니다. 연결 및 스냅샷 복구 후 다시 시도하세요.', 'alert')
+      return
+    }
     const mid = draft.mutationId
     dispatchEdit('intent', `intent-${cutId}`, mid, () =>
       postCutIntent(cutId, {
@@ -492,6 +590,10 @@ export const useStudioStore = defineStore('studio', () => {
   function saveCompositionDraft() {
     const draft = drafts.composition
     if (!draft || !server.value || saveIsBlocked('composition')) return
+    if (!canMutateAuthority.value) {
+      addToast('재동기화가 필요합니다. 연결 및 스냅샷 복구 후 다시 시도하세요.', 'alert')
+      return
+    }
     const mid = draft.mutationId
     dispatchEdit('composition', 'composition', mid, () =>
       putComposition({
@@ -508,6 +610,10 @@ export const useStudioStore = defineStore('studio', () => {
   function retrySave(draftKey: string) {
     const saveState = saves[draftKey]
     if (!saveState || (saveState.state !== 'failed' && saveState.state !== 'conflict' && saveState.state !== 'base-changed')) return
+    if (!canMutateAuthority.value) {
+      addToast('재동기화가 필요합니다. 연결 및 스냅샷 복구 후 다시 시도하세요.', 'alert')
+      return
+    }
     delete saves[draftKey]
     if (draftKey === 'baseline') {
       if (drafts.baseline) {
@@ -772,6 +878,7 @@ export const useStudioStore = defineStore('studio', () => {
     toasts,
     // Computed
     hasCurrentSnapshot,
+    canMutateAuthority,
     realizationComplete,
     hasAnyDraft,
     hasAnySaveProblem,
@@ -809,6 +916,7 @@ export const useStudioStore = defineStore('studio', () => {
     dispose,
     // Exposed for tests
     processNextLaneItem,
+    requestResync,
   }
 })
 

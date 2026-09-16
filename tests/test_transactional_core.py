@@ -56,8 +56,13 @@ def _seed_test_realization(
         new_rev = cur_rev + 1
         d_rev = con.execute("SELECT desired_revision FROM cuts WHERE cut_id = ?", (cut_id,)).fetchone()[0]
         con.execute(
-            "INSERT OR REPLACE INTO generation_jobs (job_id, cut_id, target_desired_revision, status, created_at, updated_at) VALUES (?, ?, ?, 'succeeded', ?, ?)",
-            (jid, cut_id, d_rev or 1, now_iso, now_iso),
+            "UPDATE cuts SET latest_generation_request_seq = latest_generation_request_seq + 1 WHERE cut_id = ?",
+            (cut_id,),
+        )
+        req_seq = con.execute("SELECT latest_generation_request_seq FROM cuts WHERE cut_id = ?", (cut_id,)).fetchone()[0]
+        con.execute(
+            "INSERT OR REPLACE INTO generation_jobs (job_id, cut_id, target_desired_revision, request_seq, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'succeeded', ?, ?)",
+            (jid, cut_id, d_rev or 1, req_seq, now_iso, now_iso),
         )
         con.execute(
             "INSERT OR REPLACE INTO generation_attempts (attempt_id, job_id, ordinal, status, started_at, finished_at, detail) VALUES (?, ?, 1, 'succeeded', ?, ?, 'Test seed')",
@@ -98,7 +103,7 @@ def test_acceptance_a_init_and_exactly_five_cuts(tmp_path: Path) -> None:
     assert res_snap.returncode == 0, res_snap.stderr
     snap = json.loads(res_snap.stdout)
 
-    assert snap["schema_version"] == 2
+    assert snap["schema_version"] == 4
     assert snap["authority_revision"] == 0
     cuts = snap["cuts"]
     assert len(cuts) == 5
@@ -304,7 +309,7 @@ def test_acceptance_c_composition_and_auth_revocation_atomicity(tmp_path: Path) 
     store = TransactionalStore.create_project(project_dir)
 
     # 1. Setup baseline & complete realizations so we can create an active release authorization
-    intents = {i: {"dialogue": f"line {i}"} for i in range(1, 6)}
+    intents = {i: {"prompt": f"prompt {i}", "dialogue": f"line {i}"} for i in range(1, 6)}
     rev = store.approve_structural_baseline(0, "BASE-01", {"title": "Ep 1"}, intents)
 
     closure = []
@@ -393,7 +398,7 @@ def test_acceptance_c_composition_and_auth_revocation_atomicity(tmp_path: Path) 
 def test_acceptance_c_concurrent_writers_conflict(tmp_path: Path) -> None:
     project_dir = tmp_path / "proj_c_concurrent"
     store = TransactionalStore.create_project(project_dir)
-    intents = {i: {"text": f"cut {i}"} for i in range(1, 6)}
+    intents = {i: {"prompt": f"cut prompt {i}", "dialogue": f"cut {i}"} for i in range(1, 6)}
     rev = store.approve_structural_baseline(0, "BASE-01", {}, intents)
 
     # Two writers attempt to write with the exact same expected_authority_revision (rev)
@@ -406,7 +411,7 @@ def test_acceptance_c_concurrent_writers_conflict(tmp_path: Path) -> None:
             r = local_store.accept_cut_intent(
                 expected_authority_revision=rev,
                 cut_id=1,
-                intent_payload={"text": f"intent from writer {writer_id}"},
+                intent_payload={"prompt": "prompt 1", "dialogue": f"intent from writer {writer_id}"},
             )
             results.append((writer_id, r))
         except ConflictError as ce:
@@ -431,7 +436,7 @@ def test_acceptance_c_concurrent_writers_conflict(tmp_path: Path) -> None:
     snap = store.snapshot()
     assert snap["authority_revision"] == rev + 1
     cut1_intent = [c for c in snap["cuts"] if c["cut_id"] == 1][0]["effective_intent"]
-    assert cut1_intent["text"] == f"intent from writer {winner_id}"
+    assert cut1_intent["dialogue"] == f"intent from writer {winner_id}"
 
 
 # ---------------------------------------------------------------------------
@@ -452,7 +457,7 @@ def test_acceptance_d_currency_and_complete_truth(tmp_path: Path) -> None:
         assert c["currency"] == "STALE"
 
     # Approve baseline rev 1
-    intents = {i: {"text": f"cut {i}"} for i in range(1, 6)}
+    intents = {i: {"prompt": f"prompt {i}", "dialogue": f"cut {i}"} for i in range(1, 6)}
     rev = store.approve_structural_baseline(0, "BASE-01", {}, intents)
 
     # Create dummy image files on disk for all 5 cuts
@@ -490,7 +495,7 @@ def test_acceptance_d_currency_and_complete_truth(tmp_path: Path) -> None:
 
     # Modify cut 3 intent to rev 2:
     # Even though valid asset-3 exists on disk, cut 3 has desired_revision=2 != realized_revision=1!
-    rev = store.accept_cut_intent(rev, 3, {"text": "cut 3 revised"})
+    rev = store.accept_cut_intent(rev, 3, {"prompt": "prompt 3", "dialogue": "cut 3 revised"})
     snap_stale = store.snapshot()
     cut3 = [c for c in snap_stale["cuts"] if c["cut_id"] == 3][0]
     assert cut3["desired_revision"] == 2
@@ -522,7 +527,7 @@ def test_acceptance_e_restart_authoritative_persistence(tmp_path: Path) -> None:
 
     # Write all truth dimensions:
     # 1. Baseline & intents
-    intents = {i: {"text": f"c{i}"} for i in range(1, 6)}
+    intents = {i: {"prompt": f"prompt {i}", "dialogue": f"c{i}"} for i in range(1, 6)}
     rev = store.approve_structural_baseline(0, "BASE-E", {"meta": "data"}, intents)
 
     # 2. Composition
@@ -592,7 +597,7 @@ def test_acceptance_f_interrupted_job_does_not_revoke_desired_intent(tmp_path: P
     project_dir = tmp_path / "proj_f1"
     store = TransactionalStore.create_project(project_dir)
 
-    intents = {i: {"text": f"panel {i}", "prompt": f"prompt for panel {i}"} for i in range(1, 6)}
+    intents = {i: {"prompt": f"prompt for panel {i}", "dialogue": f"panel {i}"} for i in range(1, 6)}
     rev = store.approve_structural_baseline(0, "BASE-F", {}, intents)
 
     from comic_new.generation import GenerationService
@@ -623,7 +628,7 @@ def test_acceptance_f_interrupted_job_does_not_revoke_desired_intent(tmp_path: P
     # Accepted desired intent is preserved and NOT retracted:
     cut1 = [c for c in snap["cuts"] if c["cut_id"] == 1][0]
     assert cut1["desired_revision"] == 1
-    assert cut1["effective_intent"] == {"text": "panel 1", "prompt": "prompt for panel 1"}
+    assert cut1["effective_intent"] == {"dialogue": "panel 1", "prompt": "prompt for panel 1"}
     assert cut1["currency"] == "STALE"
 
 
@@ -631,7 +636,7 @@ def test_acceptance_f_stale_realization_commit_rejection(tmp_path: Path) -> None
     project_dir = tmp_path / "proj_f2"
     store = TransactionalStore.create_project(project_dir)
 
-    intents = {i: {"text": f"panel {i}", "prompt": f"prompt for panel {i}"} for i in range(1, 6)}
+    intents = {i: {"prompt": f"prompt for panel {i}", "dialogue": f"panel {i}"} for i in range(1, 6)}
     rev = store.approve_structural_baseline(0, "BASE-F2", {}, intents)
 
     from comic_new.generation import GenerationService
@@ -647,7 +652,7 @@ def test_acceptance_f_stale_realization_commit_rejection(tmp_path: Path) -> None
     rev = store.accept_cut_intent(
         store.snapshot()["authority_revision"],
         cut_id=2,
-        intent_payload={"text": "panel 2 revised", "prompt": "revised prompt"},
+        intent_payload={"prompt": "revised prompt", "dialogue": "panel 2 revised"},
     )
 
     cand_path = Path(claimed["staging_path"])
@@ -680,7 +685,7 @@ def test_acceptance_f_delivery_truth_separation(tmp_path: Path) -> None:
     project_dir = tmp_path / "proj_f3"
     store = TransactionalStore.create_project(project_dir)
 
-    intents = {i: {"text": f"c{i}"} for i in range(1, 6)}
+    intents = {i: {"prompt": f"prompt {i}", "dialogue": f"c{i}"} for i in range(1, 6)}
     rev = store.approve_structural_baseline(0, "BASE-F3", {}, intents)
 
     closure = []
@@ -717,3 +722,41 @@ def test_acceptance_f_delivery_truth_separation(tmp_path: Path) -> None:
     )
     snap2 = store.snapshot()
     assert snap2["delivery_attempts"][0]["outcome"] == "confirmed_success"
+
+
+def test_plan002_enqueue_revokes_active_authorization_and_blocks_review(tmp_path: Path) -> None:
+    project_dir = tmp_path / "proj_plan002_revocation"
+    store = TransactionalStore.create_project(project_dir)
+
+    intents = {i: {"prompt": f"prompt {i}", "dialogue": f"c{i}"} for i in range(1, 6)}
+    rev = store.approve_structural_baseline(0, "BASE-REV", {}, intents)
+
+    closure = []
+    for cid in range(1, 6):
+        rev = _seed_test_realization(store, rev, cid, f"a-{cid}", f"/p/{cid}", f"h-{cid}")
+        closure.append({"cut_id": cid, "realized_revision": 1, "asset_id": f"a-{cid}"})
+
+    rev = store.register_review_artifact(rev, "ART-REV", "hash-rev", 0, closure)
+    rev = store.authorize_release(rev, "AUTH-REV", "ART-REV", "hash-rev")
+
+    snap = store.snapshot()
+    assert snap["release_authorization"]["active"]["authorization_id"] == "AUTH-REV"
+
+    # Same-revision regeneration enqueue on cut 1
+    rev, jobs = store.enqueue_generation_jobs(rev, cut_id=1)
+    assert jobs[0]["request_seq"] == 2
+
+    snap_after = store.snapshot()
+    # Active authorization is atomically revoked in enqueue transaction
+    assert snap_after["release_authorization"]["history"][0]["authorization_id"] == "AUTH-REV"
+    assert snap_after["release_authorization"]["history"][0]["revoked_authority_revision"] == rev
+    assert snap_after["cuts"][0]["latest_generation_request_seq"] == 2
+    assert snap_after["cuts"][0]["currency"] == "STALE"
+    assert snap_after["realization_complete"]["complete"] is False
+
+    # Review registration and release authorization reject while cut 1 latest sequence is queued
+    with pytest.raises(RealizationIncompleteError, match="Cut 1 latest generation sequence 2 is not succeeded"):
+        store.register_review_artifact(rev, "ART-REV-2", "hash-rev-2", 0, closure)
+
+    with pytest.raises(RealizationIncompleteError, match="Cut 1 latest generation sequence 2 is not succeeded"):
+        store.authorize_release(rev, "AUTH-REV-2", "ART-REV", "hash-rev")

@@ -75,7 +75,7 @@ def setup_project_with_five_current_cuts(
     Returns (store, authority_revision, [(asset_id, abs_path, sha256), ...]).
     """
     store = TransactionalStore.create_project(project_dir)
-    intents = {i: {"text": f"Cut intent {i}"} for i in range(1, 6)}
+    intents = {i: {"prompt": f"Cut prompt {i}", "dialogue": f"Cut intent {i}"} for i in range(1, 6)}
     rev = store.approve_structural_baseline(0, "BASE-01", {}, intents)
 
     if cut_colors is None:
@@ -363,7 +363,7 @@ def test_scenario_4_currency_gate_rejected_if_not_current(tmp_path: Path, font_p
     rev, comp_rev = store.accept_composition(rev, 0, valid_comp)
 
     # Invalidate cut 4 by accepting new cut intent (desired_revision becomes 2)
-    rev = store.accept_cut_intent(rev, 4, {"text": "Updated intent for cut 4"})
+    rev = store.accept_cut_intent(rev, 4, {"prompt": "Updated prompt 4", "dialogue": "Updated intent for cut 4"})
     service = CompositionService(store, font_path)
     with pytest.raises(RealizationIncompleteError):
         service.materialize(rev, comp_rev)
@@ -394,7 +394,7 @@ def test_scenario_5_canonical_pixels_and_identity_binding(tmp_path: Path, font_p
                 "y_pct": 2.0,
                 "w_pct": 30.0,
                 "h_pct": 6.0,
-                "text": "웹툰 대사 1",
+                    "text": "Cut intent 1",
                 "font_size_pct": 2.0,
                 "line_spacing_pct": 20.0,
                 "text_align": "center",
@@ -412,7 +412,7 @@ def test_scenario_5_canonical_pixels_and_identity_binding(tmp_path: Path, font_p
                 "y_pct": 45.0,
                 "w_pct": 40.0,
                 "h_pct": 8.0,
-                "text": "Multi-line\nDialogue Text",
+                    "text": "Cut intent 3",
                 "font_size_pct": 2.2,
                 "line_spacing_pct": 25.0,
                 "text_align": "left",
@@ -566,7 +566,7 @@ def test_scenario_7_immutability_editor_change_preserves_old_artifact(tmp_path: 
                 "y_pct": 5.0,
                 "w_pct": 30.0,
                 "h_pct": 10.0,
-                "text": "Initial Text A",
+                "text": "Cut intent 1",
                 "font_size_pct": 2.0,
                 "line_spacing_pct": 20.0,
                 "text_align": "center",
@@ -585,9 +585,9 @@ def test_scenario_7_immutability_editor_change_preserves_old_artifact(tmp_path: 
     initial_bytes = art_a.path.read_bytes()
     initial_hash = hashlib.sha256(initial_bytes).hexdigest()
 
-    # Now change editor state
+    # Now change editor state (gap_px or geometry, preserving current dialogue so cut remains CURRENT)
     comp_b = dict(comp_a)
-    comp_b["bubbles"] = [dict(comp_a["bubbles"][0], text="Modified Text B")]
+    comp_b["gap_px"] = 15
     rev, comp_rev_b = store.accept_composition(rev + 1, comp_rev_a, comp_b)
 
     # Verify artifact A file is UNTOUCHED
@@ -757,7 +757,7 @@ def test_scenario_9b_realization_change_after_registration(tmp_path: Path, font_
 
     # Registration incremented authority revision! Get fresh rev
     rev = store.snapshot()["authority_revision"]
-    rev = store.accept_cut_intent(rev, 3, {"text": "Updated intent 3"})
+    rev = store.accept_cut_intent(rev, 3, {"prompt": "Updated prompt 3", "dialogue": "Updated intent 3"})
     new_png = create_solid_cut_png(1024, 1536, (128, 128, 128))
     new_hash = hashlib.sha256(new_png).hexdigest()
     new_asset_id = f"asset-cut-3-new-{new_hash[:8]}"
@@ -925,7 +925,7 @@ def test_scenario_11_downstream_identity_boundary(tmp_path: Path, font_path: Pat
                 "y_pct": 25.0,
                 "w_pct": 25.0,
                 "h_pct": 8.0,
-                "text": "Downstream Proof",
+                "text": "Cut intent 2",
                 "font_size_pct": 2.0,
                 "line_spacing_pct": 20.0,
                 "text_align": "center",
@@ -1004,3 +1004,182 @@ print("NEW_PROCESS_READBACK_SUCCESS")
     res = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert res.returncode == 0, f"Process failed: {res.stderr}"
     assert "NEW_PROCESS_READBACK_SUCCESS" in res.stdout
+
+
+def test_scenario_13_race_enqueue_before_registration_fails_and_preserves_artifact(tmp_path: Path, font_path: Path):
+    """Scenario 13 (PLAN-003): Race where same-revision regeneration is enqueued before registration.
+
+    1. Establish registered deterministic artifact art1 with 5 current cuts.
+    2. Invoke materialize() again (which would normally converge on art1 as a duplicate).
+    3. Interleave same-revision enqueue for cut 1 immediately before registration call.
+    4. Registration fails (conflict / stale authority rev); duplicate convergence runs.
+    5. Duplicate convergence asserts fresh snapshot sequence-currency and raises ArtifactNoLongerCurrentError.
+    6. Verify fresh snapshot is STALE/UNRESOLVED.
+    7. Verify historical read_artifact(art1.artifact_id) still succeeds and returns identical bytes.
+    8. Verify old artifact row, file, and all 5 cut canonical realization files/bytes remain intact.
+    """
+    project_dir = tmp_path / "proj_race_before_reg"
+    store, rev, assets = setup_project_with_five_current_cuts(project_dir)
+
+    comp = {
+        "schema_version": 1,
+        "gap_px": 10,
+        "font_sha256": EXPECTED_FONT_HASH,
+        "bubbles": [],
+    }
+    rev, comp_rev = store.accept_composition(rev, 0, comp)
+
+    service = CompositionService(store, font_path)
+    art1 = service.materialize(rev, comp_rev)
+    orig_bytes = art1.bytes_data
+    orig_hash = art1.content_hash
+    orig_art_id = art1.artifact_id
+    canonical_bytes = [p.read_bytes() for _, p, _ in assets]
+
+    # Current snapshot after art1 registration
+    snap_after_art1 = store.snapshot()
+    rev = snap_after_art1["authority_revision"]
+    assert len(snap_after_art1["review_artifacts"]) == 1
+    assert snap_after_art1["realization_complete"]["complete"] is True
+
+    orig_register = store.register_review_artifact
+    race_enqueued = False
+
+    def hooked_register(expected_authority_revision, artifact_id, content_hash, composition_revision, cut_closure):
+        nonlocal race_enqueued
+        # Simulate concurrent same-revision regeneration enqueue right before registration
+        cur_auth = store.snapshot()["authority_revision"]
+        store.enqueue_generation_jobs(expected_authority_revision=cur_auth, cut_id=1)
+        race_enqueued = True
+        return orig_register(
+            expected_authority_revision=expected_authority_revision,
+            artifact_id=artifact_id,
+            content_hash=content_hash,
+            composition_revision=composition_revision,
+            cut_closure=cut_closure,
+        )
+
+    store.register_review_artifact = hooked_register
+
+    try:
+        with pytest.raises(ArtifactNoLongerCurrentError) as exc_info:
+            service.materialize(rev, comp_rev)
+        assert exc_info.value.artifact_id == orig_art_id
+        assert race_enqueued is True
+    finally:
+        store.register_review_artifact = orig_register
+
+    # Authoritative readbacks:
+    # 1. Fresh snapshot has cut 1 STALE and realization_complete UNRESOLVED
+    fresh_snap = store.snapshot()
+    assert fresh_snap["realization_complete"]["complete"] is False
+    assert fresh_snap["realization_complete"]["status"] == "UNRESOLVED"
+    assert fresh_snap["cuts"][0]["currency"] == "STALE"
+    assert fresh_snap["cuts"][0]["latest_generation_request_seq"] == 1
+
+    # 2. Existing review artifact row is preserved in DB
+    assert len(fresh_snap["review_artifacts"]) == 1
+    assert fresh_snap["review_artifacts"][0]["artifact_id"] == orig_art_id
+    assert fresh_snap["review_artifacts"][0]["content_hash"] == orig_hash
+
+    # 3. Existing review artifact file on disk is preserved
+    assert art1.path.is_file()
+    assert art1.path.read_bytes() == orig_bytes
+
+    # 4. Historical read_artifact continues to succeed in STALE state
+    hist = service.read_artifact(orig_art_id)
+    assert hist.artifact_id == orig_art_id
+    assert hist.content_hash == orig_hash
+    assert hist.bytes_data == orig_bytes
+
+    # 5. Canonical realization assets are completely preserved
+    for (_, path, _), expected_bytes in zip(assets, canonical_bytes):
+        assert path.is_file()
+        assert path.read_bytes() == expected_bytes
+
+
+def test_scenario_14_race_enqueue_after_registration_before_readback_fails_and_preserves_artifact(tmp_path: Path, font_path: Path):
+    """Scenario 14 (PLAN-003): Race where same-revision regeneration is enqueued after registration but before final readback.
+
+    1. Set up project with 5 current cuts, no existing review artifact.
+    2. Invoke materialize().
+    3. Hook register_review_artifact: let it register and commit successfully, then immediately
+       enqueue same-revision regeneration for cut 2 before returning to materialize().
+    4. materialize() proceeds to _verify_and_build_artifact() with expected_comp_rev and expected_closure.
+    5. _verify_and_build_artifact asserts snapshot sequence currency and raises ArtifactNoLongerCurrentError.
+    6. Newly registered artifact row and file are preserved (NOT deleted).
+    7. Fresh snapshot is STALE/UNRESOLVED.
+    8. Historical read_artifact(registered_id) succeeds and returns identical bytes.
+    9. Canonical realization assets are completely preserved.
+    """
+    project_dir = tmp_path / "proj_race_after_reg"
+    store, rev, assets = setup_project_with_five_current_cuts(project_dir)
+
+    comp = {
+        "schema_version": 1,
+        "gap_px": 10,
+        "font_sha256": EXPECTED_FONT_HASH,
+        "bubbles": [],
+    }
+    rev, comp_rev = store.accept_composition(rev, 0, comp)
+    canonical_bytes = [p.read_bytes() for _, p, _ in assets]
+
+    service = CompositionService(store, font_path)
+    orig_register = store.register_review_artifact
+    registered_id: str | None = None
+    registered_hash: str | None = None
+
+    def hooked_register(expected_authority_revision, artifact_id, content_hash, composition_revision, cut_closure):
+        nonlocal registered_id, registered_hash
+        registered_id = artifact_id
+        registered_hash = content_hash
+        # First let registration commit successfully
+        orig_register(
+            expected_authority_revision=expected_authority_revision,
+            artifact_id=artifact_id,
+            content_hash=content_hash,
+            composition_revision=composition_revision,
+            cut_closure=cut_closure,
+        )
+        # Immediately enqueue same-revision regeneration before readback
+        cur_auth = store.snapshot()["authority_revision"]
+        store.enqueue_generation_jobs(expected_authority_revision=cur_auth, cut_id=2)
+
+    store.register_review_artifact = hooked_register
+
+    try:
+        with pytest.raises(ArtifactNoLongerCurrentError) as exc_info:
+            service.materialize(rev, comp_rev)
+        assert registered_id is not None
+        assert exc_info.value.artifact_id == registered_id
+    finally:
+        store.register_review_artifact = orig_register
+
+    # Authoritative readbacks:
+    # 1. Fresh snapshot has cut 2 STALE and realization_complete UNRESOLVED
+    fresh_snap = store.snapshot()
+    assert fresh_snap["realization_complete"]["complete"] is False
+    assert fresh_snap["realization_complete"]["status"] == "UNRESOLVED"
+    assert fresh_snap["cuts"][1]["currency"] == "STALE"
+    assert fresh_snap["cuts"][1]["latest_generation_request_seq"] == 1
+
+    # 2. Newly registered review artifact row is preserved in DB (never deleted/unlinked)
+    assert len(fresh_snap["review_artifacts"]) == 1
+    assert fresh_snap["review_artifacts"][0]["artifact_id"] == registered_id
+    assert fresh_snap["review_artifacts"][0]["content_hash"] == registered_hash
+
+    # 3. Newly registered review artifact file exists on disk
+    art_file = project_dir / "assets" / "review-artifacts" / f"{registered_id}.png"
+    assert art_file.is_file()
+    assert hashlib.sha256(art_file.read_bytes()).hexdigest() == registered_hash
+
+    # 4. Historical read_artifact succeeds in STALE state
+    hist = service.read_artifact(registered_id)
+    assert hist.artifact_id == registered_id
+    assert hist.content_hash == registered_hash
+    assert hist.bytes_data == art_file.read_bytes()
+
+    # 5. Canonical realization assets are completely preserved
+    for (_, path, _), expected_bytes in zip(assets, canonical_bytes):
+        assert path.is_file()
+        assert path.read_bytes() == expected_bytes

@@ -26,6 +26,7 @@ CREATE TABLE cut_intents (
 CREATE TABLE cuts (
     cut_id INTEGER PRIMARY KEY CHECK (cut_id BETWEEN 1 AND 5),
     desired_revision INTEGER NULL CHECK (desired_revision IS NULL OR desired_revision > 0),
+    latest_generation_request_seq INTEGER NOT NULL DEFAULT 0 CHECK (latest_generation_request_seq >= 0),
     realized_revision INTEGER NULL CHECK (realized_revision IS NULL OR realized_revision > 0),
     realized_asset_id TEXT NULL,
     realized_asset_path TEXT NULL,
@@ -56,6 +57,7 @@ CREATE TABLE generation_jobs (
     job_id TEXT PRIMARY KEY,
     cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id BETWEEN 1 AND 5),
     target_desired_revision INTEGER NOT NULL CHECK (target_desired_revision > 0),
+    request_seq INTEGER NOT NULL CHECK (request_seq > 0),
     status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted', 'superseded')),
     terminal_detail TEXT NULL,
     created_at TEXT NOT NULL,
@@ -176,4 +178,16 @@ END;
 CREATE TRIGGER trg_cuts_no_update_cut_id BEFORE UPDATE OF cut_id ON cuts
 BEGIN
     SELECT RAISE(ABORT, 'exactly five cuts are immutable');
+END;
+
+-- Baseline precondition trigger: cut_intents insert requires active baseline
+CREATE TRIGGER trg_cut_intents_active_baseline BEFORE INSERT ON cut_intents
+FOR EACH ROW
+BEGIN
+    SELECT CASE
+        WHEN NEW.baseline_id IS NULL
+          OR (SELECT current_baseline_id FROM authority WHERE singleton_id = 1) IS NULL
+          OR NEW.baseline_id != (SELECT current_baseline_id FROM authority WHERE singleton_id = 1)
+        THEN RAISE(ABORT, 'cut_intents insert requires active baseline')
+    END;
 END;

@@ -57,9 +57,9 @@ export interface StudioClientState {
   jobsUi: Record<string, { stopRequested: boolean }>
   selection: { cutId: CutId; bubbleId?: string }
   stream: {
-    state: 'connecting' | 'open' | 'reconnecting'
+    status: 'CONNECTING' | 'OPEN' | 'DEGRADED'
+    resyncPending: boolean
     lastEventId?: string
-    gapFetchPending: boolean
   }
   ui: {
     leftOpen: boolean

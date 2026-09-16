@@ -16,9 +16,15 @@ import sys
 import time
 from pathlib import Path
 import threading
-
+import sqlite3
+import hashlib
+from datetime import datetime, timezone
 import pytest
 from PIL import Image
+
+def _create_valid_png(path: Path, color: tuple[int, int, int] = (10, 20, 30)) -> None:
+    im = Image.new("RGB", (100, 100), color=color)
+    im.save(str(path), format="PNG")
 
 from comic_new.generation import (
     GenerationRunner,
@@ -93,7 +99,7 @@ def _provider_cmd(
 
 def _init_five_cut_project(project_dir: Path) -> tuple[TransactionalStore, int]:
     store = TransactionalStore.create_project(project_dir)
-    intents = {i: {"prompt": f"Dramatic panel {i} description"} for i in range(1, 6)}
+    intents = {i: {"prompt": f"Dramatic panel {i} description", "dialogue": f"Dialogue {i}"} for i in range(1, 6)}
     rev = store.approve_structural_baseline(0, "BASE-001", {"genre": "comic"}, intents)
     return store, rev
 
@@ -321,7 +327,7 @@ def test_scenario_c_stale_revision_race(tmp_path: Path) -> None:
 
     # User modifies cut 1 intent to revision 2!
     rev = store.snapshot()["authority_revision"]
-    rev = store.accept_cut_intent(rev, cut_id=1, intent_payload={"prompt": "Panel 1 Revised v2"})
+    rev = store.accept_cut_intent(rev, cut_id=1, intent_payload={"prompt": "Panel 1 Revised v2", "dialogue": "Revised dialogue 1"})
 
     # Enqueue Job B for revision 2 while Job A is still running and blocked on gate
     rec_b = service.enqueue(cut_id=1, expected_authority_revision=rev)
@@ -809,7 +815,7 @@ def _create_v1_fixture_project(project_dir: Path) -> Path:
     for c in range(1, 6):
         con.execute(
             "INSERT INTO cut_intents (cut_id, revision, baseline_id, payload_json, authority_revision, created_at) VALUES (?, 1, 'BASE-V1', ?, 1, '2026-09-15T00:00:00Z');",
-            (c, json.dumps({"prompt": f"Dramatic panel {c} description"}))
+            (c, json.dumps({"prompt": f"Dramatic panel {c} description", "dialogue": f"Dialogue {c}"}))
         )
         con.execute(
             "INSERT INTO baseline_intents (baseline_id, cut_id, intent_revision) VALUES ('BASE-V1', ?, 1);",
@@ -862,7 +868,7 @@ def test_v1_to_v2_migration_preservation(tmp_path: Path) -> None:
     store = TransactionalStore.open_project(migrated_dir)
 
     snap = store.snapshot()
-    assert snap["schema_version"] == 2
+    assert snap["schema_version"] == 4
     assert "generation_control" in snap
     assert snap["generation_control"]["stop_epoch"] == 0
     assert snap["generation_control"]["runner_id"] is None
@@ -946,7 +952,7 @@ def test_regression_public_concurrency_assignment_invariant(tmp_path: Path) -> N
 def test_regression_stop_settlement_failure_truth(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A failed process settlement must leave execution truth running."""
+    """A failed process settlement raises truthfully while already accepted interruption remains terminal commit-ineligible."""
     project_dir = tmp_path / "proj_stop_settlement_failure"
     store, rev = _init_five_cut_project(project_dir)
     service = GenerationService(store)
@@ -990,12 +996,11 @@ def test_regression_stop_settlement_failure_truth(
             service.stop_all()
         assert "Global STOP failed to terminate" in str(exc_info.value)
 
-        # DB attempt and job must remain running!
+        # DB attempt and job must remain interrupted (commit-ineligible, not rolled back to running!)
         snap = store.snapshot()
         job_1 = next(j for j in snap["jobs"] if j["cut_id"] == 1)
-        assert job_1["status"] == "running"
-        assert job_1["attempts"][0]["status"] == "running"
-
+        assert job_1["status"] == "interrupted"
+        assert job_1["attempts"][0]["status"] == "interrupted"
         # Controlled process is still alive under fault
         assert is_pid_non_zombie_alive(pid)
     finally:
@@ -1005,3 +1010,392 @@ def test_regression_stop_settlement_failure_truth(
         orig_terminate(pid, pid, None)
         runner_thread.join(timeout=3.0)
         assert not is_pid_non_zombie_alive(pid)
+
+
+# ---------------------------------------------------------------------------
+# BLOCK-06 Acceptance Scenarios A - H
+# ---------------------------------------------------------------------------
+
+def test_acceptance_a_monotonic_sequence_and_single_commit(tmp_path: Path) -> None:
+    """Acceptance A: Same revision generation has monotonic request_seq; late Job A is superseded."""
+    project_dir = tmp_path / "proj_acc_a"
+    store, rev = _init_five_cut_project(project_dir)
+    service = GenerationService(store)
+
+    # Enqueue Job A, then Job B on cut 1 without prompt edit
+    enq_a = service.enqueue(cut_id=1, expected_authority_revision=rev)
+    job_a_id = enq_a.jobs[0]["job_id"]
+    seq_a = enq_a.jobs[0]["request_seq"]
+
+    enq_b = service.enqueue(cut_id=1, expected_authority_revision=enq_a.authority_revision)
+    job_b_id = enq_b.jobs[0]["job_id"]
+    seq_b = enq_b.jobs[0]["request_seq"]
+
+    assert enq_a.jobs[0]["target_desired_revision"] == enq_b.jobs[0]["target_desired_revision"]
+    assert seq_b == seq_a + 1
+
+    # Fresh DB connection readback
+    with store._connect() as con:
+        cut_row = con.execute("SELECT latest_generation_request_seq FROM cuts WHERE cut_id = 1").fetchone()
+        assert cut_row["latest_generation_request_seq"] == seq_b
+        row_a = con.execute("SELECT request_seq FROM generation_jobs WHERE job_id = ?", (job_a_id,)).fetchone()
+        row_b = con.execute("SELECT request_seq FROM generation_jobs WHERE job_id = ?", (job_b_id,)).fetchone()
+        assert row_a["request_seq"] == seq_a
+        assert row_b["request_seq"] == seq_b
+
+    # Simulate claim and commit: Job B commits first
+    # Manually transition Job A and B to running with candidate files
+    stg_a = tmp_path / "stg_a.png"
+    stg_b = tmp_path / "stg_b.png"
+    _create_valid_png(stg_a, color=(255, 0, 0))
+    _create_valid_png(stg_b, color=(0, 255, 0))
+    hash_b = hashlib.sha256(stg_b.read_bytes()).hexdigest()
+    bytes_b = stg_b.read_bytes()
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    with store._connect() as con:
+        con.execute("UPDATE generation_jobs SET status = 'running' WHERE job_id IN (?, ?)", (job_a_id, job_b_id))
+        con.execute("INSERT INTO generation_attempts (attempt_id, job_id, ordinal, status, started_at, runner_id) VALUES (?, ?, 1, 'running', ?, 'r1')", (f"att-{job_a_id}", job_a_id, now_iso))
+        con.execute("INSERT INTO generation_attempts (attempt_id, job_id, ordinal, status, started_at, runner_id) VALUES (?, ?, 1, 'running', ?, 'r1')", (f"att-{job_b_id}", job_b_id, now_iso))
+        con.commit()
+
+    # Job B commits valid PNG candidate
+    res_b = store.commit_candidate("r1", job_b_id, f"att-{job_b_id}", stg_b, hash_b)
+    assert res_b["status"] == "committed"
+    canonical_path = Path(res_b["canonical_path"])
+    assert canonical_path.read_bytes() == bytes_b
+
+    # Job A arrives late with valid PNG candidate -> must be superseded, canonical untouched
+    hash_a = hashlib.sha256(stg_a.read_bytes()).hexdigest()
+    res_a = store.commit_candidate("r1", job_a_id, f"att-{job_a_id}", stg_a, hash_a)
+    assert res_a["status"] == "superseded"
+    assert canonical_path.read_bytes() == bytes_b
+
+    snap = store.snapshot()
+    assert snap["cuts"][0]["realized_content_hash"] == hash_b
+    jobs_by_id = {j["job_id"]: j for j in snap["jobs"]}
+    assert jobs_by_id[job_b_id]["status"] == "succeeded"
+    assert jobs_by_id[job_a_id]["status"] == "superseded"
+
+
+def test_acceptance_b_claim_supersession_skips_subprocess(tmp_path: Path) -> None:
+    """Acceptance B: Outdated queued job is superseded before provider subprocess launch."""
+    project_dir = tmp_path / "proj_acc_b"
+    store, rev = _init_five_cut_project(project_dir)
+    service = GenerationService(store)
+
+    enq_a = service.enqueue(cut_id=1, expected_authority_revision=rev)
+    job_a_id = enq_a.jobs[0]["job_id"]
+    enq_b = service.enqueue(cut_id=1, expected_authority_revision=enq_a.authority_revision)
+    job_b_id = enq_b.jobs[0]["job_id"]
+
+    launched_jobs: list[str] = []
+    def cmd_factory(cut_id: int, staging_path: Path, target_rev: int) -> list[str]:
+        # Find which job is being launched by inspecting running attempts
+        with store._connect() as con:
+            row = con.execute("SELECT job_id FROM generation_attempts WHERE status = 'running' ORDER BY started_at DESC LIMIT 1").fetchone()
+            if row:
+                launched_jobs.append(row["job_id"])
+        return _provider_cmd(cut_id, staging_path, target_rev)
+
+    runner = GenerationRunner(store, provider_cmd_factory=cmd_factory)
+    runner.run_until_idle()
+
+    snap = store.snapshot()
+    jobs_by_id = {j["job_id"]: j for j in snap["jobs"]}
+    assert jobs_by_id[job_a_id]["status"] == "superseded"
+    assert jobs_by_id[job_b_id]["status"] == "succeeded"
+    # Job A was NEVER launched as a subprocess!
+    assert job_a_id not in launched_jobs
+    assert job_b_id in launched_jobs
+
+
+def test_acceptance_c_cancel_atomic_pre_termination_lockout(tmp_path: Path) -> None:
+    """Acceptance C: Individual Cancel revokes commit eligibility before process kill."""
+    project_dir = tmp_path / "proj_acc_c"
+    store, rev = _init_five_cut_project(project_dir)
+    service = GenerationService(store)
+    enq = service.enqueue(cut_id=1, expected_authority_revision=rev)
+    job_id = enq.jobs[0]["job_id"]
+
+    gate_file = tmp_path / "gate_c.txt"
+    def cmd_factory(cut_id: int, staging_path: Path, target_rev: int) -> list[str]:
+        return _provider_cmd(cut_id, staging_path, target_rev, mock_sleep=10.0, mock_gate_file=str(gate_file))
+
+    runner = GenerationRunner(store, provider_cmd_factory=cmd_factory)
+    runner_thread = threading.Thread(target=runner.run_until_idle)
+    runner_thread.start()
+
+    for _ in range(50):
+        with store._connect() as con:
+            row = con.execute("SELECT process_pid FROM generation_attempts WHERE status = 'running'").fetchone()
+            if row and row["process_pid"]:
+                break
+        time.sleep(0.05)
+
+    # While running, unblock provider so candidate is generated
+    gate_file.touch()
+    time.sleep(0.1)
+
+    # Cancel job
+    receipt = service.cancel(job_id)
+    assert receipt.disposition == "cancelled"
+    assert receipt.was_running is True
+
+    # Try calling commit_candidate from runner / attempt perspective -> must be discarded
+    dummy_png = tmp_path / "dummy_c.png"
+    _create_valid_png(dummy_png)
+    with store._connect() as con:
+        att_row = con.execute("SELECT runner_id FROM generation_attempts WHERE job_id = ?", (job_id,)).fetchone()
+        r_id = att_row["runner_id"] if att_row else "r1"
+    res = store.commit_candidate(r_id, job_id, f"att-{job_id}-1", dummy_png, "dummyhash")
+    assert res["status"] == "discarded"
+
+    runner_thread.join(timeout=3.0)
+    snap = store.snapshot()
+    job = next(j for j in snap["jobs"] if j["job_id"] == job_id)
+    assert job["status"] == "cancelled"
+    assert snap["cuts"][0]["realized_asset_id"] is None
+    assert snap["cuts"][0]["currency"] == "STALE"
+
+
+def test_acceptance_d_stop_atomic_pre_termination_lockout(tmp_path: Path) -> None:
+    """Acceptance D: Global STOP marks multiple running jobs interrupted in BEGIN IMMEDIATE before kill."""
+    project_dir = tmp_path / "proj_acc_d"
+    store, rev = _init_five_cut_project(project_dir)
+    service = GenerationService(store)
+    # Enqueue cut 1 and cut 2
+    enq1 = service.enqueue(cut_id=1, expected_authority_revision=rev)
+    enq2 = service.enqueue(cut_id=2, expected_authority_revision=enq1.authority_revision)
+    job1_id = enq1.jobs[0]["job_id"]
+    job2_id = enq2.jobs[0]["job_id"]
+
+    gate_file = tmp_path / "gate_d.txt"
+    def cmd_factory(cut_id: int, staging_path: Path, target_rev: int) -> list[str]:
+        return _provider_cmd(cut_id, staging_path, target_rev, mock_sleep=10.0, mock_gate_file=str(gate_file))
+
+    runner = GenerationRunner(store, provider_cmd_factory=cmd_factory)
+    runner_thread = threading.Thread(target=runner.run_until_idle)
+    runner_thread.start()
+
+    # Wait until both are running
+    for _ in range(50):
+        with store._connect() as con:
+            count = con.execute("SELECT count(*) FROM generation_attempts WHERE status = 'running'").fetchone()[0]
+            if count == 2:
+                break
+        time.sleep(0.05)
+
+    gate_file.touch()
+    time.sleep(0.1)
+
+    # Global STOP
+    stop_rec = service.stop_all()
+    assert stop_rec.interrupted_running_count == 2
+
+    # Post-STOP candidate commits must be discarded
+    dummy_png = tmp_path / "dummy_d.png"
+    _create_valid_png(dummy_png)
+    with store._connect() as con:
+        att1 = con.execute("SELECT runner_id FROM generation_attempts WHERE job_id = ?", (job1_id,)).fetchone()
+        att2 = con.execute("SELECT runner_id FROM generation_attempts WHERE job_id = ?", (job2_id,)).fetchone()
+        r_id1 = att1["runner_id"] if att1 else "r1"
+        r_id2 = att2["runner_id"] if att2 else "r1"
+    res1 = store.commit_candidate(r_id1, job1_id, f"att-{job1_id}-1", dummy_png, "h1")
+    res2 = store.commit_candidate(r_id2, job2_id, f"att-{job2_id}-1", dummy_png, "h2")
+    assert res1["status"] == "discarded"
+    assert res2["status"] == "discarded"
+
+    runner_thread.join(timeout=3.0)
+    snap = store.snapshot()
+    jobs_by_id = {j["job_id"]: j for j in snap["jobs"]}
+    assert jobs_by_id[job1_id]["status"] == "interrupted"
+    assert jobs_by_id[job2_id]["status"] == "interrupted"
+
+
+def test_acceptance_e_succeeded_state_irreversibility(tmp_path: Path) -> None:
+    """Acceptance E: Late Cancel or STOP cannot rewrite succeeded job/attempt to cancelled/interrupted."""
+    project_dir = tmp_path / "proj_acc_e"
+    store, rev = _init_five_cut_project(project_dir)
+    service = GenerationService(store)
+    enq = service.enqueue(cut_id=1, expected_authority_revision=rev)
+    job_id = enq.jobs[0]["job_id"]
+
+    runner = GenerationRunner(store, provider_cmd_factory=_provider_cmd)
+    runner.run_until_idle()
+
+    snap = store.snapshot()
+    job = next(j for j in snap["jobs"] if j["job_id"] == job_id)
+    assert job["status"] == "succeeded"
+    assert snap["cuts"][0]["currency"] == "CURRENT"
+    asset_id = snap["cuts"][0]["realized_asset_id"]
+    content_hash = snap["cuts"][0]["realized_content_hash"]
+
+    # Attempt late individual Cancel
+    cancel_rec = service.cancel(job_id)
+    assert cancel_rec.disposition == "succeeded"
+    assert cancel_rec.was_running is False
+
+    # Attempt late global STOP
+    stop_rec = service.stop_all()
+    assert stop_rec.interrupted_running_count == 0
+
+    # Status and canonical realization must remain completely intact
+    snap_after = store.snapshot()
+    job_after = next(j for j in snap_after["jobs"] if j["job_id"] == job_id)
+    assert job_after["status"] == "succeeded"
+    assert snap_after["cuts"][0]["realized_asset_id"] == asset_id
+    assert snap_after["cuts"][0]["realized_content_hash"] == content_hash
+    assert snap_after["cuts"][0]["currency"] == "CURRENT"
+
+
+def test_acceptance_f_v2_to_v3_migration_backfill_and_increment(tmp_path: Path) -> None:
+    """Acceptance F: Migration v2->v3 backfills deterministic 1..N sequences per cut and next enqueue increments."""
+    project_dir = tmp_path / "proj_acc_f"
+    project_dir.mkdir()
+    db_path = project_dir / "comic-new.sqlite3"
+
+    # Create v2 schema manually
+    v1_dir = tmp_path / "v1_base"
+    _create_v1_fixture_project(v1_dir)
+    mig_v2_sql = (Path(__file__).parent.parent / "src" / "comic_new" / "migrations" / "v1_to_v2.sql").read_text()
+    con = sqlite3.connect(str(v1_dir / "comic-new.sqlite3"))
+    for stmt in mig_v2_sql.split(";"):
+        if stmt.strip():
+            con.execute(stmt)
+    con.commit()
+
+    # Add multiple jobs to cut 1 in v2 database
+    now_iso = datetime.now(timezone.utc).isoformat()
+    con.execute("INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, status, created_at, updated_at) VALUES ('j-1-early', 1, 1, 'succeeded', '2026-09-16T00:00:00Z', ?)", (now_iso,))
+    con.execute("INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, status, created_at, updated_at) VALUES ('j-1-late', 1, 1, 'failed', '2026-09-16T00:01:00Z', ?)", (now_iso,))
+    con.commit()
+    con.close()
+
+    # Open via TransactionalStore -> triggers v2_to_v3 migration and verify_schema
+    store = TransactionalStore.open_project(v1_dir)
+    snap = store.snapshot()
+    assert snap["schema_version"] == 4
+
+    # Verify backfilled request sequences
+    with store._connect() as con2:
+        j0 = con2.execute("SELECT request_seq FROM generation_jobs WHERE job_id = 'job-1'").fetchone()[0]
+        j1 = con2.execute("SELECT request_seq FROM generation_jobs WHERE job_id = 'j-1-early'").fetchone()[0]
+        j2 = con2.execute("SELECT request_seq FROM generation_jobs WHERE job_id = 'j-1-late'").fetchone()[0]
+        assert j0 == 1
+        assert j1 == 2
+        assert j2 == 3
+        cut1_seq = con2.execute("SELECT latest_generation_request_seq FROM cuts WHERE cut_id = 1").fetchone()[0]
+        assert cut1_seq == 3
+    # Next enqueue on cut 1 must get sequence 3
+    service = GenerationService(store)
+    enq = service.enqueue(cut_id=1, expected_authority_revision=snap["authority_revision"])
+    assert enq.jobs[0]["request_seq"] == 4
+
+
+def test_acceptance_g_cancel_settlement_failure_preserves_commit_ineligibility(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Acceptance G: Physical cancel termination failure raises truthfully while job remains commit-ineligible."""
+    project_dir = tmp_path / "proj_acc_g_cancel"
+    store, rev = _init_five_cut_project(project_dir)
+    service = GenerationService(store)
+    enq = service.enqueue(cut_id=1, expected_authority_revision=rev)
+    job_id = enq.jobs[0]["job_id"]
+
+    gate_file = tmp_path / "gate_cancel_fail.txt"
+
+    def cmd_factory(cut_id: int, staging_path: Path, target_rev: int) -> list[str]:
+        return _provider_cmd(
+            cut_id,
+            staging_path,
+            target_rev,
+            mock_sleep=10.0,
+            mock_gate_file=str(gate_file),
+        )
+
+    runner = GenerationRunner(store, provider_cmd_factory=cmd_factory)
+    runner_thread = threading.Thread(target=runner.run_until_idle)
+    runner_thread.start()
+
+    pid = None
+    for _ in range(50):
+        with store._connect() as con:
+            row = con.execute("SELECT process_pid FROM generation_attempts WHERE status = 'running'").fetchone()
+            if row and row["process_pid"] is not None:
+                pid = row["process_pid"]
+                break
+        time.sleep(0.05)
+
+    assert pid is not None
+    assert is_pid_non_zombie_alive(pid)
+
+    import comic_new.generation as gen_mod
+    orig_terminate = gen_mod.terminate_process_tree
+    monkeypatch.setattr(gen_mod, "terminate_process_tree", lambda *args, **kwargs: False)
+
+    try:
+        with pytest.raises(TransactionalStoreError) as exc_info:
+            service.cancel(job_id)
+        assert "Cancel failed to terminate running process tree" in str(exc_info.value)
+        assert "job remains commit-ineligible" in str(exc_info.value)
+
+        # Job and attempt must remain cancelled, never rolled back to running
+        snap = store.snapshot()
+        job = next(j for j in snap["jobs"] if j["job_id"] == job_id)
+        assert job["status"] == "cancelled"
+        assert job["attempts"][0]["status"] == "cancelled"
+
+        # Candidate commit must be discarded
+        dummy_png = tmp_path / "dummy_g.png"
+        _create_valid_png(dummy_png)
+        with store._connect() as con:
+            att_row = con.execute("SELECT runner_id FROM generation_attempts WHERE job_id = ?", (job_id,)).fetchone()
+            r_id = att_row["runner_id"] if att_row else "r1"
+        res = store.commit_candidate(r_id, job_id, f"att-{job_id}-1", dummy_png, "dummyhash_g")
+        assert res["status"] == "discarded"
+        assert is_pid_non_zombie_alive(pid)
+    finally:
+        monkeypatch.undo()
+        gate_file.touch()
+        orig_terminate(pid, pid, None)
+        runner_thread.join(timeout=3.0)
+        assert not is_pid_non_zombie_alive(pid)
+
+def test_acceptance_h_sequence_bound_currency_projection(tmp_path: Path) -> None:
+    """Acceptance H: Desired == realized but newer request_seq pending is STALE and UNRESOLVED."""
+    project_dir = tmp_path / "proj_acc_h"
+    store, rev = _init_five_cut_project(project_dir)
+    service = GenerationService(store)
+
+    # Realize all 5 cuts first so all are CURRENT
+    for cid in range(1, 6):
+        enq = service.enqueue(cut_id=cid, expected_authority_revision=rev)
+        rev = enq.authority_revision
+    runner = GenerationRunner(store, provider_cmd_factory=_provider_cmd)
+    runner.run_until_idle()
+
+    snap1 = store.snapshot()
+    assert snap1["realization_complete"]["complete"] is True
+    assert snap1["realization_complete"]["status"] == "COMPLETE"
+    for c in snap1["cuts"]:
+        assert c["currency"] == "CURRENT"
+
+    # Now request regeneration on cut 1 without changing desired revision
+    enq_new = service.enqueue(cut_id=1, expected_authority_revision=snap1["authority_revision"])
+    snap2 = store.snapshot()
+    # Cut 1 has desired == realized == 1, but latest_generation_request_seq is pending!
+    cut1 = snap2["cuts"][0]
+    assert cut1["desired_revision"] == cut1["realized_revision"] == 1
+    assert cut1["currency"] == "STALE"
+    assert snap2["realization_complete"]["complete"] is False
+    assert snap2["realization_complete"]["status"] == "UNRESOLVED"
+
+    # Run until idle so latest request sequence commits
+    runner = GenerationRunner(store, provider_cmd_factory=_provider_cmd)
+    runner.run_until_idle()
+
+    snap3 = store.snapshot()
+    assert snap3["cuts"][0]["currency"] == "CURRENT"
+    assert snap3["realization_complete"]["complete"] is True
+    assert snap3["realization_complete"]["status"] == "COMPLETE"

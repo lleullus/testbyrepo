@@ -352,12 +352,6 @@ class GenerationService:
             if pid:
                 terminated = terminate_process_tree(pid, pgid, token)
 
-            if not terminated:
-                failed_ident = f"job={job_id},attempt={att_info.get('attempt_id')},pid={pid}"
-                raise TransactionalStoreError(
-                    f"Cancel failed to terminate running process tree for {failed_ident}; job remains running"
-                )
-
             if staging_path:
                 stg = Path(staging_path)
                 stg.unlink(missing_ok=True)
@@ -367,13 +361,13 @@ class GenerationService:
                     except OSError:
                         pass
 
-            self.store.mark_job_and_attempt_cancelled(
-                job_id=job_id,
-                attempt_id=att_info.get("attempt_id"),
-                detail="Cancelled by user",
-            )
-            return CancelReceipt(job_id=job_id, disposition="cancelled", was_running=True)
+            if not terminated:
+                failed_ident = f"job={job_id},attempt={att_info.get('attempt_id')},pid={pid}"
+                raise TransactionalStoreError(
+                    f"Cancel failed to terminate running process tree for {failed_ident}; job remains commit-ineligible"
+                )
 
+            return CancelReceipt(job_id=job_id, disposition="cancelled", was_running=True)
         return CancelReceipt(
             job_id=job_id,
             disposition=disposition,
@@ -383,7 +377,6 @@ class GenerationService:
     def stop_all(self) -> StopReceipt:
         """Global STOP: advance stop_epoch, cancel queued, terminate running process trees."""
         stop_epoch, running_procs = self.store.stop_all_and_cancel_queued()
-        items_to_mark: list[tuple[str, str]] = []
         failed_procs: list[dict[str, Any]] = []
 
         for proc_info in running_procs:
@@ -396,10 +389,6 @@ class GenerationService:
             if pid:
                 terminated = terminate_process_tree(pid, pgid, token)
 
-            if not terminated:
-                failed_procs.append(proc_info)
-                continue
-
             if staging:
                 stg = Path(staging)
                 stg.unlink(missing_ok=True)
@@ -409,11 +398,8 @@ class GenerationService:
                     except OSError:
                         pass
 
-            if proc_info.get("job_id") and proc_info.get("attempt_id"):
-                items_to_mark.append((proc_info["job_id"], proc_info["attempt_id"]))
-
-        if items_to_mark:
-            self.store.mark_attempts_and_jobs_interrupted(items_to_mark, reason="global_stop")
+            if not terminated:
+                failed_procs.append(proc_info)
 
         if failed_procs:
             failed_idents = [
@@ -421,7 +407,7 @@ class GenerationService:
                 for p in failed_procs
             ]
             raise TransactionalStoreError(
-                f"Global STOP failed to terminate running process trees: {', '.join(failed_idents)}; affected rows remain running"
+                f"Global STOP failed to terminate running process trees: {', '.join(failed_idents)}; affected rows remain commit-ineligible"
             )
 
         snap = self.store.snapshot()

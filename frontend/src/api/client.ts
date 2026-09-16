@@ -1,18 +1,20 @@
 /** Typed fetch wrapper for same-origin /api. No Axios/query-cache. */
 
-import type {
-  ApiErrorDTO,
-  BaselineStructureDTO,
-  BloggerReleaseRequest,
-  BloggerReleaseResponse,
-  CutId,
-  CutIntentDTO,
-  CompositionStateDTO,
-  ExportPngRequest,
-  ExportPngResponse,
-  JobDTO,
-  ReviewArtifactDTO,
-  StudioSnapshotDTO,
+import {
+  type ApiErrorDTO,
+  type BaselineStructureDTO,
+  type BloggerReleaseRequest,
+  type BloggerReleaseResponse,
+  type CutId,
+  type CutIntentDTO,
+  type CompositionStateDTO,
+  type ExportPngRequest,
+  type ExportPngResponse,
+  type JobDTO,
+  type ReviewArtifactDTO,
+  type StudioSnapshotDTO,
+  isStudioSnapshotDTO,
+  validateStudioSnapshot,
 } from './contracts'
 
 export class ApiError extends Error {
@@ -29,7 +31,8 @@ export class ApiError extends Error {
   }
 
   get currentSnapshot(): StudioSnapshotDTO | undefined {
-    return this.body.current_snapshot
+    const snap = this.body.current_snapshot
+    return isStudioSnapshotDTO(snap) ? snap : undefined
   }
 }
 
@@ -55,8 +58,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 // --- Queries ---
 
-export function fetchSnapshot(): Promise<StudioSnapshotDTO> {
-  return request<StudioSnapshotDTO>('GET', '/api/studio/snapshot')
+export async function fetchSnapshot(): Promise<StudioSnapshotDTO> {
+  const data = await request<unknown>('GET', '/api/studio/snapshot')
+  return validateStudioSnapshot(data)
 }
 
 export function fetchArtifactMetadata(artifactId: string): Promise<ReviewArtifactDTO> {

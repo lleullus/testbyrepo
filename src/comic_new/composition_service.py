@@ -269,6 +269,8 @@ class CompositionService:
                 if rendered.artifact_id not in reg_artifacts:
                     raise reg_err
 
+                # Assert fresh snapshot sequence-current before accepting pre-existing artifact
+                self._assert_snapshot_sequence_current(fresh_snap, rendered.artifact_id)
                 # Strict 7-step comparison for duplicate convergence:
                 art_row = reg_artifacts[rendered.artifact_id]
                 # 1) Row fields: artifact_id, content_hash, composition_revision
@@ -350,6 +352,33 @@ class CompositionService:
         """
         return self._verify_and_build_artifact(artifact_id)
 
+    def _assert_snapshot_sequence_current(self, snapshot: dict[str, Any], artifact_id: str) -> None:
+        """Assert that a snapshot remains sequence-current for review materialization.
+
+        Requires realization_complete.complete is True, exactly five cuts, and every
+        cut currency == 'CURRENT'. Raises ArtifactNoLongerCurrentError when false.
+        """
+        realization_complete = snapshot.get("realization_complete") or {}
+        if realization_complete.get("complete") is not True:
+            raise ArtifactNoLongerCurrentError(
+                artifact_id,
+                f"Artifact {artifact_id} realization is incomplete in snapshot (status: {realization_complete.get('status')})",
+            )
+        cuts = snapshot.get("cuts", [])
+        if len(cuts) != TOTAL_CUTS:
+            raise ArtifactNoLongerCurrentError(
+                artifact_id,
+                f"Artifact {artifact_id} snapshot cuts count != {TOTAL_CUTS} (got {len(cuts)})",
+            )
+        for cut in cuts:
+            cid = cut.get("cut_id")
+            currency = cut.get("currency")
+            if currency != "CURRENT":
+                raise ArtifactNoLongerCurrentError(
+                    artifact_id,
+                    f"Artifact {artifact_id} cut {cid} currency is {currency}, expected CURRENT",
+                )
+
     def _verify_and_build_artifact(
         self,
         artifact_id: str,
@@ -380,6 +409,9 @@ class CompositionService:
                 raise ArtifactReadbackError(f"Artifact {artifact_id} cut at index {idx} has cut_id {ac.get('cut_id')}, expected {expected_cid}")
 
         # 2. Check currentness against current snapshot if requested
+        if expected_comp_rev is not None or expected_closure is not None:
+            self._assert_snapshot_sequence_current(snap, artifact_id)
+
         if expected_comp_rev is not None:
             cur_comp_rev = (snap.get("composition") or {}).get("revision")
             if cur_comp_rev != expected_comp_rev or comp_rev != cur_comp_rev:

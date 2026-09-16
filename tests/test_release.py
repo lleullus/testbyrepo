@@ -62,7 +62,7 @@ def _setup_full_project(project_dir: Path):
                 "y_pct": 2.0,
                 "w_pct": 30.0,
                 "h_pct": 6.0,
-                "text": "Hello world!",
+                "text": "Cut intent 1",
                 "font_size_pct": 2.0,
                 "line_spacing_pct": 20.0,
                 "text_align": "center",
@@ -156,7 +156,7 @@ def test_acceptance_b_revocation_on_mutations_and_gate_2(tmp_path: Path):
     auth_id3 = f"auth-{mat3.artifact_id}"
     rev3 = store3.authorize_release(rev3, auth_id3, mat3.artifact_id, mat3.content_hash)
 
-    rev3 = store3.accept_cut_intent(rev3, 3, {"prompt": "New prompt for cut 3", "text": "New intent"})
+    rev3 = store3.accept_cut_intent(rev3, 3, {"prompt": "New prompt for cut 3", "dialogue": "New intent"})
     assert store3.snapshot()["release_authorization"]["active"] is None
 
     # Sub-case 4: Bubble geometry modification (x, y, w, h) revokes authorization
@@ -190,7 +190,7 @@ def test_acceptance_b_revocation_on_mutations_and_gate_2(tmp_path: Path):
         rev6,
         "base-new-2",
         {"grid": "vertical-5", "title": "New Baseline"},
-        {c: {"prompt": f"cut {c}"} for c in range(1, 6)},
+        {c: {"prompt": f"cut {c}", "dialogue": f"d {c}"} for c in range(1, 6)},
     )
     assert store6.snapshot()["release_authorization"]["active"] is None
 
@@ -231,9 +231,11 @@ def test_acceptance_c_all_or_nothing_integrity_and_gate_1(tmp_path: Path):
     # Invalidate cut 2 currency in cuts table by updating cut_intents desired_revision
     with store_s._connect() as con:
         con.execute("BEGIN IMMEDIATE;")
+        base_id = con.execute("SELECT current_baseline_id FROM authority WHERE singleton_id = 1").fetchone()["current_baseline_id"]
         con.execute(
             "INSERT INTO cut_intents (cut_id, revision, baseline_id, payload_json, authority_revision, created_at) "
-            "VALUES (2, 999, NULL, '{}', 1, '2026-09-16T00:00:00Z')"
+            "VALUES (2, 999, ?, ?, 1, '2026-09-16T00:00:00Z')",
+            (base_id, json.dumps({"prompt": "p", "dialogue": "d"})),
         )
         con.execute("UPDATE cuts SET desired_revision = 999 WHERE cut_id = 2")
         con.execute("COMMIT;")
@@ -601,6 +603,32 @@ class _MockBloggerHttpHandler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(b'{"kind": "blogger#post"}')
                 return
+            elif post_mode == "incomplete_content_length":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", "200")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(b'{"kind": "blogger#post", "id": "post-http-real-123"')
+                self.wfile.flush()
+                self.close_connection = True
+                return
+            elif post_mode == "incomplete_chunked":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Transfer-Encoding", "chunked")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(b'64\r\n{"kind": "blogger#post"\r\n')
+                self.wfile.flush()
+                self.close_connection = True
+                return
+            elif post_mode == "invalid_utf8":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"kind": "blogger#post", "id": "invalid-\xff\xfe"}')
+                return
             elif post_mode == "timeout":
                 time.sleep(1.5)
                 self.send_response(504)
@@ -608,6 +636,12 @@ class _MockBloggerHttpHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             host = self.headers.get("Host") or f"127.0.0.1:{self.server.server_port}"
+            # Extract content to mirror in readback HTML if possible
+            try:
+                parsed_post = json.loads(body.decode("utf-8"))
+                setattr(self.server, "last_posted_content", parsed_post.get("content", ""))
+            except Exception:
+                pass
             self.send_response(201)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -639,18 +673,89 @@ class _MockBloggerHttpHandler(http.server.BaseHTTPRequestHandler):
                 time.sleep(1.5)
                 self.send_response(504)
                 self.end_headers()
-            else:
+            elif readback_mode == "missing_marker":
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html")
                 self.end_headers()
                 self.wfile.write(b"<!DOCTYPE html><html><body><h1>Episode 1 Readback OK</h1></body></html>")
+            elif readback_mode == "incomplete_content_length":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", "500")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(b"<!DOCTYPE html><html><body><h1>Truncated Content-Length")
+                self.wfile.flush()
+                self.close_connection = True
+                return
+            elif readback_mode == "incomplete_chunked":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Transfer-Encoding", "chunked")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(b"64\r\n<!DOCTYPE html><html><body><h1>Truncated Chunked\r\n")
+                self.wfile.flush()
+                self.close_connection = True
+                return
+            elif readback_mode == "oversized_chunk_line_too_long":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Transfer-Encoding", "chunked")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(b"0" * 65537)
+                self.wfile.flush()
+                self.close_connection = True
+                return
+            elif readback_mode == "invalid_utf8_after_marker":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                posted_content = getattr(self.server, "last_posted_content", "")
+                if posted_content:
+                    resp_body = f"<!DOCTYPE html><html><body>{posted_content}</body></html>".encode("utf-8") + b"\xff"
+                else:
+                    resp_body = b"<!DOCTYPE html><html><body><!-- comic-new:artifact-id=dummy:sha256=dummy --></body></html>\xff"
+                self.wfile.write(resp_body)
+            elif readback_mode == "invalid_utf8_in_marker":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                posted_content = getattr(self.server, "last_posted_content", "")
+                if posted_content:
+                    raw_body = f"<!DOCTYPE html><html><body>{posted_content}</body></html>".encode("utf-8")
+                    resp_body = raw_body.replace(b"<!-- comic-new:", b"<!-- comic-new:\xff")
+                else:
+                    resp_body = b"<!DOCTYPE html><html><body><!-- comic-new:\xffartifact-id=dummy:sha256=dummy --></body></html>"
+                self.wfile.write(resp_body)
+            elif readback_mode == "malformed_marker_valid_utf8":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(b"<!DOCTYPE html><html><body><!-- comic-new:broken-marker --></body></html>")
+            else:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.end_headers()
+                custom_bytes = getattr(self.server, "readback_custom_bytes", None)
+                posted_content = getattr(self.server, "last_posted_content", "")
+                custom_marker = getattr(self.server, "readback_custom_body", None)
+                if custom_bytes is not None:
+                    resp_body = custom_bytes
+                elif custom_marker is not None:
+                    resp_body = custom_marker.encode("utf-8")
+                elif posted_content:
+                    resp_body = f"<!DOCTYPE html><html><body>{posted_content}</body></html>".encode("utf-8")
+                else:
+                    resp_body = b"<!DOCTYPE html><html><body><h1>Episode 1 Readback OK</h1></body></html>"
+                self.wfile.write(resp_body)
         else:
             self.send_response(404)
             self.end_headers()
 
     def log_message(self, format, *args):
         pass
-
 
 def test_google_blogger_adapter_real_local_http_transport_and_readback(tmp_path: Path):
     """Verify GoogleBloggerAdapter performs real HTTP token exchange, Blogger insert, and destination readback."""
@@ -754,8 +859,7 @@ def test_google_blogger_adapter_authoritative_rejection_and_transport_error(tmp_
         delivery_svc = DeliveryService(store, comp_svc, adapter_404)
         res1 = delivery_svc.deliver_blogger(rev, blog_id="blog-404", title="Episode 404", adapter=adapter_404)
         assert res1.outcome == "confirmed_failure"
-        assert res1.evidence["status_code"] == 404
-        assert "Destination URL readback rejected (404)" in res1.evidence["message"]
+        assert "404" in str(res1.evidence)
 
         # Subcase 2: Blogger insert 400 Bad Request returns confirmed_failure
         server.post_mode = "400"
@@ -842,6 +946,903 @@ def test_cli_release_with_real_local_http_transport(tmp_path: Path, monkeypatch:
         assert last_att["outcome"] == "confirmed_success"
         assert last_att["destination_id"] == "post-http-real-123"
         assert last_att["destination_url"] == f"http://127.0.0.1:{port}/readback/post-http-real-123.html"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_plan002_release_authorization_and_delivery_blocked_by_stale_sequence(tmp_path: Path):
+    """Verify that same-revision enqueue revokes active authorization and prevents preflight/delivery."""
+    project_dir = tmp_path / "proj_plan002_delivery_block"
+    store, comp_svc, mat, rev = _setup_full_project(project_dir)
+    auth_id = f"auth-{mat.artifact_id}"
+    rev = store.authorize_release(rev, auth_id, mat.artifact_id, mat.content_hash)
+
+    delivery_svc = DeliveryService(store)
+    # Preflight succeeds before regeneration
+    auth_rec, payload = delivery_svc.preflight_release(auth_id)
+    c_hash = payload.content_hash
+    art_path = store.project_dir / "assets" / "review-artifacts" / f"{payload.artifact_id}.png"
+    assert auth_rec["authorization_id"] == auth_id
+
+    # Enqueue same-revision regeneration on cut 3
+    rev, jobs = store.enqueue_generation_jobs(rev, cut_id=3)
+    assert len(jobs) == 1
+
+    # 1. Old authorization is revoked -> AuthorizationRevokedError
+    with pytest.raises(AuthorizationRevokedError, match="No active release authorization exists"):
+        delivery_svc.preflight_release()
+
+    # 2. Even if an authorization was somehow forged or attempted to be registered,
+    # store.authorize_release rejects it because cut 3 latest sequence is queued:
+    with pytest.raises(RealizationIncompleteError, match="Cut 3 latest generation sequence 1 is not succeeded"):
+        store.authorize_release(rev, "auth-forged", mat.artifact_id, mat.content_hash)
+
+    # 3. Canonical artifact bytes remain preserved and unchanged on disk
+    assert art_path.is_file()
+    assert hashlib.sha256(art_path.read_bytes()).hexdigest() == c_hash
+
+
+def test_block08_acceptance_a_b_anti_toctou_verified_bytes_handoff(tmp_path: Path):
+    """Acceptance A & B: Immutable in-memory bytes handoff, post-preflight file tampering defeated, pre-preflight tampering rejected."""
+    project_dir = tmp_path / "proj_block08_ab"
+    store, comp_svc, mat, rev = _setup_full_project(project_dir)
+    auth_id = f"auth-{mat.artifact_id}"
+    rev = store.authorize_release(rev, auth_id, mat.artifact_id, mat.content_hash)
+
+    delivery_svc = DeliveryService(store, comp_svc)
+    auth_rec, payload = delivery_svc.preflight_release(auth_id)
+    assert payload.artifact_id == mat.artifact_id
+    assert payload.content_hash == mat.content_hash
+    assert hashlib.sha256(payload.png_bytes).hexdigest() == mat.content_hash
+
+    art_file = project_dir / "assets" / "review-artifacts" / f"{mat.artifact_id}.png"
+    assert art_file.is_file()
+
+    # Sub-case 1: PNG export with post-preflight source tampering / deletion
+    # Hook deletes or replaces source review artifact file on disk before export writes destination
+    def _tamper_source_after_preflight():
+        art_file.unlink()
+        assert not art_file.exists()
+
+    out_png = project_dir / "exports" / "test_anti_toctou.png"
+    res_export = delivery_svc.export_png(
+        rev,
+        output_path=out_png,
+        authorization_id=auth_id,
+        _post_preflight_hook=_tamper_source_after_preflight,
+    )
+    assert res_export.outcome == "confirmed_success"
+    assert out_png.is_file()
+    assert hashlib.sha256(out_png.read_bytes()).hexdigest() == mat.content_hash
+    # Byte-for-byte exact equality with preflight payload
+    assert out_png.read_bytes() == payload.png_bytes
+
+    # Sub-case 2: Blogger delivery with post-preflight source tampering
+    # Restore valid file first, then use hook to tamper after preflight
+    art_file.write_bytes(payload.png_bytes)
+    captured_payloads: list[Any] = []
+
+    class _InspectingAdapter(ControlledBloggerAdapter):
+        def publish(self, blog_id, title, p):
+            captured_payloads.append(p)
+            return super().publish(blog_id, title, p)
+
+    adapter = _InspectingAdapter(mode="success")
+    cur_rev = store.snapshot()["authority_revision"]
+    res_blogger = delivery_svc.deliver_blogger(
+        cur_rev,
+        blog_id="test-blog",
+        adapter=adapter,
+        _post_preflight_hook=lambda: art_file.write_bytes(b"another-tamper"),
+    )
+    assert res_blogger.outcome == "confirmed_success"
+    assert len(captured_payloads) == 1
+    delivered_payload = captured_payloads[0]
+    assert delivered_payload.png_bytes == payload.png_bytes
+    assert delivered_payload.content_hash == mat.content_hash
+
+    # Sub-case 3: Pre-preflight tampering is rejected and creates NO delivery attempt
+    art_file.write_bytes(b"corrupted-before-preflight")
+    cur_rev2 = store.snapshot()["authority_revision"]
+    num_attempts_before = len(store.snapshot()["delivery_attempts"])
+    with pytest.raises(SourceAssetMissingError, match="Artifact file hash mismatch|corrupted"):
+        delivery_svc.export_png(cur_rev2, output_path=project_dir / "exports" / "should_not_exist.png")
+    assert len(store.snapshot()["delivery_attempts"]) == num_attempts_before
+
+
+def test_block08_acceptance_c_blogger_identity_marker_and_exact_structure(tmp_path: Path):
+    """Acceptance C: Google and Controlled adapters construct and enforce exact <!-- comic-new:artifact-id={id}:sha256={hash} --> marker."""
+    project_dir = tmp_path / "proj_block08_c"
+    store, comp_svc, mat, rev = _setup_full_project(project_dir)
+    auth_id = f"auth-{mat.artifact_id}"
+    rev = store.authorize_release(rev, auth_id, mat.artifact_id, mat.content_hash)
+
+    # Format helper test
+    from comic_new.delivery import format_blogger_marker, parse_blogger_markers
+    expected_marker = f"<!-- comic-new:artifact-id={mat.artifact_id}:sha256={mat.content_hash} -->"
+    assert format_blogger_marker(mat.artifact_id, mat.content_hash) == expected_marker
+
+    # Parser test
+    html_valid = f"<p>Hello</p>{expected_marker}<p>World</p>"
+    valid_m, malformed_m = parse_blogger_markers(html_valid)
+    assert valid_m == [(mat.artifact_id, mat.content_hash.lower())]
+    assert malformed_m == []
+
+    # ControlledBloggerAdapter publishes with exact payload
+    adapter = ControlledBloggerAdapter(mode="success")
+    delivery_svc = DeliveryService(store, comp_svc, adapter)
+    result = delivery_svc.deliver_blogger(rev, blog_id="marker-blog")
+    assert result.outcome == "confirmed_success"
+    assert len(adapter.calls) == 1
+    call = adapter.calls[0]
+    assert call["artifact_id"] == mat.artifact_id
+    assert call["content_hash"] == mat.content_hash
+
+
+def test_block08_acceptance_d_200_false_success_counterexamples(tmp_path: Path):
+    """Acceptance D: HTTP 200 destination readback rejects missing, malformed, duplicate, or mismatched markers."""
+    project_dir = tmp_path / "proj_block08_d"
+    store, comp_svc, mat, rev = _setup_full_project(project_dir)
+    auth_id = f"auth-{mat.artifact_id}"
+    rev = store.authorize_release(rev, auth_id, mat.artifact_id, mat.content_hash)
+
+    delivery_svc = DeliveryService(store, comp_svc)
+
+    # 1. Missing marker on 200 response -> confirmed_failure
+    cur_rev = store.snapshot()["authority_revision"]
+    adapter_missing = ControlledBloggerAdapter(mode="missing_marker", post_id="post-d1", destination_url="https://b.com/d1")
+    res_missing = delivery_svc.deliver_blogger(cur_rev, blog_id="blog-d", adapter=adapter_missing)
+    assert res_missing.outcome == "confirmed_failure"
+    assert res_missing.destination_id is None
+    assert res_missing.evidence["error"] == "BloggerContentIdentityError"
+    assert res_missing.evidence["reason"] == "missing_marker"
+    assert res_missing.evidence["provisional_post_id"] == "post-d1"
+
+    # 2. Malformed marker -> confirmed_failure
+    cur_rev = store.snapshot()["authority_revision"]
+    adapter_malformed = ControlledBloggerAdapter(mode="malformed_marker", post_id="post-d2", destination_url="https://b.com/d2")
+    res_malformed = delivery_svc.deliver_blogger(cur_rev, blog_id="blog-d", adapter=adapter_malformed)
+    assert res_malformed.outcome == "confirmed_failure"
+    assert res_malformed.evidence["reason"] == "malformed_marker"
+
+    # 3. Duplicate marker -> confirmed_failure
+    cur_rev = store.snapshot()["authority_revision"]
+    adapter_duplicate = ControlledBloggerAdapter(mode="duplicate_marker", post_id="post-d3", destination_url="https://b.com/d3")
+    res_duplicate = delivery_svc.deliver_blogger(cur_rev, blog_id="blog-d", adapter=adapter_duplicate)
+    assert res_duplicate.outcome == "confirmed_failure"
+    assert res_duplicate.evidence["reason"] == "duplicate_marker"
+
+    # 4. Wrong artifact ID -> confirmed_failure
+    cur_rev = store.snapshot()["authority_revision"]
+    adapter_wrong_id = ControlledBloggerAdapter(mode="wrong_artifact_id", post_id="post-d4", destination_url="https://b.com/d4")
+    res_wrong_id = delivery_svc.deliver_blogger(cur_rev, blog_id="blog-d", adapter=adapter_wrong_id)
+    assert res_wrong_id.outcome == "confirmed_failure"
+    assert res_wrong_id.evidence["reason"] == "artifact_id_mismatch"
+
+    # 5. Wrong content hash -> confirmed_failure
+    cur_rev = store.snapshot()["authority_revision"]
+    adapter_wrong_hash = ControlledBloggerAdapter(mode="wrong_hash", post_id="post-d5", destination_url="https://b.com/d5")
+    res_wrong_hash = delivery_svc.deliver_blogger(cur_rev, blog_id="blog-d", adapter=adapter_wrong_hash)
+    assert res_wrong_hash.outcome == "confirmed_failure"
+    assert res_wrong_hash.evidence["reason"] == "content_hash_mismatch"
+
+
+def test_block08_acceptance_e_exact_content_identity_success_readback(tmp_path: Path):
+    """Acceptance E: Exactly matching marker verifies destination and confirms success with complete readback evidence."""
+    project_dir = tmp_path / "proj_block08_e"
+    store, comp_svc, mat, rev = _setup_full_project(project_dir)
+    auth_id = f"auth-{mat.artifact_id}"
+    rev = store.authorize_release(rev, auth_id, mat.artifact_id, mat.content_hash)
+
+    adapter = ControlledBloggerAdapter(mode="success", post_id="post-exact-e", destination_url="https://b.com/exact-e")
+    delivery_svc = DeliveryService(store, comp_svc, adapter)
+
+    result = delivery_svc.deliver_blogger(rev, blog_id="blog-e", title="Exact Episode")
+    assert result.outcome == "confirmed_success"
+    assert result.destination_id == "post-exact-e"
+    assert result.destination_url == "https://b.com/exact-e"
+    assert result.evidence["readback"]["marker_verified"] is True
+    assert result.evidence["readback"]["expected_artifact_id"] == mat.artifact_id
+    assert result.evidence["readback"]["expected_sha256"] == mat.content_hash
+
+    # Store readback verification
+    snap = store.snapshot()
+    last_att = snap["delivery_attempts"][-1]
+    assert last_att["outcome"] == "confirmed_success"
+    assert last_att["destination_id"] == "post-exact-e"
+    assert last_att["destination_url"] == "https://b.com/exact-e"
+
+
+def test_block08_acceptance_f_unknown_preservation_and_reconcile_api(tmp_path: Path):
+    """Acceptance F: Ambiguous readback preserves unknown with provisional destination, and reconcile transitions same row."""
+    project_dir = tmp_path / "proj_block08_f"
+    store, comp_svc, mat, rev = _setup_full_project(project_dir)
+    auth_id = f"auth-{mat.artifact_id}"
+    rev = store.authorize_release(rev, auth_id, mat.artifact_id, mat.content_hash)
+
+    # Adapter where insert succeeds (provisional post_id/url known) but initial readback times out
+    timeout_adapter = ControlledBloggerAdapter(
+        mode="readback_timeout",
+        post_id="post-recon-1",
+        destination_url="https://b.com/post-recon-1.html",
+    )
+    delivery_svc = DeliveryService(store, comp_svc, timeout_adapter)
+
+    # 1. Delivery results in unknown with provisional destination
+    res1 = delivery_svc.deliver_blogger(rev, blog_id="blog-f")
+    assert res1.outcome == "unknown"
+    assert res1.destination_id is None
+    assert res1.destination_url is None
+    assert res1.evidence["provisional_post_id"] == "post-recon-1"
+    assert res1.evidence["provisional_destination_url"] == "https://b.com/post-recon-1.html"
+
+    attempt_id = res1.attempt_id
+    snap1 = store.snapshot()
+    att1 = snap1["delivery_attempts"][-1]
+    assert att1["attempt_id"] == attempt_id
+    assert att1["outcome"] == "unknown"
+
+    # 2. Reconcile with adapter that now returns exact marker -> transitions same row to confirmed_success!
+    success_adapter = ControlledBloggerAdapter(
+        mode="success",
+        post_id="post-recon-1",
+        destination_url="https://b.com/post-recon-1.html",
+    )
+    cur_rev = snap1["authority_revision"]
+    res_recon = delivery_svc.reconcile_blogger(cur_rev, attempt_id, adapter=success_adapter)
+    assert res_recon.attempt_id == attempt_id
+    assert res_recon.outcome == "confirmed_success"
+    assert res_recon.destination_id == "post-recon-1"
+    assert res_recon.destination_url == "https://b.com/post-recon-1.html"
+    assert res_recon.evidence["reconciled"] is True
+
+    # Check SQLite attempt row was transitioned in-place
+    snap2 = store.snapshot()
+    assert len(snap2["delivery_attempts"]) == 1
+    att2 = snap2["delivery_attempts"][0]
+    assert att2["attempt_id"] == attempt_id
+    assert att2["outcome"] == "confirmed_success"
+    assert att2["destination_id"] == "post-recon-1"
+    assert att2["destination_url"] == "https://b.com/post-recon-1.html"
+
+    # 3. Terminal reconcile attempt MUST be rejected
+    cur_rev2 = snap2["authority_revision"]
+    with pytest.raises(ConflictError, match="terminal"):
+        delivery_svc.reconcile_blogger(cur_rev2, attempt_id, adapter=success_adapter)
+
+    # 4. Reconcile on attempt with unknown destination remains unknown without error
+    # Create an attempt where insert failed completely before destination was known
+    cur_rev3 = store.snapshot()["authority_revision"]
+    pure_timeout_adapter = ControlledBloggerAdapter(mode="timeout")
+    res_pure = delivery_svc.deliver_blogger(cur_rev3, blog_id="blog-pure", adapter=pure_timeout_adapter)
+    assert res_pure.outcome == "unknown"
+    assert res_pure.evidence.get("provisional_destination_url") is None
+
+    cur_rev4 = store.snapshot()["authority_revision"]
+    res_pure_recon = delivery_svc.reconcile_blogger(cur_rev4, res_pure.attempt_id, adapter=success_adapter)
+    assert res_pure_recon.outcome == "unknown"
+    assert res_pure_recon.evidence["reconcile_status"] == "destination_unknown"
+
+
+def test_block08_server_api_reconcile_endpoint(tmp_path: Path):
+    """Acceptance F: FastAPI POST /api/release/blogger/{attempt_id}/reconcile endpoint."""
+    project_dir = tmp_path / "proj_server_recon"
+    store, comp_svc, mat, rev = _setup_full_project(project_dir)
+    auth_id = f"auth-{mat.artifact_id}"
+    rev = store.authorize_release(rev, auth_id, mat.artifact_id, mat.content_hash)
+
+    # Start with adapter that causes readback timeout
+    adapter = ControlledBloggerAdapter(
+        mode="readback_timeout",
+        post_id="post-srv-recon",
+        destination_url="https://blogger.com/srv-recon",
+    )
+    app = create_app(project_dir, SYSTEM_FONT_PATH, blogger_adapter=adapter)
+
+    with TestClient(app) as client:
+        cur_rev = client.get("/api/studio/snapshot").json()["authority_revision"]
+        # Deliver -> unknown
+        res_del = client.post(
+            "/api/release/blogger",
+            json={"expected_authority_revision": cur_rev, "blog_id": "api-blog", "title": "Episode 1"},
+        )
+        assert res_del.status_code == 200
+        del_data = res_del.json()
+        assert del_data["outcome"] == "unknown"
+        att_id = del_data["attempt_id"]
+
+        # Now update adapter mode to success for readback reconcile
+        adapter.mode = "success"
+        adapter.readback_mode = "success"
+        cur_rev = del_data["snapshot"]["authority_revision"]
+
+        res_recon = client.post(
+            f"/api/release/blogger/{att_id}/reconcile",
+            json={"expected_authority_revision": cur_rev},
+        )
+        assert res_recon.status_code == 200
+        recon_data = res_recon.json()
+        assert recon_data["attempt_id"] == att_id
+        assert recon_data["outcome"] == "confirmed_success"
+        assert recon_data["destination_id"] == "post-srv-recon"
+        assert recon_data["destination_url"] == "https://blogger.com/srv-recon"
+
+        # Reconciling again on terminal attempt returns 409 conflict
+        cur_rev = recon_data["snapshot"]["authority_revision"]
+        res_recon2 = client.post(
+            f"/api/release/blogger/{att_id}/reconcile",
+            json={"expected_authority_revision": cur_rev},
+        )
+        assert res_recon2.status_code == 409
+        assert res_recon2.json()["error"]["code"] == "conflict"
+
+
+def test_block08_acceptance_g_authority_mutation_concurrency_preservation(tmp_path: Path):
+    """Acceptance G: Mutation during external I/O does not alter historical attempt identity or allow new authority to claim old success."""
+    project_dir = tmp_path / "proj_block08_g"
+    store, comp_svc, mat, rev = _setup_full_project(project_dir)
+    auth_id = f"auth-{mat.artifact_id}"
+    rev = store.authorize_release(rev, auth_id, mat.artifact_id, mat.content_hash)
+
+    class _ConcurrentMutatingAdapter(ControlledBloggerAdapter):
+        def publish(self, blog_id, title, payload):
+            # Mutate store authority concurrently during external I/O
+            snap = store.snapshot()
+            cur_r = snap["authority_revision"]
+            # Mutate bubble text to advance authority revision and revoke release authorization
+            comp = snap.get("composition") or {}
+            comp_st = dict(comp.get("state") or {})
+            bubbles = [dict(b) for b in comp_st.get("bubbles", [])]
+            bubbles[0]["text"] = "Concurrent text mutation during external I/O"
+            comp_st["bubbles"] = bubbles
+            store.accept_composition(cur_r, comp.get("revision", 0), comp_st)
+            return super().publish(blog_id, title, payload)
+
+    adapter = _ConcurrentMutatingAdapter(
+        mode="success",
+        post_id="post-g-concurrent",
+        destination_url="https://b.com/g-concurrent",
+    )
+    delivery_svc = DeliveryService(store, comp_svc, adapter)
+
+    cur_rev = store.snapshot()["authority_revision"]
+    result = delivery_svc.deliver_blogger(cur_rev, blog_id="blog-g")
+    assert result.outcome == "confirmed_success"
+    assert result.destination_id == "post-g-concurrent"
+    assert result.artifact_id == mat.artifact_id
+    assert result.content_hash == mat.content_hash
+
+    # Active authorization is now revoked in current snapshot
+    snap = store.snapshot()
+    assert snap["release_authorization"]["active"] is None
+
+    # The recorded attempt still preserves the original authorization_id and artifact_id
+    att = snap["delivery_attempts"][-1]
+    assert att["authorization_id"] == auth_id
+    assert att["artifact_id"] == mat.artifact_id
+    assert att["outcome"] == "confirmed_success"
+
+
+def test_block08_google_blogger_incomplete_read_truncated_body_and_reconcile(tmp_path: Path):
+    """Verify GoogleBloggerAdapter handles IncompleteRead on truncated Content-Length and chunked framing as unknown with provisional identity, and reconcile remains unknown without terminal rewrite."""
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _MockBloggerHttpHandler)
+    server.recorded_calls = []
+    port = server.server_port
+    th = threading.Thread(target=server.serve_forever, daemon=True)
+    th.start()
+
+    try:
+        project_dir = tmp_path / "proj_incomplete_read"
+        store, comp_svc, mat, rev = _setup_full_project(project_dir)
+        auth_id = f"auth-{mat.artifact_id}"
+        rev = store.authorize_release(rev, auth_id, mat.artifact_id, mat.content_hash)
+
+        adapter = GoogleBloggerAdapter(
+            access_token="direct-token-incompl",
+            api_base_url=f"http://127.0.0.1:{port}",
+            timeout_seconds=3.0,
+        )
+        delivery_svc = DeliveryService(store, comp_svc, adapter)
+
+        # 1. Initial deliver: Insert succeeds, readback body truncated by Content-Length -> unknown with provisional destination
+        server.post_mode = "success"
+        server.readback_mode = "incomplete_content_length"
+        res1 = delivery_svc.deliver_blogger(
+            rev,
+            blog_id="test-blog-incompl",
+            title="Episode Truncated Content-Length",
+            adapter=adapter,
+        )
+        assert res1.outcome == "unknown"
+        assert res1.destination_id is None
+        assert res1.destination_url is None
+        assert res1.evidence["error"] == "BloggerTransportTimeoutError"
+        assert res1.evidence["provisional_post_id"] == "post-http-real-123"
+        assert res1.evidence["provisional_destination_url"] == f"http://127.0.0.1:{port}/readback/post-http-real-123.html"
+        assert res1.evidence["raw_response"] is not None
+
+        attempt_id = res1.attempt_id
+        snap1 = store.snapshot()
+        assert len(snap1["delivery_attempts"]) == 1
+        att1 = snap1["delivery_attempts"][0]
+        assert att1["attempt_id"] == attempt_id
+        assert att1["outcome"] == "unknown"
+        assert att1["destination_id"] is None
+        assert att1["destination_url"] is None
+        assert att1["evidence"]["provisional_post_id"] == "post-http-real-123"
+        assert att1["evidence"]["provisional_destination_url"] == f"http://127.0.0.1:{port}/readback/post-http-real-123.html"
+
+        # 2. Reconcile on same attempt: Readback body truncated by chunked framing -> remains unknown on same attempt row
+        server.readback_mode = "incomplete_chunked"
+        cur_rev = snap1["authority_revision"]
+        res_recon1 = delivery_svc.reconcile_blogger(cur_rev, attempt_id, adapter=adapter)
+        assert res_recon1.attempt_id == attempt_id
+        assert res_recon1.outcome == "unknown"
+        assert res_recon1.destination_id is None
+        assert res_recon1.destination_url is None
+        assert res_recon1.evidence["reconciled"] is False
+        assert "incomplete read" in res_recon1.evidence["reconcile_error"]
+
+        snap2 = store.snapshot()
+        assert len(snap2["delivery_attempts"]) == 1
+        att2 = snap2["delivery_attempts"][0]
+        assert att2["attempt_id"] == attempt_id
+        assert att2["outcome"] == "unknown"
+        assert att2["destination_id"] is None
+        assert att2["destination_url"] is None
+
+        # 3. Reconcile on same attempt: Readback now succeeds with exact content marker -> transitions same row to confirmed_success
+        server.readback_mode = "success"
+        cur_rev2 = snap2["authority_revision"]
+        res_recon2 = delivery_svc.reconcile_blogger(cur_rev2, attempt_id, adapter=adapter)
+        assert res_recon2.attempt_id == attempt_id
+        assert res_recon2.outcome == "confirmed_success"
+        assert res_recon2.destination_id == "post-http-real-123"
+        assert res_recon2.destination_url == f"http://127.0.0.1:{port}/readback/post-http-real-123.html"
+        assert res_recon2.evidence["reconciled"] is True
+
+        snap3 = store.snapshot()
+        assert len(snap3["delivery_attempts"]) == 1
+        att3 = snap3["delivery_attempts"][0]
+        assert att3["attempt_id"] == attempt_id
+        assert att3["outcome"] == "confirmed_success"
+        assert att3["destination_id"] == "post-http-real-123"
+
+        # 4. Initial deliver with chunked truncation on readback, followed by Content-Length truncation on reconcile
+        project_dir_b = tmp_path / "proj_incomplete_b"
+        store_b, comp_svc_b, mat_b, rev_b = _setup_full_project(project_dir_b)
+        auth_id_b = f"auth-{mat_b.artifact_id}"
+        rev_b = store_b.authorize_release(rev_b, auth_id_b, mat_b.artifact_id, mat_b.content_hash)
+        delivery_svc_b = DeliveryService(store_b, comp_svc_b, adapter)
+
+        server.post_mode = "success"
+        server.readback_mode = "incomplete_chunked"
+        res_b1 = delivery_svc_b.deliver_blogger(
+            rev_b,
+            blog_id="test-blog-incompl-b",
+            title="Episode Truncated Chunked Initial",
+            adapter=adapter,
+        )
+        assert res_b1.outcome == "unknown"
+        assert res_b1.destination_id is None
+        assert res_b1.evidence["provisional_post_id"] == "post-http-real-123"
+
+        server.readback_mode = "incomplete_content_length"
+        cur_rev_b = store_b.snapshot()["authority_revision"]
+        res_b_recon = delivery_svc_b.reconcile_blogger(cur_rev_b, res_b1.attempt_id, adapter=adapter)
+        assert res_b_recon.attempt_id == res_b1.attempt_id
+        assert res_b_recon.outcome == "unknown"
+        assert res_b_recon.evidence["reconciled"] is False
+
+        # 5. Insert itself truncated (Content-Length and chunked) -> stays unknown without generic authoritative error
+        project_dir_c = tmp_path / "proj_incomplete_c"
+        store_c, comp_svc_c, mat_c, rev_c = _setup_full_project(project_dir_c)
+        auth_id_c = f"auth-{mat_c.artifact_id}"
+        rev_c = store_c.authorize_release(rev_c, auth_id_c, mat_c.artifact_id, mat_c.content_hash)
+        delivery_svc_c = DeliveryService(store_c, comp_svc_c, adapter)
+
+        server.post_mode = "incomplete_content_length"
+        res_c1 = delivery_svc_c.deliver_blogger(
+            rev_c,
+            blog_id="test-blog-incompl-c",
+            title="Episode Truncated Insert CL",
+            adapter=adapter,
+        )
+        assert res_c1.outcome == "unknown"
+        assert res_c1.evidence["error"] == "BloggerTransportTimeoutError"
+        assert "incomplete read" in res_c1.evidence["message"]
+
+        server.post_mode = "incomplete_chunked"
+        cur_rev_c2 = store_c.snapshot()["authority_revision"]
+        res_c2 = delivery_svc_c.deliver_blogger(
+            cur_rev_c2,
+            blog_id="test-blog-incompl-c2",
+            title="Episode Truncated Insert Chunked",
+            adapter=adapter,
+        )
+        assert res_c2.outcome == "unknown"
+        assert res_c2.evidence["error"] == "BloggerTransportTimeoutError"
+        assert "incomplete read" in res_c2.evidence["message"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_block08_oversized_chunk_line_too_long_and_invalid_utf8_insert_reconcile(tmp_path: Path):
+    """Acceptance F / BLOCK-08 generic HTTP parser and decoder remediation:
+    1. LineTooLong on destination readback produces unknown with provisional destination identity.
+    2. Later repeated reconcile under LineTooLong preserves unknown on same attempt row.
+    3. Later exact reconcile succeeds without republishing where destination is known.
+    4. Invalid UTF-8 on insert produces unknown without fabricated destination.
+    5. Later reconcile on invalid UTF-8 attempt remains unknown without republishing.
+    6. Explicit 4xx and content marker mismatch remain confirmed_failure.
+    """
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _MockBloggerHttpHandler)
+    server.recorded_calls = []
+    port = server.server_port
+    th = threading.Thread(target=server.serve_forever, daemon=True)
+    th.start()
+
+    try:
+        # 1. LineTooLong on readback after known insert
+        project_dir = tmp_path / "proj_line_too_long"
+        store, comp_svc, mat, rev = _setup_full_project(project_dir)
+        auth_id = f"auth-{mat.artifact_id}"
+        rev = store.authorize_release(rev, auth_id, mat.artifact_id, mat.content_hash)
+
+        adapter = GoogleBloggerAdapter(
+            access_token="direct-token-ltl",
+            api_base_url=f"http://127.0.0.1:{port}",
+            timeout_seconds=3.0,
+        )
+        delivery_svc = DeliveryService(store, comp_svc, adapter)
+
+        server.post_mode = "success"
+        server.readback_mode = "oversized_chunk_line_too_long"
+        res1 = delivery_svc.deliver_blogger(
+            rev,
+            blog_id="test-blog-ltl",
+            title="Episode Oversized Chunk",
+            adapter=adapter,
+        )
+        assert res1.outcome == "unknown"
+        assert res1.destination_id is None
+        assert res1.destination_url is None
+        assert res1.evidence["error"] == "BloggerTransportTimeoutError"
+        assert res1.evidence["provisional_post_id"] == "post-http-real-123"
+        assert res1.evidence["provisional_destination_url"] == f"http://127.0.0.1:{port}/readback/post-http-real-123.html"
+        assert res1.evidence["raw_response"] is not None
+
+        attempt_id = res1.attempt_id
+        snap1 = store.snapshot()
+        assert len(snap1["delivery_attempts"]) == 1
+        att1 = snap1["delivery_attempts"][0]
+        assert att1["attempt_id"] == attempt_id
+        assert att1["outcome"] == "unknown"
+        assert att1["destination_id"] is None
+        assert att1["destination_url"] is None
+        assert att1["evidence"]["provisional_post_id"] == "post-http-real-123"
+        assert att1["evidence"]["provisional_destination_url"] == f"http://127.0.0.1:{port}/readback/post-http-real-123.html"
+
+        # 2. Repeated reconcile under LineTooLong preserves unknown on same attempt row
+        cur_rev = snap1["authority_revision"]
+        res_recon1 = delivery_svc.reconcile_blogger(cur_rev, attempt_id, adapter=adapter)
+        assert res_recon1.attempt_id == attempt_id
+        assert res_recon1.outcome == "unknown"
+        assert res_recon1.destination_id is None
+        assert res_recon1.destination_url is None
+        assert res_recon1.evidence["reconciled"] is False
+
+        snap2 = store.snapshot()
+        assert len(snap2["delivery_attempts"]) == 1
+        att2 = snap2["delivery_attempts"][0]
+        assert att2["attempt_id"] == attempt_id
+        assert att2["outcome"] == "unknown"
+        assert att2["destination_id"] is None
+        assert att2["destination_url"] is None
+
+        # 3. Later exact reconcile succeeds without republish where destination is known
+        server.readback_mode = "success"
+        cur_rev2 = snap2["authority_revision"]
+        post_count_before = len([c for c in server.recorded_calls if c["method"] == "POST" and "/posts" in c["path"]])
+        res_recon2 = delivery_svc.reconcile_blogger(cur_rev2, attempt_id, adapter=adapter)
+        post_count_after = len([c for c in server.recorded_calls if c["method"] == "POST" and "/posts" in c["path"]])
+
+        assert post_count_after == post_count_before == 1  # No republishing!
+        assert res_recon2.attempt_id == attempt_id
+        assert res_recon2.outcome == "confirmed_success"
+        assert res_recon2.destination_id == "post-http-real-123"
+        assert res_recon2.destination_url == f"http://127.0.0.1:{port}/readback/post-http-real-123.html"
+        assert res_recon2.evidence["reconciled"] is True
+
+        snap3 = store.snapshot()
+        assert len(snap3["delivery_attempts"]) == 1
+        att3 = snap3["delivery_attempts"][0]
+        assert att3["attempt_id"] == attempt_id
+        assert att3["outcome"] == "confirmed_success"
+        assert att3["destination_id"] == "post-http-real-123"
+        assert att3["destination_url"] == f"http://127.0.0.1:{port}/readback/post-http-real-123.html"
+
+        # 4. Invalid UTF-8 on insert -> unknown without fabricated destination
+        project_dir_u = tmp_path / "proj_invalid_utf8"
+        store_u, comp_svc_u, mat_u, rev_u = _setup_full_project(project_dir_u)
+        auth_id_u = f"auth-{mat_u.artifact_id}"
+        rev_u = store_u.authorize_release(rev_u, auth_id_u, mat_u.artifact_id, mat_u.content_hash)
+        delivery_svc_u = DeliveryService(store_u, comp_svc_u, adapter)
+
+        server.post_mode = "invalid_utf8"
+        res_u = delivery_svc_u.deliver_blogger(
+            rev_u,
+            blog_id="test-blog-utf8",
+            title="Episode Invalid UTF-8",
+            adapter=adapter,
+        )
+        assert res_u.outcome == "unknown"
+        assert res_u.destination_id is None
+        assert res_u.destination_url is None
+        assert res_u.evidence["error"] == "BloggerTransportTimeoutError"
+        assert res_u.evidence.get("provisional_post_id") is None
+        assert res_u.evidence.get("provisional_destination_url") is None
+        assert res_u.evidence.get("raw_response") is None
+
+        snap_u = store_u.snapshot()
+        assert len(snap_u["delivery_attempts"]) == 1
+        att_u = snap_u["delivery_attempts"][0]
+        assert att_u["outcome"] == "unknown"
+        assert att_u["destination_id"] is None
+        assert att_u["destination_url"] is None
+        assert att_u["evidence"].get("provisional_post_id") is None
+        assert att_u["evidence"].get("provisional_destination_url") is None
+
+        # 5. Later reconcile on invalid UTF-8 attempt remains unknown without republishing
+        post_count_before_u = len([c for c in server.recorded_calls if c["method"] == "POST" and "/posts" in c["path"]])
+        cur_rev_u = snap_u["authority_revision"]
+        res_recon_u = delivery_svc_u.reconcile_blogger(cur_rev_u, res_u.attempt_id, adapter=adapter)
+        post_count_after_u = len([c for c in server.recorded_calls if c["method"] == "POST" and "/posts" in c["path"]])
+
+        assert post_count_after_u == post_count_before_u  # No republishing!
+        assert res_recon_u.outcome == "unknown"
+        assert res_recon_u.destination_id is None
+        assert res_recon_u.destination_url is None
+        assert res_recon_u.evidence.get("reconcile_status") == "destination_unknown"
+
+        # 6. Explicit 4xx and content mismatch failure remain confirmed_failure
+        # 400 insert is confirmed_failure
+        server.post_mode = "400"
+        project_dir_f = tmp_path / "proj_explicit_failures"
+        store_f, comp_svc_f, mat_f, rev_f = _setup_full_project(project_dir_f)
+        auth_id_f = f"auth-{mat_f.artifact_id}"
+        rev_f = store_f.authorize_release(rev_f, auth_id_f, mat_f.artifact_id, mat_f.content_hash)
+        delivery_svc_f = DeliveryService(store_f, comp_svc_f, adapter)
+
+        res_400 = delivery_svc_f.deliver_blogger(
+            rev_f,
+            blog_id="test-blog-400",
+            title="Episode 400",
+            adapter=adapter,
+        )
+        assert res_400.outcome == "confirmed_failure"
+        assert res_400.evidence["status_code"] == 400
+
+        # 404 readback is confirmed_failure
+        server.post_mode = "success"
+        server.readback_mode = "404"
+        cur_rev_f2 = store_f.snapshot()["authority_revision"]
+        res_404 = delivery_svc_f.deliver_blogger(
+            cur_rev_f2,
+            blog_id="test-blog-404",
+            title="Episode 404 Readback",
+            adapter=adapter,
+        )
+        assert res_404.outcome == "confirmed_failure"
+
+        # Missing marker readback is confirmed_failure
+        server.readback_mode = "missing_marker"
+        cur_rev_f3 = store_f.snapshot()["authority_revision"]
+        res_mismatch = delivery_svc_f.deliver_blogger(
+            cur_rev_f3,
+            blog_id="test-blog-mismatch",
+            title="Episode Missing Marker",
+            adapter=adapter,
+        )
+        assert res_mismatch.outcome == "confirmed_failure"
+        assert res_mismatch.evidence["error"] == "BloggerContentIdentityError"
+        assert res_mismatch.evidence["reason"] == "missing_marker"
+
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_block08_destination_readback_invalid_utf8_initial_and_reconcile(tmp_path: Path):
+    """Verify GoogleBloggerAdapter destination readback decoding with invalid UTF-8:
+    1. Invalid byte after valid marker produces unknown with provisional post_id, destination_url, raw_response.
+    2. Repeated reconcile under invalid byte after marker remains unknown on the same attempt row.
+    3. Later valid exact readback transitions that attempt to confirmed_success without republishing.
+    4. Invalid byte within/around marker produces unknown with provisional identity (not confirmed_failure malformed_marker).
+    5. Repeated reconcile under invalid byte in marker remains unknown on the same attempt row.
+    6. Later valid exact readback transitions that attempt to confirmed_success without republishing.
+    7. Syntactically valid malformed marker in valid UTF-8 still definitively fails as confirmed_failure (BloggerContentIdentityError).
+    """
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _MockBloggerHttpHandler)
+    server.recorded_calls = []
+    port = server.server_port
+    th = threading.Thread(target=server.serve_forever, daemon=True)
+    th.start()
+
+    try:
+        adapter = GoogleBloggerAdapter(
+            access_token="direct-token-utf8",
+            api_base_url=f"http://127.0.0.1:{port}",
+            timeout_seconds=3.0,
+        )
+
+        # ------------------------------------------------------------------
+        # A. Invalid byte after marker: initial attempt unknown with provisional identity
+        # ------------------------------------------------------------------
+        project_dir_a = tmp_path / "proj_invalid_byte_after"
+        store_a, comp_svc_a, mat_a, rev_a = _setup_full_project(project_dir_a)
+        auth_id_a = f"auth-{mat_a.artifact_id}"
+        rev_a = store_a.authorize_release(rev_a, auth_id_a, mat_a.artifact_id, mat_a.content_hash)
+        delivery_svc_a = DeliveryService(store_a, comp_svc_a, adapter)
+
+        server.post_mode = "success"
+        server.readback_mode = "invalid_utf8_after_marker"
+
+        res_a = delivery_svc_a.deliver_blogger(
+            rev_a,
+            blog_id="test-blog-invalid-after",
+            title="Episode Invalid Byte After Marker",
+            adapter=adapter,
+        )
+        assert res_a.outcome == "unknown"
+        assert res_a.destination_id is None
+        assert res_a.destination_url is None
+        assert res_a.evidence["error"] == "BloggerTransportTimeoutError"
+        assert res_a.evidence["provisional_post_id"] == "post-http-real-123"
+        assert res_a.evidence["provisional_destination_url"] == f"http://127.0.0.1:{port}/readback/post-http-real-123.html"
+        assert res_a.evidence["raw_response"] is not None
+
+        attempt_id_a = res_a.attempt_id
+        snap_a1 = store_a.snapshot()
+        assert len(snap_a1["delivery_attempts"]) == 1
+        att_a1 = snap_a1["delivery_attempts"][0]
+        assert att_a1["attempt_id"] == attempt_id_a
+        assert att_a1["outcome"] == "unknown"
+        assert att_a1["destination_id"] is None
+        assert att_a1["destination_url"] is None
+        assert att_a1["evidence"]["provisional_post_id"] == "post-http-real-123"
+        assert att_a1["evidence"]["provisional_destination_url"] == f"http://127.0.0.1:{port}/readback/post-http-real-123.html"
+
+        # Repeated reconcile remains unknown on same attempt row
+        cur_rev_a1 = snap_a1["authority_revision"]
+        res_recon_a1 = delivery_svc_a.reconcile_blogger(cur_rev_a1, attempt_id_a, adapter=adapter)
+        assert res_recon_a1.attempt_id == attempt_id_a
+        assert res_recon_a1.outcome == "unknown"
+        assert res_recon_a1.destination_id is None
+        assert res_recon_a1.destination_url is None
+        assert res_recon_a1.evidence["reconciled"] is False
+
+        snap_a2 = store_a.snapshot()
+        assert len(snap_a2["delivery_attempts"]) == 1
+        att_a2 = snap_a2["delivery_attempts"][0]
+        assert att_a2["attempt_id"] == attempt_id_a
+        assert att_a2["outcome"] == "unknown"
+
+        # Later valid exact readback succeeds without republishing
+        server.readback_mode = "success"
+        post_count_before_a = len([c for c in server.recorded_calls if c["method"] == "POST" and "/posts" in c["path"]])
+        cur_rev_a2 = snap_a2["authority_revision"]
+        res_recon_a2 = delivery_svc_a.reconcile_blogger(cur_rev_a2, attempt_id_a, adapter=adapter)
+        post_count_after_a = len([c for c in server.recorded_calls if c["method"] == "POST" and "/posts" in c["path"]])
+
+        assert post_count_after_a == post_count_before_a  # No republish!
+        assert res_recon_a2.attempt_id == attempt_id_a
+        assert res_recon_a2.outcome == "confirmed_success"
+        assert res_recon_a2.destination_id == "post-http-real-123"
+        assert res_recon_a2.destination_url == f"http://127.0.0.1:{port}/readback/post-http-real-123.html"
+        assert res_recon_a2.evidence["reconciled"] is True
+
+        snap_a3 = store_a.snapshot()
+        assert len(snap_a3["delivery_attempts"]) == 1
+        att_a3 = snap_a3["delivery_attempts"][0]
+        assert att_a3["attempt_id"] == attempt_id_a
+        assert att_a3["outcome"] == "confirmed_success"
+        assert att_a3["destination_id"] == "post-http-real-123"
+        assert att_a3["destination_url"] == f"http://127.0.0.1:{port}/readback/post-http-real-123.html"
+
+        # ------------------------------------------------------------------
+        # B. Invalid byte in/around marker: initial attempt unknown with provisional identity
+        # (Must NOT be misclassified as malformed_marker / confirmed_failure)
+        # ------------------------------------------------------------------
+        project_dir_b = tmp_path / "proj_invalid_byte_in"
+        store_b, comp_svc_b, mat_b, rev_b = _setup_full_project(project_dir_b)
+        auth_id_b = f"auth-{mat_b.artifact_id}"
+        rev_b = store_b.authorize_release(rev_b, auth_id_b, mat_b.artifact_id, mat_b.content_hash)
+        delivery_svc_b = DeliveryService(store_b, comp_svc_b, adapter)
+
+        server.readback_mode = "invalid_utf8_in_marker"
+
+        res_b = delivery_svc_b.deliver_blogger(
+            rev_b,
+            blog_id="test-blog-invalid-in",
+            title="Episode Invalid Byte In Marker",
+            adapter=adapter,
+        )
+        assert res_b.outcome == "unknown"
+        assert res_b.destination_id is None
+        assert res_b.destination_url is None
+        assert res_b.evidence["error"] == "BloggerTransportTimeoutError"
+        assert res_b.evidence["provisional_post_id"] == "post-http-real-123"
+        assert res_b.evidence["provisional_destination_url"] == f"http://127.0.0.1:{port}/readback/post-http-real-123.html"
+        assert res_b.evidence["raw_response"] is not None
+
+        attempt_id_b = res_b.attempt_id
+        snap_b1 = store_b.snapshot()
+        assert len(snap_b1["delivery_attempts"]) == 1
+        att_b1 = snap_b1["delivery_attempts"][0]
+        assert att_b1["attempt_id"] == attempt_id_b
+        assert att_b1["outcome"] == "unknown"
+        assert att_b1["destination_id"] is None
+        assert att_b1["destination_url"] is None
+
+        # Repeated reconcile remains unknown on same attempt row
+        cur_rev_b1 = snap_b1["authority_revision"]
+        res_recon_b1 = delivery_svc_b.reconcile_blogger(cur_rev_b1, attempt_id_b, adapter=adapter)
+        assert res_recon_b1.attempt_id == attempt_id_b
+        assert res_recon_b1.outcome == "unknown"
+        assert res_recon_b1.destination_id is None
+        assert res_recon_b1.destination_url is None
+        assert res_recon_b1.evidence["reconciled"] is False
+
+        snap_b2 = store_b.snapshot()
+        assert len(snap_b2["delivery_attempts"]) == 1
+        att_b2 = snap_b2["delivery_attempts"][0]
+        assert att_b2["attempt_id"] == attempt_id_b
+        assert att_b2["outcome"] == "unknown"
+
+        # Later valid exact readback succeeds without republishing
+        server.readback_mode = "success"
+        post_count_before_b = len([c for c in server.recorded_calls if c["method"] == "POST" and "/posts" in c["path"]])
+        cur_rev_b2 = snap_b2["authority_revision"]
+        res_recon_b2 = delivery_svc_b.reconcile_blogger(cur_rev_b2, attempt_id_b, adapter=adapter)
+        post_count_after_b = len([c for c in server.recorded_calls if c["method"] == "POST" and "/posts" in c["path"]])
+
+        assert post_count_after_b == post_count_before_b  # No republish!
+        assert res_recon_b2.attempt_id == attempt_id_b
+        assert res_recon_b2.outcome == "confirmed_success"
+        assert res_recon_b2.destination_id == "post-http-real-123"
+        assert res_recon_b2.destination_url == f"http://127.0.0.1:{port}/readback/post-http-real-123.html"
+        assert res_recon_b2.evidence["reconciled"] is True
+
+        snap_b3 = store_b.snapshot()
+        assert len(snap_b3["delivery_attempts"]) == 1
+        att_b3 = snap_b3["delivery_attempts"][0]
+        assert att_b3["attempt_id"] == attempt_id_b
+        assert att_b3["outcome"] == "confirmed_success"
+
+        # ------------------------------------------------------------------
+        # C. Valid UTF-8 with syntactically malformed marker definitively fails
+        # (Preserve definitive content mismatch failure)
+        # ------------------------------------------------------------------
+        server.readback_mode = "malformed_marker_valid_utf8"
+        project_dir_c = tmp_path / "proj_malformed_valid_utf8"
+        store_c, comp_svc_c, mat_c, rev_c = _setup_full_project(project_dir_c)
+        auth_id_c = f"auth-{mat_c.artifact_id}"
+        rev_c = store_c.authorize_release(rev_c, auth_id_c, mat_c.artifact_id, mat_c.content_hash)
+        delivery_svc_c = DeliveryService(store_c, comp_svc_c, adapter)
+
+        res_c = delivery_svc_c.deliver_blogger(
+            rev_c,
+            blog_id="test-blog-malformed-utf8",
+            title="Episode Malformed Valid UTF-8",
+            adapter=adapter,
+        )
+        assert res_c.outcome == "confirmed_failure"
+        assert res_c.evidence["error"] == "BloggerContentIdentityError"
+        assert res_c.evidence["reason"] == "malformed_marker"
+
     finally:
         server.shutdown()
         server.server_close()

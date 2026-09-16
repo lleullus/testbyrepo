@@ -60,6 +60,7 @@ from comic_new.generation import (
 )
 from comic_new.store import (
     AuthorizationRevokedError,
+    BaselineRequiredError,
     ConflictError,
     InvalidArtifactClosureError,
     RealizationIncompleteError,
@@ -202,6 +203,10 @@ class BloggerReleaseRequest(WireModel):
     expected_authority_revision: NonNegativeInt
     blog_id: str | None = None
     title: str | None = None
+
+
+class BloggerReconcileRequest(WireModel):
+    expected_authority_revision: NonNegativeInt
 
 class _AssetReferenceParser(HTMLParser):
     def __init__(self) -> None:
@@ -514,6 +519,7 @@ def _snapshot_dto(
             {
                 "cut_id": cut["cut_id"],
                 "desired_revision": cut["desired_revision"],
+                "latest_generation_request_seq": cut["latest_generation_request_seq"],
                 "effective_intent": cut["effective_intent"],
                 "realized_revision": cut["realized_revision"],
                 "realized_asset_id": cut["realized_asset_id"],
@@ -530,6 +536,7 @@ def _snapshot_dto(
                 "job_id": job["job_id"],
                 "cut_id": job["cut_id"],
                 "target_desired_revision": job["target_desired_revision"],
+                "request_seq": job["request_seq"],
                 "status": job["status"],
                 "terminal_detail": job["terminal_detail"],
                 "created_at": job["created_at"],
@@ -835,6 +842,17 @@ def create_app(
     app.add_exception_handler(InvalidArtifactClosureError, artifact_not_current)
     app.add_exception_handler(ArtifactNoLongerCurrentError, artifact_not_current)
 
+    @app.exception_handler(BaselineRequiredError)
+    async def handle_baseline_required(_request: Request, exc: BaselineRequiredError) -> JSONResponse:
+        return _api_error(
+            ApiProblem(
+                409,
+                "baseline_required",
+                str(exc),
+                current_snapshot=dto(store.snapshot()),
+            )
+        )
+
     @app.exception_handler(RunnerAlreadyActiveError)
     async def handle_runner_busy(_request: Request, _exc: RunnerAlreadyActiveError) -> JSONResponse:
         return _api_error(ApiProblem(409, "runner_busy", "Another generation runner is active"))
@@ -1129,6 +1147,34 @@ def create_app(
             raise ApiProblem(500, "asset_missing", str(exc), current_snapshot=dto(store.snapshot())) from exc
         except Exception as exc:
             raise ApiProblem(500, "delivery_failed", str(exc), current_snapshot=dto(store.snapshot())) from exc
+
+        return {
+            "attempt_id": result.attempt_id,
+            "kind": result.kind,
+            "authorization_id": result.authorization_id,
+            "artifact_id": result.artifact_id,
+            "outcome": result.outcome,
+            "destination_id": result.destination_id,
+            "destination_url": result.destination_url,
+            "snapshot": fresh_and_publish(),
+        }
+
+    @app.post("/api/release/blogger/{attempt_id}/reconcile")
+    async def reconcile_blogger(attempt_id: str, body: BloggerReconcileRequest) -> dict[str, Any]:
+        _ensure_accepting(app)
+
+        try:
+            result = await asyncio.to_thread(
+                delivery_service.reconcile_blogger,
+                body.expected_authority_revision,
+                attempt_id,
+            )
+        except ValidationError as exc:
+            raise ApiProblem(400, "validation_error", str(exc), current_snapshot=dto(store.snapshot())) from exc
+        except ConflictError as exc:
+            raise ApiProblem(409, "conflict", str(exc), current_snapshot=dto(store.snapshot())) from exc
+        except Exception as exc:
+            raise ApiProblem(500, "reconcile_failed", str(exc), current_snapshot=dto(store.snapshot())) from exc
 
         return {
             "attempt_id": result.attempt_id,

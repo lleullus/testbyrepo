@@ -66,7 +66,18 @@ function updateSelectedBubble(patch: Partial<BubbleDTO>, enqueue = false) {
 
 const bubbleText = computed({
   get: () => selectedBubble.value?.text ?? '',
-  set: (text: string) => updateSelectedBubble({ text }),
+  set: (text: string) => {
+    const selected = selectedBubble.value
+    const composition = activeComposition.value
+    if (!selected || !composition) return
+    // Keep all bubbles of the same cut uniform with the dialogue
+    store.setCompositionDraft({
+      ...composition,
+      bubbles: composition.bubbles.map((bubble) =>
+        bubble.cut_id === selected.cut_id ? { ...bubble, text } : bubble,
+      ),
+    }, false)
+  },
 })
 
 function saveComposition() {
@@ -106,6 +117,7 @@ function addBubble() {
   const composition = activeComposition.value
   if (!composition) return
   const cutId = store.selection.cutId
+  const sameCutBubble = composition.bubbles.find((b) => b.cut_id === cutId)
   const bubbleId = `bubble-${crypto.randomUUID()}`
   const bubble: BubbleDTO = {
     bubble_id: bubbleId,
@@ -115,7 +127,7 @@ function addBubble() {
     y_pct: Math.min((cutId - 1) * 20 + 5, 91),
     w_pct: 50,
     h_pct: 4,
-    text: selectedCut.value?.effective_intent?.dialogue ?? '',
+    text: sameCutBubble ? sameCutBubble.text : (currentIntent.value.dialogue ?? ''),
     font_size_pct: 2,
     line_spacing_pct: 20,
     text_align: 'center',
