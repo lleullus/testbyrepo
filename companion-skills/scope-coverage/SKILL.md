@@ -56,7 +56,7 @@ A material finding or evidence limit must state:
 - reachable condition and materially wrong result for a finding, or the missing observation and unresolved claim for an evidence limit;
 - which verifier observation cannot distinguish the violation or is missing;
 - narrowest discriminating next observation or exact authority/environment limitation;
-- routing class (such as observation, mechanism, product, method, meaning, drift or settlement), required owner and exact current actor when supplied, permitted next action and actions not authorized.
+- routing class (such as observation, mechanism, product, method, contract, drift or settlement), required owner under `iis-workflow`'s re-entry rules and exact current actor when supplied, permitted next action and actions not authorized.
 
 Routing metadata grants no mutation authority and does not determine verification sufficiency. Do not select a missing actor or turn a local classification into permission to omit observations. Coverage may identify exact code paths and failing assumptions, but must not issue an exact patch as an implementation instruction or rewrite the Plan.
 
@@ -91,7 +91,7 @@ Limitations: None | <exact evidence/authority/investigation limits>
 The caller retains the unchanged completed verifier result and its invocation/evidence attribution while Coverage runs. It must not convert a Coverage summary into a second semantic verdict or discard raw findings/limits.
 
 - `COMPLETE` with no unresolved material finding/evidence gap and no required follow-up permits Main to apply the currentness and status-only recording procedure in `scope-verify/SKILL.md`: confirm actual independent completed results, current ready Scope/source/target and settled effects; change only `Status: ready` to `Status: done` with ordinary file tools; read back the exact result.
-- A material reachable path or evidence limit withholds recording and routes the exact finding/limit to the existing verifier, implementation/tooling, Plan, Scope or Thesis owner as appropriate. It is not a product FAILED verdict and does not authorize automatic remediation or Coverage rewriting the Plan. Main forwards the evidence; it neither repairs the product/tool nor decides which obligations are unaffected.
+- A material reachable path or evidence limit withholds recording. Main routes the exact finding/limit by the changed decision under `iis-workflow`'s re-entry rules. It is not a product FAILED verdict and does not authorize automatic remediation or Coverage rewriting the Plan. Main forwards the evidence; it neither repairs the product/tool nor decides which obligations are unaffected. The verifier retains evidence-sufficiency judgment and Coverage retains its follow-up search judgment.
 - Coverage failure, missing evidence or target attribution returns `PARTIAL`/`BLOCKED` and exact next owner/action without overwriting verifier `VERIFIED` or fabricating completion.
 - A changed stable source/config/authority or unexplained effect drift requires a fresh current-target semantic verifier cycle. The old result is never resumed or patched. An unchanged-target evidence-only gap follows the verifier's evidence-follow-up rules and produces a new whole-Scope result before further normal-success Coverage.
 

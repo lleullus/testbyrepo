@@ -43,8 +43,7 @@ class BundleInstallTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("# candidate payload\n")
         self.router = self.source / "iis-workflow/SKILL.md"
-        self.router.write_text(f"Read {self.source}/scope-shaper/tools/validate_scope.py\n"
-                               f"Guide {self.source}/model-selection-guide.md\n")
+        self.router.write_text(f"Read {self.source}/scope-shaper/tools/validate_scope.py\n")
 
     def prepare(self) -> dict:
         return self.installer.prepare(self.source, self.store)
@@ -109,7 +108,6 @@ class BundleInstallTests(unittest.TestCase):
         release = self.store / "releases" / manifest["bundle_id"]
         router = (release / "iis-workflow/SKILL.md").read_text()
         self.assertIn(str(release / "scope-shaper/tools/validate_scope.py"), router)
-        self.assertIn(str(self.source / "model-selection-guide.md"), router)
         self.router.write_text("new candidate\n")
         self.assertEqual((release / "iis-workflow/SKILL.md").read_text(), router)
         self.assertNotEqual(self.prepare()["bundle_id"], manifest["bundle_id"])

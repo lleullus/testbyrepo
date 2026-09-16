@@ -34,13 +34,13 @@ Before the first source change:
 5. Separate pre-existing working-tree changes from the Scope delta.
 6. Confirm the first mutation is directly tied to the observable result or an approved invariant.
 
-If canonical meaning is contradictory or missing, stop with `BLOCKED` and return the exact Thesis/Scope owner. Do not repair product meaning from implementation.
+If a canonical contract is contradictory or missing, stop with `BLOCKED` and return the exact gap to Main for the owning Thesis, Baseline or Scope correction under `iis-workflow`'s re-entry rules. Do not repair contract meaning from implementation.
 
 ## 4. Reviewed method and conditional start
 
-Re-read load-bearing Plan anchors before their dependent mutation. Do not create a separate PRE_ACTION approval stage. If a condition has a reviewed bundle, perform only `permitted_initial_work`; use its `discriminating_observation` to choose support, refutation or insufficiency. Support permits the reviewed direction. Refutation or insufficiency stops dependent work and returns the exact Plan/Scope/Thesis owner for revision and a new independent review. Safe work may continue only when state, owner and effect independence are demonstrated.
+Re-read load-bearing Plan anchors before their dependent mutation. Do not create a separate PRE_ACTION approval stage. If a condition has a reviewed bundle, perform only `permitted_initial_work`; use its `discriminating_observation` to choose support, refutation or insufficiency. Support permits the reviewed direction. Refutation or insufficiency stops dependent work and returns to the exact owner under `iis-workflow`'s re-entry rules, with affected method revision and independent review before dependent implementation. Safe work may continue only when state, owner and effect independence are demonstrated.
 
-Equivalent local naming/private helpers and small same-surface corrections stay within the currently admitted implementing actor's still-running invocation and authorized mutation surface; this discretion does not transfer to Main or another role. A different cause, product state/effect owner, shared interface, persistence boundary, acceptance/readback, target strategy or external-effect strategy is a material method change. Expected output-byte changes within the reviewed method do not alone require revision. Stop affected mutation and return the terminal below; do not edit the Plan or continue under stale admission:
+Equivalent local naming/private helpers and small same-surface corrections stay within the currently admitted implementing actor's still-running invocation and authorized mutation surface; this discretion does not transfer to Main or another role. With the outcome and approved boundaries unchanged, a different cause, internal owner/interface, persistence mechanism, readback method or target/effect strategy is a material method change. A change to the promised result or approved transition boundary instead returns to Main under the contract-gap rule above. Expected output-byte changes within the reviewed method do not alone require revision. For a material method change, stop affected mutation and return the terminal below; do not edit the Plan or continue under stale admission:
 
 ```text
 SCOPE IMPLEMENT RESULT
@@ -65,7 +65,7 @@ Group findings only when current evidence shows the same falsified assumption, w
 - directly resolved at the current target;
 - resolved with the same evidenced cause group;
 - separated and fixed as a distinct cause; or
-- returned at a Scope/Thesis/material-method boundary with exact next owner/action.
+- returned at a contract/material-method boundary with exact next owner/action under `iis-workflow`'s re-entry rules.
 
 A known finding that is merely named in the handoff is not closed. Keep observed facts separate from inference. User-reported observations are ground truth for the reported fact; repeat them only when needed to locate the fix or prove the post-change result.
 

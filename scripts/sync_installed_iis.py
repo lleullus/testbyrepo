@@ -128,20 +128,8 @@ def source_origins(source: Path, explicit: list[Path] | None = None) -> list[Pat
 
 
 def rebase(content: bytes, origins: list[Path], destination: Path) -> bytes:
-    # The replaceable model guide is deliberately external to every release.
-    guides = {}
-    for index, origin in enumerate(origins):
-        guide = str(origin / "model-selection-guide.md").encode()
-        token = f"__IIS_EXTERNAL_MODEL_GUIDE_{index}__".encode()
-        if token in content:
-            raise ValueError("reserved model-guide token in source")
-        if guide in content:
-            content = content.replace(guide, token)
-            guides[token] = guide
     for origin in origins:
         content = content.replace(str(origin).encode() + b"/", str(destination).encode() + b"/")
-    for token, guide in guides.items():
-        content = content.replace(token, guide)
     return content
 
 

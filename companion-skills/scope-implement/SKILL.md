@@ -76,11 +76,11 @@ Implement the smallest reviewed change that satisfies the Scope's `Outcome`, all
 
 Apply the reuse, deletion and consolidation choices in `references/implement.md` before adding structure; smallest means coherent and easier to understand, not merely fewer lines. These choices remain within the reviewed method and existing revision boundary.
 
-For each finding supplied by the caller or discovered in scope, identify it before claiming completion and give it one disposition: directly fixed, fixed with the same evidenced cause group, separately fixed, or returned at a Scope/Thesis/material-method boundary with exact next owner. Do not pass known related findings to the verifier as if they were closed. Connect each change to its Acceptance scenario, impact span, cheapest discriminating check, real acceptance readback and external-condition limit.
+For each finding supplied by the caller or discovered in scope, identify it before claiming completion and give it one disposition: directly fixed, fixed with the same evidenced cause group, separately fixed, or returned at a contract/material-method boundary with the exact owner under `iis-workflow`'s re-entry rules. Do not pass known related findings to the verifier as if they were closed. Connect each change to its Acceptance scenario, impact span, cheapest discriminating check, real acceptance readback and external-condition limit.
 
 For correction, include the actual delta, mutation attribution, relevant causal/state/config/runtime/persistence/identity/effect surfaces, self-check and remaining uncertainty in the existing result. Any claimed unaffected obligation is navigation for the verifier, not permission to omit verification. Preserve the origin of pre-existing changes rather than adopting them as this invocation's work.
 
-A material change to cause, product state/effect owner, shared interface, persistence meaning, acceptance/readback, target strategy or external-effect strategy changes the reviewed method. Expected output-byte changes within that method create a new verification target but do not alone require Plan revision. Stop mutation that depends on the new direction and return:
+Use `references/implement.md` to distinguish contract changes from material method changes under `iis-workflow`'s re-entry rules. A change to meaning, approved transition geography or the current outcome returns to Main for its owning original, not to a method rewrite. With those contracts unchanged, stop mutation that depends on a material method change and return the result below. Expected output-byte changes within the reviewed method create a new verification target but do not alone require Plan revision.
 
 ```text
 SCOPE IMPLEMENT RESULT
@@ -104,7 +104,7 @@ Tests or source inspection are supporting evidence when they do not exercise the
 
 ## Status and result
 
-This role never changes `Status:`. A normal ready Scope remains `ready` after implementation. Only Main may record `done` after the independent verifier result, Coverage and currentness checks under `scope-verify`. Do not amend Thesis, Scope, Acceptance or Plan Review during implementation.
+This role never changes `Status:`. A normal ready Scope remains `ready` after implementation. Only Main may record `done` after the independent verifier result, Coverage and currentness checks under `scope-verify`. Do not amend Thesis, Baseline, Scope, Acceptance or Plan Review during implementation.
 
 ```text
 SCOPE IMPLEMENT RESULT

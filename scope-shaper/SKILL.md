@@ -1,11 +1,11 @@
 ---
 name: scope-shaper
-description: "Select one current durable IIS Scope from actual product state and adopted Thesis, preserving required outcomes and any applicable transition contract. Produce the direct implementation/verification contract without Matt, Spec or Tickets."
+description: "Main's instructions for fixing one current IIS Scope during current-state reconciliation, before method writing. Preserve approved boundaries and serialize the implementation/verification contract without a separate Shaper stage."
 ---
 
-# Scoping
+# Current Scope Contract
 
-The current IIS Main performs Scoping inside the current request's authority. A role return is not automatically the end of a broader request. An explicit Scope-only request stops with the Scope result.
+Main uses these instructions while reconciling current state, not as a separate Shaper stage, delegated role or approval gate. Fix the current outcome and Acceptance in `SCOPE.md` before writing its method; reuse a sufficient current contract rather than reselecting it. An explicit Scope-only request stops with that contract, while a broader authorized request continues to Plan.
 
 ## Inputs
 
@@ -17,7 +17,7 @@ Distinguish evidence from product authority. A past report or a candidate name i
 
 Understand the connected product landscape before choosing: delivered capabilities, unmet required outcomes/means, candidate means, actual constraints and independently acceptable sibling outcomes. Preserve long-term intent without preapproving a future execution queue. For a small change this can be a short explanation, not a Work Package document hierarchy.
 
-Select the smallest durable observable state change that advances the assigned result without severing necessary behavior. Actor, trigger/inspection, current→target result and authoritative readback must be identifiable in the explanation, not repeated as mandatory fields. Technical layers and file count do not define product scope. One Scope may require several internal technical tasks. Split only independently acceptable outcomes; keep inseparable preservation/integration obligations with the outcome they qualify.
+Reuse an applicable approved construction boundary under the transition rules below. Where no boundary is fixed, Main selects the smallest durable observable state change that advances the assigned result without severing necessary behavior, then fixes it in Scope before method writing. Actor, trigger/inspection, current→target result and authoritative readback must be identifiable in the explanation, not repeated as mandatory fields. Technical layers and file count do not define product scope. One Scope may require several internal technical tasks. Split only independently acceptable outcomes; keep inseparable preservation/integration obligations with the outcome they qualify.
 
 A narrow current Scope must not erase the broader assigned Goal or required named items. Keep their original references and actual remaining state available to Main. Candidate removal does not waive the outcome it supported. If the user assigned only this stage or a narrow result, do not import the entire Thesis as extra work.
 
@@ -27,7 +27,9 @@ Read relevant Thesis behavior, failure/recovery, UI, identity and truth boundari
 
 ## Transition contract
 
-When an approved BASELINE-NNN applies, select within the current measured Block. Carry applicable global/path invariants, entry/exit conditions, readback, continuation/abort limits and remaining Goal obligations. HARD_ATOMIC requires one Scope with internal implementation steps. Other Blocks may allow several safe Scopes. Block exit is not final transformation completion. A narrower user stage request remains narrow despite broader Baseline continuation authority.
+When an approved BASELINE-NNN applies, reconcile the current measured Block and relevant actual state against its entry/exit/readback, global/path invariants, continuation/abort limits and remaining Goal obligations. A Block number alone does not establish runtime, config, persistent-state or external-effect readiness. Re-establish only evidence that can change the current boundary; a boundary-critical unknown prevents making that contract ready, while a method-only premise may remain for Plan's reviewed conditional first work.
+
+Reuse a Block Exit when it is the appropriate durable completion unit. If the approved original fixes an internal construction boundary or selection order, preserve it; do not split, merge or reorder it for method convenience. Otherwise a coarse non-atomic Block may allow Main to select a smaller independently acceptable result without revising the Baseline. HARD_ATOMIC remains one Scope with internal implementation steps. Record the selected Block and any applicable original boundary locator in Outcome/Acceptance, referencing existing conditions rather than copying a second policy. Block exit is not final transformation completion, and continuation authority never expands a narrower user stage request.
 
 ## Scope source
 
@@ -48,10 +50,10 @@ Use `tools/validate_scope.py /absolute/path/to/SCOPE.md` for structural validati
 
 Describe initial observable state, action/inspection, expected product result and authoritative readback wherever needed to distinguish success from a plausible failure. Include actual failure, late/duplicate response, identity and preservation cases that are material, not a fixed checklist. Do not prescribe implementation files, mocks, framework assertions or worker topology. A real artifact result can be checked by inspecting that artifact; an external-effect promise requires that effect's actual boundary. Mark unavailable evidence or permission honestly instead of substituting a surrogate.
 
-The verifier judges all applicable authored obligations against the stable implementation. A product-meaning gap goes to Thesis; an omitted projection goes back here. Do not add ad hoc ACs during verification, weaken requirements to force PASS or regard internal test success as product completion.
+The verifier judges all applicable authored obligations against the stable implementation. Return contract gaps to Main for the owning Thesis, Baseline or Scope correction under `iis-workflow`'s re-entry rules. Do not add ad hoc ACs during verification, weaken requirements to force PASS or regard internal test success as product completion.
 
-## Reshaping and return
+## Contract revision and continuation
 
-New actual evidence may split, merge, replace or reorder the current construction choice within delegated authority. Preserve the assigned Goal, required items and source history. Changing method alone returns to Plan, not to product redefinition. Do not overwrite a delivered Scope or treat an unchanged historical success as current integration evidence.
+New actual evidence may change Main's current construction choice only where the adopted originals leave that choice open. A change to fixed transition geography first requires its Baseline revision; product meaning belongs to Thesis, and method alone to Plan, under `iis-workflow`'s re-entry rules. Preserve the assigned Goal, required items and source history. Never change Outcome/Acceptance as a method edit or overwrite a delivered Scope; changed contracts require affected planning/review before dependent implementation. An unchanged historical success is not current integration evidence.
 
-Return the exact Scope path, bound originals, chosen outcome, validation result and material open limits. A ready Scope goes directly to execution planning when the current request permits it. No shared-understanding document, Spec, Ticket Set, ready-for-matt transition or duplicate Increment handoff is generated.
+Keep the exact Scope path, bound originals, chosen outcome, validation result and material open limits available to the requested next stage. A ready Scope goes directly to execution planning when the current request permits it, without a separate Shaper handoff. No shared-understanding document, Spec, Ticket Set, ready-for-matt transition or duplicate Increment handoff is generated.

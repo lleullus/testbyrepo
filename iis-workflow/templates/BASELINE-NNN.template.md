@@ -19,7 +19,7 @@ Approval:
 - Approval scope: `<Goal, invariants, Blocks, and continuation ceiling covered by this approval>`
 - Inter-Block auto-continuation authorized: `yes | no`
 
-Applicability requires this exact original revision and current authority. Finding an old file does not authorize the transition. This is a conditional transition contract, not an operating mode, request form, cursor, status log or workflow store.
+Applicability requires this exact original revision and current authority. Finding an old file does not authorize the transition. This is a conditional transition contract, not an operating mode, request form, cursor, status log or workflow store. Main prepares or revises it within existing delegated authority; choices outside that authority return to the approval owner above. Preserve bound revisions and obtain approval where the existing authority requires it, not through a new per-revision ceremony.
 
 ## Transformation Outcome
 
@@ -54,7 +54,7 @@ These constraints apply throughout the transition path, including Block boundari
 
 ## Transition Blocks
 
-Define coarse transition milestones and measured predicates, not preapproved future Scopes or a queue of implementation tasks.
+Define transition milestones and measured predicates, not ready future Scopes or a queue of implementation tasks. Reuse a Block's ID, Entry, Exit, Invariants and Continuation when its Exit is the appropriate durable completion unit. Coarse Blocks may leave smaller current outcome selection to Main. Only where independent handoff or a prescribed construction order actually matters, name that internal boundary and its conditions here, reusing the Block's existing predicates and readbacks. State a selection priority only when choosing between eligible boundaries materially matters. Do not require an internal boundary catalog for every Block; even a fixed boundary still needs current evidence and a current Scope before methods.
 
 ### Block `<BLOCK-ID>` — `<Name>`
 

@@ -4,8 +4,8 @@
 
 Run this review in an invocation separate from the method writer. Read every bound Thesis source, the complete current Scope, current implementation path and primary evidence before accepting the Planner's diagnosis as a frame. The writer's self-check, agreement, finding count, JSON shape or binding hash does not establish independent semantic review. Preserve actual reviewer identity and raw invocation/evidence provenance without inventing another approval gate.
 
-The Scope is the acceptance authority. Judge the proposed method against its complete `Outcome`, every authored `Acceptance` scenario and product success/failure/recovery/preservation condition, not merely the Plan's summary. A missing or contradictory obligation is a Scope/Thesis issue, not permission to narrow the method. Approved future details and explicit Non-Goals remain excluded.
-When the Scope contains `## Transition Authority`, review its exact project-local baseline paths/digests and selected Block/conditions as part of the current method; an absent section is not a missing requirement. A hash proves bytes, not approval or continuation authority.
+The Scope is the current acceptance contract. In this same review, distinguish its fidelity to bound originals from the proposed method's sufficiency for its complete `Outcome`, every authored `Acceptance` scenario and product success/failure/recovery/preservation condition. A missing or contradictory obligation is a `contract_gap` for Main to route under `iis-workflow`, not permission to narrow the method. Approved future details and explicit Non-Goals remain excluded.
+When the Scope contains `## Transition Authority`, read its exact project-local baseline paths/digests and compare the selected Block and any fixed construction boundary/order with the approved original and current evidence. Do not require a new internal boundary where the Baseline leaves construction choice open. An absent section is not a missing requirement. A hash proves bytes, not approval or continuation authority; this check adds no review stage or artifact.
 
 ## Bounded review frontier
 

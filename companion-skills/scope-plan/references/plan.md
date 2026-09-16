@@ -48,13 +48,13 @@ For every implementation-time premise that can be safely decided before dependen
 - `permitted_initial_work`: bounded first work;
 - `discriminating_observation`: actual readback separating support and refutation;
 - `dependent_work_not_yet_permitted`: expansion forbidden until that readback;
-- `response_if_refuted`: work to stop and exact Planner/Scope/Thesis owner to revisit.
+- `response_if_refuted`: work to stop and exact method or contract owner under `iis-workflow`'s re-entry rules.
 
 Support permits only the already reviewed direction. Refutation or insufficient evidence stops dependent mutation and returns `PARTIAL` or `BLOCKED` with the exact owner. Safe unrelated work may continue only when ownership, state and effect independence are explicit.
 
 ## Revision ownership
 
-Naming, private helpers and equivalent local edits are the admitted implementer's discretion. A changed cause, product state/effect owner, interface, persistence meaning, acceptance/readback, target strategy or effect strategy is a material method change: stop affected implementation, revise this Plan and obtain a fresh independent review. Expected output-byte changes within the reviewed method do not alone require revision. Method revision preserves the user-selected implementation actor/model/effort/mode; a fresh invocation is not a new selection. A product-meaning change returns to the exact Thesis owner; a current-result or Scope-boundary change returns to Scope shaping. Do not edit a bound Plan merely to satisfy admission.
+Naming, private helpers and equivalent local edits are the admitted implementer's discretion. With the outcome and approved boundaries unchanged, a changed cause, internal owner/interface, persistence mechanism, readback method or target/effect strategy is a material method change: stop affected implementation, revise this Plan and obtain a fresh independent review. Changes to promised meaning, approved transition geography or the current outcome instead return to Main for the owning original under `iis-workflow`'s re-entry rules; do not redefine them in Plan. Expected output-byte changes within the reviewed method do not alone require revision. Method revision preserves the user-selected implementation actor/model/effort/mode; a fresh invocation is not a new selection. Do not edit a bound Plan merely to satisfy admission.
 
 The independent Reviewer, not the Planner, owns the ADMIT judgment. A Plan hash detects byte drift; it does not prove semantic sufficiency. Preserve the exact reviewer artifact and its findings/limits.
 

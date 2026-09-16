@@ -21,7 +21,7 @@ Before any product/runtime action:
 
 If validator, Scope, Thesis authority, status, current target or product meaning cannot be established, return the applicable non-started/non-progressing result with no semantic verdict. Do not start product/runtime work to obtain missing admission evidence.
 
-A Scope that omits a material product meaning needed for its own promised result returns to Scope/Thesis ownership. Verification does not add a new acceptance obligation, normalize a missing condition or silently expand the work.
+A Scope that omits or contradicts an applicable original obligation returns to Main for the owning Thesis, Baseline or Scope correction under `iis-workflow`'s re-entry rules. Verification does not add a new acceptance obligation, normalize a missing condition or silently expand the work.
 
 ## 3. Current source and target attribution
 

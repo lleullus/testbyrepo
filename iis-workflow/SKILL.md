@@ -33,7 +33,7 @@ Derive from the latest instruction and applicable originals: assigned outcome; r
 
 Existing durable decision priorities and delegation may remain applicable. A supplied Mandate is a source of bounded authority, not a second operating mode. Resolve choices already determined by user instructions, approved originals, priorities and inspectable facts. Ask only for materially different unresolved user-owned outcomes. Never label an agent's derived recommendation explicit user approval.
 
-Reuse explicit applicable model/effort and execution-mode selections. For actual missing delegated-role selections, consult the current user-selected guide or ~/project/iis-skills/model-selection-guide.md and ask once for only those missing choices. The guide and host default are recommendations, not consent. Do not ask for disabled or DIRECT roles; never silently substitute an unavailable model. Verification selection covers sequential Coverage unless explicitly scoped otherwise. This rule does not create model questions for advisory discussion.
+Reuse applicable explicit user model/effort/mode selections or an identifiable user-selected caller/host policy; ambient defaults and recommendations are not consent. Before dispatching an enabled delegated role, resolve only genuinely missing required selections: ask once for the missing roles/fields in interactive work, or return `MODEL_SELECTION_REQUIRED` with those roles/fields in non-interactive continuation. Do not generate automatic model choices from difficulty, cost or benchmarks. An unavailable selected model or required invocation capability returns its exact limitation, not another model/effort or DIRECT fallback. Do not ask for disabled or DIRECT roles or advisory discussion. Verification selection covers sequential Coverage unless explicitly scoped otherwise.
 
 An affirmative current `/승인게이트` requires displaying the exact request contract and direct approval before downstream planning/delivery mutation. Quotes, explanations and negation do not activate it. Read-only investigation and owning Thesis source storage remain permitted. It adds no per-artifact gate and is not released by delegated recommendation. Optional adversarial consensus and the exact Challenger still require explicit user direction; do not activate or choose them automatically.
 
@@ -43,20 +43,19 @@ Use Product Thesis for product meaning, behavior, UI policy, failure/recovery an
 
 Current-state investigation supplies evidence, not authority. Reuse current load-bearing evidence and inspect changed anchors instead of repeating an entire investigation. Do not assume a stored source is current merely because its report says complete.
 
-A Transition Baseline (`BASELINE-NNN.md`) is an optional approved transition contract, not a snapshot or mode. It preserves Block dependencies, entry/exit/readback, global/path invariants, safe continuation/abort and atomic boundaries. Bind its exact applicable revision and current approval; file presence alone does not activate it. Project one measured current Block into Scoping. A HARD_ATOMIC Block remains one Scope with internal technical work, not several partially completed product units. A Block may otherwise contain several safe Scopes. Baseline applicability never expands a narrower current stage request.
+A Transition Baseline (`BASELINE-NNN.md`) is an optional approved transition contract, not a snapshot or mode. Bind its exact applicable revision and current approval; file presence alone does not activate it. Main applies its measured Block, invariants, entry/exit/readback, continuation/abort and atomic boundaries while fixing the current Scope under `scope-shaper/SKILL.md`. Reuse boundaries already fixed by that authority instead of reselecting them for method convenience. Coarse Blocks may still leave a current construction choice to Main; ordinary work needs no Baseline. Baseline applicability never expands a narrower current stage request.
 
 ## Canonical authority flow
 
 1. Investigate only facts needed by the current request.
 2. Perform or reuse Product Thesis. Product decisions needed to choose a Scope are resolved in that original, not in a new Matt document.
-3. Reconcile an applicable transition contract against actual state when present.
-4. Scope Shaper selects exactly one durable current outcome. Resolve the current Scope's material product choices in Thesis before execution planning. Scope owns includes/excludes and observable acceptance; it directly references exact Thesis originals.
-5. Execution planning owns technical methods, dependencies, actual work division and integration. A single worker does not require Workstreams boilerplate. Plan cannot strengthen, weaken or replace Scope acceptance.
-6. Obtain an actual independent Plan Review before implementation. A writer cannot independently approve its own writing invocation.
-7. Invoke implementation only inside the current request. Consume its integrated target and self-check, not just a completion label.
-8. Invoke the independent verifier for the stable exact Scope when authorized. Verification-only enters here without a new implementation Plan.
-9. For normal successful verification, obtain one independent read-only Coverage result before eligible finalization. Missing or partial review is not no-finding. Coverage does not issue a second acceptance verdict.
-10. Main records completion only under `scope-verify`'s caller procedure: attributable completed independent `VERIFIED` and Coverage `COMPLETE` with no unresolved material gap, current ready Scope/originals/target, settled effects and current user authority. Use ordinary file tools to change only `Status: ready` to `Status: done`, then read back the status-only change. Preserve verdict and recording evidence separately. Then evaluate the original assigned result and remaining required obligations.
+3. Main reconciles current evidence with any applicable transition contract and fixes one durable current outcome in `SCOPE.md` before method writing, using `scope-shaper/SKILL.md` as its contract-authoring instructions, not a separate Shaper stage or invocation. Reuse a sufficient current Scope. Resolve material product choices in Thesis; Scope records includes/excludes and observable acceptance against the exact originals.
+4. Execution planning owns technical methods, dependencies, actual work division and integration. A single worker does not require Workstreams boilerplate. Plan cannot strengthen, weaken or replace Scope acceptance.
+5. Obtain an actual independent Plan Review before implementation. A writer cannot independently approve its own writing invocation.
+6. Invoke implementation only inside the current request. Consume its integrated target and self-check, not just a completion label.
+7. Invoke the independent verifier for the stable exact Scope when authorized. Verification-only enters here without a new implementation Plan.
+8. For normal successful verification, obtain one independent read-only Coverage result before eligible finalization. Missing or partial review is not no-finding. Coverage does not issue a second acceptance verdict.
+9. Main records completion only under `scope-verify`'s caller procedure: attributable completed independent `VERIFIED` and Coverage `COMPLETE` with no unresolved material gap, current ready Scope/originals/target, settled effects and current user authority. Use ordinary file tools to change only `Status: ready` to `Status: done`, then read back the status-only change. Preserve verdict and recording evidence separately. Then evaluate the original assigned result and remaining required obligations.
 
 Do not create Matt shared understanding, Spec, Ticket Set or an extra Increment carrying the same Scope contract. Optional behavior/UI references and visual assets belong to the Thesis source set, not a separate approval lifecycle. Future candidates are not preapproved ready Scopes or an execution queue.
 
@@ -74,12 +73,15 @@ Main's request ownership does not grant implementation mutation authority. For a
 
 ## Re-entry
 
-- Method/cause/product state or effect-owner assumptions change: affected Plan and independent method review before dependent implementation; this does not change the user-selected implementing actor.
+Route by the decision that must change, not by words such as owner, persistence or readback. Reconcile changed evidence first; do not revise a contract merely to explain drift.
+
+- Product promise, policy or success meaning changes: revise the affected Thesis original, then reassess applicable Baseline, Scope and Plan. Unrelated new revisions do not automatically invalidate old bound work.
+- Approved transition boundaries, permitted states or ordering must change: Main revises the affected Baseline under its existing delegated/approval authority, preserving bound history, before projecting an affected Scope. Do not silently redefine approved geography in Scope or Plan.
+- Scope omits an applicable original obligation or its unfixed construction choice is wrong: Main corrects the current contract from current evidence under `scope-shaper/SKILL.md`, preserving the Goal, required items and approved boundaries. Do not invent ACs inside verification.
+- Meaning and approved boundaries stay unchanged, but cause, internal ownership/interface, readback method or target/effect strategy changes: revise the affected Plan and obtain independent method review before dependent implementation; this does not change the user-selected implementing actor.
+- Runtime/config drift or Block mismatch: remeasure only the deciding evidence, then use the applicable route above. Unknown external-effect settlement goes to the actual effect owner for authorized readback/containment, not to a smaller Scope or a blind retry.
 - Product implementation contradicts the adopted contract: repair through the current authorized implementation actor, then obtain a fresh independent whole-Scope verdict on the corrected target under `scope-verify`.
 - Verification cannot observe the required boundary: return the exact evidence/mechanism gap, not an inferred product defect. Invocation-local usage belongs to verifier follow-up; shared project tooling to its authorized implementation/tooling actor; IIS-owned tools to their maintainer under separate maintenance authority. An observation-only gap needs no implementation correction.
-- Scope projection omits an applicable Thesis obligation: return to Scoping; do not invent an AC inside the verifier or silently weaken the original.
-- User outcome/policy changes: revise affected Thesis meaning, then reassess affected Scope and Plan. Unrelated new revisions do not automatically invalidate old bound work.
-- Current construction shape is wrong: reshape the current Scope from actual state while preserving assigned Goal and required items.
 
 Corrective re-entry preserves the current implementation actor/model/effort/mode, including after material method revision. Only an applicable explicit user change changes that selection; unavailability does not authorize silent substitution or DIRECT fallback. A fresh invocation preserves the selection, not the prior worker's lifetime, and waits for prior effects to settle or be safely contained. Continuity never overrides stage-only, stop, no-reentry or external-effect limits.
 

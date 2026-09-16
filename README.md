@@ -1,11 +1,11 @@
 # IIS Planning Skills
 
-IIS is a host-independent skill/document workflow: Thesis → Scope → Plan → implementation → independent verification → read-only Coverage → Main's completion record. It requires ordinary file, command and independent-invocation facilities, not a patched OMP, a delivery plugin or a dedicated execution CLI. Product meaning belongs to Thesis, acceptance to Scope, methods to Plan, and the semantic verdict to the independent verifier.
+IIS is a host-independent skill/document workflow: Main reconciles current state and Thesis into a fixed Scope → Plan → implementation → independent verification → read-only Coverage → Main's completion record. It requires ordinary file, command and independent-invocation facilities, not a patched OMP, a delivery plugin or a dedicated execution CLI. Product and acceptance meaning belongs to Thesis, the current outcome and observable acceptance contract to Scope, methods to Plan, and the semantic verdict to the independent verifier.
 
 ## Components
 
 - `product-thesis/`: product meaning, Behavior/UI, failure/recovery and success observations.
-- `scope-shaper/`: selection and definition of one durable current product outcome.
+- `scope-shaper/`: Main's current Scope contract instructions, template and validator; no separate Shaper stage or invocation.
 - `companion-skills/scope-plan/`: method preparation and independent Plan Review.
 - `companion-skills/scope-implement/`, `scope-verify/`, `scope-coverage/`: implementation, independent semantic verification and read-only post-success review.
 - `iis-workflow/`: current-request routing, continuation and completion responsibility.
@@ -31,22 +31,23 @@ Use `--host codex` for that optional path adapter, or include both installed hos
 
 `rollback --confirm-quiescent` and `remove --confirm-quiescent` preserve history and refuse intervening user changes. They change installation entries, not product effects or OMP source. Restoring a historical v3 installation would also require its matching host source; it is not an alternate current operating mode. Installation does not restart clients or prove existing sessions reloaded the skills; `loaded_identity: NOT_CHECKED` remains explicit.
 
-Model configuration, credentials, the replaceable model guide and product planning/evidence are not bundled. Observatory's independent data installer remains `python3 scripts/sync_installed_observatory.py`.
+Model configuration, credentials and product planning/evidence are not bundled. IIS preserves explicit user-selected model policy rather than supplying model presets. Observatory's independent data installer remains `python3 scripts/sync_installed_observatory.py`.
 
 ## Product and planning contracts
 
-Thesis source storage is authorized before model/approval closure but does not approve product meaning or implementation. Sources normally live at `docs/planning/product-thesis/<meaning-slug>/THESIS-NNN.md`; preserve referenced revisions. Optional Transition Baseline remains a transition map, not a replacement Thesis or a second operating mode.
+Thesis source storage is authorized before model/approval closure but does not approve product meaning or implementation. Sources normally live at `docs/planning/product-thesis/<meaning-slug>/THESIS-NNN.md`; preserve referenced revisions. Optional Transition Baseline remains a transition map, not a replacement Thesis or a second operating mode. Main reuses fixed construction boundaries and chooses a current durable outcome only where the originals leave that choice open. Existing Block predicates suffice unless an actual independent handoff or prescribed order needs a finer boundary; no universal boundary catalog is required.
 
 Scope lives at `docs/planning/work/<kebab-case-slug>/SCOPE.md`, using `Schema: iis-scope/v1`, `Project-Root`, `Status`, `## Product Authority`, `## Outcome`, `## Acceptance`, and optional `## Open Decisions`/`## Transition Authority`. `draft` preserves unresolved meaning, `ready` admits reviewed work, `done` records completed verification/Coverage and Main's confirmed status change, and `superseded` marks an unconsumed replaced contract. The standalone validator checks structure and exact bound sources; it does not decide semantic completeness.
 
-Plan chooses implementation methods without redefining Scope acceptance. Its independent review records exact reviewed files and actual-byte hashes with `iis-scope-plan-review/v2`; no host-generated authority digest is required. Recommendations in [model-selection-guide.md](model-selection-guide.md) never override user-selected models/effort or introduce a hidden roster. The guide remains outside the immutable release.
+Main fixes the current Scope before method writing; Plan chooses implementation methods without redefining Outcome or Acceptance. The same independent Plan Review checks fidelity to bound originals and method sufficiency, recording exact reviewed files and actual-byte hashes with `iis-scope-plan-review/v2`; no extra review stage or host-generated authority digest is required. Re-entry follows the changed decision: Thesis meaning, Baseline geography, Main's Scope application, or Plan method. Missing required delegated-role selections are resolved by the user or returned as `MODEL_SELECTION_REQUIRED`, never by a hidden default.
 
 ## Verification and completion
 
 ```text
 Current user intent + actual product state
   → Thesis when meaning needs definition or revision
-  → Scope → Plan and independent Plan Review
+  → Main reconciles applicable Baseline/current state and fixes Scope
+  → Plan and independent Plan Review
   → Implementation → independent Verification
   → independent read-only Coverage after VERIFIED
   → Main records ready → done with ordinary file tools and readback

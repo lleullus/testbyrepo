@@ -9,7 +9,7 @@ Thesis owns what the product promises and why, including the behavior necessary 
 
 ## Entry and authority
 
-The single IIS entry interprets the current request first. A discussion or status query is not permission to write product authority. An explicit Thesis request ends after its requested product-definition result. Product construction or Scoping may create or amend Thesis when applicable meaning is missing; sufficient existing meaning is reused without a new ceremony.
+The single IIS entry interprets the current request first. A discussion or status query is not permission to write product authority. An explicit Thesis request ends after its requested product-definition result. Main's current-state reconciliation and Scope authoring may create or amend Thesis when applicable meaning is missing; sufficient existing meaning is reused without a new ceremony.
 
 Current user instructions take precedence over adopted product originals and derived necessity. Current implementation is evidence, not automatic product policy. Preserve explicit required outcomes and required means. Candidate or replaceable means are not completion obligations. Separate direct user choices from agent-derived decisions under actual delegation.
 
@@ -43,7 +43,7 @@ Resolve only material contradictions. Do not invent adjacent requirements to mak
 
 Apply current explicit instructions, adopted originals, decision priorities, delegated authority and inspectable facts before asking. When those determine one faithful recommendation, adopt it within authority without claiming direct user approval. When materially different user-owned results remain, explain their consequences and ask only that choice. A hypothetical future detail or replaceable implementation method does not require a question.
 
-No separate Matt shared understanding, Behavior approval phase or Spec serialization is created. Scope discovering a material gap returns to the affected original section here. Preserve settled meaning and update only its causal consequences. A user's explicit approval gate still applies at its actual IIS boundary.
+No separate Matt shared understanding, Behavior approval phase or Spec serialization is created. Main resolves a material product gap in the affected original section here before fixing the current Scope. Preserve settled meaning and update only its causal consequences. A user's explicit approval gate still applies at its actual IIS boundary.
 
 ## Source storage and currentness
 
