@@ -9,6 +9,9 @@
 #define RESIZE_TERMINAL '1'
 #define PAUSE '2'
 #define RESUME '3'
+#define HEARTBEAT '4'
+#define SESSION_READY '5'
+#define TAKEOVER '6'
 #define JSON_DATA '{'
 
 // server message
@@ -16,6 +19,8 @@
 #define SET_WINDOW_TITLE '1'
 #define SET_PREFERENCES '2'
 #define SET_SESSION_STATE '3'
+#define REPLAY_END '4'
+#define HEARTBEAT_REPLY '5'
 
 // url paths
 struct endpoints {
@@ -31,6 +36,14 @@ extern struct server *server;
 extern struct endpoints endpoints;
 
 struct tty_session;
+enum session_state {
+  SESSION_STATE_ACTIVE = 0,
+  SESSION_STATE_DETACHED_GRACE,
+  SESSION_STATE_EXITED_RETAINED,
+  SESSION_STATE_TERMINATING,
+  SESSION_STATE_PURGED
+};
+
 
 struct pss_http {
   char path[128];
@@ -47,10 +60,28 @@ struct pss_tty {
   char address[50];
   char path[128];
   char resume_id[33];
-  bool resumed;
+  bool session_accepted;
+  bool input_ready;
+  bool replay_end_sent;
   bool client_flow_paused;
   bool writable_pending;
+  bool heartbeat_pending;
+  bool close_after_state;
+  bool handshake_received;
+  bool state_update_pending;
+  bool takeover_offered;
+  bool takeover_pending;
   uint64_t connection_generation;
+  uint64_t requested_position;
+  uint64_t send_position;
+  uint64_t replay_target;
+  uint64_t reported_session_id;
+  uint64_t offered_owner_generation;
+  uint64_t replay_start;
+  bool replay_lost;
+  char session_state[32];
+  char heartbeat[65];
+  size_t heartbeat_len;
   char **args;
   int argc;
 
@@ -61,6 +92,9 @@ struct pss_tty {
   pty_process *process;
   struct tty_session *session;
 
+  struct tty_session *pending_session;
+  uint16_t pending_columns;
+  uint16_t pending_rows;
   int lws_close_status;
 };
 

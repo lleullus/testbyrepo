@@ -66,5 +66,20 @@ int pty_write(pty_process *process, pty_buf_t *buf);
 bool pty_resize(pty_process *process);
 bool pty_kill(pty_process *process, int sig);
 bool pty_signal_foreground(pty_process *process, int sig);
+typedef struct proc_ident {
+  pid_t pid;
+  pid_t pgrp;
+  unsigned long long starttime;
+} proc_ident_t;
+
+bool pty_proc_get_ident(pid_t pid, proc_ident_t *ident_out);
+bool pty_proc_ident_alive(const proc_ident_t *ident);
+pid_t pty_get_fg_pgid(pty_process *process);
+void pty_get_process_tree_idents(pid_t root_pid, pid_t extra_pgid, proc_ident_t **idents_out, size_t *count_out);
+void pty_expand_tree_idents(proc_ident_t **idents_inout, size_t *count_inout);
+bool pty_tree_idents_alive(const proc_ident_t *idents, size_t count);
+bool pty_kill_tree(pty_process *process, int sig);
+void pty_get_process_tree(pid_t root_pid, pid_t **pids_out, size_t *count_out);
+bool pty_tree_alive(pid_t root_pid);
 
 #endif  // TTYD_PTY_H

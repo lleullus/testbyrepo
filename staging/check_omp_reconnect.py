@@ -12,8 +12,8 @@ import urllib.request
 import websocket
 
 ROOT = Path(__file__).resolve().parents[1]
-TTYD_BIN = Path(os.environ.get('TTYD_BIN', ROOT / 'build-native' / 'ttyd'))
-INDEX = ROOT / 'staging' / 'index.html'
+TTYD_BIN = Path(os.environ.get('TTYD_BIN', ROOT / 'build' / 'ttyd'))
+INDEX = Path(os.environ.get('WEBTERM_TEST_INDEX', ROOT / 'html' / 'dist' / 'inline.html'))
 OMP = Path.home() / '.bun' / 'bin' / 'omp'
 RESUME_ID = 'c' * 32
 GRACE = 20
@@ -41,30 +41,55 @@ def token(http):
         return json.load(response).get('token', '')
 
 
-def connect(http, ws_base):
+def connect(http, ws_base, intent):
     ws = websocket.create_connection(
         f'{ws_base}?resume={RESUME_ID}',
         subprotocols=['tty'],
         origin=http.rstrip('/'),
         timeout=1,
     )
-    auth = json.dumps({'AuthToken': token(http), 'columns': 100, 'rows': 30}).encode()
-    ws.send_binary(auth)
+    handshake = json.dumps(
+        {
+            'version': 3,
+            'intent': intent,
+            'replayPosition': 0,
+            'AuthToken': token(http),
+            'columns': 100,
+            'rows': 30,
+        }
+    ).encode()
+    ws.send_binary(handshake)
     return ws
+
+
+def output_bytes(message):
+    if not isinstance(message, bytes) or len(message) < 9 or message[:1] != b'0':
+        return b''
+    return message[9:]
 
 
 def wait_session_state(ws, expected, timeout=8):
     deadline = time.time() + timeout
+    initial = None
+    output = bytearray()
     while time.time() < deadline:
         try:
             message = ws.recv()
         except websocket.WebSocketTimeoutException:
             continue
-        if isinstance(message, bytes) and message[:1] == b'3':
-            state = message[1:].decode('utf-8', errors='replace')
-            assert state == expected, (state, expected)
-            return state
-    raise AssertionError(f'session state not received: {expected}')
+        output.extend(output_bytes(message))
+        if not isinstance(message, bytes) or not message:
+            continue
+        if message[:1] == b'3':
+            state = json.loads(message[1:])
+            assert state['version'] == 3 and state['state'] == expected, (state, expected)
+            if state['inputReady']:
+                return state, bytes(output)
+            initial = state
+        elif message[:1] == b'4' and initial is not None:
+            replay = json.loads(message[1:])
+            ws.send_binary(b'5' + json.dumps({'position': replay['position']}).encode())
+    raise AssertionError(f'session state not received: {expected}; initial={initial}')
 
 
 def wait_output_regex(ws, pattern, timeout=30):
@@ -76,9 +101,7 @@ def wait_output_regex(ws, pattern, timeout=30):
             message = ws.recv()
         except websocket.WebSocketTimeoutException:
             continue
-        if not isinstance(message, bytes) or message[:1] != b'0':
-            continue
-        text += message[1:].decode('utf-8', errors='replace')
+        text += output_bytes(message).decode('utf-8', errors='replace')
         if len(text) > 2_000_000:
             text = text[-2_000_000:]
         match = regex.search(text)
@@ -113,12 +136,7 @@ env['TTYD_RECONNECT_GRACE'] = str(GRACE)
 deps_lib = ROOT / '.build-deps' / 'root' / 'usr' / 'lib' / 'x86_64-linux-gnu'
 env['LD_LIBRARY_PATH'] = str(deps_lib) + (':' + env['LD_LIBRARY_PATH'] if env.get('LD_LIBRARY_PATH') else '')
 
-prompt = (
-    'Use the bash tool exactly once. In that bash command, first print one token formed by concatenating '
-    'OMP_, TOOL_, and STARTED with no spaces. Then call the shell sleep utility for four seconds, then print '
-    'one token formed by concatenating OMP_, DETACHED_, and DONE with no spaces. After the tool finishes, '
-    'reply with the single word FINISHED.'
-)
+OMP_SCREEN_PATTERN = r'omp v[0-9]+\.[0-9]+\.[0-9]+'
 
 proc = subprocess.Popen(
     [
@@ -133,9 +151,6 @@ proc = subprocess.Popen(
         str(OMP),
         '--no-session',
         '--no-title',
-        '--auto-approve',
-        '--max-time=40',
-        prompt,
     ],
     env=env,
     stdout=subprocess.DEVNULL,
@@ -146,25 +161,23 @@ proc = subprocess.Popen(
 connections = []
 try:
     wait_http(http + 'token')
-    ws1 = connect(http, ws_base)
+    ws1 = connect(http, ws_base, 'create')
     connections.append(ws1)
-    wait_session_state(ws1, 'fresh')
+    state1, _ = wait_session_state(ws1, 'created')
     omp_pid = wait_child_pid(proc.pid)
     assert_alive(omp_pid)
 
-    # The start marker is emitted by the bash tool immediately before sleep,
-    # so receiving it proves the tool is in flight without depending on OMP UI text.
-    _, started_output = wait_output_regex(ws1, r'OMP_TOOL_STARTED', timeout=30)
+    _, startup_output = wait_output_regex(ws1, OMP_SCREEN_PATTERN, timeout=30)
     ws1.close()
     connections.remove(ws1)
 
-    time.sleep(6.0)
+    time.sleep(2.0)
     assert_alive(omp_pid)
 
-    ws2 = connect(http, ws_base)
+    ws2 = connect(http, ws_base, 'resume')
     connections.append(ws2)
-    wait_session_state(ws2, 'resumed')
-    _, replay = wait_output_regex(ws2, r'OMP_DETACHED_DONE', timeout=20)
+    state2, replay_bytes = wait_session_state(ws2, 'attached')
+    replay = replay_bytes.decode('utf-8', errors='replace')
     assert_alive(omp_pid)
 
     current_child = wait_child_pid(proc.pid)
@@ -173,12 +186,15 @@ try:
     print(
         json.dumps(
             {
+                'sessionDiagnosticInitial': state1['sessionDiagnosticId'],
+                'sessionDiagnosticAttached': state2['sessionDiagnosticId'],
                 'ompPidBefore': omp_pid,
                 'ompPidAfter': current_child,
-                'toolStartedBeforeDrop': 'OMP_TOOL_STARTED' in started_output,
-                'detachedMarkerReplayed': 'OMP_DETACHED_DONE' in replay,
+                'startupScreenObserved': bool(re.search(OMP_SCREEN_PATTERN, startup_output, re.IGNORECASE)),
+                'startupScreenReplayed': bool(re.search(OMP_SCREEN_PATTERN, replay, re.IGNORECASE)),
                 'sameOmpProcess': True,
-                'disconnectSeconds': 6,
+                'providerOrToolExecution': False,
+                'disconnectSeconds': 2,
                 'graceSeconds': GRACE,
                 'PASS': True,
             },

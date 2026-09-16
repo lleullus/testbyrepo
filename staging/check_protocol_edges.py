@@ -14,7 +14,7 @@ import websocket
 
 ROOT = Path(__file__).resolve().parents[1]
 TTYD_BIN = Path(os.environ.get('TTYD_BIN', ROOT / 'build' / 'ttyd'))
-INDEX = ROOT / 'staging' / 'index.html'
+INDEX = Path(os.environ.get('WEBTERM_TEST_INDEX', ROOT / 'html' / 'dist' / 'inline.html'))
 PASTE_SIZE = int(os.environ.get('WEBTERM_TEST_PASTE_SIZE', str(64 * 1024)))
 
 
@@ -42,30 +42,52 @@ def token(http):
         return json.load(response).get('token', '')
 
 
-def connect(http, ws_base, resume_id):
+def connect(http, ws_base, resume_id, intent='create'):
     ws = websocket.create_connection(
         f'{ws_base}?resume={resume_id}',
         subprotocols=['tty'],
         origin=http.rstrip('/'),
         timeout=5,
     )
-    auth = json.dumps({'AuthToken': token(http), 'columns': 80, 'rows': 24}).encode()
-    ws.send_binary(auth)
+    handshake = json.dumps(
+        {
+            'version': 3,
+            'intent': intent,
+            'replayPosition': 0,
+            'AuthToken': token(http),
+            'columns': 80,
+            'rows': 24,
+        }
+    ).encode()
+    ws.send_binary(handshake)
     return ws
 
 
-def wait_session_state(ws, expected=None, timeout=5):
+def output_bytes(message):
+    if not isinstance(message, bytes) or len(message) < 9 or message[:1] != b'0':
+        return b''
+    return message[9:]
+
+
+def wait_session_state(ws, expected=None, timeout=8):
     deadline = time.time() + timeout
+    initial = None
     while time.time() < deadline:
         message = ws.recv()
         if not isinstance(message, bytes) or not message:
             continue
         if message[:1] == b'3':
-            state = message[1:].decode('utf-8', errors='replace')
+            state = json.loads(message[1:])
+            assert state['version'] == 3, state
             if expected is not None:
-                assert state == expected, (state, expected)
-            return state
-    raise AssertionError(f'session state not received: {expected}')
+                assert state['state'] == expected, (state, expected)
+            if state['state'] not in ('created', 'attached') or state['inputReady']:
+                return state
+            initial = state
+        elif message[:1] == b'4' and initial is not None:
+            replay = json.loads(message[1:])
+            ws.send_binary(b'5' + json.dumps({'position': replay['position']}).encode())
+    raise AssertionError(f'session state not received: {expected}; initial={initial}')
 
 
 def wait_match(ws, pattern, timeout=8):
@@ -77,9 +99,7 @@ def wait_match(ws, pattern, timeout=8):
             message = ws.recv()
         except websocket.WebSocketTimeoutException:
             continue
-        if not isinstance(message, bytes) or not message or message[:1] != b'0':
-            continue
-        text += message[1:].decode('utf-8', errors='replace')
+        text += output_bytes(message).decode('utf-8', errors='replace')
         match = regex.search(text)
         if match:
             return match, text
@@ -137,6 +157,7 @@ results = {
     'ttydBin': str(TTYD_BIN),
     'pasteSize': PASTE_SIZE,
 }
+owned_markers = []
 
 try:
     wait_http(http + 'token')
@@ -209,6 +230,7 @@ try:
     drain_marker = Path(f'/tmp/webterm-drain-{os.getpid()}.marker')
     overflow_marker = Path(f'/tmp/webterm-overflow-{os.getpid()}.marker')
     redraw_marker = Path(f'/tmp/webterm-redraw-{os.getpid()}.marker')
+    owned_markers = [drain_marker, overflow_marker, redraw_marker]
     for marker in (drain_marker, overflow_marker, redraw_marker):
         marker.unlink(missing_ok=True)
 
@@ -226,7 +248,7 @@ try:
     while time.time() < deadline and not drain_marker.exists():
         time.sleep(0.1)
     assert drain_marker.exists() and drain_marker.read_text() == 'DONE', 'PTY output blocked while PAUSE was active'
-    results['continuousDrain'] = {'completedBeforeResume': True, 'marker': str(drain_marker)}
+    results['continuousDrain'] = {'completedBeforeResume': True}
     ws.send_binary(b'3')
     time.sleep(0.2)
 
@@ -253,15 +275,15 @@ try:
         time.sleep(0.1)
     assert overflow_marker.exists() and overflow_marker.read_text() == 'DONE', 'detached PTY output did not complete'
 
-    ws = connect(http, ws_base, 'e' * 32)
+    ws = connect(http, ws_base, 'e' * 32, 'resume')
     connections.append(ws)
-    recovery_state = wait_session_state(ws, expected='resumed')
+    recovery_state = wait_session_state(ws, expected='attached')
     deadline = time.time() + 8
     while time.time() < deadline and not redraw_marker.exists():
         time.sleep(0.1)
     assert redraw_marker.exists() and redraw_marker.read_text() == 'WINCH', 'foreground SIGWINCH was not observed'
     results['overflowRecovery'] = {
-        'sessionState': recovery_state,
+        'sessionState': recovery_state['state'],
         'sigwinchObserved': True,
     }
 
@@ -304,6 +326,8 @@ finally:
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()
+    for marker in owned_markers:
+        marker.unlink(missing_ok=True)
     if not results.get('PASS'):
         results['serverReturnCode'] = proc.poll()
         try:

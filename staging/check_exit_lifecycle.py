@@ -13,7 +13,7 @@ import websocket
 
 ROOT = Path(__file__).resolve().parents[1]
 TTYD_BIN = Path(os.environ.get('TTYD_BIN', ROOT / 'build' / 'ttyd'))
-INDEX = ROOT / 'staging' / 'index.html'
+INDEX = Path(os.environ.get('WEBTERM_TEST_INDEX', ROOT / 'html' / 'dist' / 'inline.html'))
 
 
 def free_port():
@@ -78,18 +78,36 @@ def observe(option):
         )
         with urllib.request.urlopen(http + 'token', timeout=5) as response:
             auth_token = json.load(response).get('token', '')
-        ws.send_binary(json.dumps({'AuthToken': auth_token, 'columns': 80, 'rows': 24}).encode())
+        ws.send_binary(
+            json.dumps(
+                {
+                    'version': 3,
+                    'intent': 'create',
+                    'replayPosition': 0,
+                    'AuthToken': auth_token,
+                    'columns': 80,
+                    'rows': 24,
+                }
+            ).encode()
+        )
 
         text = ''
+        session_state = None
         deadline = time.time() + 8
         while time.time() < deadline and child_pid is None:
             message = ws.recv()
-            if not isinstance(message, bytes) or message[:1] != b'0':
+            if not isinstance(message, bytes) or not message:
                 continue
-            text += message[1:].decode('utf-8', errors='replace')
-            match = re.search(r'LIFECYCLE_PID=(\d+)', text)
-            if match:
-                child_pid = int(match.group(1))
+            if message[:1] == b'3':
+                session_state = json.loads(message[1:])
+            elif message[:1] == b'4' and session_state is not None:
+                replay = json.loads(message[1:])
+                ws.send_binary(b'5' + json.dumps({'position': replay['position']}).encode())
+            elif len(message) >= 9 and message[:1] == b'0':
+                text += message[9:].decode('utf-8', errors='replace')
+                match = re.search(r'LIFECYCLE_PID=(\d+)', text)
+                if match:
+                    child_pid = int(match.group(1))
         assert child_pid is not None, text[-1000:]
 
         before_close = time.monotonic()

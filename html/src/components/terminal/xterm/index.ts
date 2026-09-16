@@ -15,6 +15,55 @@ interface TtydTerminal extends Terminal {
     fit(): void;
 }
 
+export type InputModifier = 'none' | 'shift' | 'ctrl';
+
+export interface InputOwnerSnapshot {
+    modifier: InputModifier;
+    focusIntent: 'inactive' | 'typing';
+    composing: boolean;
+    inputEpoch: number;
+}
+
+interface CompositionTransaction {
+    sequence: number;
+    inputEpoch: number;
+    connectionGeneration: number;
+    serverConnectionGeneration: number;
+    beforeValue: string;
+    start: number;
+    end: number;
+    lastData: string;
+    draft: string;
+    cancelled: boolean;
+    ended: boolean;
+}
+
+interface PhysicalKeyAction {
+    inputEpoch: number;
+    connectionGeneration: number;
+    serverConnectionGeneration: number;
+    inputType: 'insertText' | 'insertLineBreak';
+    expectedTerminalText: string;
+    key: string;
+    code: string;
+    terminalText?: string;
+}
+
+interface TextInputTransaction {
+    inputEpoch: number;
+    beforeValue: string;
+    inputType: string;
+    data: string | null;
+    physicalKeyAction?: PhysicalKeyAction;
+}
+
+interface PointerCandidate {
+    pointerId: number;
+    x: number;
+    y: number;
+    selection: string;
+}
+
 interface TtydDiagnosticEvent {
     at: number;
     event: string;
@@ -23,16 +72,38 @@ interface TtydDiagnosticEvent {
 
 export interface TtydDiagnosticsSnapshot {
     state:
+        | 'no-session'
         | 'connecting'
         | 'connected'
+        | 'replaying'
+        | 'checking-owner'
         | 'application-ready'
         | 'render-lagging'
-        | 'replaying'
         | 'terminal-state-lost'
-        | 'resyncing'
+        | 'session-conflict'
+        | 'session-expired'
+        | 'session-exited'
+        | 'session-unknown'
+        | 'session-exited-retained'
+        | 'session-rejected-capacity'
+        | 'session-error'
+        | 'takeover-pending'
+        | 'session-displaced'
+        | 'session-stale'
         | 'disconnected';
     connectionGeneration: number;
+    serverConnectionGeneration: number;
     terminalEpoch: number;
+    sessionDiagnosticId: number;
+    appliedPosition: number;
+    replayTarget: number;
+    inputReady: boolean;
+    inputEpoch: number;
+    inputModifier: InputModifier;
+    focusIntent: 'inactive' | 'typing';
+    composing: boolean;
+    connectInFlight: boolean;
+    heartbeatOutstanding: boolean;
     pendingBytes: number;
     pendingAgeMs: number;
     pendingBytesHighWater: number;
@@ -45,6 +116,9 @@ export interface TtydDiagnosticsSnapshot {
     mouseTrackingMode: string;
     visibility: DocumentVisibilityState;
     focused: boolean;
+    geometryApplyCount: number;
+    geometrySendCount: number;
+    lastValidGeometry?: { cols: number; rows: number };
     events: readonly TtydDiagnosticEvent[];
 }
 
@@ -61,12 +135,17 @@ enum Command {
     SET_WINDOW_TITLE = '1',
     SET_PREFERENCES = '2',
     SET_SESSION_STATE = '3',
+    REPLAY_END = '4',
+    HEARTBEAT_REPLY = '5',
 
     // client side
     INPUT = '0',
     RESIZE_TERMINAL = '1',
     PAUSE = '2',
     RESUME = '3',
+    HEARTBEAT = '4',
+    SESSION_READY = '5',
+    TAKEOVER = '6',
 }
 type Preferences = ITerminalOptions & ClientOptions;
 
@@ -91,9 +170,22 @@ export interface FlowControl {
     lowWater: number;
 }
 
+export interface SessionRequest {
+    id: string;
+    intent: 'create' | 'resume';
+    persisted: boolean;
+}
+
+export interface SessionBinding {
+    current?: SessionRequest;
+    create(): SessionRequest;
+    markCreated(request: SessionRequest): void;
+}
+
 export interface XtermOptions {
-    wsUrl: string;
+    wsBaseUrl: string;
     tokenUrl: string;
+    session: SessionBinding;
     flowControl: FlowControl;
     clientOptions: ClientOptions;
     termOptions: ITerminalOptions;
@@ -103,16 +195,36 @@ function toDisposable(f: () => void): IDisposable {
     return { dispose: f };
 }
 
-function addEventListener(target: EventTarget, type: string, listener: EventListener): IDisposable {
-    target.addEventListener(type, listener);
-    return toDisposable(() => target.removeEventListener(type, listener));
+function addEventListener(
+    target: EventTarget,
+    type: string,
+    listener: EventListener,
+    options?: boolean | AddEventListenerOptions
+): IDisposable {
+    target.addEventListener(type, listener, options);
+    return toDisposable(() => target.removeEventListener(type, listener, options));
+}
+
+function createDeferred<T>() {
+    let resolve!: (value?: T | PromiseLike<T>) => void;
+    const promise = new Promise<T>(settle => {
+        resolve = value => settle(value as T);
+    });
+    return { promise, resolve };
 }
 
 const RECONNECT_WINDOW_MS = 60_000;
 const RECONNECT_MAX_DELAY_MS = 5_000;
+const TOKEN_TIMEOUT_MS = 10_000;
+const ATTEMPT_TIMEOUT_MS = 30_000;
+const HEARTBEAT_INTERVAL_MS = 5_000;
+const HEARTBEAT_TIMEOUT_MS = 30_000;
+
+type AttemptResult = 'ready' | 'retry' | 'stop';
 
 export class Xterm {
     private disposables: IDisposable[] = [];
+    private socketDisposables: IDisposable[] = [];
     private textEncoder = new TextEncoder();
     private textDecoder = new TextDecoder();
     private pendingBytes = 0;
@@ -120,7 +232,12 @@ export class Xterm {
     private pendingBytesHighWater = 0;
     private flowPausedGeneration?: number;
     private connectionGeneration = 0;
+    private serverConnectionGeneration = 0;
     private terminalEpoch = 0;
+    private sessionDiagnosticId = 0;
+    private appliedPosition = 0;
+    private replayTarget = 0;
+    private inputReady = false;
     private parserCallbacks = 0;
     private renderEvents = 0;
     private animationFrames = 0;
@@ -128,49 +245,92 @@ export class Xterm {
     private maxAnimationFrameGapMs = 0;
     private animationFrame?: number;
     private connectionState: TtydDiagnosticsSnapshot['state'] = 'disconnected';
+    private isExitedRetained = false;
     private diagnosticEvents: TtydDiagnosticEvent[] = [];
     private diagnosticsEnabled = new URLSearchParams(window.location.search).get('diagnostics') === '1';
-    private terminal: Terminal;
+    private terminal!: Terminal;
     private fitAddon = new FitAddon();
     private overlayAddon = new OverlayAddon();
     private webglAddon?: WebglAddon;
+    private fitFrame?: number;
+    private terminalContainer?: HTMLElement;
+    private lastValidGeometry?: { cols: number; rows: number };
+    private lastSentGeometry?: { serverGeneration: number; cols: number; rows: number };
+    private handshakeGeometry?: { connectionGeneration: number; cols: number; rows: number };
+    private geometryApplyCount = 0;
+    private geometrySendCount = 0;
     private zmodemAddon?: ZmodemAddon;
 
     private socket?: WebSocket;
-    private token: string;
-    private opened = false;
+    private token = '';
+    private request?: SessionRequest;
     private title?: string;
     private titleFixed?: string;
     private resizeOverlay = true;
     private reconnect = true;
-    private doReconnect = true;
+    private disposed = false;
+    private preferencesApplied = false;
+    private connectPromise?: Promise<void>;
+    private attemptResolve?: (result: AttemptResult) => void;
+    private fetchAbort?: AbortController;
     private reconnectStartedAt = 0;
     private reconnectAttempts = 0;
     private reconnectTimer?: number;
-    private reconnectScrollWrites = 0;
-    private reconnecting = false;
+    private reconnectDelayResolve?: () => void;
+    private attemptTimer?: number;
+    private heartbeatTimer?: number;
+    private heartbeatNonce?: string;
+    private heartbeatSentAt = 0;
+    private heartbeatCounter = 0;
+    private automaticRecoveryExhausted = false;
+    private consumeRecoveryClick = false;
+    private displaced = false;
+    private takeoverPending = false;
+    private takeoverOwnerGeneration = 0;
+    private inputModifier: InputModifier = 'none';
+    private focusIntent: InputOwnerSnapshot['focusIntent'] = 'inactive';
+    private inputEpoch = 0;
+    private compositionSequence = 0;
+    private composition?: CompositionTransaction;
+    private discardedComposition?: CompositionTransaction;
+    private pendingTextInput?: TextInputTransaction;
+    private compositionTextareaStyle?: { width: string; height: string; lineHeight: string };
+    private pointerCandidate?: PointerCandidate;
+    private physicalKeyActions: PhysicalKeyAction[] = [];
+    private toolbarInteraction = false;
 
     private writeFunc = (data: ArrayBuffer) => this.writeData(new Uint8Array(data));
 
     constructor(
         private options: XtermOptions,
         private sendCb: () => void,
-        private ctrlStateCb: (armed: boolean) => void = () => undefined
-    ) {}
+        private inputStateCb: (snapshot: InputOwnerSnapshot) => void = () => undefined,
+        private fontSizeCb: (fontSize: number) => void = () => undefined
+    ) {
+        this.request = options.session.current;
+    }
 
     dispose() {
-        if (this.reconnectTimer !== undefined) {
-            window.clearTimeout(this.reconnectTimer);
-            this.reconnectTimer = undefined;
-        }
+        this.disposed = true;
+        this.invalidateInputOwner(true);
+        this.connectionGeneration++;
+        this.fetchAbort?.abort();
+        this.fetchAbort = undefined;
+        this.clearReconnectTimers();
+        this.clearHeartbeat();
+        this.clearSocket(true);
         if (this.animationFrame !== undefined) {
             window.cancelAnimationFrame(this.animationFrame);
             this.animationFrame = undefined;
         }
-        for (const d of this.disposables) {
-            d.dispose();
+        if (this.fitFrame !== undefined) {
+            window.cancelAnimationFrame(this.fitFrame);
+            this.fitFrame = undefined;
         }
+        for (const disposable of this.disposables) disposable.dispose();
         this.disposables.length = 0;
+        this.overlayAddon.dispose();
+        this.terminal?.dispose();
     }
 
     private recordDiagnostic(event: string, value?: number) {
@@ -184,7 +344,18 @@ export class Xterm {
         return {
             state: this.connectionState,
             connectionGeneration: this.connectionGeneration,
+            serverConnectionGeneration: this.serverConnectionGeneration,
             terminalEpoch: this.terminalEpoch,
+            sessionDiagnosticId: this.sessionDiagnosticId,
+            appliedPosition: this.appliedPosition,
+            replayTarget: this.replayTarget,
+            inputReady: this.inputReady,
+            inputEpoch: this.inputEpoch,
+            inputModifier: this.inputModifier,
+            focusIntent: this.focusIntent,
+            composing: this.composition !== undefined && !this.composition.cancelled,
+            connectInFlight: this.connectPromise !== undefined,
+            heartbeatOutstanding: this.heartbeatNonce !== undefined,
             pendingBytes: this.pendingBytes,
             pendingAgeMs: this.pendingSince === 0 ? 0 : now - this.pendingSince,
             pendingBytesHighWater: this.pendingBytesHighWater,
@@ -197,6 +368,9 @@ export class Xterm {
             mouseTrackingMode: this.terminal.modes.mouseTrackingMode,
             visibility: document.visibilityState,
             focused: document.hasFocus() && document.activeElement === this.terminal.textarea,
+            geometryApplyCount: this.geometryApplyCount,
+            geometrySendCount: this.geometrySendCount,
+            lastValidGeometry: this.lastValidGeometry && { ...this.lastValidGeometry },
             events: this.diagnosticEvents.slice(),
         };
     }
@@ -250,31 +424,509 @@ export class Xterm {
         this.terminal?.blur();
     }
 
+    private inputSnapshot(): InputOwnerSnapshot {
+        return {
+            modifier: this.inputModifier,
+            focusIntent: this.focusIntent,
+            composing: this.composition !== undefined && !this.composition.cancelled,
+            inputEpoch: this.inputEpoch,
+        };
+    }
+
+    private emitInputState() {
+        this.inputStateCb(this.inputSnapshot());
+    }
+
+    private setModifier(modifier: InputModifier) {
+        if (this.inputModifier === modifier) return;
+        this.inputModifier = modifier;
+        this.emitInputState();
+    }
+
+    public toggleShift() {
+        this.setModifier(this.inputModifier === 'shift' ? 'none' : 'shift');
+    }
+
+    public toggleCtrl() {
+        this.setModifier(this.inputModifier === 'ctrl' ? 'none' : 'ctrl');
+    }
+
+    public clearModifierForLocalAction() {
+        this.setModifier('none');
+    }
+
+    public beginToolbarInteraction() {
+        this.toolbarInteraction = true;
+    }
+
+    public endToolbarInteraction() {
+        window.setTimeout(() => {
+            if (this.focusIntent === 'typing' && document.activeElement !== this.terminal.textarea)
+                this.terminal.focus();
+            this.toolbarInteraction = false;
+        }, 500);
+    }
+
+    private setFocusIntent(focusIntent: InputOwnerSnapshot['focusIntent']) {
+        if (this.focusIntent === focusIntent) return;
+        this.focusIntent = focusIntent;
+        this.emitInputState();
+    }
+
+    private activateTypingFocus() {
+        if (!this.inputReady || this.displaced) return;
+        if (this.inputModifier === 'shift') this.setModifier('none');
+        this.discardedComposition = undefined;
+        this.setFocusIntent('typing');
+        this.terminal.focus();
+    }
+
+    private invalidateInputOwner(blur: boolean) {
+        this.inputEpoch++;
+        this.pendingTextInput = undefined;
+        this.pointerCandidate = undefined;
+        this.physicalKeyActions.length = 0;
+        if (this.composition) {
+            this.composition.cancelled = true;
+            this.discardedComposition = this.composition;
+            this.composition = undefined;
+        }
+        this.clearLocalPreedit();
+        this.resetOwnedTextarea();
+        this.inputModifier = 'none';
+        this.focusIntent = 'inactive';
+        if (blur) this.terminal?.blur();
+        this.emitInputState();
+    }
+
+    private renderLocalPreedit(text: string) {
+        const textarea = this.terminal.textarea;
+        const view = this.terminal.element?.querySelector<HTMLElement>('.composition-view');
+        if (!textarea || !view) return;
+        if (!this.compositionTextareaStyle) {
+            this.compositionTextareaStyle = {
+                width: textarea.style.width,
+                height: textarea.style.height,
+                lineHeight: textarea.style.lineHeight,
+            };
+        }
+        view.textContent = text;
+        view.style.left = textarea.style.left;
+        view.style.top = textarea.style.top;
+        view.style.height = textarea.style.height;
+        view.style.lineHeight = textarea.style.lineHeight;
+        view.style.fontFamily = this.terminal.options.fontFamily ?? '';
+        view.style.fontSize = `${this.terminal.options.fontSize ?? 15}px`;
+        view.classList.add('active');
+        const bounds = view.getBoundingClientRect();
+        textarea.style.width = `${Math.max(bounds.width, 1)}px`;
+        textarea.style.height = `${Math.max(bounds.height, 1)}px`;
+        textarea.style.lineHeight = `${Math.max(bounds.height, 1)}px`;
+    }
+
+    private clearLocalPreedit() {
+        const view = this.terminal?.element?.querySelector<HTMLElement>('.composition-view');
+        if (view) {
+            view.classList.remove('active');
+            view.textContent = '';
+        }
+        const textarea = this.terminal?.textarea;
+        if (textarea && this.compositionTextareaStyle) {
+            textarea.style.width = this.compositionTextareaStyle.width;
+            textarea.style.height = this.compositionTextareaStyle.height;
+            textarea.style.lineHeight = this.compositionTextareaStyle.lineHeight;
+        }
+        this.compositionTextareaStyle = undefined;
+    }
+
+    private resetOwnedTextarea() {
+        const textarea = this.terminal?.textarea;
+        if (!textarea) return;
+        textarea.value = '';
+        textarea.setSelectionRange(0, 0);
+    }
+
+    private cancelComposition() {
+        const transaction = this.composition;
+        if (!transaction) return false;
+        transaction.cancelled = true;
+        this.composition = undefined;
+        this.discardedComposition = transaction;
+        this.resetOwnedTextarea();
+        this.clearLocalPreedit();
+        this.emitInputState();
+        return true;
+    }
+
+    private compositionText(transaction: CompositionTransaction, eventData = ''): string {
+        const current = this.terminal.textarea?.value ?? transaction.beforeValue;
+        const before = transaction.beforeValue;
+        const beforePrefix = before.slice(0, transaction.start);
+        const beforeSuffix = before.slice(transaction.end);
+        if (
+            current.startsWith(beforePrefix) &&
+            current.endsWith(beforeSuffix) &&
+            current.length >= beforePrefix.length + beforeSuffix.length
+        )
+            return current.slice(beforePrefix.length, current.length - beforeSuffix.length);
+        let prefix = 0;
+        while (prefix < before.length && prefix < current.length && before[prefix] === current[prefix]) prefix++;
+        let suffix = 0;
+        while (
+            suffix < before.length - prefix &&
+            suffix < current.length - prefix &&
+            before[before.length - 1 - suffix] === current[current.length - 1 - suffix]
+        )
+            suffix++;
+        const inserted = current.slice(prefix, current.length - suffix);
+        return inserted || eventData || transaction.lastData;
+    }
+
+    private settleComposition(eventData = '') {
+        const transaction = this.composition;
+        if (!transaction) return false;
+        const text = this.compositionText(transaction, eventData);
+        this.composition = undefined;
+        this.pendingTextInput = undefined;
+        this.clearLocalPreedit();
+        this.resetOwnedTextarea();
+        const valid =
+            !transaction.cancelled &&
+            transaction.inputEpoch === this.inputEpoch &&
+            transaction.connectionGeneration === this.connectionGeneration &&
+            transaction.serverConnectionGeneration === this.serverConnectionGeneration;
+        if (valid && text) this.sendData(text);
+        this.emitInputState();
+        return true;
+    }
+
+    private sendPlainText(text: string) {
+        const modifier = this.inputModifier;
+        this.setModifier('none');
+        if (modifier === 'ctrl' && /^[a-zA-Z]$/.test(text)) {
+            this.sendData(String.fromCharCode(text.toUpperCase().charCodeAt(0) - 64));
+            return;
+        }
+        this.sendData(text);
+    }
+
+    private beginPhysicalKeyAction(event: KeyboardEvent) {
+        if (event.isComposing || event.keyCode === 229) return;
+        const inputType = event.key === 'Enter' ? 'insertLineBreak' : event.key.length === 1 ? 'insertText' : undefined;
+        if (!inputType) return;
+        this.physicalKeyActions.push({
+            inputEpoch: this.inputEpoch,
+            connectionGeneration: this.connectionGeneration,
+            serverConnectionGeneration: this.serverConnectionGeneration,
+            inputType,
+            expectedTerminalText: inputType === 'insertLineBreak' ? '\r' : event.key,
+            key: event.key,
+            code: event.code,
+        });
+    }
+
+    private rememberTerminalData(data: string) {
+        for (const action of this.physicalKeyActions) {
+            if (
+                action.terminalText === undefined &&
+                action.inputEpoch === this.inputEpoch &&
+                action.connectionGeneration === this.connectionGeneration &&
+                action.serverConnectionGeneration === this.serverConnectionGeneration &&
+                action.expectedTerminalText === data
+            ) {
+                action.terminalText = data;
+                return;
+            }
+        }
+    }
+
+    private takePhysicalKeyAction(inputType: string, data: string | null) {
+        if (inputType !== 'insertText' && inputType !== 'insertLineBreak') return undefined;
+        for (let index = 0; index < this.physicalKeyActions.length; index++) {
+            const action = this.physicalKeyActions[index];
+            if (
+                action.inputEpoch === this.inputEpoch &&
+                action.connectionGeneration === this.connectionGeneration &&
+                action.serverConnectionGeneration === this.serverConnectionGeneration &&
+                action.inputType === inputType &&
+                action.terminalText === action.expectedTerminalText &&
+                (inputType !== 'insertText' || action.expectedTerminalText === data)
+            )
+                return this.physicalKeyActions.splice(index, 1)[0];
+        }
+        return undefined;
+    }
+
+    private ownsTextInput(event: InputEvent) {
+        return (
+            event.isComposing ||
+            event.inputType.includes('Composition') ||
+            event.inputType === 'insertText' ||
+            event.inputType === 'insertReplacementText' ||
+            event.inputType === 'insertLineBreak' ||
+            event.inputType === 'deleteContentBackward' ||
+            event.inputType === 'deleteContentForward'
+        );
+    }
+
+    private handleCompositionStart = (event: CompositionEvent) => {
+        event.stopImmediatePropagation();
+        if (this.composition?.ended) this.settleComposition(this.composition.lastData);
+        else if (this.composition) this.cancelComposition();
+        this.setModifier('none');
+        this.pendingTextInput = undefined;
+        this.physicalKeyActions.length = 0;
+        this.discardedComposition = undefined;
+        this.resetOwnedTextarea();
+        const textarea = this.terminal.textarea;
+        const start = textarea?.selectionStart ?? textarea?.value.length ?? 0;
+        const end = textarea?.selectionEnd ?? start;
+        this.composition = {
+            sequence: ++this.compositionSequence,
+            inputEpoch: this.inputEpoch,
+            connectionGeneration: this.connectionGeneration,
+            serverConnectionGeneration: this.serverConnectionGeneration,
+            beforeValue: textarea?.value ?? '',
+            start,
+            end,
+            lastData: event.data,
+            draft: event.data,
+            cancelled: false,
+            ended: false,
+        };
+        this.renderLocalPreedit(event.data);
+        this.emitInputState();
+    };
+
+    private handleCompositionUpdate = (event: CompositionEvent) => {
+        event.stopImmediatePropagation();
+        if (!this.composition) return;
+        this.composition.lastData = event.data;
+        this.composition.draft = event.data;
+        this.renderLocalPreedit(event.data);
+    };
+
+    private handleCompositionEnd = (event: CompositionEvent) => {
+        event.stopImmediatePropagation();
+        const transaction = this.composition;
+        if (!transaction) return;
+        transaction.lastData = event.data || transaction.lastData;
+        transaction.ended = true;
+        const sequence = transaction.sequence;
+        window.setTimeout(() => {
+            if (this.composition?.sequence === sequence) this.settleComposition(event.data);
+        }, 0);
+    };
+
+    private handleBeforeInput = (event: InputEvent) => {
+        if (!this.ownsTextInput(event) && !this.composition) return;
+        event.stopImmediatePropagation();
+        if (this.composition) {
+            if (event.data !== null) {
+                this.composition.lastData = event.data;
+                this.composition.draft = event.data;
+                this.renderLocalPreedit(event.data);
+            }
+            return;
+        }
+        if (this.discardedComposition && (event.isComposing || event.inputType.includes('Composition'))) return;
+        this.discardedComposition = undefined;
+        this.resetOwnedTextarea();
+        this.pendingTextInput = {
+            inputEpoch: this.inputEpoch,
+            beforeValue: this.terminal.textarea?.value ?? '',
+            inputType: event.inputType,
+            data: event.data,
+            physicalKeyAction: this.takePhysicalKeyAction(event.inputType, event.data),
+        };
+    };
+
+    private handleInput = (event: InputEvent) => {
+        if (!this.ownsTextInput(event) && !this.composition && !this.discardedComposition) return;
+        event.stopImmediatePropagation();
+        if (this.composition) {
+            if (event.data) this.composition.lastData = event.data;
+            this.composition.draft = this.compositionText(this.composition, event.data ?? '');
+            this.renderLocalPreedit(this.composition.draft);
+            if (!event.isComposing && !event.inputType.includes('Composition'))
+                this.settleComposition(event.data ?? '');
+            return;
+        }
+        if (this.discardedComposition) {
+            this.discardedComposition = undefined;
+            this.resetOwnedTextarea();
+            return;
+        }
+        const transaction = this.pendingTextInput;
+        this.pendingTextInput = undefined;
+        if (!transaction || transaction.inputEpoch !== this.inputEpoch) {
+            this.resetOwnedTextarea();
+            return;
+        }
+        if (transaction.inputType === 'insertLineBreak') {
+            this.setModifier('none');
+            this.resetOwnedTextarea();
+            if (transaction.physicalKeyAction?.terminalText !== '\r') this.sendData('\r');
+            return;
+        }
+        if (transaction.inputType === 'deleteContentBackward') {
+            this.setModifier('none');
+            this.resetOwnedTextarea();
+            this.sendData('\x7f');
+            return;
+        }
+        if (transaction.inputType === 'deleteContentForward') {
+            this.setModifier('none');
+            this.resetOwnedTextarea();
+            this.sendData('\x1b[3~');
+            return;
+        }
+        const text = this.terminal.textarea?.value || event.data || transaction.data || '';
+        this.resetOwnedTextarea();
+        if (!text || transaction.physicalKeyAction?.terminalText === text) return;
+        this.sendPlainText(text);
+    };
+
+    private handlePaste = (event: ClipboardEvent) => {
+        const text = event.clipboardData?.getData('text/plain');
+        if (text === undefined) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.setModifier('none');
+        if (this.composition) this.cancelComposition();
+        this.pendingTextInput = undefined;
+        this.physicalKeyActions.length = 0;
+        this.resetOwnedTextarea();
+        this.terminal.paste(text);
+    };
+
+    private handleInputKeyDown = (event: KeyboardEvent) => {
+        if (this.composition?.ended) this.settleComposition(this.composition.lastData);
+        if (this.composition) {
+            event.stopImmediatePropagation();
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                this.setModifier('none');
+                this.cancelComposition();
+            }
+            return;
+        }
+        if (event.keyCode === 229) {
+            event.stopImmediatePropagation();
+            return;
+        }
+        this.discardedComposition = undefined;
+        this.pendingTextInput = undefined;
+        if (event.key === 'Enter' || event.key === 'Escape') this.setModifier('none');
+        this.beginPhysicalKeyAction(event);
+    };
+
+    private handleInputKeyUp = (event: KeyboardEvent) => {
+        for (let index = this.physicalKeyActions.length - 1; index >= 0; index--) {
+            const action = this.physicalKeyActions[index];
+            if (action.code === event.code || action.key === event.key) this.physicalKeyActions.splice(index, 1);
+        }
+    };
+
+    private isDirectInputTarget(target: EventTarget | null) {
+        return target instanceof Element && !target.closest('a,button,input,select,[role="button"],.terminal-overlay');
+    }
+
+    private handleTerminalPointerDown = (event: PointerEvent) => {
+        if (event.target instanceof Element && event.target.closest('.terminal-overlay')) return;
+        if (this.claimRecoveryPointer(event)) return;
+        if (
+            event.pointerType !== 'touch' &&
+            (!event.isPrimary || event.button !== 0 || !this.isDirectInputTarget(event.target))
+        ) {
+            this.pointerCandidate = undefined;
+            return;
+        }
+        this.pointerCandidate = {
+            pointerId: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+            selection: this.terminal.getSelection(),
+        };
+    };
+
+    private handleTerminalPointerMove = (event: PointerEvent) => {
+        const candidate = this.pointerCandidate;
+        if (!candidate || candidate.pointerId !== event.pointerId) return;
+        if (Math.hypot(event.clientX - candidate.x, event.clientY - candidate.y) > 8) this.pointerCandidate = undefined;
+    };
+
+    private handleTerminalPointerUp = (event: PointerEvent) => {
+        const candidate = this.pointerCandidate;
+        this.pointerCandidate = undefined;
+        if (this.consumeRecoveryClick)
+            window.setTimeout(() => {
+                this.consumeRecoveryClick = false;
+            }, 0);
+        if (
+            !candidate ||
+            candidate.pointerId !== event.pointerId ||
+            !this.isDirectInputTarget(event.target) ||
+            this.terminal.getSelection() !== candidate.selection
+        )
+            return;
+        this.activateTypingFocus();
+    };
+
+    private handleTerminalPointerCancel = () => {
+        this.pointerCandidate = undefined;
+    };
+
     public fit() {
-        if (!this.terminal) return;
-        this.fitAddon.fit();
-        requestAnimationFrame(() => this.fitAddon.fit());
+        if (!this.terminal || this.fitFrame !== undefined) return;
+        this.fitFrame = window.requestAnimationFrame(() => {
+            this.fitFrame = undefined;
+            if (!this.terminalContainer || document.visibilityState === 'hidden') return;
+            const rect = this.terminalContainer.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return;
+            this.fitAddon.fit();
+            const { cols, rows } = this.terminal;
+            if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols <= 0 || rows <= 0) return;
+            const previous = this.lastValidGeometry;
+            this.lastValidGeometry = { cols, rows };
+            if (!previous || previous.cols !== cols || previous.rows !== rows) this.geometryApplyCount++;
+            this.sendCurrentGeometry();
+        });
     }
 
     public setFontSize(fontSize: number) {
         if (!this.terminal) return;
-        this.terminal.options.fontSize = fontSize;
+        const normalized = Math.min(32, Math.max(8, Math.round(fontSize)));
+        this.fontSizeCb(normalized);
+        if (this.terminal.options.fontSize === normalized) return;
+        this.terminal.options.fontSize = normalized;
         this.fit();
     }
 
     public sendEscape() {
+        this.setModifier('none');
+        if (this.cancelComposition()) return;
         this.sendData('\x1b');
     }
 
-    public sendTab(shifted = false) {
+    public sendTab() {
+        const shifted = this.inputModifier === 'shift';
+        this.setModifier('none');
         this.sendData(shifted ? '\x1b[Z' : '\t');
     }
 
     public sendEnter() {
+        this.setModifier('none');
+        if (this.composition) {
+            this.settleComposition();
+            return;
+        }
         this.sendData('\r');
     }
 
-    public sendArrow(direction: 'left' | 'up' | 'down' | 'right', shifted = false) {
+    public sendArrow(direction: 'left' | 'up' | 'down' | 'right') {
+        const shifted = this.inputModifier === 'shift';
+        this.setModifier('none');
         const suffix = { left: 'D', up: 'A', down: 'B', right: 'C' }[direction];
         if (shifted) {
             this.sendData(`\x1b[1;2${suffix}`);
@@ -285,42 +937,98 @@ export class Xterm {
         this.sendData(prefix + suffix);
     }
 
-    public toggleCtrlArmed() {
-        this.setCtrlArmed(!this.ctrlArmed);
+    public claimRecoveryPointer(event: Event, createNew = false): boolean {
+        if (this.inputReady) return false;
+        event.preventDefault();
+        event.stopPropagation();
+        this.consumeRecoveryClick = event.type === 'pointerdown';
+        this.invalidateInputOwner(true);
+        if (this.displaced) return true;
+        this.requestRecovery(createNew);
+        return true;
     }
 
-    @bind
-    public async refreshToken() {
-        try {
-            const resp = await fetch(this.options.tokenUrl);
-            if (resp.ok) {
-                const json = await resp.json();
-                this.token = json.token;
-            }
-        } catch (e) {
-            console.error(`[ttyd] fetch ${this.options.tokenUrl}: `, e);
+    public requestRecoveryFromToolbar(): boolean {
+        if (this.inputReady) return false;
+        this.invalidateInputOwner(true);
+        if (!this.displaced) this.requestRecovery(false);
+        return true;
+    }
+
+    private requestRecovery(createNew: boolean) {
+        if (this.disposed || this.displaced || this.connectPromise) return;
+        if (createNew || !this.request || this.connectionState === 'no-session') {
+            this.request = this.options.session.create();
+            this.appliedPosition = 0;
+            this.replayTarget = 0;
+            this.terminalEpoch++;
         }
+        this.takeoverPending = false;
+        this.takeoverOwnerGeneration = 0;
+        this.connectionState = 'disconnected';
+        this.automaticRecoveryExhausted = false;
+        this.reconnectStartedAt = performance.now();
+        this.reconnectAttempts = 0;
+        this.beginRecovery();
     }
 
     @bind
     private onWindowUnload(event: BeforeUnloadEvent) {
         event.preventDefault();
         if (this.socket?.readyState === WebSocket.OPEN) {
-            const message = 'Close terminal? this will also terminate the command.';
+            const message = 'Close terminal tab? The session remains available during the reconnect grace period.';
             event.returnValue = message;
             return message;
         }
         return undefined;
     }
 
+    private async waitForGeometry(): Promise<boolean> {
+        this.fit();
+        const deadline = performance.now() + ATTEMPT_TIMEOUT_MS;
+        while (!this.disposed && !this.lastValidGeometry && performance.now() < deadline) {
+            const frame = createDeferred<void>();
+            window.requestAnimationFrame(() => frame.resolve());
+            await frame.promise;
+            this.fit();
+        }
+        return this.lastValidGeometry !== undefined;
+    }
+
+    private sendCurrentGeometry() {
+        const geometry = this.lastValidGeometry;
+        const socket = this.socket;
+        if (
+            !geometry ||
+            !this.inputReady ||
+            this.serverConnectionGeneration <= 0 ||
+            socket?.readyState !== WebSocket.OPEN
+        )
+            return;
+        const previous = this.lastSentGeometry;
+        if (
+            previous?.serverGeneration === this.serverConnectionGeneration &&
+            previous.cols === geometry.cols &&
+            previous.rows === geometry.rows
+        )
+            return;
+        socket.send(
+            this.textEncoder.encode(
+                Command.RESIZE_TERMINAL + JSON.stringify({ columns: geometry.cols, rows: geometry.rows })
+            )
+        );
+        this.lastSentGeometry = { serverGeneration: this.serverConnectionGeneration, ...geometry };
+        this.geometrySendCount++;
+        this.recordDiagnostic('geometry-sent', geometry.cols * 10000 + geometry.rows);
+    }
+
     @bind
     public open(parent: HTMLElement) {
+        this.terminalContainer = parent;
         this.terminal = new Terminal(this.options.termOptions);
         const { terminal, fitAddon, overlayAddon } = this;
         window.term = terminal as TtydTerminal;
-        window.term.fit = () => {
-            this.fitAddon.fit();
-        };
+        window.term.fit = () => this.fit();
         if (this.diagnosticsEnabled) window.ttydDiagnostics = () => this.diagnosticsSnapshot();
 
         terminal.loadAddon(fitAddon);
@@ -328,7 +1036,17 @@ export class Xterm {
         terminal.loadAddon(new WebLinksAddon());
 
         terminal.open(parent);
-        fitAddon.fit();
+        this.initListeners();
+        this.fit();
+        if (this.request) {
+            this.reconnectStartedAt = performance.now();
+            this.beginRecovery();
+        } else {
+            this.connectionState = 'no-session';
+            overlayAddon.showAction('No saved tab session. Continuity is unavailable.', 'Start New Session', event =>
+                this.claimRecoveryPointer(event)
+            );
+        }
     }
 
     private registerTouchScroll(element: HTMLElement): IDisposable {
@@ -378,7 +1096,7 @@ export class Xterm {
 
     @bind
     private initListeners() {
-        const { terminal, fitAddon, overlayAddon, register, sendData } = this;
+        const { terminal, overlayAddon, register, sendData } = this;
         register(
             terminal.onTitleChange(data => {
                 if (data && data !== '' && !this.titleFixed) {
@@ -401,12 +1119,11 @@ export class Xterm {
         register(
             terminal.onRender(() => {
                 this.renderEvents++;
+                if (this.composition) this.renderLocalPreedit(this.composition.draft);
             })
         );
         register(
             terminal.onResize(({ cols, rows }) => {
-                const msg = JSON.stringify({ columns: cols, rows });
-                this.socket?.send(this.textEncoder.encode(Command.RESIZE_TERMINAL + msg));
                 if (this.resizeOverlay) overlayAddon.showOverlay(`${cols}x${rows}`, 300);
             })
         );
@@ -421,38 +1138,104 @@ export class Xterm {
                 this.overlayAddon?.showOverlay('\u2702', 200);
             })
         );
+        register(
+            terminal.onKey(event => {
+                if (this.inputReady || event.domEvent.key !== 'Enter') return;
+                event.domEvent.preventDefault();
+                event.domEvent.stopPropagation();
+                this.requestRecovery(false);
+            })
+        );
         const terminalElement = terminal.element;
         const isTouchDevice =
             (window.matchMedia?.('(pointer: coarse)').matches ?? false) || navigator.maxTouchPoints > 0;
         if (terminalElement && isTouchDevice) register(this.registerTouchScroll(terminalElement));
-        register(addEventListener(window, 'resize', () => fitAddon.fit()));
+        if (this.terminalContainer) {
+            const container = this.terminalContainer;
+            const capture = true;
+            register(
+                addEventListener(container, 'compositionstart', this.handleCompositionStart as EventListener, capture)
+            );
+            register(
+                addEventListener(container, 'compositionupdate', this.handleCompositionUpdate as EventListener, capture)
+            );
+            register(
+                addEventListener(container, 'compositionend', this.handleCompositionEnd as EventListener, capture)
+            );
+            register(addEventListener(container, 'beforeinput', this.handleBeforeInput as EventListener, capture));
+            register(addEventListener(container, 'input', this.handleInput as EventListener, capture));
+            register(addEventListener(container, 'paste', this.handlePaste as EventListener, capture));
+            register(addEventListener(container, 'keydown', this.handleInputKeyDown as EventListener, capture));
+            register(addEventListener(container, 'keyup', this.handleInputKeyUp as EventListener, capture));
+            register(
+                addEventListener(container, 'pointerdown', this.handleTerminalPointerDown as EventListener, capture)
+            );
+            register(
+                addEventListener(container, 'pointermove', this.handleTerminalPointerMove as EventListener, capture)
+            );
+            register(addEventListener(container, 'pointerup', this.handleTerminalPointerUp as EventListener, capture));
+            register(addEventListener(container, 'pointercancel', this.handleTerminalPointerCancel, capture));
+        }
+        if (terminal.textarea) {
+            register(
+                addEventListener(terminal.textarea, 'blur', () => {
+                    if (this.toolbarInteraction) {
+                        queueMicrotask(() => {
+                            if (this.focusIntent === 'typing') this.terminal.focus();
+                        });
+                        return;
+                    }
+                    if (this.focusIntent === 'typing') this.invalidateInputOwner(false);
+                })
+            );
+        }
+        register(addEventListener(window, 'resize', this.fit));
+        if (window.visualViewport) {
+            register(addEventListener(window.visualViewport, 'resize', this.fit));
+            register(addEventListener(window.visualViewport, 'scroll', this.fit));
+        }
+        if (typeof ResizeObserver !== 'undefined' && this.terminalContainer) {
+            const observer = new ResizeObserver(() => this.fit());
+            observer.observe(this.terminalContainer);
+            register(toDisposable(() => observer.disconnect()));
+        }
         register(addEventListener(window, 'beforeunload', this.onWindowUnload));
+        register(addEventListener(document, 'visibilitychange', this.handleVisibilityReturn));
+        register(addEventListener(window, 'pageshow', this.handleVisibilityReturn));
+        register(addEventListener(window, 'online', this.handleVisibilityReturn));
+        register(
+            addEventListener(
+                document,
+                'click',
+                event => {
+                    if (!this.consumeRecoveryClick) return;
+                    this.consumeRecoveryClick = false;
+                    event.preventDefault();
+                    event.stopPropagation();
+                },
+                true
+            )
+        );
+        register(
+            addEventListener(window, 'pointercancel', () => {
+                this.consumeRecoveryClick = false;
+            })
+        );
         if (this.diagnosticsEnabled && this.animationFrame === undefined)
             this.animationFrame = window.requestAnimationFrame(this.monitorAnimationFrames);
     }
 
     @bind
-    public writeData(data: string | Uint8Array) {
-        const { terminal } = this;
+    public writeData(data: string | Uint8Array, endPosition?: number, generation: number = this.connectionGeneration) {
         const bytes = typeof data === 'string' ? this.textEncoder.encode(data).byteLength : data.byteLength;
         const { high, low } = this.flowThresholds();
         const afterWrite = () => {
             this.pendingBytes = Math.max(0, this.pendingBytes - bytes);
             if (this.pendingBytes === 0) this.pendingSince = 0;
-            if (this.flowPausedGeneration === this.connectionGeneration && this.pendingBytes < low) {
+            if (generation === this.connectionGeneration && endPosition !== undefined)
+                this.appliedPosition = Math.max(this.appliedPosition, endPosition);
+            if (this.flowPausedGeneration === this.connectionGeneration && this.pendingBytes < low)
                 this.sendFlowControl(Command.RESUME);
-            }
-            if (
-                (this.connectionState === 'render-lagging' && this.pendingBytes < low) ||
-                (this.connectionState === 'replaying' && this.pendingBytes === 0)
-            ) {
-                this.connectionState = 'application-ready';
-                this.recordDiagnostic('render-caught-up', this.pendingBytes);
-            }
-            if (this.reconnectScrollWrites <= 0) return;
-            this.reconnectScrollWrites--;
-            terminal.scrollToBottom();
-            requestAnimationFrame(() => terminal.scrollToBottom());
         };
 
         if (this.pendingBytes === 0) this.pendingSince = performance.now();
@@ -462,13 +1245,20 @@ export class Xterm {
             this.connectionState = 'render-lagging';
             this.sendFlowControl(Command.PAUSE);
         }
-        terminal.write(data, afterWrite);
+        this.terminal.write(data, afterWrite);
     }
 
     @bind
     public sendData(data: string | Uint8Array) {
         const { socket, textEncoder } = this;
-        if (socket?.readyState !== WebSocket.OPEN) return;
+        if (
+            this.displaced ||
+            !this.inputReady ||
+            this.isExitedRetained ||
+            this.serverConnectionGeneration <= 0 ||
+            socket?.readyState !== WebSocket.OPEN
+        )
+            return;
 
         if (typeof data === 'string') {
             const payload = new Uint8Array(data.length * 3 + 1);
@@ -484,124 +1274,333 @@ export class Xterm {
         this.recordDiagnostic('input-sent', typeof data === 'string' ? data.length : data.byteLength);
     }
 
-    private ctrlArmed = false;
-
-    public setCtrlArmed(armed: boolean) {
-        this.ctrlArmed = armed;
-        this.ctrlStateCb(armed);
-    }
-
     @bind
     private onTerminalData(data: string) {
         this.recordDiagnostic('terminal-data', data.length);
-        if (this.ctrlArmed) {
-            this.setCtrlArmed(false);
-            if (/^[a-zA-Z]$/.test(data)) {
-                const code = data.toUpperCase().charCodeAt(0) - 64;
-                this.sendData(String.fromCharCode(code));
+        this.rememberTerminalData(data);
+        this.sendPlainText(data);
+    }
+
+    private requestTakeover(ownerGeneration: number) {
+        const socket = this.socket;
+        const geometry = this.lastValidGeometry;
+        if (
+            this.disposed ||
+            this.displaced ||
+            this.takeoverPending ||
+            ownerGeneration <= 0 ||
+            !geometry ||
+            socket?.readyState !== WebSocket.OPEN
+        )
+            return;
+        this.takeoverPending = true;
+        this.takeoverOwnerGeneration = ownerGeneration;
+        this.connectionState = 'takeover-pending';
+        this.overlayAddon.clearAction();
+        this.overlayAddon.showOverlay('Takeover requested...');
+        socket.send(
+            this.textEncoder.encode(
+                Command.TAKEOVER + JSON.stringify({ ownerGeneration, columns: geometry.cols, rows: geometry.rows })
+            )
+        );
+        this.recordDiagnostic('takeover-requested', ownerGeneration);
+    }
+
+    private cancelTakeover() {
+        if (this.displaced || this.inputReady) return;
+        this.takeoverPending = false;
+        this.takeoverOwnerGeneration = 0;
+        this.invalidateInputOwner(true);
+        this.clearSocket(true);
+        this.clearHeartbeat();
+        this.connectionState = 'session-conflict';
+        this.overlayAddon.clearAction();
+        this.overlayAddon.showAction('Takeover cancelled. The original tab remains active.', 'Retry', event =>
+            this.claimRecoveryPointer(event)
+        );
+    }
+
+    private enterDisplaced() {
+        if (this.displaced) return;
+        this.displaced = true;
+        this.takeoverPending = false;
+        this.takeoverOwnerGeneration = 0;
+        this.inputReady = false;
+        this.invalidateInputOwner(true);
+        this.connectionGeneration++;
+        this.fetchAbort?.abort();
+        this.fetchAbort = undefined;
+        this.clearReconnectTimers();
+        this.clearHeartbeat();
+        this.clearSocket(true);
+        this.connectionState = 'session-displaced';
+        this.overlayAddon.clearAction();
+        this.overlayAddon.showOverlay('세션이 다른 탭으로 이동되었습니다');
+        this.recordDiagnostic('session-displaced');
+    }
+
+    private beginRecovery() {
+        if (this.disposed || this.displaced || this.connectPromise || !this.request) return;
+        this.connectPromise = this.runRecovery().finally(() => {
+            this.connectPromise = undefined;
+        });
+    }
+
+    private async runRecovery() {
+        this.clearHeartbeat();
+        while (!this.disposed && !this.displaced) {
+            const elapsed = performance.now() - this.reconnectStartedAt;
+            if (elapsed >= RECONNECT_WINDOW_MS || !this.reconnect) {
+                this.showManualReconnect();
                 return;
             }
-        }
 
-        this.sendData(data);
+            const result = await this.connectAttempt();
+            if (result === 'ready' || result === 'stop' || this.disposed) return;
+
+            const remaining = RECONNECT_WINDOW_MS - (performance.now() - this.reconnectStartedAt);
+            if (remaining <= 0) continue;
+            const delay = Math.min(1000 * 2 ** Math.min(this.reconnectAttempts, 3), RECONNECT_MAX_DELAY_MS, remaining);
+            this.reconnectAttempts++;
+            const delayGate = createDeferred<void>();
+            this.reconnectDelayResolve = delayGate.resolve;
+            this.reconnectTimer = window.setTimeout(() => {
+                this.reconnectTimer = undefined;
+                this.reconnectDelayResolve = undefined;
+                delayGate.resolve();
+            }, delay);
+            await delayGate.promise;
+        }
     }
 
-    @bind
-    public connect() {
-        this.connectionGeneration++;
+    private async waitForParserDrain(): Promise<boolean> {
+        const deadline = performance.now() + ATTEMPT_TIMEOUT_MS;
+        while (!this.disposed && this.pendingBytes > 0 && performance.now() < deadline) {
+            const parserTick = createDeferred<void>();
+            window.setTimeout(parserTick.resolve, 16);
+            await parserTick.promise;
+        }
+        if (this.pendingBytes === 0) return true;
+        this.connectionState = 'terminal-state-lost';
+        this.overlayAddon.showAction('Terminal parser did not settle. Input remains blocked.', 'Retry', event =>
+            this.claimRecoveryPointer(event)
+        );
+        return false;
+    }
+
+    private async connectAttempt(): Promise<AttemptResult> {
+        if (!(await this.waitForParserDrain()) || !(await this.waitForGeometry()) || !this.request || this.disposed)
+            return 'stop';
+        this.invalidateInputOwner(true);
+        const generation = ++this.connectionGeneration;
+        const request = this.request;
+        this.clearSocket(true);
         this.flowPausedGeneration = undefined;
+        this.inputReady = false;
         this.connectionState = 'connecting';
-        this.recordDiagnostic('connecting', this.connectionGeneration);
-        this.socket = new WebSocket(this.options.wsUrl, ['tty']);
-        const { socket, register } = this;
+        this.recordDiagnostic('connecting', generation);
+        this.overlayAddon.clearAction();
+        this.overlayAddon.showOverlay('Connecting...');
 
+        this.fetchAbort?.abort();
+        const controller = new AbortController();
+        this.fetchAbort = controller;
+        const tokenTimeout = Math.min(
+            TOKEN_TIMEOUT_MS,
+            RECONNECT_WINDOW_MS - (performance.now() - this.reconnectStartedAt)
+        );
+        if (tokenTimeout <= 0) {
+            this.fetchAbort = undefined;
+            return 'retry';
+        }
+        this.attemptTimer = window.setTimeout(() => controller.abort(), tokenTimeout);
+        try {
+            const response = await fetch(this.options.tokenUrl, { signal: controller.signal, cache: 'no-store' });
+            if (!response.ok) throw new Error(`token response ${response.status}`);
+            const body = (await response.json()) as { token?: unknown };
+            if (typeof body.token !== 'string') throw new Error('token response missing token');
+            this.token = body.token;
+        } catch (error) {
+            if (!this.disposed) console.warn(`[ttyd] fetch ${this.options.tokenUrl}:`, error);
+            return this.disposed ? 'stop' : 'retry';
+        } finally {
+            if (this.attemptTimer !== undefined) window.clearTimeout(this.attemptTimer);
+            this.attemptTimer = undefined;
+            if (this.fetchAbort === controller) this.fetchAbort = undefined;
+        }
+
+        if (this.disposed || generation !== this.connectionGeneration) return 'stop';
+        const url = new URL(this.options.wsBaseUrl);
+        url.searchParams.set('resume', request.id);
+        const socket = new WebSocket(url, ['tty']);
         socket.binaryType = 'arraybuffer';
-        register(addEventListener(socket, 'open', this.onSocketOpen));
-        register(addEventListener(socket, 'message', this.onSocketData as EventListener));
-        register(addEventListener(socket, 'close', this.onSocketClose as EventListener));
-        register(addEventListener(socket, 'error', () => console.warn('[ttyd] websocket error')));
-    }
+        this.socket = socket;
+        this.socketDisposables.push(
+            addEventListener(socket, 'open', () => this.handleSocketOpen(socket, generation, request)),
+            addEventListener(socket, 'message', event => this.onSocketData(event as MessageEvent, socket, generation)),
+            addEventListener(socket, 'close', event => this.handleSocketClose(event as CloseEvent, socket, generation)),
+            addEventListener(socket, 'error', () => console.warn('[ttyd] websocket error'))
+        );
 
-    @bind
-    private onSocketOpen() {
-        console.log('[ttyd] websocket connection opened');
-        const { textEncoder, terminal, overlayAddon } = this;
-
-        const msg = JSON.stringify({
-            AuthToken: this.token,
-            columns: terminal.cols,
-            rows: terminal.rows,
-        });
-        this.socket?.send(textEncoder.encode(msg));
-        this.connectionState = 'connected';
-        this.recordDiagnostic('connected', this.connectionGeneration);
-        if (this.pendingBytes > this.flowThresholds().high) this.sendFlowControl(Command.PAUSE);
-
-        if (this.opened) {
-            this.reconnecting = true;
-            terminal.options.disableStdin = false;
-            overlayAddon.showOverlay('Restoring session...');
-        } else {
-            this.opened = true;
-            this.reconnecting = false;
+        const attempt = createDeferred<AttemptResult>();
+        this.attemptResolve = attempt.resolve;
+        const attemptTimeout = Math.min(
+            ATTEMPT_TIMEOUT_MS,
+            RECONNECT_WINDOW_MS - (performance.now() - this.reconnectStartedAt)
+        );
+        if (attemptTimeout <= 0) {
+            this.clearSocket(true);
+            this.settleAttempt('retry');
+            return attempt.promise;
         }
-
-        this.doReconnect = this.reconnect;
-        this.initListeners();
-        const isTouchDevice =
-            (window.matchMedia?.('(pointer: coarse)').matches ?? false) || navigator.maxTouchPoints > 0;
-        if (!isTouchDevice) terminal.focus();
+        this.attemptTimer = window.setTimeout(() => {
+            if (generation !== this.connectionGeneration) return;
+            this.recordDiagnostic('attempt-timeout', generation);
+            this.clearSocket(true);
+            this.settleAttempt('retry');
+        }, attemptTimeout);
+        return attempt.promise;
     }
 
-    @bind
-    private onSocketClose(event: CloseEvent) {
-        console.log(`[ttyd] websocket connection closed with code: ${event.code}`);
-        this.connectionState = 'disconnected';
-        this.flowPausedGeneration = undefined;
-        this.recordDiagnostic('disconnected', event.code);
-
-        const { doReconnect, overlayAddon } = this;
-        overlayAddon.showOverlay('Connection Closed');
-        this.dispose();
-
-        // 1000: CLOSE_NORMAL
-        if (event.code !== 1000 && doReconnect) {
-            this.scheduleReconnect();
-        } else {
-            this.waitForManualReconnect();
-        }
-    }
-
-    private scheduleReconnect() {
-        const now = Date.now();
-        if (this.reconnectStartedAt === 0) this.reconnectStartedAt = now;
-
-        const remaining = RECONNECT_WINDOW_MS - (now - this.reconnectStartedAt);
-        if (remaining <= 0 || !this.doReconnect) {
-            this.waitForManualReconnect();
+    private handleSocketOpen(socket: WebSocket, generation: number, request: SessionRequest) {
+        if (socket !== this.socket || generation !== this.connectionGeneration || this.disposed) return;
+        const geometry = this.lastValidGeometry;
+        if (!geometry) {
+            this.clearSocket(true);
+            this.settleAttempt('retry');
             return;
         }
-
-        const delay = Math.min(1000 * 2 ** Math.min(this.reconnectAttempts, 3), RECONNECT_MAX_DELAY_MS, remaining);
-        this.reconnectAttempts++;
-        this.overlayAddon.showOverlay('Reconnecting...');
-        this.reconnectTimer = window.setTimeout(() => {
-            this.reconnectTimer = undefined;
-            void this.refreshToken().then(this.connect);
-        }, delay);
+        const message = JSON.stringify({
+            version: 3,
+            intent: request.intent,
+            replayPosition: this.appliedPosition,
+            AuthToken: this.token,
+            columns: geometry.cols,
+            rows: geometry.rows,
+        });
+        this.handshakeGeometry = { connectionGeneration: generation, ...geometry };
+        socket.send(this.textEncoder.encode(message));
+        this.connectionState = 'connected';
+        this.recordDiagnostic('connected', generation);
     }
 
-    private waitForManualReconnect() {
-        const { terminal, overlayAddon, refreshToken, connect } = this;
-        const keyDispose = terminal.onKey(e => {
-            if (e.domEvent.key !== 'Enter') return;
-            keyDispose.dispose();
-            this.reconnectStartedAt = 0;
+    private handleSocketClose(event: CloseEvent, socket: WebSocket, generation: number) {
+        if (socket !== this.socket || generation !== this.connectionGeneration || this.disposed) return;
+        const stopped = this.connectionState.startsWith('session-') || this.connectionState === 'no-session';
+        this.clearSocket(false);
+        this.clearHeartbeat();
+        this.inputReady = false;
+        this.invalidateInputOwner(true);
+        this.handshakeGeometry = undefined;
+        this.flowPausedGeneration = undefined;
+        this.recordDiagnostic('disconnected', event.code);
+        if (stopped) return;
+        this.connectionState = 'disconnected';
+        if (this.attemptResolve) {
+            this.settleAttempt('retry');
+            return;
+        }
+        this.overlayAddon.showOverlay('Connection lost. Recovering...');
+        this.reconnectStartedAt = performance.now();
+        this.reconnectAttempts = 0;
+        this.automaticRecoveryExhausted = false;
+        if (this.reconnect) this.beginRecovery();
+        else this.showManualReconnect();
+    }
+
+    private settleAttempt(result: AttemptResult) {
+        const resolve = this.attemptResolve;
+        if (!resolve) return;
+        this.attemptResolve = undefined;
+        if (this.attemptTimer !== undefined) window.clearTimeout(this.attemptTimer);
+        this.attemptTimer = undefined;
+        resolve(result);
+    }
+
+    private clearSocket(close: boolean) {
+        const socket = this.socket;
+        this.socket = undefined;
+        for (const disposable of this.socketDisposables) disposable.dispose();
+        this.socketDisposables.length = 0;
+        if (close && socket && socket.readyState < WebSocket.CLOSING) socket.close();
+    }
+
+    private clearReconnectTimers() {
+        if (this.reconnectTimer !== undefined) window.clearTimeout(this.reconnectTimer);
+        if (this.attemptTimer !== undefined) window.clearTimeout(this.attemptTimer);
+        this.reconnectTimer = undefined;
+        this.attemptTimer = undefined;
+        this.reconnectDelayResolve?.();
+        this.reconnectDelayResolve = undefined;
+        this.attemptResolve?.('stop');
+        this.attemptResolve = undefined;
+    }
+
+    private showManualReconnect() {
+        this.automaticRecoveryExhausted = true;
+        this.connectionState = 'disconnected';
+        this.overlayAddon.showAction('Automatic recovery paused.', 'Reconnect', event =>
+            this.claimRecoveryPointer(event)
+        );
+    }
+
+    @bind
+    private handleVisibilityReturn() {
+        this.fit();
+        if (document.visibilityState === 'hidden') {
+            this.invalidateInputOwner(true);
+            return;
+        }
+        if (this.disposed || this.displaced) return;
+        if (this.inputReady) {
+            this.sendHeartbeat();
+        } else if (!this.automaticRecoveryExhausted) {
+            if (this.reconnectStartedAt === 0) this.reconnectStartedAt = performance.now();
+            this.beginRecovery();
+        }
+    }
+
+    private startHeartbeat() {
+        this.clearHeartbeat();
+        this.heartbeatTimer = window.setInterval(() => this.sendHeartbeat(), HEARTBEAT_INTERVAL_MS);
+        this.sendHeartbeat();
+    }
+
+    private sendHeartbeat() {
+        const socket = this.socket;
+        if (
+            this.displaced ||
+            !this.inputReady ||
+            document.visibilityState === 'hidden' ||
+            socket?.readyState !== WebSocket.OPEN
+        )
+            return;
+        if (this.heartbeatNonce) {
+            if (Date.now() - this.heartbeatSentAt < HEARTBEAT_TIMEOUT_MS) return;
+            this.recordDiagnostic('heartbeat-timeout', this.connectionGeneration);
+            this.inputReady = false;
+            this.invalidateInputOwner(true);
+            this.clearSocket(true);
+            this.clearHeartbeat();
+            this.connectionState = 'disconnected';
+            this.reconnectStartedAt = performance.now();
             this.reconnectAttempts = 0;
-            overlayAddon.showOverlay('Reconnecting...');
-            void refreshToken().then(connect);
-        });
-        overlayAddon.showOverlay('Press ⏎ to Reconnect');
+            this.automaticRecoveryExhausted = false;
+            this.beginRecovery();
+            return;
+        }
+        const nonce = `${this.connectionGeneration}:${++this.heartbeatCounter}`;
+        this.heartbeatNonce = nonce;
+        this.heartbeatSentAt = Date.now();
+        socket.send(this.textEncoder.encode(Command.HEARTBEAT + nonce));
+        this.recordDiagnostic('heartbeat-sent', this.heartbeatCounter);
+    }
+
+    private clearHeartbeat() {
+        if (this.heartbeatTimer !== undefined) window.clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = undefined;
+        this.heartbeatNonce = undefined;
+        this.heartbeatSentAt = 0;
     }
 
     @bind
@@ -638,64 +1637,248 @@ export class Xterm {
         return prefs;
     }
 
-    @bind
-    private onSocketData(event: MessageEvent) {
-        const { textDecoder } = this;
-        const rawData = event.data as ArrayBuffer;
-        const cmd = String.fromCharCode(new Uint8Array(rawData)[0]);
-        const data = rawData.slice(1);
+    private async settleReplay(socket: WebSocket, generation: number, position: number, truncated: boolean) {
+        const deadline = performance.now() + ATTEMPT_TIMEOUT_MS;
+        while (
+            !this.disposed &&
+            socket === this.socket &&
+            generation === this.connectionGeneration &&
+            (this.pendingBytes > 0 || this.appliedPosition < position) &&
+            performance.now() < deadline
+        ) {
+            const parserTick = createDeferred<void>();
+            window.setTimeout(parserTick.resolve, 16);
+            await parserTick.promise;
+        }
+        if (
+            this.disposed ||
+            socket !== this.socket ||
+            generation !== this.connectionGeneration ||
+            this.pendingBytes > 0 ||
+            this.appliedPosition < position
+        ) {
+            this.recordDiagnostic('replay-settlement-failed', position);
+            this.clearSocket(true);
+            this.settleAttempt('retry');
+            return;
+        }
 
-        switch (cmd) {
-            case Command.OUTPUT:
-                this.writeFunc(data);
+        for (let frame = 0; frame < 2; frame++) {
+            const rendered = createDeferred<void>();
+            window.requestAnimationFrame(() => rendered.resolve());
+            await rendered.promise;
+        }
+        if (socket !== this.socket || generation !== this.connectionGeneration || socket.readyState !== WebSocket.OPEN)
+            return;
+        this.replayTarget = position;
+        if (this.isExitedRetained) {
+            this.inputReady = false;
+            this.invalidateInputOwner(true);
+            this.recordDiagnostic('replay-settled', position);
+            return;
+        }
+        this.connectionState = truncated ? 'terminal-state-lost' : 'replaying';
+        socket.send(this.textEncoder.encode(Command.SESSION_READY + JSON.stringify({ position })));
+        this.recordDiagnostic('replay-settled', position);
+    }
+
+    private onSocketData(event: MessageEvent, socket: WebSocket, generation: number) {
+        if (socket !== this.socket || generation !== this.connectionGeneration || !(event.data instanceof ArrayBuffer))
+            return;
+        const rawData = event.data;
+        const bytes = new Uint8Array(rawData);
+        if (bytes.length === 0) return;
+        const command = String.fromCharCode(bytes[0]);
+
+        switch (command) {
+            case Command.OUTPUT: {
+                if (bytes.length < 9) return;
+                const view = new DataView(rawData);
+                const endPosition = view.getUint32(1) * 0x1_0000_0000 + view.getUint32(5);
+                const data = rawData.slice(9);
+                if (this.zmodemAddon) {
+                    this.writeFunc(data);
+                    this.appliedPosition = Math.max(this.appliedPosition, endPosition);
+                } else {
+                    this.writeData(new Uint8Array(data), endPosition, generation);
+                }
                 break;
+            }
             case Command.SET_WINDOW_TITLE:
-                this.title = textDecoder.decode(data);
+                this.title = this.textDecoder.decode(rawData.slice(1));
                 document.title = this.title;
                 break;
             case Command.SET_PREFERENCES:
-                this.applyPreferences({
-                    ...this.options.clientOptions,
-                    ...JSON.parse(textDecoder.decode(data)),
-                    ...this.parseOptsFromUrlQuery(window.location.search),
-                } as Preferences);
+                if (!this.preferencesApplied) {
+                    this.preferencesApplied = true;
+                    this.applyPreferences({
+                        ...this.options.clientOptions,
+                        ...JSON.parse(this.textDecoder.decode(rawData.slice(1))),
+                        ...this.parseOptsFromUrlQuery(window.location.search),
+                    } as Preferences);
+                }
                 break;
             case Command.SET_SESSION_STATE: {
-                const state = textDecoder.decode(data);
-                const wasReconnecting = this.reconnecting;
-                this.recordDiagnostic(`session-${state}`);
-                if (state === 'fresh') {
-                    this.terminalEpoch++;
-                    this.terminal.reset();
-                    this.connectionState = 'application-ready';
-                    this.reconnectScrollWrites = 0;
-                    if (wasReconnecting) this.overlayAddon.showOverlay('New Session', 300);
-                } else if (state === 'resumed') {
-                    this.connectionState = wasReconnecting ? 'replaying' : 'application-ready';
-                    if (wasReconnecting) {
-                        this.reconnectScrollWrites = 4;
-                        this.terminal.scrollToBottom();
-                        requestAnimationFrame(() => this.terminal.scrollToBottom());
-                        this.overlayAddon.showOverlay('Reconnected', 300);
-                    }
-                } else {
-                    console.warn(`[ttyd] unknown session state: ${state}`);
-                    this.connectionState = 'application-ready';
+                const message = JSON.parse(this.textDecoder.decode(rawData.slice(1))) as {
+                    version?: number;
+                    state?: string;
+                    sessionDiagnosticId?: number;
+                    connectionGeneration?: number;
+                    ownerGeneration?: number;
+                    replay?: { from?: number; to?: number; truncated?: boolean };
+                    inputReady?: boolean;
+                    exitCode?: number;
+                    exitSignal?: number;
+                };
+                if (message.version !== 3 || typeof message.state !== 'string') {
+                    this.connectionState = 'session-error';
+                    this.overlayAddon.showAction('Session protocol mismatch.', 'Retry', pointer =>
+                        this.claimRecoveryPointer(pointer)
+                    );
+                    this.settleAttempt('stop');
+                    return;
                 }
-                this.reconnectStartedAt = 0;
-                this.reconnectAttempts = 0;
-                this.reconnecting = false;
+                this.serverConnectionGeneration = message.connectionGeneration ?? 0;
+                this.sessionDiagnosticId = message.sessionDiagnosticId ?? 0;
+                this.replayTarget = message.replay?.to ?? 0;
+                const truncated = message.replay?.truncated === true;
+                this.recordDiagnostic(`session-${message.state}`, this.serverConnectionGeneration);
+
+                if (message.state === 'displaced') {
+                    this.enterDisplaced();
+                    this.settleAttempt('stop');
+                    return;
+                }
+
+                if (message.state === 'checking') {
+                    this.inputReady = false;
+                    this.invalidateInputOwner(true);
+                    this.connectionState = 'checking-owner';
+                    this.overlayAddon.showOverlay('Checking previous connection...');
+                    break;
+                }
+                if (message.state === 'exited_retained') {
+                    this.isExitedRetained = true;
+                    this.takeoverPending = false;
+                    this.takeoverOwnerGeneration = 0;
+                    this.inputReady = false;
+                    this.invalidateInputOwner(true);
+                    this.connectionState = 'session-exited-retained';
+                    const exitCode = message.exitCode ?? 0;
+                    const exitSignal = message.exitSignal ?? 0;
+                    const statusText =
+                        exitSignal > 0 ? `작업 완료 (신호: ${exitSignal})` : `작업 완료 (종료 코드: ${exitCode})`;
+                    const notice = truncated ? `${statusText} - 이전 출력이 절사됨 (최신 8 MiB 보존)` : statusText;
+                    this.overlayAddon.showAction(notice, 'Start New Session', pointer =>
+                        this.claimRecoveryPointer(pointer, true)
+                    );
+                    break;
+                }
+                if (message.state === 'created' || message.state === 'attached') {
+                    this.takeoverPending = false;
+                    this.takeoverOwnerGeneration = 0;
+                    this.overlayAddon.clearAction();
+                    if (message.state === 'created' && this.request) this.options.session.markCreated(this.request);
+                    if (message.inputReady) {
+                        this.inputReady = true;
+                        this.reconnectStartedAt = 0;
+                        this.reconnectAttempts = 0;
+                        this.automaticRecoveryExhausted = false;
+                        this.connectionState = truncated ? 'terminal-state-lost' : 'application-ready';
+                        this.overlayAddon.showOverlay(
+                            truncated ? '이전 출력이 절사됨 (최신 8 MiB 보존)' : 'Input ready',
+                            600
+                        );
+                        if (this.request && !this.request.persisted)
+                            this.overlayAddon.showOverlay('Ephemeral session: reload continuity is unavailable.', 2500);
+                        this.startHeartbeat();
+                        this.settleAttempt('ready');
+                        const handshake = this.handshakeGeometry;
+                        if (handshake?.connectionGeneration === generation) {
+                            this.lastSentGeometry = {
+                                serverGeneration: this.serverConnectionGeneration,
+                                cols: handshake.cols,
+                                rows: handshake.rows,
+                            };
+                        }
+                        this.sendCurrentGeometry();
+                        const isTouchDevice =
+                            (window.matchMedia?.('(pointer: coarse)').matches ?? false) || navigator.maxTouchPoints > 0;
+                        if (!isTouchDevice) this.activateTypingFocus();
+                    } else {
+                        this.inputReady = false;
+                        this.invalidateInputOwner(true);
+                        this.connectionState = 'replaying';
+                        this.overlayAddon.showOverlay('Session accepted. Restoring screen...');
+                    }
+                    break;
+                }
+                this.inputReady = false;
+                this.invalidateInputOwner(true);
+                this.automaticRecoveryExhausted = true;
+                this.takeoverPending = false;
+                if (message.state === 'conflict' && typeof message.ownerGeneration === 'number') {
+                    this.takeoverOwnerGeneration = message.ownerGeneration;
+                    this.connectionState = 'session-conflict';
+                    this.overlayAddon.showChoices('세션이 이미 다른 탭에서 사용 중입니다', [
+                        {
+                            label: '이 화면으로 가져오기 (Take Over)',
+                            action: () => this.requestTakeover(message.ownerGeneration as number),
+                        },
+                        { label: '취소', action: () => this.cancelTakeover() },
+                    ]);
+                    this.settleAttempt('stop');
+                    break;
+                }
+                this.takeoverOwnerGeneration = 0;
+                const stopped = message.state as
+                    'conflict' | 'stale' | 'expired' | 'exited' | 'unknown' | 'error' | 'rejected_capacity';
+                const labels: Record<string, readonly [string, string]> = {
+                    conflict: ['Session ownership changed. Reconnect to recheck.', 'Retry'],
+                    stale: ['Session ownership changed. Reconnect to recheck.', 'Retry'],
+                    expired: ['Session expired. No new shell was started.', 'Start New Session'],
+                    exited: ['Session exited. Results are not retained by this block.', 'Start New Session'],
+                    unknown: ['Recovery target cannot be confirmed.', 'Start New Session'],
+                    rejected_capacity: ['서버 수용 한도에 도달했습니다. 잠시 후 다시 시도하십시오.', 'Retry'],
+                    error: ['Session protocol error. No shell was started.', 'Retry'],
+                };
+                const [label, action] = labels[stopped] ?? labels.error;
+                this.connectionState = (
+                    stopped === 'rejected_capacity' ? 'session-rejected-capacity' : `session-${stopped}`
+                ) as TtydDiagnosticsSnapshot['state'];
+                const createNew = stopped === 'expired' || stopped === 'exited' || stopped === 'unknown';
+                this.overlayAddon.showAction(label, action, pointer => this.claimRecoveryPointer(pointer, createNew));
+                this.settleAttempt('stop');
+                break;
+            }
+            case Command.REPLAY_END: {
+                const message = JSON.parse(this.textDecoder.decode(rawData.slice(1))) as {
+                    version?: number;
+                    position?: number;
+                    truncated?: boolean;
+                };
+                if (message.version === 3 && typeof message.position === 'number')
+                    void this.settleReplay(socket, generation, message.position, message.truncated === true);
+                break;
+            }
+            case Command.HEARTBEAT_REPLY: {
+                const nonce = this.textDecoder.decode(rawData.slice(1));
+                if (nonce === this.heartbeatNonce) {
+                    this.heartbeatNonce = undefined;
+                    this.heartbeatSentAt = 0;
+                    this.recordDiagnostic('heartbeat-received', this.heartbeatCounter);
+                }
                 break;
             }
             default:
-                console.warn(`[ttyd] unknown command: ${cmd}`);
+                console.warn(`[ttyd] unknown command: ${command}`);
                 break;
         }
     }
 
     @bind
     private applyPreferences(prefs: Preferences) {
-        const { terminal, fitAddon, register } = this;
+        const { terminal, register } = this;
         if (prefs.enableZmodem || prefs.enableTrzsz) {
             this.zmodemAddon = new ZmodemAddon({
                 zmodem: prefs.enableZmodem,
@@ -731,7 +1914,6 @@ export class Xterm {
                     if (value) {
                         console.log('[ttyd] Reconnect disabled');
                         this.reconnect = false;
-                        this.doReconnect = false;
                     }
                     break;
                 case 'enableZmodem':
@@ -775,12 +1957,16 @@ export class Xterm {
                     break;
                 default:
                     console.log(`[ttyd] option: ${key}=${JSON.stringify(value)}`);
-                    if (terminal.options[key] instanceof Object) {
-                        terminal.options[key] = Object.assign({}, terminal.options[key], value);
+                    if (key === 'fontSize') {
+                        this.setFontSize(Number(value));
                     } else {
-                        terminal.options[key] = value;
+                        if (terminal.options[key] instanceof Object) {
+                            terminal.options[key] = Object.assign({}, terminal.options[key], value);
+                        } else {
+                            terminal.options[key] = value;
+                        }
+                        if (key.indexOf('font') === 0) this.fit();
                     }
-                    if (key.indexOf('font') === 0) fitAddon.fit();
                     break;
             }
         }

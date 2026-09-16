@@ -10,6 +10,8 @@
 #ifndef _WIN32
 #include <sys/ioctl.h>
 #include <sys/wait.h>
+#include <dirent.h>
+#include <ctype.h>
 
 #if defined(__OpenBSD__) || defined(__APPLE__)
 #include <util.h>
@@ -213,6 +215,18 @@ bool pty_kill(pty_process *process, int sig) {
 #endif
 }
 
+pid_t pty_get_fg_pgid(pty_process *process) {
+#ifdef _WIN32
+  (void)process;
+  return 0;
+#else
+  if (process == NULL || process->pty < 0) return 0;
+  pid_t pgid = 0;
+  if (ioctl(process->pty, TIOCGPGRP, &pgid) < 0 || pgid <= 1) return 0;
+  return pgid;
+#endif
+}
+
 bool pty_signal_foreground(pty_process *process, int sig) {
 #ifdef _WIN32
   (void)process;
@@ -220,13 +234,373 @@ bool pty_signal_foreground(pty_process *process, int sig) {
   return false;
 #else
   if (process == NULL || process->pty < 0) return false;
-  pid_t pgid = 0;
-  if (ioctl(process->pty, TIOCGPGRP, &pgid) < 0 || pgid <= 1) return false;
+  pid_t pgid = pty_get_fg_pgid(process);
+  if (pgid <= 1) {
+    if (process_running(process)) return kill(process->pid, sig) == 0;
+    return false;
+  }
   if (kill(-pgid, sig) == 0) return true;
   if (errno != ESRCH) return false;
-  pid_t retry = 0;
-  if (ioctl(process->pty, TIOCGPGRP, &retry) < 0 || retry <= 1) return false;
-  return kill(-retry, sig) == 0;
+  pid_t retry = pty_get_fg_pgid(process);
+  if (retry <= 1) {
+    if (process_running(process)) return kill(process->pid, sig) == 0;
+    return false;
+  }
+  if (kill(-retry, sig) == 0) return true;
+  if (process_running(process)) return kill(process->pid, sig) == 0;
+  return false;
+#endif
+}
+
+bool pty_proc_get_ident(pid_t pid, proc_ident_t *ident_out) {
+  if (pid <= 1 || ident_out == NULL) return false;
+  memset(ident_out, 0, sizeof(*ident_out));
+  ident_out->pid = pid;
+
+#ifdef __linux__
+  char path[64];
+  snprintf(path, sizeof(path), "/proc/%d/stat", pid);
+  FILE *f = fopen(path, "r");
+  if (f == NULL) return false;
+  char buf[1024];
+  if (fgets(buf, sizeof(buf), f) == NULL) {
+    fclose(f);
+    return false;
+  }
+  fclose(f);
+
+  char *closing = strrchr(buf, ')');
+  if (closing == NULL || closing[1] != ' ') return false;
+
+  char *p = closing + 2;
+  int token_idx = 0;
+  while (*p != '\0') {
+    while (*p == ' ') p++;
+    if (*p == '\0') break;
+    char *token_start = p;
+    while (*p != '\0' && *p != ' ') p++;
+    if (token_idx == 2) {
+      ident_out->pgrp = (pid_t)atoi(token_start);
+    } else if (token_idx == 19) {
+      ident_out->starttime = strtoull(token_start, NULL, 10);
+      return true;
+    }
+    token_idx++;
+  }
+  return false;
+#else
+  ident_out->pgrp = getpgid(pid);
+  ident_out->starttime = 0;
+  return (kill(pid, 0) == 0 || errno == EPERM);
+#endif
+}
+
+bool pty_proc_ident_alive(const proc_ident_t *ident) {
+  if (ident == NULL || ident->pid <= 1) return false;
+  if (kill(ident->pid, 0) != 0 && errno == ESRCH) return false;
+#ifdef __linux__
+  char path[64];
+  snprintf(path, sizeof(path), "/proc/%d/stat", ident->pid);
+  FILE *f = fopen(path, "r");
+  if (f == NULL) return false;
+  char buf[1024];
+  if (fgets(buf, sizeof(buf), f) == NULL) {
+    fclose(f);
+    return false;
+  }
+  fclose(f);
+
+  char *closing = strrchr(buf, ')');
+  if (closing == NULL || closing[1] != ' ') return false;
+
+  char *p = closing + 2;
+  int token_idx = 0;
+  char state = 0;
+  unsigned long long starttime = 0;
+  while (*p != '\0') {
+    while (*p == ' ') p++;
+    if (*p == '\0') break;
+    char *token_start = p;
+    while (*p != '\0' && *p != ' ') p++;
+    if (token_idx == 0) {
+      state = *token_start;
+    } else if (token_idx == 19) {
+      starttime = strtoull(token_start, NULL, 10);
+      break;
+    }
+    token_idx++;
+  }
+  if (state == 'Z') return false;
+  if (ident->starttime != 0 && starttime != ident->starttime) return false;
+  return true;
+#else
+  return (kill(ident->pid, 0) == 0 || errno == EPERM);
+#endif
+}
+
+void pty_get_process_tree_idents(pid_t root_pid, pid_t extra_pgid, proc_ident_t **idents_out, size_t *count_out) {
+  if (root_pid <= 1 && extra_pgid <= 1) {
+    *idents_out = NULL;
+    *count_out = 0;
+    return;
+  }
+  size_t cap = 32;
+  size_t count = 0;
+  proc_ident_t *idents = xmalloc(cap * sizeof(proc_ident_t));
+
+  if (root_pid > 1) {
+    proc_ident_t root_ident;
+    if (pty_proc_get_ident(root_pid, &root_ident)) {
+      idents[count++] = root_ident;
+    } else {
+      idents[count].pid = root_pid;
+      idents[count].pgrp = (extra_pgid > 1 ? extra_pgid : root_pid);
+      idents[count].starttime = 0;
+      count++;
+    }
+  }
+
+#ifdef __linux__
+  bool added = true;
+  while (added) {
+    added = false;
+    DIR *dir = opendir("/proc");
+    if (dir == NULL) break;
+    struct dirent *ent;
+    while ((ent = readdir(dir)) != NULL) {
+      if (!isdigit((unsigned char)ent->d_name[0])) continue;
+      pid_t pid = (pid_t)atoi(ent->d_name);
+      if (pid <= 1) continue;
+
+      bool already = false;
+      for (size_t i = 0; i < count; i++) {
+        if (idents[i].pid == pid) { already = true; break; }
+      }
+      if (already) continue;
+
+      char stat_path[64];
+      snprintf(stat_path, sizeof(stat_path), "/proc/%d/stat", pid);
+      FILE *f = fopen(stat_path, "r");
+      if (f == NULL) continue;
+      char buf[1024];
+      if (fgets(buf, sizeof(buf), f) != NULL) {
+        char *closing = strrchr(buf, ')');
+        if (closing != NULL && closing[1] == ' ') {
+          char *p = closing + 2;
+          char state = 0;
+          int ppid = 0, pgrp = 0;
+          unsigned long long starttime = 0;
+          int token_idx = 0;
+          while (*p != '\0') {
+            while (*p == ' ') p++;
+            if (*p == '\0') break;
+            char *token_start = p;
+            while (*p != '\0' && *p != ' ') p++;
+            if (token_idx == 0) state = *token_start;
+            else if (token_idx == 1) ppid = atoi(token_start);
+            else if (token_idx == 2) pgrp = atoi(token_start);
+            else if (token_idx == 19) {
+              starttime = strtoull(token_start, NULL, 10);
+              break;
+            }
+            token_idx++;
+          }
+
+          if (state != 'Z') {
+            bool matches = false;
+            for (size_t i = 0; i < count; i++) {
+              if (idents[i].pid == (pid_t)ppid) {
+                matches = true;
+                break;
+              }
+            }
+            if (!matches) {
+              if (extra_pgid > 1 && (pid_t)pgrp == extra_pgid) {
+                matches = true;
+              } else {
+                for (size_t i = 0; i < count; i++) {
+                  if (idents[i].pgrp > 1 && idents[i].pgrp == (pid_t)pgrp) {
+                    matches = true;
+                    break;
+                  }
+                }
+              }
+            }
+
+            if (matches) {
+              if (count >= cap) {
+                cap *= 2;
+                idents = xrealloc(idents, cap * sizeof(proc_ident_t));
+              }
+              idents[count].pid = pid;
+              idents[count].pgrp = (pid_t)pgrp;
+              idents[count].starttime = starttime;
+              count++;
+              added = true;
+            }
+          }
+        }
+      }
+      fclose(f);
+    }
+    closedir(dir);
+  }
+#endif
+
+  *idents_out = idents;
+  *count_out = count;
+}
+
+void pty_expand_tree_idents(proc_ident_t **idents_inout, size_t *count_inout) {
+  if (idents_inout == NULL || *idents_inout == NULL || count_inout == NULL || *count_inout == 0) return;
+
+#ifdef __linux__
+  proc_ident_t *idents = *idents_inout;
+  size_t count = *count_inout;
+  size_t cap = count + 32;
+  idents = xrealloc(idents, cap * sizeof(proc_ident_t));
+
+  bool added = true;
+  while (added) {
+    added = false;
+    DIR *dir = opendir("/proc");
+    if (dir == NULL) break;
+    struct dirent *ent;
+    while ((ent = readdir(dir)) != NULL) {
+      if (!isdigit((unsigned char)ent->d_name[0])) continue;
+      pid_t pid = (pid_t)atoi(ent->d_name);
+      if (pid <= 1) continue;
+
+      bool already = false;
+      for (size_t i = 0; i < count; i++) {
+        if (idents[i].pid == pid) { already = true; break; }
+      }
+      if (already) continue;
+
+      char stat_path[64];
+      snprintf(stat_path, sizeof(stat_path), "/proc/%d/stat", pid);
+      FILE *f = fopen(stat_path, "r");
+      if (f == NULL) continue;
+      char buf[1024];
+      if (fgets(buf, sizeof(buf), f) != NULL) {
+        char *closing = strrchr(buf, ')');
+        if (closing != NULL && closing[1] == ' ') {
+          char *p = closing + 2;
+          char state = 0;
+          int ppid = 0, pgrp = 0;
+          unsigned long long starttime = 0;
+          int token_idx = 0;
+          while (*p != '\0') {
+            while (*p == ' ') p++;
+            if (*p == '\0') break;
+            char *token_start = p;
+            while (*p != '\0' && *p != ' ') p++;
+            if (token_idx == 0) state = *token_start;
+            else if (token_idx == 1) ppid = atoi(token_start);
+            else if (token_idx == 2) pgrp = atoi(token_start);
+            else if (token_idx == 19) {
+              starttime = strtoull(token_start, NULL, 10);
+              break;
+            }
+            token_idx++;
+          }
+
+          if (state != 'Z') {
+            bool matches = false;
+            for (size_t i = 0; i < count; i++) {
+              if (idents[i].pid == (pid_t)ppid && pty_proc_ident_alive(&idents[i])) {
+                matches = true;
+                break;
+              }
+            }
+            if (!matches) {
+              for (size_t i = 0; i < count; i++) {
+                if (idents[i].pgrp > 1 && idents[i].pgrp == (pid_t)pgrp && pty_proc_ident_alive(&idents[i])) {
+                  matches = true;
+                  break;
+                }
+              }
+            }
+
+            if (matches) {
+              if (count >= cap) {
+                cap *= 2;
+                idents = xrealloc(idents, cap * sizeof(proc_ident_t));
+              }
+              idents[count].pid = pid;
+              idents[count].pgrp = (pid_t)pgrp;
+              idents[count].starttime = starttime;
+              count++;
+              added = true;
+            }
+          }
+        }
+      }
+      fclose(f);
+    }
+    closedir(dir);
+  }
+
+  *idents_inout = idents;
+  *count_inout = count;
+#endif
+}
+
+bool pty_tree_idents_alive(const proc_ident_t *idents, size_t count) {
+  if (idents == NULL || count == 0) return false;
+  for (size_t i = 0; i < count; i++) {
+    if (pty_proc_ident_alive(&idents[i])) return true;
+  }
+  return false;
+}
+
+void pty_get_process_tree(pid_t root_pid, pid_t **pids_out, size_t *count_out) {
+  proc_ident_t *idents = NULL;
+  size_t count = 0;
+  pty_get_process_tree_idents(root_pid, 0, &idents, &count);
+  if (count == 0 || idents == NULL) {
+    *pids_out = NULL;
+    *count_out = 0;
+    return;
+  }
+  pid_t *pids = xmalloc(count * sizeof(pid_t));
+  for (size_t i = 0; i < count; i++) {
+    pids[i] = idents[i].pid;
+  }
+  free(idents);
+  *pids_out = pids;
+  *count_out = count;
+}
+
+bool pty_tree_alive(pid_t root_pid) {
+  proc_ident_t *idents = NULL;
+  size_t count = 0;
+  pty_get_process_tree_idents(root_pid, 0, &idents, &count);
+  bool alive = pty_tree_idents_alive(idents, count);
+  free(idents);
+  return alive;
+}
+
+bool pty_kill_tree(pty_process *process, int sig) {
+  if (process == NULL) return false;
+#ifdef _WIN32
+  return pty_kill(process, sig);
+#else
+  pid_t root_pid = process->pid;
+  if (root_pid <= 1) return false;
+
+  pid_t fg_pgid = pty_get_fg_pgid(process);
+  proc_ident_t *idents = NULL;
+  size_t count = 0;
+  pty_get_process_tree_idents(root_pid, fg_pgid, &idents, &count);
+  for (size_t i = 0; i < count; i++) {
+    if (pty_proc_ident_alive(&idents[i])) {
+      kill(idents[i].pid, sig);
+      if (idents[i].pgrp > 1) kill(-idents[i].pgrp, sig);
+    }
+  }
+  free(idents);
+  return true;
 #endif
 }
 

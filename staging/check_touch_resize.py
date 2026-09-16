@@ -231,6 +231,8 @@ try:
     wait_until('window.term.buffer.active.baseY > 200', timeout=15)
     evaluate('window.term.scrollToBottom(); true')
     time.sleep(0.2)
+    evaluate("document.querySelector('.xterm-helper-textarea').blur(); true")
+    assert not evaluate("document.activeElement === document.querySelector('.xterm-helper-textarea')")
     touch_before = buffer_state()
 
     # A finger moving down should move the viewport upward into scrollback.
@@ -240,6 +242,7 @@ try:
         touch_before,
         touch_after_down,
     )
+    assert not evaluate("document.activeElement === document.querySelector('.xterm-helper-textarea')")
 
     # Reverse the gesture and verify the viewport moves back toward the bottom.
     touch_drag(0.72, 0.30)

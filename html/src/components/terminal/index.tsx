@@ -1,6 +1,6 @@
 import { bind } from 'decko';
 import { Component, h } from 'preact';
-import { Xterm, XtermOptions } from './xterm';
+import { InputOwnerSnapshot, Xterm, XtermOptions } from './xterm';
 
 import '@xterm/xterm/css/xterm.css';
 import { Modal } from '../modal';
@@ -11,15 +11,11 @@ interface Props extends XtermOptions {
 
 interface State {
     modal: boolean;
-    fontSize: number;
-    ctrlArmed: boolean;
-    shiftArmed: boolean;
-    isFullscreen: boolean;
 }
 
 const FONT_STORAGE_KEY = 'webterm.fontSize';
-const MIN_FONT_SIZE = 10;
-const MAX_FONT_SIZE = 30;
+const MIN_FONT_SIZE = 8;
+const MAX_FONT_SIZE = 32;
 
 function clampFontSize(value: number): number {
     return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, value));
@@ -40,42 +36,50 @@ function getInitialFontSize(props: Props): number {
 export class Terminal extends Component<Props, State> {
     private container: HTMLElement;
     private xterm: Xterm;
+    private toolbar: HTMLElement;
+    private fontSize: number;
+    private inputOwner: InputOwnerSnapshot = {
+        modifier: 'none',
+        focusIntent: 'inactive',
+        composing: false,
+        inputEpoch: 0,
+    };
+    private isFullscreen = false;
 
     constructor(props: Props) {
         super(props);
-        const fontSize = getInitialFontSize(props);
-        this.state = { modal: false, fontSize, ctrlArmed: false, shiftArmed: false, isFullscreen: false };
+        this.fontSize = getInitialFontSize(props);
+        this.state = { modal: false };
         this.xterm = new Xterm(
-            { ...props, termOptions: { ...props.termOptions, fontSize } },
+            { ...props, termOptions: { ...props.termOptions, fontSize: this.fontSize } },
             this.showModal,
-            this.handleCtrlState
+            this.handleInputState,
+            this.handleFontSize
         );
     }
 
-    async componentDidMount() {
+    componentDidMount() {
         document.addEventListener('fullscreenchange', this.handleFullscreenChange);
-        await this.xterm.refreshToken();
+        this.toolbar = this.container.parentElement?.querySelector('.mobile-toolbar') as HTMLElement;
+        this.toolbar.addEventListener('pointerdown', this.handleToolbarPointerDown, true);
+        this.toolbar.addEventListener('mousedown', this.handleToolbarPointerDown, true);
         this.xterm.open(this.container);
-        this.xterm.connect();
     }
 
     componentWillUnmount() {
         document.removeEventListener('fullscreenchange', this.handleFullscreenChange);
+        this.toolbar.removeEventListener('pointerdown', this.handleToolbarPointerDown, true);
+        this.toolbar.removeEventListener('mousedown', this.handleToolbarPointerDown, true);
         this.xterm.dispose();
     }
 
-    render({ id }: Props, { modal, fontSize, ctrlArmed, shiftArmed, isFullscreen }: State) {
+    render({ id }: Props, { modal }: State) {
+        const { fontSize, inputOwner, isFullscreen } = this;
+        const shiftArmed = inputOwner.modifier === 'shift';
+        const ctrlArmed = inputOwner.modifier === 'ctrl';
         return (
             <div class="webterm-root">
-                <div
-                    class="mobile-toolbar"
-                    role="toolbar"
-                    aria-label="Terminal controls"
-                    onPointerDown={event => {
-                        event.stopPropagation();
-                        this.blurTerminalAndHideKeyboard();
-                    }}
-                >
+                <div class="mobile-toolbar" role="toolbar" aria-label="Terminal controls">
                     <div class="toolbar-row">
                         <button class="toolbar-button tab-button" type="button" onClick={this.sendTab}>
                             TAB
@@ -172,12 +176,7 @@ export class Terminal extends Component<Props, State> {
                         </button>
                     </div>
                 </div>
-                <div
-                    id={id}
-                    class="terminal-container"
-                    ref={c => (this.container = c as HTMLElement)}
-                    onPointerDown={this.handleTerminalPointerDown}
-                >
+                <div id={id} class="terminal-container" ref={c => (this.container = c as HTMLElement)}>
                     <Modal show={modal}>
                         <label class="file-label">
                             <input onChange={this.sendFile} class="file-input" type="file" multiple />
@@ -189,83 +188,57 @@ export class Terminal extends Component<Props, State> {
         );
     }
 
-    private blurTerminalAndHideKeyboard() {
-        this.xterm.blur();
-        const virtualKeyboard = (navigator as Navigator & { virtualKeyboard?: { hide(): void } }).virtualKeyboard;
-        try {
-            virtualKeyboard?.hide();
-        } catch {
-            // The VirtualKeyboard API is optional; blur is the primary guarantee.
-        }
-    }
-
-    private clearShiftArmed() {
-        if (this.state.shiftArmed) this.setState({ shiftArmed: false });
-    }
-
-    private clearCtrlArmed() {
-        if (this.state.ctrlArmed) this.xterm.setCtrlArmed(false);
-    }
-
     @bind
-    private handleTerminalPointerDown() {
-        this.clearShiftArmed();
+    private handleToolbarPointerDown(event: Event) {
+        event.stopPropagation();
+        this.xterm.beginToolbarInteraction();
+        const target = event.target as Element;
+        if (target.closest('.enter-button') && this.xterm.claimRecoveryPointer(event)) return;
+        event.preventDefault();
     }
-
     @bind
     private sendTab() {
-        this.blurTerminalAndHideKeyboard();
-        const shifted = this.state.shiftArmed;
-        this.clearShiftArmed();
-        this.clearCtrlArmed();
-        this.xterm.sendTab(shifted);
+        this.xterm.endToolbarInteraction();
+        this.xterm.sendTab();
     }
 
     @bind
     private toggleShift() {
-        this.blurTerminalAndHideKeyboard();
-        const shiftArmed = !this.state.shiftArmed;
-        if (shiftArmed && this.state.ctrlArmed) this.xterm.setCtrlArmed(false);
-        this.setState({ shiftArmed });
+        this.xterm.endToolbarInteraction();
+        this.xterm.toggleShift();
     }
 
     private sendArrow(direction: 'left' | 'up' | 'down' | 'right') {
-        this.blurTerminalAndHideKeyboard();
-        const shifted = this.state.shiftArmed;
-        this.clearShiftArmed();
-        this.clearCtrlArmed();
-        this.xterm.sendArrow(direction, shifted);
+        this.xterm.endToolbarInteraction();
+        this.xterm.sendArrow(direction);
     }
 
     @bind
     private sendEnter() {
-        this.blurTerminalAndHideKeyboard();
-        this.clearShiftArmed();
-        this.clearCtrlArmed();
+        this.xterm.endToolbarInteraction();
+        if (this.xterm.requestRecoveryFromToolbar()) return;
         this.xterm.sendEnter();
     }
 
     @bind
     private sendEscape() {
-        this.blurTerminalAndHideKeyboard();
-        this.clearShiftArmed();
+        this.xterm.endToolbarInteraction();
         this.xterm.sendEscape();
     }
 
     @bind
     private toggleCtrl() {
-        this.blurTerminalAndHideKeyboard();
-        this.clearShiftArmed();
-        this.xterm.toggleCtrlArmed();
+        this.xterm.endToolbarInteraction();
+        this.xterm.toggleCtrl();
     }
 
     private changeFontSize(delta: number) {
-        this.blurTerminalAndHideKeyboard();
-        this.clearShiftArmed();
-        const fontSize = clampFontSize(this.state.fontSize + delta);
-        if (fontSize === this.state.fontSize) return;
+        this.xterm.endToolbarInteraction();
+        this.xterm.clearModifierForLocalAction();
+        const fontSize = clampFontSize(this.fontSize + delta);
+        if (fontSize === this.fontSize) return;
 
-        this.setState({ fontSize });
+        this.fontSize = fontSize;
         try {
             window.localStorage.setItem(FONT_STORAGE_KEY, String(fontSize));
         } catch {
@@ -275,20 +248,43 @@ export class Terminal extends Component<Props, State> {
     }
 
     @bind
-    private handleCtrlState(ctrlArmed: boolean) {
-        this.setState({ ctrlArmed });
+    private handleInputState(inputOwner: InputOwnerSnapshot) {
+        this.inputOwner = inputOwner;
+        const shift = this.container?.parentElement?.querySelector('.shift-button');
+        const ctrl = this.container?.parentElement?.querySelector('.ctrl-button');
+        const shiftArmed = inputOwner.modifier === 'shift';
+        const ctrlArmed = inputOwner.modifier === 'ctrl';
+        shift?.classList.toggle('active', shiftArmed);
+        shift?.setAttribute('aria-pressed', String(shiftArmed));
+        ctrl?.classList.toggle('active', ctrlArmed);
+        ctrl?.setAttribute('aria-pressed', String(ctrlArmed));
+    }
+
+    @bind
+    private handleFontSize(fontSize: number) {
+        this.fontSize = fontSize;
+        this.container?.parentElement
+            ?.querySelector('.font-decrease-button')
+            ?.setAttribute('aria-label', `Decrease font size; current ${fontSize} pixels`);
+        this.container?.parentElement
+            ?.querySelector('.font-increase-button')
+            ?.setAttribute('aria-label', `Increase font size; current ${fontSize} pixels`);
     }
 
     @bind
     private handleFullscreenChange() {
-        this.setState({ isFullscreen: Boolean(document.fullscreenElement) });
+        this.isFullscreen = Boolean(document.fullscreenElement);
+        const button = this.container?.parentElement?.querySelector('.fullscreen-button');
+        button?.classList.toggle('active', this.isFullscreen);
+        button?.setAttribute('aria-pressed', String(this.isFullscreen));
+        button?.setAttribute('aria-label', this.isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen');
+        button?.setAttribute('title', this.isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen');
         this.xterm.fit();
     }
 
     @bind
     private async toggleFullscreen() {
-        this.blurTerminalAndHideKeyboard();
-        this.clearShiftArmed();
+        this.xterm.clearModifierForLocalAction();
         try {
             if (!document.fullscreenElement) {
                 await document.documentElement.requestFullscreen();

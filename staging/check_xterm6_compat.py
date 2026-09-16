@@ -87,6 +87,20 @@ def wait_until(expression, timeout=10):
         time.sleep(0.1)
     raise AssertionError(f'wait timeout: {expression}; last={last!r}')
 
+def wait_ready():
+    wait_until("Boolean(window.ttydDiagnostics)", timeout=5)
+    if not evaluate("Boolean(window.ttydDiagnostics().inputReady)"):
+        evaluate("document.querySelector('.terminal-overlay button')?.click(); true")
+    wait_until("Boolean(window.ttydDiagnostics().inputReady)", timeout=15)
+
+def terminal_input(text):
+    evaluate("document.querySelector('.xterm-helper-textarea').focus(); true")
+    for chunk in text.split('\r')[:-1]:
+        evaluate(f"window.term.input({json.dumps(chunk)}, true); true")
+        evaluate("window.term.input('\\r', true); true")
+    if not text.endswith('\r'):
+        evaluate(f"window.term.input({json.dumps(text.split(chr(13))[-1])}, true); true")
+
 
 def buffer_text():
     return evaluate(
@@ -116,6 +130,7 @@ def wait_text(marker, timeout=8):
 
 
 def run_case(name, params, fragment=''):
+    params = {**params, 'diagnostics': '1'}
     query = urllib.parse.urlencode(params)
     target_url = URL + ('&' if '?' in URL else '?') + query + fragment
     call('Page.navigate', {'url': target_url})
@@ -123,8 +138,9 @@ def run_case(name, params, fragment=''):
     wait_until("Boolean(document.querySelector('.xterm-helper-textarea'))")
     time.sleep(0.6)
 
+    wait_ready()
     marker = f'XTERM6_{name.upper()}_OK'
-    evaluate(f"window.term.input({json.dumps('echo ' + marker + '\\r')}, true); true")
+    terminal_input('echo ' + marker + '\r')
     wait_text(marker)
     state = evaluate(
         """(() => ({
@@ -234,7 +250,7 @@ try:
                 "(window.__xterm6Logs || []).some(line => line.includes('WebGL context lost, falling back to default renderer'))",
                 timeout=5,
             )
-            evaluate("window.term.input('echo XTERM6_CONTEXT_LOSS_OK\\r', true); true")
+            terminal_input('echo XTERM6_CONTEXT_LOSS_OK\r')
             wait_text('XTERM6_CONTEXT_LOSS_OK')
             post_loss = evaluate(
                 """(() => ({

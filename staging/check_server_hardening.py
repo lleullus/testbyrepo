@@ -12,8 +12,8 @@ import urllib.request
 import websocket
 
 ROOT = Path(__file__).resolve().parents[1]
-TTYD_BIN = Path(os.environ.get('TTYD_BIN', ROOT / 'build-native' / 'ttyd'))
-INDEX = ROOT / 'staging' / 'index.html'
+TTYD_BIN = Path(os.environ.get('TTYD_BIN', ROOT / 'build' / 'ttyd'))
+INDEX = Path(os.environ.get('WEBTERM_TEST_INDEX', ROOT / 'html' / 'dist' / 'inline.html'))
 CC = os.environ.get('CC', 'cc')
 
 
@@ -100,7 +100,7 @@ def check_long_initial_messages():
 
     port = free_port()
     http = f'http://127.0.0.1:{port}/'
-    ws_url = f'ws://127.0.0.1:{port}/ws'
+    ws_url = f"ws://127.0.0.1:{port}/ws?resume={'1' * 32}"
     long_command_arg = 'C' * 5000
     long_pref = 'P' * 5000
     proc = subprocess.Popen(
@@ -135,7 +135,18 @@ def check_long_initial_messages():
         )
         with urllib.request.urlopen(http + 'token', timeout=5) as response:
             auth_token = json.load(response).get('token', '')
-        ws.send_binary(json.dumps({'AuthToken': auth_token, 'columns': 80, 'rows': 24}).encode())
+        ws.send_binary(
+            json.dumps(
+                {
+                    'version': 3,
+                    'intent': 'create',
+                    'replayPosition': 0,
+                    'AuthToken': auth_token,
+                    'columns': 80,
+                    'rows': 24,
+                }
+            ).encode()
+        )
 
         messages = {}
         deadline = time.time() + 8
@@ -151,12 +162,13 @@ def check_long_initial_messages():
         assert prefs is not None and len(prefs) > 4096, None if prefs is None else len(prefs)
         assert long_command_arg.encode() in title, 'long command/title payload was truncated'
         assert long_pref.encode() in prefs, 'long preferences payload was truncated'
-        assert state == b'3fresh', state
+        session_state = json.loads(state[1:])
+        assert session_state['version'] == 3 and session_state['state'] == 'created', session_state
         assert proc.poll() is None, proc.poll()
         return {
             'titleBytes': len(title),
             'preferencesBytes': len(prefs),
-            'sessionState': state[1:].decode(),
+            'sessionState': session_state['state'],
             'serverAlive': True,
         }
     finally:
@@ -204,14 +216,25 @@ def check_validity_grace():
     try:
         wait_http(http + 'token')
         ws = websocket.create_connection(
-            f'ws://127.0.0.1:{port}/ws',
+            f"ws://127.0.0.1:{port}/ws?resume={'2' * 32}",
             subprotocols=['tty'],
             origin=http.rstrip('/'),
             timeout=5,
         )
         with urllib.request.urlopen(http + 'token', timeout=5) as response:
             auth_token = json.load(response)['token']
-        ws.send_binary(json.dumps({'AuthToken': auth_token, 'columns': 80, 'rows': 24}).encode())
+        ws.send_binary(
+            json.dumps(
+                {
+                    'version': 3,
+                    'intent': 'create',
+                    'replayPosition': 0,
+                    'AuthToken': auth_token,
+                    'columns': 80,
+                    'rows': 24,
+                }
+            ).encode()
+        )
 
         # Read wire bytes directly so websocket-client does not answer the server PING.
         ws.sock.settimeout(0.25)
