@@ -16,7 +16,7 @@ The caller binds one exact construction unit before dispatch:
 - **Plan Review:** exact outside-Project-Root `plan_review_path` containing schema `iis-scope-plan-review/v2`, one current `ADMIT` for this Scope and the independent reviewer provenance.
 - **Plan:** exact reviewed method paths and conditional first work.
 - **User instructions:** current permitted actions, selected execution mode and model/effort.
-- **Existing evidence:** implementation baseline, findings and readback locations, or `None supplied`.
+- **Existing evidence:** implementation baseline, findings and readback locations, or `None supplied`. For correction, include the exact Verify/Coverage finding and primary evidence, current authorized actor/model/effort/mode, permitted next action and authority limits.
 
 Tell the implementing actor: **read all bound Thesis sources, the exact Scope and the exact current Plan Review directly before implementation, including product purpose, complete loop, false-success distinctions, failure/recovery meaning, Acceptance and authoritative readback.** A summary or file-name lookup is not a substitute. These sources bound the work; they do not authorize Scope expansion.
 
@@ -53,6 +53,8 @@ Top-level execution defaults to one `SUBAGENT`. Use `DIRECT` only when the curre
 
 Preserve the current selected model/effort. A capability failure returns `SUBAGENT CAPABILITY UNAVAILABLE` with the observed limit; it does not silently become DIRECT. Keep one implementation owner on one mutable worktree/effect surface. Do not start a replacement until the prior worker/process has actually settled; cancellation receipt alone is not settlement.
 
+A Verify/Coverage-driven correction is a continuation of implementation authority, not a new actor selection. A fresh invocation, including after material method revision, preserves the current actor/model/effort/mode unless the user explicitly changes it. Main's request ownership grants no repair authority. Continuity does not override stage-only, stop, no-reentry or external-effect limits. Establish the actual working state and prior-effect settlement before correction; later self-check cannot retroactively authorize another actor's mutation.
+
 The caller reads this entry contract. The actual worker reads [references/implement.md](references/implement.md) in full. A permitted DIRECT actor reads that reference itself. The caller must not copy the worker procedure into a substitute result.
 
 ## Contract preflight
@@ -76,7 +78,9 @@ Apply the reuse, deletion and consolidation choices in `references/implement.md`
 
 For each finding supplied by the caller or discovered in scope, identify it before claiming completion and give it one disposition: directly fixed, fixed with the same evidenced cause group, separately fixed, or returned at a Scope/Thesis/material-method boundary with exact next owner. Do not pass known related findings to the verifier as if they were closed. Connect each change to its Acceptance scenario, impact span, cheapest discriminating check, real acceptance readback and external-condition limit.
 
-A material change to cause, owner, shared interface, persistence meaning, acceptance/readback, target identity or external-effect strategy changes the reviewed method. Stop mutation that depends on the new direction and return:
+For correction, include the actual delta, mutation attribution, relevant causal/state/config/runtime/persistence/identity/effect surfaces, self-check and remaining uncertainty in the existing result. Any claimed unaffected obligation is navigation for the verifier, not permission to omit verification. Preserve the origin of pre-existing changes rather than adopting them as this invocation's work.
+
+A material change to cause, product state/effect owner, shared interface, persistence meaning, acceptance/readback, target strategy or external-effect strategy changes the reviewed method. Expected output-byte changes within that method create a new verification target but do not alone require Plan revision. Stop mutation that depends on the new direction and return:
 
 ```text
 SCOPE IMPLEMENT RESULT
@@ -87,10 +91,10 @@ Reviewed direction: <current Plan/reviewed method>
 New direct evidence: <exact observation>
 Affected plan scope: <exact section>
 Current working-tree state: <exact state>
-Next allowed action: revise affected Plan -> independent review -> fresh implementation actor
+Next allowed action: revise affected Plan -> independent review -> fresh implementation invocation preserving the current authorized actor/model/effort/mode
 ```
 
-Do not keep the old actor alive through a continuation flag or edit the bound Plan to force admission.
+Do not keep the prior invocation alive through a continuation flag or edit the bound Plan to force admission. Method revision does not authorize actor substitution.
 
 ## Completion self-check
 

@@ -49,13 +49,16 @@ Coverage receives the exact Scope, current Thesis/applicable Transition sources,
 3. Inspect verifier primary evidence, not only its narrative. For each load-bearing claim follow the raw path/locator, target identity, initial state, action, readback and observation window. Compare what was activated and observed with reachable states the implementation can produce. Check onset versus settlement, pre-existing existence before deletion, publisher versus subscriber/rendered evidence and identity/persistence only when those distinctions govern this Scope claim.
 4. Resolve materially supported candidates as an evidence-backed dismissal, a concrete finding, or an exact evidence limit. An unexecuted branch alone is not a finding, but a reachable contract-violating state that would pass the actual observations is material.
 
-A material finding must state:
+A material finding or evidence limit must state:
 
 - exact Thesis/Scope obligation and section;
-- actual implementation path and failing assumption, with observed fact separated from inference;
-- reachable condition and materially wrong result;
-- which verifier observation/readback cannot distinguish it;
-- narrowest discriminating next observation or exact authority/environment limitation.
+- relevant implementation/mechanism path or exact unavailable anchor, with observed fact separated from inference;
+- reachable condition and materially wrong result for a finding, or the missing observation and unresolved claim for an evidence limit;
+- which verifier observation cannot distinguish the violation or is missing;
+- narrowest discriminating next observation or exact authority/environment limitation;
+- routing class (such as observation, mechanism, product, method, meaning, drift or settlement), required owner and exact current actor when supplied, permitted next action and actions not authorized.
+
+Routing metadata grants no mutation authority and does not determine verification sufficiency. Do not select a missing actor or turn a local classification into permission to omit observations. Coverage may identify exact code paths and failing assumptions, but must not issue an exact patch as an implementation instruction or rewrite the Plan.
 
 Dismiss unrelated risks, unreachable candidates, approved Non-Goals and already-discriminated paths. Do not require a fixed finding count or an executable reproduction from this read-only role. Stop when material candidates are resolved; do not search remote possibilities merely to fill a report.
 
@@ -88,8 +91,12 @@ Limitations: None | <exact evidence/authority/investigation limits>
 The caller retains the unchanged completed verifier result and its invocation/evidence attribution while Coverage runs. It must not convert a Coverage summary into a second semantic verdict or discard raw findings/limits.
 
 - `COMPLETE` with no unresolved material finding/evidence gap and no required follow-up permits Main to apply the currentness and status-only recording procedure in `scope-verify/SKILL.md`: confirm actual independent completed results, current ready Scope/source/target and settled effects; change only `Status: ready` to `Status: done` with ordinary file tools; read back the exact result.
-- A material reachable path or evidence limit withholds recording and routes the exact finding/limit to the existing implementation, Plan, Scope or Thesis owner. It is not a product `FAILED` verdict and does not authorize automatic remediation or Coverage rewriting the Plan.
+- A material reachable path or evidence limit withholds recording and routes the exact finding/limit to the existing verifier, implementation/tooling, Plan, Scope or Thesis owner as appropriate. It is not a product FAILED verdict and does not authorize automatic remediation or Coverage rewriting the Plan. Main forwards the evidence; it neither repairs the product/tool nor decides which obligations are unaffected.
 - Coverage failure, missing evidence or target attribution returns `PARTIAL`/`BLOCKED` and exact next owner/action without overwriting verifier `VERIFIED` or fabricating completion.
-- A changed stable source/config/authority or unexplained effect drift requires a fresh current-target semantic verifier cycle. The old result is never resumed or patched. Follow-up Coverage focuses on the corrected gap and current evidence, not an unrelated repeat.
+- A changed stable source/config/authority or unexplained effect drift requires a fresh current-target semantic verifier cycle. The old result is never resumed or patched. An unchanged-target evidence-only gap follows the verifier's evidence-follow-up rules and produces a new whole-Scope result before further normal-success Coverage.
+
+Only Coverage decides whether follow-up search can be targeted. Require an attributable predecessor COMPLETE review with readable primary basis and explicit limits, exactly identified unresolved items, and a new settled VERIFIED result for the current whole Scope. Inspect all relevant changes since that predecessor, including product, runtime/config, mechanisms and verifier observations omitted or replaced. Establish that the previous basis outside the follow-up frontier remains applicable; COMPLETE alone or the verifier's local-impact claim is insufficient.
+
+Targeted follow-up examines the prior finding, corrected causal path, adjacent reachable bypasses, new primary evidence and the basis for reduced execution. If boundedness or retained applicability cannot be established, perform normal Scope-bounded Coverage, not a repository-wide audit. Missing evidence or unfinished search remains PARTIAL/BLOCKED, never no-finding.
 
 Do not create a Coverage verdict store, fingerprint registry, scheduler, approval layer, lifecycle state or new delivery switch. Coverage is an ordinary read-only review between verifier settlement and Main's completion recording, not host-enforced authorization.

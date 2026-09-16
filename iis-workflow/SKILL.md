@@ -22,7 +22,7 @@ A current request starts work; old artifacts and standing preferences do not sta
 | Implement, do not verify | Current independently reviewed method, implementation and self-check; no verifier, Coverage or verified completion. |
 | Verify existing implementation only | Bind the actual stable target directly; no fresh Plan prerequisite and no automatic product repair. |
 | Build a specified outcome | Perform necessary planning and authorized delivery until that assigned result is satisfied. One Scope is not the whole result unless evidence establishes it. |
-| Fail and report / no re-entry | Preserve the exact result and stop cross-owner corrective continuation. Ordinary local correction inside a still-running owner is not a new owner cycle. |
+| Fail and report / no re-entry | Preserve the exact result and stop cross-owner corrective continuation. Local correction is not a new owner cycle only within the currently admitted implementing actor's still-running invocation, reviewed method and authorized mutation surface; it neither transfers authority to Main nor keeps a completed invocation open. |
 | Stop during execution | Stop new dispatch, contain authorized work, distinguish cancellation receipt from actual settlement and report remaining work. |
 
 Read-only and stage-only requests use this same path. Do not recreate a manual mode. Deployment, purchases, credentials, production changes and destructive external actions require their own concrete authority; a build request is not blanket permission for them.
@@ -70,14 +70,20 @@ Use available coordination and completed independent-invocation result delivery;
 
 Main verifies attribution, currentness, whole-request coverage and result limits; it does not issue a second verifier verdict. Separate authorship, evidence, semantic verdict and status recording. Digests come from actual bytes through ordinary tools and do not prove independence or success. This is a skill/document procedure, not host-enforced authentication, locking or authorization. A stored done artifact is historical evidence, not a new completion event.
 
+Main's request ownership does not grant implementation mutation authority. For a Verify/Coverage-driven product or shared verification-tooling correction, forward the exact finding, primary evidence and current target to the currently authorized implementation/tooling actor. Main must not repair through source/config/tool edits, commands or product runtime/data changes unless an applicable user selection made before mutation explicitly assigns Main/DIRECT for this exact implementation stage. That actor follows the full `scope-implement` admission and self-check contract. Size, locality or urgency does not change this boundary. Separately authorized planning, read-only inspection, containment and status-only recording remain permitted, but cannot disguise a repair.
+
 ## Re-entry
 
-- Method/cause/owner assumption changes: affected Plan and independent method review before dependent implementation.
-- Product implementation contradicts the adopted contract: repair through the authorized implementation owner, then fresh independent verification of affected integrated behavior.
-- Verification mechanism or environment cannot observe the required boundary: correct only that evidence/mechanism gap; do not infer a product defect.
+- Method/cause/product state or effect-owner assumptions change: affected Plan and independent method review before dependent implementation; this does not change the user-selected implementing actor.
+- Product implementation contradicts the adopted contract: repair through the current authorized implementation actor, then obtain a fresh independent whole-Scope verdict on the corrected target under `scope-verify`.
+- Verification cannot observe the required boundary: return the exact evidence/mechanism gap, not an inferred product defect. Invocation-local usage belongs to verifier follow-up; shared project tooling to its authorized implementation/tooling actor; IIS-owned tools to their maintainer under separate maintenance authority. An observation-only gap needs no implementation correction.
 - Scope projection omits an applicable Thesis obligation: return to Scoping; do not invent an AC inside the verifier or silently weaken the original.
 - User outcome/policy changes: revise affected Thesis meaning, then reassess affected Scope and Plan. Unrelated new revisions do not automatically invalidate old bound work.
 - Current construction shape is wrong: reshape the current Scope from actual state while preserving assigned Goal and required items.
+
+Corrective re-entry preserves the current implementation actor/model/effort/mode, including after material method revision. Only an applicable explicit user change changes that selection; unavailability does not authorize silent substitution or DIRECT fallback. A fresh invocation preserves the selection, not the prior worker's lifetime, and waits for prior effects to settle or be safely contained. Continuity never overrides stage-only, stop, no-reentry or external-effect limits.
+
+Main may dispatch verifier follow-up and forward impact statements, but must not declare an obligation unaffected, carry forward a prior PASS or decide that reduced observations suffice for VERIFIED. The independent verifier owns evidence sufficiency; Coverage owns whether its subsequent read-only search can be targeted. Apply their existing reports and continuation rules, not a new controller or approval layer.
 
 Do not repeat the same owner with materially unchanged target, authority, evidence and route. An available discriminating observation not yet attempted is useful work, not a retry loop. Respect disabled stages and no-reentry instructions. Unknown evidence remains unknown; failed user requirements are not candidates merely because they are expensive.
 

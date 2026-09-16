@@ -9,12 +9,15 @@ Confirm before any mutation:
 - exact Scope `Status:` and baseline working-tree state;
 - exact outside-root `plan_review_path` and the actual independent reviewer artifact;
 - reviewed Plan, conditional first work, current target hints and known findings.
+- for corrective re-entry, the exact predecessor finding/evidence, current authorized implementing actor/model/effort/mode, allowed correction and prior-effect settlement. A fresh invocation preserves that selection even after method revision; only an explicit applicable user change changes it. Current stop/stage/no-reentry limits still apply.
 
 Read all Thesis sources bound by the Scope and the complete Scope itself, including any optional `## Transition Authority` lines. When present, confirm each exact project-local baseline path and SHA-256 against the canonical validator output and apply only the Scope's selected Block/conditions; an absent section does not require a baseline. Do not replace original purpose, utility loop, failure/recovery, UI/behavior or truth boundaries with the caller's summary. A normal implementation input is `Status: ready`; `done` is diagnostic/no reimplementation, and `draft`, `blocked` or `superseded` do not start.
 
 ## 2. Admission and native execution
 
 Immediately before the first source mutation, in both SUBAGENT and DIRECT mode, use the supplied Scope validator and ordinary read/hash tools to check the exact Project Root, ready Scope, bound Thesis/applicable Transition bytes, reviewed Plans and outside-root `iis-scope-plan-review/v2` artifact. Compare actual bytes with all review source/Plan records and the caller-supplied review digest; confirm the completed independent review's attribution, exact `ADMIT`, permitted start scope, conditions and no unresolved material findings. Missing, stale or non-admitted review stops affected work with its exact cause. A JSON shape or copied conversation result is not independent review evidence.
+
+For correction, distinguish this actor's actual delta from pre-existing mutations and their original authorship. Verify that this invocation holds current implementation authority; request ownership alone is not admission. A later self-check or implementing-actor label cannot retroactively authorize another actor's changes.
 
 After admission, use ordinary read/search/edit/write/test/build/lint/CLI/service facilities. Do not add an IIS scheduler, lease, queue, execution ID, retry gate or generic uncertainty phase. A settled nonzero command is the command's observed failure; fix or retry within the reviewed method when safe.
 
@@ -37,7 +40,7 @@ If canonical meaning is contradictory or missing, stop with `BLOCKED` and return
 
 Re-read load-bearing Plan anchors before their dependent mutation. Do not create a separate PRE_ACTION approval stage. If a condition has a reviewed bundle, perform only `permitted_initial_work`; use its `discriminating_observation` to choose support, refutation or insufficiency. Support permits the reviewed direction. Refutation or insufficiency stops dependent work and returns the exact Plan/Scope/Thesis owner for revision and a new independent review. Safe work may continue only when state, owner and effect independence are demonstrated.
 
-Equivalent local naming/private helpers and a small same-surface correction stay within worker discretion. A different cause, owner, shared interface, persistence boundary, acceptance/readback, target identity or external-effect strategy is a material method change. Stop affected mutation and return the terminal below; do not edit the Plan or continue under stale admission:
+Equivalent local naming/private helpers and small same-surface corrections stay within the currently admitted implementing actor's still-running invocation and authorized mutation surface; this discretion does not transfer to Main or another role. A different cause, product state/effect owner, shared interface, persistence boundary, acceptance/readback, target strategy or external-effect strategy is a material method change. Expected output-byte changes within the reviewed method do not alone require revision. Stop affected mutation and return the terminal below; do not edit the Plan or continue under stale admission:
 
 ```text
 SCOPE IMPLEMENT RESULT
@@ -48,7 +51,7 @@ Reviewed direction: <Plan/reviewed method>
 New direct evidence: <observation>
 Affected plan scope: <section>
 Current working-tree state: <state>
-Next allowed action: revise affected Plan -> independent review -> fresh actor
+Next allowed action: revise affected Plan -> independent review -> fresh implementation invocation preserving the current authorized actor/model/effort/mode
 ```
 
 ## 5. Implementation loop
@@ -92,3 +95,5 @@ Only then return `Completion: COMPLETE`. This self-check is not the independent 
 ## 7. Result
 
 Return `SCOPE IMPLEMENT RESULT` using the entry contract's concise result fields. Include exact admission, implemented result, actual self-check evidence, stable-target handoff, completion and material limits. Do not repeat a full Acceptance matrix or a second fixed provenance form. A tool/transport failure alone is not a product failure.
+
+For correction, include actual mutation attribution and delta, relevant causal/state/config/runtime/persistence/identity/effect surfaces, self-check evidence and limits in that result. Claimed unaffected obligations guide independent verification; they neither carry forward a PASS nor select evidence breadth.

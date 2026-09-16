@@ -52,6 +52,8 @@ The Plan normally lives at `<Project-Root>/docs/planning/work/<work-slug>/plans/
 
 Preserve a clearly selected execution mode/model/effort for each role. Resolve a genuinely missing selection only through the caller's current policy. Never promote a host default or recommendation into a user selection.
 
+Corrective method revision and fresh independent review do not change the user-selected implementation actor/model/effort/mode; only an applicable explicit user change does. Expected output-byte changes within the reviewed method do not alone require Plan revision. This continuity creates no permission beyond current stage, stop or effect limits.
+
 Planner and Reviewer are separate invocations. The writer cannot approve its own Plan in the same invocation. There is no hidden fan-out, fixed roster, extra reviewer, consensus ceremony or automatic DIRECT fallback. If an independent invocation or required capability is unavailable, return the useful Plan plus the exact independence limit; do not manufacture ADMIT.
 
 The Planner reads `references/plan.md`. The independent Reviewer reads `references/review.md` and the relevant grounding/conditional-start rules in `references/plan.md`. A permitted DIRECT role reads its own reference. No worker implements product code or issues a verification verdict.

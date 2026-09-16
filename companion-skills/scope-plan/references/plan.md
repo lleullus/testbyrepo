@@ -54,7 +54,7 @@ Support permits only the already reviewed direction. Refutation or insufficient 
 
 ## Revision ownership
 
-Naming, private helpers and equivalent local edits are implementer discretion. A changed cause, owner, interface, persistence meaning, acceptance/readback or effect strategy is a material method change: stop affected implementation, revise this Plan and obtain a fresh independent review. A product-meaning change returns to the exact Thesis owner; a current-result or Scope-boundary change returns to Scope shaping. Do not edit a bound Plan merely to satisfy admission.
+Naming, private helpers and equivalent local edits are the admitted implementer's discretion. A changed cause, product state/effect owner, interface, persistence meaning, acceptance/readback, target strategy or effect strategy is a material method change: stop affected implementation, revise this Plan and obtain a fresh independent review. Expected output-byte changes within the reviewed method do not alone require revision. Method revision preserves the user-selected implementation actor/model/effort/mode; a fresh invocation is not a new selection. A product-meaning change returns to the exact Thesis owner; a current-result or Scope-boundary change returns to Scope shaping. Do not edit a bound Plan merely to satisfy admission.
 
 The independent Reviewer, not the Planner, owns the ADMIT judgment. A Plan hash detects byte drift; it does not prove semantic sufficiency. Preserve the exact reviewer artifact and its findings/limits.
 

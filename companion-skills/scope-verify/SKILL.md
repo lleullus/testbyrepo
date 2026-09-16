@@ -13,9 +13,9 @@ The caller provides one complete source assignment before role-specific instruct
 - **Thesis:** every exact Scope-bound project-local Thesis source, recorded revision and full UTF-8 SHA-256.
 - **Scope:** exact canonical `docs/planning/work/<slug>/SCOPE.md` path.
 - **Transition Authority:** if the exact Scope contains the optional section, preserve each exact project-local baseline path and full SHA-256 and verify the selected Block/conditions during semantic preflight; if absent, no baseline is required. A digest proves bytes, not approval or continuation authority.
-- **Plan Review:** `None` or exact optional outside-root method review path; navigation only for verification.
-- **Implementation evidence:** exact current target/report/readback references, or `None supplied`.
-- **Known Coverage findings:** exact previous review/correction/new evidence, or `None`.
+- **Plan Review:** `None` or exact outside-root method review path; method navigation, with applicable admission evidence required for corrective continuation below.
+- **Implementation evidence:** exact current target/report/readback references, or `None supplied` for standalone verification. After correction in this request, supply the actual mutation attribution, current authorized actor/model/effort/mode and completed implementation result with admission and self-check evidence.
+- **Known findings:** exact predecessor Verify/Coverage result, finding and correction/new evidence, or `None`.
 - **User instructions:** current permitted actions, readbacks, external conditions and selected verifier model/effort.
 - **Independent Verifier:** exact separate invocation/worker identity and result destination; the verifier is not the implementing actor or Main relabeling its own judgment.
 
@@ -41,9 +41,11 @@ The caller Main owns dispatch, completed-result fan-in, worker/process settlemen
 
 Normal delivery verification requires exact `Status: ready`. `draft`, `blocked` or `superseded` do not start. `done` is allowed only for explicitly authorized diagnostic re-verification and cannot reopen or rewrite status. If Scope/Thesis/applicable Transition or stable target changes during the cycle, stop progression and require a fresh cycle against the current originals.
 
-Resolve `scope-verify/SKILL.md`, `scope-verify/references/verify.md` and the canonical Scope validator from the same supplied source or installed skills snapshot and pass exact readable paths. Reports, Plan Reviews and implementation reports are navigation only; the verifier resolves actual stable implementation targets and scenario-effect paths itself. Verification-only does not require a Plan or Plan Review.
+Resolve `scope-verify/SKILL.md`, `scope-verify/references/verify.md` and the canonical Scope validator from the same supplied source or installed skills snapshot and pass exact readable paths. Reports guide target resolution, not semantic judgment; the verifier resolves actual stable implementation targets and scenario-effect paths itself. Genuine standalone verification-only requires no Plan, Plan Review or historical implementation provenance.
 
 Known project verification-tool paths and usage may travel with existing implementation evidence/navigation; they are not new required inputs or proof. Reuse them under `references/verify.md` when they observe the required real boundary.
+
+For corrective continuation within this request after product or shared verification-tooling repair, confirm actual mutation attribution and a completed result from the currently authorized implementation/tooling actor, including applicable admission and self-check. Known unauthorized mutation or missing corrective attribution returns the existing non-started authority limitation, not product FAILED, and prevents normal-success progression. A report label, later self-check or renaming the same continuation verification-only cannot retroactively authorize mutation. Declared authorized verifier scenario effects are not implementation corrections.
 
 Arrange **exactly one** separate independent invocation with the selected verifier model/effort, using the available delegation or session facilities. `SUBAGENT` is a role arrangement, not a requirement for a particular tool, profile or patched host. There is no DIRECT self-verification, nested verifier, fallback roster or hidden fan-out. If a genuinely independent invocation or necessary execution capability is unavailable, return the exact limitation without product/runtime/status mutation; do not silently substitute Main or the implementer.
 
@@ -58,6 +60,8 @@ Use ordinary inspection/read/CLI/service/runtime tools. Recheck authority and st
 Apply this same identity/currentness discipline to verification scripts, configuration and execution mechanisms that materially determine the verdict. Bind what actually ran and its target in existing evidence, not the tool's entire dependency tree; use the reference's mechanism-drift and return rules.
 
 The verifier checks every authored Acceptance scenario and every product success/failure/preservation condition that the Scope makes applicable. A happy path, test count, source shape, internal state or implementation report cannot replace a required real boundary. If a material contract gap prevents the Scope Acceptance from deciding its own result, return a non-started/non-progressing result with the exact Scope/Thesis owner; do not author a substitute obligation.
+
+After stable product target change, regaining VERIFIED requires one fresh whole-Scope verdict on the exact current target; never compose PASS results from different targets. The verifier, not Main, the implementer or Coverage, chooses sufficient evidence acquisition. Avoid mechanical replay only when current-target primary evidence still discriminates every authored decision boundary. Noninterference alone cannot replace required real-boundary observation; fresh readback of an older result does not prove the current implementation produced it. Apply the reference's bounded same-target evidence follow-up and mechanism invalidation rules without rewriting predecessor reports.
 
 For an uncertain non-idempotent or external effect, do not blind replay. Use the authored authoritative readback, settlement and cleanup. Applied/not-applied may be adjudicated when attributable; unknown settlement keeps affected evidence `INCONCLUSIVE`.
 
@@ -94,3 +98,5 @@ Observed Scope Status: ready | done
 ```
 
 Record initial identities before execution, preserve raw observations, and distinguish measured facts from inference. Non-started preflight results name their exact blocker without inventing a semantic verdict. A normal evidence-complete `FAILED` does not need a provenance block; an authority/currentness/evidence/settlement limitation states `Decision`, `Governing authority`, `Observed condition`, `Effect` and `Next allowed action`.
+
+For re-entry, identify the predecessor, actual correction attribution or evidence-only gap, and evidence newly acquired versus retained with its original invocation attribution. Explain reduced execution and remaining limits in the existing scenario report. For material findings needing corrective routing, name the responsible role/current actor when supplied, permitted next action and unauthorized actions; this routing grants no new authority.
