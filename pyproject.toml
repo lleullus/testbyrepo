@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=45"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "logtrim"
+version = "0.1.0"
+description = "Offline log trimming utility for Linux, Kubernetes, pod, component, and journal output."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+  { name = "logtrim contributors" }
+]
+dependencies = []
+
+[project.scripts]
+logtrim = "logtrim.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["logtrim*"]
+exclude = ["tests*", "tests.*"]
+
+[tool.setuptools.package-data]
+logtrim = ["*.py", "*.txt", "*.md"]

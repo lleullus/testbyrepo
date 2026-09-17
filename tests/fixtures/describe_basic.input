@@ -1,0 +1,11 @@
+Name:           api
+Namespace:      default
+Labels:
+  app=api
+Annotations:
+  owner=team
+Conditions:
+  Ready          True
+Events:
+  Type    Reason    Age   From     Message
+  Normal  Started   1m    kubelet  Started container

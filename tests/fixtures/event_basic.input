@@ -1,0 +1,9 @@
+2026-04-07T11:00:00Z app[1]: Failed to start
+Traceback (most recent call last):
+  File "app.py", line 1, <module>
+ValueError: bad input
+2026-04-07T11:00:05Z app[2]: Failed to start
+Traceback (most recent call last):
+  File "app.py", line 1, <module>
+ValueError: bad input
+2026-04-07T11:00:10Z nginx[3]: Failed to start

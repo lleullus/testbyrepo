@@ -1,0 +1,16 @@
+include README.md
+include LICENSE
+include pyproject.toml
+include setup.bat
+include setup.sh
+include build-dist.sh
+recursive-include logtrim *.py
+exclude tests *
+global-exclude __pycache__
+global-exclude *.pyc
+global-exclude .git*
+global-exclude .venv
+global-exclude output.txt
+global-exclude input.txt
+global-exclude oracle*.log
+global-exclude oracle_*_capture*.md
