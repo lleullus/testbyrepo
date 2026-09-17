@@ -52,6 +52,7 @@ interface PhysicalKeyAction {
     key: string;
     code: string;
     terminalText?: string;
+    released?: boolean;
 }
 
 interface TextInputTransaction {
@@ -655,6 +656,7 @@ export class Xterm {
         if (event.isComposing || event.keyCode === 229) return;
         const inputType = event.key === 'Enter' ? 'insertLineBreak' : event.key.length === 1 ? 'insertText' : undefined;
         if (!inputType) return;
+        if (this.physicalKeyActions.length >= 16) this.physicalKeyActions.splice(0, 1);
         this.physicalKeyActions.push({
             inputEpoch: this.inputEpoch,
             connectionGeneration: this.connectionGeneration,
@@ -691,7 +693,10 @@ export class Xterm {
                 action.serverConnectionGeneration === this.serverConnectionGeneration &&
                 action.inputType === inputType &&
                 action.terminalText === action.expectedTerminalText &&
-                (inputType !== 'insertText' || action.expectedTerminalText === data)
+                (inputType !== 'insertText' ||
+                    data === null ||
+                    data === undefined ||
+                    action.expectedTerminalText === data)
             )
                 return this.physicalKeyActions.splice(index, 1)[0];
         }
@@ -716,7 +721,7 @@ export class Xterm {
         else if (this.composition) this.cancelComposition();
         this.setModifier('none');
         this.pendingTextInput = undefined;
-        this.physicalKeyActions.length = 0;
+        this.physicalKeyActions = this.physicalKeyActions.filter(action => action.terminalText !== undefined);
         this.discardedComposition = undefined;
         const textarea = this.terminal.textarea;
         const beforeValue = textarea?.value ?? '';
@@ -875,7 +880,17 @@ export class Xterm {
     private handleInputKeyUp = (event: KeyboardEvent) => {
         for (let index = this.physicalKeyActions.length - 1; index >= 0; index--) {
             const action = this.physicalKeyActions[index];
-            if (action.code === event.code || action.key === event.key) this.physicalKeyActions.splice(index, 1);
+            if (action.released || (action.code !== event.code && action.key !== event.key)) continue;
+            if (action.terminalText === undefined) {
+                this.physicalKeyActions.splice(index, 1);
+            } else {
+                action.released = true;
+                window.setTimeout(() => {
+                    const staleIndex = this.physicalKeyActions.indexOf(action);
+                    if (staleIndex !== -1) this.physicalKeyActions.splice(staleIndex, 1);
+                }, 2000);
+            }
+            return;
         }
     };
 

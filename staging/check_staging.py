@@ -157,6 +157,31 @@ def dispatch_physical_text_action(text, code, key_code, shift=False, invalidate=
     )
 
 
+def dispatch_bluetooth_physical_text_action(text, code, key_code, before_data_null=False):
+    evaluate(
+        f"""(async () => {{
+            const textarea = document.querySelector('.xterm-helper-textarea');
+            const keyOptions = {{
+                key:{json.dumps(text)}, code:{json.dumps(code)}, keyCode:{key_code}, which:{key_code},
+                bubbles:true, cancelable:true
+            }};
+            textarea.dispatchEvent(new KeyboardEvent('keydown', keyOptions));
+            await new Promise(resolve => setTimeout(resolve, 0));
+            textarea.dispatchEvent(new KeyboardEvent('keyup', keyOptions));
+            textarea.dispatchEvent(new InputEvent('beforeinput', {{
+                data:{'null' if before_data_null else json.dumps(text)}, inputType:'insertText', isComposing:false,
+                bubbles:true, cancelable:true
+            }}));
+            textarea.value = {json.dumps(text)};
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            textarea.dispatchEvent(new InputEvent('input', {{
+                data:{json.dumps(text)}, inputType:'insertText', isComposing:false, bubbles:true
+            }}));
+            return true;
+        }})()"""
+    )
+
+
 def dispatch_physical_enter_action():
     evaluate(
         """(() => {
@@ -852,6 +877,29 @@ try:
     )
     results['physicalAsciiDualEventBytes'] = physical_ascii_hex
     assert physical_ascii_hex == physical_ascii_value.encode().hex(), physical_ascii_hex
+
+    bluetooth_keyup_first_hex = capture_toolbar_bytes(
+        lambda: dispatch_bluetooth_physical_text_action('1', 'Digit1', 49), settle=True
+    )
+    results['bluetoothKeyupFirstBytes'] = bluetooth_keyup_first_hex
+    assert bluetooth_keyup_first_hex == '31', bluetooth_keyup_first_hex
+
+    bluetooth_null_data_hex = capture_toolbar_bytes(
+        lambda: dispatch_bluetooth_physical_text_action('1', 'Digit1', 49, before_data_null=True), settle=True
+    )
+    results['bluetoothNullBeforeInputDataBytes'] = bluetooth_null_data_hex
+    assert bluetooth_null_data_hex == '31', bluetooth_null_data_hex
+
+    bluetooth_composition_value = '1일'
+    bluetooth_composition_hex = capture_toolbar_bytes(
+        lambda: (
+            dispatch_bluetooth_physical_text_action('1', 'Digit1', 49, before_data_null=True),
+            dispatch_composition_scenario('', bluetooth_composition_value, '일'),
+        ),
+        settle=True,
+    )
+    results['bluetoothKeyupFirstThenCompositionBytes'] = bluetooth_composition_hex
+    assert bluetooth_composition_hex == bluetooth_composition_value.encode().hex(), bluetooth_composition_hex
 
     stale_physical_hex = capture_toolbar_bytes(
         lambda: (
