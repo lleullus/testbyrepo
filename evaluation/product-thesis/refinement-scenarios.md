@@ -14,7 +14,7 @@ Use existing host tools only under explicit experiment authority. The existing `
 
 Before each run, materialize only the case's necessary disposable originals and source excerpts. Freeze their actual bytes/digests and scripted user follow-ups. Use the existing Thesis and Scope templates when a canonical artifact is required; create real exact path/hash bindings, not placeholder hashes. Preserve any source designated historical. Supply actor prompts and fixture evidence, but keep expected observations and evaluator judgments out of actor context. Ordinary source readers must see the fixture files, not fabricated tool-output transcripts. Code excerpts establish only fixture source behavior; they are not claims about a running service.
 
-Do not run a real verifier, Coverage, deployment or implementation merely to score a planning case. When evaluating a role/capability limit, actually constrain that capability instead of pretending an invocation happened. Preserve a known historical completion as synthetic history, never as current execution evidence.
+Do not run a real verifier, Production Heuristic Probe, deployment or implementation merely to score a planning case. When evaluating a role/capability limit, actually constrain that capability instead of pretending an invocation happened. Preserve a known historical completion as synthetic history, never as current execution evidence.
 
 ## Scenarios
 

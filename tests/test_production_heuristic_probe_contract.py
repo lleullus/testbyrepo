@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PROBE = ROOT / "companion-skills" / "production-heuristic-probing" / "SKILL.md"
 CURRENT_SOURCES = (
     ROOT / "product-thesis" / "references" / "exploration.md",
+    ROOT / "evaluation" / "product-thesis" / "refinement-scenarios.md",
     ROOT / "evaluation" / "ready-verification" / "README.md",
     ROOT / "docs" / "engineering" / "ready-runtime" / "dependency-map.md",
     ROOT / "docs" / "engineering" / "ready-runtime" / "verification.md",
@@ -37,6 +38,7 @@ class ProductionHeuristicProbeContractTests(unittest.TestCase):
             "Coverage owns its later read-only search",
             "independent read-only Coverage",
             "separate read-only Coverage",
+            "real verifier, Coverage, deployment",
         )
         for path in CURRENT_SOURCES:
             text = path.read_text(encoding="utf-8")
