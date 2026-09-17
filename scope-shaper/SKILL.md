@@ -35,7 +35,7 @@ Reuse a Block Exit when it is the appropriate durable completion unit. If the ap
 
 ## Scope source
 
-Write `docs/planning/work/<kebab-case-slug>/SCOPE.md` under the exact canonical Project Root. The direct artifact uses `Schema: iis-scope/v1`, `Project-Root` and `Status`. Use `draft` while current product decisions remain unresolved, `ready` once meaning and executable observation are sufficient. `done` is Main's completion record after independent verification, Coverage and currentness checks under `scope-verify`, not a planning or implementer write. `superseded` records a replaced unconsumed contract without rewriting delivered history.
+Write `docs/planning/work/<kebab-case-slug>/SCOPE.md` under the exact canonical Project Root. The direct artifact uses `Schema: iis-scope/v1`, `Project-Root` and `Status`. Use `draft` while current product decisions remain unresolved, `ready` once meaning and executable observation are sufficient. `done` is Main's completion record after independent verification, Production Heuristic Probe and currentness checks under `scope-verify`, not a planning or implementer write. `superseded` records a replaced unconsumed contract without rewriting delivered history.
 
 Include:
 - `## Product Authority`: one line per exact project-local Thesis source, `- /absolute/path sha256:<full UTF-8 digest>`. Reuse original revisions; do not create a per-Scope copy.

@@ -16,7 +16,7 @@ The caller binds one exact construction unit before dispatch:
 - **Plan Review:** exact outside-Project-Root `plan_review_path` containing schema `iis-scope-plan-review/v2`, one current `ADMIT` for this Scope and the independent reviewer provenance.
 - **Plan:** exact reviewed method paths and conditional first work.
 - **User instructions:** current permitted actions, selected execution mode and model/effort.
-- **Existing evidence:** implementation baseline, findings and readback locations, or `None supplied`. For correction, include the exact Verify/Coverage finding and primary evidence, current authorized actor/model/effort/mode, permitted next action and authority limits.
+- **Existing evidence:** implementation baseline, findings and readback locations, or `None supplied`. For correction, include the exact Verify/Probe finding and primary evidence, current authorized actor/model/effort/mode, permitted next action and authority limits.
 
 Tell the implementing actor: **read all bound Thesis sources, the exact Scope and the exact current Plan Review directly before implementation, including product purpose, complete loop, false-success distinctions, failure/recovery meaning, Acceptance and authoritative readback.** A summary or file-name lookup is not a substitute. These sources bound the work; they do not authorize Scope expansion.
 
@@ -32,7 +32,7 @@ Forward the source assignment unchanged and append exact role documents, target,
 
 ## Purpose and authority
 
-This role implements one existing ready Scope and performs implementer self-check. It does not redesign Thesis/Scope, select another outcome, write a new Plan, issue the independent semantic verdict, dispatch Coverage or change Scope status. The separate verifier owns its verdict; Main owns eligible status recording after independent Coverage.
+This role implements one existing ready Scope and performs implementer self-check. It does not redesign Thesis/Scope, select another outcome, write a new Plan, issue the independent semantic verdict, dispatch the Production Heuristic Probe or change Scope status. The separate verifier owns its verdict; Main owns eligible status recording after the independent Production Heuristic Probe.
 
 ## Inputs and admission
 
@@ -53,7 +53,7 @@ Top-level execution defaults to one `SUBAGENT`. Use `DIRECT` only when the curre
 
 Preserve the current selected model/effort. A capability failure returns `SUBAGENT CAPABILITY UNAVAILABLE` with the observed limit; it does not silently become DIRECT. Keep one implementation owner on one mutable worktree/effect surface. Do not start a replacement until the prior worker/process has actually settled; cancellation receipt alone is not settlement.
 
-A Verify/Coverage-driven correction is a continuation of implementation authority, not a new actor selection. A fresh invocation, including after material method revision, preserves the current actor/model/effort/mode unless the user explicitly changes it. Main's request ownership grants no repair authority. Continuity does not override stage-only, stop, no-reentry or external-effect limits. Establish the actual working state and prior-effect settlement before correction; later self-check cannot retroactively authorize another actor's mutation.
+A Verify/Probe-driven correction is a continuation of implementation authority, not a new actor selection. A fresh invocation, including after material method revision, preserves the current actor/model/effort/mode unless the user explicitly changes it. Main's request ownership grants no repair authority. Continuity does not override stage-only, stop, no-reentry or external-effect limits. Establish the actual working state and prior-effect settlement before correction; later self-check cannot retroactively authorize another actor's mutation.
 
 The caller reads this entry contract. The actual worker reads [references/implement.md](references/implement.md) in full. A permitted DIRECT actor reads that reference itself. The caller must not copy the worker procedure into a substitute result.
 
@@ -104,7 +104,7 @@ Tests or source inspection are supporting evidence when they do not exercise the
 
 ## Status and result
 
-This role never changes `Status:`. A normal ready Scope remains `ready` after implementation. Only Main may record `done` after the independent verifier result, Coverage and currentness checks under `scope-verify`. Do not amend Thesis, Baseline, Scope, Acceptance or Plan Review during implementation.
+This role never changes `Status:`. A normal ready Scope remains `ready` after implementation. Only Main may record `done` after the independent verifier result, Production Heuristic Probe and currentness checks under `scope-verify`. Do not amend Thesis, Baseline, Scope, Acceptance or Plan Review during implementation.
 
 ```text
 SCOPE IMPLEMENT RESULT

@@ -2,9 +2,9 @@
 
 ## 1. Independent semantic cycle
 
-The caller owns dispatch, completed-result fan-in, Coverage and completion recording. The assigned independent verifier performs this entire core and never delegates. It is a separate invocation from the implementing actor and Main's completion check, not self-verification under another label. Read every bound Thesis source and the exact Scope directly before accepting caller framing. A narrower test suggestion, implementation report or Plan cannot redefine approved meaning.
+The caller owns dispatch, completed-result fan-in, Production Heuristic Probe and completion recording. The assigned independent verifier performs this entire core and never delegates. It is a separate invocation from the implementing actor and Main's completion check, not self-verification under another label. Read every bound Thesis source and the exact Scope directly before accepting caller framing. A narrower test suggestion, implementation report or Plan cannot redefine approved meaning.
 
-The verifier owns canonical Scope admission, original-meaning check, every authored Acceptance scenario, product success/failure/preservation conditions, scenario discrimination, current target/effect attribution, runtime/canonical evidence, finding disposition, settlement and cleanup. It never edits product source/config/planning/prior evidence, dispatches Coverage or writes Scope status. It records its own fresh evidence and performs only authorized scenario effects and cleanup.
+The verifier owns canonical Scope admission, original-meaning check, every authored Acceptance scenario, product success/failure/preservation conditions, scenario discrimination, current target/effect attribution, runtime/canonical evidence, finding disposition, settlement and cleanup. It never edits product source/config/planning/prior evidence, dispatches the Production Heuristic Probe or writes Scope status. It records its own fresh evidence and performs only authorized scenario effects and cleanup.
 
 ## 2. Canonical admission and current authority
 
@@ -17,7 +17,7 @@ Before any product/runtime action:
 5. Read every Thesis source named in `Product Authority`, the complete Scope, optional `Transition Authority`, current user instructions and any applicable transition/re-entry constraint. If present, compare each exact project-local baseline path/SHA-256 with validator `transition_authorities` and apply only the Scope's selected approved Block/conditions; an absent section does not require a baseline. A hash is byte identity, not approval or continuation authority. Confirm authority bytes and hashes are current.
 6. Enumerate every meaningful authored Acceptance scenario and every product success/failure/preservation condition expressed by the Scope. Preserve authored labels, initial conditions, triggers/inspections, expected results, authoritative readbacks and decision boundaries; do not invent missing conditions or weaken existing ones.
 7. Resolve the actual current stable implementation target and declared scenario-effect paths from direct repository/runtime observation. Caller hints and Plan Review paths are navigation only.
-8. For a known Verify/Coverage correction in this request, inspect the predecessor, actual product/shared-tooling mutation attribution and completed result from the currently authorized implementation/tooling actor, including applicable admission and self-check. Missing attribution or unauthorized correction is a non-started authority limit, not product FAILED. Later self-check, report labels or relabeling this continuation verification-only do not cure it. A genuine standalone verification-only request has no historical implementation-provenance prerequisite; authorized scenario effects are not repairs.
+8. For a known Verify/Probe correction in this request, inspect the predecessor, actual product/shared-tooling mutation attribution and completed result from the currently authorized implementation/tooling actor, including applicable admission and self-check. Missing attribution or unauthorized correction is a non-started authority limit, not product FAILED. Later self-check, report labels or relabeling this continuation verification-only do not cure it. A genuine standalone verification-only request has no historical implementation-provenance prerequisite; authorized scenario effects are not repairs.
 
 If validator, Scope, Thesis authority, status, current target or product meaning cannot be established, return the applicable non-started/non-progressing result with no semantic verdict. Do not start product/runtime work to obtain missing admission evidence.
 
@@ -64,7 +64,7 @@ Purpose/success condition -> observation(s)
 Failure/recovery/preservation condition -> observation(s)
 ```
 
-These are navigation aids, not a second schema or evidence store. Link each obligation to the scenario block and primary evidence that discriminate it; keep observation limits in that block so Coverage can find what was and was not established without a second matrix. Every authored Acceptance scenario remains in the adjudication denominator. A real artifact/document promise may use canonical inspection; a runtime, state-transition, ordering, persistence, UI or external-effect promise requires its real boundary and authoritative readback.
+These are navigation aids, not a second schema or evidence store. Link each obligation to the scenario block and primary evidence that discriminate it; keep observation limits in that block so the Production Heuristic Probe can find what was and was not established without a second matrix. Every authored Acceptance scenario remains in the adjudication denominator. A real artifact/document promise may use canonical inspection; a runtime, state-transition, ordering, persistence, UI or external-effect promise requires its real boundary and authoritative readback.
 
 ## 5. Integrated scenario blocks
 
@@ -190,7 +190,7 @@ Cleanup and settlement: <actual state>
 Limitations/provenance: <None or exact Decision/Governing authority/Observed condition/Effect/Next allowed action>
 ```
 
-Progression is `PENDING CALLER RECORDING` for a normal ready Scope and `NOT APPLICABLE` for diagnostic done verification. A non-started preflight result names its exact blocker without manufacturing a verdict. The worker never writes `done`. Main preserves the unchanged completed result and actual invocation/evidence attribution, then applies the Coverage and ordinary status-only recording procedure in `scope-verify/SKILL.md`. No special host terminal schema, handle or authentication is required or claimed. A field set, hash, copied narrative or process exit alone does not prove independent verification.
+Progression is `PENDING CALLER RECORDING` for a normal ready Scope and `NOT APPLICABLE` for diagnostic done verification. A non-started preflight result names its exact blocker without manufacturing a verdict. The worker never writes `done`. Main preserves the unchanged completed result and actual invocation/evidence attribution, then applies the Production Heuristic Probe and ordinary status-only recording procedure in `scope-verify/SKILL.md`. No special host terminal schema, handle or authentication is required or claimed. A field set, hash, copied narrative or process exit alone does not prove independent verification.
 
 ## 9. Completion boundary
 

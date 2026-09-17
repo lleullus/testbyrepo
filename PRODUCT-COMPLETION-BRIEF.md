@@ -114,10 +114,10 @@ Main이 현재 제품 상태와 Thesis, 적용되는 Baseline을 대조해 Scope
 
 현재 요청에 다른 종료점이 없는 이 브리프의 기본 계획 범위는 하나의 `ready` Scope, 해당 Plan과 실제 독립 Plan Review까지다. 계획 완료는 현재 원본과 일치하는 검토 결과가 `ADMIT`이고 중요한 미해결 문제가 없을 때만 인정한다. 이것은 제품의 구현·검증 완료나 Scope의 `done`을 뜻하지 않는다. 계획만 요청된 경우 구현이나 다음 Scope를 자동 시작하지 않는다.
 
-구현·검증까지 명시한 요청은 그 허용 범위까지 이어간다. 구현자의 self-check와 별도 검증자의 의미 판정을 구분하고, 성공한 독립 검증 뒤에는 독립 읽기 전용 Coverage를 수행한다. Main은 실제 완료된 독립 검증의 `VERIFIED`와 Coverage의 `COMPLETE`, 중요한 미해결 공백의 부재를 확인한다. 결과의 귀속·현재성, 검증한 원본·대상의 유지와 실행 효과의 정리도 확인한 뒤 일반 파일 도구로 해당 Scope의 상태만 `ready`에서 `done`으로 바꾸고 실제 기록을 읽어 확인한다. 검증 원판정과 완료 기록은 분리하며, 실패·불확정·누락·오래된 증거를 완료로 바꾸지 않는다. 이는 절차상 책임이지 호스트가 강제하는 인증이나 잠금은 아니다.
+구현·검증까지 명시한 요청은 그 허용 범위까지 이어간다. 구현자의 self-check와 별도 검증자의 의미 판정을 구분하고, 성공한 독립 검증 뒤에는 독립 Production Heuristic Probe를 수행한다. Main은 실제 완료된 독립 검증의 `VERIFIED`와 Probe의 `COMPLETE`, 현재 Scope를 무효화하는 중요한 finding/evidence gap의 부재를 확인한다. 결과의 귀속·현재성, 검증한 원본·대상의 유지와 실행 효과의 정리도 확인한 뒤 일반 파일 도구로 해당 Scope의 상태만 `ready`에서 `done`으로 바꾸고 실제 기록을 읽어 확인한다. 검증 원판정과 Probe 결과, 완료 기록은 분리하며, 실패·불확정·누락·오래된 증거를 완료로 바꾸지 않는다. 이는 절차상 책임이지 호스트가 강제하는 인증이나 잠금은 아니다.
 
 Scope 하나의 완료를 요청 전체의 완료로 간주하지 않는다. Main은 처음 요청한 결과와 남은 필수 항목을 다시 대조하고, 현재 사용자 권한과 종료 조건 안에서만 후속 작업을 진행한다. 운영 배포·외부 변경에는 별도 구체적 권한이 필요하며, 현재 사용자의 중지나 단계 제한을 우선한다.
 
 살펴본 범위에서 변경을 정당화할 결함이나 개선 기회가 없다면, 판단 범위와 근거를 밝히고 변경하지 않는 결론을 낼 수 있다. 결정적인 정보가 부족하다면 무엇이 어떤 선택을 막는지 명시한다. 어느 경우에도 제품 전체가 완벽하다고 선언하거나, 결과물을 만들기 위해 개선 과제를 억지로 생성하지 않는다.
 
-현행 역할·종료 조건의 원본: [IIS](iis-workflow/SKILL.md), [Thesis](product-thesis/SKILL.md), [Scope](scope-shaper/SKILL.md), [Plan·독립 Review](companion-skills/scope-plan/SKILL.md), [검증·완료 기록](companion-skills/scope-verify/SKILL.md), [Coverage](companion-skills/scope-coverage/SKILL.md).
+현행 역할·종료 조건의 원본: [IIS](iis-workflow/SKILL.md), [Thesis](product-thesis/SKILL.md), [Scope](scope-shaper/SKILL.md), [Plan·독립 Review](companion-skills/scope-plan/SKILL.md), [검증·완료 기록](companion-skills/scope-verify/SKILL.md), [Production Heuristic Probe](companion-skills/production-heuristic-probing/SKILL.md).

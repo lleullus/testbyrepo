@@ -26,7 +26,7 @@ PAYLOAD_ROOTS = (
     "iis-workflow", "product-thesis", "scope-shaper", "iis-observatory", "repo-snapshot",
     "observatory/bin", "observatory/src",
     "companion-skills/scope-plan", "companion-skills/scope-implement",
-    "companion-skills/scope-verify", "companion-skills/scope-coverage",
+    "companion-skills/scope-verify", "companion-skills/production-heuristic-probing",
     "companion-skills/repository-investigation", "companion-skills/purpose-first-review",
     "iis_path_contract.py",
 )
@@ -42,7 +42,7 @@ REQUIRED = (
     "companion-skills/scope-implement/references/implement.md",
     "companion-skills/scope-verify/SKILL.md",
     "companion-skills/scope-verify/references/verify.md",
-    "companion-skills/scope-coverage/SKILL.md",
+    "companion-skills/production-heuristic-probing/SKILL.md",
     "companion-skills/repository-investigation/SKILL.md",
     "companion-skills/purpose-first-review/SKILL.md",
     "iis_path_contract.py",
@@ -51,7 +51,7 @@ CANDIDATE_RETIRED = (
     "iis-adaptive-planning", "matt", "delivery-runtime", "delivery-tools",
     "companion-skills/ready-ticket-plan", "companion-skills/ready-ticket-implement",
     "companion-skills/ready-ticket-verify", "companion-skills/ready-ticket-coverage",
-    "companion-skills/ready-ticket-heuristic-probe",
+    "companion-skills/ready-ticket-heuristic-probe", "companion-skills/scope-coverage",
 )
 TEXT_SUFFIXES = {".md", ".py", ".js", ".json", ".yaml", ".yml", ".sh", ".toml"}
 

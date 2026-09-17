@@ -1,13 +1,13 @@
 # IIS Planning Skills
 
-IIS is a host-independent skill/document workflow: Main reconciles current state and Thesis into a fixed Scope → Plan → implementation → independent verification → read-only Coverage → Main's completion record. It requires ordinary file, command and independent-invocation facilities, not a patched OMP, a delivery plugin or a dedicated execution CLI. Product and acceptance meaning belongs to Thesis, the current outcome and observable acceptance contract to Scope, methods to Plan, and the semantic verdict to the independent verifier.
+IIS is a host-independent skill/document workflow: Main reconciles current state and Thesis into a fixed Scope → Plan → implementation → independent verification → Production Heuristic Probe → Main's completion record. It requires ordinary file, command and independent-invocation facilities, not a patched OMP, a delivery plugin or a dedicated execution CLI. Product and acceptance meaning belongs to Thesis, the current outcome and observable acceptance contract to Scope, methods to Plan, and the semantic verdict to the independent verifier.
 
 ## Components
 
 - `product-thesis/`: product meaning, Behavior/UI, failure/recovery and success observations, with bounded exploration/refinement inside the same role.
 - `scope-shaper/`: Main's current Scope contract instructions, template and validator; no separate Shaper stage or invocation.
 - `companion-skills/scope-plan/`: method preparation and independent Plan Review.
-- `companion-skills/scope-implement/`, `scope-verify/`, `scope-coverage/`: implementation, independent semantic verification and read-only post-success review.
+- `companion-skills/scope-implement/`, `scope-verify/`, `production-heuristic-probing/`: implementation, independent semantic verification and bounded production-heuristic probing after successful verification.
 - `iis-workflow/`: current-request routing, continuation and completion responsibility.
 - `iis-observatory/`, `observatory/bin/`, `observatory/src/`: optional read-only project state inspection.
 - `repo-snapshot/`: independent Git working-tree snapshot utility.
@@ -37,7 +37,7 @@ Model configuration, credentials and product planning/evidence are not bundled. 
 
 Thesis source storage is authorized before model/approval closure but does not approve product meaning or implementation. Sources normally live at `docs/planning/product-thesis/<meaning-slug>/THESIS-NNN.md`; preserve referenced revisions. Optional Transition Baseline remains a transition map, not a replacement Thesis or a second operating mode. Main reuses fixed construction boundaries and chooses a current durable outcome only where the originals leave that choice open. Existing Block predicates suffice unless an actual independent handoff or prescribed order needs a finer boundary; no universal boundary catalog is required.
 
-Scope lives at `docs/planning/work/<kebab-case-slug>/SCOPE.md`, using `Schema: iis-scope/v1`, `Project-Root`, `Status`, `## Product Authority`, `## Outcome`, `## Acceptance`, and optional `## Open Decisions`/`## Transition Authority`. `draft` preserves unresolved meaning, `ready` admits reviewed work, `done` records completed verification/Coverage and Main's confirmed status change, and `superseded` marks an unconsumed replaced contract. The standalone validator checks structure and exact bound sources; it does not decide semantic completeness.
+Scope lives at `docs/planning/work/<kebab-case-slug>/SCOPE.md`, using `Schema: iis-scope/v1`, `Project-Root`, `Status`, `## Product Authority`, `## Outcome`, `## Acceptance`, and optional `## Open Decisions`/`## Transition Authority`. `draft` preserves unresolved meaning, `ready` admits reviewed work, `done` records completed verification/Probe and Main's confirmed status change, and `superseded` marks an unconsumed replaced contract. The standalone validator checks structure and exact bound sources; it does not decide semantic completeness.
 
 Main fixes the current Scope before method writing; Plan chooses implementation methods without redefining Outcome or Acceptance. The same independent Plan Review checks fidelity to bound originals and method sufficiency, recording exact reviewed files and actual-byte hashes with `iis-scope-plan-review/v2`; no extra review stage or host-generated authority digest is required. Re-entry follows the changed decision: Thesis meaning, Baseline geography, Main's Scope application, or Plan method. Missing required delegated-role selections are resolved by the user or returned as `MODEL_SELECTION_REQUIRED`, never by a hidden default.
 
@@ -57,11 +57,11 @@ Current user intent + actual product state
   → Main reconciles applicable Baseline/current state and fixes Scope
   → Plan and independent Plan Review
   → Implementation → independent Verification
-  → independent read-only Coverage after VERIFIED
+  → independent Production Heuristic Probe after VERIFIED
   → Main records ready → done with ordinary file tools and readback
 ```
 
-The verifier records every authored Acceptance result, actual observations and evidence, exact original/target identities, declared scenario effects, currentness and settlement. Main preserves the original verdict; it does not issue a second semantic verdict. Completion requires attributable completed independent verification, complete Coverage with no unresolved material gap, current authority/target, settled effects and current user permission. Main then edits only the Scope status and reads back the actual result. Failed, inconclusive, missing or stale evidence cannot become completion.
+The verifier records every authored Acceptance result, actual observations and evidence, exact original/target identities, declared scenario effects, currentness and settlement. The Probe independently looks for minimal abnormal triggers, hidden service/implementation paths and observation gaps that can still falsify the same Scope while preserving the verifier's semantic verdict. Main does not issue a second semantic verdict. Completion requires attributable completed independent verification, a complete Probe with no unresolved Scope-material finding/evidence gap, current authority/target, settled effects and current user permission. Main then edits only the Scope status and reads back the actual result. Failed, inconclusive, missing or stale evidence cannot become completion.
 
 These are procedural responsibilities, not host-enforced authentication or locks. Hashes, report fields and process exits do not by themselves prove independent judgment or success. No replacement runtime, opaque credential store or execution CLI is introduced. Scope completion is not automatically completion of the user's whole request.
 

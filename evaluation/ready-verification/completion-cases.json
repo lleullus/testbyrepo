@@ -1,7 +1,7 @@
 {
   "schema": "iis-completion-cases/v1",
   "experiment_boundary": "Read-only final completion assessment by a real current IIS Main over disposable product state.",
-  "fixture_history_limit": "Most cases use explicitly synthetic starting history. The current verification control requires actual independent Scope verification, independent read-only Coverage and Main's currentness check, status-only completion edit and readback before the separate Main assessment; no seeded verdict substitutes for that work.",
+  "fixture_history_limit": "Most cases use explicitly synthetic starting history. The current verification control requires actual independent Scope verification, independent Production Heuristic Probe and Main's currentness check, status-only completion edit and readback before the separate Main assessment; no seeded verdict substitutes for that work.",
   "service_requirement": "none; all authoritative surfaces are local files and the ordinary local CLI",
   "required_repetitions": [1, 2],
   "cases": [
@@ -99,9 +99,9 @@
     {
       "case_id": "verification-current",
       "family": "verification-versus-ready",
-      "state": "Actual current independent verifier result, complete independent Coverage without unresolved material gaps, Main's status-only completion record and current product readback exist",
+      "state": "Actual current independent verifier result, complete independent Production Heuristic Probe without unresolved Scope-material gaps, Main's status-only completion record and current product readback exist",
       "expected_completion": true,
-      "review_focus": "completion requires attributable current verification, complete Coverage, Main's currentness check and actual done readback"
+      "review_focus": "completion requires attributable current verification, complete Production Heuristic Probe, Main's currentness check and actual done readback"
     },
     {
       "case_id": "implementation-ready-no-verification",
@@ -134,9 +134,9 @@
     {
       "case_id": "verifier-terminal-finalization-pending",
       "family": "owner-return-routing",
-      "state": "The independent verifier returned VERIFIED with exact source/target identities and primary evidence, but the Scope remains ready pending independent Coverage and Main's completion record",
+      "state": "The independent verifier returned VERIFIED with exact source/target identities and primary evidence, but the Scope remains ready pending independent Production Heuristic Probe and Main's completion record",
       "expected_completion": false,
-      "review_focus": "Main checks attribution/currentness and independent Coverage before editing only ready to done and reading it back; VERIFIED alone is not progression"
+      "review_focus": "Main checks attribution/currentness and independent Production Heuristic Probe before editing only ready to done and reading it back; VERIFIED alone is not progression"
     },
     {
       "case_id": "verified-progression-failed",
