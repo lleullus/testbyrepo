@@ -613,22 +613,14 @@ export class Xterm {
                 suffix++;
             inserted = current.slice(prefix, current.length - suffix);
         }
-        if (!anchored && inserted && inserted !== reportedComposition) {
-            const replayedLength = this.replayedPrefixLength(inserted, transaction.handledTextareaTail);
+        let result = inserted || reportedComposition;
+        if (!anchored && result && transaction.handledTextareaTail) {
+            const replayedLength = this.replayedPrefixLength(result, transaction.handledTextareaTail);
             if (replayedLength > 0) {
-                const remainder = inserted.slice(replayedLength);
-                if (
-                    [
-                        reportedComposition,
-                        transaction.compositionData,
-                        transaction.inputData,
-                        transaction.lastData,
-                    ].includes(remainder)
-                )
-                    return remainder;
+                result = result.slice(replayedLength);
             }
         }
-        return inserted || reportedComposition;
+        return result;
     }
 
     private settleComposition(eventData = '') {
