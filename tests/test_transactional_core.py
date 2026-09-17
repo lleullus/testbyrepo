@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import subprocess
@@ -14,6 +15,7 @@ from uuid import uuid4
 import pytest
 
 from comic_new.store import (
+    DEFAULT_GENERATION_MODEL,
     AuthorizationRevokedError,
     ConflictError,
     InvalidArtifactClosureError,
@@ -59,10 +61,27 @@ def _seed_test_realization(
             "UPDATE cuts SET latest_generation_request_seq = latest_generation_request_seq + 1 WHERE cut_id = ?",
             (cut_id,),
         )
-        req_seq = con.execute("SELECT latest_generation_request_seq FROM cuts WHERE cut_id = ?", (cut_id,)).fetchone()[0]
+        req_seq = con.execute(
+            "SELECT latest_generation_request_seq FROM cuts WHERE cut_id = ?", (cut_id,)
+        ).fetchone()[0]
+        intent_row = con.execute(
+            "SELECT payload_json FROM cut_intents WHERE cut_id = ? AND revision = ?", (cut_id, d_rev or 1)
+        ).fetchone()
+        intent_payload = json.loads(intent_row[0]) if intent_row else {"prompt": f"prompt {cut_id}", "prompt_origin": "user"}
+        prompt = intent_payload["prompt"]
+        prompt_origin = intent_payload.get("prompt_origin", "user")
         con.execute(
-            "INSERT OR REPLACE INTO generation_jobs (job_id, cut_id, target_desired_revision, request_seq, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'succeeded', ?, ?)",
-            (jid, cut_id, d_rev or 1, req_seq, now_iso, now_iso),
+            """
+            INSERT OR REPLACE INTO generation_jobs (
+                job_id, cut_id, target_desired_revision, request_seq, model,
+                effective_prompt, effective_prompt_origin, effective_prompt_sha256,
+                status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'succeeded', ?, ?)
+            """,
+            (
+                jid, cut_id, d_rev or 1, req_seq, DEFAULT_GENERATION_MODEL, prompt, prompt_origin,
+                hashlib.sha256(prompt.encode("utf-8")).hexdigest(), now_iso, now_iso,
+            ),
         )
         con.execute(
             "INSERT OR REPLACE INTO generation_attempts (attempt_id, job_id, ordinal, status, started_at, finished_at, detail) VALUES (?, ?, 1, 'succeeded', ?, ?, 'Test seed')",
@@ -103,7 +122,7 @@ def test_acceptance_a_init_and_exactly_five_cuts(tmp_path: Path) -> None:
     assert res_snap.returncode == 0, res_snap.stderr
     snap = json.loads(res_snap.stdout)
 
-    assert snap["schema_version"] == 4
+    assert snap["schema_version"] == 5
     assert snap["authority_revision"] == 0
     cuts = snap["cuts"]
     assert len(cuts) == 5
@@ -263,7 +282,7 @@ def test_acceptance_b_baseline_and_monotonic_intent(tmp_path: Path) -> None:
     # Each cut should now have desired_revision == 1
     for cut in snap1["cuts"]:
         assert cut["desired_revision"] == 1
-        assert cut["effective_intent"] == intents[cut["cut_id"]]
+        assert cut["effective_intent"] == {"prompt_origin": "user", **intents[cut["cut_id"]]}
 
     # Consecutive intent updates on cut 2
     rev2 = store2.accept_cut_intent(
@@ -296,7 +315,7 @@ def test_acceptance_b_baseline_and_monotonic_intent(tmp_path: Path) -> None:
     snap3 = store2.snapshot()
     cut2_restored = [c for c in snap3["cuts"] if c["cut_id"] == 2][0]
     assert cut2_restored["desired_revision"] == 4  # Monotonically increased, not decremented
-    assert cut2_restored["effective_intent"] == intents[2]
+    assert cut2_restored["effective_intent"] == {"prompt_origin": "user", **intents[2]}
 
 
 # ---------------------------------------------------------------------------
@@ -628,7 +647,9 @@ def test_acceptance_f_interrupted_job_does_not_revoke_desired_intent(tmp_path: P
     # Accepted desired intent is preserved and NOT retracted:
     cut1 = [c for c in snap["cuts"] if c["cut_id"] == 1][0]
     assert cut1["desired_revision"] == 1
-    assert cut1["effective_intent"] == {"dialogue": "panel 1", "prompt": "prompt for panel 1"}
+    assert cut1["effective_intent"] == {
+        "prompt_origin": "user", "dialogue": "panel 1", "prompt": "prompt for panel 1"
+    }
     assert cut1["currency"] == "STALE"
 
 
@@ -760,3 +781,62 @@ def test_plan002_enqueue_revokes_active_authorization_and_blocks_review(tmp_path
 
     with pytest.raises(RealizationIncompleteError, match="Cut 1 latest generation sequence 2 is not succeeded"):
         store.authorize_release(rev, "AUTH-REV-2", "ART-REV", "hash-rev")
+
+
+def test_block10_sparse_approval_resolves_per_cut_defaults(tmp_path: Path) -> None:
+    project_dir = tmp_path / "proj_block10_sparse"
+    store = TransactionalStore.create_project(project_dir)
+    structure = {
+        "source_brief": "고장 난 위성의 밤",
+        "cuts": [
+            {"cut_id": cid, "role": f"role-{cid}", "beat": f"beat-{cid}"}
+            for cid in range(1, 6)
+        ],
+    }
+    intents = {
+        cid: {"prompt": " authored prompt " if cid == 1 else " \t", "dialogue": ""}
+        for cid in range(1, 6)
+    }
+
+    revision = store.approve_structural_baseline(0, "BASE-BLOCK10", structure, intents)
+    snapshot = TransactionalStore.open_project(project_dir).snapshot()
+
+    assert snapshot["authority_revision"] == revision
+    assert snapshot["cuts"][0]["effective_intent"] == {
+        "prompt": " authored prompt ", "dialogue": "", "prompt_origin": "user"
+    }
+    for cut in snapshot["cuts"][1:]:
+        assert cut["effective_intent"] == {
+            "prompt": f"고장 난 위성의 밤 - 컷 {cut['cut_id']} (role-{cut['cut_id']}: beat-{cut['cut_id']})",
+            "dialogue": "",
+            "prompt_origin": "intelligent_default",
+        }
+
+
+def test_block10_single_enqueue_ignores_other_cut_and_rejects_empty_target(tmp_path: Path) -> None:
+    project_dir = tmp_path / "proj_block10_isolation"
+    store = TransactionalStore.create_project(project_dir)
+    structure = {
+        "source_brief": "brief",
+        "cuts": [{"cut_id": cid, "role": "role", "beat": "beat"} for cid in range(1, 6)],
+    }
+    intents = {cid: {"prompt": f"prompt-{cid}", "dialogue": ""} for cid in range(1, 6)}
+    revision = store.approve_structural_baseline(0, "BASE-BLOCK10-ISO", structure, intents)
+
+    # Create a controlled empty effective prompt in cut 2 without changing authority.
+    with store._connect() as con:
+        con.execute(
+            "UPDATE cut_intents SET payload_json = ? WHERE cut_id = 2 AND revision = 1",
+            (json.dumps({"prompt": "   ", "dialogue": "", "prompt_origin": "user"}),),
+        )
+        con.commit()
+
+    revision, jobs = store.enqueue_generation_jobs(revision, cut_id=1)
+    assert [job["cut_id"] for job in jobs] == [1]
+    before_invalid = store.snapshot()
+    with pytest.raises(ValidationError, match="effective prompt"):
+        store.enqueue_generation_jobs(revision, cut_id=2)
+    after_invalid = store.snapshot()
+    assert len(after_invalid["jobs"]) == len(before_invalid["jobs"]) == 1
+    assert after_invalid["cuts"][1]["latest_generation_request_seq"] == 0
+    assert after_invalid["authority_revision"] == before_invalid["authority_revision"]

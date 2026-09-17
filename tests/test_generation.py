@@ -717,6 +717,7 @@ def _create_v1_fixture_project(project_dir: Path) -> Path:
         job_id TEXT PRIMARY KEY,
         cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id BETWEEN 1 AND 5),
         target_desired_revision INTEGER NOT NULL CHECK (target_desired_revision > 0),
+        model TEXT NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted', 'superseded')),
         terminal_detail TEXT NULL,
         created_at TEXT NOT NULL,
@@ -839,21 +840,21 @@ def _create_v1_fixture_project(project_dir: Path) -> Path:
     )
 
     con.execute(
-        "INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, status, terminal_detail, created_at, updated_at) VALUES ('job-1', 1, 1, 'succeeded', 'done', '2026-09-15T00:00:00Z', '2026-09-15T00:00:00Z');"
+        "INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, model, status, terminal_detail, created_at, updated_at) VALUES ('job-1', 1, 1, 'oauth/gpt-image-2.5-flare', 'succeeded', 'done', '2026-09-15T00:00:00Z', '2026-09-15T00:00:00Z');"
     )
     con.execute(
         "INSERT INTO generation_attempts (attempt_id, job_id, ordinal, status, started_at, finished_at, detail) VALUES ('att-1', 'job-1', 1, 'succeeded', '2026-09-15T00:00:00Z', '2026-09-15T00:00:00Z', 'done');"
     )
 
     con.execute(
-        "INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, status, terminal_detail, created_at, updated_at) VALUES ('job-2', 2, 1, 'running', NULL, '2026-09-15T00:00:00Z', '2026-09-15T00:00:00Z');"
+        "INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, model, status, terminal_detail, created_at, updated_at) VALUES ('job-2', 2, 1, 'oauth/gpt-image-2.5-flare', 'running', NULL, '2026-09-15T00:00:00Z', '2026-09-15T00:00:00Z');"
     )
     con.execute(
         "INSERT INTO generation_attempts (attempt_id, job_id, ordinal, status, started_at, finished_at, detail) VALUES ('att-2', 'job-2', 1, 'running', '2026-09-15T00:00:00Z', NULL, NULL);"
     )
 
     con.execute(
-        "INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, status, terminal_detail, created_at, updated_at) VALUES ('job-3', 3, 1, 'queued', NULL, '2026-09-15T00:00:00Z', '2026-09-15T00:00:00Z');"
+        "INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, model, status, terminal_detail, created_at, updated_at) VALUES ('job-3', 3, 1, 'oauth/gpt-image-2.5-flare', 'queued', NULL, '2026-09-15T00:00:00Z', '2026-09-15T00:00:00Z');"
     )
 
     con.commit()
@@ -868,7 +869,7 @@ def test_v1_to_v2_migration_preservation(tmp_path: Path) -> None:
     store = TransactionalStore.open_project(migrated_dir)
 
     snap = store.snapshot()
-    assert snap["schema_version"] == 4
+    assert snap["schema_version"] == 5
     assert "generation_control" in snap
     assert snap["generation_control"]["stop_epoch"] == 0
     assert snap["generation_control"]["runner_id"] is None
@@ -1267,15 +1268,15 @@ def test_acceptance_f_v2_to_v3_migration_backfill_and_increment(tmp_path: Path) 
 
     # Add multiple jobs to cut 1 in v2 database
     now_iso = datetime.now(timezone.utc).isoformat()
-    con.execute("INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, status, created_at, updated_at) VALUES ('j-1-early', 1, 1, 'succeeded', '2026-09-16T00:00:00Z', ?)", (now_iso,))
-    con.execute("INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, status, created_at, updated_at) VALUES ('j-1-late', 1, 1, 'failed', '2026-09-16T00:01:00Z', ?)", (now_iso,))
+    con.execute("INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, model, status, created_at, updated_at) VALUES ('j-1-early', 1, 1, 'oauth/gpt-image-2.5-flare', 'succeeded', '2026-09-16T00:00:00Z', ?)", (now_iso,))
+    con.execute("INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, model, status, created_at, updated_at) VALUES ('j-1-late', 1, 1, 'oauth/gpt-image-2.5-flare', 'failed', '2026-09-16T00:01:00Z', ?)", (now_iso,))
     con.commit()
     con.close()
 
     # Open via TransactionalStore -> triggers v2_to_v3 migration and verify_schema
     store = TransactionalStore.open_project(v1_dir)
     snap = store.snapshot()
-    assert snap["schema_version"] == 4
+    assert snap["schema_version"] == 5
 
     # Verify backfilled request sequences
     with store._connect() as con2:
@@ -1399,3 +1400,37 @@ def test_acceptance_h_sequence_bound_currency_projection(tmp_path: Path) -> None
     assert snap3["cuts"][0]["currency"] == "CURRENT"
     assert snap3["realization_complete"]["complete"] is True
     assert snap3["realization_complete"]["status"] == "COMPLETE"
+
+
+def test_block10_default_model_and_job_identity_are_frozen(tmp_path: Path) -> None:
+    project_dir = tmp_path / "proj_block10_model"
+    store, revision = _init_five_cut_project(project_dir)
+    service = GenerationService(store)
+    receipt = service.enqueue(cut_id=1, expected_authority_revision=revision)
+    job = receipt.jobs[0]
+
+    assert job["model"] == "oauth/gpt-image-2.5-flare"
+    assert job["effective_prompt"] == "Dramatic panel 1 description"
+    assert job["effective_prompt_origin"] == "user"
+    assert job["effective_prompt_sha256"] == hashlib.sha256(
+        job["effective_prompt"].encode("utf-8")
+    ).hexdigest()
+
+    runner = GenerationRunner(store, ima2_binary="ima2")
+    command = runner.default_provider_cmd(
+        job["job_id"], tmp_path / "candidate.png", 60, job["model"]
+    )
+    assert command[command.index("--model") + 1] == "oauth/gpt-image-2.5-flare"
+    assert "nano-banana-pro" not in command
+
+    claimed = None
+    store.acquire_runner_ownership("runner-block10", 9999, "9999:0")
+    try:
+        claimed = store.claim_next_generation_job(
+            "runner-block10", 9999, "9999:0", 0, project_dir / ".generation-staging"
+        )
+    finally:
+        store.release_runner_ownership("runner-block10")
+    assert claimed is not None
+    assert claimed["effective_prompt"] == job["effective_prompt"]
+    assert claimed["model"] == job["model"]

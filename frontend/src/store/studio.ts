@@ -4,9 +4,11 @@ import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
 import {
   type CutId,
-  type CutIntentDTO,
+  type CutIntentInputDTO,
   type CompositionStateDTO,
   type BaselineStructureDTO,
+  type BaselineCutIntentInputDTO,
+  type DraftGenerationResponseDTO,
   type ReviewArtifactDTO,
   type Sha256,
   type StudioSnapshotDTO,
@@ -16,6 +18,10 @@ import {
   ApiError,
   fetchSnapshot,
   postBaseline,
+  postAddCut,
+  postRetireCut,
+  postReorderCuts,
+  postGenerateDraft,
   postCutIntent,
   putComposition,
   postGenerationJobs,
@@ -173,6 +179,13 @@ export const useStudioStore = defineStore('studio', () => {
   })
 
   // --- Internal helpers ---
+  function recoverSelection(snapshot: StudioSnapshotDTO) {
+    if (!snapshot.cuts.some((cut) => cut.cut_id === selection.cutId)) {
+      selection.cutId = snapshot.cuts[0].cut_id
+      selection.bubbleId = undefined
+    }
+  }
+
 
   function applySnapshot(snap: unknown): boolean {
     if (!isStudioSnapshotDTO(snap)) {
@@ -183,10 +196,15 @@ export const useStudioStore = defineStore('studio', () => {
         return false // monotonic — ignore older
       }
       if (snap.authority_revision === server.value.authority_revision) {
+        if (snap.composition.revision > server.value.composition.revision) {
+          server.value = snap
+          return true
+        }
         return true // acceptable/current, do not reapply or change drafts
       }
     }
     server.value = snap
+    recoverSelection(snap)
     // Mark any affected draft as base-changed if the server moved ahead
     if (drafts.composition) {
       const draftBaseRev = drafts.composition.baseAuthorityRevision
@@ -337,6 +355,7 @@ export const useStudioStore = defineStore('studio', () => {
   async function loadStudio() {
     const snap = await fetchSnapshot()
     server.value = snap
+    recoverSelection(snap)
     minRequiredRevision = snap.authority_revision
     if (narrowMedia && !responsiveListenerAttached) {
       narrowMedia.addEventListener('change', handleResponsiveChange)
@@ -352,15 +371,16 @@ export const useStudioStore = defineStore('studio', () => {
     draftKey: string,
     mutationId: string,
     execute: () => Promise<{ accepted_mutation_id: string; snapshot: StudioSnapshotDTO }>,
-  ) {
+  ): Promise<boolean> {
     if (!canMutateAuthority.value) {
       addToast('재동기화가 필요합니다. 연결 및 스냅샷 복구 후 다시 시도하세요.', 'alert')
-      return
+      return false
     }
-    if (authoritativeEditLane.inFlight) return // max in-flight = 1
+    if (authoritativeEditLane.inFlight) return false // max in-flight = 1
 
     authoritativeEditLane.inFlight = { kind, draftKey, mutationId }
     saves[draftKey] = { state: 'pending', mutationId }
+    let accepted = false
 
     try {
       const result = await execute()
@@ -378,6 +398,7 @@ export const useStudioStore = defineStore('studio', () => {
         if (kind === 'baseline' && result.snapshot.composition.state === null) {
           setCompositionDraft(result.snapshot.render_contract.default_composition)
         }
+        accepted = true
       } else if (
         result.accepted_mutation_id === mutationId &&
         currentMutationId !== undefined
@@ -425,6 +446,7 @@ export const useStudioStore = defineStore('studio', () => {
       // Check if there's a newer draft waiting to be saved
       processNextLaneItem()
     }
+    return accepted
   }
 
   function getCurrentDraftMutationId(kind: EditKind, draftKey: string): string | undefined {
@@ -486,7 +508,7 @@ export const useStudioStore = defineStore('studio', () => {
       saveBaselineDraft()
       return
     }
-    for (const cid of [1, 2, 3, 4, 5] as CutId[]) {
+    for (const cid of (server.value.cuts.map((cut) => cut.cut_id) as CutId[])) {
       const draft = drafts.intents[cid]
       const key = `intent-${cid}`
       if (draft && !saveIsBlocked(key)) {
@@ -501,7 +523,7 @@ export const useStudioStore = defineStore('studio', () => {
 
   // --- Draft mutations (user edits) ---
 
-  function setIntentDraft(cutId: CutId, intent: CutIntentDTO, enqueue = true) {
+  function setIntentDraft(cutId: CutId, intent: CutIntentInputDTO, enqueue = true) {
     const existing = drafts.intents[cutId]
     const mid = nextMutationId()
     drafts.intents[cutId] = {
@@ -533,33 +555,94 @@ export const useStudioStore = defineStore('studio', () => {
     }
     if (enqueue) processNextLaneItem()
   }
-
-  function setBaselineDraft(structure: BaselineStructureDTO, intents: Array<{ cut_id: CutId; intent: CutIntentDTO }>, enqueue = true) {
+  function setBaselineDraft(
+    structure: BaselineStructureDTO,
+    intents: Array<{ cut_id: CutId; intent: CutIntentInputDTO | BaselineCutIntentInputDTO }>,
+    enqueue = true,
+  ) {
     const mid = nextMutationId()
+    const normalizedIntents: BaselineDraft['intents'] = intents.map(({ cut_id, intent }) => ({
+      cut_id,
+      intent: {
+        prompt: intent.prompt,
+        dialogue: intent.dialogue,
+        prompt_origin: 'prompt_origin' in intent ? intent.prompt_origin : 'user',
+      },
+    }))
     drafts.baseline = {
       mutationId: mid,
       baseAuthorityRevision: server.value?.authority_revision ?? 0,
       localVersion: (drafts.baseline?.localVersion ?? 0) + 1,
-      value: { structure, intents },
+      value: { structure, intents: normalizedIntents },
     }
     if (!saves['baseline'] || saves['baseline'].state === 'idle') {
       saves['baseline'] = { state: 'idle' }
     }
     if (enqueue) processNextLaneItem()
   }
+  async function generateBaselineDraft(
+    topic: string,
+    cutCount = 5,
+    shouldApply?: () => boolean,
+  ): Promise<DraftGenerationResponseDTO | null> {
+    if (!topic.trim()) {
+      addToast('주제 또는 시놉시스를 입력하세요.', 'alert')
+      return null
+    }
+    try {
+      const result = await postGenerateDraft({ topic, cut_count: cutCount })
+      if (result.cut_count < 1 || result.cuts.length !== result.cut_count) {
+        throw new Error('Studio baseline draft must contain a non-empty dynamic cut set')
+      }
+      if (shouldApply && !shouldApply()) {
+        addToast('입력이 변경되어 생성 결과를 적용하지 않았습니다.', 'alert')
+        return null
+      }
+      if (server.value?.baseline && server.value.cuts.length !== result.cut_count) {
+        throw new Error('기존 활성 컷 수와 다른 초안은 먼저 컷 구성을 명시적으로 변경해야 합니다.')
+      }
+      const activeIds = server.value?.baseline ? server.value.cuts.map((cut) => cut.cut_id) : result.cuts.map((cut) => cut.display_order)
+      const structure: BaselineStructureDTO = {
+        source_brief: result.source_brief,
+        cuts: result.cuts.map((cut, index) => ({
+          cut_id: activeIds[index] as CutId,
+          role: cut.role,
+          beat: cut.beat,
+        })),
+      }
+      const intents = result.cuts.map((cut, index) => ({
+        cut_id: activeIds[index] as CutId,
+        intent: {
+          prompt: cut.prompt,
+          dialogue: cut.dialogue,
+          prompt_origin: 'llm_draft' as const,
+        },
+      }))
+      setBaselineDraft(structure, intents, false)
+      addToast('초안이 생성되었습니다. 검토 후 승인하세요.', 'status')
+      return result
+    } catch (err) {
+      if (err instanceof ApiError) {
+        addToast(`AI 콘티 생성 실패: ${err.body.message}`, 'alert')
+      } else {
+        addToast('AI 콘티 생성 실패 — 다시 시도하거나 수동 입력을 사용하세요.', 'alert')
+      }
+      return null
+    }
+  }
 
   // --- Save dispatchers ---
 
-  function saveBaselineDraft() {
+  async function saveBaselineDraft(): Promise<boolean> {
     const draft = drafts.baseline
-    if (!draft || !server.value || saveIsBlocked('baseline')) return
+    if (!draft || !server.value || saveIsBlocked('baseline')) return false
     if (!canMutateAuthority.value) {
       addToast('재동기화가 필요합니다. 연결 및 스냅샷 복구 후 다시 시도하세요.', 'alert')
-      return
+      return false
     }
     const mid = draft.mutationId
     const baselineId = `bl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    dispatchEdit('baseline', 'baseline', mid, () =>
+    return dispatchEdit('baseline', 'baseline', mid, () =>
       postBaseline({
         expected_authority_revision: draft.baseAuthorityRevision,
         mutation_id: mid,
@@ -832,7 +915,55 @@ export const useStudioStore = defineStore('studio', () => {
     ui.review = null
   }
 
-  // --- Selection ---
+  async function addCut(position?: number) {
+    if (!canMutateAuthority.value || !server.value?.baseline) return
+    try {
+      const result = await postAddCut({
+        expected_authority_revision: server.value.authority_revision,
+        mutation_id: nextMutationId(),
+        baseline_id: server.value.baseline.baseline_id,
+        role: '새 장면',
+        beat: '새 컷의 전개',
+        position,
+      })
+      applySnapshot(result.snapshot)
+    } catch (err) {
+      if (err instanceof ApiError && err.currentSnapshot) applySnapshot(err.currentSnapshot)
+      addToast('컷 추가 실패', 'alert')
+    }
+  }
+
+  async function retireCut(cutId: CutId) {
+    if (!canMutateAuthority.value || !server.value?.baseline || server.value.cuts.length <= 1) return
+    try {
+      const result = await postRetireCut(cutId, {
+        expected_authority_revision: server.value.authority_revision,
+        mutation_id: nextMutationId(),
+        baseline_id: server.value.baseline.baseline_id,
+      })
+      applySnapshot(result.snapshot)
+      if (selection.cutId === cutId) selectCut(result.snapshot.cuts[0].cut_id)
+    } catch (err) {
+      if (err instanceof ApiError && err.currentSnapshot) applySnapshot(err.currentSnapshot)
+      addToast('컷 비활성화 실패', 'alert')
+    }
+  }
+
+  async function reorderCuts(orderedCutIds: CutId[]) {
+    if (!canMutateAuthority.value || !server.value?.baseline) return
+    try {
+      const result = await postReorderCuts({
+        expected_authority_revision: server.value.authority_revision,
+        mutation_id: nextMutationId(),
+        baseline_id: server.value.baseline.baseline_id,
+        ordered_cut_ids: orderedCutIds,
+      })
+      applySnapshot(result.snapshot)
+    } catch (err) {
+      if (err instanceof ApiError && err.currentSnapshot) applySnapshot(err.currentSnapshot)
+      addToast('컷 순서 변경 실패', 'alert')
+    }
+  }
 
   function selectCut(cutId: CutId) {
     selection.cutId = cutId
@@ -893,6 +1024,7 @@ export const useStudioStore = defineStore('studio', () => {
     setIntentDraft,
     setCompositionDraft,
     setBaselineDraft,
+    generateBaselineDraft,
     saveBaselineDraft,
     saveIntentDraft,
     saveCompositionDraft,
@@ -904,6 +1036,9 @@ export const useStudioStore = defineStore('studio', () => {
     generateCut,
     materializeReview,
     authorizeReview,
+    addCut,
+    retireCut,
+    reorderCuts,
     exportPng,
     releaseBlogger,
     closeReview,

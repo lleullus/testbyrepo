@@ -6,8 +6,10 @@ import {
   type BloggerReleaseRequest,
   type BloggerReleaseResponse,
   type CutId,
-  type CutIntentDTO,
+  type CutIntentInputDTO,
+  type BaselineCutIntentInputDTO,
   type CompositionStateDTO,
+  type DraftGenerationResponseDTO,
   type ExportPngRequest,
   type ExportPngResponse,
   type JobDTO,
@@ -15,6 +17,7 @@ import {
   type StudioSnapshotDTO,
   isStudioSnapshotDTO,
   validateStudioSnapshot,
+  validateDraftGenerationResponse,
 } from './contracts'
 
 export class ApiError extends Error {
@@ -87,9 +90,46 @@ export function postBaseline(payload: {
   mutation_id: string
   baseline_id: string
   structure: BaselineStructureDTO
-  intents: Array<{ cut_id: CutId; intent: CutIntentDTO }>
+  intents: Array<{ cut_id: CutId; intent: BaselineCutIntentInputDTO }>
 }): Promise<MutationResponse> {
   return request<MutationResponse>('POST', '/api/baselines', payload)
+}
+export function postAddCut(payload: {
+  expected_authority_revision: number
+  mutation_id: string
+  baseline_id: string
+  role: string
+  beat: string
+  prompt?: string
+  dialogue?: string
+  position?: number
+}): Promise<MutationResponse & { cut_id: CutId }> {
+  return request<MutationResponse & { cut_id: CutId }>('POST', '/api/cuts', payload)
+}
+
+export function postRetireCut(cutId: CutId, payload: {
+  expected_authority_revision: number
+  mutation_id: string
+  baseline_id: string
+}): Promise<MutationResponse> {
+  return request<MutationResponse>('POST', `/api/cuts/${cutId}/retire`, payload)
+}
+
+export function postReorderCuts(payload: {
+  expected_authority_revision: number
+  mutation_id: string
+  baseline_id: string
+  ordered_cut_ids: CutId[]
+}): Promise<MutationResponse> {
+  return request<MutationResponse>('POST', '/api/cuts/reorder', payload)
+}
+
+export async function postGenerateDraft(payload: {
+  topic: string
+  cut_count: number
+}): Promise<DraftGenerationResponseDTO> {
+  const data = await request<unknown>('POST', '/api/baselines/generate-draft', payload)
+  return validateDraftGenerationResponse(data)
 }
 
 export function postCutIntent(
@@ -97,7 +137,7 @@ export function postCutIntent(
   payload: {
     expected_authority_revision: number
     mutation_id: string
-    intent: CutIntentDTO
+    intent: CutIntentInputDTO
   },
 ): Promise<MutationResponse> {
   return request<MutationResponse>('POST', `/api/cuts/${cutId}/intent`, payload)

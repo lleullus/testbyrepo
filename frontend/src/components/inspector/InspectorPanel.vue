@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useStudioStore } from '@/store/studio'
-import type { CutIntentDTO, BubbleDTO } from '@/api/contracts'
+import type { CutIntentInputDTO, BubbleDTO } from '@/api/contracts'
 
 const store = useStudioStore()
 
@@ -10,7 +10,7 @@ const selectedCut = computed(() =>
 )
 
 const activeComposition = computed(() =>
-  store.drafts.composition?.value.state ?? store.server?.composition.state ?? null,
+  store.drafts.composition?.value.state ?? store.server?.composition.state ?? store.server?.render_contract.default_composition ?? null,
 )
 
 const selectedBubble = computed((): BubbleDTO | null => {
@@ -20,7 +20,7 @@ const selectedBubble = computed((): BubbleDTO | null => {
   ) ?? null
 })
 
-const currentIntent = computed<CutIntentDTO>(() =>
+const currentIntent = computed<CutIntentInputDTO>(() =>
   store.drafts.intents[store.selection.cutId]?.value ??
   selectedCut.value?.effective_intent ??
   { prompt: '', dialogue: '' },
@@ -55,11 +55,11 @@ function saveIntent() {
 function updateSelectedBubble(patch: Partial<BubbleDTO>, enqueue = false) {
   const selected = selectedBubble.value
   const composition = activeComposition.value
-  if (!selected || !composition) return
+  if (!selected || selected.anchor_status !== 'ANCHORED' || !composition) return
   store.setCompositionDraft({
     ...composition,
     bubbles: composition.bubbles.map((bubble) =>
-      bubble.bubble_id === selected.bubble_id ? { ...bubble, ...patch } : bubble,
+      bubble.bubble_id === selected.bubble_id ? { ...bubble, ...patch } as BubbleDTO : bubble,
     ),
   }, enqueue)
 }
@@ -85,7 +85,7 @@ function saveComposition() {
 }
 
 function updateBubbleNumber(
-  key: 'x_pct' | 'y_pct' | 'w_pct' | 'h_pct' | 'font_size_pct' | 'line_spacing_pct',
+  key: 'local_x_pct' | 'local_y_pct' | 'local_w_pct' | 'local_h_pct' | 'font_size_pct' | 'line_spacing_pct',
   event: Event,
 ) {
   const value = Number((event.target as HTMLInputElement).value)
@@ -120,14 +120,15 @@ function addBubble() {
   const sameCutBubble = composition.bubbles.find((b) => b.cut_id === cutId)
   const bubbleId = `bubble-${crypto.randomUUID()}`
   const bubble: BubbleDTO = {
+    anchor_status: 'ANCHORED',
     bubble_id: bubbleId,
     cut_id: cutId,
     shape: 'rounded_rectangle',
-    x_pct: 25,
-    y_pct: Math.min((cutId - 1) * 20 + 5, 91),
-    w_pct: 50,
-    h_pct: 4,
-    text: sameCutBubble ? sameCutBubble.text : (currentIntent.value.dialogue ?? ''),
+    local_x_pct: 25,
+    local_y_pct: 5,
+    local_w_pct: 50,
+    local_h_pct: 20,
+    text: sameCutBubble?.text ?? (currentIntent.value.dialogue ?? ''),
     font_size_pct: 2,
     line_spacing_pct: 20,
     text_align: 'center',
@@ -142,6 +143,34 @@ function addBubble() {
     bubbles: [...composition.bubbles, bubble],
   })
   store.selectBubble(bubbleId)
+}
+function reanchorSelectedBubble() {
+  const selected = selectedBubble.value
+  const composition = activeComposition.value
+  if (!selected || selected.anchor_status !== 'REANCHOR_REQUIRED' || !composition) return
+  const anchored: BubbleDTO = {
+    anchor_status: 'ANCHORED',
+    cut_id: store.selection.cutId,
+    bubble_id: selected.bubble_id,
+    shape: selected.shape,
+    local_x_pct: 25,
+    local_y_pct: 5,
+    local_w_pct: 50,
+    local_h_pct: 20,
+    text: selected.text,
+    font_size_pct: selected.font_size_pct,
+    line_spacing_pct: selected.line_spacing_pct,
+    text_align: selected.text_align,
+    text_rgba: selected.text_rgba,
+    fill_rgba: selected.fill_rgba,
+    outline_rgba: selected.outline_rgba,
+    outline_width_pct: selected.outline_width_pct,
+    padding_pct: selected.padding_pct,
+  }
+  store.setCompositionDraft({
+    ...composition,
+    bubbles: composition.bubbles.map((bubble) => bubble.bubble_id === selected.bubble_id ? anchored : bubble),
+  })
 }
 
 function deleteBubble() {
@@ -241,7 +270,13 @@ function generateSelectedCut() {
       <button class="inspector-btn" @click="addBubble">선택 컷에 말풍선 추가</button>
     </section>
 
-    <section class="inspector-section" v-if="selectedBubble">
+    <section class="inspector-section" v-if="selectedBubble?.anchor_status === 'REANCHOR_REQUIRED'" role="alert">
+      <h2 class="inspector-heading">말풍선 수동 재배치 필요</h2>
+      <p class="inspector-hint">기존 전역 좌표를 안전하게 컷에 귀속할 수 없습니다. 원 좌표를 보존했으며, 현재 컷에 새 말풍선을 추가해 위치를 명시하세요.</p>
+      <pre>{{ selectedBubble.legacy_global_rect }}</pre>
+      <button class="inspector-btn" @click="reanchorSelectedBubble">현재 컷에 명시적으로 재배치</button>
+    </section>
+    <section class="inspector-section" v-if="selectedBubble?.anchor_status === 'ANCHORED'">
       <div class="inspector-heading-row">
         <h2 class="inspector-heading">말풍선</h2>
         <button class="delete-btn" @click="deleteBubble">삭제</button>
@@ -256,7 +291,7 @@ function generateSelectedCut() {
         />
       </label>
       <div class="field-grid">
-        <label v-for="field in ['x_pct', 'y_pct', 'w_pct', 'h_pct'] as const" :key="field" class="inspector-label">
+        <label v-for="field in ['local_x_pct', 'local_y_pct', 'local_w_pct', 'local_h_pct'] as const" :key="field" class="inspector-label">
           {{ field }}
           <input
             class="inspector-input"

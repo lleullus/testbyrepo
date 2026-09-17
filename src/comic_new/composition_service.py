@@ -14,15 +14,15 @@ import uuid
 from PIL import Image
 
 from comic_new.composition import (
-    CANONICAL_HEIGHT,
     CANONICAL_WIDTH,
+    LEGACY_CANONICAL_HEIGHT,
     CompositionError,
     CompositionRenderError,
     CompositionValidationError,
     SHA256_HEX_RE,
     SourceAssetError,
-    TOTAL_CUTS,
     TypographyError,
+    compute_cut_slots,
     artifact_path,
     canonical_json_dumps,
     normalize_state,
@@ -119,17 +119,20 @@ class CompositionService:
                 raise CompositionValidationError(f"Invalid composition state_json: {e}") from e
 
         norm_state = normalize_state(raw_state)
-
-        # Check exact 5 cuts from snapshot
         snap_cuts = snap.get("cuts", [])
-        if len(snap_cuts) != TOTAL_CUTS:
-            raise RealizationIncompleteError(f"Expected exactly 5 cuts in snapshot, got {len(snap_cuts)}")
 
-        # Check five current & realization complete
+        if not isinstance(snap_cuts, list) or not snap_cuts:
+            raise RealizationIncompleteError("Active cut set is empty")
+        ordered_cut_ids = [cut["cut_id"] for cut in snap_cuts]
+        if len(norm_state["slot_heights_px"]) != len(snap_cuts):
+            raise CompositionRenderError(
+                f"Composition slot count {len(norm_state['slot_heights_px'])} does not match cuts {len(snap_cuts)}"
+            )
+
+        # Check all cuts are current before materialization.
         real_complete = snap.get("realization_complete", {})
         if not real_complete.get("complete", False):
-            raise RealizationIncompleteError("Realization is incomplete: not all 5 cuts are current")
-
+            raise RealizationIncompleteError("Realization is incomplete: not all active cuts are current")
         # Prepare cuts payload with source bytes read and preflight
         cuts_payload: list[dict[str, Any]] = []
         for c in snap_cuts:
@@ -181,6 +184,7 @@ class CompositionService:
             composition_revision=actual_comp_rev,
             cuts=cuts_payload,
             font_bytes=self._font_bytes,
+            ordered_cut_ids=ordered_cut_ids,
         )
 
         # Set up staging directory
@@ -205,7 +209,7 @@ class CompositionService:
 
             stg_img = Image.open(io.BytesIO(read_staging_bytes))
             stg_img.load()
-            if stg_img.format != "PNG" or stg_img.size != (CANONICAL_WIDTH, CANONICAL_HEIGHT):
+            if stg_img.format != "PNG" or stg_img.size != (rendered.width, rendered.height):
                 raise CompositionRenderError(f"Staging image invalid format/size: {stg_img.format}, {stg_img.size}")
             stg_closure = stg_img.text.get("comic_new_closure")
             if not stg_closure or stg_closure != rendered.metadata_json:
@@ -227,7 +231,7 @@ class CompositionService:
 
             fin_img = Image.open(io.BytesIO(final_bytes))
             fin_img.load()
-            if fin_img.format != "PNG" or fin_img.size != (CANONICAL_WIDTH, CANONICAL_HEIGHT):
+            if fin_img.format != "PNG" or fin_img.size != (rendered.width, rendered.height):
                 raise CompositionRenderError(f"Final image invalid format/size: {fin_img.format}, {fin_img.size}")
             fin_closure = fin_img.text.get("comic_new_closure")
             if not fin_closure or fin_closure != rendered.metadata_json:
@@ -246,6 +250,7 @@ class CompositionService:
             registration_closure = [
                 {
                     "cut_id": item["cut_id"],
+                    "display_order": item["display_order"],
                     "realized_revision": item["realized_revision"],
                     "asset_id": item["asset_id"],
                 }
@@ -280,9 +285,9 @@ class CompositionService:
                 ):
                     raise reg_err
 
-                # 2) Ordered 5 cuts closure in DB
+                # Compare the complete ordered active closure, not just its length.
                 db_cuts = art_row.get("cuts", [])
-                if len(db_cuts) != TOTAL_CUTS:
+                if len(db_cuts) != len(rendered.closure) or [c.get("cut_id") for c in db_cuts] != [c["cut_id"] for c in rendered.closure]:
                     raise reg_err
                 for idx, c_item in enumerate(rendered.closure):
                     db_c = db_cuts[idx]
@@ -309,10 +314,10 @@ class CompositionService:
                         f"Composition revision changed to {cur_comp} during race",
                     )
 
-                # 6) Current 5 cuts identities in snapshot
+                # Current snapshot must retain the same ordered active IDs.
                 fresh_cuts = fresh_snap.get("cuts", [])
-                if len(fresh_cuts) != TOTAL_CUTS:
-                    raise ArtifactNoLongerCurrentError(rendered.artifact_id, "Snapshot cuts incomplete")
+                if len(fresh_cuts) != len(rendered.closure) or [c.get("cut_id") for c in fresh_cuts] != [c["cut_id"] for c in rendered.closure]:
+                    raise ArtifactNoLongerCurrentError(rendered.artifact_id, "Snapshot active cuts changed")
                 for idx, c_item in enumerate(rendered.closure):
                     fc = fresh_cuts[idx]
                     if (
@@ -353,11 +358,7 @@ class CompositionService:
         return self._verify_and_build_artifact(artifact_id)
 
     def _assert_snapshot_sequence_current(self, snapshot: dict[str, Any], artifact_id: str) -> None:
-        """Assert that a snapshot remains sequence-current for review materialization.
-
-        Requires realization_complete.complete is True, exactly five cuts, and every
-        cut currency == 'CURRENT'. Raises ArtifactNoLongerCurrentError when false.
-        """
+        """Assert that a snapshot remains current for its ordered active cuts."""
         realization_complete = snapshot.get("realization_complete") or {}
         if realization_complete.get("complete") is not True:
             raise ArtifactNoLongerCurrentError(
@@ -365,18 +366,15 @@ class CompositionService:
                 f"Artifact {artifact_id} realization is incomplete in snapshot (status: {realization_complete.get('status')})",
             )
         cuts = snapshot.get("cuts", [])
-        if len(cuts) != TOTAL_CUTS:
-            raise ArtifactNoLongerCurrentError(
-                artifact_id,
-                f"Artifact {artifact_id} snapshot cuts count != {TOTAL_CUTS} (got {len(cuts)})",
-            )
+        cut_ids = [cut.get("cut_id") for cut in cuts]
+        if not cuts or len(set(cut_ids)) != len(cut_ids) or any(not isinstance(cid, int) or cid < 1 for cid in cut_ids):
+            raise ArtifactNoLongerCurrentError(artifact_id, f"Artifact {artifact_id} snapshot active cuts are invalid")
         for cut in cuts:
             cid = cut.get("cut_id")
-            currency = cut.get("currency")
-            if currency != "CURRENT":
+            if cut.get("currency") != "CURRENT":
                 raise ArtifactNoLongerCurrentError(
                     artifact_id,
-                    f"Artifact {artifact_id} cut {cid} currency is {currency}, expected CURRENT",
+                    f"Artifact {artifact_id} cut {cid} currency is {cut.get('currency')}, expected CURRENT",
                 )
 
     def _verify_and_build_artifact(
@@ -399,14 +397,11 @@ class CompositionService:
         if artifact_id != f"artifact-{expected_hash}":
             raise ArtifactReadbackError(f"artifact_id {artifact_id} does not match artifact-{expected_hash}")
 
-        if len(art_closure) != TOTAL_CUTS:
-            raise ArtifactReadbackError(f"Artifact {artifact_id} cuts in DB must be exactly 5, got {len(art_closure)}")
-
-        # Verify ordering 1..5 in DB cuts
-        for idx, ac in enumerate(art_closure):
-            expected_cid = idx + 1
-            if ac.get("cut_id") != expected_cid:
-                raise ArtifactReadbackError(f"Artifact {artifact_id} cut at index {idx} has cut_id {ac.get('cut_id')}, expected {expected_cid}")
+        closure_ids = [c.get("cut_id") for c in art_closure]
+        if not closure_ids or len(set(closure_ids)) != len(closure_ids) or any(not isinstance(cid, int) or cid < 1 for cid in closure_ids):
+            raise ArtifactReadbackError(f"Artifact {artifact_id} closure IDs are invalid")
+        if [c.get("display_order") for c in art_closure] != list(range(1, len(art_closure) + 1)):
+            raise ArtifactReadbackError(f"Artifact {artifact_id} closure display order is invalid")
 
         # 2. Check currentness against current snapshot if requested
         if expected_comp_rev is not None or expected_closure is not None:
@@ -422,8 +417,8 @@ class CompositionService:
 
         if expected_closure is not None:
             current_cuts = snap.get("cuts", [])
-            if len(current_cuts) != TOTAL_CUTS:
-                raise ArtifactNoLongerCurrentError(artifact_id, "Snapshot cuts length != 5")
+            if [c.get("cut_id") for c in current_cuts] != [c["cut_id"] for c in expected_closure]:
+                raise ArtifactNoLongerCurrentError(artifact_id, "Snapshot active cut order changed")
             for idx, exp_c in enumerate(expected_closure):
                 cc = current_cuts[idx]
                 cid = exp_c["cut_id"]
@@ -455,45 +450,57 @@ class CompositionService:
             img.load()
             if img.format != "PNG":
                 raise ArtifactReadbackError(f"Artifact image is not PNG, got {img.format}")
-            if img.size != (CANONICAL_WIDTH, CANONICAL_HEIGHT):
-                raise ArtifactReadbackError(f"Artifact size {img.size} != {(CANONICAL_WIDTH, CANONICAL_HEIGHT)}")
             if img.mode != "RGB":
                 raise ArtifactReadbackError(f"Artifact image mode is {img.mode}, expected RGB")
-
             closure_raw = img.text.get("comic_new_closure")
             if not closure_raw:
                 raise ArtifactReadbackError("Artifact missing comic_new_closure metadata")
-
             meta = json.loads(closure_raw)
-            if meta.get("contract") != "canonical-composition/v1":
-                raise ArtifactReadbackError(f"Invalid contract in metadata: {meta.get('contract')}")
-            if meta.get("width") != CANONICAL_WIDTH or meta.get("height") != CANONICAL_HEIGHT:
-                raise ArtifactReadbackError("Dimensions in metadata mismatch")
+            contract = meta.get("contract")
+            if contract == "canonical-composition/v1":
+                expected_width, expected_height = CANONICAL_WIDTH, LEGACY_CANONICAL_HEIGHT
+                if img.size != (expected_width, expected_height):
+                    raise ArtifactReadbackError(f"Legacy artifact size {img.size} != {(expected_width, expected_height)}")
+                if not isinstance(meta.get("state"), dict) or not isinstance(meta.get("font_sha256"), str):
+                    raise ArtifactReadbackError("Legacy artifact metadata is incomplete")
+            elif contract == "canonical-composition/v2":
+                meta_state = meta.get("state")
+                if not isinstance(meta_state, dict):
+                    raise ArtifactReadbackError("Metadata state is not dict")
+                normalized_meta_state = normalize_state(meta_state)
+                slots = compute_cut_slots(normalized_meta_state["slot_heights_px"], normalized_meta_state["gap_px"], closure_ids)
+                expected_width = normalized_meta_state["canvas_width_px"]
+                expected_height = slots[-1].bottom_px
+                if img.size != (expected_width, expected_height):
+                    raise ArtifactReadbackError(f"Artifact size {img.size} != {(expected_width, expected_height)}")
+                if meta.get("width_px") != expected_width or meta.get("height_px") != expected_height:
+                    raise ArtifactReadbackError("Dimensions in metadata mismatch")
+                if meta.get("gap_px") != normalized_meta_state["gap_px"] or meta.get("fit") != "contain":
+                    raise ArtifactReadbackError("Geometry fit metadata mismatch")
+                if meta.get("slots") != [slot.__dict__ for slot in slots]:
+                    raise ArtifactReadbackError("Resolved slot metadata mismatch")
+                if meta.get("font_sha256") != normalized_meta_state["font_sha256"]:
+                    raise ArtifactReadbackError(
+                        f"Metadata font_sha256 {meta.get('font_sha256')} != embedded state {normalized_meta_state['font_sha256']}"
+                    )
+            else:
+                raise ArtifactReadbackError(f"Invalid contract in metadata: {contract}")
             if meta.get("composition_revision") != comp_rev:
                 raise ArtifactReadbackError(f"Metadata comp_rev {meta.get('composition_revision')} != DB {comp_rev}")
-            # Validate embedded normalized state and its exact font identity.
-            meta_state = meta.get("state")
-            if not isinstance(meta_state, dict):
-                raise ArtifactReadbackError("Metadata state is not dict")
-            normalized_meta_state = normalize_state(meta_state)
-            if meta.get("font_sha256") != normalized_meta_state["font_sha256"]:
-                raise ArtifactReadbackError(
-                    f"Metadata font_sha256 {meta.get('font_sha256')} != embedded state {normalized_meta_state['font_sha256']}"
-                )
-            # Validate embedded cuts closure matches DB cuts
+            # Validate embedded cuts closure matches DB cuts.
             meta_cuts = meta.get("cuts", [])
-            if len(meta_cuts) != TOTAL_CUTS:
-                raise ArtifactReadbackError(f"Metadata cuts length {len(meta_cuts)} != 5")
-
+            if [c.get("cut_id") for c in meta_cuts] != [c.get("cut_id") for c in art_closure]:
+                raise ArtifactReadbackError(f"Artifact {artifact_id} embedded cut order mismatch")
             for idx, mc in enumerate(meta_cuts):
                 db_c = art_closure[idx]
-                cid = idx + 1
-                if mc.get("cut_id") != cid or db_c.get("cut_id") != cid:
-                    raise ArtifactReadbackError(f"Cut id mismatch at index {idx}: meta={mc.get('cut_id')}, db={db_c.get('cut_id')}")
+                cid = mc.get("cut_id")
+                metadata_order = mc.get("display_order")
+                if metadata_order is not None and (metadata_order != db_c.get("display_order") or metadata_order != idx + 1):
+                    raise ArtifactReadbackError(f"Cut {cid} display order mismatch")
                 if mc.get("realized_revision") != db_c.get("realized_revision"):
-                    raise ArtifactReadbackError(f"Cut {cid} revision mismatch: meta={mc.get('realized_revision')}, db={db_c.get('realized_revision')}")
+                    raise ArtifactReadbackError(f"Cut {cid} revision mismatch")
                 if mc.get("asset_id") != db_c.get("asset_id"):
-                    raise ArtifactReadbackError(f"Cut {cid} asset_id mismatch: meta={mc.get('asset_id')}, db={db_c.get('asset_id')}")
+                    raise ArtifactReadbackError(f"Cut {cid} asset_id mismatch")
                 if mc.get("desired_revision") != mc.get("realized_revision"):
                     raise ArtifactReadbackError(f"Cut {cid} meta desired_rev != realized_rev")
                 src_hash = mc.get("source_content_hash")
@@ -509,8 +516,8 @@ class CompositionService:
             artifact_id=artifact_id,
             content_hash=actual_hash,
             path=dest_path,
-            width=CANONICAL_WIDTH,
-            height=CANONICAL_HEIGHT,
+            width=expected_width,
+            height=expected_height,
             composition_revision=comp_rev,
             closure=art_closure,
             bytes_data=file_bytes,

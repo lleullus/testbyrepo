@@ -25,17 +25,18 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 import uvicorn
 
 from comic_new.composition import (
-    CANONICAL_HEIGHT,
     CANONICAL_WIDTH,
+    LEGACY_CANONICAL_HEIGHT,
     CompositionError,
     CompositionRenderError,
     CompositionValidationError,
     SourceAssetError,
     TypographyError,
+    compute_cut_slots,
     normalize_state,
 )
 from comic_new.composition_service import (
@@ -58,6 +59,7 @@ from comic_new.generation import (
     find_session_or_group_pids,
     is_process_alive_with_token,
 )
+from comic_new.llm import DraftGenerationError, OpenCodexClient
 from comic_new.store import (
     AuthorizationRevokedError,
     BaselineRequiredError,
@@ -77,9 +79,9 @@ _STARTUP_SETTLEMENT_SECONDS = 30.0
 _SHUTDOWN_SETTLEMENT_SECONDS = 15.0
 
 NonNegativeInt = Annotated[int, Field(strict=True, ge=0)]
-CutId = Literal[1, 2, 3, 4, 5]
+CutId = Annotated[int, Field(strict=True, ge=1)]
 Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-CutPathId = Annotated[int, ApiPath(ge=1, le=5)]
+CutPathId = Annotated[int, ApiPath(ge=1)]
 PositiveQueryInt = Annotated[int, Query(ge=1)]
 
 
@@ -97,6 +99,7 @@ class ApiProblem(Exception):
         expected_revision: int | None = None,
         actual_revision: int | None = None,
         current_snapshot: dict[str, Any] | None = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
@@ -105,7 +108,7 @@ class ApiProblem(Exception):
         self.expected_revision = expected_revision
         self.actual_revision = actual_revision
         self.current_snapshot = current_snapshot
-
+        self.details = details
 
 class WireModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -122,9 +125,10 @@ class BaselineStructureDTO(WireModel):
     cuts: list[BaselineCutDTO]
 
     @model_validator(mode="after")
-    def validate_exact_five(self) -> "BaselineStructureDTO":
-        if [cut.cut_id for cut in self.cuts] != [1, 2, 3, 4, 5]:
-            raise ValueError("structure.cuts must contain ordered cut_id values 1 through 5 exactly once")
+    def validate_ordered_cuts(self) -> "BaselineStructureDTO":
+        ids = [cut.cut_id for cut in self.cuts]
+        if not ids or len(set(ids)) != len(ids):
+            raise ValueError("structure.cuts must contain non-empty unique positive cut IDs")
         return self
 
 
@@ -133,10 +137,26 @@ class CutIntentDTO(WireModel):
     dialogue: StrictStr
 
 
+class BaselineCutIntentDTO(CutIntentDTO):
+    prompt_origin: Literal["user", "llm_draft", "intelligent_default"]
+
+
 class BaselineIntentDTO(WireModel):
     cut_id: CutId
-    intent: CutIntentDTO
+    intent: BaselineCutIntentDTO
 
+
+class DraftGenerationRequest(WireModel):
+    topic: StrictStr | None = None
+    synopsis: StrictStr | None = None
+    cut_count: StrictInt = 5
+
+    def effective_topic(self) -> str:
+        if self.topic is not None and self.topic.strip():
+            return self.topic.strip()
+        if self.synopsis is not None and self.synopsis.strip():
+            return self.synopsis.strip()
+        return ""
 
 class BaselineRequest(WireModel):
     expected_authority_revision: NonNegativeInt
@@ -149,8 +169,55 @@ class BaselineRequest(WireModel):
     def validate_request(self) -> "BaselineRequest":
         if not self.mutation_id or not self.baseline_id:
             raise ValueError("mutation_id and baseline_id must be non-empty")
-        if [item.cut_id for item in self.intents] != [1, 2, 3, 4, 5]:
-            raise ValueError("intents must contain ordered cut_id values 1 through 5 exactly once")
+        structure_ids = [cut.cut_id for cut in self.structure.cuts]
+        intent_ids = [item.cut_id for item in self.intents]
+        if intent_ids != structure_ids:
+            raise ValueError("intents must contain the same ordered cut IDs as structure.cuts")
+        return self
+
+class AddCutRequest(WireModel):
+    expected_authority_revision: NonNegativeInt
+    mutation_id: StrictStr
+    baseline_id: StrictStr
+    role: StrictStr
+    beat: StrictStr
+    prompt: StrictStr = ""
+    dialogue: StrictStr = ""
+    position: StrictInt | None = None
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> "AddCutRequest":
+        if not self.mutation_id.strip() or not self.baseline_id.strip() or not self.role.strip() or not self.beat.strip():
+            raise ValueError("mutation_id, baseline_id, role, and beat must be non-empty")
+        if self.position is not None and self.position < 1:
+            raise ValueError("position must be a positive integer")
+        return self
+
+
+class RetireCutRequest(WireModel):
+    expected_authority_revision: NonNegativeInt
+    mutation_id: StrictStr
+    baseline_id: StrictStr
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> "RetireCutRequest":
+        if not self.mutation_id.strip() or not self.baseline_id.strip():
+            raise ValueError("mutation_id and baseline_id must be non-empty")
+        return self
+
+
+class ReorderCutsRequest(WireModel):
+    expected_authority_revision: NonNegativeInt
+    mutation_id: StrictStr
+    baseline_id: StrictStr
+    ordered_cut_ids: list[StrictInt]
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> "ReorderCutsRequest":
+        if not self.mutation_id.strip() or not self.baseline_id.strip():
+            raise ValueError("mutation_id and baseline_id must be non-empty")
+        if not self.ordered_cut_ids or any(item < 1 for item in self.ordered_cut_ids) or len(set(self.ordered_cut_ids)) != len(self.ordered_cut_ids):
+            raise ValueError("ordered_cut_ids must be non-empty unique positive integers")
         return self
 
 
@@ -481,12 +548,33 @@ class RunnerSupervisor:
                 raise RuntimeError("Generation runner supervisor did not settle")
 
 
-def _default_composition(font_sha256: str) -> dict[str, Any]:
+def _default_composition(font_sha256: str, ordered_cut_ids: list[int]) -> dict[str, Any]:
+    ids = ordered_cut_ids
+    if not ids or any(isinstance(cid, bool) or not isinstance(cid, int) or cid < 1 for cid in ids) or len(set(ids)) != len(ids):
+        raise ValueError("ordered_cut_ids must be non-empty unique positive integers")
+    base_height, remainder = divmod(LEGACY_CANONICAL_HEIGHT - (len(ids) - 1) * 24, len(ids))
+    heights = [base_height + (1 if index < remainder else 0) for index in range(len(ids))]
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "canvas_width_px": CANONICAL_WIDTH,
         "gap_px": 24,
+        "slot_heights_px": heights,
+        "fit": "contain",
         "font_sha256": font_sha256,
         "bubbles": [],
+    }
+
+
+def _render_contract(state: dict[str, Any], ordered_cut_ids: list[int] | None = None) -> dict[str, Any]:
+    normalized = normalize_state(state)
+    ids = ordered_cut_ids or list(range(1, len(normalized["slot_heights_px"]) + 1))
+    slots = compute_cut_slots(normalized["slot_heights_px"], normalized["gap_px"], ids)
+    return {
+        "width_px": normalized["canvas_width_px"],
+        "height_px": slots[-1].bottom_px,
+        "gap_px": normalized["gap_px"],
+        "fit": normalized["fit"],
+        "slots": [slot.__dict__ for slot in slots],
     }
 
 
@@ -518,6 +606,7 @@ def _snapshot_dto(
         cuts.append(
             {
                 "cut_id": cut["cut_id"],
+                "display_order": cut["display_order"],
                 "desired_revision": cut["desired_revision"],
                 "latest_generation_request_seq": cut["latest_generation_request_seq"],
                 "effective_intent": cut["effective_intent"],
@@ -537,6 +626,10 @@ def _snapshot_dto(
                 "cut_id": job["cut_id"],
                 "target_desired_revision": job["target_desired_revision"],
                 "request_seq": job["request_seq"],
+                "model": job["model"],
+                "effective_prompt": job["effective_prompt"],
+                "effective_prompt_origin": job["effective_prompt_origin"],
+                "effective_prompt_sha256": job["effective_prompt_sha256"],
                 "status": job["status"],
                 "terminal_detail": job["terminal_detail"],
                 "created_at": job["created_at"],
@@ -564,7 +657,12 @@ def _snapshot_dto(
         for artifact in snapshot["review_artifacts"]
     ]
 
+    ordered_cut_ids = [cut["cut_id"] for cut in cuts]
     effective_font_hash = font_sha256
+    render_state = state if isinstance(state, dict) else _default_composition(effective_font_hash, ordered_cut_ids)
+    contract = _render_contract(render_state, ordered_cut_ids)
+    default_comp = _default_composition(effective_font_hash, ordered_cut_ids)
+    contract["default_composition"] = default_comp
     return {
         "schema_version": snapshot["schema_version"],
         "authority_revision": snapshot["authority_revision"],
@@ -576,11 +674,7 @@ def _snapshot_dto(
             "state": state,
             "updated_at": composition["updated_at"],
         },
-        "render_contract": {
-            "width": CANONICAL_WIDTH,
-            "height": CANONICAL_HEIGHT,
-            "default_composition": _default_composition(effective_font_hash),
-        },
+        "render_contract": contract,
         "jobs": jobs,
         "review_artifacts": artifacts,
         "release_authorization": snapshot["release_authorization"],
@@ -605,6 +699,7 @@ def _artifact_dto(artifact: MaterializedArtifact, created_at: str) -> dict[str, 
         "cuts": [
             {
                 "cut_id": cut["cut_id"],
+                "display_order": cut["display_order"],
                 "desired_revision": cut["desired_revision"],
                 "realized_revision": cut["realized_revision"],
                 "asset_id": cut["asset_id"],
@@ -630,6 +725,8 @@ def _api_error(problem: ApiProblem) -> JSONResponse:
         error["actual_revision"] = problem.actual_revision
     if problem.current_snapshot is not None:
         error["current_snapshot"] = problem.current_snapshot
+    if problem.details is not None:
+        error["details"] = problem.details
     return JSONResponse(status_code=problem.status_code, content=body)
 
 
@@ -661,6 +758,7 @@ def create_app(
     project_dir: Path | str,
     font_path: Path | str,
     blogger_adapter: BloggerAdapter | None = None,
+    draft_client: OpenCodexClient | None = None,
 ) -> FastAPI:
     """Create one production app after strict project/font/static preflight."""
     store = _preflight_project(project_dir)
@@ -670,6 +768,7 @@ def create_app(
     composition_service = CompositionService(store, resolved_font)
     effective_blogger_adapter = blogger_adapter or GoogleBloggerAdapter()
     delivery_service = DeliveryService(store, composition_service, effective_blogger_adapter)
+    effective_draft_client = draft_client or OpenCodexClient()
     broadcaster = SnapshotBroadcaster(store, font_sha256)
     supervisor = RunnerSupervisor(store)
 
@@ -780,6 +879,7 @@ def create_app(
     )
     app.state.store = store
     app.state.generation_service = generation_service
+    app.state.draft_client = effective_draft_client
     app.state.composition_service = composition_service
     app.state.broadcaster = broadcaster
     app.state.runner_supervisor = supervisor
@@ -795,6 +895,19 @@ def create_app(
         broadcaster.publish(snapshot)
         return snapshot
 
+    @app.exception_handler(DraftGenerationError)
+    async def handle_draft_generation_error(_request: Request, exc: DraftGenerationError) -> JSONResponse:
+        unavailable = exc.unavailable_only
+        return _api_error(
+            ApiProblem(
+                503 if unavailable else 502,
+                "draft_service_unavailable" if unavailable else "draft_generation_failed",
+                "OpenCodex 서비스에 연결할 수 없습니다. 잠시 후 다시 시도하거나 수동 입력을 사용하세요."
+                if unavailable
+                else "OpenCodex가 유효한 콘티 초안을 반환하지 않았습니다. 다시 시도하거나 수동 입력을 사용하세요.",
+                details={"attempts": exc.public_details()},
+            )
+        )
     @app.exception_handler(ApiProblem)
     async def handle_api_problem(_request: Request, exc: ApiProblem) -> JSONResponse:
         return _api_error(exc)
@@ -827,7 +940,7 @@ def create_app(
 
     @app.exception_handler(RealizationIncompleteError)
     async def handle_incomplete(_request: Request, _exc: RealizationIncompleteError) -> JSONResponse:
-        return _api_error(ApiProblem(409, "realization_incomplete", "Exactly five current realizations are required"))
+        return _api_error(ApiProblem(409, "realization_incomplete", "All active cuts must have current realizations"))
 
     async def artifact_not_current(_request: Request, _exc: Exception) -> JSONResponse:
         return _api_error(
@@ -862,7 +975,7 @@ def create_app(
         return _api_error(ApiProblem(400, "validation_error", str(exc)))
 
     async def handle_composition_validation(_request: Request, exc: Exception) -> JSONResponse:
-        return _api_error(ApiProblem(400, "validation_error", str(exc)))
+        return _api_error(ApiProblem(422, "validation_error", str(exc)))
 
     app.add_exception_handler(CompositionValidationError, handle_composition_validation)
     app.add_exception_handler(TypographyError, handle_composition_validation)
@@ -893,7 +1006,10 @@ def create_app(
     @app.post("/api/baselines")
     async def approve_baseline(body: BaselineRequest) -> dict[str, Any]:
         _ensure_accepting(app)
-        intents = {item.cut_id: item.intent.model_dump() for item in body.intents}
+        intents = {
+            item.cut_id: item.intent.model_dump()
+            for item in body.intents
+        }
         await asyncio.to_thread(
             store.approve_structural_baseline,
             body.expected_authority_revision,
@@ -902,6 +1018,43 @@ def create_app(
             intents,
         )
         return {"accepted_mutation_id": body.mutation_id, "snapshot": fresh_and_publish()}
+    @app.post("/api/baselines/generate-draft")
+    async def generate_baseline_draft(body: DraftGenerationRequest) -> dict[str, Any]:
+        _ensure_accepting(app)
+        topic_text = body.effective_topic()
+        if not topic_text:
+            raise ApiProblem(400, "validation_error", "topic or synopsis must be a non-empty string")
+        if body.cut_count < 1:
+            raise ApiProblem(400, "validation_error", "cut_count must be a positive integer")
+        result = await app.state.draft_client.generate_draft(topic_text, body.cut_count)
+        return result.model_dump(mode="json")
+
+    @app.post("/api/cuts")
+    async def add_cut(body: AddCutRequest) -> dict[str, Any]:
+        _ensure_accepting(app)
+        new_rev, new_cut_id = await asyncio.to_thread(
+            store.add_cut,
+            body.expected_authority_revision,
+            body.baseline_id,
+            body.role,
+            body.beat,
+            body.prompt,
+            body.dialogue,
+            body.position,
+        )
+        return {"accepted_mutation_id": body.mutation_id, "cut_id": new_cut_id, "authority_revision": new_rev, "snapshot": fresh_and_publish()}
+
+    @app.post("/api/cuts/{cut_id}/retire")
+    async def retire_cut(cut_id: CutPathId, body: RetireCutRequest) -> dict[str, Any]:
+        _ensure_accepting(app)
+        new_rev = await asyncio.to_thread(store.retire_cut, body.expected_authority_revision, cut_id, body.baseline_id)
+        return {"accepted_mutation_id": body.mutation_id, "authority_revision": new_rev, "snapshot": fresh_and_publish()}
+
+    @app.post("/api/cuts/reorder")
+    async def reorder_cuts(body: ReorderCutsRequest) -> dict[str, Any]:
+        _ensure_accepting(app)
+        new_rev = await asyncio.to_thread(store.reorder_cuts, body.expected_authority_revision, body.ordered_cut_ids, body.baseline_id)
+        return {"accepted_mutation_id": body.mutation_id, "authority_revision": new_rev, "snapshot": fresh_and_publish()}
 
     @app.post("/api/cuts/{cut_id}/intent")
     async def accept_intent(cut_id: CutPathId, body: IntentRequest) -> dict[str, Any]:
@@ -1017,7 +1170,9 @@ def create_app(
         revision: PositiveQueryInt,
     ) -> Response:
         snapshot = store.snapshot()
-        cut = snapshot["cuts"][cut_id - 1]
+        cut = next((candidate for candidate in snapshot["cuts"] if candidate["cut_id"] == cut_id), None)
+        if cut is None:
+            raise ApiProblem(404, "not_found", "Cut realization was not found")
         if (
             revision != cut["realized_revision"]
             or asset_id != cut["realized_asset_id"]

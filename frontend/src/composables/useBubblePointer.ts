@@ -1,7 +1,7 @@
-/** Pointer math and capture for bubble move/resize — Plan §6.1 */
+/** Pointer math and capture for cut-local bubble move/resize. */
 
 import { ref, type Ref } from 'vue'
-import type { PercentageRect } from '@/domain/geometry'
+import type { LocalPercentageRect } from '@/domain/geometry'
 import { applyMoveDelta, applyResizeDelta, round4 } from '@/domain/geometry'
 
 export type GestureMode = 'move' | 'resize'
@@ -14,31 +14,27 @@ export interface GestureState {
   pointerId: number
   startClientX: number
   startClientY: number
-  startRect: PercentageRect
-  frozenSurfaceRect: DOMRect
-  transientRect: PercentageRect
+  startRect: LocalPercentageRect
+  frozenSlotRect: DOMRect
+  transientRect: LocalPercentageRect
 }
 
-export function useBubblePointer(
-  surfaceRef: Readonly<Ref<HTMLElement | null>>,
-) {
+export function useBubblePointer(ownerSlotRef: Readonly<Ref<HTMLElement | null>>) {
   const gesture = ref<GestureState | null>(null)
 
   function startGesture(
     e: PointerEvent,
-    startRect: PercentageRect,
+    startRect: LocalPercentageRect,
     mode: GestureMode,
     handle: ResizeHandle | null,
   ) {
-    if (e.button !== 0) return // primary only
-    const surface = surfaceRef.value
-    if (!surface) return
-
+    if (e.button !== 0) return
+    const slot = ownerSlotRef.value
+    if (!slot) return
     e.preventDefault()
     const el = e.currentTarget as HTMLElement
     el.setPointerCapture(e.pointerId)
     el.style.touchAction = 'none'
-
     gesture.value = {
       active: true,
       mode,
@@ -47,67 +43,49 @@ export function useBubblePointer(
       startClientX: e.clientX,
       startClientY: e.clientY,
       startRect: { ...startRect },
-      frozenSurfaceRect: surface.getBoundingClientRect(),
+      frozenSlotRect: slot.getBoundingClientRect(),
       transientRect: { ...startRect },
     }
   }
 
-  function moveGesture(e: PointerEvent): PercentageRect | null {
-    const g = gesture.value
-    if (!g || !g.active || e.pointerId !== g.pointerId) return null
-
-    const dxPct = ((e.clientX - g.startClientX) / g.frozenSurfaceRect.width) * 100
-    const dyPct = ((e.clientY - g.startClientY) / g.frozenSurfaceRect.height) * 100
-
-    let result: PercentageRect
-    if (g.mode === 'move') {
-      result = applyMoveDelta(g.startRect, dxPct, dyPct)
-    } else {
-      result = applyResizeDelta(g.startRect, g.handle!, dxPct, dyPct)
-    }
-
-    g.transientRect = result
+  function moveGesture(e: PointerEvent): LocalPercentageRect | null {
+    const current = gesture.value
+    if (!current || !current.active || e.pointerId !== current.pointerId) return null
+    const dxPct = ((e.clientX - current.startClientX) / current.frozenSlotRect.width) * 100
+    const dyPct = ((e.clientY - current.startClientY) / current.frozenSlotRect.height) * 100
+    const result = current.mode === 'move'
+      ? applyMoveDelta(current.startRect, dxPct, dyPct)
+      : applyResizeDelta(current.startRect, current.handle!, dxPct, dyPct)
+    current.transientRect = result
     return result
   }
 
-  function endGesture(e: PointerEvent): PercentageRect | null {
-    const g = gesture.value
-    if (!g || e.pointerId !== g.pointerId) return null
-
+  function endGesture(e: PointerEvent): LocalPercentageRect | null {
+    const current = gesture.value
+    if (!current || e.pointerId !== current.pointerId) return null
     const el = e.currentTarget as HTMLElement
     el.releasePointerCapture(e.pointerId)
-
-    const finalRect: PercentageRect = {
-      x_pct: round4(g.transientRect.x_pct),
-      y_pct: round4(g.transientRect.y_pct),
-      w_pct: round4(g.transientRect.w_pct),
-      h_pct: round4(g.transientRect.h_pct),
+    const finalRect: LocalPercentageRect = {
+      local_x_pct: round4(current.transientRect.local_x_pct),
+      local_y_pct: round4(current.transientRect.local_y_pct),
+      local_w_pct: round4(current.transientRect.local_w_pct),
+      local_h_pct: round4(current.transientRect.local_h_pct),
     }
-
     gesture.value = null
     return finalRect
   }
 
-  function cancelGesture(e: PointerEvent): PercentageRect | null {
-    const g = gesture.value
-    if (!g || e.pointerId !== g.pointerId) return null
-
+  function cancelGesture(e: PointerEvent): LocalPercentageRect | null {
+    const current = gesture.value
+    if (!current || e.pointerId !== current.pointerId) return null
     const el = e.currentTarget as HTMLElement | null
     if (el) {
       try { el.releasePointerCapture(e.pointerId) } catch { /* already released */ }
     }
-
-    // Return to starting rect (last local draft), not transient
-    const startRect = { ...g.startRect }
+    const startRect = { ...current.startRect }
     gesture.value = null
     return startRect
   }
 
-  return {
-    gesture,
-    startGesture,
-    moveGesture,
-    endGesture,
-    cancelGesture,
-  }
+  return { gesture, startGesture, moveGesture, endGesture, cancelGesture }
 }

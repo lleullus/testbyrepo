@@ -12,9 +12,9 @@ export function isCutCurrent(cut: CutDTO): boolean {
   )
 }
 
-/** All 5 cuts Current. */
+/** All active cuts Current; an empty active set is not complete. */
 export function isRealizationComplete(cuts: CutDTO[]): boolean {
-  return cuts.length === 5 && cuts.every(isCutCurrent)
+  return cuts.length >= 1 && cuts.every(isCutCurrent)
 }
 
 /** Active/stoppable job count from snapshot. */

@@ -1,4 +1,4 @@
--- comic-new v2 schema: Single Transactional Authority with Unified Generation
+-- comic-new v7 schema: dynamic active cuts with stable identity and ordered membership
 
 CREATE TABLE authority (
     singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
@@ -14,7 +14,7 @@ CREATE TABLE structural_baselines (
 );
 
 CREATE TABLE cut_intents (
-    cut_id INTEGER NOT NULL CHECK (cut_id BETWEEN 1 AND 5),
+    cut_id INTEGER NOT NULL CHECK (cut_id >= 1),
     revision INTEGER NOT NULL CHECK (revision > 0),
     baseline_id TEXT NULL REFERENCES structural_baselines(baseline_id),
     payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
@@ -24,13 +24,19 @@ CREATE TABLE cut_intents (
 );
 
 CREATE TABLE cuts (
-    cut_id INTEGER PRIMARY KEY CHECK (cut_id BETWEEN 1 AND 5),
+    cut_id INTEGER PRIMARY KEY CHECK (cut_id >= 1),
+    is_active INTEGER NOT NULL CHECK (is_active IN (0, 1)),
+    display_order INTEGER NULL CHECK (display_order IS NULL OR display_order >= 1),
     desired_revision INTEGER NULL CHECK (desired_revision IS NULL OR desired_revision > 0),
     latest_generation_request_seq INTEGER NOT NULL DEFAULT 0 CHECK (latest_generation_request_seq >= 0),
     realized_revision INTEGER NULL CHECK (realized_revision IS NULL OR realized_revision > 0),
     realized_asset_id TEXT NULL,
     realized_asset_path TEXT NULL,
     realized_content_hash TEXT NULL,
+    CHECK (
+        (is_active = 1 AND display_order IS NOT NULL) OR
+        (is_active = 0 AND display_order IS NULL)
+    ),
     CHECK (
         (realized_revision IS NULL AND realized_asset_id IS NULL AND realized_asset_path IS NULL AND realized_content_hash IS NULL) OR
         (realized_revision IS NOT NULL AND realized_asset_id IS NOT NULL AND realized_asset_path IS NOT NULL AND realized_content_hash IS NOT NULL)
@@ -40,7 +46,7 @@ CREATE TABLE cuts (
 
 CREATE TABLE baseline_intents (
     baseline_id TEXT NOT NULL REFERENCES structural_baselines(baseline_id) ON DELETE CASCADE,
-    cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id BETWEEN 1 AND 5),
+    cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id >= 1),
     intent_revision INTEGER NOT NULL CHECK (intent_revision > 0),
     PRIMARY KEY (baseline_id, cut_id),
     FOREIGN KEY (cut_id, intent_revision) REFERENCES cut_intents(cut_id, revision)
@@ -55,9 +61,13 @@ CREATE TABLE composition (
 
 CREATE TABLE generation_jobs (
     job_id TEXT PRIMARY KEY,
-    cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id BETWEEN 1 AND 5),
+    cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id >= 1),
     target_desired_revision INTEGER NOT NULL CHECK (target_desired_revision > 0),
     request_seq INTEGER NOT NULL CHECK (request_seq > 0),
+    model TEXT NOT NULL CHECK (length(trim(model)) > 0),
+    effective_prompt TEXT NOT NULL CHECK (length(trim(effective_prompt)) > 0),
+    effective_prompt_origin TEXT NOT NULL CHECK (effective_prompt_origin IN ('user', 'llm_draft', 'intelligent_default')),
+    effective_prompt_sha256 TEXT NOT NULL CHECK (length(effective_prompt_sha256) = 64),
     status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted', 'superseded')),
     terminal_detail TEXT NULL,
     created_at TEXT NOT NULL,
@@ -110,10 +120,12 @@ CREATE TABLE review_artifacts (
 
 CREATE TABLE artifact_cuts (
     artifact_id TEXT NOT NULL REFERENCES review_artifacts(artifact_id) ON DELETE CASCADE,
-    cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id BETWEEN 1 AND 5),
+    cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id >= 1),
+    display_order INTEGER NOT NULL CHECK (display_order >= 1),
     realized_revision INTEGER NOT NULL CHECK (realized_revision > 0),
     asset_id TEXT NOT NULL,
-    PRIMARY KEY (artifact_id, cut_id)
+    PRIMARY KEY (artifact_id, cut_id),
+    UNIQUE (artifact_id, display_order)
 );
 
 CREATE TABLE release_authorizations (
@@ -129,6 +141,10 @@ CREATE TABLE release_authorizations (
 CREATE UNIQUE INDEX idx_active_release_authorization
 ON release_authorizations ((1))
 WHERE revoked_authority_revision IS NULL;
+
+CREATE UNIQUE INDEX idx_active_cut_display_order
+ON cuts (display_order)
+WHERE is_active = 1;
 
 CREATE TABLE delivery_attempts (
     attempt_id TEXT PRIMARY KEY,
@@ -152,32 +168,32 @@ CREATE TABLE delivery_attempts (
     )
 );
 
--- Seed initial singleton and cuts rows
+-- Seed initial singleton rows. Dynamic cut rows are inserted atomically by create_project().
 INSERT INTO authority (singleton_id, authority_revision, current_baseline_id)
 VALUES (1, 0, NULL);
 
 INSERT INTO composition (singleton_id, revision, state_json, updated_at)
 VALUES (1, 0, '{}', '2026-09-15T00:00:00Z');
 
-INSERT INTO cuts (cut_id) VALUES (1), (2), (3), (4), (5);
-
 INSERT INTO generation_control (singleton_id, stop_epoch, runner_id, runner_pid, runner_start_token, runner_started_at)
 VALUES (1, 0, NULL, NULL, NULL, NULL);
 
--- Exactly five cuts triggers: protect table cuts from row insertion, deletion, and cut_id changes
-CREATE TRIGGER trg_cuts_no_insert BEFORE INSERT ON cuts
-BEGIN
-    SELECT RAISE(ABORT, 'exactly five cuts are immutable');
-END;
-
+-- Stable identity/history guards. Active membership and display order are mutable by store transactions.
 CREATE TRIGGER trg_cuts_no_delete BEFORE DELETE ON cuts
 BEGIN
-    SELECT RAISE(ABORT, 'exactly five cuts are immutable');
+    SELECT RAISE(ABORT, 'cut history is immutable; retire cuts instead');
 END;
 
 CREATE TRIGGER trg_cuts_no_update_cut_id BEFORE UPDATE OF cut_id ON cuts
 BEGIN
-    SELECT RAISE(ABORT, 'exactly five cuts are immutable');
+    SELECT RAISE(ABORT, 'cut_id identity is immutable');
+END;
+
+CREATE TRIGGER trg_cuts_keep_one_active BEFORE UPDATE OF is_active ON cuts
+WHEN OLD.is_active = 1 AND NEW.is_active = 0
+ AND (SELECT COUNT(*) FROM cuts WHERE is_active = 1) <= 1
+BEGIN
+    SELECT RAISE(ABORT, 'at least one active cut is required');
 END;
 
 -- Baseline precondition trigger: cut_intents insert requires active baseline

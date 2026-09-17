@@ -1,0 +1,49 @@
+[
+  {
+    "name": "single",
+    "gap_px": 24,
+    "slot_heights_px": [7680],
+    "expected_slots": [
+      {"cut_id": 1, "top_px": 0, "bottom_px": 7680, "height_px": 7680}
+    ],
+    "height_px": 7680
+  },
+  {
+    "name": "two-nonuniform",
+    "gap_px": 24,
+    "slot_heights_px": [1000, 1201],
+    "expected_slots": [
+      {"cut_id": 1, "top_px": 0, "bottom_px": 1000, "height_px": 1000},
+      {"cut_id": 2, "top_px": 1024, "bottom_px": 2225, "height_px": 1201}
+    ],
+    "height_px": 2225
+  },
+  {
+    "name": "legacy-five",
+    "gap_px": 24,
+    "slot_heights_px": [1516, 1517, 1517, 1517, 1517],
+    "expected_slots": [
+      {"cut_id": 1, "top_px": 0, "bottom_px": 1516, "height_px": 1516},
+      {"cut_id": 2, "top_px": 1540, "bottom_px": 3057, "height_px": 1517},
+      {"cut_id": 3, "top_px": 3081, "bottom_px": 4598, "height_px": 1517},
+      {"cut_id": 4, "top_px": 4622, "bottom_px": 6139, "height_px": 1517},
+      {"cut_id": 5, "top_px": 6163, "bottom_px": 7680, "height_px": 1517}
+    ],
+    "height_px": 7680
+  },
+  {
+    "name": "seven-odd",
+    "gap_px": 3,
+    "slot_heights_px": [101, 202, 303, 404, 505, 606, 707],
+    "expected_slots": [
+      {"cut_id": 1, "top_px": 0, "bottom_px": 101, "height_px": 101},
+      {"cut_id": 2, "top_px": 104, "bottom_px": 306, "height_px": 202},
+      {"cut_id": 3, "top_px": 309, "bottom_px": 612, "height_px": 303},
+      {"cut_id": 4, "top_px": 615, "bottom_px": 1019, "height_px": 404},
+      {"cut_id": 5, "top_px": 1022, "bottom_px": 1527, "height_px": 505},
+      {"cut_id": 6, "top_px": 1530, "bottom_px": 2136, "height_px": 606},
+      {"cut_id": 7, "top_px": 2139, "bottom_px": 2846, "height_px": 707}
+    ],
+    "height_px": 2846
+  }
+]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
@@ -9,6 +10,10 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 from uuid import uuid4
+
+
+DEFAULT_GENERATION_MODEL = "oauth/gpt-image-2.5-flare"
+PROMPT_ORIGINS = frozenset(("user", "llm_draft", "intelligent_default"))
 
 
 class TransactionalStoreError(Exception):
@@ -71,7 +76,7 @@ class TransactionalStore:
     """Concrete single SQLite transactional authority for comic_new."""
 
     APPLICATION_ID: int = 0x434F4D43  # 'COMC'
-    SCHEMA_VERSION: int = 4
+    SCHEMA_VERSION: int = 7
     DB_FILENAME: str = "comic-new.sqlite3"
     BUSY_TIMEOUT_MS: int = 5000
 
@@ -91,15 +96,64 @@ class TransactionalStore:
         "delivery_attempts",
     })
     REQUIRED_TRIGGERS: frozenset[str] = frozenset({
-        "trg_cuts_no_insert",
         "trg_cuts_no_delete",
         "trg_cuts_no_update_cut_id",
+        "trg_cuts_keep_one_active",
         "trg_cut_intents_active_baseline",
     })
     REQUIRED_INDEXES: frozenset[str] = frozenset({
         "idx_active_release_authorization",
         "idx_generation_jobs_queued",
+        "idx_active_cut_display_order",
     })
+
+    @staticmethod
+    def _validate_cut_id(cut_id: Any) -> int:
+        if isinstance(cut_id, bool) or not isinstance(cut_id, int) or cut_id < 1:
+            raise ValidationError(f"Invalid cut_id {cut_id!r}; must be a positive integer")
+        return cut_id
+
+    @staticmethod
+    def _active_cuts(con: sqlite3.Connection, *, require_nonempty: bool = True) -> list[sqlite3.Row]:
+        rows = con.execute(
+            "SELECT cut_id, is_active, display_order, desired_revision, latest_generation_request_seq, "
+            "realized_revision, realized_asset_id, realized_asset_path, realized_content_hash "
+            "FROM cuts WHERE is_active = 1 ORDER BY display_order ASC"
+        ).fetchall()
+        ids = [row["cut_id"] for row in rows]
+        orders = [row["display_order"] for row in rows]
+        if require_nonempty and not rows:
+            raise StoreCorruptionError("Active cut set must not be empty")
+        if len(set(ids)) != len(ids) or any(not isinstance(cid, int) or cid < 1 for cid in ids):
+            raise StoreCorruptionError(f"Active cut IDs must be unique positive integers, found {ids}")
+        if orders != list(range(1, len(rows) + 1)):
+            raise StoreCorruptionError(f"Active cut display_order must be contiguous from 1, found {orders}")
+        return rows
+
+    @staticmethod
+    def _active_cut_ids(con: sqlite3.Connection) -> list[int]:
+        return [row["cut_id"] for row in TransactionalStore._active_cuts(con)]
+
+    @staticmethod
+    def _ordered_ids(value: Any, *, field_name: str) -> list[int]:
+        if not isinstance(value, list) or not value:
+            raise ValidationError(f"{field_name} must be a non-empty list")
+        ids = [TransactionalStore._validate_cut_id(item) for item in value]
+        if len(set(ids)) != len(ids):
+            raise ValidationError(f"{field_name} must contain unique cut IDs")
+        return ids
+
+    def _connect(self) -> sqlite3.Connection:
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        con = sqlite3.connect(
+            str(self.db_path),
+            timeout=self.BUSY_TIMEOUT_MS / 1000.0,
+            isolation_level=None,  # Explicit manual transaction control
+        )
+        con.row_factory = sqlite3.Row
+        con.execute("PRAGMA foreign_keys = ON;")
+        con.execute(f"PRAGMA busy_timeout = {self.BUSY_TIMEOUT_MS};")
+        return con
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path).resolve()
 
@@ -119,17 +173,73 @@ class TransactionalStore:
 
     @staticmethod
     def _parse_structured_intent(intent_payload: Any) -> dict[str, str]:
+        """Parse the structural shape without imposing generation eligibility."""
         if not isinstance(intent_payload, dict):
             raise ValidationError("Intent payload must be a JSON object with 'prompt' and 'dialogue'")
         prompt = intent_payload.get("prompt")
         dialogue = intent_payload.get("dialogue")
-        if prompt is None or not isinstance(prompt, str) or not prompt.strip():
-            raise ValidationError("Intent prompt must be a non-empty string")
+        if prompt is None or not isinstance(prompt, str):
+            raise ValidationError("Intent prompt must be a string")
         if dialogue is None or not isinstance(dialogue, str):
             raise ValidationError("Intent dialogue must be a string")
-        return {"prompt": prompt, "dialogue": dialogue}
+        parsed = {"prompt": prompt, "dialogue": dialogue}
+        if "prompt_origin" in intent_payload:
+            origin = intent_payload["prompt_origin"]
+            if not isinstance(origin, str) or origin not in PROMPT_ORIGINS:
+                raise ValidationError(
+                    "Intent prompt_origin must be one of user, llm_draft, intelligent_default"
+                )
+            parsed["prompt_origin"] = origin
+        return parsed
+
+    @classmethod
+    def _resolve_baseline_intent(
+        cls,
+        intent_payload: Any,
+        structure: Any,
+        cut_id: int,
+    ) -> dict[str, str]:
+        parsed = cls._parse_structured_intent(intent_payload)
+        prompt = parsed["prompt"]
+        if prompt.strip():
+            return {
+                "prompt": prompt,
+                "dialogue": parsed["dialogue"],
+                "prompt_origin": parsed.get("prompt_origin", "user"),
+            }
+
+        if not isinstance(structure, dict):
+            raise ValidationError("Baseline structure must be a JSON object to resolve an empty prompt")
+        source_brief = structure.get("source_brief")
+        cuts = structure.get("cuts")
+        if not isinstance(source_brief, str) or not isinstance(cuts, list):
+            raise ValidationError(
+                "Baseline structure must include source_brief and ordered cuts to resolve an empty prompt"
+            )
+        if not cuts or any(not isinstance(cut, dict) for cut in cuts):
+            raise ValidationError("Baseline structure cuts must be a non-empty list")
+        ids = [cls._validate_cut_id(cut.get("cut_id")) for cut in cuts]
+        if len(set(ids)) != len(ids):
+            raise ValidationError("Baseline structure cuts must contain unique positive cut IDs")
+        by_id = {cut.get("cut_id"): cut for cut in cuts}
+        cut = by_id.get(cut_id)
+        if not isinstance(cut, dict):
+            raise ValidationError(f"Baseline structure is missing cut {cut_id}")
+        role = cut.get("role")
+        beat = cut.get("beat")
+        if not isinstance(role, str) or not isinstance(beat, str):
+            raise ValidationError(f"Baseline cut {cut_id} role and beat must be strings")
+        effective_prompt = f"{source_brief.strip()} - 컷 {cut_id} ({role.strip()}: {beat.strip()})".strip()
+        if not effective_prompt:
+            raise ValidationError(f"Cut {cut_id} could not resolve a non-empty effective prompt")
+        return {
+            "prompt": effective_prompt,
+            "dialogue": parsed["dialogue"],
+            "prompt_origin": "intelligent_default",
+        }
 
     def _connect(self) -> sqlite3.Connection:
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         con = sqlite3.connect(
             str(self.db_path),
             timeout=self.BUSY_TIMEOUT_MS / 1000.0,
@@ -141,7 +251,9 @@ class TransactionalStore:
         return con
 
     @classmethod
-    def create_project(cls, project_dir: str | Path) -> TransactionalStore:
+    def create_project(cls, project_dir: str | Path, cut_count: int = 5) -> TransactionalStore:
+        if isinstance(cut_count, bool) or not isinstance(cut_count, int) or cut_count < 1:
+            raise ValidationError("cut_count must be a positive integer")
         p = Path(project_dir).resolve()
         if p.exists() and not p.is_dir():
             raise ValidationError(f"Target path {p} exists and is not a directory")
@@ -149,38 +261,35 @@ class TransactionalStore:
         db_path = p / cls.DB_FILENAME
 
         if db_path.exists():
-            try:
-                if db_path.stat().st_size == 0:
-                    pass  # Empty crashed placeholder, safe to reinitialize
-                else:
-                    try:
-                        cls(db_path).verify_schema()
-                        raise ProjectAlreadyExistsError(f"Project already initialized at {p}")
-                    except ProjectAlreadyExistsError:
-                        raise
-                    except Exception as e:
-                        raise StoreCorruptionError(
-                            f"Unrecognized or partially initialized database at {db_path}: {e}"
-                        ) from e
-            except (ProjectAlreadyExistsError, StoreCorruptionError):
-                raise
-            except Exception as e:
-                raise StoreCorruptionError(f"Cannot inspect existing database at {db_path}: {e}") from e
+            if db_path.stat().st_size == 0:
+                db_path.unlink()
+            else:
+                try:
+                    cls(db_path).verify_schema()
+                    raise ProjectAlreadyExistsError(f"Project already initialized at {p}")
+                except ProjectAlreadyExistsError:
+                    raise
+                except Exception as e:
+                    raise StoreCorruptionError(f"Unrecognized or partially initialized database at {db_path}: {e}") from e
 
         schema_sql_path = Path(__file__).parent / "schema.sql"
         if not schema_sql_path.is_file():
             raise StoreCorruptionError(f"Missing schema definition at {schema_sql_path}")
         sql_text = schema_sql_path.read_text(encoding="utf-8")
-
         tmp_db_path = p / f".{cls.DB_FILENAME}.tmp.{uuid4().hex}"
         con = sqlite3.connect(str(tmp_db_path), timeout=cls.BUSY_TIMEOUT_MS / 1000.0)
         try:
             con.execute("PRAGMA foreign_keys = ON;")
+            cut_rows_sql = "\n".join(
+                f"INSERT INTO cuts (cut_id, is_active, display_order) VALUES ({cut_id}, 1, {cut_id});"
+                for cut_id in range(1, cut_count + 1)
+            )
             init_script = (
                 "BEGIN IMMEDIATE;\n"
                 f"PRAGMA application_id = {cls.APPLICATION_ID};\n"
                 f"PRAGMA user_version = {cls.SCHEMA_VERSION};\n"
                 f"{sql_text}\n"
+                f"{cut_rows_sql}\n"
                 "COMMIT;\n"
             )
             con.executescript(init_script)
@@ -189,7 +298,8 @@ class TransactionalStore:
             os.replace(tmp_db_path, db_path)
         except Exception as e:
             try:
-                con.rollback()
+                if con.in_transaction:
+                    con.execute("ROLLBACK;")
             except Exception:
                 pass
             try:
@@ -197,9 +307,9 @@ class TransactionalStore:
             except Exception:
                 pass
             tmp_db_path.unlink(missing_ok=True)
-            if not isinstance(e, StoreCorruptionError):
-                raise StoreCorruptionError(f"Database initialization failed: {e}") from e
-            raise
+            if isinstance(e, (ValidationError, StoreCorruptionError, ProjectAlreadyExistsError)):
+                raise
+            raise StoreCorruptionError(f"Database initialization failed: {e}") from e
 
         store = cls(db_path)
         store.verify_schema()
@@ -377,8 +487,529 @@ class TransactionalStore:
                         raise
                     raise StoreCorruptionError(f"Migration from v3 to v4 failed: {e}") from e
                 user_ver = 4
-            elif user_ver != 4:
+
+            if user_ver == 4:
+                mig_path_v5 = Path(__file__).parent / "migrations" / "v4_to_v5.sql"
+                if not mig_path_v5.is_file():
+                    raise StoreCorruptionError(f"Missing migration script at {mig_path_v5}")
+                mig_sql_v5 = mig_path_v5.read_text(encoding="utf-8")
+                statements_v5 = [stmt.strip() for stmt in mig_sql_v5.split(";") if stmt.strip()]
+                if not statements_v5:
+                    raise StoreCorruptionError(f"Migration script at {mig_path_v5} is empty")
+                try:
+                    con.execute("BEGIN IMMEDIATE;")
+                    for stmt in statements_v5:
+                        con.execute(stmt)
+                    self._migrate_v4_to_v5(con)
+                    con.execute("PRAGMA user_version = 5;")
+                    con.execute("COMMIT;")
+                except Exception as e:
+                    if con.in_transaction:
+                        con.execute("ROLLBACK;")
+                    if isinstance(e, StoreCorruptionError):
+                        raise
+                    raise StoreCorruptionError(f"Migration from v4 to v5 failed: {e}") from e
+                user_ver = 5
+
+            if user_ver == 5:
+                mig_path_v6 = Path(__file__).parent / "migrations" / "v5_to_v6.sql"
+                if not mig_path_v6.is_file():
+                    raise StoreCorruptionError(f"Missing migration script at {mig_path_v6}")
+                statements_v6 = [stmt.strip() for stmt in mig_path_v6.read_text(encoding="utf-8").split(";") if stmt.strip()]
+                if not statements_v6:
+                    raise StoreCorruptionError(f"Migration script at {mig_path_v6} is empty")
+                try:
+                    con.execute("BEGIN IMMEDIATE;")
+                    for stmt in statements_v6:
+                        con.execute(stmt)
+                    self._migrate_v5_to_v6(con)
+                    con.execute("PRAGMA user_version = 6;")
+                    con.execute("COMMIT;")
+                except Exception as e:
+                    if con.in_transaction:
+                        con.execute("ROLLBACK;")
+                    if isinstance(e, StoreCorruptionError):
+                        raise
+                    raise StoreCorruptionError(f"Migration from v5 to v6 failed: {e}") from e
+                user_ver = 6
+            if user_ver == 6:
+                mig_path_v7 = Path(__file__).parent / "migrations" / "v6_to_v7.sql"
+                if not mig_path_v7.is_file():
+                    raise StoreCorruptionError(f"Missing migration script at {mig_path_v7}")
+                statements_v7 = [stmt.strip() for stmt in mig_path_v7.read_text(encoding="utf-8").split(";") if stmt.strip()]
+                if not statements_v7:
+                    raise StoreCorruptionError(f"Migration script at {mig_path_v7} is empty")
+                try:
+                    con.execute("PRAGMA foreign_keys = OFF;")
+                    con.execute("BEGIN IMMEDIATE;")
+                    for stmt in statements_v7:
+                        con.execute(stmt)
+                    self._migrate_v6_to_v7(con)
+                    con.execute("PRAGMA user_version = 7;")
+                    con.execute("COMMIT;")
+                except Exception as e:
+                    if con.in_transaction:
+                        con.execute("ROLLBACK;")
+                    if isinstance(e, StoreCorruptionError):
+                        raise
+                    raise StoreCorruptionError(f"Migration from v6 to v7 failed: {e}") from e
+                finally:
+                    con.execute("PRAGMA foreign_keys = ON;")
+                user_ver = 7
+
+            if user_ver != 7:
                 raise StoreCorruptionError(f"Unrecognized schema version: {user_ver}")
+
+
+    def _migrate_v6_to_v7(self, con: sqlite3.Connection) -> None:
+        """Rebuild fixed-range v6 tables into the dynamic active-set v7 schema."""
+        old_names = (
+            "authority", "structural_baselines", "cut_intents", "cuts", "baseline_intents",
+            "generation_jobs", "generation_attempts", "artifact_cuts",
+        )
+        # Drop objects whose names would otherwise conflict with the v7 guards.
+        for trigger in (
+            "trg_cuts_no_insert", "trg_cuts_no_delete", "trg_cuts_no_update_cut_id",
+            "trg_cuts_keep_one_active", "trg_cut_intents_active_baseline",
+        ):
+            con.execute(f"DROP TRIGGER IF EXISTS {trigger}")
+        con.execute("DROP INDEX IF EXISTS idx_generation_jobs_queued")
+        con.execute("DROP INDEX IF EXISTS idx_active_cut_display_order")
+        con.execute("DROP INDEX IF EXISTS idx_active_release_authorization")
+
+        for name in old_names:
+            con.execute(f"ALTER TABLE {name} RENAME TO {name}_v6")
+
+        v7_schema = """
+            CREATE TABLE structural_baselines (
+                baseline_id TEXT PRIMARY KEY,
+                structure_json TEXT NOT NULL CHECK (json_valid(structure_json)),
+                authority_revision INTEGER NOT NULL CHECK (authority_revision >= 0),
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE cut_intents (
+                cut_id INTEGER NOT NULL CHECK (cut_id >= 1),
+                revision INTEGER NOT NULL CHECK (revision > 0),
+                baseline_id TEXT NULL REFERENCES structural_baselines(baseline_id),
+                payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
+                authority_revision INTEGER NOT NULL CHECK (authority_revision >= 0),
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (cut_id, revision)
+            );
+            CREATE TABLE cuts (
+                cut_id INTEGER PRIMARY KEY CHECK (cut_id >= 1),
+                is_active INTEGER NOT NULL CHECK (is_active IN (0, 1)),
+                display_order INTEGER NULL CHECK (display_order IS NULL OR display_order >= 1),
+                desired_revision INTEGER NULL CHECK (desired_revision IS NULL OR desired_revision > 0),
+                latest_generation_request_seq INTEGER NOT NULL DEFAULT 0 CHECK (latest_generation_request_seq >= 0),
+                realized_revision INTEGER NULL CHECK (realized_revision IS NULL OR realized_revision > 0),
+                realized_asset_id TEXT NULL,
+                realized_asset_path TEXT NULL,
+                realized_content_hash TEXT NULL,
+                CHECK ((is_active = 1 AND display_order IS NOT NULL) OR (is_active = 0 AND display_order IS NULL)),
+                CHECK ((realized_revision IS NULL AND realized_asset_id IS NULL AND realized_asset_path IS NULL AND realized_content_hash IS NULL) OR
+                      (realized_revision IS NOT NULL AND realized_asset_id IS NOT NULL AND realized_asset_path IS NOT NULL AND realized_content_hash IS NOT NULL)),
+                FOREIGN KEY (cut_id, desired_revision) REFERENCES cut_intents(cut_id, revision)
+            );
+            CREATE TABLE authority (
+                singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+                authority_revision INTEGER NOT NULL CHECK (authority_revision >= 0),
+                current_baseline_id TEXT NULL REFERENCES structural_baselines(baseline_id)
+            );
+            CREATE TABLE baseline_intents (
+                baseline_id TEXT NOT NULL REFERENCES structural_baselines(baseline_id) ON DELETE CASCADE,
+                cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id >= 1),
+                intent_revision INTEGER NOT NULL CHECK (intent_revision > 0),
+                PRIMARY KEY (baseline_id, cut_id),
+                FOREIGN KEY (cut_id, intent_revision) REFERENCES cut_intents(cut_id, revision)
+            );
+            CREATE TABLE generation_jobs (
+                job_id TEXT PRIMARY KEY,
+                cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id >= 1),
+                target_desired_revision INTEGER NOT NULL CHECK (target_desired_revision > 0),
+                request_seq INTEGER NOT NULL CHECK (request_seq > 0),
+                model TEXT NOT NULL CHECK (length(trim(model)) > 0),
+                effective_prompt TEXT NOT NULL CHECK (length(trim(effective_prompt)) > 0),
+                effective_prompt_origin TEXT NOT NULL CHECK (effective_prompt_origin IN ('user', 'llm_draft', 'intelligent_default')),
+                effective_prompt_sha256 TEXT NOT NULL CHECK (length(effective_prompt_sha256) = 64),
+                status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted', 'superseded')),
+                terminal_detail TEXT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE generation_attempts (
+                attempt_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL REFERENCES generation_jobs(job_id) ON DELETE CASCADE,
+                ordinal INTEGER NOT NULL CHECK (ordinal >= 1),
+                status TEXT NOT NULL CHECK (status IN ('running', 'succeeded', 'failed', 'interrupted', 'cancelled')),
+                started_at TEXT NOT NULL,
+                finished_at TEXT NULL,
+                detail TEXT NULL,
+                runner_id TEXT NULL,
+                process_pid INTEGER NULL,
+                process_group_id INTEGER NULL,
+                process_start_token TEXT NULL,
+                staging_path TEXT NULL,
+                provider_request_id TEXT NULL,
+                UNIQUE (job_id, ordinal),
+                CHECK ((process_pid IS NULL AND process_group_id IS NULL AND process_start_token IS NULL) OR
+                       (process_pid IS NOT NULL AND process_group_id IS NOT NULL AND process_start_token IS NOT NULL))
+            );
+            CREATE TABLE artifact_cuts (
+                artifact_id TEXT NOT NULL REFERENCES review_artifacts(artifact_id) ON DELETE CASCADE,
+                cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id >= 1),
+                display_order INTEGER NOT NULL CHECK (display_order >= 1),
+                realized_revision INTEGER NOT NULL CHECK (realized_revision > 0),
+                asset_id TEXT NOT NULL,
+                PRIMARY KEY (artifact_id, cut_id),
+                UNIQUE (artifact_id, display_order)
+            );
+        """
+        for statement in v7_schema.split(";"):
+            statement = statement.strip()
+            if statement:
+                con.execute(statement)
+
+        old_counts: dict[str, int] = {}
+        for name in old_names:
+            old_counts[name] = con.execute(f"SELECT COUNT(*) FROM {name}_v6").fetchone()[0]
+
+        con.execute("INSERT INTO structural_baselines SELECT baseline_id, structure_json, authority_revision, created_at FROM structural_baselines_v6")
+        con.execute(
+            """INSERT INTO cut_intents (cut_id, revision, baseline_id, payload_json, authority_revision, created_at)
+               SELECT cut_id, revision, baseline_id, payload_json, authority_revision, created_at FROM cut_intents_v6"""
+        )
+        con.execute(
+            """INSERT INTO cuts (cut_id, is_active, display_order, desired_revision, latest_generation_request_seq,
+                                  realized_revision, realized_asset_id, realized_asset_path, realized_content_hash)
+               SELECT cut_id, 1, cut_id, desired_revision, latest_generation_request_seq,
+                      realized_revision, realized_asset_id, realized_asset_path, realized_content_hash
+               FROM cuts_v6 ORDER BY cut_id"""
+        )
+        con.execute("INSERT INTO authority SELECT singleton_id, authority_revision, current_baseline_id FROM authority_v6")
+        con.execute("INSERT INTO baseline_intents SELECT baseline_id, cut_id, intent_revision FROM baseline_intents_v6")
+        con.execute(
+            """INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, request_seq, model,
+                                               effective_prompt, effective_prompt_origin, effective_prompt_sha256,
+                                               status, terminal_detail, created_at, updated_at)
+               SELECT job_id, cut_id, target_desired_revision, request_seq, model,
+                      effective_prompt, effective_prompt_origin, effective_prompt_sha256,
+                      status, terminal_detail, created_at, updated_at FROM generation_jobs_v6"""
+        )
+        con.execute(
+            """INSERT INTO generation_attempts (attempt_id, job_id, ordinal, status, started_at, finished_at, detail,
+                                                  runner_id, process_pid, process_group_id, process_start_token,
+                                                  staging_path, provider_request_id)
+               SELECT attempt_id, job_id, ordinal, status, started_at, finished_at, detail,
+                      runner_id, process_pid, process_group_id, process_start_token,
+                      staging_path, provider_request_id FROM generation_attempts_v6"""
+        )
+        con.execute(
+            """INSERT INTO artifact_cuts (artifact_id, cut_id, display_order, realized_revision, asset_id)
+               SELECT artifact_id, cut_id, cut_id, realized_revision, asset_id FROM artifact_cuts_v6 ORDER BY artifact_id, cut_id"""
+        )
+
+        for name in reversed(old_names):
+            con.execute(f"DROP TABLE {name}_v6")
+
+        for name in old_names:
+            actual = con.execute(f"SELECT COUNT(*) FROM {name}").fetchone()[0]
+            if actual != old_counts[name]:
+                raise StoreCorruptionError(f"v6-to-v7 row count mismatch for {name}: {old_counts[name]} -> {actual}")
+        active = con.execute("SELECT cut_id, display_order FROM cuts WHERE is_active = 1 ORDER BY display_order").fetchall()
+        if not active or [tuple(row) for row in active] != [(row[0], row[0]) for row in con.execute("SELECT cut_id FROM cuts ORDER BY cut_id")]:
+            raise StoreCorruptionError("v6-to-v7 active cut order backfill failed")
+        con.execute("CREATE INDEX idx_generation_jobs_queued ON generation_jobs (status, created_at, job_id)")
+        con.execute("CREATE UNIQUE INDEX idx_active_cut_display_order ON cuts (display_order) WHERE is_active = 1")
+        con.execute("CREATE UNIQUE INDEX idx_active_release_authorization ON release_authorizations ((1)) WHERE revoked_authority_revision IS NULL")
+        con.execute(
+            """CREATE TRIGGER trg_cuts_no_delete BEFORE DELETE ON cuts
+               BEGIN SELECT RAISE(ABORT, 'cut history is immutable; retire cuts instead'); END"""
+        )
+        con.execute(
+            """CREATE TRIGGER trg_cuts_no_update_cut_id BEFORE UPDATE OF cut_id ON cuts
+               BEGIN SELECT RAISE(ABORT, 'cut_id identity is immutable'); END"""
+        )
+        con.execute(
+            """CREATE TRIGGER trg_cuts_keep_one_active BEFORE UPDATE OF is_active ON cuts
+               WHEN OLD.is_active = 1 AND NEW.is_active = 0
+                AND (SELECT COUNT(*) FROM cuts WHERE is_active = 1) <= 1
+               BEGIN SELECT RAISE(ABORT, 'at least one active cut is required'); END"""
+        )
+        con.execute(
+            """CREATE TRIGGER trg_cut_intents_active_baseline BEFORE INSERT ON cut_intents
+               FOR EACH ROW BEGIN
+                 SELECT CASE WHEN NEW.baseline_id IS NULL
+                   OR (SELECT current_baseline_id FROM authority WHERE singleton_id = 1) IS NULL
+                   OR NEW.baseline_id != (SELECT current_baseline_id FROM authority WHERE singleton_id = 1)
+                   THEN RAISE(ABORT, 'cut_intents insert requires active baseline') END;
+               END"""
+        )
+    def _migrate_v4_to_v5(self, con: sqlite3.Connection) -> None:
+        """Rebuild generation tables while freezing attributable job inputs."""
+        old_job_cols = {row["name"] for row in con.execute("PRAGMA table_info(generation_jobs)").fetchall()}
+        old_attempt_cols = {row["name"] for row in con.execute("PRAGMA table_info(generation_attempts)").fetchall()}
+        job_rows = con.execute("SELECT * FROM generation_jobs ORDER BY created_at ASC, job_id ASC").fetchall()
+
+        model_columns = [name for name in ("model", "provider_model") if name in old_job_cols]
+        attempt_model_columns = [name for name in ("model", "provider_model") if name in old_attempt_cols]
+        frozen_jobs: list[dict[str, Any]] = []
+        for row in job_rows:
+            model: str | None = row[model_columns[0]] if model_columns else None
+            if (not isinstance(model, str) or not model.strip()) and attempt_model_columns:
+                model_row = con.execute(
+                    f"SELECT {attempt_model_columns[0]} FROM generation_attempts WHERE job_id = ? "
+                    "ORDER BY ordinal ASC LIMIT 1",
+                    (row["job_id"],),
+                ).fetchone()
+                model = model_row[0] if model_row else None
+            if not isinstance(model, str) or not model.strip():
+                raise StoreCorruptionError(
+                    f"Migration from v4 to v5 cannot attribute historical model for job {row['job_id']}"
+                )
+
+            intent_row = con.execute(
+                "SELECT payload_json FROM cut_intents WHERE cut_id = ? AND revision = ?",
+                (row["cut_id"], row["target_desired_revision"]),
+            ).fetchone()
+            if not intent_row:
+                raise StoreCorruptionError(
+                    f"Migration from v4 to v5 cannot resolve prompt for job {row['job_id']}"
+                )
+            raw_payload = json.loads(intent_row["payload_json"])
+            if isinstance(raw_payload, dict):
+                prompt = raw_payload.get("prompt")
+                origin = raw_payload.get("prompt_origin", "user")
+            elif isinstance(raw_payload, str):
+                prompt = raw_payload
+                origin = "user"
+            else:
+                prompt = None
+                origin = "user"
+            if not isinstance(prompt, str) or not prompt.strip():
+                raise StoreCorruptionError(
+                    f"Migration from v4 to v5 cannot resolve non-empty prompt for job {row['job_id']}"
+                )
+            if not isinstance(origin, str) or origin not in PROMPT_ORIGINS:
+                raise StoreCorruptionError(
+                    f"Migration from v4 to v5 found invalid prompt origin for job {row['job_id']}"
+                )
+            frozen_jobs.append(
+                {
+                    "job_id": row["job_id"],
+                    "cut_id": row["cut_id"],
+                    "target_desired_revision": row["target_desired_revision"],
+                    "request_seq": row["request_seq"],
+                    "model": model,
+                    "effective_prompt": prompt,
+                    "effective_prompt_origin": origin,
+                    "effective_prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+                    "status": row["status"],
+                    "terminal_detail": row["terminal_detail"],
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                }
+            )
+
+        con.execute("ALTER TABLE generation_attempts RENAME TO generation_attempts_v4")
+        con.execute("ALTER TABLE generation_jobs RENAME TO generation_jobs_v4")
+        con.execute(
+            """
+            CREATE TABLE generation_jobs (
+                job_id TEXT PRIMARY KEY,
+                cut_id INTEGER NOT NULL REFERENCES cuts(cut_id) CHECK (cut_id >= 1),
+                target_desired_revision INTEGER NOT NULL CHECK (target_desired_revision > 0),
+                request_seq INTEGER NOT NULL CHECK (request_seq > 0),
+                model TEXT NOT NULL CHECK (length(trim(model)) > 0),
+                effective_prompt TEXT NOT NULL CHECK (length(trim(effective_prompt)) > 0),
+                effective_prompt_origin TEXT NOT NULL CHECK (effective_prompt_origin IN ('user', 'llm_draft', 'intelligent_default')),
+                effective_prompt_sha256 TEXT NOT NULL CHECK (length(effective_prompt_sha256) = 64),
+                status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted', 'superseded')),
+                terminal_detail TEXT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        con.execute(
+            """
+            CREATE TABLE generation_attempts (
+                attempt_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL REFERENCES generation_jobs(job_id) ON DELETE CASCADE,
+                ordinal INTEGER NOT NULL CHECK (ordinal >= 1),
+                status TEXT NOT NULL CHECK (status IN ('running', 'succeeded', 'failed', 'interrupted', 'cancelled')),
+                started_at TEXT NOT NULL,
+                finished_at TEXT NULL,
+                detail TEXT NULL,
+                runner_id TEXT NULL,
+                process_pid INTEGER NULL,
+                process_group_id INTEGER NULL,
+                process_start_token TEXT NULL,
+                staging_path TEXT NULL,
+                provider_request_id TEXT NULL,
+                UNIQUE (job_id, ordinal),
+                CHECK (
+                    (process_pid IS NULL AND process_group_id IS NULL AND process_start_token IS NULL) OR
+                    (process_pid IS NOT NULL AND process_group_id IS NOT NULL AND process_start_token IS NOT NULL)
+                )
+            )
+            """
+        )
+        for job in frozen_jobs:
+            con.execute(
+                """
+                INSERT INTO generation_jobs (
+                    job_id, cut_id, target_desired_revision, request_seq, model,
+                    effective_prompt, effective_prompt_origin, effective_prompt_sha256,
+                    status, terminal_detail, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                tuple(job[field] for field in (
+                    "job_id", "cut_id", "target_desired_revision", "request_seq", "model",
+                    "effective_prompt", "effective_prompt_origin", "effective_prompt_sha256",
+                    "status", "terminal_detail", "created_at", "updated_at",
+                )),
+            )
+        old_attempt_rows = con.execute("SELECT * FROM generation_attempts_v4").fetchall()
+        for row in old_attempt_rows:
+            con.execute(
+                """
+                INSERT INTO generation_attempts (
+                    attempt_id, job_id, ordinal, status, started_at, finished_at, detail,
+                    runner_id, process_pid, process_group_id, process_start_token,
+                    staging_path, provider_request_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                tuple(row[name] if name in old_attempt_cols else None for name in (
+                    "attempt_id", "job_id", "ordinal", "status", "started_at", "finished_at", "detail",
+                    "runner_id", "process_pid", "process_group_id", "process_start_token",
+                    "staging_path", "provider_request_id",
+                )),
+            )
+        con.execute("DROP TABLE generation_attempts_v4")
+        con.execute("DROP INDEX IF EXISTS idx_generation_jobs_queued")
+        con.execute("DROP TABLE generation_jobs_v4")
+        con.execute("CREATE INDEX idx_generation_jobs_queued ON generation_jobs (status, created_at, job_id)")
+
+    def _migrate_v5_to_v6(self, con: sqlite3.Connection) -> None:
+        """Convert legacy global bubble coordinates to composition schema v2."""
+        from decimal import Decimal, ROUND_HALF_UP
+        from comic_new.composition import (
+            CANONICAL_WIDTH,
+            LEGACY_CANONICAL_HEIGHT,
+            compute_bubble_geometry,
+        )
+
+        row = con.execute("SELECT revision, state_json FROM composition WHERE singleton_id = 1").fetchone()
+        if not row:
+            raise StoreCorruptionError("Missing composition singleton during v5 to v6 migration")
+        try:
+            state = json.loads(row["state_json"])
+        except Exception as exc:
+            raise StoreCorruptionError(f"Migration from v5 to v6 cannot parse composition state: {exc}") from exc
+        if state == {}:
+            return
+        if not isinstance(state, dict):
+            raise StoreCorruptionError("Migration from v5 to v6 requires composition state object")
+        if state.get("schema_version") == 2:
+            return
+        if state.get("schema_version") != 1:
+            raise StoreCorruptionError(f"Migration from v5 to v6 found unsupported composition schema {state.get('schema_version')!r}")
+        if set(state) - {"schema_version", "gap_px", "font_sha256", "bubbles"}:
+            raise StoreCorruptionError("Migration from v5 to v6 found unknown legacy composition fields")
+        gap_px = state.get("gap_px")
+        if isinstance(gap_px, bool) or not isinstance(gap_px, int) or gap_px < 0 or LEGACY_CANONICAL_HEIGHT - 4 * gap_px < 5:
+            raise StoreCorruptionError(f"Migration from v5 to v6 found invalid legacy gap_px {gap_px!r}")
+        font_sha256 = state.get("font_sha256")
+        if not isinstance(font_sha256, str):
+            raise StoreCorruptionError("Migration from v5 to v6 found invalid font_sha256")
+        bubbles = state.get("bubbles")
+        if not isinstance(bubbles, list):
+            raise StoreCorruptionError("Migration from v5 to v6 found invalid bubbles list")
+
+        usable = LEGACY_CANONICAL_HEIGHT - 4 * gap_px
+        legacy_slots: list[tuple[int, int, int]] = []
+        for index in range(5):
+            top = (index * usable) // 5 + index * gap_px
+            bottom = ((index + 1) * usable) // 5 + index * gap_px
+            legacy_slots.append((index + 1, top, bottom))
+        legacy_style_keys = {
+            "bubble_id", "cut_id", "shape", "text", "font_size_pct", "line_spacing_pct",
+            "text_align", "text_rgba", "fill_rgba", "outline_rgba", "outline_width_pct", "padding_pct",
+        }
+        converted: list[dict[str, Any]] = []
+        for index, bubble in enumerate(bubbles):
+            if not isinstance(bubble, dict):
+                raise StoreCorruptionError(f"Migration from v5 to v6 bubble {index} is not an object")
+            required = legacy_style_keys | {"x_pct", "y_pct", "w_pct", "h_pct"}
+            if set(bubble) != required:
+                raise StoreCorruptionError(f"Migration from v5 to v6 bubble {index} has unsupported fields")
+            try:
+                cut_id = bubble["cut_id"]
+                if isinstance(cut_id, bool) or not isinstance(cut_id, int) or cut_id not in range(1, 6):
+                    raise ValueError("invalid cut_id")
+                vals = {key: Decimal(str(bubble[key])) for key in ("x_pct", "y_pct", "w_pct", "h_pct")}
+                if any(not value.is_finite() for value in vals.values()):
+                    raise ValueError("non-finite coordinate")
+                old_edges = (
+                    int((vals["x_pct"] * CANONICAL_WIDTH / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
+                    int((vals["y_pct"] * LEGACY_CANONICAL_HEIGHT / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
+                    int(((vals["x_pct"] + vals["w_pct"]) * CANONICAL_WIDTH / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
+                    int(((vals["y_pct"] + vals["h_pct"]) * LEGACY_CANONICAL_HEIGHT / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
+                )
+            except (ArithmeticError, TypeError, ValueError) as exc:
+                raise StoreCorruptionError(f"Migration from v5 to v6 bubble {index} has invalid coordinates") from exc
+            center_y = (old_edges[1] + old_edges[3]) / 2
+            owner = next((slot for slot in legacy_slots if slot[1] <= center_y < slot[2]), None)
+            safe = owner is not None and owner[0] == cut_id and old_edges[1] >= owner[1] and old_edges[3] <= owner[2] and old_edges[3] > old_edges[1]
+            common = {key: bubble[key] for key in legacy_style_keys}
+            if safe:
+                _, slot_top, slot_bottom = owner
+                slot_height = slot_bottom - slot_top
+                local_y = ((Decimal(old_edges[1] - slot_top) * 100) / slot_height).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                local_h = ((Decimal(old_edges[3] - old_edges[1]) * 100) / slot_height).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                candidate = {
+                    "anchor_status": "ANCHORED", **common,
+                    "local_x_pct": float(vals["x_pct"]),
+                    "local_y_pct": float(local_y),
+                    "local_w_pct": float(vals["w_pct"]),
+                    "local_h_pct": float(local_h),
+                }
+                try:
+                    projected = compute_bubble_geometry(candidate, {"cut_id": cut_id, "top_px": slot_top, "bottom_px": slot_bottom, "height_px": slot_height}, CANONICAL_WIDTH)
+                except Exception:
+                    safe = False
+                if safe and projected == old_edges:
+                    converted.append(candidate)
+                    continue
+            converted.append({
+                "anchor_status": "REANCHOR_REQUIRED", **common,
+                "legacy_global_rect": {key: bubble[key] for key in ("x_pct", "y_pct", "w_pct", "h_pct")},
+            })
+
+        new_state = {
+            "schema_version": 2,
+            "canvas_width_px": CANONICAL_WIDTH,
+            "gap_px": gap_px,
+            "slot_heights_px": [bottom - top for _, top, bottom in legacy_slots],
+            "fit": "contain",
+            "font_sha256": font_sha256,
+            "bubbles": converted,
+        }
+        from comic_new.composition import canonical_json_dumps
+        new_comp_rev = row["revision"] + 1
+        auth_row = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()
+        if not auth_row:
+            raise StoreCorruptionError("Missing authority singleton during v5 to v6 migration")
+        new_auth_rev = auth_row["authority_revision"] + 1
+        now_iso = datetime.now(timezone.utc).isoformat()
+        con.execute(
+            "UPDATE composition SET revision = ?, state_json = ?, updated_at = ? WHERE singleton_id = 1",
+            (new_comp_rev, canonical_json_dumps(new_state), now_iso),
+        )
+        self._revoke_active_authorization(con, new_auth_rev, now_iso)
+        con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_auth_rev,))
+
     def verify_schema(self) -> None:
         with self._connect() as con:
             app_id_row = con.execute("PRAGMA application_id;").fetchone()
@@ -408,10 +1039,20 @@ class TransactionalStore:
             if missing_indexes:
                 raise StoreCorruptionError(f"Missing required indexes: {sorted(missing_indexes)}")
 
-            cut_rows = con.execute("SELECT cut_id FROM cuts ORDER BY cut_id;").fetchall()
-            cut_ids = [row[0] for row in cut_rows]
-            if cut_ids != [1, 2, 3, 4, 5]:
-                raise StoreCorruptionError(f"Expected cuts [1, 2, 3, 4, 5], found {cut_ids}")
+            all_cut_rows = con.execute("SELECT cut_id, is_active, display_order FROM cuts ORDER BY cut_id;").fetchall()
+            if not all_cut_rows:
+                raise StoreCorruptionError("cuts table must contain at least one stable cut")
+            active_rows = self._active_cuts(con)
+            active_ids = [row["cut_id"] for row in active_rows]
+            if any(row["is_active"] not in (0, 1) for row in all_cut_rows):
+                raise StoreCorruptionError("cuts contains invalid is_active value")
+            if any(row["is_active"] == 0 and row["display_order"] is not None for row in all_cut_rows):
+                raise StoreCorruptionError("inactive cuts must have NULL display_order")
+            cut_cols = {row["name"] for row in con.execute("PRAGMA table_info(cuts);").fetchall()}
+            if not {"is_active", "display_order", "latest_generation_request_seq"}.issubset(cut_cols):
+                raise StoreCorruptionError("cuts missing v7 active-set columns")
+            if active_ids != [row["cut_id"] for row in active_rows]:
+                raise StoreCorruptionError("active cut order is not stable")
 
             auth_row = con.execute("SELECT count(*) FROM authority WHERE singleton_id = 1;").fetchone()
             auth = auth_row[0] if auth_row else 0
@@ -441,9 +1082,38 @@ class TransactionalStore:
             if "latest_generation_request_seq" not in cut_cols:
                 raise StoreCorruptionError("cuts missing column: latest_generation_request_seq")
 
-            job_cols = {row["name"] for row in con.execute("PRAGMA table_info(generation_jobs);").fetchall()}
-            if "request_seq" not in job_cols:
-                raise StoreCorruptionError("generation_jobs missing column: request_seq")
+            job_cols_info = con.execute("PRAGMA table_info(generation_jobs);").fetchall()
+            job_cols = {row["name"] for row in job_cols_info}
+            required_job_cols = {
+                "request_seq", "model", "effective_prompt", "effective_prompt_origin", "effective_prompt_sha256",
+            }
+            missing_job_cols = required_job_cols - job_cols
+            if missing_job_cols:
+                raise StoreCorruptionError(f"generation_jobs missing columns: {sorted(missing_job_cols)}")
+            not_null_by_col = {row["name"]: row["notnull"] for row in job_cols_info}
+            missing_not_null = {name for name in required_job_cols if not_null_by_col.get(name) != 1}
+            if missing_not_null:
+                raise StoreCorruptionError(f"generation_jobs columns must be NOT NULL: {sorted(missing_not_null)}")
+            for row in con.execute(
+                "SELECT model, effective_prompt, effective_prompt_origin, effective_prompt_sha256 FROM generation_jobs"
+            ).fetchall():
+                model = row["model"]
+                prompt = row["effective_prompt"]
+                origin = row["effective_prompt_origin"]
+                prompt_hash = row["effective_prompt_sha256"]
+                if not isinstance(model, str) or not model.strip():
+                    raise StoreCorruptionError("generation_jobs contains an empty model")
+                if not isinstance(prompt, str) or not prompt.strip():
+                    raise StoreCorruptionError("generation_jobs contains an empty effective prompt")
+                if origin not in PROMPT_ORIGINS:
+                    raise StoreCorruptionError(f"generation_jobs contains invalid prompt origin: {origin!r}")
+                if (
+                    not isinstance(prompt_hash, str)
+                    or len(prompt_hash) != 64
+                    or any(char not in "0123456789abcdef" for char in prompt_hash.lower())
+                    or hashlib.sha256(prompt.encode("utf-8")).hexdigest() != prompt_hash.lower()
+                ):
+                    raise StoreCorruptionError("generation_jobs contains an invalid effective prompt hash")
 
             invalid_seq_jobs = con.execute("SELECT COUNT(*) FROM generation_jobs WHERE request_seq <= 0").fetchone()[0]
             if invalid_seq_jobs > 0:
@@ -453,6 +1123,19 @@ class TransactionalStore:
             if invalid_seq_cuts > 0:
                 raise StoreCorruptionError(f"Found {invalid_seq_cuts} cuts with negative latest_generation_request_seq")
 
+            comp_state_row = con.execute("SELECT state_json FROM composition WHERE singleton_id = 1").fetchone()
+            if not comp_state_row:
+                raise StoreCorruptionError("Missing composition singleton state")
+            try:
+                persisted_state = json.loads(comp_state_row["state_json"])
+            except Exception as exc:
+                raise StoreCorruptionError(f"Composition state is not valid JSON: {exc}") from exc
+            if persisted_state != {}:
+                from comic_new.composition import normalize_state
+                try:
+                    normalize_state(persisted_state)
+                except Exception as exc:
+                    raise StoreCorruptionError(f"Persisted composition state is invalid: {exc}") from exc
     def _begin_mutation(self, con: sqlite3.Connection, expected_authority_revision: int) -> int:
         con.execute("BEGIN IMMEDIATE;")
         row = con.execute("SELECT authority_revision FROM authority WHERE singleton_id = 1").fetchone()
@@ -476,20 +1159,14 @@ class TransactionalStore:
         )
         return cur.rowcount > 0
     def _validate_cuts_sequence_current(self, con: sqlite3.Connection) -> list[sqlite3.Row]:
-        cuts_rows = con.execute(
-            "SELECT cut_id, desired_revision, latest_generation_request_seq, realized_revision, realized_asset_id FROM cuts ORDER BY cut_id ASC"
-        ).fetchall()
-        if len(cuts_rows) != 5:
-            raise RealizationIncompleteError(f"Expected exactly 5 cuts, found {len(cuts_rows)}")
+        cuts_rows = self._active_cuts(con)
         for r in cuts_rows:
             cid = r["cut_id"]
             d_rev = r["desired_revision"]
             r_rev = r["realized_revision"]
             latest_seq = r["latest_generation_request_seq"]
             if d_rev is None or r_rev != d_rev:
-                raise RealizationIncompleteError(
-                    f"Cut {cid} is not current (desired={d_rev}, realized={r_rev})"
-                )
+                raise RealizationIncompleteError(f"Cut {cid} is not current (desired={d_rev}, realized={r_rev})")
             if latest_seq > 0:
                 latest_job = con.execute(
                     "SELECT status FROM generation_jobs WHERE cut_id = ? AND request_seq = ?",
@@ -512,6 +1189,8 @@ class TransactionalStore:
                 raise StoreCorruptionError("Missing authority singleton")
             auth_rev = auth_row["authority_revision"]
             current_baseline_id = auth_row["current_baseline_id"]
+            active_rows = self._active_cuts(con)
+            active_ids = [row["cut_id"] for row in active_rows]
 
             baseline_data: dict[str, Any] | None = None
             if current_baseline_id is not None:
@@ -521,7 +1200,10 @@ class TransactionalStore:
                 ).fetchone()
                 if b_row:
                     intents_rows = con.execute(
-                        "SELECT cut_id, intent_revision FROM baseline_intents WHERE baseline_id = ? ORDER BY cut_id ASC",
+                        """SELECT bi.cut_id, bi.intent_revision
+                           FROM baseline_intents bi JOIN cuts c ON c.cut_id = bi.cut_id
+                          WHERE bi.baseline_id = ? AND c.is_active = 1
+                          ORDER BY c.display_order ASC""",
                         (current_baseline_id,),
                     ).fetchall()
                     baseline_data = {
@@ -536,18 +1218,15 @@ class TransactionalStore:
                     }
 
             cuts_rows = con.execute(
-                """
-                SELECT c.cut_id, c.desired_revision, c.latest_generation_request_seq, c.realized_revision,
-                       c.realized_asset_id, c.realized_asset_path, c.realized_content_hash,
-                       i.payload_json AS effective_intent_json
-                FROM cuts c
-                LEFT JOIN cut_intents i ON c.cut_id = i.cut_id AND c.desired_revision = i.revision
-                ORDER BY c.cut_id ASC
-                """
+                """SELECT c.cut_id, c.display_order, c.desired_revision, c.latest_generation_request_seq,
+                          c.realized_revision, c.realized_asset_id, c.realized_asset_path,
+                          c.realized_content_hash, i.payload_json AS effective_intent_json
+                     FROM cuts c
+                     LEFT JOIN cut_intents i ON c.cut_id = i.cut_id AND c.desired_revision = i.revision
+                    WHERE c.is_active = 1 ORDER BY c.display_order ASC"""
             ).fetchall()
-
-            if len(cuts_rows) != 5:
-                raise StoreCorruptionError(f"Expected exactly 5 cuts, found {len(cuts_rows)}")
+            if [row["cut_id"] for row in cuts_rows] != active_ids:
+                raise StoreCorruptionError("Active cut snapshot changed during read")
 
             cuts_data: list[dict[str, Any]] = []
             all_current = True
@@ -556,48 +1235,35 @@ class TransactionalStore:
                 d_rev = row["desired_revision"]
                 latest_seq = row["latest_generation_request_seq"]
                 r_rev = row["realized_revision"]
-                eff_intent = (
-                    json.loads(row["effective_intent_json"])
-                    if row["effective_intent_json"] is not None
-                    else None
-                )
-
-                # Currency check:
-                # 1. Revision equality: desired_revision == realized_revision (both non-null)
-                # 2. Sequence check: if latest_generation_request_seq > 0, there must be a generation_job
-                #    with cut_id = cid and request_seq = latest_generation_request_seq that is 'succeeded'.
+                eff_intent = json.loads(row["effective_intent_json"]) if row["effective_intent_json"] is not None else None
+                if isinstance(eff_intent, dict) and "prompt_origin" not in eff_intent:
+                    eff_intent["prompt_origin"] = "user"
                 rev_match = d_rev is not None and r_rev is not None and d_rev == r_rev
-                if not rev_match:
-                    is_current = False
-                elif latest_seq == 0:
-                    is_current = True
+                if latest_seq == 0:
+                    is_current = rev_match
                 else:
                     latest_job = con.execute(
                         "SELECT status FROM generation_jobs WHERE cut_id = ? AND request_seq = ?",
                         (cid, latest_seq),
                     ).fetchone()
-                    is_current = latest_job is not None and latest_job["status"] == "succeeded"
-
+                    is_current = rev_match and latest_job is not None and latest_job["status"] == "succeeded"
                 currency = "CURRENT" if is_current else "STALE"
-                if not is_current:
-                    all_current = False
-
-                cuts_data.append(
-                    {
-                        "cut_id": cid,
-                        "desired_revision": d_rev,
-                        "latest_generation_request_seq": latest_seq,
-                        "effective_intent": eff_intent,
-                        "realized_revision": r_rev,
-                        "realized_asset_id": row["realized_asset_id"],
-                        "realized_asset_path": row["realized_asset_path"],
-                        "realized_content_hash": row["realized_content_hash"],
-                        "currency": currency,
-                    }
-                )
+                all_current = all_current and is_current
+                cuts_data.append({
+                    "cut_id": cid,
+                    "display_order": row["display_order"],
+                    "desired_revision": d_rev,
+                    "latest_generation_request_seq": latest_seq,
+                    "effective_intent": eff_intent,
+                    "realized_revision": r_rev,
+                    "realized_asset_id": row["realized_asset_id"],
+                    "realized_asset_path": row["realized_asset_path"],
+                    "realized_content_hash": row["realized_content_hash"],
+                    "currency": currency,
+                })
             realization_complete = {
-                "complete": all_current,
-                "status": "COMPLETE" if all_current else "UNRESOLVED",
+                "complete": all_current and bool(cuts_data),
+                "status": "COMPLETE" if all_current and cuts_data else "UNRESOLVED",
             }
 
             comp_row = con.execute(
@@ -624,6 +1290,10 @@ class TransactionalStore:
                         "cut_id": j["cut_id"],
                         "target_desired_revision": j["target_desired_revision"],
                         "request_seq": j["request_seq"],
+                        "model": j["model"],
+                        "effective_prompt": j["effective_prompt"],
+                        "effective_prompt_origin": j["effective_prompt_origin"],
+                        "effective_prompt_sha256": j["effective_prompt_sha256"],
                         "status": j["status"],
                         "terminal_detail": j["terminal_detail"],
                         "created_at": j["created_at"],
@@ -653,7 +1323,7 @@ class TransactionalStore:
             for art in art_rows:
                 aid = art["artifact_id"]
                 ac_rows = con.execute(
-                    "SELECT cut_id, realized_revision, asset_id FROM artifact_cuts WHERE artifact_id = ? ORDER BY cut_id ASC",
+                    "SELECT cut_id, display_order, realized_revision, asset_id FROM artifact_cuts WHERE artifact_id = ? ORDER BY display_order ASC",
                     (aid,),
                 ).fetchall()
                 artifacts_data.append(
@@ -665,6 +1335,7 @@ class TransactionalStore:
                         "cuts": [
                             {
                                 "cut_id": ac["cut_id"],
+                                "display_order": ac["display_order"],
                                 "realized_revision": ac["realized_revision"],
                                 "asset_id": ac["asset_id"],
                             }
@@ -764,77 +1435,102 @@ class TransactionalStore:
     ) -> int:
         from comic_new.composition import canonical_json_dumps
 
-        if not baseline_id or not isinstance(baseline_id, str):
+        if not isinstance(baseline_id, str) or not baseline_id.strip():
             raise ValidationError("baseline_id must be a non-empty string")
-        if set(intents_by_cut.keys()) != {1, 2, 3, 4, 5}:
-            raise ValidationError("intents_by_cut must contain exactly keys 1 through 5")
-
-        parsed_intents: dict[int, dict[str, str]] = {}
-        for cid in (1, 2, 3, 4, 5):
-            parsed_intents[cid] = self._parse_structured_intent(intents_by_cut[cid])
-
-        struct_json = (
-            json.dumps(structure, sort_keys=True) if isinstance(structure, dict) else str(structure)
-        )
+        if isinstance(structure, str):
+            try:
+                structure_obj = json.loads(structure)
+            except Exception as exc:
+                raise ValidationError("structure must be a JSON object") from exc
+        else:
+            structure_obj = structure
+        if not isinstance(structure_obj, dict):
+            raise ValidationError("structure must be a JSON object")
+        cuts = structure_obj.get("cuts")
+        if not isinstance(cuts, list) or not cuts:
+            raise ValidationError("structure.cuts must be a non-empty list")
+        structure_ids = [self._validate_cut_id(c.get("cut_id")) if isinstance(c, dict) else 0 for c in cuts]
+        if len(set(structure_ids)) != len(structure_ids):
+            raise ValidationError("structure.cuts must contain ordered unique positive IDs")
+        if not isinstance(intents_by_cut, dict) or set(intents_by_cut) != set(structure_ids):
+            raise ValidationError("intents_by_cut keys must exactly match structure cuts")
+        parsed_intents = {
+            cid: self._resolve_baseline_intent(intents_by_cut[cid], structure_obj, cid)
+            for cid in structure_ids
+        }
+        struct_json = canonical_json_dumps(structure_obj)
         now_iso = datetime.now(timezone.utc).isoformat()
-
         con = self._connect()
         try:
             new_rev = self._begin_mutation(con, expected_authority_revision)
+            active_rows = self._active_cuts(con)
+            active_ids = [row["cut_id"] for row in active_rows]
+            current_base = con.execute("SELECT current_baseline_id FROM authority WHERE singleton_id = 1").fetchone()
+            current_base_id = current_base["current_baseline_id"] if current_base else None
+            requested_ids = structure_ids
+            pristine = (
+                current_base_id is None
+                and con.execute("SELECT COUNT(*) FROM cut_intents").fetchone()[0] == 0
+                and con.execute("SELECT COUNT(*) FROM generation_jobs").fetchone()[0] == 0
+                and con.execute("SELECT COUNT(*) FROM artifact_cuts").fetchone()[0] == 0
+            )
+            if pristine and structure_ids != list(range(1, len(cuts) + 1)):
+                raise ValidationError("First baseline must use stable cut IDs 1..N")
+            if not pristine and active_ids != requested_ids:
+                raise ValidationError("Baseline cut order must match active cuts")
+            if pristine:
+                physical_ids = [row["cut_id"] for row in con.execute("SELECT cut_id FROM cuts ORDER BY cut_id").fetchall()]
+                max_physical = max(physical_ids, default=0)
+                for cid in physical_ids:
+                    if cid > len(requested_ids):
+                        con.execute("UPDATE cuts SET is_active = 0, display_order = NULL WHERE cut_id = ?", (cid,))
+                for cid in range(1, len(requested_ids) + 1):
+                    if cid in physical_ids:
+                        con.execute("UPDATE cuts SET is_active = 1, display_order = ? WHERE cut_id = ?", (cid, cid))
+                    else:
+                        if cid <= max_physical:
+                            raise StoreCorruptionError("Cannot allocate non-monotonic initial cut identity")
+                        con.execute("INSERT INTO cuts (cut_id, is_active, display_order) VALUES (?, 1, ?)", (cid, cid))
+            active_rows = self._active_cuts(con)
+            active_ids = [row["cut_id"] for row in active_rows]
+            if active_ids != requested_ids:
+                raise StoreCorruptionError("Active cuts do not match approved baseline structure")
             con.execute(
                 "INSERT INTO structural_baselines (baseline_id, structure_json, authority_revision, created_at) VALUES (?, ?, ?, ?)",
                 (baseline_id, struct_json, new_rev, now_iso),
             )
-
-            # Acceptance C: Set current_baseline_id BEFORE inserting cut_intents to satisfy trigger
             con.execute(
                 "UPDATE authority SET current_baseline_id = ?, authority_revision = ? WHERE singleton_id = 1",
                 (baseline_id, new_rev),
             )
-
-            for cut_id in (1, 2, 3, 4, 5):
-                cur_des_row = con.execute(
-                    "SELECT desired_revision FROM cuts WHERE cut_id = ?", (cut_id,)
-                ).fetchone()
-                cur_des = cur_des_row["desired_revision"] if cur_des_row else None
-                new_intent_rev = (cur_des or 0) + 1
-                payload_json = json.dumps(parsed_intents[cut_id], sort_keys=True)
-
+            for cid in active_ids:
+                cur_row = con.execute("SELECT desired_revision FROM cuts WHERE cut_id = ?", (cid,)).fetchone()
+                new_intent_rev = (cur_row["desired_revision"] or 0) + 1 if cur_row else 1
+                payload_json = canonical_json_dumps(parsed_intents[cid])
                 con.execute(
                     "INSERT INTO cut_intents (cut_id, revision, baseline_id, payload_json, authority_revision, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                    (cut_id, new_intent_rev, baseline_id, payload_json, new_rev, now_iso),
+                    (cid, new_intent_rev, baseline_id, payload_json, new_rev, now_iso),
                 )
-                con.execute(
-                    "UPDATE cuts SET desired_revision = ? WHERE cut_id = ?", (new_intent_rev, cut_id)
-                )
+                con.execute("UPDATE cuts SET desired_revision = ? WHERE cut_id = ?", (new_intent_rev, cid))
                 con.execute(
                     "INSERT INTO baseline_intents (baseline_id, cut_id, intent_revision) VALUES (?, ?, ?)",
-                    (baseline_id, cut_id, new_intent_rev),
+                    (baseline_id, cid, new_intent_rev),
                 )
 
-            # Synchronize composition bubbles with new baseline dialogues
-            comp_row = con.execute(
-                "SELECT revision, state_json FROM composition WHERE singleton_id = 1"
-            ).fetchone()
+            comp_row = con.execute("SELECT revision, state_json FROM composition WHERE singleton_id = 1").fetchone()
             if comp_row and comp_row["state_json"]:
                 comp_state = json.loads(comp_row["state_json"])
-                bubbles = comp_state.get("bubbles", [])
                 changed = False
-                for b in bubbles:
-                    cid = b.get("cut_id")
-                    if cid in parsed_intents:
-                        target_d = parsed_intents[cid]["dialogue"]
-                        if b.get("text") != target_d:
-                            b["text"] = target_d
-                            changed = True
+                for bubble in comp_state.get("bubbles", []):
+                    cid = bubble.get("cut_id")
+                    if cid in parsed_intents and bubble.get("text") != parsed_intents[cid]["dialogue"]:
+                        bubble["text"] = parsed_intents[cid]["dialogue"]
+                        changed = True
                 if changed:
-                    new_comp_rev = comp_row["revision"] + 1
-                    new_state_json = canonical_json_dumps(comp_state)
                     con.execute(
                         "UPDATE composition SET revision = ?, state_json = ?, updated_at = ? WHERE singleton_id = 1",
-                        (new_comp_rev, new_state_json, now_iso),
+                        (comp_row["revision"] + 1, canonical_json_dumps(comp_state), now_iso),
                     )
-
             self._revoke_active_authorization(con, new_rev, now_iso)
             con.execute("COMMIT;")
             return new_rev
@@ -850,9 +1546,13 @@ class TransactionalStore:
     ) -> int:
         from comic_new.composition import canonical_json_dumps
 
-        if cut_id not in (1, 2, 3, 4, 5):
-            raise ValidationError(f"Invalid cut_id {cut_id}; must be between 1 and 5")
+        self._validate_cut_id(cut_id)
         parsed_intent = self._parse_structured_intent(intent_payload)
+        parsed_intent = {
+            "prompt": parsed_intent["prompt"],
+            "dialogue": parsed_intent["dialogue"],
+            "prompt_origin": parsed_intent.get("prompt_origin", "user"),
+        }
         payload_json = json.dumps(parsed_intent, sort_keys=True)
         now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -861,9 +1561,10 @@ class TransactionalStore:
             new_rev = self._begin_mutation(con, expected_authority_revision)
             cur_base_id = self._require_active_baseline(con)
 
-            cur_des_row = con.execute(
-                "SELECT desired_revision FROM cuts WHERE cut_id = ?", (cut_id,)
-            ).fetchone()
+            active_ids = {row["cut_id"] for row in self._active_cuts(con)}
+            if cut_id not in active_ids:
+                raise ValidationError(f"Cut {cut_id} is not an active cut")
+            cur_des_row = con.execute("SELECT desired_revision FROM cuts WHERE cut_id = ?", (cut_id,)).fetchone()
             cur_des = cur_des_row["desired_revision"] if cur_des_row else None
             new_intent_rev = (cur_des or 0) + 1
 
@@ -919,6 +1620,8 @@ class TransactionalStore:
         from comic_new.composition import canonical_json_dumps, normalize_state
 
         norm_state = normalize_state(state)
+        if not norm_state["slot_heights_px"]:
+            raise ValidationError("Composition slot heights must be non-empty")
         now_iso = datetime.now(timezone.utc).isoformat()
         con = self._connect()
         try:
@@ -937,15 +1640,20 @@ class TransactionalStore:
                 )
 
             # Inspect bubbles per cut
-            bubbles_by_cut: dict[int, list[dict[str, Any]]] = {cid: [] for cid in (1, 2, 3, 4, 5)}
+            active_rows = self._active_cuts(con)
+            active_ids = [row["cut_id"] for row in active_rows]
+            if len(norm_state["slot_heights_px"]) != len(active_ids):
+                raise ValidationError(f"Composition slot heights must match active cuts ({len(active_ids)}), got {len(norm_state['slot_heights_px'])}")
+            bubbles_by_cut: dict[int, list[dict[str, Any]]] = {cid: [] for cid in active_ids}
             for b in norm_state.get("bubbles", []):
                 cid = b.get("cut_id")
-                if cid in bubbles_by_cut:
-                    bubbles_by_cut[cid].append(b)
+                if cid not in bubbles_by_cut:
+                    raise ValidationError(f"Bubble {b.get('bubble_id')} belongs to inactive or unknown cut {cid}")
+                bubbles_by_cut[cid].append(b)
 
-            # Fetch active current cut intents
+            # Fetch active current cut intents.
             current_intents: dict[int, dict[str, Any]] = {}
-            for cid in (1, 2, 3, 4, 5):
+            for cid in active_ids:
                 cut_row = con.execute("SELECT desired_revision FROM cuts WHERE cut_id = ?", (cid,)).fetchone()
                 if not cut_row or cut_row["desired_revision"] is None:
                     raise BaselineRequiredError(f"Cut {cid} has no active intent binding")
@@ -957,11 +1665,7 @@ class TransactionalStore:
                 if not intent_row or intent_row["baseline_id"] != cur_base_id:
                     raise BaselineRequiredError(f"Cut {cid} intent is not bound to active baseline {cur_base_id}")
                 payload = json.loads(intent_row["payload_json"])
-                current_intents[cid] = {
-                    "desired_revision": d_rev,
-                    "prompt": payload.get("prompt", ""),
-                    "dialogue": payload.get("dialogue", ""),
-                }
+                current_intents[cid] = {"desired_revision": d_rev, "prompt": payload.get("prompt", ""), "dialogue": payload.get("dialogue", ""), "prompt_origin": payload.get("prompt_origin", "user")}
 
             # Acceptance E & F & G:
             # For each cut:
@@ -972,7 +1676,7 @@ class TransactionalStore:
             #   advance cuts.desired_revision.
             # - If no bubbles exist for the cut, or submitted text equals current dialogue:
             #   no CutIntent revision created.
-            for cid in (1, 2, 3, 4, 5):
+            for cid in active_ids:
                 cut_bubbles = bubbles_by_cut[cid]
                 if not cut_bubbles:
                     continue
@@ -989,6 +1693,7 @@ class TransactionalStore:
                     new_payload = {
                         "prompt": current_intents[cid]["prompt"],
                         "dialogue": submitted_text,
+                        "prompt_origin": current_intents[cid]["prompt_origin"],
                     }
                     con.execute(
                         "INSERT INTO cut_intents (cut_id, revision, baseline_id, payload_json, authority_revision, created_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -1024,9 +1729,8 @@ class TransactionalStore:
         expected_authority_revision: int,
         cut_id: int | None = None,
     ) -> tuple[int, list[dict[str, Any]]]:
-        if cut_id is not None and cut_id not in (1, 2, 3, 4, 5):
-            raise ValidationError(f"Invalid cut_id {cut_id}; must be between 1 and 5")
-        target_cuts = [1, 2, 3, 4, 5] if cut_id is None else [cut_id]
+        if cut_id is not None:
+            self._validate_cut_id(cut_id)
         now_iso = datetime.now(timezone.utc).isoformat()
 
         con = self._connect()
@@ -1034,8 +1738,12 @@ class TransactionalStore:
             new_rev = self._begin_mutation(con, expected_authority_revision)
             cur_base_id = self._require_active_baseline(con)
 
-            # Pre-validate all target cuts have desired intent bound to active baseline and non-empty prompt
-            cuts_to_enqueue: list[tuple[int, int]] = []
+            active_ids = self._active_cut_ids(con)
+            if cut_id is not None and cut_id not in active_ids:
+                raise ValidationError(f"Cut {cut_id} is not an active cut")
+            target_cuts = active_ids if cut_id is None else [cut_id]
+            # Validate only requested cuts, then freeze their effective identity.
+            cuts_to_enqueue: list[dict[str, Any]] = []
             for cid in target_cuts:
                 cut_row = con.execute("SELECT desired_revision FROM cuts WHERE cut_id = ?", (cid,)).fetchone()
                 if not cut_row or cut_row["desired_revision"] is None:
@@ -1052,14 +1760,29 @@ class TransactionalStore:
                         f"Cut {cid} revision {d_rev} intent is bound to baseline {intent_row['baseline_id']!r}, not active baseline {cur_base_id!r}"
                     )
                 payload = self._parse_structured_intent(json.loads(intent_row["payload_json"]))
-                if not payload["prompt"].strip():
+                effective_prompt = payload["prompt"]
+                if not effective_prompt.strip():
                     raise ValidationError(
-                        f"Cut {cid} revision {d_rev} intent payload does not contain a non-empty prompt"
+                        f"Cut {cid} revision {d_rev} intent payload does not contain a non-empty effective prompt"
                     )
-                cuts_to_enqueue.append((cid, d_rev))
+                origin = payload.get("prompt_origin", "user")
+                if origin not in PROMPT_ORIGINS:
+                    raise ValidationError(f"Cut {cid} revision {d_rev} has invalid prompt origin")
+                cuts_to_enqueue.append(
+                    {
+                        "cut_id": cid,
+                        "target_desired_revision": d_rev,
+                        "model": DEFAULT_GENERATION_MODEL,
+                        "effective_prompt": effective_prompt,
+                        "effective_prompt_origin": origin,
+                        "effective_prompt_sha256": hashlib.sha256(effective_prompt.encode("utf-8")).hexdigest(),
+                    }
+                )
 
             created_jobs: list[dict[str, Any]] = []
-            for cid, d_rev in cuts_to_enqueue:
+            for target in cuts_to_enqueue:
+                cid = target["cut_id"]
+                d_rev = target["target_desired_revision"]
                 job_id = f"job-{cid}-r{d_rev}-{uuid4().hex[:8]}"
                 # Increment cut's latest_generation_request_seq
                 con.execute(
@@ -1070,19 +1793,217 @@ class TransactionalStore:
                 req_seq = seq_row["latest_generation_request_seq"]
 
                 con.execute(
-                    "INSERT INTO generation_jobs (job_id, cut_id, target_desired_revision, request_seq, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'queued', ?, ?)",
-                    (job_id, cid, d_rev, req_seq, now_iso, now_iso),
+                    """
+                    INSERT INTO generation_jobs (
+                        job_id, cut_id, target_desired_revision, request_seq, model,
+                        effective_prompt, effective_prompt_origin, effective_prompt_sha256,
+                        status, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)
+                    """,
+                    (
+                        job_id, cid, d_rev, req_seq, target["model"], target["effective_prompt"],
+                        target["effective_prompt_origin"], target["effective_prompt_sha256"], now_iso, now_iso,
+                    ),
                 )
                 created_jobs.append({
                     "job_id": job_id,
                     "cut_id": cid,
                     "target_desired_revision": d_rev,
                     "request_seq": req_seq,
+                    "model": target["model"],
+                    "effective_prompt": target["effective_prompt"],
+                    "effective_prompt_origin": target["effective_prompt_origin"],
+                    "effective_prompt_sha256": target["effective_prompt_sha256"],
                 })
             self._revoke_active_authorization(con, new_rev, now_iso)
             con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,))
             con.execute("COMMIT;")
             return (new_rev, created_jobs)
+        except Exception:
+            if con.in_transaction:
+                con.execute("ROLLBACK;")
+            raise
+        finally:
+            con.close()
+
+    @staticmethod
+    def _rewrite_active_order(con: sqlite3.Connection, ordered_ids: list[int]) -> None:
+        if not ordered_ids or len(set(ordered_ids)) != len(ordered_ids):
+            raise ValidationError("ordered active cut IDs must be non-empty and unique")
+        max_order = con.execute("SELECT COALESCE(MAX(display_order), 0) FROM cuts").fetchone()[0]
+        for index, cid in enumerate(ordered_ids, 1):
+            con.execute("UPDATE cuts SET display_order = ? WHERE cut_id = ? AND is_active = 1", (max_order + index, cid))
+        for index, cid in enumerate(ordered_ids, 1):
+            con.execute("UPDATE cuts SET display_order = ? WHERE cut_id = ? AND is_active = 1", (index, cid))
+
+    @staticmethod
+    def _transform_composition_membership(
+        con: sqlite3.Connection,
+        old_ids: list[int],
+        new_ids: list[int],
+        now_iso: str,
+        *,
+        added_cut: bool = False,
+    ) -> None:
+        row = con.execute("SELECT revision, state_json FROM composition WHERE singleton_id = 1").fetchone()
+        if not row or row["state_json"] == "{}":
+            return
+        from comic_new.composition import canonical_json_dumps, normalize_state
+        state = normalize_state(json.loads(row["state_json"]))
+        if len(state["slot_heights_px"]) != len(old_ids):
+            raise StoreCorruptionError("Composition slots do not match the previous active cut set")
+        heights = dict(zip(old_ids, state["slot_heights_px"], strict=True))
+        default_height = max(1, (7680 - (len(new_ids) - 1) * state["gap_px"]) // len(new_ids))
+        state["slot_heights_px"] = [heights.get(cid, default_height) for cid in new_ids]
+        state["bubbles"] = [b for b in state.get("bubbles", []) if b.get("cut_id") in set(new_ids)]
+        con.execute(
+            "UPDATE composition SET revision = ?, state_json = ?, updated_at = ? WHERE singleton_id = 1",
+            (row["revision"] + 1, canonical_json_dumps(state), now_iso),
+        )
+
+    def _clone_baseline_for_membership(
+        self,
+        con: sqlite3.Connection,
+        baseline_id: str,
+        structure: dict[str, Any],
+        ordered_ids: list[int],
+        new_rev: int,
+        now_iso: str,
+        *,
+        added_cut: tuple[int, dict[str, Any]] | None = None,
+    ) -> None:
+        from comic_new.composition import canonical_json_dumps
+        con.execute(
+            "INSERT INTO structural_baselines (baseline_id, structure_json, authority_revision, created_at) VALUES (?, ?, ?, ?)",
+            (baseline_id, canonical_json_dumps(structure), new_rev, now_iso),
+        )
+        con.execute("UPDATE authority SET current_baseline_id = ?, authority_revision = ? WHERE singleton_id = 1", (baseline_id, new_rev))
+        added_id = added_cut[0] if added_cut else None
+        if added_cut:
+            payload = self._resolve_baseline_intent(added_cut[1], structure, added_id)
+            con.execute(
+                "INSERT INTO cut_intents (cut_id, revision, baseline_id, payload_json, authority_revision, created_at) VALUES (?, 1, ?, ?, ?, ?)",
+                (added_id, baseline_id, canonical_json_dumps(payload), new_rev, now_iso),
+            )
+            con.execute("UPDATE cuts SET desired_revision = 1 WHERE cut_id = ?", (added_id,))
+        for cid in ordered_ids:
+            row = con.execute("SELECT desired_revision FROM cuts WHERE cut_id = ? AND is_active = 1", (cid,)).fetchone()
+            if not row or row["desired_revision"] is None:
+                raise BaselineRequiredError(f"Cut {cid} has no desired intent binding")
+            con.execute(
+                "INSERT INTO baseline_intents (baseline_id, cut_id, intent_revision) VALUES (?, ?, ?)",
+                (baseline_id, cid, row["desired_revision"]),
+            )
+            # Rebind existing cut_intent row to the new cloned baseline so enqueue_generation_jobs can target it
+            con.execute(
+                "UPDATE cut_intents SET baseline_id = ? WHERE cut_id = ? AND revision = ?",
+                (baseline_id, cid, row["desired_revision"]),
+            )
+
+    @staticmethod
+    def _baseline_structure(con: sqlite3.Connection, baseline_id: str) -> dict[str, Any]:
+        row = con.execute("SELECT structure_json FROM structural_baselines WHERE baseline_id = ?", (baseline_id,)).fetchone()
+        if not row:
+            raise BaselineRequiredError(f"Baseline {baseline_id} not found")
+        structure = json.loads(row["structure_json"])
+        if not isinstance(structure, dict) or not isinstance(structure.get("cuts"), list):
+            raise StoreCorruptionError("Active baseline structure is invalid")
+        return structure
+
+    def add_cut(
+        self,
+        expected_authority_revision: int,
+        baseline_id: str,
+        role: str,
+        beat: str,
+        prompt: str = "",
+        dialogue: str = "",
+        position: int | None = None,
+    ) -> tuple[int, int]:
+        if not isinstance(baseline_id, str) or not baseline_id.strip() or not isinstance(role, str) or not isinstance(beat, str):
+            raise ValidationError("baseline_id, role, and beat are required strings")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        con = self._connect()
+        try:
+            new_rev = self._begin_mutation(con, expected_authority_revision)
+            current_base = self._require_active_baseline(con)
+            if baseline_id != current_base:
+                raise ValidationError("baseline_id does not match active baseline")
+            old_ids = self._active_cut_ids(con)
+            new_id = con.execute("SELECT COALESCE(MAX(cut_id), 0) + 1 FROM cuts").fetchone()[0]
+            insert_at = len(old_ids) + 1 if position is None else position
+            if isinstance(insert_at, bool) or not isinstance(insert_at, int) or not 1 <= insert_at <= len(old_ids) + 1:
+                raise ValidationError("position must be between 1 and active cut count + 1")
+            con.execute("INSERT INTO cuts (cut_id, is_active, display_order) VALUES (?, 1, ?)", (new_id, len(old_ids) + 1))
+            new_ids = old_ids[: insert_at - 1] + [new_id] + old_ids[insert_at - 1 :]
+            self._rewrite_active_order(con, new_ids)
+            structure = self._baseline_structure(con, current_base)
+            structure["cuts"] = [*structure["cuts"]]
+            structure["cuts"].insert(insert_at - 1, {"cut_id": new_id, "role": role, "beat": beat})
+            payload = {"prompt": prompt, "dialogue": dialogue, "prompt_origin": "user"}
+            self._clone_baseline_for_membership(con, f"{baseline_id}-m{new_rev}", structure, new_ids, new_rev, now_iso, added_cut=(new_id, payload))
+            self._transform_composition_membership(con, old_ids, new_ids, now_iso, added_cut=True)
+            self._revoke_active_authorization(con, new_rev, now_iso)
+            con.execute("COMMIT;")
+            return new_rev, new_id
+        except Exception:
+            if con.in_transaction:
+                con.execute("ROLLBACK;")
+            raise
+        finally:
+            con.close()
+
+    def retire_cut(self, expected_authority_revision: int, cut_id: int, baseline_id: str) -> int:
+        self._validate_cut_id(cut_id)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        con = self._connect()
+        try:
+            new_rev = self._begin_mutation(con, expected_authority_revision)
+            current_base = self._require_active_baseline(con)
+            if baseline_id != current_base:
+                raise ValidationError("baseline_id does not match active baseline")
+            old_ids = self._active_cut_ids(con)
+            if cut_id not in old_ids:
+                raise ValidationError(f"Cut {cut_id} is not active")
+            if len(old_ids) <= 1:
+                raise ValidationError("At least one active cut is required")
+            new_ids = [cid for cid in old_ids if cid != cut_id]
+            structure = self._baseline_structure(con, current_base)
+            structure["cuts"] = [c for c in structure["cuts"] if c.get("cut_id") != cut_id]
+            con.execute("UPDATE cuts SET is_active = 0, display_order = NULL WHERE cut_id = ?", (cut_id,))
+            self._rewrite_active_order(con, new_ids)
+            self._clone_baseline_for_membership(con, f"{baseline_id}-m{new_rev}", structure, new_ids, new_rev, now_iso)
+            self._transform_composition_membership(con, old_ids, new_ids, now_iso)
+            self._revoke_active_authorization(con, new_rev, now_iso)
+            con.execute("COMMIT;")
+            return new_rev
+        except Exception:
+            if con.in_transaction:
+                con.execute("ROLLBACK;")
+            raise
+        finally:
+            con.close()
+
+    def reorder_cuts(self, expected_authority_revision: int, ordered_ids: list[int], baseline_id: str) -> int:
+        ordered_ids = self._ordered_ids(ordered_ids, field_name="ordered_cut_ids")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        con = self._connect()
+        try:
+            new_rev = self._begin_mutation(con, expected_authority_revision)
+            current_base = self._require_active_baseline(con)
+            if baseline_id != current_base:
+                raise ValidationError("baseline_id does not match active baseline")
+            old_ids = self._active_cut_ids(con)
+            if set(ordered_ids) != set(old_ids):
+                raise ValidationError("ordered_cut_ids must exactly match the active cut set")
+            structure = self._baseline_structure(con, current_base)
+            structure["cuts"] = sorted(structure["cuts"], key=lambda c: ordered_ids.index(c.get("cut_id")))
+            self._rewrite_active_order(con, ordered_ids)
+            self._clone_baseline_for_membership(con, f"{baseline_id}-m{new_rev}", structure, ordered_ids, new_rev, now_iso)
+            self._transform_composition_membership(con, old_ids, ordered_ids, now_iso)
+            self._revoke_active_authorization(con, new_rev, now_iso)
+            con.execute("COMMIT;")
+            return new_rev
         except Exception:
             if con.in_transaction:
                 con.execute("ROLLBACK;")
@@ -1220,7 +2141,9 @@ class TransactionalStore:
 
             while True:
                 row = con.execute(
-                    "SELECT job_id, cut_id, target_desired_revision, request_seq FROM generation_jobs WHERE status = 'queued' ORDER BY created_at ASC, job_id ASC LIMIT 1"
+                    "SELECT job_id, cut_id, target_desired_revision, request_seq, model, effective_prompt, "
+                    "effective_prompt_origin, effective_prompt_sha256 FROM generation_jobs "
+                    "WHERE status = 'queued' ORDER BY created_at ASC, job_id ASC LIMIT 1"
                 ).fetchone()
                 if not row:
                     con.execute("COMMIT;")
@@ -1255,12 +2178,9 @@ class TransactionalStore:
                     con.execute("UPDATE authority SET authority_revision = ? WHERE singleton_id = 1", (new_rev,))
                     # Loop to check next queued job
                     continue
-                intent_row = con.execute(
-                    "SELECT payload_json FROM cut_intents WHERE cut_id = ? AND revision = ?",
-                    (cut_id, target_rev),
-                ).fetchone()
-                payload = json.loads(intent_row["payload_json"])
-                prompt = payload if isinstance(payload, str) else (payload.get("prompt") or payload.get("text"))
+                prompt = row["effective_prompt"]
+                if hashlib.sha256(prompt.encode("utf-8")).hexdigest() != row["effective_prompt_sha256"].lower():
+                    raise StoreCorruptionError(f"Generation job {job_id} effective prompt hash mismatch")
 
                 attempt_id = f"att-{job_id}-1"
                 staging_dir = staging_base_dir / job_id
@@ -1287,7 +2207,12 @@ class TransactionalStore:
                     "job_id": job_id,
                     "cut_id": cut_id,
                     "target_desired_revision": target_rev,
+                    "request_seq": job_req_seq,
+                    "model": row["model"],
                     "attempt_id": attempt_id,
+                    "effective_prompt": prompt,
+                    "effective_prompt_origin": row["effective_prompt_origin"],
+                    "effective_prompt_sha256": row["effective_prompt_sha256"],
                     "prompt": prompt,
                     "staging_path": str(candidate_path),
                 }
@@ -1362,14 +2287,16 @@ class TransactionalStore:
             cut_id = job["cut_id"]
             target_rev = job["target_desired_revision"]
             job_req_seq = job["request_seq"]
-            cut_row = con.execute("SELECT desired_revision, latest_generation_request_seq FROM cuts WHERE cut_id = ?", (cut_id,)).fetchone()
+            cut_row = con.execute("SELECT is_active, desired_revision, latest_generation_request_seq FROM cuts WHERE cut_id = ?", (cut_id,)).fetchone()
+            is_active = bool(cut_row["is_active"]) if cut_row else False
             cur_desired = cut_row["desired_revision"] if cut_row else None
             latest_seq = cut_row["latest_generation_request_seq"] if cut_row else 0
 
-            if cur_desired != target_rev or job_req_seq != latest_seq:
-                # Target revision or request sequence is stale: attempt succeeded, job superseded, cut unchanged
+            if not is_active or cur_desired != target_rev or job_req_seq != latest_seq:
+                # Inactive, superseded revision, or superseded sequence: candidate is never canonical.
                 detail = (
-                    f"Target revision {target_rev} superseded by current desired revision {cur_desired}"
+                    f"Cut {cut_id} is inactive" if not is_active
+                    else f"Target revision {target_rev} superseded by current desired revision {cur_desired}"
                     if cur_desired != target_rev
                     else f"Target request sequence {job_req_seq} superseded by latest request sequence {latest_seq}"
                 )
@@ -1630,8 +2557,8 @@ class TransactionalStore:
     ) -> int:
         if not artifact_id or not content_hash:
             raise ValidationError("artifact_id and content_hash must be non-empty strings")
-        if len(cut_closure) != 5:
-            raise ValidationError(f"cut_closure must have exactly 5 elements, got {len(cut_closure)}")
+        if not isinstance(cut_closure, list) or not cut_closure:
+            raise ValidationError("cut_closure must be a non-empty list")
         now_iso = datetime.now(timezone.utc).isoformat()
 
         con = self._connect()
@@ -1646,28 +2573,26 @@ class TransactionalStore:
                 )
 
             cuts_rows = self._validate_cuts_sequence_current(con)
-            closure_map = {item["cut_id"]: item for item in cut_closure}
-            for r in cuts_rows:
-                cid = r["cut_id"]
-                if cid not in closure_map:
-                    raise ValidationError(f"Missing cut {cid} in closure")
-                c_item = closure_map[cid]
-                if (
-                    c_item.get("realized_revision") != r["realized_revision"]
-                    or c_item.get("asset_id") != r["realized_asset_id"]
-                ):
+            active_ids = [row["cut_id"] for row in cuts_rows]
+            closure_ids = [item.get("cut_id") for item in cut_closure]
+            if closure_ids != active_ids or len(set(closure_ids)) != len(closure_ids):
+                raise ValidationError("Artifact closure must exactly match ordered active cuts")
+            for index, (r, c_item) in enumerate(zip(cuts_rows, cut_closure, strict=True), 1):
+                if c_item.get("display_order") != index:
+                    raise ValidationError("Artifact closure display_order must be contiguous from 1")
+                if c_item.get("realized_revision") != r["realized_revision"] or c_item.get("asset_id") != r["realized_asset_id"]:
                     raise ValidationError(
-                        f"Cut {cid} closure mismatch: closure has rev={c_item.get('realized_revision')}, asset={c_item.get('asset_id')}; actual has rev={r['realized_revision']}, asset={r['realized_asset_id']}"
+                        f"Cut {r['cut_id']} closure mismatch: closure has rev={c_item.get('realized_revision')}, asset={c_item.get('asset_id')}; actual has rev={r['realized_revision']}, asset={r['realized_asset_id']}"
                     )
 
             con.execute(
                 "INSERT INTO review_artifacts (artifact_id, content_hash, composition_revision, created_at) VALUES (?, ?, ?, ?)",
                 (artifact_id, content_hash, composition_revision, now_iso),
             )
-            for item in cut_closure:
+            for index, item in enumerate(cut_closure, 1):
                 con.execute(
-                    "INSERT INTO artifact_cuts (artifact_id, cut_id, realized_revision, asset_id) VALUES (?, ?, ?, ?)",
-                    (artifact_id, item["cut_id"], item["realized_revision"], item["asset_id"]),
+                    "INSERT INTO artifact_cuts (artifact_id, cut_id, display_order, realized_revision, asset_id) VALUES (?, ?, ?, ?, ?)",
+                    (artifact_id, item["cut_id"], index, item["realized_revision"], item["asset_id"]),
                 )
 
             self._revoke_active_authorization(con, new_rev, now_iso)
@@ -1716,12 +2641,13 @@ class TransactionalStore:
                 )
 
             art_cuts = con.execute(
-                "SELECT cut_id, realized_revision, asset_id FROM artifact_cuts WHERE artifact_id = ? ORDER BY cut_id ASC",
+                "SELECT cut_id, display_order, realized_revision, asset_id FROM artifact_cuts WHERE artifact_id = ? ORDER BY display_order ASC",
                 (artifact_id,),
             ).fetchall()
-            art_closure = {
-                ac["cut_id"]: (ac["realized_revision"], ac["asset_id"]) for ac in art_cuts
-            }
+            active_ids = [row["cut_id"] for row in self._active_cuts(con)]
+            if [ac["cut_id"] for ac in art_cuts] != active_ids or [ac["display_order"] for ac in art_cuts] != list(range(1, len(active_ids) + 1)):
+                raise InvalidArtifactClosureError("Artifact closure does not match ordered active cuts")
+            art_closure = {ac["cut_id"]: (ac["realized_revision"], ac["asset_id"]) for ac in art_cuts}
 
             cuts_rows = self._validate_cuts_sequence_current(con)
             for cr in cuts_rows:
@@ -1791,26 +2717,19 @@ class TransactionalStore:
                 )
 
             art_cuts = con.execute(
-                "SELECT cut_id, realized_revision, asset_id FROM artifact_cuts WHERE artifact_id = ? ORDER BY cut_id ASC",
+                "SELECT cut_id, display_order, realized_revision, asset_id FROM artifact_cuts WHERE artifact_id = ? ORDER BY display_order ASC",
                 (art_id,),
             ).fetchall()
-            art_closure = {
-                ac["cut_id"]: (ac["realized_revision"], ac["asset_id"]) for ac in art_cuts
-            }
-            cuts_rows = con.execute(
-                "SELECT cut_id, desired_revision, realized_revision, realized_asset_id FROM cuts ORDER BY cut_id ASC"
-            ).fetchall()
+            active_rows = self._active_cuts(con)
+            active_ids = [row["cut_id"] for row in active_rows]
+            if [ac["cut_id"] for ac in art_cuts] != active_ids or [ac["display_order"] for ac in art_cuts] != list(range(1, len(active_ids) + 1)):
+                raise InvalidArtifactClosureError("Artifact closure does not match ordered active cuts")
+            art_closure = {ac["cut_id"]: (ac["realized_revision"], ac["asset_id"]) for ac in art_cuts}
+            cuts_rows = self._validate_cuts_sequence_current(con)
             for cr in cuts_rows:
                 cid = cr["cut_id"]
-                if cr["desired_revision"] is None or cr["realized_revision"] != cr["desired_revision"]:
-                    raise RealizationIncompleteError(f"Cut {cid} is not current")
-                if cid not in art_closure or art_closure[cid] != (
-                    cr["realized_revision"],
-                    cr["realized_asset_id"],
-                ):
-                    raise InvalidArtifactClosureError(
-                        f"Cut {cid} realization does not match artifact closure"
-                    )
+                if cid not in art_closure or art_closure[cid] != (cr["realized_revision"], cr["realized_asset_id"]):
+                    raise InvalidArtifactClosureError(f"Cut {cid} realization does not match artifact closure")
 
             con.execute(
                 "INSERT INTO delivery_attempts (attempt_id, kind, authorization_id, artifact_id, request_id, outcome, destination_id, destination_url, evidence_json, observed_authority_revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'unknown', NULL, NULL, NULL, NULL, ?, ?)",

@@ -13,8 +13,11 @@ import {
 } from '../src/api/contracts'
 
 const DEFAULT_COMPOSITION: CompositionStateDTO = {
-  schema_version: 1,
+  schema_version: 2,
+  canvas_width_px: 1024,
   gap_px: 24,
+  slot_heights_px: [1516, 1517, 1517, 1517, 1517],
+  fit: 'contain',
   font_sha256: '0'.repeat(64),
   bubbles: [],
 }
@@ -22,18 +25,33 @@ const DEFAULT_COMPOSITION: CompositionStateDTO = {
 function makeSnapshot(overrides: Partial<StudioSnapshotDTO> = {}): StudioSnapshotDTO {
   const cuts = [1, 2, 3, 4, 5].map((cutId) => ({
     cut_id: cutId as CutId,
+    display_order: cutId,
     desired_revision: 1,
     latest_generation_request_seq: 0,
-    effective_intent: { prompt: `prompt-${cutId}`, dialogue: `dialogue-${cutId}` },
+    effective_intent: { prompt: `prompt-${cutId}`, dialogue: `dialogue-${cutId}`, prompt_origin: 'user' },
     realized_revision: 1,
     realized_asset_id: `asset-${cutId}`,
     realized_content_hash: '0'.repeat(64),
     realized_asset_url: `/api/cuts/${cutId}/realization?asset_id=asset-${cutId}&revision=1`,
     currency: 'CURRENT' as const,
-  })) as [CutDTO, CutDTO, CutDTO, CutDTO, CutDTO]
+  }))
 
   return {
-    schema_version: 4,
+    schema_version: 7,
+    render_contract: {
+      width_px: 1024,
+      height_px: 7680,
+      gap_px: 24,
+      fit: 'contain',
+      slots: [
+        { cut_id: 1, top_px: 0, bottom_px: 1516, height_px: 1516 },
+        { cut_id: 2, top_px: 1540, bottom_px: 3057, height_px: 1517 },
+        { cut_id: 3, top_px: 3081, bottom_px: 4598, height_px: 1517 },
+        { cut_id: 4, top_px: 4622, bottom_px: 6139, height_px: 1517 },
+        { cut_id: 5, top_px: 6163, bottom_px: 7680, height_px: 1517 },
+      ],
+      default_composition: DEFAULT_COMPOSITION,
+    },
     authority_revision: 1,
     baseline: {
       baseline_id: 'baseline-1',
@@ -51,8 +69,7 @@ function makeSnapshot(overrides: Partial<StudioSnapshotDTO> = {}): StudioSnapsho
     },
     cuts,
     realization_complete: { complete: true, status: 'COMPLETE' },
-    composition: { revision: 1, state: DEFAULT_COMPOSITION, updated_at: '2026-01-01T00:00:00Z' },
-    render_contract: { width: 1024, height: 7680, default_composition: DEFAULT_COMPOSITION },
+    composition: { revision: 0, state: DEFAULT_COMPOSITION, updated_at: '2026-01-01T00:00:00Z' },
     jobs: [],
     review_artifacts: [],
     release_authorization: { active: null, history: [] },
@@ -127,8 +144,9 @@ describe('review authorization identity', () => {
       content_hash: contentHash,
       composition_revision: 1,
       created_at: '2026-01-01T00:00:00Z',
-      cuts: ([1, 2, 3, 4, 5] as CutId[]).map((cutId) => ({
+      cuts: ([1, 2, 3, 4, 5] as CutId[]).map((cutId, index) => ({
         cut_id: cutId,
+        display_order: index + 1,
         desired_revision: 1,
         realized_revision: 1,
         asset_id: `asset-${cutId}`,
@@ -138,22 +156,25 @@ describe('review authorization identity', () => {
     }
     const summary = {
       ...artifact,
-      cuts: artifact.cuts.map(({ cut_id, realized_revision, asset_id }) => ({
+      cuts: artifact.cuts.map(({ cut_id, display_order, realized_revision, asset_id }) => ({
         cut_id,
+        display_order,
         realized_revision,
         asset_id,
       })),
     }
-    store.server = makeSnapshot({ review_artifacts: [summary] })
+    store.server = makeSnapshot({
+      composition: { revision: 1, state: DEFAULT_COMPOSITION, updated_at: '2026-01-01T00:00:00Z' },
+      review_artifacts: [summary],
+    })
     store.ui.review = { artifact, displayedByteHash: contentHash, zoom: 1 }
     expect(store.canAuthorize).toBe(true)
-
-    store.applySnapshot(makeSnapshot({
+    const nextSnap = makeSnapshot({
       authority_revision: 2,
       composition: { revision: 2, state: DEFAULT_COMPOSITION, updated_at: '2026-01-01T00:01:00Z' },
       review_artifacts: [summary],
-    }))
-
+    })
+    store.applySnapshot(nextSnap)
     expect(store.canAuthorize).toBe(false)
   })
 })
@@ -189,6 +210,34 @@ describe('cross-type authoritative edit lane', () => {
     }))
     await vi.waitFor(() => expect(store.drafts.intents[1]).toBeUndefined())
   })
+
+  it('returns false and preserves the baseline draft when save fails', async () => {
+    const pending = controlledFetch()
+    const store = useStudioStore()
+    store.stream.status = 'OPEN'
+    const snapshot = makeSnapshot({ authority_revision: 1 })
+    store.server = snapshot
+    const structure = snapshot.baseline!.structure
+    const intents = snapshot.cuts.map((cut) => ({
+      cut_id: cut.cut_id,
+      intent: {
+        prompt: cut.effective_intent!.prompt,
+        dialogue: cut.effective_intent!.dialogue,
+      },
+    }))
+    store.setBaselineDraft(structure, intents, false)
+
+    const savePromise = store.saveBaselineDraft()
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    pending[0].resolve(jsonResponse({
+      error: { code: 'validation_error', message: 'invalid sparse baseline' },
+    }, 400))
+
+    await expect(savePromise).resolves.toBe(false)
+    expect(store.drafts.baseline?.value.structure).toEqual(structure)
+    expect(store.saves.baseline?.state).toBe('failed')
+  })
+
 
   it('serializes default composition only after a baseline is accepted', async () => {
     const pending = controlledFetch()
@@ -250,8 +299,9 @@ describe('cross-type authoritative edit lane', () => {
     store.stream.status = 'OPEN'
     store.server = makeSnapshot({
       jobs: [{
-        job_id: 'job-1', cut_id: 1, target_desired_revision: 1, request_seq: 0, status: 'running',
-        terminal_detail: null, created_at: '', updated_at: '', attempts: [],
+        job_id: 'job-1', cut_id: 1, target_desired_revision: 1, request_seq: 0,
+        model: 'oauth/gpt-image-2.5-flare', effective_prompt: 'prompt-1', effective_prompt_origin: 'user', effective_prompt_sha256: '0'.repeat(64),
+        status: 'running', terminal_detail: null, created_at: '', updated_at: '', attempts: [],
       }],
     })
 
@@ -342,8 +392,9 @@ describe('client resync safety and empirical cutover', () => {
     }
     initial.realization_complete = { complete: false, status: 'UNRESOLVED' }
     initial.jobs = [{
-      job_id: 'job-1', cut_id: 1 as CutId, target_desired_revision: 1, request_seq: 1, status: 'running',
-      terminal_detail: null, created_at: '', updated_at: '', attempts: [],
+      job_id: 'job-1', cut_id: 1 as CutId, target_desired_revision: 1, request_seq: 1,
+      model: 'oauth/gpt-image-2.5-flare', effective_prompt: 'prompt-1', effective_prompt_origin: 'user', effective_prompt_sha256: '0'.repeat(64),
+      status: 'running', terminal_detail: null, created_at: '', updated_at: '', attempts: [],
     }]
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(initial))
     vi.stubGlobal('fetch', fetchMock)
@@ -895,6 +946,10 @@ describe('isStudioSnapshotDTO runtime validator unit tests', () => {
       cut_id: 1 as CutId,
       target_desired_revision: 1,
       request_seq: 1,
+      model: 'oauth/gpt-image-2.5-flare',
+      effective_prompt: 'prompt-1',
+      effective_prompt_origin: 'user' as const,
+      effective_prompt_sha256: '0'.repeat(64),
       status: 'failed' as const,
       terminal_detail: 'provider failed',
       created_at: '2026-01-01T00:00:00Z',

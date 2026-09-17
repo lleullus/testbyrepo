@@ -373,7 +373,7 @@ def test_acceptance_h_v3_to_v4_migration_and_single_readback(tmp_path: Path) -> 
     # 2. Open project: triggers v3 -> v4 migration
     store = TransactionalStore.open_project(project_dir)
     snap = store.snapshot()
-    assert snap["schema_version"] == 4
+    assert snap["schema_version"] == 5
     # Composition bubble text was synchronized to current intent dialogue!
     migrated_bubble = snap["composition"]["state"]["bubbles"][0]
     assert migrated_bubble["text"] == "Canonical Dialogue 1"
@@ -430,7 +430,7 @@ def test_acceptance_h_v3_to_v4_preserves_prior_baseline_intent_history(tmp_path:
     con.close()
 
     store = TransactionalStore.open_project(project_dir)
-    assert store.snapshot()["schema_version"] == 4
+    assert store.snapshot()["schema_version"] == 5
     with sqlite3.connect(db_path) as check:
         assert check.execute("SELECT COUNT(*) FROM cut_intents").fetchone()[0] == 10
         assert check.execute(

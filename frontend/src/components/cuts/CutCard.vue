@@ -7,8 +7,8 @@ import { useStudioStore } from '@/store/studio'
 const props = defineProps<{
   cut: CutDTO
   selected: boolean
+  slotHeight?: number
 }>()
-
 const emit = defineEmits<{ select: [] }>()
 
 const store = useStudioStore()
@@ -22,6 +22,7 @@ const hasSaveIssue = computed(() => {
   return s && (s.state === 'failed' || s.state === 'conflict' || s.state === 'base-changed')
 })
 
+const thumbStyle = computed(() => props.slotHeight ? { aspectRatio: `1024 / ${props.slotHeight}` } : undefined)
 const hasIntentDraft = computed(() => !!store.drafts.intents[props.cut.cut_id])
 </script>
 
@@ -33,7 +34,7 @@ const hasIntentDraft = computed(() => !!store.drafts.intents[props.cut.cut_id])
     :aria-pressed="selected"
     @click="emit('select')"
   >
-    <div class="cut-thumb">
+    <div class="cut-thumb" :style="thumbStyle">
       <img
         v-if="thumbUrl"
         :src="thumbUrl"
@@ -83,7 +84,7 @@ const hasIntentDraft = computed(() => !!store.drafts.intents[props.cut.cut_id])
 
 .cut-thumb {
   width: 56px;
-  height: 56px;
+  aspect-ratio: 1;
   flex-shrink: 0;
   border-radius: var(--radius-inner);
   overflow: hidden;

@@ -27,13 +27,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # comic-new init <project_dir>
+    # comic-new init <project_dir> [--cut-count N]
     init_parser = subparsers.add_parser(
         "init",
-        help="Initialize a new comic-new project directory with exact five-cut transactional store",
+        help="Initialize a new comic-new project directory with N dynamic cuts",
     )
     init_parser.add_argument("project_dir", type=str, help="Path to the empty project directory")
-
+    init_parser.add_argument("--cut-count", type=int, default=5, help="Initial active cut count (positive integer)")
     # comic-new snapshot <project_dir>
     snapshot_parser = subparsers.add_parser(
         "snapshot",
@@ -42,18 +42,17 @@ def main(argv: list[str] | None = None) -> int:
     snapshot_parser.add_argument("project_dir", type=str, help="Path to the project directory")
 
 
-    # comic-new generate <project_dir> [--cut {1,2,3,4,5}]
+    # comic-new generate <project_dir> [--cut N]
     gen_parser = subparsers.add_parser(
         "generate",
-        help="Enqueue and run image generation for all cuts or a single cut",
+        help="Enqueue and run image generation for all active cuts or a single cut",
     )
     gen_parser.add_argument("project_dir", type=str, help="Path to the project directory")
     gen_parser.add_argument(
         "--cut",
         type=int,
-        choices=[1, 2, 3, 4, 5],
         default=None,
-        help="Single cut_id to generate (defaults to all 1..5)",
+        help="Single positive cut_id to generate (defaults to all active cuts)",
     )
 
     # comic-new run-generation <project_dir>
@@ -114,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "init":
             p = Path(args.project_dir)
-            store = TransactionalStore.create_project(p)
+            store = TransactionalStore.create_project(p, cut_count=args.cut_count)
             print(f"Initialized comic-new project at {store.db_path.parent}")
             return 0
         elif args.command == "snapshot":
@@ -160,7 +159,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1 if bad_counts > 0 else 0
         elif args.command == "export-png":
             from comic_new.delivery import DeliveryService
-            from comic_new.composition import CANONICAL_HEIGHT, CANONICAL_WIDTH
+            from comic_new.composition import CANONICAL_WIDTH
             p = Path(args.project_dir)
             store = TransactionalStore.open_project(p)
             snap = store.snapshot()
@@ -176,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
                     "output_file": str(dest_file),
                     "content_hash": result.content_hash,
                     "bytes_written": result.bytes_written,
-                    "dimensions": [CANONICAL_WIDTH, CANONICAL_HEIGHT],
+                    "dimensions": [result.evidence.get("width", CANONICAL_WIDTH), result.evidence.get("height")],
                 }
                 print(json.dumps(output, indent=2))
                 return 0

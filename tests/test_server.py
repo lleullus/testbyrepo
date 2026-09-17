@@ -229,8 +229,11 @@ def _setup_server_project_with_five_current_cuts(
             con.execute("COMMIT;")
 
     comp = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "canvas_width_px": 1024,
         "gap_px": 10,
+        "slot_heights_px": [1528, 1528, 1528, 1528, 1528],
+        "fit": "contain",
         "font_sha256": "acb6440a713d880a13a21b468ba7cd43f5a2b2934972e51be791c880730777b8",
         "bubbles": [],
     }

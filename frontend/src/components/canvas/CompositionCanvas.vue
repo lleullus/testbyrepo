@@ -1,54 +1,38 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useStudioStore } from '@/store/studio'
-import type { CutId, BubbleDTO, CompositionStateDTO } from '@/api/contracts'
+import type { AnchoredBubbleDTO, BubbleDTO, CompositionStateDTO, ResolvedSlotDTO, CutId } from '@/api/contracts'
 import { cutRealizationUrl } from '@/domain/currency'
+import { canvasHeight as resolvedCanvasHeight, computeCutSlots, projectLocalRectToCanvas } from '@/domain/geometry'
+import type { LocalPercentageRect } from '@/domain/geometry'
 import BubbleOverlay from './BubbleOverlay.vue'
 
 const store = useStudioStore()
-const surfaceRef = ref<HTMLElement | null>(null)
-
 const snap = computed(() => store.server)
+const slotElements = ref<Record<number, HTMLElement | null>>({})
 
-// Projected composition: merge server composition with draft if present
 const projectedComposition = computed((): CompositionStateDTO | null => {
   if (!snap.value) return null
-  // If there's a composition draft, use its state (full replacement)
-  if (store.drafts.composition) {
-    return store.drafts.composition.value.state
-  }
-  return snap.value.composition.state ?? null
+  if (store.drafts.composition) return store.drafts.composition.value.state
+  return snap.value.composition.state ?? snap.value.render_contract.default_composition
 })
 
-const bubbles = computed((): BubbleDTO[] => {
-  return projectedComposition.value?.bubbles ?? []
+const projectedSlots = computed<ResolvedSlotDTO[]>(() => {
+  const state = projectedComposition.value
+  if (!state) return []
+  if (!store.drafts.composition && snap.value?.render_contract.slots) return snap.value.render_contract.slots
+  return computeCutSlots(state.slot_heights_px, state.gap_px, snap.value?.cuts.map((cut) => cut.cut_id))
 })
 
-const gapPx = computed(() => projectedComposition.value?.gap_px ?? 24)
-
-// Canonical surface aspect: 1024:7680
-const SURFACE_W = 1024
-const SURFACE_H = 7680
-const aspectRatio = SURFACE_H / SURFACE_W
-
-// Cut slot geometry (mirrors Python compute_cut_slots)
-const cutSlots = computed(() => {
-  const gap = gapPx.value
-  const totalGap = gap * 4
-  const availableHeight = SURFACE_H - totalGap
-  const cutHeight = Math.floor(availableHeight / 5)
-  const slots: Array<{ yPct: number; hPct: number }> = []
-  for (let i = 0; i < 5; i++) {
-    const y0 = i * (cutHeight + gap)
-    slots.push({
-      yPct: (y0 / SURFACE_H) * 100,
-      hPct: (cutHeight / SURFACE_H) * 100,
-    })
-  }
-  return slots
+const canvasHeight = computed(() => {
+  if (!projectedSlots.value.length) return 1
+  return resolvedCanvasHeight(projectedSlots.value, projectedComposition.value?.gap_px)
 })
+const canvasWidth = computed(() => projectedComposition.value?.canvas_width_px ?? 1024)
+const bubbles = computed(() => projectedComposition.value?.bubbles ?? [])
+const anchoredBubbles = computed(() => bubbles.value.filter((bubble): bubble is AnchoredBubbleDTO => bubble.anchor_status === 'ANCHORED'))
+const reanchorBubbles = computed(() => bubbles.value.filter((bubble) => bubble.anchor_status === 'REANCHOR_REQUIRED'))
 
-// Build cut image URLs
 const cutImages = computed(() => {
   if (!snap.value) return []
   return snap.value.cuts.map((cut) => ({
@@ -58,166 +42,112 @@ const cutImages = computed(() => {
   }))
 })
 
-// When a bubble geometry changes via interaction
-function onBubbleCommit(bubbleId: string, rect: { x_pct: number; y_pct: number; w_pct: number; h_pct: number }) {
-  if (!projectedComposition.value) return
-  const newBubbles = projectedComposition.value.bubbles.map((b) => {
-    if (b.bubble_id === bubbleId) {
-      return { ...b, ...rect }
-    }
-    return b
-  })
-  const newState: CompositionStateDTO = {
-    ...projectedComposition.value,
-    bubbles: newBubbles,
-  }
-  store.setCompositionDraft(newState)
+function setSlotRef(cutId: number, element: unknown) {
+  slotElements.value[cutId] = element instanceof HTMLElement ? element : null
+}
+function slotForBubble(cutId: CutId): ResolvedSlotDTO | undefined {
+  return projectedSlots.value.find((slot) => slot.cut_id === cutId)
+}
+function imageForCut(cutId: number) {
+  return cutImages.value.find((image) => image.cut_id === cutId)
+}
+function projectedRect(bubble: AnchoredBubbleDTO, slot: ResolvedSlotDTO) {
+  return projectLocalRectToCanvas(
+    {
+      local_x_pct: bubble.local_x_pct,
+      local_y_pct: bubble.local_y_pct,
+      local_w_pct: bubble.local_w_pct,
+      local_h_pct: bubble.local_h_pct,
+    },
+    slot,
+    canvasWidth.value,
+    canvasHeight.value,
+  )
+}
+
+function onBubbleCommit(bubbleId: string, rect: LocalPercentageRect) {
+  const composition = projectedComposition.value
+  if (!composition) return
+  const bubbles = composition.bubbles.map((bubble) =>
+    bubble.bubble_id === bubbleId && bubble.anchor_status === 'ANCHORED'
+      ? { ...bubble, ...rect }
+      : bubble,
+  )
+  store.setCompositionDraft({ ...composition, bubbles })
 }
 
 function onBubbleSelect(bubbleId: string) {
+  const bubble = bubbles.value.find((item) => item.bubble_id === bubbleId)
+  if (bubble) store.selectCut(bubble.cut_id as CutId)
   store.selectBubble(bubbleId)
 }
 </script>
 
 <template>
   <section
-    ref="surfaceRef"
     class="composition-surface"
-    :style="{ aspectRatio: `${SURFACE_W} / ${SURFACE_H}` }"
+    :style="{ aspectRatio: `${canvasWidth} / ${canvasHeight}` }"
     aria-label="조판 캔버스"
   >
-    <!-- Cut image layers -->
     <div
-      v-for="(slot, i) in cutSlots"
-      :key="i"
+      v-for="slot in projectedSlots"
+      :key="slot.cut_id"
+      :ref="(element) => setSlotRef(slot.cut_id, element)"
       class="cut-slot"
       :style="{
-        top: `${slot.yPct}%`,
-        height: `${slot.hPct}%`,
+        top: `${slot.top_px / canvasHeight * 100}%`,
+        height: `${slot.height_px / canvasHeight * 100}%`,
       }"
     >
       <img
-        v-if="cutImages[i]?.url"
-        :src="cutImages[i].url!"
-        :alt="`컷 ${i + 1}`"
+        v-if="imageForCut(slot.cut_id)?.url"
+        :src="imageForCut(slot.cut_id)!.url!"
+        :alt="`컷 ${slot.cut_id}`"
         class="cut-image"
         loading="lazy"
         draggable="false"
       />
-      <div v-else class="cut-placeholder">
-        <span>컷 {{ i + 1 }}</span>
-      </div>
-      <!-- STALE overlay -->
+      <div v-else class="cut-placeholder"><span>컷 {{ slot.cut_id }}</span></div>
+      <div v-if="imageForCut(slot.cut_id)?.stale" class="stale-overlay"><span class="stale-badge">STALE</span></div>
       <div
-        v-if="cutImages[i]?.stale"
-        class="stale-overlay"
-      >
-        <span class="stale-badge">STALE</span>
-      </div>
+        v-for="bubble in reanchorBubbles.filter((item) => item.cut_id === slot.cut_id)"
+        :key="bubble.bubble_id"
+        class="reanchor-required"
+        role="alert"
+      >수동 재배치 필요 · {{ bubble.bubble_id }}</div>
     </div>
 
-    <!-- Bubble overlay layer -->
-    <BubbleOverlay
-      v-for="bubble in bubbles"
-      :key="bubble.bubble_id"
-      :bubble="bubble"
-      :surfaceRef="surfaceRef"
-      :selected="store.selection.bubbleId === bubble.bubble_id"
-      @commit="(rect) => onBubbleCommit(bubble.bubble_id, rect)"
-      @select="onBubbleSelect(bubble.bubble_id)"
-    />
+    <template v-for="bubble in anchoredBubbles" :key="bubble.bubble_id">
+      <BubbleOverlay
+        v-if="slotForBubble(bubble.cut_id)"
+        :bubble="bubble"
+        :slot="slotForBubble(bubble.cut_id)!"
+        :slotElement="slotElements[bubble.cut_id] ?? null"
+        :projectedRect="projectedRect(bubble, slotForBubble(bubble.cut_id)!)"
+        :canvasWidthPx="canvasWidth"
+        :canvasHeightPx="canvasHeight"
+        :selected="store.selection.bubbleId === bubble.bubble_id"
+        @commit="(rect) => onBubbleCommit(bubble.bubble_id, rect)"
+        @select="onBubbleSelect(bubble.bubble_id)"
+      />
+    </template>
 
-    <!-- Unsaved / conflict / save-failure overlay -->
-    <div
-      v-if="store.saves['composition']?.state === 'failed' || store.saves['composition']?.state === 'conflict'"
-      class="save-status-overlay"
-      role="alert"
-    >
+    <div v-if="store.saves['composition']?.state === 'failed' || store.saves['composition']?.state === 'conflict'" class="save-status-overlay" role="alert">
       <span class="save-status-badge">저장 안 됨</span>
     </div>
-    <div
-      v-else-if="store.drafts.composition"
-      class="save-status-overlay save-status-unsaved"
-    >
-      <span class="save-status-badge">미저장</span>
-    </div>
+    <div v-else-if="store.drafts.composition" class="save-status-overlay save-status-unsaved"><span class="save-status-badge">미저장</span></div>
   </section>
 </template>
 
 <style scoped>
-.composition-surface {
-  position: relative;
-  width: 100%;
-  max-height: 100%;
-  background: var(--canvas-bg);
-  overflow: hidden;
-  container-type: inline-size;
-}
-
-.cut-slot {
-  position: absolute;
-  left: 0;
-  width: 100%;
-  overflow: hidden;
-}
-
-.cut-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  user-select: none;
-  pointer-events: none;
-}
-
-.cut-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #1E2028;
-  color: #5E6572;
-  font-size: 24px;
-  font-weight: 700;
-}
-
-.stale-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(161, 92, 0, 0.12);
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  padding: var(--sp-4);
-}
-
-.stale-badge {
-  background: var(--color-stale);
-  color: #fff;
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  padding: 2px var(--sp-4);
-  border-radius: var(--radius-inner);
-}
-
-.save-status-overlay {
-  position: absolute;
-  bottom: var(--sp-8);
-  right: var(--sp-8);
-  z-index: 10;
-}
-
-.save-status-badge {
-  background: var(--color-error);
-  color: #fff;
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  padding: 2px var(--sp-8);
-  border-radius: var(--radius-inner);
-}
-
-.save-status-unsaved .save-status-badge {
-  background: var(--color-stale);
-}
+.composition-surface { position: relative; width: 100%; background: #ffffff; overflow: hidden; container-type: inline-size; }
+.cut-slot { position: absolute; left: 0; width: 100%; background: #ffffff; overflow: hidden; }
+.cut-image { width: 100%; height: 100%; object-fit: contain; display: block; user-select: none; pointer-events: none; }
+.cut-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #1E2028; color: #5E6572; font-size: 24px; font-weight: 700; }
+.stale-overlay { position: absolute; inset: 0; background: rgba(161, 92, 0, 0.12); display: flex; align-items: flex-start; justify-content: flex-end; padding: var(--sp-4); }
+.stale-badge { background: var(--color-stale); color: #fff; font-size: var(--font-size-xs); font-weight: 700; padding: 2px var(--sp-4); border-radius: var(--radius-inner); }
+.reanchor-required { position: absolute; top: var(--sp-8); left: var(--sp-8); padding: var(--sp-4) var(--sp-8); color: var(--color-error); background: rgba(255,255,255,.9); font-size: var(--font-size-xs); z-index: 4; }
+.save-status-overlay { position: absolute; bottom: var(--sp-8); right: var(--sp-8); z-index: 10; }
+.save-status-badge { background: var(--color-error); color: #fff; font-size: var(--font-size-xs); font-weight: 600; padding: 2px var(--sp-8); border-radius: var(--radius-inner); }
+.save-status-unsaved .save-status-badge { background: var(--color-stale); }
 </style>

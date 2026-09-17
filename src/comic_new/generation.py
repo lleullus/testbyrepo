@@ -20,11 +20,14 @@ from uuid import uuid4
 from PIL import Image
 
 from comic_new.store import (
+    DEFAULT_GENERATION_MODEL,
     RunnerAlreadyActiveError,
     TransactionalStore,
     TransactionalStoreError,
     ValidationError,
 )
+
+DEFAULT_MODEL = DEFAULT_GENERATION_MODEL
 
 
 def get_process_start_token(pid: int) -> str | None:
@@ -328,8 +331,9 @@ class GenerationService:
         expected_authority_revision: int = 0,
     ) -> EnqueueReceipt:
         """Enqueue generation jobs for all cuts (if cut_id is None) or a single cut."""
-        if cut_id is not None and cut_id not in (1, 2, 3, 4, 5):
-            raise ValidationError(f"Invalid cut_id {cut_id}; must be between 1 and 5")
+        if cut_id is not None:
+            if isinstance(cut_id, bool) or not isinstance(cut_id, int) or cut_id < 1:
+                raise ValidationError(f"Invalid cut_id {cut_id!r}; must be a positive integer")
 
         new_rev, jobs = self.store.enqueue_generation_jobs(
             expected_authority_revision=expected_authority_revision,
@@ -432,7 +436,7 @@ class GenerationRunner:
         project_dir: Path | str | None = None,
         ima2_binary: str | None = None,
         provider_cmd_factory: Callable[..., list[str]] | None = None,
-        provider_timeout: float = 60.0,
+        provider_timeout: float = 120.0,
         watchdog_timeout: float | None = None,
     ) -> None:
         self.store = store
@@ -452,7 +456,13 @@ class GenerationRunner:
         self.staging_base_dir = self.project_dir / ".generation-staging"
         self._exec_script = Path(__file__).parent / "_generation_exec.py"
 
-    def default_provider_cmd(self, job_id: str, staging_path: Path, timeout: int) -> list[str]:
+    def default_provider_cmd(
+        self,
+        job_id: str,
+        staging_path: Path,
+        timeout: int,
+        model: str = DEFAULT_MODEL,
+    ) -> list[str]:
         parts = shlex.split(self.ima2_binary)
         return parts + [
             "gen",
@@ -461,7 +471,7 @@ class GenerationRunner:
             "direct",
             "--no-size-nudge",
             "--model",
-            "nano-banana-pro",
+            model,
             "--size",
             "1024x1536",
             "--quality",
@@ -625,7 +635,7 @@ class GenerationRunner:
                 attempt_id = claim["attempt_id"]
                 staging_file = Path(claim["staging_path"])
                 staging_file.parent.mkdir(parents=True, exist_ok=True)
-                prompt = claim["prompt"]
+                prompt = claim["effective_prompt"]
 
                 # Determine provider command
                 if self.provider_cmd_factory:
@@ -634,7 +644,7 @@ class GenerationRunner:
                     )
                 else:
                     provider_cmd = self.default_provider_cmd(
-                        job_id, staging_file, int(self.provider_timeout)
+                        job_id, staging_file, int(self.provider_timeout), claim["model"]
                     )
 
                 # Set up synchronization pipe gate

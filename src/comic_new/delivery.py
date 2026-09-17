@@ -27,7 +27,7 @@ import urllib.parse
 import urllib.request
 from PIL import Image
 
-from comic_new.composition import CANONICAL_HEIGHT, CANONICAL_WIDTH
+from comic_new.composition import CANONICAL_WIDTH
 from comic_new.composition_service import (
     ArtifactReadbackError,
     CompositionService,
@@ -759,7 +759,7 @@ class DeliveryService:
     ) -> tuple[dict[str, Any], VerifiedArtifactPayload]:
         """Perform All-or-Nothing preflight checks before any delivery attempt.
 
-        Reads the canonical review artifact once, validates closure and 5-cut assets,
+        Reads the canonical review artifact once, validates the ordered active-cut closure,
         and captures verified in-memory bytes. Downstream delivery operations consume
         the returned VerifiedArtifactPayload directly without reopening the source file.
 
@@ -786,17 +786,15 @@ class DeliveryService:
         artifact_id = active_auth["artifact_id"]
         expected_hash = active_auth["artifact_content_hash"]
 
-        # 1. 5 cuts current check (Gate 1: Currency)
+        # 1. Active-set current check (all-or-nothing currency gate)
         realization_complete = snap.get("realization_complete", {})
         if not realization_complete.get("complete"):
             raise RealizationIncompleteError("Snapshot realization is incomplete (UNRESOLVED)")
         cuts = snap.get("cuts", [])
-        if len(cuts) != 5:
-            raise ReleasePreflightError(f"Expected exactly 5 cuts, found {len(cuts)}")
-        for cut in cuts:
-            cid = cut["cut_id"]
-            if cut.get("currency") != "CURRENT" or cut.get("desired_revision") is None or cut.get("realized_revision") != cut.get("desired_revision"):
-                raise RealizationIncompleteError(f"Cut {cid} is not current (STALE)")
+        if not cuts:
+            raise ReleasePreflightError("Active cut set must not be empty")
+        if any(cut.get("currency") != "CURRENT" or cut.get("desired_revision") is None or cut.get("realized_revision") != cut.get("desired_revision") for cut in cuts):
+            raise RealizationIncompleteError("All active cuts must have current realizations")
 
         # 2. Capture verified bytes: prefer CompositionService.read_artifact
         actual_art_bytes: bytes
@@ -811,16 +809,18 @@ class DeliveryService:
             if not art_path.is_file():
                 raise SourceAssetMissingError(f"Review artifact file missing at {art_path}")
             actual_art_bytes = art_path.read_bytes()
-            # Dimension / format verification with Pillow
             try:
                 import io
                 with Image.open(io.BytesIO(actual_art_bytes)) as im:
-                    if im.size != (CANONICAL_WIDTH, CANONICAL_HEIGHT):
-                        raise SourceAssetMissingError(
-                            f"Review artifact dimensions {im.size} != expected ({CANONICAL_WIDTH}, {CANONICAL_HEIGHT})"
-                        )
                     if im.format != "PNG":
                         raise SourceAssetMissingError(f"Review artifact format {im.format} != PNG")
+                    closure_raw = im.text.get("comic_new_closure")
+                    if not closure_raw:
+                        raise SourceAssetMissingError("Review artifact has no geometry closure")
+                    closure = json.loads(closure_raw)
+                    expected_size = (closure.get("width_px"), closure.get("height_px"))
+                    if expected_size[0] != CANONICAL_WIDTH or not isinstance(expected_size[1], int) or expected_size[1] <= 0 or im.size != expected_size:
+                        raise SourceAssetMissingError(f"Review artifact dimensions {im.size} do not match closure {expected_size}")
             except Exception as exc:
                 if isinstance(exc, SourceAssetMissingError):
                     raise
@@ -940,16 +940,21 @@ class DeliveryService:
                 )
 
             with Image.open(dest_path) as im:
-                if im.size != (CANONICAL_WIDTH, CANONICAL_HEIGHT):
-                    raise DeliveryError(f"Exported image dimension mismatch: {im.size}")
                 if im.format != "PNG":
                     raise DeliveryError(f"Exported image format mismatch: {im.format}")
-
+                closure_raw = im.text.get("comic_new_closure")
+                if not closure_raw:
+                    raise DeliveryError("Exported image has no geometry closure")
+                closure = json.loads(closure_raw)
+                expected_size = (closure.get("width_px"), closure.get("height_px"))
+                if expected_size[0] != CANONICAL_WIDTH or not isinstance(expected_size[1], int) or expected_size[1] <= 0 or im.size != expected_size:
+                    raise DeliveryError(f"Exported image dimension mismatch: {im.size} vs closure {expected_size}")
+                exported_width, exported_height = expected_size
             evidence = {
                 "sha256": exported_hash,
                 "bytes_written": len(exported_bytes),
-                "width": CANONICAL_WIDTH,
-                "height": CANONICAL_HEIGHT,
+                "width": exported_width,
+                "height": exported_height,
                 "output_path": str(dest_path),
             }
 

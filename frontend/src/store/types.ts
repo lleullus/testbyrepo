@@ -1,10 +1,11 @@
-/** Client state types — Plan §5.1 exact shape */
+/** Client state types — composition v2 and cut-local bubble coordinates. */
 
 import type {
   CutId,
-  CutIntentDTO,
+  CutIntentInputDTO,
   CompositionStateDTO,
   BaselineStructureDTO,
+  BaselineCutIntentInputDTO,
   ReviewArtifactDTO,
   Sha256,
   StudioSnapshotDTO,
@@ -26,7 +27,7 @@ export interface CompositionDraftPatch {
 
 export interface BaselineDraft {
   structure: BaselineStructureDTO
-  intents: Array<{ cut_id: CutId; intent: CutIntentDTO }>
+  intents: Array<{ cut_id: CutId; intent: BaselineCutIntentInputDTO }>
 }
 
 export type SaveState =
@@ -47,7 +48,7 @@ export interface StudioClientState {
   server: StudioSnapshotDTO | null
   drafts: {
     composition: (EditDraft<CompositionDraftPatch> & { baseCompositionRevision: number }) | null
-    intents: Partial<Record<CutId, EditDraft<CutIntentDTO>>>
+    intents: Partial<Record<CutId, EditDraft<CutIntentInputDTO>>>
     baseline: EditDraft<BaselineDraft> | null
   }
   saves: Record<string, SaveState>
