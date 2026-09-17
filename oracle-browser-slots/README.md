@@ -15,28 +15,28 @@ Run the repository-local entry point directly:
 ./bin/oracle-browser-slots status --slot 1
 ./bin/oracle-browser-slots status
 ./bin/oracle-browser-slots run --slot 1 --job-id example-001 -- \
-  /home/user01/.nvm/versions/node/v24.18.0/bin/oracle \
+  oracle \
   --engine browser --remote-chrome 127.0.0.1:19222 \
   --browser-model-strategy current -p "<task>"
 ./bin/oracle-browser-slots submit --request-id example-auto-001 -- \
-  /home/user01/.nvm/versions/node/v24.18.0/bin/oracle \
+  oracle \
   --engine browser --browser-model-strategy current -p "<task>"
 
 # Record an initial session as owned by one exact OpenCode conversation.
 ./bin/oracle-browser-slots submit --request-id example-context-001 \
   --opencode-conversation-id "<current-opencode-conversation-id>" -- \
-  /home/user01/.nvm/versions/node/v24.18.0/bin/oracle -p "<task>"
+  oracle -p "<task>"
 
 # Continue the newest eligible session owned by that OpenCode conversation.
 ./bin/oracle-browser-slots followup --request-id example-followup-001 \
   --opencode-conversation-id "<current-opencode-conversation-id>" -- \
-  /home/user01/.nvm/versions/node/v24.18.0/bin/oracle -p "<follow-up>"
+  oracle -p "<follow-up>"
 
 # An explicit eligible parent takes precedence over implicit selection.
 ./bin/oracle-browser-slots followup --request-id example-followup-002 \
   --opencode-conversation-id "<current-opencode-conversation-id>" \
   --parent-session-id "<oracle-session-id>" -- \
-  /home/user01/.nvm/versions/node/v24.18.0/bin/oracle -p "<follow-up>"
+  oracle -p "<follow-up>"
 ```
 
 Every command writes structured JSON. A status record contains `slot_id`,
@@ -50,10 +50,10 @@ opens ChatGPT in that slot's fixed profile. It returns exit code `0` only when
 the resulting status is `사용 가능`; the JSON output explains login, CDP, or
 preparation failures and the required operator action.
 
-`run` requires an explicit slot, job ID, and stock Oracle argv after `--`. The
-executable must be the canonical `/home/user01/.nvm/versions/node/v24.18.0/bin/oracle`;
-the wrapper never accepts a basename or shell/env wrapper. It never passes the
-command through a shell. It claims the slot atomically, runs one child, and
+`run` requires an explicit slot, job ID, and Oracle argv after `--`. Use the
+logical `oracle` token (or the exact entry already proved by runtime resolution);
+the wrapper replaces it with the validated Node and package entry and never
+passes the command through a shell. It claims the slot atomically, runs one child, and
 releases the claim after success, non-zero exit, spawn failure, or Ctrl-C
 interruption. Lifecycle records are newline-delimited JSON on stderr so the
 child command's stdout and stderr remain available to the operator.
@@ -158,8 +158,8 @@ and verification. The parent file is not modified. Stock lineage remains in
 answer:
 
 ```bash
-/home/user01/.nvm/versions/node/v24.18.0/bin/oracle session "<child-session-id>"
-/home/user01/.nvm/versions/node/v24.18.0/bin/oracle session "<child-session-id>" --path
+oracle session "<child-session-id>"
+oracle session "<child-session-id>" --path
 ```
 
 The response stays in stock Oracle's output/model log or transcript rather than
@@ -209,12 +209,14 @@ Tests and non-production runs can isolate the runtime with:
 - `ORACLE_BROWSER_SLOTS_CDP_START_TIMEOUT`
 - `ORACLE_BROWSER_SLOTS_CDP_REQUEST_TIMEOUT`
 - `ORACLE_BROWSER_SLOTS_QUEUE_POLL_INTERVAL`
-- `ORACLE_BROWSER_SLOTS_ORACLE_CLI` for an explicit absolute-path test binary only
 
-`ORACLE_BROWSER_SLOTS_ORACLE_CLI` changes only the child execution seam used by
-tests and non-production runs. File selection parity remains tied to the
-canonical stock Oracle 0.16.1 installation; the override is not a supported
-alternate production Oracle distribution.
+Child-producing commands resolve `dist/bin/oracle-cli.js` relative to the product first,
+then the `oracle` found on `PATH`. The selected entry must belong to an
+`@steipete/oracle` package whose `bin.oracle`, package version, Node >= 24 runtime,
+CLI `--version`, and `oracle-file-selection/v1` capability all agree. Resolution
+failure is a pre-submission rejection; there is no personal-path or environment
+override fallback. `oracle runtime file-selection --capability --json` reports the
+non-submitting selector identity.
 
 ## Slot-wise ChatGPT workspace URLs
 

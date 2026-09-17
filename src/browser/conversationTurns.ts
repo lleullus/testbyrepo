@@ -7,6 +7,11 @@ export interface ConversationTurnIdentity {
   absoluteOrdinal: number | null;
 }
 
+export interface AssistantResponseIdentityScope {
+  committedUserTurn: ConversationTurnIdentity;
+  committedAssistantTurn?: ConversationTurnIdentity | null;
+}
+
 /** Build a browser-context expression that returns one DOM node per conversation turn. */
 export function buildConversationTurnListExpression(rootExpression = "document"): string {
   const containerSelector = JSON.stringify(CONVERSATION_TURN_CONTAINER_SELECTOR);
@@ -178,6 +183,108 @@ export function buildConversationTurnIdentityMatcherExpression(): string {
         sharedFields += 1;
       }
       return sharedFields > 0;
+    };
+  `;
+}
+
+/** Build a browser-context resolver for the assistant turn owned by a committed user turn. */
+export function buildScopedAssistantRecordResolver(
+  identityScope: AssistantResponseIdentityScope,
+  functionName = "resolveScopedAssistantRecord",
+  scopeName = "IDENTITY_SCOPE",
+): string {
+  return `
+    const ${scopeName} = ${JSON.stringify(identityScope)};
+    ${buildConversationTurnIdentityMatcherExpression()}
+    const ${functionName} = () => {
+      const records = ${buildConversationTurnRecordsExpression()};
+      const expectedUser = ${scopeName}?.committedUserTurn;
+      if (!hasStableConversationTurnIdentity(expectedUser)) return null;
+      const userMatches = records
+        .map((record, index) => ({ record, index }))
+        .filter(
+          ({ record }) =>
+            record.role === 'user' &&
+            sameCommittedConversationTurnIdentity(record.identity, expectedUser),
+        );
+      if (userMatches.length !== 1) return null;
+
+      const userIndex = userMatches[0].index;
+      const userOrdinal = conversationTurnOrdinal(expectedUser);
+      const expectedAssistant = ${scopeName}?.committedAssistantTurn;
+      if (hasStableConversationTurnIdentity(expectedAssistant)) {
+        const matches = records
+          .map((record, index) => ({ record, index }))
+          .filter(
+            ({ record }) =>
+              record.role === 'assistant' &&
+              sameConversationTurnIdentity(record.identity, expectedAssistant),
+          );
+        if (matches.length !== 1) return null;
+        const owned = matches[0];
+        const assistantOrdinal = conversationTurnOrdinal(owned.record.identity);
+        const sharesCommittedBoundary =
+          userOrdinal !== null && assistantOrdinal !== null
+            ? assistantOrdinal === userOrdinal + 1
+            : owned.index === userIndex + 1;
+        return owned.index > userIndex && sharesCommittedBoundary ? owned.record : null;
+      }
+
+      const nextRecord = records[userIndex + 1];
+      if (
+        nextRecord?.role === 'assistant' &&
+        !hasStableConversationTurnIdentity(nextRecord.identity)
+      ) {
+        return null;
+      }
+      if (
+        nextRecord?.role === 'assistant' &&
+        hasStableConversationTurnIdentity(nextRecord.identity) &&
+        conversationTurnOrdinal(nextRecord.identity) === null
+      ) {
+        return nextRecord;
+      }
+
+      if (userOrdinal !== null) {
+        const ordinalCandidates = records
+          .map((record, index) => ({ record, index }))
+          .filter(({ record, index }) => {
+            const assistantOrdinal = conversationTurnOrdinal(record.identity);
+            return (
+              index > userIndex &&
+              record.role === 'assistant' &&
+              hasStableConversationTurnIdentity(record.identity) &&
+              assistantOrdinal !== null &&
+              assistantOrdinal > userOrdinal
+            );
+          });
+        if (ordinalCandidates.length > 0) {
+          const pairedCandidates = ordinalCandidates.filter(
+            ({ record }) => conversationTurnOrdinal(record.identity) === userOrdinal + 1,
+          );
+          if (pairedCandidates.length === 0) return null;
+          const closestOrdinal = Math.min(
+            ...pairedCandidates.map(({ record }) => conversationTurnOrdinal(record.identity)),
+          );
+          const closest = pairedCandidates.filter(
+            ({ record }) => conversationTurnOrdinal(record.identity) === closestOrdinal,
+          );
+          return closest.length === 1 ? closest[0].record : null;
+        }
+      }
+
+      if (userOrdinal !== null) return null;
+      if (
+        nextRecord?.role !== 'assistant' ||
+        !hasStableConversationTurnIdentity(nextRecord.identity)
+      ) {
+        return null;
+      }
+      const nextOrdinal = conversationTurnOrdinal(nextRecord.identity);
+      if (userOrdinal !== null && nextOrdinal !== null && nextOrdinal <= userOrdinal) {
+        return null;
+      }
+      return nextRecord;
     };
   `;
 }

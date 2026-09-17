@@ -22,7 +22,10 @@ import {
 import { resolveBrowserConfig } from "./config.js";
 import { clearStaleChatGptConversationCookies, syncCookies } from "./cookies.js";
 import { CHATGPT_URL } from "./constants.js";
-import { buildConversationTurnListExpression } from "./conversationTurns.js";
+import {
+  normalizeConversationTurnIdentity,
+  type AssistantResponseIdentityScope,
+} from "./conversationTurns.js";
 import { cleanupStaleProfileState } from "./profileState.js";
 import { readDevToolsActivePortInfo } from "./detect.js";
 import {
@@ -33,10 +36,6 @@ import {
   openConversationFromSidebar,
   openConversationFromSidebarWithRetry,
   waitForLocationChange,
-  readConversationTurnIndex,
-  buildPromptEchoMatcher,
-  recoverPromptEcho,
-  alignPromptEchoMarkdown,
   type TargetInfoLite,
 } from "./reattachHelpers.js";
 import { waitForDeepResearchCompletion } from "./actions/deepResearch.js";
@@ -52,11 +51,70 @@ export interface ReattachDeps {
     config: BrowserSessionConfig | undefined,
   ) => Promise<ReattachResult>;
   promptPreview?: string;
+  onIdentityScopeResolved?: (scope: AssistantResponseIdentityScope) => Promise<void> | void;
 }
 
 export interface ReattachResult {
   answerText: string;
   answerMarkdown: string;
+  identityScope?: AssistantResponseIdentityScope;
+}
+
+interface RecoveryAttribution {
+  expectedConversationId: string;
+  identityScope: AssistantResponseIdentityScope;
+}
+
+function requireRecoveryAttribution(runtime: BrowserRuntimeMetadata): RecoveryAttribution {
+  const storedConversationId = runtime.conversationId?.trim() || undefined;
+  const urlConversationId = extractConversationIdFromUrl(runtime.tabUrl ?? "");
+  if (storedConversationId && urlConversationId && storedConversationId !== urlConversationId) {
+    throw new Error("recovery-attribution-unavailable: conflicting conversation identity");
+  }
+  const expectedConversationId = storedConversationId ?? urlConversationId;
+  const committedUserTurn = normalizeConversationTurnIdentity(runtime.committedUserTurn);
+  const scopedUserTurn = normalizeConversationTurnIdentity(runtime.identityScope?.committedUserTurn);
+  const committedAssistantTurn = normalizeConversationTurnIdentity(
+    runtime.identityScope?.committedAssistantTurn,
+  );
+  const topLevelAssistantTurn = normalizeConversationTurnIdentity(runtime.committedAssistantTurn);
+  if (runtime.committedAssistantTurn && !topLevelAssistantTurn) {
+    throw new Error("recovery-attribution-unavailable: malformed committed assistant turn identity");
+  }
+  if (runtime.identityScope?.committedAssistantTurn && !committedAssistantTurn) {
+    throw new Error("recovery-attribution-unavailable: malformed committed assistant turn identity");
+  }
+  if (!expectedConversationId || !committedUserTurn || !scopedUserTurn) {
+    throw new Error("recovery-attribution-unavailable: missing durable conversation or user turn identity");
+  }
+  if (JSON.stringify(committedUserTurn) !== JSON.stringify(scopedUserTurn)) {
+    throw new Error("recovery-attribution-unavailable: conflicting committed user turn identity");
+  }
+  if (
+    topLevelAssistantTurn &&
+    committedAssistantTurn &&
+    JSON.stringify(topLevelAssistantTurn) !== JSON.stringify(committedAssistantTurn)
+  ) {
+    throw new Error("recovery-attribution-unavailable: conflicting committed assistant turn identity");
+  }
+  return {
+    expectedConversationId,
+    identityScope: {
+      committedUserTurn,
+      committedAssistantTurn: committedAssistantTurn ?? topLevelAssistantTurn,
+    },
+  };
+}
+
+async function requireExpectedConversation(
+  Runtime: ChromeClient["Runtime"],
+  expectedConversationId: string,
+): Promise<void> {
+  const { result } = await Runtime.evaluate({ expression: "location.href", returnByValue: true });
+  const href = typeof result?.value === "string" ? result.value : "";
+  if (extractConversationIdFromUrl(href) !== expectedConversationId) {
+    throw new Error("recovery-attribution-unavailable: active conversation does not match stored identity");
+  }
 }
 
 export async function resumeBrowserSession(
@@ -65,6 +123,7 @@ export async function resumeBrowserSession(
   logger: BrowserLogger,
   deps: ReattachDeps = {},
 ): Promise<ReattachResult> {
+  const attribution = requireRecoveryAttribution(runtime);
   const recoverSession =
     deps.recoverSession ??
     (async (runtimeMeta, configMeta) =>
@@ -142,17 +201,13 @@ export async function resumeBrowserSession(
         returnByValue: true,
       });
       const href = typeof result?.value === "string" ? result.value : "";
-      if (href.includes("/c/")) {
-        const currentId = extractConversationIdFromUrl(href);
-        if (!runtime.conversationId || (currentId && currentId === runtime.conversationId)) {
-          return;
-        }
+      if (extractConversationIdFromUrl(href) === attribution.expectedConversationId) {
+        return;
       }
       const opened = await openConversationFromSidebarWithRetry(
         Runtime,
         {
-          conversationId:
-            runtime.conversationId ?? extractConversationIdFromUrl(runtime.tabUrl ?? ""),
+          conversationId: attribution.expectedConversationId,
           preferProjects: true,
           promptPreview: deps.promptPreview,
         },
@@ -162,6 +217,7 @@ export async function resumeBrowserSession(
         throw new Error("Unable to locate prior ChatGPT conversation in sidebar.");
       }
       await waitForLocationChange(Runtime, 15_000);
+      await requireExpectedConversation(Runtime, attribution.expectedConversationId);
     };
 
     const waitForResponse = deps.waitForAssistantResponse ?? waitForAssistantResponse;
@@ -174,52 +230,41 @@ export async function resumeBrowserSession(
       "Reattach target did not respond",
     );
     await ensureConversationOpen();
-    const minTurnIndex =
-      (await readPromptPreviewTurnIndex(Runtime, deps.promptPreview)) ??
-      (deps.promptPreview ? null : await readConversationTurnIndex(Runtime, logger));
     if (config?.researchMode === "deep") {
-      const waitForDeepResearch =
-        deps.waitForDeepResearchCompletion ?? waitForDeepResearchCompletion;
-      const researchResult = await withTimeout(
-        waitForDeepResearch(Runtime, logger, timeoutMs, minTurnIndex ?? undefined, Page, client, {
-          requireScopedTargetOwner: true,
-        }),
-        timeoutMs + 5_000,
-        "Reattach Deep Research response timed out",
+      throw new Error(
+        "recovery-attribution-unavailable: Deep Research recovery lacks stable owned-assistant attribution",
       );
-      await closeAttached();
-      return {
-        answerText: researchResult.text,
-        answerMarkdown: researchResult.text,
-      };
     }
-    const promptEcho = buildPromptEchoMatcher(deps.promptPreview);
     const answer = await withTimeout(
-      waitForResponse(Runtime, timeoutMs, logger, minTurnIndex ?? undefined),
+      waitForResponse(
+        Runtime,
+        timeoutMs,
+        logger,
+        undefined,
+        attribution.expectedConversationId,
+        attribution.identityScope,
+        deps.onIdentityScopeResolved,
+      ),
       timeoutMs + 5_000,
       "Reattach response timed out",
     );
-    const recovered = await recoverPromptEcho(
-      Runtime,
-      answer,
-      promptEcho,
-      logger,
-      minTurnIndex,
-      timeoutMs,
-    );
+    await requireExpectedConversation(Runtime, attribution.expectedConversationId);
     const markdown =
       (await withTimeout(
-        captureMarkdown(Runtime, recovered.meta, logger),
+        captureMarkdown(Runtime, answer.meta, logger, attribution.identityScope),
         15_000,
         "Reattach markdown capture timed out",
-      )) ?? recovered.text;
-    const aligned = alignPromptEchoMarkdown(recovered.text, markdown, promptEcho, logger);
+      )) ?? answer.text;
+    await requireExpectedConversation(Runtime, attribution.expectedConversationId);
 
     await closeAttached();
-    return { answerText: aligned.answerText, answerMarkdown: aligned.answerMarkdown };
+    return { answerText: answer.text, answerMarkdown: markdown, identityScope: attribution.identityScope };
   } catch (error) {
     await closeAttached();
     const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith("recovery-attribution-unavailable:")) {
+      throw error;
+    }
     logger(
       `Existing Chrome reattach failed (${message}); reopening browser to locate the session.`,
     );
@@ -270,6 +315,7 @@ async function resumeBrowserSessionViaNewChrome(
   logger: BrowserLogger,
   deps: ReattachDeps,
 ): Promise<ReattachResult> {
+  const attribution = requireRecoveryAttribution(runtime);
   const resolved = resolveBrowserConfig(config ?? {});
   const manualLogin = Boolean(resolved.manualLogin);
   const userDataDir = manualLogin
@@ -373,76 +419,35 @@ async function resumeBrowserSessionViaNewChrome(
       }
     }
   };
-  const minTurnIndex =
-    (await readPromptPreviewTurnIndex(Runtime, deps.promptPreview)) ??
-    (deps.promptPreview ? null : await readConversationTurnIndex(Runtime, logger));
+  await requireExpectedConversation(Runtime, attribution.expectedConversationId);
   if (resolved.researchMode === "deep") {
-    const waitForDeepResearch = deps.waitForDeepResearchCompletion ?? waitForDeepResearchCompletion;
-    const researchResult = await waitForDeepResearch(
-      Runtime,
-      logger,
-      timeoutMs,
-      minTurnIndex ?? undefined,
-      Page,
-      client,
-      {
-        requireScopedTargetOwner: true,
-      },
-    );
     await cleanup();
-    return {
-      answerText: researchResult.text,
-      answerMarkdown: researchResult.text,
-    };
+    throw new Error(
+      "recovery-attribution-unavailable: Deep Research recovery lacks stable owned-assistant attribution",
+    );
   }
-  const promptEcho = buildPromptEchoMatcher(deps.promptPreview);
-  const answer = await waitForResponse(Runtime, timeoutMs, logger, minTurnIndex ?? undefined);
-  const recovered = await recoverPromptEcho(
+  const answer = await waitForResponse(
     Runtime,
-    answer,
-    promptEcho,
-    logger,
-    minTurnIndex,
     timeoutMs,
+    logger,
+    undefined,
+    attribution.expectedConversationId,
+    attribution.identityScope,
+    deps.onIdentityScopeResolved,
   );
-  const markdown = (await captureMarkdown(Runtime, recovered.meta, logger)) ?? recovered.text;
-  const aligned = alignPromptEchoMarkdown(recovered.text, markdown, promptEcho, logger);
-
+  await requireExpectedConversation(Runtime, attribution.expectedConversationId);
+  const markdown =
+    (await captureMarkdown(Runtime, answer.meta, logger, attribution.identityScope)) ?? answer.text;
+  await requireExpectedConversation(Runtime, attribution.expectedConversationId);
   await cleanup();
 
-  return { answerText: aligned.answerText, answerMarkdown: aligned.answerMarkdown };
+  return {
+    answerText: answer.text,
+    answerMarkdown: markdown,
+    identityScope: attribution.identityScope,
+  };
 }
 
-async function readPromptPreviewTurnIndex(
-  Runtime: ChromeClient["Runtime"],
-  promptPreview?: string | null,
-): Promise<number | null> {
-  const preview = promptPreview?.trim();
-  if (!preview) {
-    return null;
-  }
-  const { result } = await Runtime.evaluate({
-    expression: `(() => {
-      const needle = ${JSON.stringify(preview.toLowerCase().replace(/\s+/g, " ").slice(0, 120))};
-      if (!needle) return null;
-      const normalize = (value) => String(value || '').toLowerCase().replace(/\\s+/g, ' ').trim();
-      const turns = ${buildConversationTurnListExpression()};
-      let matched = null;
-      for (const [index, node] of turns.entries()) {
-        const attr = (node.getAttribute('data-message-author-role') || node.getAttribute('data-turn') || node.dataset?.turn || '').toLowerCase();
-        const isUser = attr === 'user' || Boolean(node.querySelector('[data-message-author-role="user"]'));
-        if (!isUser) continue;
-        const text = normalize(node.innerText || node.textContent || '');
-        if (text.length > 0 && (text.includes(needle) || needle.includes(text.slice(0, needle.length)))) {
-          matched = index;
-        }
-      }
-      return matched;
-    })()`,
-    returnByValue: true,
-  });
-  return typeof result?.value === "number" ? result.value : null;
-}
 
 // biome-ignore lint/style/useNamingConvention: test-only export used in vitest suite
 export const __test__ = {
@@ -450,5 +455,5 @@ export const __test__ = {
   extractConversationIdFromUrl,
   buildConversationUrl,
   openConversationFromSidebar,
-  readPromptPreviewTurnIndex,
+  requireRecoveryAttribution,
 };

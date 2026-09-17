@@ -57,8 +57,8 @@ route in a task:
    never silently create a replacement key.
 4. Apply the Dry Run rules below before the live request.
 5. Submit the live request through the bound wrapper route with
-   `--engine browser` and `--browser-model-strategy current`. Never invoke a
-   live stock Oracle request directly.
+   `--engine browser` and the explicit model strategy defined under Model
+   Selection below. Never invoke a live stock Oracle request directly.
 
 Never invoke stock Oracle's live or browser paths outside this wrapper,
 including for verification, probing, or tests. Verify stock parser semantics
@@ -327,14 +327,33 @@ stored-session readback is useful.
 
 ## Model Selection
 
-The Oracle CLI itself defaults to `select`, but this skill hard-fixes its
-default to `current`: every invocation must pass
-`--browser-model-strategy current`. This keeps the model already selected in
-ChatGPT and does not request an active-model switch. Stock model inspection and
-evidence collection still run for a new non-resumed request; a resumed followup
-skips selection. Do not omit the flag or change it to `select` or `ignore`.
-If the user wants another active model, they must change it outside the Oracle
-invocation before this workflow starts.
+The Oracle CLI defaults to `select`. This skill chooses the strategy from the
+user's model intent rather than unconditionally preserving the active model:
+
+- No explicit model request: pass `--browser-model-strategy current` and omit
+  `--model`; keep the active model instead of selecting Oracle's default.
+- Explicit model request: pass `--browser-model-strategy select --model
+  "<requested-model>"`. Let Oracle select the requested model; do not require
+  the user to switch it manually before the managed invocation.
+- `ignore` skips model selection and is not a substitute for either case.
+
+Use the installed CLI's supported aliases or an exact ChatGPT model label.
+For example, GPT-5.6 Sol with Pro reasoning uses
+`--browser-model-strategy select --model gpt-5.6-sol --browser-thinking-time pro`.
+Model and reasoning are independent requests; do not infer one from the other.
+An unknown alias can fall back through stock mapping, so inspect the resolved
+target in the mandatory changed-model dry-run rather than guessing a model ID.
+If the requested model is unavailable, report that failure without substituting
+another model.
+
+For managed followups, stock Oracle skips selection when `--model` is omitted.
+An explicit `--model` sets `explicitResumeModel: true` and `modelStrategy:
+select`, selecting the requested model in the resumed conversation. Preserve
+the parent/origin-slot route; a model change does not authorize a new chat.
+
+The command examples elsewhere in this skill assume no explicit model request.
+For an explicit request, replace their `current` strategy with `select` and add
+`--model` in both dry-run and live argv. Keep all other wrapper requirements.
 
 Do not claim a specific actual ChatGPT model solely from Oracle's default model
 field. Report model-selection evidence exactly as stored in the session
@@ -344,7 +363,7 @@ metadata; `verified: false` means the active model label was not verified.
 
 Deep Research mode is not used by this skill. Never pass
 `--browser-research deep`; detailed investigations must use the normal browser
-request path with `--browser-model-strategy current`.
+request path with the model strategy defined under Model Selection.
 
 ## Failure Handling
 

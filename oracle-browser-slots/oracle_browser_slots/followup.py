@@ -26,7 +26,12 @@ from .attachments import (
 )
 from .cdp import CDPError
 from .model import AVAILABLE, OCCUPIED, SLOT_IDS, Settings, utc_now
-from .runner import JobRunner, LifecycleEmitter, OracleTransportError
+from .runner import (
+    JobRunner,
+    LifecycleEmitter,
+    OracleTransportError,
+    VALUE_TAKING_OPTIONS,
+)
 from .service import SlotService
 
 
@@ -579,23 +584,24 @@ class OracleSessionRepository:
                 "실행할 canonical stock Oracle command가 없습니다.",
                 "-- 뒤에 canonical Oracle argv를 지정하십시오.",
             )
-        if "--" in command[1:]:
+        option_tokens = self._option_tokens(command)
+        if "--" in option_tokens:
             raise FollowupError(
                 "stock Oracle argv 내부의 -- terminator는 context 세션 플래그와 함께 사용할 수 없습니다.",
                 "prompt와 옵션을 명시적 stock Oracle 플래그로 전달하십시오.",
             )
         for owned in ("--slug", "--followup", "--browser-archive"):
-            if self._option_values(command, owned):
+            if self._option_count(option_tokens, owned):
                 raise FollowupError(
                     f"{owned}는 Oracle Browser Slots가 소유하는 옵션입니다.",
                     f"caller argv에서 {owned}를 제거하십시오.",
                 )
-        if self._option_count(command, "--no-wait"):
+        if self._option_count(option_tokens, "--no-wait"):
             raise FollowupError(
                 "context-aware Oracle 요청은 --no-wait를 사용할 수 없습니다.",
                 "--no-wait를 제거하십시오. child 종료 후에만 session 증거를 기록합니다.",
             )
-        wait_count = self._option_count(command, "--wait")
+        wait_count = self._option_count(option_tokens, "--wait")
         if wait_count > 1:
             raise FollowupError("--wait가 중복 지정되었습니다.", "--wait를 한 번만 지정하십시오.")
         normalized = list(command)
@@ -609,27 +615,21 @@ class OracleSessionRepository:
         return normalized
 
     @staticmethod
-    def _option_count(argv: Sequence[str], flag: str) -> int:
-        return sum(
-            token == flag or token.startswith(f"{flag}=") for token in argv[1:]
-        )
-
-    @staticmethod
-    def _option_values(argv: Sequence[str], flag: str) -> list[str | None]:
-        values: list[str | None] = []
+    def _option_tokens(argv: Sequence[str]) -> list[str]:
+        tokens: list[str] = []
         index = 1
         while index < len(argv):
             token = argv[index]
-            if token == flag:
-                value = argv[index + 1] if index + 1 < len(argv) and not argv[index + 1].startswith("--") else None
-                values.append(value)
-                index += 2 if value is not None else 1
-                continue
-            prefix = f"{flag}="
-            if token.startswith(prefix):
-                values.append(token[len(prefix) :])
+            tokens.append(token)
+            option = token.split("=", 1)[0]
+            if "=" not in token and option in VALUE_TAKING_OPTIONS:
+                index += 1
             index += 1
-        return values
+        return tokens
+
+    @staticmethod
+    def _option_count(tokens: Sequence[str], flag: str) -> int:
+        return sum(token == flag or token.startswith(f"{flag}=") for token in tokens)
 
     def _validate_created_session(
         self, metadata: dict[str, Any], expected_session_id: str
@@ -1130,7 +1130,7 @@ class FollowupRunner:
                     request_id,
                     selection_mode=selection_mode,
                     event="failed",
-                    exit_code=1,
+                    exit_code=2,
                     reason=(
                         f"부모의 원 슬롯 {parent.slot_id}을 사용할 수 없습니다: "
                         f"{status.get('reason', status.get('status'))}"
@@ -1264,7 +1264,7 @@ class FollowupRunner:
                 self._emit(emit, record)
                 return {
                     "accepted": True,
-                    "exit_code": 1,
+                    "exit_code": 2,
                     "record": record,
                     "child_started": False,
                 }

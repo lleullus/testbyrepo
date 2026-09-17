@@ -18,9 +18,9 @@ import threading
 from contextlib import contextmanager
 from typing import Any, Callable, Mapping, Sequence
 import zipfile
+from .runtime import ResolvedOracleRuntime
 
 
-CANONICAL_ORACLE_CLI = "/home/user01/.nvm/versions/node/v24.18.0/bin/oracle"
 MAX_SAFE_FILE_SIZE_BYTES = 9_007_199_254_740_991
 CONFLICTING_OPTIONS = {
     "--browser-attachments",
@@ -89,6 +89,11 @@ REQUIRED_VALUE_OPTIONS = {
     "--output",
     "--aspect",
     "--write-output",
+    "--perf-trace-path",
+    "--engine",
+    "--browser-model-strategy",
+    "--remote-chrome",
+    "--browser-thinking-time",
 }
 MANIFEST_FILENAME = "oracle-browser-slots-attachments.json"
 MANIFEST_RELATIVE_PATH = f"artifacts/{MANIFEST_FILENAME}"
@@ -350,16 +355,22 @@ class _FileArgumentGroups:
 
 
 class FileAttachmentPolicy:
-    """Select with stock Oracle, then pass one compressed ZIP to stock Oracle."""
+    """Select through the resolved Oracle release, then pass one compressed ZIP."""
 
     def __init__(
         self,
         *,
+        runtime: ResolvedOracleRuntime | None = None,
         selector: Callable[[Mapping[str, list[str]], Path], Sequence[str | Path]] | None = None,
         oracle_home: Path | None = None,
         temporary_root: Path | None = None,
     ) -> None:
-        self.selector = selector or select_stock_files
+        if selector is not None:
+            self.selector = selector
+        else:
+            if runtime is None:
+                raise ValueError("runtime is required when no file selector is injected")
+            self.selector = lambda groups, cwd: select_stock_files(runtime, groups, cwd)
         self.oracle_home = oracle_home or _oracle_home_from_environment()
         self.temporary_root = temporary_root
 
@@ -449,67 +460,36 @@ class FileAttachmentPolicy:
             raise
 
 
-def select_stock_files(groups: Mapping[str, list[str]], cwd: Path) -> list[Path]:
-    """Reuse stock 0.16.1's readFiles and CLI path-input normalization."""
+def select_stock_files(
+    runtime: ResolvedOracleRuntime,
+    groups: Mapping[str, list[str]],
+    cwd: Path,
+) -> list[Path]:
+    """Select files through the stable interface of the already-proved Oracle release."""
 
-    node_path = Path(CANONICAL_ORACLE_CLI).parent / "node"
-    version_root = node_path.parent.parent
-    files_module = version_root / "lib/node_modules/@steipete/oracle/dist/src/oracle/files.js"
-    options_module = version_root / "lib/node_modules/@steipete/oracle/dist/src/cli/options.js"
-    if not node_path.is_file() or not files_module.is_file() or not options_module.is_file():
-        raise AttachmentPreparationError(
-            "stock Oracle 0.16.1 파일 선택기를 찾을 수 없습니다.",
-            "canonical stock Oracle와 같은 Node 설치를 확인하십시오.",
-        )
-
-    payload = {key: list(groups.get(key, [])) for key in ("file", "include", "files", "path", "paths")}
-    script = f"""
-import {{ readFiles }} from {json.dumps(files_module.as_uri())};
-import {{ mergePathLikeOptions, dedupePathInputs }} from {json.dumps(options_module.as_uri())};
-let raw = "";
-for await (const chunk of process.stdin) raw += chunk;
-const request = JSON.parse(raw);
-const cwd = request.cwd;
-const merged = mergePathLikeOptions(
-  request.file,
-  request.include,
-  request.files,
-  request.path,
-  request.paths,
-);
-const normalized = dedupePathInputs(merged, {{ cwd }}).deduped;
-console.log = (...args) => console.error(...args);
-try {{
-  const files = await readFiles(normalized, {{
-    cwd,
-    maxFileSizeBytes: 0,
-    readContents: false,
-  }});
-  process.stdout.write(JSON.stringify({{ ok: true, files: files.map((file) => file.path) }}));
-}} catch (error) {{
-  process.stdout.write(JSON.stringify({{
-    ok: false,
-    error: {{
-      name: error?.name ?? "Error",
-      message: error?.message ?? String(error),
-    }},
-  }}));
-  process.exitCode = 1;
-}}
-"""
+    payload = {
+        key: list(groups.get(key, []))
+        for key in ("file", "include", "files", "path", "paths")
+    }
     try:
         completed = subprocess.run(
-            [str(node_path), "--input-type=module", "-e", script],
+            [
+                *runtime.command_prefix,
+                "runtime",
+                "file-selection",
+                "--json",
+            ],
             cwd=str(cwd),
             input=json.dumps({**payload, "cwd": str(cwd)}),
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
         raise AttachmentPreparationError(
-            f"stock Oracle 파일 선택기를 시작하지 못했습니다: {exc}",
-            "canonical stock Oracle의 Node 실행 파일과 설치 경로를 확인하십시오.",
+            f"Oracle 파일 선택기를 시작하지 못했습니다: {exc}",
+            "검증된 Oracle release와 Node 런타임을 확인하십시오.",
         ) from exc
 
     try:
@@ -517,26 +497,26 @@ try {{
     except (json.JSONDecodeError, TypeError) as exc:
         detail = completed.stderr.strip() or completed.stdout.strip() or "응답 없음"
         raise AttachmentPreparationError(
-            f"stock Oracle 파일 선택기 응답을 해석하지 못했습니다: {detail}",
-            "stock Oracle 0.16.1 설치와 Node 런타임을 확인하십시오.",
+            f"Oracle 파일 선택기 응답을 해석하지 못했습니다: {detail}",
+            "검증된 Oracle release의 file-selection capability를 확인하십시오.",
         ) from exc
-    if not isinstance(result, dict) or result.get("ok") is not True:
-        error = result.get("error") if isinstance(result, dict) else None
+    if not isinstance(result, dict) or not runtime.identity_matches(result):
+        raise AttachmentPreparationError(
+            "Oracle 파일 선택기의 protocol 또는 package identity가 실행 runtime과 다릅니다.",
+            "동일한 @steipete/oracle release가 선택과 실행에 사용되는지 확인하십시오.",
+        )
+    if completed.returncode != 0 or result.get("ok") is not True:
+        error = result.get("error")
         message = error.get("message") if isinstance(error, dict) else "알 수 없는 선택 오류"
         raise AttachmentPreparationError(
-            f"stock Oracle 파일 선택에 실패했습니다: {message}",
+            f"Oracle 파일 선택에 실패했습니다: {message}",
             "파일 입력, glob/제외 패턴, .gitignore와 기본 제외 규칙을 확인하십시오.",
         )
     files = result.get("files")
     if not isinstance(files, list) or not all(isinstance(item, str) for item in files):
         raise AttachmentPreparationError(
-            "stock Oracle 파일 선택 결과 형식이 올바르지 않습니다.",
-            "stock Oracle 0.16.1 설치를 확인하십시오.",
-        )
-    if completed.returncode != 0:
-        raise AttachmentPreparationError(
-            "stock Oracle 파일 선택이 비정상 종료되었습니다.",
-            "파일 입력과 stock Oracle 설치를 확인하십시오.",
+            "Oracle 파일 선택 결과 형식이 올바르지 않습니다.",
+            "검증된 Oracle release의 file-selection 응답을 확인하십시오.",
         )
     return [Path(item) for item in files]
 
@@ -562,6 +542,10 @@ def _extract_file_arguments(argv: Sequence[str]) -> _FileArgumentGroups:
         token = argv[index]
         if token == "--":
             break
+        option = token.split("=", 1)[0]
+        if "=" not in token and option in REQUIRED_VALUE_OPTIONS:
+            index += 2
+            continue
         key = option_to_key.get(token)
         if key is None:
             for option, option_key in option_to_key.items():
@@ -570,6 +554,14 @@ def _extract_file_arguments(argv: Sequence[str]) -> _FileArgumentGroups:
                     key = option_key
                     values[key].append(token[len(prefix) :])
                     break
+            if (
+                key is None
+                and token.startswith("-f")
+                and not token.startswith("-f=")
+                and len(token) > 2
+            ):
+                key = "file"
+                values[key].append(token[2:])
             if key is None:
                 index += 1
                 continue
@@ -701,10 +693,20 @@ def _normalize_file_command(
             terminator_position = len(normalized)
             normalized.extend(argv[index:])
             break
+        option = token.split("=", 1)[0]
+        if "=" not in token and option in REQUIRED_VALUE_OPTIONS:
+            normalized.append(token)
+            if index + 1 < len(argv):
+                normalized.append(argv[index + 1])
+            index += 2
+            continue
         if token in option_to_key:
             index += 1
             while index < len(argv) and not argv[index].startswith("-"):
                 index += 1
+            continue
+        if token.startswith("-f") and not token.startswith("-f=") and len(token) > 2:
+            index += 1
             continue
         if any(token.startswith(f"{option}=") for option in option_to_key):
             index += 1

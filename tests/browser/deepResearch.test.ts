@@ -1208,17 +1208,34 @@ describe("waitForDeepResearchCompletion", () => {
     );
   });
 
-  it("scopes reattached OOPIF reports to their owning conversation turn", async () => {
-    mockRuntime.evaluate.mockResolvedValue({
-      result: {
-        value: {
-          finished: false,
-          stopVisible: false,
-          textLength: 0,
-          hasIframe: true,
-          hasActiveScopedResearch: false,
+  it("scopes reattached OOPIF reports to the exact committed assistant turn", async () => {
+    const committedUserTurn = {
+      turnId: "user-b",
+      messageId: "user-message-b",
+      testId: "conversation-turn-1",
+      absoluteOrdinal: 1,
+    };
+    const committedAssistantTurn = {
+      turnId: "assistant-b",
+      messageId: "assistant-message-b",
+      testId: "conversation-turn-2",
+      absoluteOrdinal: 2,
+    };
+    mockRuntime.evaluate.mockImplementation(async ({ expression }: { expression?: string }) => {
+      if (expression?.includes("resolveBindingScopedAssistantRecord")) {
+        return { result: { value: committedAssistantTurn } };
+      }
+      return {
+        result: {
+          value: {
+            finished: false,
+            stopVisible: false,
+            textLength: 0,
+            hasIframe: true,
+            hasActiveScopedResearch: false,
+          },
         },
-      },
+      };
     });
 
     const listeners = new Map<string, (params: unknown, sessionId?: string) => void>();
@@ -1232,8 +1249,8 @@ describe("waitForDeepResearchCompletion", () => {
       removeListener: vi.fn(),
       send: vi.fn(async (method: string, params?: unknown, sessionId?: string) => {
         if (method === "Target.setAutoAttach" && (params as { autoAttach?: boolean })?.autoAttach) {
-          // Emit the current report first so target order alone would incorrectly
-          // let the later stale completion win.
+          // Emit B first so a later C report would overwrite it if scanning only
+          // enforced a minimum turn index instead of B's committed identity.
           listeners.get("Target.attachedToTarget")?.(
             {
               sessionId: "current-session",
@@ -1243,8 +1260,8 @@ describe("waitForDeepResearchCompletion", () => {
           );
           listeners.get("Target.attachedToTarget")?.(
             {
-              sessionId: "old-session",
-              targetInfo: { targetId: "old-target", type: "iframe", url: deepResearchUrl },
+              sessionId: "later-session",
+              targetInfo: { targetId: "later-target", type: "iframe", url: deepResearchUrl },
             },
             "page-session",
           );
@@ -1257,15 +1274,30 @@ describe("waitForDeepResearchCompletion", () => {
         }
         if (method === "DOM.getFrameOwner") {
           const frameId = (params as { frameId?: string }).frameId;
-          return { backendNodeId: frameId === "current-session-frame" ? 20 : 10 };
+          return { backendNodeId: frameId === "current-session-frame" ? 20 : 30 };
         }
         if (method === "DOM.resolveNode") {
           const backendNodeId = (params as { backendNodeId?: number }).backendNodeId;
-          return { object: { objectId: backendNodeId === 20 ? "current-owner" : "old-owner" } };
+          return { object: { objectId: backendNodeId === 20 ? "current-owner" : "later-owner" } };
         }
         if (method === "Runtime.callFunctionOn" && sessionId === "page-session") {
           const objectId = (params as { objectId?: string }).objectId;
-          return { result: { value: objectId === "current-owner" ? 2 : 0 } };
+          return {
+            result: {
+              value:
+                objectId === "current-owner"
+                  ? { turnIndex: 2, identity: committedAssistantTurn }
+                  : {
+                      turnIndex: 3,
+                      identity: {
+                        turnId: "assistant-c",
+                        messageId: "assistant-message-c",
+                        testId: "conversation-turn-3",
+                        absoluteOrdinal: 3,
+                      },
+                    },
+            },
+          };
         }
         if (method === "Runtime.evaluate" && sessionId) {
           return {
@@ -1277,7 +1309,7 @@ describe("waitForDeepResearchCompletion", () => {
                 text:
                   sessionId === "current-session"
                     ? "CURRENT_REPORT https://example.com/current"
-                    : "OLD_REPORT https://example.com/old",
+                    : "LATER_REPORT https://example.com/later",
               },
             },
           };
@@ -1293,10 +1325,14 @@ describe("waitForDeepResearchCompletion", () => {
       1,
       undefined,
       mockClient as never,
-      { requireScopedTargetOwner: true },
+      {
+        requireScopedTargetOwner: true,
+        identityScope: { committedUserTurn, committedAssistantTurn },
+      },
     );
 
     expect(result.text).toBe("CURRENT_REPORT https://example.com/current");
+    expect(result.text).not.toContain("LATER_REPORT");
     expect(mockClient.send).toHaveBeenCalledWith(
       "DOM.getFrameOwner",
       { frameId: "current-session-frame" },

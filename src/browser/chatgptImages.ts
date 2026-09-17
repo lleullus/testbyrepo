@@ -8,7 +8,11 @@ import type {
   SavedBrowserImage,
 } from "./types.js";
 import { ASSISTANT_ROLE_SELECTOR } from "./constants.js";
-import { buildConversationTurnListExpression } from "./conversationTurns.js";
+import {
+  buildConversationTurnListExpression,
+  buildScopedAssistantRecordResolver,
+  type AssistantResponseIdentityScope,
+} from "./conversationTurns.js";
 import { delay } from "./utils.js";
 import { readAssistantSnapshot } from "./pageActions.js";
 import { getOracleHomeDir } from "../oracleHome.js";
@@ -67,14 +71,37 @@ function dedupeImages(images: BrowserGeneratedImage[]): BrowserGeneratedImage[] 
   return [...best.values()];
 }
 
-function buildAssistantImageExpression(minTurnIndex?: number): string {
+function buildAssistantImageExpression(
+  minTurnIndex?: number,
+  expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
+): string {
   const minTurnLiteral =
     typeof minTurnIndex === "number" && Number.isFinite(minTurnIndex) && minTurnIndex >= 0
       ? Math.floor(minTurnIndex)
       : -1;
+  const expectedConversationLiteral =
+    typeof expectedConversationId === "string" && expectedConversationId.trim().length > 0
+      ? JSON.stringify(expectedConversationId.trim())
+      : "null";
   const assistantLiteral = JSON.stringify(ASSISTANT_ROLE_SELECTOR);
+  const scopedResolver = identityScope
+    ? buildScopedAssistantRecordResolver(
+        identityScope,
+        "resolveImageScopedAssistantRecord",
+        "IMAGE_IDENTITY_SCOPE",
+      )
+    : "";
   return `(() => {
     const MIN_TURN_INDEX = ${minTurnLiteral};
+    const EXPECTED_CONVERSATION_ID = ${expectedConversationLiteral};
+    const HAS_IDENTITY_SCOPE = ${identityScope ? "true" : "false"};
+    const currentHref = typeof location === 'object' && location.href ? location.href : '';
+    const currentConversationId = currentHref.match(/\\/c\\/([a-zA-Z0-9-]+)/)?.[1] ?? null;
+    if (EXPECTED_CONVERSATION_ID && currentConversationId !== EXPECTED_CONVERSATION_ID) {
+      return [];
+    }
+    ${scopedResolver}
     const ASSISTANT_SELECTOR = ${assistantLiteral};
     const isGeneratedImage = (img) => {
       const url = new URL(img?.src || '', location.origin || 'https://chatgpt.com');
@@ -110,6 +137,10 @@ function buildAssistantImageExpression(minTurnIndex?: number): string {
       if (testId.includes('assistant')) return true;
       return Boolean(node.querySelector(ASSISTANT_SELECTOR) || node.querySelector('[data-testid*="assistant"]'));
     };
+    if (HAS_IDENTITY_SCOPE) {
+      const scopedRecord = resolveImageScopedAssistantRecord();
+      return scopedRecord ? serializeImages(scopedRecord.node) : [];
+    }
     const turns = ${buildConversationTurnListExpression()};
     for (let index = turns.length - 1; index >= 0; index -= 1) {
       const turn = turns[index];
@@ -141,9 +172,15 @@ function buildAssistantImageExpression(minTurnIndex?: number): string {
 export async function readAssistantGeneratedImages(
   Runtime: ChromeClient["Runtime"],
   minTurnIndex?: number,
+  expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
 ): Promise<BrowserGeneratedImage[]> {
   const { result } = await Runtime.evaluate({
-    expression: buildAssistantImageExpression(minTurnIndex),
+    expression: buildAssistantImageExpression(
+      minTurnIndex,
+      expectedConversationId,
+      identityScope,
+    ),
     returnByValue: true,
   });
   const raw = Array.isArray(result?.value) ? result.value : [];
@@ -165,10 +202,14 @@ export async function readAssistantGeneratedImages(
 async function readAssistantGeneratedImagesWithFallback(
   Runtime: ChromeClient["Runtime"],
   minTurnIndex?: number | null,
+  expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
 ): Promise<BrowserGeneratedImage[]> {
   const filteredImages = await readAssistantGeneratedImages(
     Runtime,
     minTurnIndex ?? undefined,
+    expectedConversationId,
+    identityScope,
   ).catch(() => []);
   if (
     filteredImages.length > 0 ||
@@ -179,13 +220,24 @@ async function readAssistantGeneratedImagesWithFallback(
   }
 
   const [fallbackImages, fallbackSnapshot] = await Promise.all([
-    readAssistantGeneratedImages(Runtime).catch(() => []),
-    readAssistantSnapshot(Runtime).catch(() => null),
+    readAssistantGeneratedImages(
+      Runtime,
+      undefined,
+      expectedConversationId,
+      identityScope,
+    ).catch(() => []),
+    readAssistantSnapshot(
+      Runtime,
+      undefined,
+      expectedConversationId,
+      identityScope,
+    ).catch(() => null),
   ]);
   const fallbackTurnIndex =
     typeof fallbackSnapshot?.turnIndex === "number" ? fallbackSnapshot.turnIndex : null;
   const nearBoundary =
-    fallbackTurnIndex !== null && fallbackTurnIndex + 1 >= Math.floor(minTurnIndex);
+    identityScope !== undefined ||
+    (fallbackTurnIndex !== null && fallbackTurnIndex + 1 >= Math.floor(minTurnIndex));
   return fallbackImages.length > 0 && nearBoundary ? fallbackImages : [];
 }
 
@@ -449,6 +501,8 @@ async function saveGeneratedImageButtonArtifacts(params: {
   Runtime: ChromeClient["Runtime"];
   logger?: BrowserLogger;
   minTurnIndex?: number | null;
+  expectedConversationId?: string;
+  identityScope?: AssistantResponseIdentityScope;
   targetPath: string;
 }): Promise<SavedBrowserImage[]> {
   const buttonDownloads = await saveAssistantDownloadButtonArtifacts({
@@ -461,6 +515,8 @@ async function saveGeneratedImageButtonArtifacts(params: {
     allowGenericDownloadLabels: true,
     downloadPath: path.dirname(params.targetPath),
     minTurnIndex: params.minTurnIndex,
+    expectedConversationId: params.expectedConversationId,
+    identityScope: params.identityScope,
   });
   const buttonImages: SavedBrowserImage[] = [];
   for (const download of buttonDownloads) {
@@ -536,6 +592,8 @@ export async function collectGeneratedImageArtifacts(params: {
   answerText: string;
   waitTimeoutMs?: number;
   checkBlockingUiWarning?: () => Promise<void>;
+  expectedConversationId?: string;
+  identityScope?: AssistantResponseIdentityScope;
 }): Promise<{
   generatedImages: BrowserGeneratedImage[];
   savedImages: SavedBrowserImage[];
@@ -547,6 +605,8 @@ export async function collectGeneratedImageArtifacts(params: {
   let generatedImages = await readAssistantGeneratedImagesWithFallback(
     params.Runtime,
     params.minTurnIndex ?? undefined,
+    params.expectedConversationId,
+    params.identityScope,
   );
   let latestAnswerText = params.answerText;
 
@@ -560,6 +620,8 @@ export async function collectGeneratedImageArtifacts(params: {
       Runtime: params.Runtime,
       logger: params.logger,
       minTurnIndex: params.minTurnIndex,
+      expectedConversationId: params.expectedConversationId,
+      identityScope: params.identityScope,
       targetPath,
     });
     if (buttonImages.length > 0) {
@@ -572,6 +634,8 @@ export async function collectGeneratedImageArtifacts(params: {
       generatedImages = await readAssistantGeneratedImagesWithFallback(
         params.Runtime,
         params.minTurnIndex ?? undefined,
+        params.expectedConversationId,
+        params.identityScope,
       );
       if (generatedImages.length > 0) {
         break;
@@ -579,6 +643,8 @@ export async function collectGeneratedImageArtifacts(params: {
       const latestSnapshot = await readAssistantSnapshot(
         params.Runtime,
         params.minTurnIndex ?? undefined,
+        params.expectedConversationId,
+        params.identityScope,
       ).catch(() => null);
       const snapshotText =
         typeof latestSnapshot?.text === "string" ? latestSnapshot.text.trim() : "";
@@ -595,6 +661,8 @@ export async function collectGeneratedImageArtifacts(params: {
         Runtime: params.Runtime,
         logger: params.logger,
         minTurnIndex: params.minTurnIndex,
+        expectedConversationId: params.expectedConversationId,
+        identityScope: params.identityScope,
         targetPath,
       });
       if (delayedButtonImages.length > 0) {
@@ -641,6 +709,8 @@ export async function collectGeneratedImageArtifacts(params: {
         Runtime: params.Runtime,
         logger: params.logger,
         minTurnIndex: params.minTurnIndex,
+        expectedConversationId: params.expectedConversationId,
+        identityScope: params.identityScope,
         targetPath: path.resolve(explicitTargetPath),
       });
       if (buttonImages.length > 0) {

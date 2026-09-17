@@ -169,6 +169,35 @@ describe("session lifecycle", () => {
           capturedAt: "2026-07-03T00:00:00.000Z",
           diagnostic: { controlCount: 1, matchingControlCount: 1, observedKinds: ["slider"] },
         },
+        runtime: {
+          conversationId: "conversation-identity",
+          committedUserTurn: {
+            turnId: "user-turn",
+            messageId: "user-message",
+            testId: "conversation-turn-2",
+            absoluteOrdinal: 2,
+          },
+          committedAssistantTurn: {
+            turnId: "assistant-turn",
+            messageId: "assistant-message",
+            testId: "conversation-turn-3",
+            absoluteOrdinal: 3,
+          },
+          identityScope: {
+            committedUserTurn: {
+              turnId: "user-turn",
+              messageId: "user-message",
+              testId: "conversation-turn-2",
+              absoluteOrdinal: 2,
+            },
+            committedAssistantTurn: {
+              turnId: "assistant-turn",
+              messageId: "assistant-message",
+              testId: "conversation-turn-3",
+              absoluteOrdinal: 3,
+            },
+          },
+        },
       },
     });
     const updated = await sessionModule.readSessionMetadata(meta.id);
@@ -184,6 +213,26 @@ describe("session lifecycle", () => {
       requestedIntent: "pro",
       resolvedLevel: "pro",
       verified: true,
+    });
+    expect(updated?.browser?.runtime?.committedAssistantTurn).toEqual({
+      turnId: "assistant-turn",
+      messageId: "assistant-message",
+      testId: "conversation-turn-3",
+      absoluteOrdinal: 3,
+    });
+    expect(updated?.browser?.runtime?.identityScope).toEqual({
+      committedUserTurn: {
+        turnId: "user-turn",
+        messageId: "user-message",
+        testId: "conversation-turn-2",
+        absoluteOrdinal: 2,
+      },
+      committedAssistantTurn: {
+        turnId: "assistant-turn",
+        messageId: "assistant-message",
+        testId: "conversation-turn-3",
+        absoluteOrdinal: 3,
+      },
     });
   });
 

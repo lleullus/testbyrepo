@@ -16,10 +16,20 @@ from oracle_browser_slots.model import (
     validate_chatgpt_url,
 )
 from oracle_browser_slots.runner import JobRunner, OracleTransportError
+from oracle_browser_slots.runtime import ResolvedOracleRuntime
 from oracle_browser_slots.service import SlotService
 
 
-TEST_ORACLE_CLI = "/tmp/oracle-test-bin/oracle"
+TEST_ORACLE_CLI = "oracle"
+TEST_RUNTIME = ResolvedOracleRuntime(
+    node_path=Path("/tmp/oracle-test-bin/node"),
+    node_version="v24.0.0",
+    package_root=Path("/tmp/oracle-test-bin"),
+    package_name="@steipete/oracle",
+    package_version="0.16.1",
+    oracle_entry=Path("/tmp/oracle-test-bin/oracle-cli.js"),
+    oracle_entry_sha256="test-entry",
+)
 SLOT3_URL = "https://chatgpt.com/g/g-p-69f9e842469881918478d6362f949164-codex/project"
 
 
@@ -200,7 +210,7 @@ class SettingsMappingTests(unittest.TestCase):
 class RunnerMappingTests(unittest.TestCase):
     def _runner(self, root: Path, **overrides) -> JobRunner:
         service = ready_service(root, **overrides)
-        return JobRunner(service, oracle_cli_path=TEST_ORACLE_CLI)
+        return JobRunner(service, runtime=TEST_RUNTIME)
 
     def test_injection_when_slot_mapped(self):
         with TemporaryDirectory() as directory:
@@ -359,7 +369,7 @@ class RunnerMappingTests(unittest.TestCase):
                 slot_chatgpt_urls={3: SLOT3_URL},
             )
             self.assertEqual(service.prepare(3)["status"], "사용 가능")
-            runner = JobRunner(service, oracle_cli_path=TEST_ORACLE_CLI)
+            runner = JobRunner(service, runtime=TEST_RUNTIME)
             claim = runner.claim_for_auto(
                 3,
                 "followup-request",
@@ -376,7 +386,7 @@ class RunnerMappingTests(unittest.TestCase):
                 slot_chatgpt_urls={3: SLOT3_URL},
             )
             self.assertEqual(service.prepare(3)["status"], "사용 가능")
-            runner = JobRunner(service, oracle_cli_path=TEST_ORACLE_CLI)
+            runner = JobRunner(service, runtime=TEST_RUNTIME)
             claim = runner.claim_for_auto(
                 3,
                 "auto-request",
@@ -400,7 +410,7 @@ class RunnerMappingTests(unittest.TestCase):
             )
             self.assertEqual(service.prepare(1)["status"], "사용 가능")
             self.assertEqual(service.prepare(2)["status"], "사용 가능")
-            runner = JobRunner(service, oracle_cli_path=TEST_ORACLE_CLI)
+            runner = JobRunner(service, runtime=TEST_RUNTIME)
             first = runner.claim_for_auto(
                 1, "request", [TEST_ORACLE_CLI, "-p", "task"]
             )
@@ -423,11 +433,8 @@ class RunnerMappingTests(unittest.TestCase):
                 captured["argv"] = argv
                 return ReturnCodeChild(0)
 
-            result = JobRunner(
-                service,
-                popen_factory=popen,
-                oracle_cli_path=TEST_ORACLE_CLI,
-            ).run(3, "mapped-run", [TEST_ORACLE_CLI, "-p", "task"])
+            result = JobRunner(service,
+            popen_factory=popen, runtime=TEST_RUNTIME, ).run(3, "mapped-run", [TEST_ORACLE_CLI, "-p", "task"])
             self.assertTrue(result["accepted"])
             argv = captured["argv"]
             self.assertIn("--chatgpt-url", argv)

@@ -96,7 +96,11 @@ describe("readAssistantGeneratedImages", () => {
     return false;
   }
 
-  function evaluateImageExpression(expression: string, elements: FakeElement[]): unknown {
+  function evaluateImageExpression(
+    expression: string,
+    elements: FakeElement[],
+    href = "https://chatgpt.com/c/conversation-b",
+  ): unknown {
     const document = {
       querySelectorAll: (selector: string) =>
         flattenElements(elements).filter((element) => matchesSelector(element, selector)),
@@ -114,6 +118,7 @@ describe("readAssistantGeneratedImages", () => {
         DOCUMENT_POSITION_FOLLOWING: 4,
       },
       {
+        href,
         origin: "https://chatgpt.com",
       },
     );
@@ -220,6 +225,79 @@ describe("readAssistantGeneratedImages", () => {
       width: 1254,
       height: 1254,
     });
+  });
+
+  test("rejects images from a later unowned assistant turn when scoped to the committed turn", async () => {
+    const ownedImage = new FakeElement(
+      "img",
+      {
+        src: "https://chatgpt.com/backend-api/estuary/content?id=file_owned_b",
+        alt: "generated image",
+        width: "1024",
+        height: "1024",
+      },
+      3,
+    );
+    const unownedImage = new FakeElement(
+      "img",
+      {
+        src: "https://chatgpt.com/backend-api/estuary/content?id=file_unowned_c",
+        alt: "generated image",
+        width: "1024",
+        height: "1024",
+      },
+      5,
+    );
+    const elements = [
+      new FakeElement(
+        "article",
+        { "data-testid": "conversation-turn-10", "data-message-author-role": "user" },
+        1,
+      ),
+      new FakeElement(
+        "article",
+        { "data-testid": "conversation-turn-11", "data-message-author-role": "assistant" },
+        2,
+        [ownedImage],
+      ),
+      new FakeElement(
+        "article",
+        { "data-testid": "conversation-turn-12", "data-message-author-role": "assistant" },
+        4,
+        [unownedImage],
+      ),
+    ];
+    const runtime = {
+      evaluate: vi.fn(async ({ expression }: { expression: string }) => ({
+        result: { value: evaluateImageExpression(expression, elements) },
+      })),
+    } as unknown as ChromeClient["Runtime"];
+    const identityScope = {
+      committedUserTurn: {
+        turnId: null,
+        messageId: null,
+        testId: "conversation-turn-10",
+        absoluteOrdinal: 10,
+      },
+      committedAssistantTurn: {
+        turnId: null,
+        messageId: null,
+        testId: "conversation-turn-11",
+        absoluteOrdinal: 11,
+      },
+    };
+
+    const images = await readAssistantGeneratedImages(
+      runtime,
+      0,
+      "conversation-b",
+      identityScope,
+    );
+
+    expect(images.map((image) => image.fileId)).toEqual(["file_owned_b"]);
+    const expression = vi.mocked(runtime.evaluate).mock.calls[0]?.[0]?.expression ?? "";
+    expect(expression).toContain("EXPECTED_CONVERSATION_ID");
+    expect(expression).toContain("IMAGE_IDENTITY_SCOPE");
   });
 });
 

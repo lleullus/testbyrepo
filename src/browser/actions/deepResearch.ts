@@ -9,11 +9,21 @@ import {
   FINISHED_ACTIONS_SELECTOR,
   STOP_BUTTON_SELECTOR,
 } from "../constants.js";
-import { buildConversationTurnListExpression } from "../conversationTurns.js";
+import {
+  buildConversationTurnListExpression,
+  buildConversationTurnRecordsExpression,
+  normalizeConversationTurnIdentity,
+  type AssistantResponseIdentityScope,
+  type ConversationTurnIdentity,
+} from "../conversationTurns.js";
 import { delay } from "../utils.js";
 import { isDeepResearchIncompleteText } from "../deepResearchResult.js";
 import { buildClickDispatcher } from "./domEvents.js";
-import { captureAssistantMarkdown, readAssistantSnapshot } from "./assistantResponse.js";
+import {
+  bindAssistantTurnIdentity,
+  captureAssistantMarkdown,
+  readAssistantSnapshot,
+} from "./assistantResponse.js";
 import { BrowserAutomationError } from "../../oracle/errors.js";
 
 type ActivateOutcome =
@@ -213,6 +223,9 @@ export async function waitForDeepResearchCompletion(
     ignoredTargetKeys?: readonly string[];
     requireScopedTargetOwner?: boolean;
     targetBaselineCaptured?: boolean;
+    expectedConversationId?: string;
+    identityScope?: AssistantResponseIdentityScope;
+    onIdentityScopeResolved?: (scope: AssistantResponseIdentityScope) => Promise<void> | void;
   },
 ): Promise<{
   text: string;
@@ -233,12 +246,31 @@ export async function waitForDeepResearchCompletion(
     (scopedToNewTurns && options?.targetBaselineCaptured !== true);
   let observedResearchEvidence = false;
   let loggedIncompleteResult = false;
+  const expectedConversationId = options?.expectedConversationId?.trim() || undefined;
+  const identityScope = options?.identityScope;
 
   logger(`Monitoring Deep Research (timeout: ${Math.round(timeoutMs / 60_000)}min)...`);
 
   while (Date.now() - start < timeoutMs) {
+    if (identityScope && !identityScope.committedAssistantTurn) {
+      const boundAssistant = await bindAssistantTurnIdentity(
+        Runtime,
+        identityScope.committedUserTurn,
+        0,
+      );
+      if (boundAssistant) {
+        identityScope.committedAssistantTurn = boundAssistant;
+        await options?.onIdentityScopeResolved?.({
+          committedUserTurn: { ...identityScope.committedUserTurn },
+          committedAssistantTurn: { ...boundAssistant },
+        });
+      }
+    }
     const { result } = await Runtime.evaluate({
-      expression: buildDeepResearchCompletionPollExpression(minTurnLiteral),
+      expression: buildDeepResearchCompletionPollExpression(
+        minTurnLiteral,
+        expectedConversationId,
+      ),
       returnByValue: true,
     });
 
@@ -252,9 +284,16 @@ export async function waitForDeepResearchCompletion(
           incompleteResult?: boolean;
           researchActivity?: boolean;
           accountBlocked?: boolean;
+          conversationMismatch?: boolean;
         }
       | undefined;
 
+    if (val?.conversationMismatch) {
+      throw new BrowserAutomationError(
+        "Deep Research polling left the committed conversation.",
+        { stage: "deep-research-attribution", code: "conversation-mismatch" },
+      );
+    }
     if (val?.accountBlocked) {
       throw new BrowserAutomationError(
         "ChatGPT account security block detected during Deep Research. Open chatgpt.com in Chrome, secure the account, then rerun Oracle.",
@@ -269,12 +308,16 @@ export async function waitForDeepResearchCompletion(
     // (readDeepResearchTargetResult) attaches to the iframe's own CDP target and
     // walks its nested frames, so it CAN read the report. Prefer the target path
     // and fall back to the in-page frame path for legacy/inline rendering.
+    const expectedAssistant = normalizeConversationTurnIdentity(
+      identityScope?.committedAssistantTurn,
+    );
     const rawTargetResult = client
       ? ((
           await readDeepResearchTargetResult(
             client,
             ignoredTargetKeys,
             requireScopedTargetOwner ? minTurnLiteral : -1,
+            expectedAssistant,
           ).catch(() => null)
         )?.read ?? null)
       : null;
@@ -289,6 +332,7 @@ export async function waitForDeepResearchCompletion(
             Page,
             client,
             scopedToNewTurns ? minTurnLiteral : -1,
+            expectedAssistant,
           ).catch(() => null)
         : null;
     const rawInPageResult = inPageScan?.read ?? null;
@@ -304,6 +348,25 @@ export async function waitForDeepResearchCompletion(
       val?.hasActiveScopedResearch,
     );
     if (read?.completed && read.text) {
+      if (identityScope) {
+        const ownedAssistant = await bindAssistantTurnIdentity(
+          Runtime,
+          identityScope.committedUserTurn,
+          0,
+        );
+        const expectedAssistant = normalizeConversationTurnIdentity(
+          identityScope.committedAssistantTurn,
+        );
+        if (
+          !ownedAssistant ||
+          (expectedAssistant && JSON.stringify(ownedAssistant) !== JSON.stringify(expectedAssistant))
+        ) {
+          throw new BrowserAutomationError(
+            "Deep Research completed without a response owned by the committed user turn.",
+            { stage: "deep-research-attribution", code: "assistant-ownership-unavailable" },
+          );
+        }
+      }
       logger(`Deep Research completed (${Math.round((Date.now() - start) / 1000)}s elapsed)`);
       return {
         text: read.text,
@@ -321,7 +384,13 @@ export async function waitForDeepResearchCompletion(
         );
       }
       logger(`Deep Research completed (${Math.round((Date.now() - start) / 1000)}s elapsed)`);
-      return await extractDeepResearchResult(Runtime, logger, minTurnIndex ?? undefined);
+      return await extractDeepResearchResult(
+        Runtime,
+        logger,
+        minTurnIndex ?? undefined,
+        expectedConversationId,
+        identityScope,
+      );
     }
 
     const incompleteFrameResult = Boolean(
@@ -374,19 +443,26 @@ export async function extractDeepResearchResult(
   Runtime: ChromeClient["Runtime"],
   logger: BrowserLogger,
   minTurnIndex?: number,
+  expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
 ): Promise<{
   text: string;
   html?: string;
   meta: { turnId?: string | null; messageId?: string | null };
 }> {
-  const snapshot = await readAssistantSnapshot(Runtime, minTurnIndex);
+  const snapshot = await readAssistantSnapshot(
+    Runtime,
+    minTurnIndex,
+    expectedConversationId,
+    identityScope,
+  );
   const meta = {
     turnId: snapshot?.turnId ?? null,
     messageId: snapshot?.messageId ?? null,
   };
 
   // Try the copy-button approach first for clean markdown
-  const markdown = await captureAssistantMarkdown(Runtime, meta, logger);
+  const markdown = await captureAssistantMarkdown(Runtime, meta, logger, identityScope);
   if (markdown && !isDeepResearchIncompleteText(markdown)) {
     return { text: markdown, html: snapshot?.html ?? undefined, meta };
   }
@@ -433,6 +509,38 @@ interface DeepResearchTargetSessionResult {
 interface DeepResearchFrameReadResult {
   read: DeepResearchFrameStatus;
   ownerTurnIndex: number | null;
+}
+
+interface DeepResearchTargetOwner {
+  turnIndex: number | null;
+  identity: ConversationTurnIdentity | null;
+}
+
+function isExpectedDeepResearchOwner(
+  owner: DeepResearchTargetOwner,
+  expectedAssistant: ConversationTurnIdentity | null,
+  minTurnIndex: number,
+): boolean {
+  if (!expectedAssistant) {
+    return minTurnIndex < 0 || (owner.turnIndex !== null && owner.turnIndex >= minTurnIndex);
+  }
+  const actual = normalizeConversationTurnIdentity(owner.identity);
+  if (!actual) {
+    return false;
+  }
+  const expectedOrdinal = expectedAssistant.absoluteOrdinal;
+  if (expectedOrdinal !== null) {
+    return actual.absoluteOrdinal === expectedOrdinal;
+  }
+  let sharedFields = 0;
+  for (const key of ["turnId", "messageId"] as const) {
+    const expectedValue = expectedAssistant[key];
+    const actualValue = actual[key];
+    if (expectedValue === null || actualValue === null) continue;
+    if (expectedValue !== actualValue) return false;
+    sharedFields += 1;
+  }
+  return sharedFields > 0;
 }
 
 function filterIncompleteDeepResearchRead(
@@ -483,6 +591,7 @@ async function readDeepResearchFrameResult(
   Page: ChromeClient["Page"],
   client?: ChromeClient,
   minTurnIndex = -1,
+  expectedAssistant: ConversationTurnIdentity | null = null,
 ): Promise<DeepResearchFrameReadResult | null> {
   const pageWithFrames = Page as ChromeClient["Page"] & {
     getFrameTree?: () => Promise<{ frameTree?: DeepResearchFrameTree }>;
@@ -521,13 +630,17 @@ async function readDeepResearchFrameResult(
   let best: DeepResearchFrameReadResult | null = null;
   for (const frameId of frameIds) {
     let ownerTurnIndex: number | null = null;
-    if (minTurnIndex >= 0 && rawClient?.send) {
-      ownerTurnIndex = await readDeepResearchTargetOwnerTurnIndex(
+    if (minTurnIndex >= 0 || expectedAssistant) {
+      if (!rawClient?.send) {
+        continue;
+      }
+      const owner = await readDeepResearchTargetOwner(
         rawClient as ChromeClient & { send: NonNullable<typeof rawClient.send> },
         frameId,
         rawClient.oraclePageSessionId,
       );
-      if (ownerTurnIndex === null || ownerTurnIndex < minTurnIndex) {
+      ownerTurnIndex = owner.turnIndex;
+      if (!isExpectedDeepResearchOwner(owner, expectedAssistant, minTurnIndex)) {
         continue;
       }
     }
@@ -560,6 +673,7 @@ async function readDeepResearchTargetResult(
   client: ChromeClient,
   ignoredTargetKeys: ReadonlySet<string> = new Set(),
   minTurnIndex = -1,
+  expectedAssistant: ConversationTurnIdentity | null = null,
 ): Promise<DeepResearchTargetScanResult | null> {
   const rawClient = client as ChromeClient & {
     send?: (
@@ -637,7 +751,7 @@ async function readDeepResearchTargetResult(
     }
     await delay(100);
 
-    if (minTurnIndex >= 0) {
+    if (minTurnIndex >= 0 || expectedAssistant) {
       await rawClient.send("DOM.enable", {}, pageSessionId).catch(() => undefined);
       await rawClient.send("Runtime.enable", {}, pageSessionId).catch(() => undefined);
     }
@@ -659,15 +773,11 @@ async function readDeepResearchTargetResult(
       if (target.targetId && ignoredTargetKeys.has(target.targetId)) {
         continue;
       }
-      if (minTurnIndex >= 0) {
-        const ownerTurnIndex = sessionResult.frameId
-          ? await readDeepResearchTargetOwnerTurnIndex(
-              rawClient,
-              sessionResult.frameId,
-              pageSessionId,
-            )
-          : null;
-        if (ownerTurnIndex === null || ownerTurnIndex < minTurnIndex) {
+      if (minTurnIndex >= 0 || expectedAssistant) {
+        const owner = sessionResult.frameId
+          ? await readDeepResearchTargetOwner(rawClient, sessionResult.frameId, pageSessionId)
+          : { turnIndex: null, identity: null };
+        if (!isExpectedDeepResearchOwner(owner, expectedAssistant, minTurnIndex)) {
           continue;
         }
       }
@@ -713,7 +823,7 @@ export async function captureDeepResearchTargetKeys(client: ChromeClient): Promi
   return scan.targetKeys;
 }
 
-async function readDeepResearchTargetOwnerTurnIndex(
+async function readDeepResearchTargetOwner(
   rawClient: {
     send: (
       method: string,
@@ -723,19 +833,19 @@ async function readDeepResearchTargetOwnerTurnIndex(
   },
   frameId: string,
   pageSessionId?: string,
-): Promise<number | null> {
+): Promise<DeepResearchTargetOwner> {
   const owner = (await rawClient
     .send("DOM.getFrameOwner", { frameId }, pageSessionId)
     .catch(() => null)) as { backendNodeId?: number } | null;
   if (typeof owner?.backendNodeId !== "number") {
-    return null;
+    return { turnIndex: null, identity: null };
   }
   const resolved = (await rawClient
     .send("DOM.resolveNode", { backendNodeId: owner.backendNodeId }, pageSessionId)
     .catch(() => null)) as { object?: { objectId?: string } } | null;
   const objectId = resolved?.object?.objectId;
   if (!objectId) {
-    return null;
+    return { turnIndex: null, identity: null };
   }
   try {
     const response = (await rawClient
@@ -744,9 +854,12 @@ async function readDeepResearchTargetOwnerTurnIndex(
         {
           objectId,
           functionDeclaration: `function() {
-            const turns = ${buildConversationTurnListExpression()};
-            const index = turns.findIndex((turn) => turn === this || turn.contains?.(this));
-            return index >= 0 ? index : null;
+            const records = ${buildConversationTurnRecordsExpression()};
+            const turnIndex = records.findIndex(
+              (record) => record.node === this || record.node?.contains?.(this),
+            );
+            if (turnIndex < 0) return null;
+            return { turnIndex, identity: records[turnIndex]?.identity ?? null };
           }`,
           returnByValue: true,
         },
@@ -754,9 +867,23 @@ async function readDeepResearchTargetOwnerTurnIndex(
       )
       .catch(() => null)) as { result?: { value?: unknown } } | null;
     const value = response?.result?.value;
-    return typeof value === "number" && Number.isFinite(value) && value >= 0
-      ? Math.floor(value)
-      : null;
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+      return { turnIndex: Math.floor(value), identity: null };
+    }
+    if (!value || typeof value !== "object") {
+      return { turnIndex: null, identity: null };
+    }
+    const record = value as { turnIndex?: unknown; identity?: unknown };
+    const turnIndex =
+      typeof record.turnIndex === "number" &&
+      Number.isFinite(record.turnIndex) &&
+      record.turnIndex >= 0
+        ? Math.floor(record.turnIndex)
+        : null;
+    return {
+      turnIndex,
+      identity: normalizeConversationTurnIdentity(record.identity),
+    };
   } finally {
     await rawClient
       .send("Runtime.releaseObject", { objectId }, pageSessionId)
@@ -1049,68 +1176,77 @@ function buildDeepResearchStatusExpression(): string {
   })()`;
 }
 
-function buildDeepResearchCompletionPollExpression(minTurnIndex: number): string {
+function buildDeepResearchCompletionPollExpression(
+  minTurnIndex: number,
+  expectedConversationId?: string,
+): string {
   const finishedSelector = JSON.stringify(FINISHED_ACTIONS_SELECTOR);
   const stopSelector = JSON.stringify(STOP_BUTTON_SELECTOR);
   return `(() => {
-    const MIN_TURN_INDEX = ${minTurnIndex};
-    const stopVisible = Boolean(document.querySelector(${stopSelector}));
-    const scopedToNewTurns = MIN_TURN_INDEX >= 0;
-    const pageText = String(document.body?.innerText || '').toLowerCase().replace(/\\s+/g, ' ');
-    const accountBlocked = pageText.includes('suspicious activity detected') &&
-      pageText.includes('secure your account') &&
-      pageText.includes('regain access');
-    const isAssistantTurn = (node) => {
-      const attr = String(node.getAttribute('data-message-author-role') || node.getAttribute('data-turn') || node.dataset?.turn || '').toLowerCase();
-      return attr === 'assistant' ||
-        Boolean(node.querySelector('[data-message-author-role="assistant"], [data-turn="assistant"]')) ||
-        String(node.getAttribute('data-testid') || '').toLowerCase().includes('conversation-turn') &&
-          /chatgpt\\s+said/i.test(node.innerText || node.textContent || '');
-    };
-    const conversationTurns = ${buildConversationTurnListExpression()};
-    const allAssistantTurns = Array.from(document.querySelectorAll('[data-message-author-role="assistant"], [data-turn="assistant"]'));
-    const scopedTurns = scopedToNewTurns
-      ? conversationTurns.slice(MIN_TURN_INDEX).filter(isAssistantTurn)
-      : allAssistantTurns;
-    const lastTurn = scopedTurns[scopedTurns.length - 1] || (scopedToNewTurns ? null : allAssistantTurns[allAssistantTurns.length - 1]);
-    const text = (lastTurn?.textContent || '').trim();
-    const normalized = text.toLowerCase().replace(/\\s+/g, ' ').trim();
-    const textLength = text.length;
-    const lines = text.split(/\\n+/).map(line => line.trim()).filter(Boolean);
-    const tailIsPlanningPanel = text.length <= 1500 &&
-      lines.length >= 4 &&
-      lines.length <= 20 &&
-      /^update$/i.test(lines[1] || '') &&
-      /^stop research$/i.test(lines[lines.length - 1] || '') &&
-      /^determining steps for creating a report(?:\\.\\.\\.)?$/i.test(lines[lines.length - 2] || '');
-    const isToolStub = normalized === 'called tool' ||
-      normalized === 'used tool' ||
-      normalized === 'użyto narzędzia' ||
-      normalized === 'narzędzie wywołane';
-    const incompleteResult = isToolStub ||
-      normalized === 'planning' ||
-      normalized === 'researching' ||
-      normalized === 'searching the web' ||
-      (text.trimStart().startsWith('<system-reminder>') &&
-        /<system-reminder>[\\s\\S]*#\\s*plan mode\\b/i.test(text)) ||
-      tailIsPlanningPanel;
-    const finished = Boolean(lastTurn?.querySelector(${finishedSelector})) &&
-      textLength >= 40 &&
-      !incompleteResult;
-    const hasIframe = Array.from(document.querySelectorAll('iframe')).some(f => {
-      const rect = f.getBoundingClientRect();
-      return rect.width > 200 && rect.height > 200;
-    });
-    const hasScopedDeepResearchIframe = Array.from(lastTurn?.querySelectorAll?.('iframe') || []).some(f => {
-      const rect = f.getBoundingClientRect();
-      const descriptor = String(f.getAttribute('src') || '') + ' ' + String(f.getAttribute('name') || '');
-      return rect.width > 200 && rect.height > 200 &&
-        /connector_openai_deep_research|deep-research/i.test(descriptor);
-    });
-    const hasActiveScopedResearch = scopedToNewTurns && Boolean(lastTurn) &&
-      hasScopedDeepResearchIframe &&
-      (textLength < 40 || isToolStub || tailIsPlanningPanel || /chatgpt\\s+said:?$/i.test(text));
-    return { finished, stopVisible, textLength, hasIframe, isToolStub, incompleteResult, researchActivity: tailIsPlanningPanel || (isToolStub && hasScopedDeepResearchIframe), hasActiveScopedResearch, accountBlocked };
+  const MIN_TURN_INDEX = ${minTurnIndex};
+  const stopVisible = Boolean(document.querySelector(${stopSelector}));
+    const EXPECTED_CONVERSATION_ID = ${JSON.stringify(expectedConversationId ?? null)};
+    const currentHref = typeof location === 'object' && location.href ? location.href : '';
+    const currentConversationId = currentHref.match(/\\/c\\/([a-zA-Z0-9-]+)/)?.[1] ?? null;
+    if (EXPECTED_CONVERSATION_ID && currentConversationId !== EXPECTED_CONVERSATION_ID) {
+      return { conversationMismatch: true };
+    }
+  const scopedToNewTurns = MIN_TURN_INDEX >= 0;
+  const pageText = String(document.body?.innerText || '').toLowerCase().replace(/\\s+/g, ' ');
+  const accountBlocked = pageText.includes('suspicious activity detected') &&
+    pageText.includes('secure your account') &&
+    pageText.includes('regain access');
+  const isAssistantTurn = (node) => {
+    const attr = String(node.getAttribute('data-message-author-role') || node.getAttribute('data-turn') || node.dataset?.turn || '').toLowerCase();
+    return attr === 'assistant' ||
+      Boolean(node.querySelector('[data-message-author-role="assistant"], [data-turn="assistant"]')) ||
+      String(node.getAttribute('data-testid') || '').toLowerCase().includes('conversation-turn') &&
+        /chatgpt\\s+said/i.test(node.innerText || node.textContent || '');
+  };
+  const conversationTurns = ${buildConversationTurnListExpression()};
+  const allAssistantTurns = Array.from(document.querySelectorAll('[data-message-author-role="assistant"], [data-turn="assistant"]'));
+  const scopedTurns = scopedToNewTurns
+    ? conversationTurns.slice(MIN_TURN_INDEX).filter(isAssistantTurn)
+    : allAssistantTurns;
+  const lastTurn = scopedTurns[scopedTurns.length - 1] || (scopedToNewTurns ? null : allAssistantTurns[allAssistantTurns.length - 1]);
+  const text = (lastTurn?.textContent || '').trim();
+  const normalized = text.toLowerCase().replace(/\\s+/g, ' ').trim();
+  const textLength = text.length;
+  const lines = text.split(/\\n+/).map(line => line.trim()).filter(Boolean);
+  const tailIsPlanningPanel = text.length <= 1500 &&
+    lines.length >= 4 &&
+    lines.length <= 20 &&
+    /^update$/i.test(lines[1] || '') &&
+    /^stop research$/i.test(lines[lines.length - 1] || '') &&
+    /^determining steps for creating a report(?:\\.\\.\\.)?$/i.test(lines[lines.length - 2] || '');
+  const isToolStub = normalized === 'called tool' ||
+    normalized === 'used tool' ||
+    normalized === 'użyto narzędzia' ||
+    normalized === 'narzędzie wywołane';
+  const incompleteResult = isToolStub ||
+    normalized === 'planning' ||
+    normalized === 'researching' ||
+    normalized === 'searching the web' ||
+    (text.trimStart().startsWith('<system-reminder>') &&
+      /<system-reminder>[\\s\\S]*#\\s*plan mode\\b/i.test(text)) ||
+    tailIsPlanningPanel;
+  const finished = Boolean(lastTurn?.querySelector(${finishedSelector})) &&
+    textLength >= 40 &&
+    !incompleteResult;
+  const hasIframe = Array.from(document.querySelectorAll('iframe')).some(f => {
+    const rect = f.getBoundingClientRect();
+    return rect.width > 200 && rect.height > 200;
+  });
+  const hasScopedDeepResearchIframe = Array.from(lastTurn?.querySelectorAll?.('iframe') || []).some(f => {
+    const rect = f.getBoundingClientRect();
+    const descriptor = String(f.getAttribute('src') || '') + ' ' + String(f.getAttribute('name') || '');
+    return rect.width > 200 && rect.height > 200 &&
+      /connector_openai_deep_research|deep-research/i.test(descriptor);
+  });
+  const hasActiveScopedResearch = scopedToNewTurns && Boolean(lastTurn) &&
+    hasScopedDeepResearchIframe &&
+    (textLength < 40 || isToolStub || tailIsPlanningPanel || /chatgpt\\s+said:?$/i.test(text));
+  return { finished, stopVisible, textLength, hasIframe, isToolStub, incompleteResult, researchActivity: tailIsPlanningPanel || (isToolStub && hasScopedDeepResearchIframe), hasActiveScopedResearch, accountBlocked };
   })()`;
 }
 

@@ -7,7 +7,11 @@ import type {
   SavedBrowserFile,
 } from "./types.js";
 import { ASSISTANT_ROLE_SELECTOR } from "./constants.js";
-import { buildConversationTurnListExpression } from "./conversationTurns.js";
+import {
+  buildConversationTurnListExpression,
+  buildScopedAssistantRecordResolver,
+  type AssistantResponseIdentityScope,
+} from "./conversationTurns.js";
 import {
   computeFileSha256,
   resolveSessionArtifactsDir,
@@ -719,6 +723,8 @@ function buildClickAssistantDownloadButtonsExpression(
   expectedLabels: string[] = [],
   allowGenericDownloadLabels = true,
   options: { markClicked?: boolean; maxClicks?: number; returnDiagnostics?: boolean } = {},
+  expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
 ): string {
   const minTurnLiteral =
     typeof minTurnIndex === "number" && Number.isFinite(minTurnIndex) && minTurnIndex >= 0
@@ -727,6 +733,17 @@ function buildClickAssistantDownloadButtonsExpression(
   const assistantLiteral = JSON.stringify(ASSISTANT_ROLE_SELECTOR);
   const expectedLabelsLiteral = JSON.stringify(expectedLabels);
   const allowGenericDownloadLabelsLiteral = JSON.stringify(allowGenericDownloadLabels);
+  const expectedConversationLiteral =
+    typeof expectedConversationId === "string" && expectedConversationId.trim().length > 0
+      ? JSON.stringify(expectedConversationId.trim())
+      : "null";
+  const scopedResolver = identityScope
+    ? buildScopedAssistantRecordResolver(
+        identityScope,
+        "resolveDownloadScopedAssistantRecord",
+        "DOWNLOAD_IDENTITY_SCOPE",
+      )
+    : "";
   const markClickedLiteral = JSON.stringify(options.markClicked === true);
   const returnDiagnosticsLiteral = JSON.stringify(options.returnDiagnostics === true);
   const maxClicksLiteral =
@@ -743,6 +760,16 @@ function buildClickAssistantDownloadButtonsExpression(
     const MARK_CLICKED = ${markClickedLiteral};
     const RETURN_DIAGNOSTICS = ${returnDiagnosticsLiteral};
     const MAX_CLICKS = ${maxClicksLiteral};
+    const EXPECTED_CONVERSATION_ID = ${expectedConversationLiteral};
+    const HAS_IDENTITY_SCOPE = ${identityScope ? "true" : "false"};
+    const currentHref = typeof location === 'object' && location.href ? location.href : '';
+    const currentConversationId = currentHref.match(/\\/c\\/([a-zA-Z0-9-]+)/)?.[1] ?? null;
+    if (EXPECTED_CONVERSATION_ID && currentConversationId !== EXPECTED_CONVERSATION_ID) {
+      return RETURN_DIAGNOSTICS
+        ? { inspectedCount: 0, selectedCategory: undefined, clicked: [] }
+        : [];
+    }
+    ${scopedResolver}
     const HAS_EXPECTED_LABELS = EXPECTED_LABELS.length > 0;
     const CLICKED_ATTRIBUTE = 'data-oracle-download-clicked';
     const isAssistantTurn = (node) => {
@@ -859,7 +886,12 @@ function buildClickAssistantDownloadButtonsExpression(
     const genericBehaviorButton = (info) =>
       ALLOW_GENERIC_DOWNLOAD_LABELS && info.className.includes('behavior-btn') && hasDownloadIntent(info);
     const genericFallbackButton = (info) => ALLOW_GENERIC_DOWNLOAD_LABELS && hasDownloadIntent(info);
-    const turns = ${buildConversationTurnListExpression()};
+    const turns = HAS_IDENTITY_SCOPE
+      ? (() => {
+          const scopedRecord = resolveDownloadScopedAssistantRecord();
+          return scopedRecord ? [scopedRecord.node] : [];
+        })()
+      : ${buildConversationTurnListExpression()};
     const expectedMatches = new Set();
     const genericBehaviorMatches = new Set();
     const genericFallbackMatches = new Set();
@@ -985,6 +1017,8 @@ async function moveDownloadedFileToExpectedName(
 async function clickAssistantDownloadButtons(params: {
   Runtime: ChromeClient["Runtime"];
   minTurnIndex?: number | null;
+  expectedConversationId?: string;
+  identityScope?: AssistantResponseIdentityScope;
   expectedLabels?: string[];
   allowGenericDownloadLabels?: boolean;
   markClicked?: boolean;
@@ -997,6 +1031,8 @@ async function clickAssistantDownloadButtons(params: {
     params.expectedLabels ?? [],
     params.allowGenericDownloadLabels,
     { markClicked: params.markClicked, maxClicks: params.maxClicks, returnDiagnostics: true },
+    params.expectedConversationId,
+    params.identityScope,
   );
   const deadline = Date.now() + (params.timeoutMs ?? DOWNLOAD_BUTTON_WAIT_MS);
   let lastInspectedCount = 0;
@@ -1130,6 +1166,8 @@ export async function saveAssistantDownloadButtonArtifacts(params: {
   downloadPath?: string;
   downloadWaitMs?: number;
   minTurnIndex?: number | null;
+  expectedConversationId?: string;
+  identityScope?: AssistantResponseIdentityScope;
   sessionId?: string;
 }): Promise<SavedBrowserFile[]> {
   if (
@@ -1169,6 +1207,8 @@ export async function saveAssistantDownloadButtonArtifacts(params: {
       Runtime: params.Runtime,
       minTurnIndex: params.minTurnIndex,
       expectedLabels: [],
+      expectedConversationId: params.expectedConversationId,
+      identityScope: params.identityScope,
       allowGenericDownloadLabels: params.allowGenericDownloadLabels,
       timeoutMs: buttonWaitMs,
       logger: params.logger,
@@ -1205,6 +1245,8 @@ export async function saveAssistantDownloadButtonArtifacts(params: {
     let clickResult = await clickAssistantDownloadButtons({
       Runtime: params.Runtime,
       minTurnIndex: params.minTurnIndex,
+      expectedConversationId: params.expectedConversationId,
+      identityScope: params.identityScope,
       expectedLabels,
       allowGenericDownloadLabels: params.allowGenericDownloadLabels === true,
       markClicked: true,

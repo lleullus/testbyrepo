@@ -515,7 +515,9 @@ class SlotService:
             )
             state["requires_reprepare"] = True
             self._save_status(slot, state, record)
-            return {"accepted": False, "record": self._rejection_from_record(record, job_id)}
+            rejection = self._rejection_from_record(record, job_id)
+            rejection["readiness_rejected"] = True
+            return {"accepted": False, "record": rejection}
 
         if not login.valid:
             record = self._record(
@@ -526,7 +528,9 @@ class SlotService:
                 occupancy=None,
             )
             self._save_status(slot, state, record)
-            return {"accepted": False, "record": self._rejection_from_record(record, job_id)}
+            rejection = self._rejection_from_record(record, job_id)
+            rejection["readiness_rejected"] = True
+            return {"accepted": False, "record": rejection}
 
         started_at = utc_now()
         occupancy = {
@@ -688,7 +692,7 @@ class SlotService:
         else:
             try:
                 login = self.cdp.check_login(slot)
-            except CDPError as exc:
+            except Exception as exc:
                 state["requires_reprepare"] = True
                 final_state = UNAVAILABLE
                 final_reason = f"{reason} 점유는 해제했지만 CDP 확인에 실패했습니다: {exc}"

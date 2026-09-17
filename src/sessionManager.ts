@@ -16,6 +16,10 @@ import type {
   CookieParam,
 } from "./browser/types.js";
 import type {
+  AssistantResponseIdentityScope,
+  ConversationTurnIdentity,
+} from "./browser/conversationTurns.js";
+import type {
   TransportFailureReason,
   ApiProviderMode,
   AzureOptions,
@@ -135,6 +139,12 @@ export interface BrowserRuntimeMetadata {
   conversationId?: string;
   /** True after Oracle has submitted the prompt to ChatGPT. */
   promptSubmitted?: boolean;
+  /** Remote user turn proven committed for the current request. */
+  committedUserTurn?: ConversationTurnIdentity | null;
+  /** Durable user/assistant ownership scope used by recovery. */
+  identityScope?: AssistantResponseIdentityScope | null;
+  /** Remote assistant turn bound to committedUserTurn, once resolved. */
+  committedAssistantTurn?: ConversationTurnIdentity | null;
   /** PID of the controller process that launched this browser run. Helps detect orphaned sessions. */
   controllerPid?: number;
 }

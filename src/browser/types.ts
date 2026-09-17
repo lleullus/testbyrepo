@@ -230,6 +230,9 @@ export interface BrowserRunResult {
   tabUrl?: string;
   conversationId?: string;
   promptSubmitted?: boolean;
+  committedUserTurn?: BrowserRuntimeMetadata["committedUserTurn"];
+  committedAssistantTurn?: BrowserRuntimeMetadata["committedAssistantTurn"];
+  identityScope?: BrowserRuntimeMetadata["identityScope"];
   controllerPid?: number;
 }
 

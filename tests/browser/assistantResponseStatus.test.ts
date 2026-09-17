@@ -16,10 +16,10 @@ import {
   readAssistantSnapshot,
   type TerminalGateConfig,
   type TerminalSample,
-  type AssistantResponseIdentityScope,
 } from "../../src/browser/actions/assistantResponse.js";
 import {
   buildConversationTurnCountExpression,
+  type AssistantResponseIdentityScope,
   type ConversationTurnIdentity,
 } from "../../src/browser/conversationTurns.js";
 import {
@@ -752,6 +752,66 @@ describe("assistant turn identity binding", () => {
 
     expect(
       evaluateSnapshot(document, buildAssistantSnapshotExpressionForTest(0, undefined, scope)),
+    ).toBeNull();
+  });
+
+  test("rejects a known assistant that belongs to a later committed user boundary", () => {
+    const document = new BindingDocument([
+      makeTurn("conversation-turn-10", "user", "user-turn-10", "user-message-10"),
+      makeFinishedAssistantTurn(
+        "conversation-turn-11",
+        "owned-assistant-11",
+        "owned-message-11",
+        "owned answer",
+      ),
+      makeTurn("conversation-turn-12", "user", "user-turn-12", "user-message-12"),
+      makeFinishedAssistantTurn(
+        "conversation-turn-13",
+        "later-assistant-13",
+        "later-message-13",
+        "later answer",
+      ),
+    ]);
+    const scope: AssistantResponseIdentityScope = {
+      committedUserTurn: committedUser,
+      committedAssistantTurn: {
+        turnId: "later-assistant-13",
+        messageId: "later-message-13",
+        testId: "conversation-turn-13",
+        absoluteOrdinal: 13,
+      },
+    };
+
+    expect(
+      evaluateSnapshot(document, buildAssistantSnapshotExpressionForTest(0, undefined, scope)),
+    ).toBeNull();
+  });
+
+  test("rejects a scoped snapshot when the active route has no matching conversation identity", () => {
+    const document = new BindingDocument([
+      makeTurn("conversation-turn-10", "user", "user-turn-10", "user-message-10"),
+      makeFinishedAssistantTurn(
+        "conversation-turn-11",
+        "owned-assistant-11",
+        "owned-message-11",
+        "owned answer",
+      ),
+    ]);
+    const scope: AssistantResponseIdentityScope = {
+      committedUserTurn: committedUser,
+      committedAssistantTurn: {
+        turnId: "owned-assistant-11",
+        messageId: "owned-message-11",
+        testId: "conversation-turn-11",
+        absoluteOrdinal: 11,
+      },
+    };
+
+    expect(
+      evaluateSnapshot(
+        document,
+        buildAssistantSnapshotExpressionForTest(0, "different-conversation", scope),
+      ),
     ).toBeNull();
   });
 

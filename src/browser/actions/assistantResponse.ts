@@ -9,9 +9,9 @@ import {
 } from "../constants.js";
 import {
   buildConversationTurnListExpression,
-  buildConversationTurnRecordsExpression,
-  buildConversationTurnIdentityMatcherExpression,
+  buildScopedAssistantRecordResolver,
   normalizeConversationTurnIdentity,
+  type AssistantResponseIdentityScope,
   type ConversationTurnIdentity,
 } from "../conversationTurns.js";
 import { buildThinkingActivePredicateJs, readThinkingActivity } from "./thinkingStatus.js";
@@ -29,10 +29,6 @@ const ASSISTANT_TURN_BINDING_TIMEOUT_MS = 3_000;
 // Still used by the in-page settle heuristic's length buckets (see buildResponseObserverExpression).
 const MIN_CONFIDENT_ANSWER_LENGTH = 16;
 
-export interface AssistantResponseIdentityScope {
-  committedUserTurn: ConversationTurnIdentity;
-  committedAssistantTurn?: ConversationTurnIdentity | null;
-}
 
 function readPositiveIntEnv(name: string, fallback: number): number {
   const raw = Number(process.env[name]);
@@ -243,98 +239,6 @@ export async function bindAssistantTurnIdentity(
   }
 }
 
-function buildScopedAssistantRecordResolver(
-  identityScope: AssistantResponseIdentityScope,
-  functionName = "resolveScopedAssistantRecord",
-  scopeName = "IDENTITY_SCOPE",
-): string {
-  return `
-    const ${scopeName} = ${JSON.stringify(identityScope)};
-    ${buildConversationTurnIdentityMatcherExpression()}
-    const ${functionName} = () => {
-      const records = ${buildConversationTurnRecordsExpression()};
-      const expectedAssistant = ${scopeName}?.committedAssistantTurn;
-      if (hasStableConversationTurnIdentity(expectedAssistant)) {
-        const matches = records.filter(
-          (record) =>
-            record.role === 'assistant' &&
-            sameConversationTurnIdentity(record.identity, expectedAssistant),
-        );
-        return matches.length === 1 ? matches[0] : null;
-      }
-
-      const expectedUser = ${scopeName}?.committedUserTurn;
-      if (!hasStableConversationTurnIdentity(expectedUser)) return null;
-      const userMatches = records
-        .map((record, index) => ({ record, index }))
-        .filter(
-          ({ record }) =>
-            record.role === 'user' &&
-            sameCommittedConversationTurnIdentity(record.identity, expectedUser),
-        );
-      if (userMatches.length !== 1) return null;
-
-      const userIndex = userMatches[0].index;
-      const userOrdinal = conversationTurnOrdinal(expectedUser);
-      const nextRecord = records[userIndex + 1];
-      if (
-        nextRecord?.role === 'assistant' &&
-        !hasStableConversationTurnIdentity(nextRecord.identity)
-      ) {
-        return null;
-      }
-      if (
-        nextRecord?.role === 'assistant' &&
-        hasStableConversationTurnIdentity(nextRecord.identity) &&
-        conversationTurnOrdinal(nextRecord.identity) === null
-      ) {
-        return nextRecord;
-      }
-
-      if (userOrdinal !== null) {
-        const ordinalCandidates = records
-          .map((record, index) => ({ record, index }))
-          .filter(({ record, index }) => {
-            const assistantOrdinal = conversationTurnOrdinal(record.identity);
-            return (
-              index > userIndex &&
-              record.role === 'assistant' &&
-              hasStableConversationTurnIdentity(record.identity) &&
-              assistantOrdinal !== null &&
-              assistantOrdinal > userOrdinal
-            );
-          });
-        if (ordinalCandidates.length > 0) {
-          const pairedCandidates = ordinalCandidates.filter(
-            ({ record }) => conversationTurnOrdinal(record.identity) === userOrdinal + 1,
-          );
-          if (pairedCandidates.length === 0) return null;
-          const closestOrdinal = Math.min(
-            ...pairedCandidates.map(({ record }) => conversationTurnOrdinal(record.identity)),
-          );
-          const closest = pairedCandidates.filter(
-            ({ record }) => conversationTurnOrdinal(record.identity) === closestOrdinal,
-          );
-          return closest.length === 1 ? closest[0].record : null;
-        }
-      }
-
-      if (userOrdinal !== null) return null;
-
-      if (
-        nextRecord?.role !== 'assistant' ||
-        !hasStableConversationTurnIdentity(nextRecord.identity)
-      ) {
-        return null;
-      }
-      const nextOrdinal = conversationTurnOrdinal(nextRecord.identity);
-      if (userOrdinal !== null && nextOrdinal !== null && nextOrdinal <= userOrdinal) {
-        return null;
-      }
-      return nextRecord;
-    };
-  `;
-}
 
 async function resolveAssistantResponseIdentityScope(
   Runtime: ChromeClient["Runtime"],
@@ -373,6 +277,7 @@ export async function waitForAssistantResponse(
   minTurnIndex?: number,
   expectedConversationId?: string,
   identityScope?: AssistantResponseIdentityScope,
+  onIdentityScopeResolved?: (scope: AssistantResponseIdentityScope) => Promise<void> | void,
 ): Promise<{
   text: string;
   html?: string;
@@ -385,6 +290,14 @@ export async function waitForAssistantResponse(
     identityScope,
     timeoutMs,
   );
+  if (resolvedIdentityScope && onIdentityScopeResolved) {
+    await onIdentityScopeResolved({
+      committedUserTurn: { ...resolvedIdentityScope.committedUserTurn },
+      committedAssistantTurn: resolvedIdentityScope.committedAssistantTurn
+        ? { ...resolvedIdentityScope.committedAssistantTurn }
+        : null,
+    });
+  }
   // Learned: two paths are needed:
   // 1) DOM observer (fast when mutations fire),
   // 2) snapshot poller (fallback when observers miss or JS stalls).
@@ -597,9 +510,10 @@ export async function captureAssistantMarkdown(
   Runtime: ChromeClient["Runtime"],
   meta: { messageId?: string | null; turnId?: string | null },
   logger: BrowserLogger,
+  identityScope?: AssistantResponseIdentityScope,
 ): Promise<string | null> {
   const { result } = await Runtime.evaluate({
-    expression: buildCopyExpression(meta),
+    expression: buildCopyExpression(meta, identityScope),
     returnByValue: true,
     awaitPromise: true,
   });
@@ -1130,11 +1044,7 @@ function buildAssistantSnapshotExpression(
     const EXPECTED_CONVERSATION_ID = ${expectedConversationLiteral};
     const currentHref = typeof location === 'object' && location.href ? location.href : '';
     const currentConversationId = currentHref.match(/\\/c\\/([a-zA-Z0-9-]+)/)?.[1] ?? null;
-    if (
-      EXPECTED_CONVERSATION_ID &&
-      currentConversationId &&
-      currentConversationId !== EXPECTED_CONVERSATION_ID
-    ) {
+    if (EXPECTED_CONVERSATION_ID && currentConversationId !== EXPECTED_CONVERSATION_ID) {
       return null;
     }
     // Learned: the default turn DOM misses project view; keep a fallback extractor.
@@ -1207,8 +1117,7 @@ function buildResponseObserverExpression(
     };
     const matchesExpectedConversation = () => {
       if (!EXPECTED_CONVERSATION_ID) return true;
-      const currentId = currentConversationId();
-      return !currentId || currentId === EXPECTED_CONVERSATION_ID;
+      return currentConversationId() === EXPECTED_CONVERSATION_ID;
     };
     const isAnswerNowPlaceholder = (snapshot) => {
       const normalized = String(snapshot?.text ?? '').toLowerCase().trim();
@@ -1684,29 +1593,35 @@ function buildMarkdownFallbackExtractor(
   })`;
 }
 
-function buildCopyExpression(meta: { messageId?: string | null; turnId?: string | null }): string {
+function buildCopyExpression(
+  meta: { messageId?: string | null; turnId?: string | null },
+  identityScope?: AssistantResponseIdentityScope,
+): string {
   return `(() => {
     ${buildClickDispatcher()}
     const BUTTON_SELECTOR = '${COPY_BUTTON_SELECTOR}';
     const TIMEOUT_MS = 10000;
 
     const locateButton = () => {
+      const HAS_IDENTITY_SCOPE = ${identityScope ? "true" : "false"};
+      ${identityScope ? buildScopedAssistantRecordResolver(identityScope, "resolveCopyScopedAssistantRecord", "COPY_IDENTITY_SCOPE") : ""}
+      if (HAS_IDENTITY_SCOPE) {
+        const scopedRecord = resolveCopyScopedAssistantRecord();
+        if (!scopedRecord) return null;
+        return scopedRecord.node.querySelector(BUTTON_SELECTOR);
+      }
       const hint = ${JSON.stringify(meta ?? {})};
       if (hint?.messageId) {
         const node = document.querySelector('[data-message-id="' + hint.messageId + '"]');
         const buttons = node ? Array.from(node.querySelectorAll('${COPY_BUTTON_SELECTOR}')) : [];
         const button = buttons.at(-1) ?? null;
-        if (button) {
-          return button;
-        }
+        if (button) return button;
       }
       if (hint?.turnId) {
         const node = document.querySelector('[data-testid="' + hint.turnId + '"]');
         const buttons = node ? Array.from(node.querySelectorAll('${COPY_BUTTON_SELECTOR}')) : [];
         const button = buttons.at(-1) ?? null;
-        if (button) {
-          return button;
-        }
+        if (button) return button;
       }
       const CONVERSATION_SELECTOR = ${JSON.stringify(CONVERSATION_TURN_SELECTOR)};
       const ASSISTANT_SELECTOR = '${ASSISTANT_ROLE_SELECTOR}';

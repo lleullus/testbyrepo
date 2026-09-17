@@ -19,6 +19,20 @@ type FakeClient = {
   close: () => Promise<void> | void;
 };
 
+const durableAttribution = (conversationId: string) => {
+  const committedUserTurn = {
+    turnId: `user-${conversationId}`,
+    messageId: `message-${conversationId}`,
+    testId: "conversation-turn-2",
+    absoluteOrdinal: 2,
+  };
+  return {
+    conversationId,
+    committedUserTurn,
+    identityScope: { committedUserTurn, committedAssistantTurn: null },
+  };
+};
+
 describe("resumeBrowserSession", () => {
   test("selects target and captures markdown via stubs", async () => {
     const runtime = {
@@ -26,6 +40,7 @@ describe("resumeBrowserSession", () => {
       chromeHost: "127.0.0.1",
       chromeTargetId: "target-1",
       tabUrl: "https://chatgpt.com/c/abc",
+      ...durableAttribution("abc"),
     };
     const listTargets = vi.fn(
       async () =>
@@ -85,6 +100,7 @@ describe("resumeBrowserSession", () => {
       chromeHost: "127.0.0.1",
       chromeTargetId: "target-1",
       tabUrl: "https://chatgpt.com/c/abc",
+      ...durableAttribution("abc"),
     };
     const listTargets = vi.fn(
       async () =>
@@ -128,7 +144,15 @@ describe("resumeBrowserSession", () => {
       promptPreview: "live reattach pro 123",
     });
 
-    expect(waitForAssistantResponse).toHaveBeenCalledWith(expect.anything(), 2000, logger, 3);
+    expect(waitForAssistantResponse).toHaveBeenCalledWith(
+      expect.anything(),
+      2000,
+      logger,
+      undefined,
+      "abc",
+      expect.objectContaining({ committedUserTurn: expect.objectContaining({ turnId: "user-abc" }) }),
+      undefined,
+    );
   });
 
   test("uses Deep Research completion path when reattaching research sessions", async () => {
@@ -137,6 +161,7 @@ describe("resumeBrowserSession", () => {
       chromeHost: "127.0.0.1",
       chromeTargetId: "target-1",
       tabUrl: "https://chatgpt.com/c/deep",
+      ...durableAttribution("deep"),
     };
     const listTargets = vi.fn(
       async () =>
@@ -179,31 +204,17 @@ describe("resumeBrowserSession", () => {
     const logger = vi.fn() as BrowserLogger;
     logger.verbose = true;
 
-    const result = await resumeBrowserSession(
-      runtime,
-      { timeoutMs: 2000, researchMode: "deep" },
-      logger,
-      {
+    await expect(
+      resumeBrowserSession(runtime, { timeoutMs: 2000, researchMode: "deep" }, logger, {
         listTargets,
         connect,
         waitForAssistantResponse,
         captureAssistantMarkdown,
         waitForDeepResearchCompletion,
-      },
-    );
+      }),
+    ).rejects.toThrow("Deep Research recovery lacks stable owned-assistant attribution");
 
-    expect(result.answerMarkdown).toBe("Deep report body");
-    expect(waitForDeepResearchCompletion).toHaveBeenCalledWith(
-      expect.objectContaining({ evaluate }),
-      logger,
-      2000,
-      2,
-      expect.any(Object),
-      expect.any(Object),
-      {
-        requireScopedTargetOwner: true,
-      },
-    );
+    expect(waitForDeepResearchCompletion).not.toHaveBeenCalled();
     expect(waitForAssistantResponse).not.toHaveBeenCalled();
     expect(captureAssistantMarkdown).not.toHaveBeenCalled();
   });
@@ -211,6 +222,7 @@ describe("resumeBrowserSession", () => {
   test("falls back to recovery when chrome port is missing", async () => {
     const runtime = {
       tabUrl: "https://chatgpt.com/c/abc",
+      ...durableAttribution("abc"),
     };
     const recoverSession = vi.fn(async () => ({
       answerText: "fallback",
@@ -230,6 +242,7 @@ describe("resumeBrowserSession", () => {
       chromeProfileRoot: "/tmp/oracle-attach-running-profile",
       tabUrl: "https://chatgpt.com/c/abc",
       chromeTargetId: "target-2",
+      ...durableAttribution("abc"),
     };
     const listTargets = vi.fn(
       async () =>
@@ -290,6 +303,7 @@ describe("resumeBrowserSession", () => {
       chromeHost: "127.0.0.1",
       chromeTargetId: "target-1",
       tabUrl: "https://chatgpt.com/c/abc",
+      ...durableAttribution("abc"),
     };
     const listTargets = vi.fn(async () => {
       return [{ targetId: "target-1", type: "page", url: runtime.tabUrl }] satisfies FakeTarget[];
@@ -331,6 +345,23 @@ describe("resumeBrowserSession", () => {
     expect(result.answerText).toBe("fallback");
     expect(close).toHaveBeenCalledOnce();
     expect(recoverSession).toHaveBeenCalled();
+  });
+
+  test("fails closed before attaching when durable attribution is missing", async () => {
+    const connect = vi.fn();
+    const recoverSession = vi.fn();
+    const logger = vi.fn() as BrowserLogger;
+
+    await expect(
+      resumeBrowserSession(
+        { chromePort: 51559, tabUrl: "https://chatgpt.com/c/abc" },
+        {},
+        logger,
+        { connect, recoverSession },
+      ),
+    ).rejects.toThrow("recovery-attribution-unavailable");
+    expect(connect).not.toHaveBeenCalled();
+    expect(recoverSession).not.toHaveBeenCalled();
   });
 });
 

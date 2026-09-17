@@ -6,6 +6,7 @@ import multiprocessing
 import os
 from pathlib import Path
 import signal
+import shutil
 import socketserver
 import struct
 import subprocess
@@ -25,12 +26,36 @@ from oracle_browser_slots.followup import (
 )
 from oracle_browser_slots.model import AVAILABLE, OCCUPIED, Settings
 from oracle_browser_slots.runner import JobRunner
+from oracle_browser_slots.runtime import ResolvedOracleRuntime
 from oracle_browser_slots.service import SlotService
 
 
-TEST_ORACLE_CLI = "/tmp/oracle-followup-test-bin/oracle"
+TEST_ORACLE_CLI = "oracle"
+TEST_RUNTIME = ResolvedOracleRuntime(
+    node_path=Path("/tmp/oracle-followup-test-bin/node"),
+    node_version="v24.0.0",
+    package_root=Path("/tmp/oracle-followup-test-bin"),
+    package_name="@steipete/oracle",
+    package_version="0.16.1",
+    oracle_entry=Path("/tmp/oracle-followup-test-bin/oracle-cli.js"),
+    oracle_entry_sha256="test-entry",
+)
 CONVERSATION_ID = "11111111-2222-3333-4444-555555555555"
 CONVERSATION_URL = f"https://chatgpt.com/c/{CONVERSATION_ID}"
+_sleep_patcher = None
+
+
+def setUpModule():
+    global _sleep_patcher
+    _sleep_patcher = patch("oracle_browser_slots.service.time.sleep", return_value=None)
+    _sleep_patcher.start()
+
+
+def tearDownModule():
+    global _sleep_patcher
+    if _sleep_patcher is not None:
+        _sleep_patcher.stop()
+
 
 
 class FakeLauncher:
@@ -271,11 +296,8 @@ def cancellation_waiter_process(settings, oracle_home, result_queue):
     def forbidden_popen(argv, *, env, close_fds):
         raise AssertionError("cancelled waiter must not spawn stock Oracle")
 
-    runner = JobRunner(
-        service,
-        popen_factory=forbidden_popen,
-        oracle_cli_path=TEST_ORACLE_CLI,
-    )
+    runner = JobRunner(service,
+    popen_factory=forbidden_popen, runtime=TEST_RUNTIME, )
     repository = OracleSessionRepository(settings, oracle_home=oracle_home)
     result = FollowupRunner(
         service,
@@ -471,6 +493,31 @@ class ParentSelectionTests(unittest.TestCase):
                             "archive-owned",
                         )
 
+    def test_prompt_values_resembling_wrapper_options_are_not_reinterpreted(self):
+        with TemporaryDirectory() as directory:
+            repository = OracleSessionRepository(
+                settings_for(Path(directory)), oracle_home=Path(directory) / "oracle-home"
+            )
+            cases = (
+                ("-p", "--wait"),
+                ("-p", "--no-wait"),
+                ("-p", "--slug"),
+                ("-p", "--"),
+                ("--prompt", "--browser-archive"),
+                ("--message", "--followup"),
+                ("-m", "--wait"),
+            )
+            for value_option, value in cases:
+                with self.subTest(value_option=value_option, value=value):
+                    command, session_id = repository.prepare_new_run_command(
+                        [TEST_ORACLE_CLI, value_option, value], "option-like-value"
+                    )
+                    self.assertEqual(command[1:3], [value_option, value])
+                    self.assertEqual(
+                        command[-5:],
+                        ["--slug", session_id, "--wait", "--browser-archive", "never"],
+                    )
+
 
 class FollowupExecutionTests(unittest.TestCase):
     def _ready_service(self, root: Path, ready_slots=(1, 2, 3, 4, 5)) -> SlotService:
@@ -497,11 +544,8 @@ class FollowupExecutionTests(unittest.TestCase):
             self.assertTrue(held["accepted"])
 
             factory = FakeOracleFactory(oracle_home)
-            runner = JobRunner(
-                service,
-                popen_factory=factory,
-                oracle_cli_path=TEST_ORACLE_CLI,
-            )
+            runner = JobRunner(service,
+            popen_factory=factory, runtime=TEST_RUNTIME, )
             repository = OracleSessionRepository(service.settings, oracle_home=oracle_home)
             followup = FollowupRunner(
                 service,
@@ -560,6 +604,7 @@ class FollowupExecutionTests(unittest.TestCase):
                 f"127.0.0.1:{service.settings.slot(2).port}",
             )
             self.assertEqual(option_value(command, "--browser-archive"), "never")
+            self.assertEqual(option_value(command, "--browser-timeout"), "2h")
             self.assertEqual(factory.calls[0]["env"]["ORACLE_BROWSER_SLOT_ID"], "2")
             self.assertEqual(service.cdp.restore_calls, [])
             self.assertEqual((parent_directory / "meta.json").read_bytes(), parent_before)
@@ -580,6 +625,45 @@ class FollowupExecutionTests(unittest.TestCase):
 
             next_parent, mode = repository.select_parent("ctx-main")
             self.assertEqual((next_parent.session_id, mode), (child_id, "implicit"))
+            self.assertEqual(service.status(2)["status"], AVAILABLE)
+
+    def test_pre_submit_rejection_releases_origin_without_spawning_or_fallback(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root)
+            oracle_home = root / "oracle-home"
+            write_stock_session(
+                oracle_home, service.settings, "pre-submit-parent", slot_id=2
+            )
+            factory = FakeOracleFactory(oracle_home)
+            runner = JobRunner(service, popen_factory=factory, runtime=TEST_RUNTIME)
+
+            with patch.object(
+                runner,
+                "pre_submit_check",
+                return_value={
+                    "ready": False,
+                    "reason": "login expired",
+                    "operator_action": "prepare slot 2",
+                },
+            ):
+                result = FollowupRunner(
+                    service,
+                    runner=runner,
+                    repository=OracleSessionRepository(
+                        service.settings, oracle_home=oracle_home
+                    ),
+                ).run(
+                    "followup-pre-submit-reject",
+                    "ctx-main",
+                    [TEST_ORACLE_CLI, "-p", "must not submit"],
+                )
+
+            self.assertEqual(result["exit_code"], 2)
+            self.assertEqual(result["record"]["outcome"], "failed")
+            self.assertTrue(result["record"]["released"])
+            self.assertEqual(result["record"]["attempted_slots"], [2])
+            self.assertEqual(factory.calls, [])
             self.assertEqual(service.status(2)["status"], AVAILABLE)
 
     def test_file_followup_emits_one_prepared_event_before_status_claim_and_child(self):
@@ -603,12 +687,8 @@ class FollowupExecutionTests(unittest.TestCase):
             factory = FakeOracleFactory(oracle_home)
             result = FollowupRunner(
                 service,
-                runner=JobRunner(
-                    service,
-                    popen_factory=factory,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                    attachment_policy=policy,
-                ),
+                runner=JobRunner(service,
+                popen_factory=factory, runtime=TEST_RUNTIME, attachment_policy=policy,),
                 repository=OracleSessionRepository(
                     service.settings, oracle_home=oracle_home
                 ),
@@ -666,7 +746,7 @@ class FollowupExecutionTests(unittest.TestCase):
             factory = FakeOracleFactory(oracle_home)
             followup = FollowupRunner(
                 service,
-                runner=JobRunner(service, popen_factory=factory, oracle_cli_path=TEST_ORACLE_CLI),
+                runner=JobRunner(service, popen_factory=factory, runtime=TEST_RUNTIME),
                 repository=OracleSessionRepository(service.settings, oracle_home=oracle_home),
                 poll_interval=0.01,
             )
@@ -725,11 +805,8 @@ class FollowupExecutionTests(unittest.TestCase):
 
             result = FollowupRunner(
                 service,
-                runner=JobRunner(
-                    service,
-                    popen_factory=factory,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                ),
+                runner=JobRunner(service,
+                popen_factory=factory, runtime=TEST_RUNTIME, ),
                 repository=OracleSessionRepository(
                     service.settings, oracle_home=oracle_home
                 ),
@@ -793,11 +870,8 @@ class FollowupExecutionTests(unittest.TestCase):
             cdp.restore_archived_conversation = restore
             result = FollowupRunner(
                 service,
-                runner=JobRunner(
-                    service,
-                    popen_factory=popen,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                ),
+                runner=JobRunner(service,
+                popen_factory=popen, runtime=TEST_RUNTIME, ),
                 repository=OracleSessionRepository(
                     service.settings, oracle_home=oracle_home
                 ),
@@ -835,11 +909,8 @@ class FollowupExecutionTests(unittest.TestCase):
             events: list[dict[str, object]] = []
             result = FollowupRunner(
                 service,
-                runner=JobRunner(
-                    service,
-                    popen_factory=factory,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                ),
+                runner=JobRunner(service,
+                popen_factory=factory, runtime=TEST_RUNTIME, ),
                 repository=OracleSessionRepository(
                     service.settings, oracle_home=oracle_home
                 ),
@@ -876,11 +947,8 @@ class FollowupExecutionTests(unittest.TestCase):
             factory = FakeOracleFactory(oracle_home)
             result = FollowupRunner(
                 service,
-                runner=JobRunner(
-                    service,
-                    popen_factory=factory,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                ),
+                runner=JobRunner(service,
+                popen_factory=factory, runtime=TEST_RUNTIME, ),
                 repository=OracleSessionRepository(
                     service.settings, oracle_home=oracle_home
                 ),
@@ -890,7 +958,7 @@ class FollowupExecutionTests(unittest.TestCase):
                 "ctx-main",
                 [TEST_ORACLE_CLI, "-p", "must not run"],
             )
-            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["exit_code"], 2)
             self.assertIn("다른 슬롯으로 전환하지 않았습니다", result["record"]["operator_action"])
             self.assertEqual(result["record"]["attempted_slots"], [2])
             self.assertEqual(factory.calls, [])
@@ -913,11 +981,8 @@ class FollowupExecutionTests(unittest.TestCase):
             events: list[dict[str, object]] = []
             result = FollowupRunner(
                 service,
-                runner=JobRunner(
-                    service,
-                    popen_factory=factory,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                ),
+                runner=JobRunner(service,
+                popen_factory=factory, runtime=TEST_RUNTIME, ),
                 repository=OracleSessionRepository(
                     service.settings, oracle_home=oracle_home
                 ),
@@ -959,11 +1024,8 @@ class FollowupExecutionTests(unittest.TestCase):
             result_holder: dict[str, object] = {}
             followup = FollowupRunner(
                 service,
-                runner=JobRunner(
-                    service,
-                    popen_factory=factory,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                ),
+                runner=JobRunner(service,
+                popen_factory=factory, runtime=TEST_RUNTIME, ),
                 repository=OracleSessionRepository(
                     service.settings, oracle_home=oracle_home
                 ),
@@ -1038,11 +1100,8 @@ class FollowupExecutionTests(unittest.TestCase):
             factory = FakeOracleFactory(oracle_home)
             result = FollowupRunner(
                 service,
-                runner=JobRunner(
-                    service,
-                    popen_factory=factory,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                ),
+                runner=JobRunner(service,
+                popen_factory=factory, runtime=TEST_RUNTIME, ),
                 repository=OracleSessionRepository(
                     service.settings, oracle_home=oracle_home
                 ),
@@ -1053,7 +1112,7 @@ class FollowupExecutionTests(unittest.TestCase):
                 [TEST_ORACLE_CLI, "-p", "must not run"],
             )
 
-            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["exit_code"], 2)
             self.assertEqual(result["record"]["attempted_slots"], [10])
             self.assertIn(
                 "다른 슬롯으로 전환하지 않았습니다",
@@ -1073,11 +1132,8 @@ class FollowupExecutionTests(unittest.TestCase):
             factory = FakeOracleFactory(oracle_home)
             result = FollowupRunner(
                 service,
-                runner=JobRunner(
-                    service,
-                    popen_factory=factory,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                ),
+                runner=JobRunner(service,
+                popen_factory=factory, runtime=TEST_RUNTIME, ),
                 repository=OracleSessionRepository(
                     service.settings, oracle_home=oracle_home
                 ),
@@ -1088,7 +1144,7 @@ class FollowupExecutionTests(unittest.TestCase):
                 [TEST_ORACLE_CLI, "-p", "must not run"],
             )
 
-            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["exit_code"], 2)
             self.assertIn(
                 "다른 슬롯으로 전환하지 않았습니다",
                 result["record"]["operator_action"],
@@ -1124,11 +1180,8 @@ class FollowupExecutionTests(unittest.TestCase):
             factory = FakeOracleFactory(oracle_home)
             followup = FollowupRunner(
                 service,
-                runner=JobRunner(
-                    service,
-                    popen_factory=factory,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                ),
+                runner=JobRunner(service,
+                popen_factory=factory, runtime=TEST_RUNTIME, ),
                 repository=OracleSessionRepository(
                     service.settings, oracle_home=oracle_home
                 ),
@@ -1385,15 +1438,48 @@ print(answer)
 
 class IsolatedCliExerciseTests(unittest.TestCase):
     def test_actual_cli_followup_and_no_parent_fail_closed(self):
-        project_root = Path(__file__).resolve().parents[1]
+        source_root = Path(__file__).resolve().parents[1]
         with TemporaryDirectory() as directory:
             root = Path(directory)
+            project_root = root / "oracle-browser-slots"
+            shutil.copytree(source_root / "oracle_browser_slots", project_root / "oracle_browser_slots")
+            shutil.copytree(source_root / "bin", project_root / "bin")
             oracle_home = root / "oracle-home"
             state_root = root / "state"
             profile_root = root / "profiles"
-            executable = root / "bin" / "oracle"
+            executable = root / "dist" / "bin" / "oracle-cli.js"
             executable.parent.mkdir(parents=True)
             write_fake_oracle_executable(executable)
+            (root / "package.json").write_text(
+                json.dumps(
+                    {
+                        "name": "@steipete/oracle",
+                        "version": "0.16.1",
+                        "bin": {"oracle": "dist/bin/oracle-cli.js"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            runtime_bin = root / "bin"
+            runtime_bin.mkdir()
+            (runtime_bin / "oracle").symlink_to(executable)
+            fake_node = runtime_bin / "node"
+            fake_node.write_text(
+                "#!/usr/bin/python3\n"
+                "import json, os, sys\n"
+                "if sys.argv[1:] == ['--version']:\n"
+                "    print('v24.0.0')\n"
+                "elif sys.argv[2:] == ['--version']:\n"
+                "    print('0.16.1')\n"
+                "elif sys.argv[2:] == ['runtime', 'file-selection', '--capability', '--json']:\n"
+                "    print(json.dumps({'schema': 'oracle-file-selection/v1', 'ok': True, "
+                "'capability': 'file-selection', 'package': {'name': '@steipete/oracle', "
+                "'version': '0.16.1'}}))\n"
+                "else:\n"
+                "    os.execv(sys.executable, [sys.executable, sys.argv[1], *sys.argv[2:]])\n",
+                encoding="utf-8",
+            )
+            fake_node.chmod(0o755)
 
             while True:
                 server = _ThreadedTCPServer(("127.0.0.1", 0), _FakeCDPHandler)
@@ -1439,7 +1525,7 @@ class IsolatedCliExerciseTests(unittest.TestCase):
                         "ORACLE_BROWSER_SLOTS_PORT_BASE": str(settings.port_base),
                         "ORACLE_BROWSER_SLOTS_CDP_REQUEST_TIMEOUT": "1",
                         "ORACLE_BROWSER_SLOTS_QUEUE_POLL_INTERVAL": "0.01",
-                        "ORACLE_BROWSER_SLOTS_ORACLE_CLI": str(executable),
+                        "PATH": f"{runtime_bin}:/usr/bin:/bin",
                     }
                 )
                 initial_command = [
@@ -1450,7 +1536,7 @@ class IsolatedCliExerciseTests(unittest.TestCase):
                     "--opencode-conversation-id",
                     "ctx-cli",
                     "--",
-                    str(executable),
+                    "oracle",
                     "-p",
                     "initial consult",
                 ]
@@ -1483,7 +1569,7 @@ class IsolatedCliExerciseTests(unittest.TestCase):
                     "--opencode-conversation-id",
                     "ctx-cli",
                     "--",
-                    str(executable),
+                    "oracle",
                     "-p",
                     "continue safely",
                 ]
@@ -1553,7 +1639,7 @@ class IsolatedCliExerciseTests(unittest.TestCase):
                     "--opencode-conversation-id",
                     "ctx-without-parent",
                     "--",
-                    str(executable),
+                    "oracle",
                     "-p",
                     "must not submit",
                 ]

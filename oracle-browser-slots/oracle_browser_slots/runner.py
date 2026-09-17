@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import os
+import re
 import signal
 import subprocess
 import threading
+from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from .attachments import (
@@ -13,17 +15,28 @@ from .attachments import (
     AttachmentPreparationInterrupted,
     FileAttachmentPolicy,
     PreparedAttachment,
+    REQUIRED_VALUE_OPTIONS,
 )
 from .cdp import CDPError
 from .model import validate_chatgpt_url
 from .service import SlotService
+from .runtime import OracleRuntimeError, ResolvedOracleRuntime, resolve_oracle_runtime
 
 
 LifecycleEmitter = Callable[[dict[str, Any]], None]
-CANONICAL_ORACLE_CLI = "/home/user01/.nvm/versions/node/v24.18.0/bin/oracle"
 REQUIRED_ORACLE_FLAGS = (("--engine", "browser"),)
+ENGINE_FLAGS = ("--engine", "-e", "--mode")
 MODEL_STRATEGY_FLAG = "--browser-model-strategy"
 URL_ALIAS_FLAGS = ("--chatgpt-url", "--browser-url")
+BROWSER_TIMEOUT_FLAG = "--browser-timeout"
+DEFAULT_BROWSER_TIMEOUT = "2h"
+MAX_BROWSER_TIMEOUT_MILLISECONDS = 30 * 24 * 60 * 60 * 1000
+DURATION_UNIT_MILLISECONDS = {
+    "ms": 1,
+    "s": 1000,
+    "m": 60 * 1000,
+    "h": 60 * 60 * 1000,
+}
 FORBIDDEN_TRANSPORT_FLAGS = (
     "--browser-manual-login",
     "--browser-chrome-path",
@@ -33,6 +46,21 @@ FORBIDDEN_TRANSPORT_FLAGS = (
 )
 MODEL_FLAGS = ("--model", "-m", "--models")
 REASONING_FLAG = "--browser-thinking-time"
+VALUE_TAKING_OPTIONS = REQUIRED_VALUE_OPTIONS | {
+    "-f",
+    "--file",
+    "--include",
+    "--files",
+    "--path",
+    "--paths",
+    "--perf-trace-path",
+    "--engine",
+    "-e",
+    "--mode",
+    MODEL_STRATEGY_FLAG,
+    "--remote-chrome",
+    REASONING_FLAG,
+}
 
 
 class _RunInterrupted(Exception):
@@ -47,15 +75,15 @@ class JobRunner:
         service: SlotService,
         *,
         popen_factory: Callable[..., Any] = subprocess.Popen,
-        oracle_cli_path: str | None = None,
+        runtime: ResolvedOracleRuntime | None = None,
+        runtime_resolver: Callable[[], ResolvedOracleRuntime] = resolve_oracle_runtime,
         attachment_policy: FileAttachmentPolicy | None = None,
     ) -> None:
         self.service = service
         self.popen_factory = popen_factory
-        self.oracle_cli_path = oracle_cli_path or os.environ.get(
-            "ORACLE_BROWSER_SLOTS_ORACLE_CLI", CANONICAL_ORACLE_CLI
-        )
-        self.attachment_policy = attachment_policy or FileAttachmentPolicy()
+        self.runtime = runtime
+        self.runtime_resolver = runtime_resolver
+        self.attachment_policy = attachment_policy
 
     def run(
         self,
@@ -145,6 +173,29 @@ class JobRunner:
             if prepared is not None:
                 prepared.cleanup()
             return {"accepted": False, "exit_code": 2, "record": claim["record"]}
+
+        readiness = self.pre_submit_check(slot_id)
+        if not readiness["ready"]:
+            cleanup_result = prepared.cleanup() if prepared is not None else None
+            finished = self.service.finish_job(
+                slot_id,
+                job_id,
+                claim["record"]["started_at"],
+                "pre_submit_failed",
+                2,
+                readiness["reason"],
+                readiness["operator_action"],
+            )
+            record = finished["record"]
+            if cleanup_result is not None:
+                record["generated_zip_cleanup"] = cleanup_result
+            self._emit(emit, record)
+            return {
+                "accepted": True,
+                "exit_code": 2,
+                "record": record,
+                "child_started": False,
+            }
 
         if prepared is None:
             return self.execute_claimed(
@@ -287,7 +338,11 @@ class JobRunner:
     ) -> tuple[list[str], PreparedAttachment | None]:
         """Prepare file-bearing argv before a slot claim; leave file-free argv unchanged."""
 
-        prepared = self.attachment_policy.prepare(argv, request_id)
+        policy = self.attachment_policy
+        if policy is None:
+            policy = FileAttachmentPolicy(runtime=self._resolved_runtime())
+            self.attachment_policy = policy
+        prepared = policy.prepare(argv, request_id)
         if prepared is None:
             return list(argv), None
         return prepared.command, prepared
@@ -433,7 +488,11 @@ class JobRunner:
                 for signal_number in self._interrupt_signals():
                     previous_handlers[signal_number] = signal.getsignal(signal_number)
                     signal.signal(signal_number, interrupt_handler)
-            child = self.popen_factory(command, env=environment, close_fds=True)
+            runtime = self._resolved_runtime()
+            if not command or Path(command[0]).resolve() != runtime.oracle_entry:
+                raise ValueError("검증된 Oracle entry가 child command에서 변경되었습니다.")
+            child_command = [*runtime.command_prefix, *command[1:]]
+            child = self.popen_factory(child_command, env=environment, close_fds=True)
             try:
                 exit_code = int(child.wait())
             except (KeyboardInterrupt, _RunInterrupted) as exc:
@@ -621,26 +680,43 @@ class JobRunner:
         *,
         apply_workspace_mapping: bool = True,
     ) -> list[str]:
-        expected_executable = self.oracle_cli_path
-        if not os.path.isabs(expected_executable) or argv[0] != expected_executable:
+        runtime = self._resolved_runtime()
+        executable = argv[0]
+        if executable == "oracle":
+            pass
+        elif os.path.isabs(executable):
+            if Path(executable) != runtime.oracle_entry:
+                try:
+                    supplied = Path(executable).resolve(strict=True)
+                except OSError as exc:
+                    raise OracleTransportError(
+                        f"Oracle 실행 파일을 해석할 수 없습니다: {exc}",
+                        "논리 실행 토큰 oracle 또는 확인된 Oracle entry를 지정하십시오.",
+                    ) from exc
+                if supplied != runtime.oracle_entry:
+                    raise OracleTransportError(
+                        f"요청한 Oracle 실행 파일이 검증된 release entry와 다릅니다: {supplied}",
+                        f"oracle 또는 {runtime.oracle_entry}를 지정하십시오.",
+                    )
+        else:
             raise OracleTransportError(
-                "public Oracle 요청은 canonical stock Oracle CLI만 실행할 수 있습니다.",
-                f"{expected_executable}를 argv[0]으로 지정하고 shell/env wrapper 없이 다시 실행하십시오.",
+                f"지원하지 않는 Oracle 실행 토큰입니다: {executable}",
+                "논리 실행 토큰 oracle을 argv[0]으로 지정하십시오.",
             )
 
         expected_remote: str | None = None
         if slot_id is not None:
             slot = self.service.settings.slot(slot_id)
             expected_remote = f"127.0.0.1:{slot.port}"
-        for token in argv[1:]:
-            if any(
-                token == flag or token.startswith(f"{flag}=")
-                for flag in FORBIDDEN_TRANSPORT_FLAGS
-            ):
-                raise OracleTransportError(
-                    f"Oracle 요청에 stock Oracle 외부 transport 옵션이 포함되어 있습니다: {token}",
-                    "browser-manual-login, browser-chrome-path, browser-keep-browser, remote-host, bridge를 제거하십시오.",
-                )
+        forbidden_occurrences = self._option_occurrences(
+            argv, FORBIDDEN_TRANSPORT_FLAGS
+        )
+        if forbidden_occurrences:
+            token = forbidden_occurrences[0][0]
+            raise OracleTransportError(
+                f"Oracle 요청에 stock Oracle 외부 transport 옵션이 포함되어 있습니다: {token}",
+                "browser-manual-login, browser-chrome-path, browser-keep-browser, remote-host, bridge를 제거하십시오.",
+            )
 
         caller_url = self._caller_chatgpt_url(argv)
         injection: str | None = None
@@ -660,30 +736,31 @@ class JobRunner:
         required_values[MODEL_STRATEGY_FLAG] = self._expected_model_strategy(argv)
         if expected_remote is not None:
             required_values["--remote-chrome"] = expected_remote
-        index = 1
-        while index < len(argv):
-            token = argv[index]
-            flag = None
-            value: str | None = None
-            if token in values:
-                flag = token
-                if index + 1 >= len(argv) or argv[index + 1].startswith("--"):
-                    raise OracleTransportError(
-                        f"{token} 값이 없습니다.",
-                        f"{token}에 명시적 값을 지정하십시오.",
-                    )
-                value = argv[index + 1]
-                index += 1
-            else:
-                for candidate in values:
-                    prefix = f"{candidate}="
-                    if token.startswith(prefix):
-                        flag = candidate
-                        value = token[len(prefix) :]
-                        break
-            if flag is not None:
-                values[flag].append(value or "")
-            index += 1
+
+        timeout_occurrences = self._option_occurrences(argv, (BROWSER_TIMEOUT_FLAG,))
+        if len(timeout_occurrences) > 1:
+            raise OracleTransportError(
+                f"{BROWSER_TIMEOUT_FLAG}가 중복 지정되었습니다.",
+                f"{BROWSER_TIMEOUT_FLAG}를 한 번만 지정하십시오.",
+            )
+        if timeout_occurrences:
+            timeout_value = timeout_occurrences[0][1]
+            if not timeout_value:
+                raise OracleTransportError(
+                    f"{BROWSER_TIMEOUT_FLAG} 값이 없습니다.",
+                    f"{BROWSER_TIMEOUT_FLAG}에 명시적 값을 지정하십시오.",
+                )
+            if not self._is_positive_duration(timeout_value):
+                raise OracleTransportError(
+                    f"{BROWSER_TIMEOUT_FLAG} 값이 유효한 양의 duration이 아닙니다: {timeout_value}",
+                    f"{BROWSER_TIMEOUT_FLAG}에 30m, 10s, 500ms, 2h 같은 양의 duration을 지정하십시오.",
+                )
+        for flag in values:
+            option_flags = ENGINE_FLAGS if flag == "--engine" else (flag,)
+            values[flag] = [
+                value or ""
+                for _, value, _ in self._option_occurrences(argv, option_flags)
+            ]
 
         for flag, expected in required_values.items():
             occurrences = values[flag]
@@ -718,11 +795,28 @@ class JobRunner:
                 normalized = self._insert_before_terminator(
                     normalized, (flag, expected)
                 )
+        if not timeout_occurrences:
+            normalized = self._insert_before_terminator(
+                normalized, (BROWSER_TIMEOUT_FLAG, DEFAULT_BROWSER_TIMEOUT)
+            )
         if injection is not None:
             normalized = self._insert_before_terminator(
                 normalized, ("--chatgpt-url", injection)
             )
+        normalized[0] = str(runtime.oracle_entry)
         return normalized
+
+    def _resolved_runtime(self) -> ResolvedOracleRuntime:
+        if self.runtime is not None:
+            return self.runtime
+        try:
+            self.runtime = self.runtime_resolver()
+        except OracleRuntimeError as exc:
+            raise OracleTransportError(
+                f"Oracle runtime 사전 검증에 실패했습니다: {exc}",
+                "Node >= 24와 동일 @steipete/oracle release 설치 및 PATH를 확인하십시오.",
+            ) from exc
+        return self.runtime
 
     @staticmethod
     def _option_occurrences(
@@ -746,29 +840,40 @@ class JobRunner:
                     if token.startswith(prefix):
                         occurrences.append((flag, token[len(prefix) :], "equals"))
                         break
+                    if (
+                        flag in ("-m", "-e")
+                        and token.startswith(flag)
+                        and not token.startswith(prefix)
+                        and len(token) > len(flag)
+                    ):
+                        occurrences.append((flag, token[len(flag) :], "combined"))
+                        break
+                else:
+                    option = token.split("=", 1)[0]
+                    if "=" not in token and option in VALUE_TAKING_OPTIONS:
+                        index += 1
             index += 1
         return occurrences
 
     @staticmethod
-    def _option_values(argv: Sequence[str], flags: Sequence[str]) -> list[str]:
-        values: list[str] = []
-        index = 1
-        while index < len(argv):
-            token = argv[index]
-            if token == "--":
-                break
-            if token in flags:
-                if index + 1 < len(argv) and not argv[index + 1].startswith("--"):
-                    values.append(argv[index + 1])
-                    index += 1
-            else:
-                for flag in flags:
-                    prefix = f"{flag}="
-                    if token.startswith(prefix):
-                        values.append(token[len(prefix) :])
-                        break
-            index += 1
-        return values
+    def _is_positive_duration(value: str) -> bool:
+        lowercase = value.strip().lower()
+        try:
+            if re.fullmatch(r"[0-9]+", lowercase) is not None:
+                milliseconds = int(lowercase)
+                return 0 < milliseconds <= MAX_BROWSER_TIMEOUT_MILLISECONDS
+
+            normalized = "".join(lowercase.split())
+            if re.fullmatch(r"(?:[0-9]+(?:ms|h|m|s))+", normalized) is None:
+                return False
+            total_milliseconds = 0
+            for component, unit in re.findall(r"([0-9]+)(ms|h|m|s)", normalized):
+                total_milliseconds += int(component) * DURATION_UNIT_MILLISECONDS[unit]
+                if total_milliseconds > MAX_BROWSER_TIMEOUT_MILLISECONDS:
+                    return False
+            return total_milliseconds > 0
+        except (ValueError, OverflowError):
+            return False
 
     @staticmethod
     def _caller_chatgpt_url(argv: list[str]) -> str | None:
@@ -776,73 +881,51 @@ class JobRunner:
 
         seen: dict[str, str] = {}
         caller_url: str | None = None
-        index = 1
-        while index < len(argv):
-            token = argv[index]
-            if token == "--":
-                break
-            flag: str | None = None
-            value: str | None = None
-            if token in URL_ALIAS_FLAGS:
-                flag = token
-                if (
-                    index + 1 >= len(argv)
-                    or argv[index + 1].startswith("-")
-                ):
-                    raise OracleTransportError(
-                        f"{token} 값이 없습니다.",
-                        f"{token}에 https URL을 지정하십시오.",
-                    )
-                value = argv[index + 1]
-                index += 1
-            else:
-                for candidate in URL_ALIAS_FLAGS:
-                    prefix = f"{candidate}="
-                    if token.startswith(prefix):
-                        flag = candidate
-                        value = token[len(prefix) :]
-                        break
-            if flag is not None:
-                if not value or value.startswith("-"):
-                    raise OracleTransportError(
-                        f"{flag} 값이 비어 있거나 옵션으로 해석될 수 있습니다.",
-                        f"{flag}에 https URL을 지정하십시오.",
-                    )
-                try:
-                    validate_chatgpt_url(value, flag)
-                except ValueError as exc:
-                    raise OracleTransportError(
-                        str(exc),
-                        f"{flag}에 https://chatgpt.com 또는 "
-                        "https://chat.openai.com URL을 지정하십시오.",
-                    ) from exc
-                if flag in seen:
-                    raise OracleTransportError(
-                        f"{flag}가 중복 지정되었습니다.",
-                        f"{flag}를 한 번만 지정하십시오.",
-                    )
-                seen[flag] = value
-                if len(seen) > 1:
-                    raise OracleTransportError(
-                        "--chatgpt-url과 --browser-url을 함께 지정할 수 없습니다.",
-                        "URL alias는 둘 중 하나만 지정하십시오.",
-                    )
-                caller_url = value
-            index += 1
+        for flag, value, _ in JobRunner._option_occurrences(argv, URL_ALIAS_FLAGS):
+            if not value or value.startswith("-"):
+                raise OracleTransportError(
+                    f"{flag} 값이 비어 있거나 옵션으로 해석될 수 있습니다.",
+                    f"{flag}에 https URL을 지정하십시오.",
+                )
+            try:
+                validate_chatgpt_url(value, flag)
+            except ValueError as exc:
+                raise OracleTransportError(
+                    str(exc),
+                    f"{flag}에 https://chatgpt.com 또는 "
+                    "https://chat.openai.com URL을 지정하십시오.",
+                ) from exc
+            if flag in seen:
+                raise OracleTransportError(
+                    f"{flag}가 중복 지정되었습니다.",
+                    f"{flag}를 한 번만 지정하십시오.",
+                )
+            seen[flag] = value
+            if len(seen) > 1:
+                raise OracleTransportError(
+                    "--chatgpt-url과 --browser-url을 함께 지정할 수 없습니다.",
+                    "URL alias는 둘 중 하나만 지정하십시오.",
+                )
+            caller_url = value
         return caller_url
 
     @staticmethod
     def _insert_before_terminator(
         normalized: list[str], pair: Sequence[str]
     ) -> list[str]:
-        """Insert injected options before the first standalone `--`."""
+        """Insert injected options before the first unconsumed `--`."""
 
-        try:
-            terminator = normalized.index("--")
-        except ValueError:
-            normalized.extend(pair)
-        else:
-            normalized[terminator:terminator] = list(pair)
+        index = 1
+        while index < len(normalized):
+            token = normalized[index]
+            if token == "--":
+                normalized[index:index] = list(pair)
+                return normalized
+            option = token.split("=", 1)[0]
+            if "=" not in token and option in VALUE_TAKING_OPTIONS:
+                index += 1
+            index += 1
+        normalized.extend(pair)
         return normalized
 
     @staticmethod

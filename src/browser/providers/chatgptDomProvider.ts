@@ -6,11 +6,11 @@ import {
   type AttachmentReadyExpectation,
   type PromptCommitTurnIdentity,
 } from "../actions/promptComposer.js";
-import type { ConversationTurnIdentity } from "../conversationTurns.js";
-import {
-  waitForAssistantResponse,
-  type AssistantResponseIdentityScope,
-} from "../actions/assistantResponse.js";
+import type {
+  AssistantResponseIdentityScope,
+  ConversationTurnIdentity,
+} from "../conversationTurns.js";
+import { waitForAssistantResponse } from "../actions/assistantResponse.js";
 
 interface ChatgptDomProviderState {
   runtime: ChromeClient["Runtime"];
@@ -24,6 +24,8 @@ interface ChatgptDomProviderState {
   committedUserTurn?: PromptCommitTurnIdentity | null;
   committedAssistantTurn?: ConversationTurnIdentity | null;
   onPromptSubmitted?: () => Promise<void> | void;
+  onPromptCommitted?: (identity: ConversationTurnIdentity) => Promise<void> | void;
+  onIdentityScopeResolved?: (scope: AssistantResponseIdentityScope) => Promise<void> | void;
 }
 
 function requireState(ctx: ProviderDomFlowContext): ChatgptDomProviderState {
@@ -60,6 +62,7 @@ async function submitPromptViaAdapter(ctx: ProviderDomFlowContext): Promise<void
   );
   state.committedUserTurn = committedUserTurn;
   state.committedAssistantTurn = null;
+  await state.onPromptCommitted?.(committedUserTurn);
 }
 
 async function waitForResponse(ctx: ProviderDomFlowContext): Promise<{
@@ -81,6 +84,11 @@ async function waitForResponse(ctx: ProviderDomFlowContext): Promise<{
     state.baselineTurns ?? undefined,
     undefined,
     identityScope,
+    async (resolvedScope) => {
+      state.committedUserTurn = resolvedScope.committedUserTurn;
+      state.committedAssistantTurn = resolvedScope.committedAssistantTurn ?? null;
+      await state.onIdentityScopeResolved?.(resolvedScope);
+    },
   );
   if (identityScope?.committedAssistantTurn) {
     state.committedAssistantTurn = identityScope.committedAssistantTurn;

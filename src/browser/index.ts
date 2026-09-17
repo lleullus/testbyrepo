@@ -72,8 +72,10 @@ import type { LaunchedChrome } from "chrome-launcher";
 import { BrowserAutomationError } from "../oracle/errors.js";
 import { alignPromptEchoPair, buildPromptEchoMatcher } from "./reattachHelpers.js";
 import { buildConversationTurnCountExpression } from "./conversationTurns.js";
-import type { ConversationTurnIdentity } from "./conversationTurns.js";
-import type { AssistantResponseIdentityScope } from "./actions/assistantResponse.js";
+import type {
+  AssistantResponseIdentityScope,
+  ConversationTurnIdentity,
+} from "./conversationTurns.js";
 import type { ProfileRunLock } from "./profileState.js";
 import {
   cleanupStaleProfileState,
@@ -543,6 +545,7 @@ async function waitForAssistantOrGeneratedImageResponse(params: {
   expectedConversationId?: string;
   imageOutputRequested: boolean;
   logger: BrowserLogger;
+  identityScope?: AssistantResponseIdentityScope;
 }): Promise<AssistantAnswer> {
   if (!params.imageOutputRequested) {
     return params.waitForText();
@@ -554,6 +557,7 @@ async function waitForAssistantOrGeneratedImageResponse(params: {
     params.timeoutMs,
     params.minTurnIndex,
     params.expectedConversationId,
+    params.identityScope,
   );
   if (response) {
     if (response.html?.includes("/backend-api/estuary/content?id=file_")) {
@@ -561,7 +565,6 @@ async function waitForAssistantOrGeneratedImageResponse(params: {
     }
     return response;
   }
-
   throw new Error("assistant response timeout while waiting for generated image or text");
 }
 
@@ -583,13 +586,17 @@ async function pollGeneratedImageOrTextAssistantResponse(
   timeoutMs: number,
   minTurnIndex?: number,
   expectedConversationId?: string,
+  identityScope?: AssistantResponseIdentityScope,
 ): Promise<AssistantAnswer | null> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    let snapshot = await readAssistantSnapshot(Runtime, minTurnIndex, expectedConversationId).catch(
-      () => null,
-    );
-    if (!snapshot && typeof minTurnIndex === "number" && Number.isFinite(minTurnIndex)) {
+    let snapshot = await readAssistantSnapshot(
+      Runtime,
+      minTurnIndex,
+      expectedConversationId,
+      identityScope,
+    ).catch(() => null);
+    if (!snapshot && typeof minTurnIndex === "number" && Number.isFinite(minTurnIndex) && !identityScope) {
       const relaxedSnapshot = await readAssistantSnapshot(
         Runtime,
         undefined,
@@ -749,6 +756,8 @@ type ChatGptProviderSubmissionState = Record<string, unknown> & {
   baselineTurns?: number | null;
   committedUserTurn?: ConversationTurnIdentity | null;
   committedAssistantTurn?: ConversationTurnIdentity | null;
+  onPromptCommitted?: (identity: ConversationTurnIdentity) => Promise<void> | void;
+  onIdentityScopeResolved?: (scope: AssistantResponseIdentityScope) => Promise<void> | void;
 };
 
 function buildAssistantResponseIdentityScope(
@@ -1041,6 +1050,8 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
   let lastTargetId: string | undefined;
   let lastUrl: string | undefined;
   let promptSubmitted = false;
+  let committedUserTurn: ConversationTurnIdentity | undefined;
+  let identityScope: AssistantResponseIdentityScope | undefined;
   let modelSelectionEvidence: BrowserModelSelectionEvidence | undefined;
   let reasoningSelectionEvidence: BrowserReasoningSelectionEvidence | undefined;
   const reasoningSelectionHistory: BrowserReasoningSelectionEvidence[] = [];
@@ -1050,7 +1061,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
   let modelSelectionAttemptIndex = 0;
   let tabLease: BrowserTabLease | null = null;
   let conversationUrlMonitor: ConversationUrlMonitor | null = null;
-  const emitRuntimeHint = async (): Promise<void> => {
+  const emitRuntimeHint = async (strict = false): Promise<void> => {
     if (!chrome?.port) {
       return;
     }
@@ -1063,6 +1074,9 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
       tabUrl: lastUrl,
       conversationId,
       promptSubmitted,
+      committedUserTurn,
+      committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+      identityScope,
       userDataDir,
       controllerPid: process.pid,
     };
@@ -1080,6 +1094,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
         tabUrl: lastUrl,
       });
     } catch (error) {
+      if (strict) throw error;
       const message = error instanceof Error ? error.message : String(error);
       logger(`Failed to persist runtime hint: ${message}`);
     }
@@ -1327,6 +1342,9 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
                     ? extractConversationIdFromUrl(liveness.matchedUrl ?? lastUrl ?? "")
                     : undefined,
                 promptSubmitted,
+                committedUserTurn,
+                committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+                identityScope,
                 controllerPid: process.pid,
               },
             }),
@@ -1782,6 +1800,21 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
         baselineTurns: baselineTurns ?? undefined,
         attachmentNames: attachmentExpectations,
         onPromptSubmitted: markPromptSubmitted,
+        onPromptCommitted: async (identity) => {
+          committedUserTurn = { ...identity };
+          identityScope = { committedUserTurn: { ...identity }, committedAssistantTurn: null };
+          await emitRuntimeHint(true);
+        },
+        onIdentityScopeResolved: async (resolvedScope) => {
+          committedUserTurn = { ...resolvedScope.committedUserTurn };
+          identityScope = {
+            committedUserTurn: { ...resolvedScope.committedUserTurn },
+            committedAssistantTurn: resolvedScope.committedAssistantTurn
+              ? { ...resolvedScope.committedAssistantTurn }
+              : null,
+          };
+          await emitRuntimeHint(true);
+        },
       };
       const deepResearchTargetBaseline =
         deepResearch && client
@@ -1842,7 +1875,6 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
 
     let baselineTurns: number | null = null;
     let baselineAssistantText: string | null = null;
-    let identityScope: AssistantResponseIdentityScope | undefined;
     let deepResearchTargetKeys: string[] = [];
     let deepResearchTargetBaselineCaptured = false;
     await acquireProfileLockIfNeeded();
@@ -1869,6 +1901,15 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
       await releaseProfileLockIfHeld();
     }
     const imageArtifactMinTurnIndex = baselineTurns;
+    let anchoredExpectedConversationId =
+      extractConversationIdFromUrl(config.resumeConversationUrl ?? "") ??
+      (lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined);
+    const expectedConversationId = () => {
+      if (!anchoredExpectedConversationId && lastUrl) {
+        anchoredExpectedConversationId = extractConversationIdFromUrl(lastUrl);
+      }
+      return anchoredExpectedConversationId;
+    };
     if (deepResearch) {
       await raceWithDisconnect(waitForResearchPlanAutoConfirm(Runtime, logger));
       const researchResult = await raceWithDisconnect(
@@ -1882,6 +1923,18 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
           {
             ignoredTargetKeys: deepResearchTargetKeys,
             targetBaselineCaptured: deepResearchTargetBaselineCaptured,
+            expectedConversationId: expectedConversationId(),
+            identityScope,
+            onIdentityScopeResolved: async (resolvedScope) => {
+              committedUserTurn = { ...resolvedScope.committedUserTurn };
+              identityScope = {
+                committedUserTurn: { ...resolvedScope.committedUserTurn },
+                committedAssistantTurn: resolvedScope.committedAssistantTurn
+                  ? { ...resolvedScope.committedAssistantTurn }
+                  : null,
+              };
+              await emitRuntimeHint(true);
+            },
           },
         ),
       );
@@ -1940,14 +1993,15 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
         tabUrl: lastUrl,
         conversationId: lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined,
         promptSubmitted,
+        committedUserTurn,
+        committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+        identityScope,
         controllerPid: process.pid,
       };
     }
     // Helper to normalize text for echo detection (collapse whitespace, lowercase)
     const normalizeForComparison = (text: string): string =>
       text.toLowerCase().replace(/\s+/g, " ").trim();
-    const expectedConversationId = () =>
-      lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined;
     const waitForFreshAssistantResponse = async (baselineNormalized: string, timeoutMs: number) => {
       const baselinePrefix =
         baselineNormalized.length >= 80
@@ -2036,6 +2090,9 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
               tabUrl: lastUrl,
               conversationId: lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined,
               promptSubmitted,
+              committedUserTurn,
+              committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+              identityScope,
               controllerPid: process.pid,
             },
           },
@@ -2061,6 +2118,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
             minTurnIndex: baselineTurns ?? undefined,
             expectedConversationId: expectedConversationId(),
             imageOutputRequested,
+            identityScope,
           }),
         ),
       );
@@ -2098,6 +2156,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
               minTurnIndex: baselineTurns ?? undefined,
               expectedConversationId: expectedConversationId(),
               imageOutputRequested,
+              identityScope,
             }),
           ),
         );
@@ -2127,6 +2186,9 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
               tabUrl: lastUrl,
               conversationId: lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined,
               promptSubmitted,
+              committedUserTurn,
+              committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+              identityScope,
               controllerPid: process.pid,
             };
             throw await createAssistantTimeoutError({
@@ -2168,7 +2230,12 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
       const copiedMarkdown = await raceWithDisconnect(
         withRetries(
           async () => {
-            const attempt = await captureAssistantMarkdown(Runtime, turnAnswer.meta, logger);
+            const attempt = await captureAssistantMarkdown(
+              Runtime,
+              turnAnswer.meta,
+              logger,
+              identityScope,
+            );
             if (!attempt) {
               throw new Error("copy-missing");
             }
@@ -2199,6 +2266,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
           logger,
           allowMarkdownUpdate: !copiedMarkdown,
           identityScope,
+          expectedConversationId: expectedConversationId(),
         }));
 
       // Final sanity check: ensure we didn't accidentally capture the user prompt instead of the assistant turn.
@@ -2372,6 +2440,8 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
       outputPath: options.outputPath,
       answerText,
       waitTimeoutMs: options.config?.timeoutMs,
+      expectedConversationId: expectedConversationId(),
+      identityScope,
       checkBlockingUiWarning: () =>
         throwChatGptUiWarningIfPresent({
           Runtime,
@@ -2387,6 +2457,9 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
             tabUrl: lastUrl,
             conversationId: lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined,
             promptSubmitted,
+            committedUserTurn,
+            committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+            identityScope,
             controllerPid: process.pid,
           },
         }),
@@ -2460,6 +2533,9 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
       tabUrl: lastUrl,
       conversationId: lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined,
       promptSubmitted,
+      committedUserTurn,
+      committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+      identityScope,
       controllerPid: process.pid,
     };
   } catch (error) {
@@ -2487,6 +2563,9 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
         chromeTargetId: lastTargetId,
         tabUrl: lastUrl,
         promptSubmitted,
+        committedUserTurn,
+        committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+        identityScope,
         controllerPid: process.pid,
       };
       const reuseProfileHint =
@@ -2563,6 +2642,9 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
               ? extractConversationIdFromUrl(liveness.matchedUrl ?? lastUrl ?? "")
               : undefined,
           promptSubmitted,
+          committedUserTurn,
+          committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+          identityScope,
           controllerPid: process.pid,
         },
       },
@@ -2841,6 +2923,7 @@ async function maybeRecoverLongAssistantResponse({
   logger,
   allowMarkdownUpdate,
   identityScope,
+  expectedConversationId,
 }: {
   runtime: ChromeClient["Runtime"];
   baselineTurns: number | null;
@@ -2849,6 +2932,7 @@ async function maybeRecoverLongAssistantResponse({
   logger: BrowserLogger;
   allowMarkdownUpdate: boolean;
   identityScope?: AssistantResponseIdentityScope;
+  expectedConversationId?: string;
 }): Promise<{ answerText: string; answerMarkdown: string }> {
   // Learned: long streaming responses can still be rendering after initial capture.
   // Add a brief delay and re-poll to catch any additional content (#71).
@@ -2864,7 +2948,7 @@ async function maybeRecoverLongAssistantResponse({
     const laterSnapshot = await readAssistantSnapshot(
       runtime,
       baselineTurns ?? undefined,
-      undefined,
+      expectedConversationId,
       identityScope,
     ).catch(() => null);
     const laterText = typeof laterSnapshot?.text === "string" ? laterSnapshot.text.trim() : "";
@@ -3074,6 +3158,8 @@ async function runRemoteBrowserMode(
   let tabLease: BrowserTabLease | null = null;
   let lastUrl: string | undefined;
   let promptSubmitted = false;
+  let committedUserTurn: ConversationTurnIdentity | undefined;
+  let identityScope: AssistantResponseIdentityScope | undefined;
   let modelSelectionEvidence: BrowserModelSelectionEvidence | undefined;
   let reasoningSelectionEvidence: BrowserReasoningSelectionEvidence | undefined;
   const reasoningSelectionHistory: BrowserReasoningSelectionEvidence[] = [];
@@ -3085,7 +3171,7 @@ async function runRemoteBrowserMode(
   let ownsTarget = true;
   let conversationUrlMonitor: ConversationUrlMonitor | null = null;
   const runtimeHintCb = options.runtimeHintCb;
-  const emitRuntimeHint = async () => {
+  const emitRuntimeHint = async (strict = false) => {
     if (!runtimeHintCb) return;
     try {
       await runtimeHintCb(
@@ -3098,6 +3184,9 @@ async function runRemoteBrowserMode(
           tabUrl: lastUrl,
           conversationId: lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined,
           promptSubmitted,
+          committedUserTurn,
+          committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+          identityScope,
           controllerPid: process.pid,
         },
         modelSelectionEvidence,
@@ -3111,6 +3200,7 @@ async function runRemoteBrowserMode(
         tabUrl: lastUrl,
       });
     } catch (error) {
+      if (strict) throw error;
       const message = error instanceof Error ? error.message : String(error);
       logger(`Failed to persist runtime hint: ${message}`);
     }
@@ -3461,6 +3551,21 @@ async function runRemoteBrowserMode(
         baselineTurns: baselineTurns ?? undefined,
         attachmentNames: attachmentExpectations,
         onPromptSubmitted: markPromptSubmitted,
+        onPromptCommitted: async (identity) => {
+          committedUserTurn = { ...identity };
+          identityScope = { committedUserTurn: { ...identity }, committedAssistantTurn: null };
+          await emitRuntimeHint(true);
+        },
+        onIdentityScopeResolved: async (resolvedScope) => {
+          committedUserTurn = { ...resolvedScope.committedUserTurn };
+          identityScope = {
+            committedUserTurn: { ...resolvedScope.committedUserTurn },
+            committedAssistantTurn: resolvedScope.committedAssistantTurn
+              ? { ...resolvedScope.committedAssistantTurn }
+              : null,
+          };
+          await emitRuntimeHint(true);
+        },
       };
       const deepResearchTargetBaseline =
         deepResearch && client
@@ -3495,7 +3600,6 @@ async function runRemoteBrowserMode(
 
     let baselineTurns: number | null = null;
     let baselineAssistantText: string | null = null;
-    let identityScope: AssistantResponseIdentityScope | undefined;
     let deepResearchTargetKeys: string[] = [];
     let deepResearchTargetBaselineCaptured = false;
     const submission = await runSubmissionWithRecovery({
@@ -3516,6 +3620,15 @@ async function runRemoteBrowserMode(
     deepResearchTargetKeys = submission.deepResearchTargetKeys ?? [];
     deepResearchTargetBaselineCaptured = submission.deepResearchTargetBaselineCaptured ?? false;
     const imageArtifactMinTurnIndex = baselineTurns;
+    let anchoredExpectedConversationId =
+      extractConversationIdFromUrl(config.resumeConversationUrl ?? "") ??
+      (lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined);
+    const expectedConversationId = () => {
+      if (!anchoredExpectedConversationId && lastUrl) {
+        anchoredExpectedConversationId = extractConversationIdFromUrl(lastUrl);
+      }
+      return anchoredExpectedConversationId;
+    };
     if (deepResearch) {
       await waitForResearchPlanAutoConfirm(Runtime, logger);
       const researchResult = await waitForDeepResearchCompletion(
@@ -3528,6 +3641,18 @@ async function runRemoteBrowserMode(
         {
           ignoredTargetKeys: deepResearchTargetKeys,
           targetBaselineCaptured: deepResearchTargetBaselineCaptured,
+          expectedConversationId: expectedConversationId(),
+          identityScope,
+          onIdentityScopeResolved: async (resolvedScope) => {
+            committedUserTurn = { ...resolvedScope.committedUserTurn };
+            identityScope = {
+              committedUserTurn: { ...resolvedScope.committedUserTurn },
+              committedAssistantTurn: resolvedScope.committedAssistantTurn
+                ? { ...resolvedScope.committedAssistantTurn }
+                : null,
+            };
+            await emitRuntimeHint(true);
+          },
         },
       );
       await activeConversationUrlMonitor.update("post-deep-research", 15_000).catch(() => false);
@@ -3581,14 +3706,15 @@ async function runRemoteBrowserMode(
         tabUrl: lastUrl,
         conversationId: lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined,
         promptSubmitted,
+        committedUserTurn,
+        committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+        identityScope,
         controllerPid: process.pid,
       };
     }
     // Helper to normalize text for echo detection (collapse whitespace, lowercase)
     const normalizeForComparison = (text: string): string =>
       text.toLowerCase().replace(/\s+/g, " ").trim();
-    const expectedConversationId = () =>
-      lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined;
     const waitForFreshAssistantResponse = async (baselineNormalized: string, timeoutMs: number) => {
       const baselinePrefix =
         baselineNormalized.length >= 80
@@ -3676,6 +3802,9 @@ async function runRemoteBrowserMode(
               tabUrl: lastUrl,
               conversationId: lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined,
               promptSubmitted,
+              committedUserTurn,
+              committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+              identityScope,
               controllerPid: process.pid,
             },
           },
@@ -3701,6 +3830,7 @@ async function runRemoteBrowserMode(
           minTurnIndex: baselineTurns ?? undefined,
           expectedConversationId: expectedConversationId(),
           imageOutputRequested,
+          identityScope,
         }),
       );
       logger("Recovered assistant response after delayed recheck");
@@ -3736,6 +3866,7 @@ async function runRemoteBrowserMode(
             minTurnIndex: baselineTurns ?? undefined,
             expectedConversationId: expectedConversationId(),
             imageOutputRequested,
+            identityScope,
           }),
         );
       } catch (error) {
@@ -3765,6 +3896,9 @@ async function runRemoteBrowserMode(
               tabUrl: lastUrl,
               conversationId: lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined,
               promptSubmitted,
+              committedUserTurn,
+              committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+              identityScope,
               controllerPid: process.pid,
             };
             throw await createAssistantTimeoutError({
@@ -3805,7 +3939,12 @@ async function runRemoteBrowserMode(
 
       const copiedMarkdown = await withRetries(
         async () => {
-          const attempt = await captureAssistantMarkdown(Runtime, turnAnswer.meta, logger);
+          const attempt = await captureAssistantMarkdown(
+            Runtime,
+            turnAnswer.meta,
+            logger,
+            identityScope,
+          );
           if (!attempt) {
             throw new Error("copy-missing");
           }
@@ -3834,6 +3973,7 @@ async function runRemoteBrowserMode(
           logger,
           allowMarkdownUpdate: !copiedMarkdown,
           identityScope,
+          expectedConversationId: expectedConversationId(),
         }));
 
       // Final sanity check: ensure we didn't accidentally capture the user prompt instead of the assistant turn.
@@ -3965,6 +4105,8 @@ async function runRemoteBrowserMode(
       outputPath: options.outputPath,
       answerText,
       waitTimeoutMs: options.config?.timeoutMs,
+      expectedConversationId: expectedConversationId(),
+      identityScope,
       checkBlockingUiWarning: () =>
         throwChatGptUiWarningIfPresent({
           Runtime,
@@ -3980,6 +4122,9 @@ async function runRemoteBrowserMode(
             tabUrl: lastUrl,
             conversationId: lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined,
             promptSubmitted,
+            committedUserTurn,
+            committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+            identityScope,
             controllerPid: process.pid,
           },
         }),
@@ -4048,6 +4193,9 @@ async function runRemoteBrowserMode(
       tabUrl: lastUrl,
       conversationId: lastUrl ? extractConversationIdFromUrl(lastUrl) : undefined,
       promptSubmitted,
+      committedUserTurn,
+      committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+      identityScope,
       artifacts: savedArtifacts,
       generatedImages: imageArtifacts.generatedImages,
       savedImages: imageArtifacts.savedImages,
@@ -4095,6 +4243,9 @@ async function runRemoteBrowserMode(
             ? extractConversationIdFromUrl(liveness.matchedUrl ?? lastUrl ?? "")
             : undefined,
         promptSubmitted,
+        committedUserTurn,
+        committedAssistantTurn: identityScope?.committedAssistantTurn ?? null,
+        identityScope,
         controllerPid: process.pid,
       },
     });

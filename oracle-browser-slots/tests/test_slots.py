@@ -27,6 +27,7 @@ from oracle_browser_slots.cdp import (
     CDPError,
     LoginResult,
     _archived_ui_fallback_expression,
+    _WebSocket,
 )
 from oracle_browser_slots.coordination import QueueCoordinator
 from oracle_browser_slots.launcher import (
@@ -36,12 +37,28 @@ from oracle_browser_slots.launcher import (
     _is_chrome_process,
 )
 from oracle_browser_slots.model import AVAILABLE, OCCUPIED, SLOT_IDS, UNAVAILABLE, Settings
-from oracle_browser_slots.runner import CANONICAL_ORACLE_CLI, JobRunner, OracleTransportError
+from oracle_browser_slots.runner import JobRunner, OracleTransportError
+from oracle_browser_slots.runtime import (
+    OracleRuntimeError,
+    ResolvedOracleRuntime,
+    resolve_oracle_runtime,
+)
 from oracle_browser_slots.service import SlotService, process_starttime
 from oracle_browser_slots.state import StateError, StateStore
 
 
-TEST_ORACLE_CLI = "/tmp/oracle-test-bin/oracle"
+TEST_ORACLE_CLI = "oracle"
+TEST_NODE = Path("/tmp/oracle-test-bin/node")
+TEST_ORACLE_ENTRY = Path("/tmp/oracle-test-bin/oracle-cli.js")
+TEST_RUNTIME = ResolvedOracleRuntime(
+    node_path=TEST_NODE,
+    node_version="v24.0.0",
+    package_root=Path("/tmp/oracle-test-bin"),
+    package_name="@steipete/oracle",
+    package_version="0.16.1",
+    oracle_entry=TEST_ORACLE_ENTRY,
+    oracle_entry_sha256="test-entry",
+)
 
 
 def oracle_argv(port: int, *extra: str) -> list[str]:
@@ -55,6 +72,10 @@ def oracle_argv(port: int, *extra: str) -> list[str]:
         f"127.0.0.1:{port}",
         *extra,
     ]
+
+
+def resolved_child_argv(command: list[str]) -> list[str]:
+    return [str(TEST_NODE), str(TEST_ORACLE_ENTRY), *command[1:]]
 
 
 class FakeLauncher:
@@ -156,11 +177,8 @@ def auto_waiter_process(settings, result_queue):
         ),
         launcher=FakeLauncher(),
     )
-    runner = JobRunner(
-        service,
-        popen_factory=lambda argv, *, env, close_fds: ReturnCodeChild(0),
-        oracle_cli_path=TEST_ORACLE_CLI,
-    )
+    runner = JobRunner(service,
+    popen_factory=lambda argv, *, env, close_fds: ReturnCodeChild(0), runtime=TEST_RUNTIME, )
     result = AutoAllocator(service, runner=runner, poll_interval=0.01).submit(
         "waiting-cancel",
         [TEST_ORACLE_CLI, "-p", "task"],
@@ -188,7 +206,7 @@ def auto_running_sighup_process(settings, result_queue):
         popen_calls.append(argv)
         return SignalBlockingChild(child_started)
 
-    runner = JobRunner(service, popen_factory=popen, oracle_cli_path=TEST_ORACLE_CLI)
+    runner = JobRunner(service, popen_factory=popen, runtime=TEST_RUNTIME)
 
     def send_sighup():
         child_started.wait(timeout=5)
@@ -274,6 +292,47 @@ def settings_for(root: Path) -> Settings:
 
 
 class CDPConversationRestoreTests(unittest.TestCase):
+    def test_websocket_request_ignores_non_object_json_messages(self):
+        websocket = _WebSocket("ws://127.0.0.1/devtools/page/test", 0.01)
+        websocket.socket = Mock()
+        with patch.object(websocket, "_send_frame"), patch.object(
+            websocket,
+            "_read_message",
+            side_effect=[(0x1, b"[]"), (0x1, b'{"id":1,"result":{}}')],
+        ):
+            response = websocket.request("Runtime.evaluate", {})
+
+        self.assertEqual(response["id"], 1)
+
+    def test_check_login_wraps_unexpected_websocket_response_errors(self):
+        class FailingWebSocket:
+            def __init__(self, _url, _timeout):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, _exc_type, _exc, _traceback):
+                pass
+
+            def request(self, _method, _params):
+                raise TypeError("unexpected response shape")
+
+        targets = [
+            {
+                "type": "page",
+                "url": "https://chatgpt.com/",
+                "webSocketDebuggerUrl": "ws://127.0.0.1/devtools/page/test",
+            }
+        ]
+        client = CDPClient(request_timeout=0.01)
+        with patch.object(client, "browser_version"), patch.object(
+            client, "_get_json", return_value=targets
+        ), patch("oracle_browser_slots.cdp._WebSocket", FailingWebSocket), self.assertRaisesRegex(
+            CDPError, "로그인 상태를 확인할 수 없습니다"
+        ):
+            client.check_login(settings_for(Path("/tmp")).slot(1))
+
     def test_restore_requires_same_conversation_url_and_usable_composer(self):
         with TemporaryDirectory() as directory:
             settings = settings_for(Path(directory))
@@ -1230,6 +1289,34 @@ class SlotServiceTests(unittest.TestCase):
             self.assertEqual(service.status(10)["status"], AVAILABLE)
             self.assertEqual(service.status(1)["status"], AVAILABLE)
 
+    def test_finish_releases_occupancy_when_login_recheck_raises_unexpected_error(self):
+        with TemporaryDirectory() as directory:
+            settings = settings_for(Path(directory))
+            cdp = FakeCDP({1: LoginResult(True, "ready", "없음")})
+            store = StateStore(settings.state_root)
+            service = SlotService(settings, store=store, cdp=cdp, launcher=FakeLauncher())
+            self.assertEqual(service.prepare(1)["status"], AVAILABLE)
+            claim = service.claim_job(1, "cleanup-guard-error")
+            self.assertTrue(claim["accepted"])
+
+            cdp.results[1] = TypeError("unexpected login response")
+            finished = service.finish_job(
+                1,
+                "cleanup-guard-error",
+                claim["record"]["started_at"],
+                "pre_submit_failed",
+                2,
+                "guard failed",
+                "prepare slot 1",
+            )
+
+            self.assertTrue(finished["released"])
+            self.assertEqual(finished["record"]["status"], UNAVAILABLE)
+            self.assertIn("unexpected login response", finished["record"]["reason"])
+            state = store.read(1)
+            self.assertIsNone(state["occupancy"])
+            self.assertTrue(state["requires_reprepare"])
+
     def test_occupancy_is_readable_and_abandoned_work_requires_reprepare(self):
         with TemporaryDirectory() as directory:
             settings = settings_for(Path(directory))
@@ -1343,7 +1430,7 @@ class JobRunnerTests(unittest.TestCase):
     def test_compatible_slots_use_exact_model_and_reasoning_capabilities(self):
         with TemporaryDirectory() as directory:
             service = SlotService(settings_for(Path(directory)))
-            runner = JobRunner(service, oracle_cli_path=TEST_ORACLE_CLI)
+            runner = JobRunner(service, runtime=TEST_RUNTIME)
 
             default_slots = (1, 2, 3, 4, 5, 10)
             high_slots = (3, 4, 5, 1, 2, 10)
@@ -1391,6 +1478,10 @@ class JobRunnerTests(unittest.TestCase):
             self.assertEqual(
                 runner.compatible_slots([TEST_ORACLE_CLI, "-m", "gpt-5.5"]),
                 default_slots,
+            )
+            self.assertEqual(
+                runner.compatible_slots([TEST_ORACLE_CLI, "-mgpt-6-pro"]),
+                pro_slots,
             )
             self.assertEqual(
                 runner.compatible_slots([TEST_ORACLE_CLI, "-m", "gpt-5.5", "--model", "gpt-6"]),
@@ -1448,7 +1539,7 @@ class JobRunnerTests(unittest.TestCase):
     def test_invalid_model_or_reasoning_is_rejected_before_claim(self):
         with TemporaryDirectory() as directory:
             service = SlotService(settings_for(Path(directory)))
-            runner = JobRunner(service, oracle_cli_path=TEST_ORACLE_CLI)
+            runner = JobRunner(service, runtime=TEST_RUNTIME)
             command = [
                 TEST_ORACLE_CLI,
                 "--model",
@@ -1483,13 +1574,14 @@ class JobRunnerTests(unittest.TestCase):
             result = JobRunner(
                 service,
                 popen_factory=popen,
-                oracle_cli_path=TEST_ORACLE_CLI,
+                runtime=TEST_RUNTIME,
             ).run(1, "inject-flags", [TEST_ORACLE_CLI, "-p", "task"])
             self.assertTrue(result["accepted"])
             self.assertEqual(
                 captured["argv"],
                 [
-                    TEST_ORACLE_CLI,
+                    str(TEST_NODE),
+                    str(TEST_ORACLE_ENTRY),
                     "-p",
                     "task",
                     "--engine",
@@ -1498,8 +1590,277 @@ class JobRunnerTests(unittest.TestCase):
                     "current",
                     "--remote-chrome",
                     "127.0.0.1:19222",
+                    "--browser-timeout",
+                    "2h",
                 ],
             )
+
+    def test_option_tokens_used_as_argument_values_are_not_scanned(self):
+        with TemporaryDirectory() as directory:
+            service = SlotService(settings_for(Path(directory)))
+            runner = JobRunner(service, runtime=TEST_RUNTIME)
+
+            for value_option in ("-p", "--prompt", "--message", "--perf-trace-path"):
+                with self.subTest(value_option=value_option):
+                    command = runner.validate_auto_command(
+                        [TEST_ORACLE_CLI, value_option, "--engine=browser"]
+                    )
+                    self.assertIn("--engine=browser", command)
+                    engine_index = command.index("--engine")
+                    self.assertEqual(command[engine_index + 1], "browser")
+
+            prompt_remote = runner.validate_auto_command(
+                [TEST_ORACLE_CLI, "-p", "--remote-chrome=prompt-value"]
+            )
+            normalized = runner._validated_oracle_command(1, prompt_remote)
+            self.assertIn("--remote-chrome=prompt-value", normalized)
+            remote_index = normalized.index("--remote-chrome")
+            self.assertEqual(normalized[remote_index + 1], "127.0.0.1:19222")
+
+            self.assertIsNone(
+                runner._caller_chatgpt_url(
+                    [
+                        TEST_ORACLE_CLI,
+                        "-p",
+                        "--chatgpt-url=https://chatgpt.com/g/prompt-value",
+                    ]
+                )
+            )
+
+    def test_prompt_consumed_double_dash_does_not_split_injected_options(self):
+        with TemporaryDirectory() as directory:
+            runner = JobRunner(
+                SlotService(settings_for(Path(directory))), runtime=TEST_RUNTIME
+            )
+
+            command = runner.validate_auto_command([TEST_ORACLE_CLI, "-p", "--"])
+
+            self.assertEqual(
+                command,
+                [
+                    str(TEST_ORACLE_ENTRY),
+                    "-p",
+                    "--",
+                    "--engine",
+                    "browser",
+                    "--browser-model-strategy",
+                    "current",
+                    "--browser-timeout",
+                    "2h",
+                ],
+            )
+
+    def test_required_flags_after_terminator_are_injected_before_it(self):
+        with TemporaryDirectory() as directory:
+            settings = settings_for(Path(directory))
+            service = SlotService(
+                settings,
+                cdp=FakeCDP({1: LoginResult(True, "ready", "없음")}),
+                launcher=FakeLauncher(),
+            )
+            self.assertEqual(service.prepare(1)["status"], AVAILABLE)
+            captured: dict[str, object] = {}
+
+            def popen(argv, *, env, close_fds):
+                captured["argv"] = argv
+                return ReturnCodeChild(0)
+
+            post_terminator = [
+                "--engine=browser",
+                "--browser-model-strategy=current",
+                "--remote-chrome=127.0.0.1:19222",
+            ]
+            result = JobRunner(
+                service,
+                popen_factory=popen,
+                runtime=TEST_RUNTIME,
+            ).run(
+                1,
+                "inject-before-terminator",
+                [TEST_ORACLE_CLI, "-p", "task", "--", *post_terminator],
+            )
+
+            self.assertTrue(result["accepted"])
+            argv = captured["argv"]
+            terminator = argv.index("--")
+            self.assertEqual(
+                argv[:terminator],
+                [
+                    str(TEST_NODE),
+                    str(TEST_ORACLE_ENTRY),
+                    "-p",
+                    "task",
+                    "--engine",
+                    "browser",
+                    "--browser-model-strategy",
+                    "current",
+                    "--remote-chrome",
+                    "127.0.0.1:19222",
+                    "--browser-timeout",
+                    "2h",
+                ],
+            )
+            self.assertEqual(argv[terminator + 1 :], post_terminator)
+
+    def test_browser_timeout_default_override_and_terminator_are_normalized_once(self):
+        with TemporaryDirectory() as directory:
+            settings = settings_for(Path(directory))
+            service = SlotService(
+                settings,
+                cdp=FakeCDP({1: LoginResult(True, "ready", "없음")}),
+                launcher=FakeLauncher(),
+            )
+            self.assertEqual(service.prepare(1)["status"], AVAILABLE)
+            runner = JobRunner(service, runtime=TEST_RUNTIME)
+
+            default_command = runner.validate_auto_command(
+                [TEST_ORACLE_CLI, "-p", "task", "--", "--browser-timeout", "payload"]
+            )
+            self.assertEqual(default_command.count("--browser-timeout"), 2)
+            terminator = default_command.index("--")
+            self.assertEqual(default_command[terminator - 2 : terminator], ["--browser-timeout", "2h"])
+            prompt_value_command = runner.validate_auto_command(
+                [TEST_ORACLE_CLI, "-p", "--browser-timeout=30m"]
+            )
+            self.assertEqual(
+                prompt_value_command[1:3], ["-p", "--browser-timeout=30m"]
+            )
+            self.assertEqual(prompt_value_command.count("--browser-timeout"), 1)
+            timeout_index = prompt_value_command.index("--browser-timeout")
+            self.assertEqual(prompt_value_command[timeout_index + 1], "2h")
+
+            for override in (
+                ["--browser-timeout", "30m"],
+                ["--browser-timeout=30m"],
+            ):
+                with self.subTest(override=override):
+                    command = runner.validate_auto_command([TEST_ORACLE_CLI, *override, "-p", "task"])
+                    claim = runner.claim_for_auto(1, f"timeout-{len(override)}", command)
+                    self.assertTrue(claim["accepted"])
+                    normalized = claim["command"]
+                    self.assertNotIn("2h", normalized)
+                    self.assertEqual(
+                        sum(
+                            token == "--browser-timeout" or token.startswith("--browser-timeout=")
+                            for token in normalized
+                        ),
+                        1,
+                    )
+                    self.assertIn("30m", " ".join(normalized))
+                    self.assertTrue(
+                        service.finish_job(
+                            1,
+                            f"timeout-{len(override)}",
+                            claim["record"]["started_at"],
+                            "success",
+                            0,
+                            "test cleanup",
+                            "없음",
+                        )["released"]
+                    )
+
+            invalid = (
+                [TEST_ORACLE_CLI, "--browser-timeout"],
+                [TEST_ORACLE_CLI, "--browser-timeout="],
+                [TEST_ORACLE_CLI, "--browser-timeout", "30m", "--browser-timeout=2h"],
+            )
+            for command in invalid:
+                with self.subTest(command=command), self.assertRaises(OracleTransportError):
+                    runner.validate_auto_command(command)
+
+    def test_invalid_browser_timeout_fails_closed_before_claim(self):
+        with TemporaryDirectory() as directory:
+            service = SlotService(settings_for(Path(directory)))
+            runner = JobRunner(service, runtime=TEST_RUNTIME)
+
+            for timeout in ("bogus", "0", "0s", "0h0m"):
+                with self.subTest(timeout=timeout), patch.object(
+                    service, "claim_job"
+                ) as claim:
+                    result = runner.run(
+                        1,
+                        f"invalid-timeout-{timeout}",
+                        [TEST_ORACLE_CLI, f"--browser-timeout={timeout}"],
+                    )
+                    self.assertFalse(result["accepted"])
+                    self.assertEqual(result["exit_code"], 2)
+                    self.assertIn("양의 duration", result["record"]["reason"])
+                    claim.assert_not_called()
+
+    def test_browser_timeout_ceiling_rejects_nonfinite_js_values_before_claim(self):
+        with TemporaryDirectory() as directory:
+            service = SlotService(settings_for(Path(directory)))
+            runner = JobRunner(service, runtime=TEST_RUNTIME)
+
+            for timeout in ("720h", "2592000s", "2592000000ms", "2592000000"):
+                with self.subTest(accepted=timeout):
+                    runner.validate_auto_command(
+                        [TEST_ORACLE_CLI, f"--browser-timeout={timeout}"]
+                    )
+
+            for timeout in ("720h1ms", "2592001s", "9" * 300):
+                with self.subTest(rejected=timeout), patch.object(
+                    service, "claim_job"
+                ) as claim:
+                    result = runner.run(
+                        1,
+                        f"excessive-timeout-{len(timeout)}",
+                        [TEST_ORACLE_CLI, f"--browser-timeout={timeout}"],
+                    )
+                    self.assertFalse(result["accepted"])
+                    self.assertEqual(result["exit_code"], 2)
+                    self.assertIn("양의 duration", result["record"]["reason"])
+                    claim.assert_not_called()
+
+    def test_unicode_browser_timeout_fails_closed_before_claim(self):
+        with TemporaryDirectory() as directory:
+            service = SlotService(settings_for(Path(directory)))
+            runner = JobRunner(service, runtime=TEST_RUNTIME)
+
+            with patch.object(service, "claim_job") as claim:
+                result = runner.run(
+                    1,
+                    "unicode-timeout",
+                    [TEST_ORACLE_CLI, "--browser-timeout=١"],
+                )
+
+            self.assertFalse(result["accepted"])
+            self.assertEqual(result["exit_code"], 2)
+            self.assertIn("양의 duration", result["record"]["reason"])
+            claim.assert_not_called()
+
+    def test_public_run_rejects_unready_slot_after_claim_without_spawning(self):
+        with TemporaryDirectory() as directory:
+            settings = settings_for(Path(directory))
+            cdp = FakeCDP({1: LoginResult(True, "ready", "없음")})
+            service = SlotService(settings, cdp=cdp, launcher=FakeLauncher())
+            self.assertEqual(service.prepare(1)["status"], AVAILABLE)
+            popen = Mock(side_effect=AssertionError("child must not start"))
+            runner = JobRunner(
+                service,
+                popen_factory=popen,
+                runtime=TEST_RUNTIME,
+            )
+            with patch.object(
+                runner,
+                "pre_submit_check",
+                return_value={
+                    "ready": False,
+                    "reason": "login expired",
+                    "operator_action": "prepare slot 1",
+                },
+            ) as check:
+                result = runner.run(
+                    1, "run-pre-submit-reject", [TEST_ORACLE_CLI, "-p", "task"]
+                )
+
+            self.assertEqual(result["exit_code"], 2)
+            self.assertFalse(result["child_started"])
+            self.assertEqual(result["record"]["outcome"], "pre_submit_failed")
+            self.assertTrue(result["record"]["released"])
+            check.assert_called_once_with(1)
+            popen.assert_not_called()
+            self.assertEqual(service.status(1)["status"], AVAILABLE)
 
     def test_request_derived_strategy_is_injected_once_for_exact_pro_requests(self):
         cases = (
@@ -1529,11 +1890,8 @@ class JobRunnerTests(unittest.TestCase):
                     return ReturnCodeChild(0)
 
                 command = [TEST_ORACLE_CLI, *extra]
-                result = JobRunner(
-                    service,
-                    popen_factory=popen,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                ).run(1, f"strategy-{expected_strategy}-{len(extra)}", command)
+                result = JobRunner(service,
+                popen_factory=popen, runtime=TEST_RUNTIME, ).run(1, f"strategy-{expected_strategy}-{len(extra)}", command)
                 self.assertTrue(result["accepted"])
                 normalized = list(captured["argv"])
                 strategy_positions = [
@@ -1598,7 +1956,7 @@ class JobRunnerTests(unittest.TestCase):
         )
         with TemporaryDirectory() as directory:
             service = SlotService(settings_for(Path(directory)))
-            runner = JobRunner(service, oracle_cli_path=TEST_ORACLE_CLI)
+            runner = JobRunner(service, runtime=TEST_RUNTIME)
             for job_id, command, reason_fragment in invalid_commands:
                 with self.subTest(job_id=job_id):
                     with patch.object(service, "claim_job") as claim:
@@ -1633,10 +1991,13 @@ class JobRunnerTests(unittest.TestCase):
             result = JobRunner(
                 service,
                 popen_factory=popen,
-                oracle_cli_path=TEST_ORACLE_CLI,
+                runtime=TEST_RUNTIME,
             ).run(2, "equals-flags", command)
             self.assertTrue(result["accepted"])
-            self.assertEqual(captured["argv"], command)
+            self.assertEqual(
+                captured["argv"],
+                [*resolved_child_argv(command), "--browser-timeout", "2h"],
+            )
 
     def test_conflicting_duplicate_or_noncanonical_transport_is_rejected_before_claim(self):
         with TemporaryDirectory() as directory:
@@ -1656,7 +2017,7 @@ class JobRunnerTests(unittest.TestCase):
             runner = JobRunner(
                 service,
                 popen_factory=popen,
-                oracle_cli_path=TEST_ORACLE_CLI,
+                runtime=TEST_RUNTIME,
             )
             invalid_commands = (
                 (
@@ -1683,9 +2044,9 @@ class JobRunnerTests(unittest.TestCase):
                     "외부 transport",
                 ),
                 (
-                    "basename-only",
-                    ["oracle", "--engine", "browser"],
-                    "canonical",
+                    "unsupported-token",
+                    ["other-oracle", "--engine", "browser"],
+                    "지원하지 않는",
                 ),
             )
             for job_id, command, reason_fragment in invalid_commands:
@@ -1697,6 +2058,51 @@ class JobRunnerTests(unittest.TestCase):
                     self.assertIn(reason_fragment, result["record"]["reason"])
                     claim.assert_not_called()
             self.assertEqual(popen_calls, [])
+
+    def test_engine_aliases_reject_incompatible_mode_before_claim(self):
+        with TemporaryDirectory() as directory:
+            service = SlotService(settings_for(Path(directory)))
+            runner = JobRunner(service, runtime=TEST_RUNTIME)
+
+            for engine_flag in ("-e", "--mode"):
+                with self.subTest(engine_flag=engine_flag), patch.object(
+                    service, "claim_job"
+                ) as claim:
+                    result = runner.run(
+                        1,
+                        f"incompatible-engine-{engine_flag}",
+                        [TEST_ORACLE_CLI, engine_flag, "api"],
+                    )
+
+                    self.assertFalse(result["accepted"])
+                    self.assertEqual(result["exit_code"], 2)
+                    self.assertIn("--engine", result["record"]["reason"])
+                    claim.assert_not_called()
+
+    def test_attached_short_engine_options_are_scanned_before_claim(self):
+        with TemporaryDirectory() as directory:
+            service = SlotService(settings_for(Path(directory)))
+            runner = JobRunner(service, runtime=TEST_RUNTIME)
+
+            browser_command = runner.validate_auto_command(
+                [TEST_ORACLE_CLI, "-ebrowser"]
+            )
+            self.assertIn("-ebrowser", browser_command)
+            self.assertNotIn("--engine", browser_command)
+
+            invalid_commands = (
+                [TEST_ORACLE_CLI, "-eapi"],
+                [TEST_ORACLE_CLI, "--engine", "browser", "-eapi"],
+            )
+            for command in invalid_commands:
+                with self.subTest(command=command), patch.object(
+                    service, "claim_job"
+                ) as claim:
+                    result = runner.run(1, "attached-short-engine", command)
+
+                    self.assertFalse(result["accepted"])
+                    self.assertEqual(result["exit_code"], 2)
+                    claim.assert_not_called()
 
     def test_success_and_nonzero_failure_release_occupancy(self):
         for return_code, expected_outcome in ((0, "success"), (7, "failed")):
@@ -1717,7 +2123,7 @@ class JobRunnerTests(unittest.TestCase):
                 result = JobRunner(
                     service,
                     popen_factory=popen,
-                    oracle_cli_path=TEST_ORACLE_CLI,
+                    runtime=TEST_RUNTIME,
                 ).run(
                     1,
                     f"job-{return_code}",
@@ -1730,7 +2136,14 @@ class JobRunnerTests(unittest.TestCase):
                 self.assertEqual(len(records), 2)
                 self.assertEqual(records[0]["state_after"], OCCUPIED)
                 self.assertEqual(records[1]["state_after"], AVAILABLE)
-                self.assertEqual(captured["argv"], oracle_argv(19222, "--arg"))
+                self.assertEqual(
+                    captured["argv"],
+                    [
+                        *resolved_child_argv(oracle_argv(19222, "--arg")),
+                        "--browser-timeout",
+                        "2h",
+                    ],
+                )
                 self.assertEqual(captured["env"]["ORACLE_BROWSER_REMOTE_CHROME"], "127.0.0.1:19222")
                 self.assertEqual(captured["env"]["ORACLE_BROWSER_SLOT_PORT"], "19222")
                 self.assertTrue(captured["close_fds"])
@@ -1757,7 +2170,7 @@ class JobRunnerTests(unittest.TestCase):
             runner = JobRunner(
                 service,
                 popen_factory=popen,
-                oracle_cli_path=TEST_ORACLE_CLI,
+                runtime=TEST_RUNTIME,
             )
             first = runner.run(1, "slot-1-job", oracle_argv(19222, "one"))
             second = runner.run(2, "slot-2-job", oracle_argv(19223, "two"))
@@ -1765,7 +2178,18 @@ class JobRunnerTests(unittest.TestCase):
             self.assertTrue(second["accepted"])
             self.assertEqual(
                 commands,
-                [oracle_argv(19222, "one"), oracle_argv(19223, "two")],
+                [
+                    [
+                        *resolved_child_argv(oracle_argv(19222, "one")),
+                        "--browser-timeout",
+                        "2h",
+                    ],
+                    [
+                        *resolved_child_argv(oracle_argv(19223, "two")),
+                        "--browser-timeout",
+                        "2h",
+                    ],
+                ],
             )
             self.assertEqual(service.status(1)["status"], AVAILABLE)
             self.assertEqual(service.status(2)["status"], AVAILABLE)
@@ -1780,11 +2204,8 @@ class JobRunnerTests(unittest.TestCase):
             def failing_popen(argv, *, env, close_fds):
                 raise FileNotFoundError("missing command")
 
-            result = JobRunner(
-                service,
-                popen_factory=failing_popen,
-                oracle_cli_path=TEST_ORACLE_CLI,
-            ).run(1, "spawn-error", oracle_argv(19222, "missing-command"))
+            result = JobRunner(service,
+            popen_factory=failing_popen, runtime=TEST_RUNTIME, ).run(1, "spawn-error", oracle_argv(19222, "missing-command"))
             self.assertEqual(result["exit_code"], 127)
             self.assertEqual(result["record"]["outcome"], "spawn_error")
             self.assertTrue(result["record"]["released"])
@@ -1800,11 +2221,8 @@ class JobRunnerTests(unittest.TestCase):
             def failing_popen(argv, *, env, close_fds):
                 raise RuntimeError("unexpected popen failure")
 
-            result = JobRunner(
-                service,
-                popen_factory=failing_popen,
-                oracle_cli_path=TEST_ORACLE_CLI,
-            ).run(1, "general-spawn-error", oracle_argv(19222))
+            result = JobRunner(service,
+            popen_factory=failing_popen, runtime=TEST_RUNTIME, ).run(1, "general-spawn-error", oracle_argv(19222))
             self.assertEqual(result["record"]["outcome"], "spawn_error")
             self.assertIn("예외", result["record"]["reason"])
             self.assertTrue(result["record"]["released"])
@@ -1816,11 +2234,8 @@ class JobRunnerTests(unittest.TestCase):
             cdp = FakeCDP({1: LoginResult(True, "ready", "없음")})
             service = SlotService(settings, cdp=cdp, launcher=FakeLauncher())
             self.assertEqual(service.prepare(1)["status"], AVAILABLE)
-            result = JobRunner(
-                service,
-                popen_factory=lambda argv, *, env, close_fds: ExplodingWaitChild(),
-                oracle_cli_path=TEST_ORACLE_CLI,
-            ).run(1, "general-wait-error", oracle_argv(19222))
+            result = JobRunner(service,
+            popen_factory=lambda argv, *, env, close_fds: ExplodingWaitChild(), runtime=TEST_RUNTIME, ).run(1, "general-wait-error", oracle_argv(19222))
             self.assertEqual(result["record"]["outcome"], "failed")
             self.assertIn("예외", result["record"]["reason"])
             self.assertTrue(result["record"]["released"])
@@ -1832,11 +2247,8 @@ class JobRunnerTests(unittest.TestCase):
             cdp = FakeCDP({1: LoginResult(True, "ready", "없음")})
             service = SlotService(settings, cdp=cdp, launcher=FakeLauncher())
             self.assertEqual(service.prepare(1)["status"], AVAILABLE)
-            result = JobRunner(
-                service,
-                popen_factory=lambda argv, *, env, close_fds: InterruptingChild(),
-                oracle_cli_path=TEST_ORACLE_CLI,
-            ).run(1, "interrupted", oracle_argv(19222))
+            result = JobRunner(service,
+            popen_factory=lambda argv, *, env, close_fds: InterruptingChild(), runtime=TEST_RUNTIME, ).run(1, "interrupted", oracle_argv(19222))
             self.assertEqual(result["exit_code"], 143)
             self.assertEqual(result["record"]["outcome"], "interrupted")
             self.assertTrue(result["record"]["released"])
@@ -1858,11 +2270,8 @@ class JobRunnerTests(unittest.TestCase):
                     popen_calls.append(argv)
                 return BlockingChild(child_started, release_child)
 
-            runner = JobRunner(
-                service,
-                popen_factory=popen,
-                oracle_cli_path=TEST_ORACLE_CLI,
-            )
+            runner = JobRunner(service,
+            popen_factory=popen, runtime=TEST_RUNTIME, )
             barrier = threading.Barrier(2)
             results: list[dict[str, object]] = []
 
@@ -2003,7 +2412,7 @@ class CliTests(unittest.TestCase):
                     "--job-id",
                     "job-ten",
                     "--",
-                    CANONICAL_ORACLE_CLI,
+                    TEST_ORACLE_CLI,
                     "-p",
                     "task",
                 ]
@@ -2033,7 +2442,7 @@ class CliTests(unittest.TestCase):
                     "--job-id",
                     "unprepared-job",
                     "--",
-                    CANONICAL_ORACLE_CLI,
+                    TEST_ORACLE_CLI,
                     "--engine",
                     "browser",
                     "--browser-model-strategy",
@@ -2062,7 +2471,6 @@ class CliTests(unittest.TestCase):
             environment = os.environ.copy()
             environment["ORACLE_BROWSER_SLOTS_STATE_ROOT"] = f"{directory}/state"
             environment["ORACLE_BROWSER_SLOTS_PROFILE_ROOT"] = f"{directory}/profiles"
-            environment["ORACLE_BROWSER_SLOTS_ORACLE_CLI"] = TEST_ORACLE_CLI
             completed = subprocess.run(
                 [
                     str(project_root / "bin" / "oracle-browser-slots"),
@@ -2109,11 +2517,8 @@ class AutoAllocatorTests(unittest.TestCase):
         return service
 
     def _runner(self, service: SlotService, popen_factory):
-        return JobRunner(
-            service,
-            popen_factory=popen_factory,
-            oracle_cli_path=TEST_ORACLE_CLI,
-        )
+        return JobRunner(service,
+        popen_factory=popen_factory, runtime=TEST_RUNTIME, )
 
     def test_submit_rejects_incompatibility_and_missing_identity_before_file_preparation(self):
         with TemporaryDirectory() as directory:
@@ -2739,6 +3144,90 @@ class AutoAllocatorTests(unittest.TestCase):
             self.assertEqual(service.status(1)["status"], AVAILABLE)
             self.assertEqual(service.status(2)["status"], AVAILABLE)
 
+    def test_submit_all_pre_submit_failures_exit_two_without_child(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root)
+            child_commands: list[list[str]] = []
+
+            def popen(argv, *, env, close_fds):
+                child_commands.append(argv)
+                return ReturnCodeChild(0)
+
+            runner = self._runner(service, popen)
+            readiness = [
+                {
+                    "ready": False,
+                    "reason": f"slot {slot_id} lost CDP",
+                    "operator_action": f"repair slot {slot_id}",
+                }
+                for slot_id in SLOT_IDS
+            ]
+            events: list[dict[str, object]] = []
+            with patch.object(runner, "pre_submit_check", side_effect=readiness):
+                result = AutoAllocator(
+                    service, runner=runner, poll_interval=0.01
+                ).submit(
+                    "auto-all-pre-submit-failed",
+                    [TEST_ORACLE_CLI, "-p", "task"],
+                    emit=events.append,
+                )
+
+            self.assertEqual(result["exit_code"], 2)
+            self.assertFalse(result["child_started"])
+            self.assertEqual(result["record"]["attempted_slots"], list(SLOT_IDS))
+            self.assertEqual(
+                result["record"]["reassignment_reasons"],
+                [f"slot {slot_id} lost CDP" for slot_id in SLOT_IDS],
+            )
+            self.assertEqual(child_commands, [])
+            self.assertEqual(events[-1]["event"], "failed")
+            self.assertTrue(
+                all(service.status(slot_id)["status"] == AVAILABLE for slot_id in SLOT_IDS)
+            )
+
+    def test_claim_time_cdp_and_login_rejections_are_attempted_and_exit_two(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self._ready_service(root)
+            checks = {slot_id: 0 for slot_id in SLOT_IDS}
+
+            def claim_time_failure(slot):
+                checks[slot.slot_id] += 1
+                if checks[slot.slot_id] == 1:
+                    return LoginResult(True, "ready during duplicate scan", "없음")
+                if slot.slot_id == SLOT_IDS[0]:
+                    raise CDPError("slot 1 CDP failed")
+                return LoginResult(
+                    False,
+                    f"slot {slot.slot_id} login expired",
+                    f"repair slot {slot.slot_id}",
+                )
+
+            service.cdp.check_login = Mock(side_effect=claim_time_failure)
+            child_commands: list[list[str]] = []
+
+            result = AutoAllocator(
+                service,
+                runner=self._runner(
+                    service,
+                    lambda argv, *, env, close_fds: child_commands.append(argv),
+                ),
+                poll_interval=0.01,
+            ).submit("claim-time-login-failures", [TEST_ORACLE_CLI, "-p", "task"])
+
+            self.assertEqual(result["exit_code"], 2)
+            self.assertFalse(result["child_started"])
+            self.assertEqual(result["record"]["attempted_slots"], list(SLOT_IDS))
+            self.assertEqual(
+                result["record"]["reassignment_reasons"],
+                [
+                    "slot 1 CDP failed",
+                    *[f"slot {slot_id} login expired" for slot_id in SLOT_IDS[1:]],
+                ],
+            )
+            self.assertEqual(child_commands, [])
+
     def test_occupied_submits_are_fifo_and_new_submit_cannot_overtake(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -2960,16 +3449,122 @@ class AutoAllocatorTests(unittest.TestCase):
                 self.assertFalse(locked.queue_path.exists())
 
 
+class RuntimeResolutionTests(unittest.TestCase):
+    @staticmethod
+    def _runtime_fixture(
+        root: Path,
+        *,
+        node_version: str = "v24.0.0",
+        package_version: str = "0.16.1",
+        cli_version: str = "0.16.1",
+    ) -> tuple[Path, Path]:
+        package_root = root / "package"
+        entry = package_root / "dist" / "bin" / "oracle-cli.js"
+        entry.parent.mkdir(parents=True)
+        entry.write_text("// fixture entry\n", encoding="utf-8")
+        entry.chmod(0o755)
+        (package_root / "package.json").write_text(
+            json.dumps(
+                {
+                    "name": "@steipete/oracle",
+                    "version": package_version,
+                    "bin": {"oracle": "dist/bin/oracle-cli.js"},
+                }
+            ),
+            encoding="utf-8",
+        )
+        bin_dir = root / "bin"
+        bin_dir.mkdir()
+        (bin_dir / "oracle").symlink_to(entry)
+        node = bin_dir / "node"
+        node.write_text(
+            "#!/usr/bin/python3\n"
+            "import json, sys\n"
+            f"node_version = {node_version!r}\n"
+            f"cli_version = {cli_version!r}\n"
+            f"package_version = {package_version!r}\n"
+            "if sys.argv[1:] == ['--version']:\n"
+            "    print(node_version)\n"
+            "elif sys.argv[2:] == ['--version']:\n"
+            "    print(cli_version)\n"
+            "elif sys.argv[2:] == ['runtime', 'file-selection', '--capability', '--json']:\n"
+            "    print(json.dumps({'schema': 'oracle-file-selection/v1', 'ok': True, "
+            "'capability': 'file-selection', 'package': {'name': '@steipete/oracle', "
+            "'version': package_version}}))\n"
+            "else:\n"
+            "    print('unexpected arguments', file=sys.stderr)\n"
+            "    raise SystemExit(2)\n",
+            encoding="utf-8",
+        )
+        node.chmod(0o755)
+        return bin_dir, entry.resolve()
+
+    def test_runtime_resolution_uses_attributed_path_release(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            bin_dir, entry = self._runtime_fixture(root)
+            runtime = resolve_oracle_runtime(
+                product_root=root / "no-product-entry",
+                path=f"{bin_dir}:/usr/bin:/bin",
+            )
+            self.assertEqual(runtime.oracle_entry, entry)
+            self.assertEqual(runtime.package_name, "@steipete/oracle")
+            self.assertEqual(runtime.package_version, "0.16.1")
+            self.assertEqual(runtime.selector_protocol, "oracle-file-selection/v1")
+            self.assertEqual(len(runtime.oracle_entry_sha256), 64)
+
+    def test_runtime_precondition_rejects_node_23(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            bin_dir, _entry = self._runtime_fixture(root, node_version="v23.9.0")
+            with self.assertRaisesRegex(OracleRuntimeError, "Node >= 24"):
+                resolve_oracle_runtime(
+                    product_root=root / "no-product-entry",
+                    path=f"{bin_dir}:/usr/bin:/bin",
+                )
+
+    def test_runtime_precondition_rejects_cli_package_version_mismatch(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            bin_dir, _entry = self._runtime_fixture(root, cli_version="0.16.0")
+            with self.assertRaisesRegex(OracleRuntimeError, "일치하지 않습니다"):
+                resolve_oracle_runtime(
+                    product_root=root / "no-product-entry",
+                    path=f"{bin_dir}:/usr/bin:/bin",
+                )
+
+    def test_runtime_precondition_rejects_before_claim_and_child_start(self):
+        with TemporaryDirectory() as directory:
+            service = SlotService(settings_for(Path(directory)))
+
+            def reject_runtime() -> ResolvedOracleRuntime:
+                raise OracleRuntimeError("capability mismatch")
+
+            with patch.object(service, "claim_job") as claim:
+                result = JobRunner(
+                    service,
+                    popen_factory=lambda *_args, **_kwargs: self.fail("child must not start"),
+                    runtime_resolver=reject_runtime,
+                ).run(1, "runtime-rejection", ["oracle", "-p", "task"])
+            self.assertEqual(result["exit_code"], 2)
+            self.assertFalse(result["accepted"])
+            self.assertIn("capability mismatch", result["record"]["reason"])
+            claim.assert_not_called()
+
+
 class AttachmentPolicyTests(unittest.TestCase):
     @staticmethod
     def _policy(root: Path, selector=None) -> FileAttachmentPolicy:
         temporary_root = root / "zip-temp"
         temporary_root.mkdir(parents=True, exist_ok=True)
-        return FileAttachmentPolicy(
-            selector=selector,
-            oracle_home=root / "oracle-home",
-            temporary_root=temporary_root,
-        )
+        options = {
+            "selector": selector,
+            "oracle_home": root / "oracle-home",
+            "temporary_root": temporary_root,
+        }
+        if selector is None:
+            options["runtime"] = resolve_oracle_runtime()
+        return FileAttachmentPolicy(**options)
 
     @staticmethod
     def _write_session(prepared, *, prompt_submitted: bool, log: str = "") -> Path:
@@ -3071,6 +3666,82 @@ class AttachmentPolicyTests(unittest.TestCase):
             cleanup = prepared.cleanup()
             self.assertTrue(cleanup["removed"])
             self.assertFalse(prepared.zip_path.exists())
+
+    def test_combined_short_file_argument_is_zipped_and_removed(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "combined.txt"
+            source.write_text("combined", encoding="utf-8")
+            observed_groups = []
+
+            def selector(groups, _cwd):
+                observed_groups.append(groups)
+                return [source]
+
+            raw_argument = f"-f{source}"
+            prepared = self._policy(root, selector=selector).prepare(
+                [TEST_ORACLE_CLI, "-p", "task", raw_argument],
+                "combined-short-file",
+                cwd=root,
+            )
+
+            self.assertIsNotNone(prepared)
+            self.assertEqual(observed_groups[0]["file"], [str(source)])
+            self.assertNotIn(raw_argument, prepared.command)
+            self.assertEqual(prepared.command.count("--file"), 1)
+            self.assertEqual(
+                prepared.command[prepared.command.index("--file") + 1],
+                str(prepared.zip_path),
+            )
+            prepared.cleanup()
+
+    def test_file_like_values_of_non_file_options_are_not_attachments(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "actual.txt"
+            source.write_text("actual", encoding="utf-8")
+
+            for value_option in ("-p", "--prompt", "--message", "--perf-trace-path"):
+                for prompt_value in ("--file=README.md", "-fREADME.md"):
+                    with self.subTest(
+                        value_option=value_option,
+                        prompt_value=prompt_value,
+                    ):
+                        no_attachment = self._policy(
+                            root,
+                            selector=lambda _groups, _cwd: self.fail(
+                                "prompt value must not reach the file selector"
+                            ),
+                        ).prepare(
+                            [TEST_ORACLE_CLI, value_option, prompt_value],
+                            "prompt-only",
+                            cwd=root,
+                        )
+                        self.assertIsNone(no_attachment)
+
+                        observed_groups = []
+
+                        def selector(groups, _cwd):
+                            observed_groups.append(groups)
+                            return [source]
+
+                        prepared = self._policy(root, selector=selector).prepare(
+                            [
+                                TEST_ORACLE_CLI,
+                                value_option,
+                                prompt_value,
+                                "--file",
+                                str(source),
+                            ],
+                            "prompt-and-file",
+                            cwd=root,
+                        )
+                        self.assertIsNotNone(prepared)
+                        self.assertEqual(observed_groups[0]["file"], [str(source)])
+                        option_index = prepared.command.index(value_option)
+                        self.assertEqual(prepared.command[option_index + 1], prompt_value)
+                        self.assertEqual(prepared.command.count("--file"), 1)
+                        prepared.cleanup()
 
     def test_normalized_member_collision_fails_without_renaming(self):
         with TemporaryDirectory() as directory:
@@ -3201,12 +3872,8 @@ class AttachmentPolicyTests(unittest.TestCase):
                 self.assertTrue(Path(argv[argv.index("--file") + 1]).exists())
                 return ReturnCodeChild(7)
 
-            runner = JobRunner(
-                service,
-                popen_factory=popen,
-                oracle_cli_path=TEST_ORACLE_CLI,
-                attachment_policy=policy,
-            )
+            runner = JobRunner(service,
+            popen_factory=popen, runtime=TEST_RUNTIME, attachment_policy=policy,)
             events: list[dict[str, object]] = []
             result = runner.run(
                 1,
@@ -3238,12 +3905,8 @@ class AttachmentPolicyTests(unittest.TestCase):
                 ),
             )
             with patch.object(service, "claim_job", wraps=service.claim_job) as claim:
-                rejected = JobRunner(
-                    service,
-                    popen_factory=popen,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                    attachment_policy=failing_policy,
-                ).run(1, "selection-failure", [TEST_ORACLE_CLI, "--file", str(source)])
+                rejected = JobRunner(service,
+                popen_factory=popen, runtime=TEST_RUNTIME, attachment_policy=failing_policy,).run(1, "selection-failure", [TEST_ORACLE_CLI, "--file", str(source)])
             self.assertFalse(rejected["accepted"])
             self.assertIn("selection failed", rejected["record"]["reason"])
             claim.assert_not_called()
@@ -3261,12 +3924,8 @@ class AttachmentPolicyTests(unittest.TestCase):
             source = root / "source.txt"
             source.write_text("source", encoding="utf-8")
             policy = self._policy(root, selector=lambda _groups, _cwd: [source])
-            runner = JobRunner(
-                service,
-                popen_factory=lambda _argv, **_kwargs: self.fail("child must not start"),
-                oracle_cli_path=TEST_ORACLE_CLI,
-                attachment_policy=policy,
-            )
+            runner = JobRunner(service,
+            popen_factory=lambda _argv, **_kwargs: self.fail("child must not start"), runtime=TEST_RUNTIME, attachment_policy=policy,)
 
             def failing_emit(record):
                 if record["event"] == "attachment_prepared":
@@ -3311,12 +3970,8 @@ class AttachmentPolicyTests(unittest.TestCase):
                     "oracle_browser_slots.attachments.PreparedAttachment.write_manifest",
                     return_value=manifest_result,
                 ):
-                    result = JobRunner(
-                        service,
-                        popen_factory=popen,
-                        oracle_cli_path=TEST_ORACLE_CLI,
-                        attachment_policy=policy,
-                    ).run(1, "post-child-manifest-failure", [TEST_ORACLE_CLI, "--file", str(source)])
+                    result = JobRunner(service,
+                    popen_factory=popen, runtime=TEST_RUNTIME, attachment_policy=policy,).run(1, "post-child-manifest-failure", [TEST_ORACLE_CLI, "--file", str(source)])
 
                 self.assertEqual(result["exit_code"], 1)
                 self.assertEqual(result["record"]["outcome"], "failed")
@@ -3351,12 +4006,8 @@ class AttachmentPolicyTests(unittest.TestCase):
                 "oracle_browser_slots.attachments.PreparedAttachment.write_manifest",
                 return_value=None,
             ):
-                result = JobRunner(
-                    service,
-                    popen_factory=popen,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                    attachment_policy=policy,
-                ).run(
+                result = JobRunner(service,
+                popen_factory=popen, runtime=TEST_RUNTIME, attachment_policy=policy,).run(
                     1,
                     "sessionless-dry-run",
                     [
@@ -3402,12 +4053,8 @@ class AttachmentPolicyTests(unittest.TestCase):
                 "oracle_browser_slots.attachments.PreparedAttachment.cleanup",
                 return_value={"removed": False, "error": "permission denied"},
             ):
-                result = JobRunner(
-                    service,
-                    popen_factory=popen,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                    attachment_policy=policy,
-                ).run(1, "post-child-cleanup-failure", [TEST_ORACLE_CLI, "--file", str(source)])
+                result = JobRunner(service,
+                popen_factory=popen, runtime=TEST_RUNTIME, attachment_policy=policy,).run(1, "post-child-cleanup-failure", [TEST_ORACLE_CLI, "--file", str(source)])
 
             self.assertEqual(result["exit_code"], 1)
             self.assertEqual(result["record"]["outcome"], "failed")
@@ -3438,12 +4085,8 @@ class AttachmentPolicyTests(unittest.TestCase):
                 "oracle_browser_slots.attachments._create_compressed_zip",
                 side_effect=OSError("zip write failed"),
             ), patch.object(service, "claim_job", wraps=service.claim_job) as claim:
-                result = JobRunner(
-                    service,
-                    popen_factory=lambda _argv, **_kwargs: self.fail("child must not start"),
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                    attachment_policy=failing_policy,
-                ).run(1, "zip-create-failure", [TEST_ORACLE_CLI, "--file", str(source)])
+                result = JobRunner(service,
+                popen_factory=lambda _argv, **_kwargs: self.fail("child must not start"), runtime=TEST_RUNTIME, attachment_policy=failing_policy,).run(1, "zip-create-failure", [TEST_ORACLE_CLI, "--file", str(source)])
             self.assertFalse(result["accepted"])
             self.assertIn("ZIP", result["record"]["reason"])
             claim.assert_not_called()
@@ -3455,12 +4098,8 @@ class AttachmentPolicyTests(unittest.TestCase):
                 child_calls.append(argv)
                 return InterruptingChild()
 
-            result = JobRunner(
-                service,
-                popen_factory=interrupting_popen,
-                oracle_cli_path=TEST_ORACLE_CLI,
-                attachment_policy=policy,
-            ).run(1, "zip-interrupted", [TEST_ORACLE_CLI, "--file", str(source)])
+            result = JobRunner(service,
+            popen_factory=interrupting_popen, runtime=TEST_RUNTIME, attachment_policy=policy,).run(1, "zip-interrupted", [TEST_ORACLE_CLI, "--file", str(source)])
             self.assertEqual(result["exit_code"], 143)
             self.assertEqual(result["record"]["outcome"], "interrupted")
             self.assertEqual(len(child_calls), 1)
@@ -3510,12 +4149,8 @@ class AttachmentPolicyTests(unittest.TestCase):
             events: list[dict[str, object]] = []
             result = AutoAllocator(
                 service,
-                runner=JobRunner(
-                    service,
-                    popen_factory=popen,
-                    oracle_cli_path=TEST_ORACLE_CLI,
-                    attachment_policy=policy,
-                ),
+                runner=JobRunner(service,
+                popen_factory=popen, runtime=TEST_RUNTIME, attachment_policy=policy,),
                 poll_interval=0.01,
             ).submit(
                 "submit-zip",

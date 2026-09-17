@@ -553,6 +553,9 @@ class AutoAllocator:
                     )
                     self._emit(emit, result["record"])
                     return {"assignment": None, "terminal": result}
+                if claim["record"].get("readiness_rejected") is True:
+                    state["attempted_slots"].append(slot_id)
+                    state["reassignment_reasons"].append(claim["record"]["reason"])
                 continue
 
             state["attempted_slots"].append(slot_id)
@@ -1125,7 +1128,7 @@ class AutoAllocator:
         )
         return {
             "accepted": True,
-            "exit_code": 1,
+            "exit_code": 2,
             "record": record,
             "child_started": False,
         }
@@ -1150,7 +1153,12 @@ class AutoAllocator:
             operator_action=operator_action,
         )
         record["slot_diagnostics"] = diagnostics
-        return {"accepted": False, "exit_code": 1, "record": record}
+        return {
+            "accepted": False,
+            "exit_code": 2 if reassignment_reasons else 1,
+            "record": record,
+            "child_started": False,
+        }
 
     def _queued_record(
         self,

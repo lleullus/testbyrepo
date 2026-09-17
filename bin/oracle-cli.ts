@@ -2,6 +2,8 @@
 import "dotenv/config";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import fs from "node:fs";
+import { createHash } from "node:crypto";
 import { Command, Option } from "commander";
 import type { OptionValues } from "commander";
 // Allow `npx @steipete/oracle oracle-mcp` to resolve the MCP server even though npx runs the default binary.
@@ -20,6 +22,7 @@ import { DEFAULT_MODEL, MODEL_CONFIGS } from "../src/oracle/config.js";
 import { isKnownModel, resolveOverriddenApiModel } from "../src/oracle/modelResolver.js";
 import type {
   ApiProviderMode,
+  FileContent,
   ModelName,
   ModelOverridesConfig,
   PreviewMode,
@@ -47,6 +50,7 @@ import {
   mergePathLikeOptions,
   dedupePathInputs,
 } from "../src/cli/options.js";
+import { readFiles } from "../src/oracle/files.js";
 import { buildBrowserConfig, resolveBrowserModelLabel } from "../src/cli/browserConfig.js";
 import { copyToClipboard } from "../src/cli/clipboard.js";
 import { buildMarkdownBundle } from "../src/cli/markdownBundle.js";
@@ -330,6 +334,7 @@ const docsCheckRequested = docsArgIndex >= 0 && routingCliArgs[docsArgIndex + 1]
 const suppressIntro =
   doctorJsonRequested ||
   docsCheckRequested ||
+  routingCliArgs[0] === "runtime" ||
   (routingCliArgs[0] === "bridge" &&
     (routingCliArgs[1] === "codex-config" || routingCliArgs[1] === "claude-config"));
 
@@ -927,6 +932,80 @@ Examples:
   oracle --render --copy -p "Review the TS data layer" --file "src/**/*.ts" --file "!src/**/*.test.ts"
 `,
 );
+
+const runtimeCommand = program
+  .command("runtime")
+  .description("Inspect the non-submitting Oracle runtime interfaces.");
+
+runtimeCommand
+  .command("file-selection")
+  .description("Resolve file inputs without starting a model or browser session.")
+  .option("--capability", "Report the file-selection protocol capability.", false)
+  .option("--json", "Emit the machine-readable protocol response.", false)
+  .action(async (options: { capability?: boolean; json?: boolean }) => {
+    let entrySha256: string | undefined;
+    try {
+      const entryPath = fs.realpathSync(process.argv[1]);
+      entrySha256 = createHash("sha256").update(fs.readFileSync(entryPath)).digest("hex");
+    } catch {
+      entrySha256 = undefined;
+    }
+    const identity = {
+      schema: "oracle-file-selection/v1",
+      package: { name: "@steipete/oracle", version: VERSION },
+      entry_sha256: entrySha256,
+    };
+    if (options.capability) {
+      process.stdout.write(`${JSON.stringify({ ...identity, ok: true, capability: "file-selection" })}\n`);
+      return;
+    }
+
+    try {
+      let raw = "";
+      for await (const chunk of process.stdin) raw += String(chunk);
+      const request = JSON.parse(raw) as Record<string, unknown>;
+      if (typeof request.cwd !== "string" || request.cwd.length === 0) {
+        throw new Error("cwd must be a non-empty string");
+      }
+      const readGroup = (key: string): string[] => {
+        const value = request[key];
+        if (value === undefined) return [];
+        if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+          throw new Error(`${key} must be an array of strings`);
+        }
+        return value;
+      };
+      const merged = mergePathLikeOptions(
+        readGroup("file"),
+        readGroup("include"),
+        readGroup("files"),
+        readGroup("path"),
+        readGroup("paths"),
+      );
+      const normalized = dedupePathInputs(merged, { cwd: request.cwd }).deduped;
+      const originalConsoleLog = console.log;
+      console.log = (...args: unknown[]) => console.error(...args);
+      let files: FileContent[];
+      try {
+        files = await readFiles(normalized, {
+          cwd: request.cwd,
+          maxFileSizeBytes: 0,
+          readContents: false,
+        });
+      } finally {
+        console.log = originalConsoleLog;
+      }
+      process.stdout.write(
+        `${JSON.stringify({ ...identity, ok: true, files: files.map((file) => file.path) })}\n`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stdout.write(
+        `${JSON.stringify({ ...identity, ok: false, error: { name: error instanceof Error ? error.name : "Error", message } })}\n`,
+      );
+      process.exitCode = 2;
+    }
+  });
 
 program
   .command("serve")

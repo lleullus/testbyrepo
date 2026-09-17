@@ -328,7 +328,21 @@ export async function attachSession(
           }) as unknown as BrowserLogger,
           { verbose: true },
         ),
-        { promptPreview: metadata.promptPreview },
+        {
+          promptPreview: metadata.promptPreview,
+          onIdentityScopeResolved: async (identityScope) => {
+            await sessionStore.updateSession(sessionId, {
+              browser: {
+                ...metadata!.browser,
+                runtime: {
+                  ...runtime,
+                  committedUserTurn: identityScope.committedUserTurn,
+                  identityScope,
+                },
+              },
+            });
+          },
+        },
       );
       const outputTokens = estimateTokenCount(result.answerMarkdown);
       const artifacts = await saveReattachBrowserArtifacts(sessionId, metadata, result);

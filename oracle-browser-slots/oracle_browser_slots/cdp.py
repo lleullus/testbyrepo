@@ -117,7 +117,15 @@ class CDPClient:
                         "returnByValue": True,
                     },
                 )
-        except (OSError, ValueError, TimeoutError, json.JSONDecodeError) as exc:
+        except (
+            OSError,
+            ValueError,
+            TimeoutError,
+            json.JSONDecodeError,
+            CDPError,
+            AttributeError,
+            TypeError,
+        ) as exc:
             raise CDPError(
                 f"슬롯 {slot.slot_id}의 ChatGPT 로그인 상태를 확인할 수 없습니다."
             ) from exc
@@ -837,7 +845,7 @@ class _WebSocket:
             if opcode != 0x1:
                 continue
             value = json.loads(message.decode("utf-8"))
-            if value.get("id") == request_id:
+            if isinstance(value, dict) and value.get("id") == request_id:
                 return value
 
     def _read_until_headers(self) -> bytes:
