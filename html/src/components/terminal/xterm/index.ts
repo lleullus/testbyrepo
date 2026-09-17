@@ -26,6 +26,11 @@ export interface InputOwnerSnapshot {
     inputEpoch: number;
 }
 
+interface HandledDomReplay {
+    offset: number;
+    text: string;
+}
+
 interface CompositionTransaction {
     sequence: number;
     inputEpoch: number;
@@ -34,6 +39,7 @@ interface CompositionTransaction {
     beforeValue: string;
     start: number;
     end: number;
+    handledDomReplay?: HandledDomReplay;
     handledTextareaTail: string;
     compositionData: string;
     inputData: string;
@@ -60,7 +66,6 @@ interface TextInputTransaction {
     beforeValue: string;
     inputType: string;
     data: string | null;
-    physicalKeyAction?: PhysicalKeyAction;
 }
 
 interface PointerCandidate {
@@ -302,6 +307,8 @@ export class Xterm {
     private pendingTextInput?: TextInputTransaction;
     private compositionTextareaStyle?: { width: string; height: string; lineHeight: string };
     private handledTextareaTail = '';
+    private handledPhysicalKeyTail = '';
+    private handledTextareaTailRequiresAnchor = false;
     private pointerCandidate?: PointerCandidate;
     private physicalKeyActions: PhysicalKeyAction[] = [];
     private toolbarInteraction = false;
@@ -489,7 +496,13 @@ export class Xterm {
     }
 
     private invalidateInputOwner(blur: boolean) {
-        this.clearHandledTextareaContext();
+        if (blur) {
+            this.clearHandledTextareaContext();
+        } else {
+            // A browser/IME layout switch may blur and immediately refocus the textarea. Keep the
+            // sent tail only for an exact DOM anchor match; never use it as an unanchored prefix.
+            this.handledTextareaTailRequiresAnchor = true;
+        }
         this.inputEpoch++;
         this.pendingTextInput = undefined;
         this.pointerCandidate = undefined;
@@ -554,17 +567,23 @@ export class Xterm {
         textarea.setSelectionRange(0, 0);
     }
 
-    private rememberHandledTextareaText(text: string) {
-        // eslint-disable-next-line no-control-regex
-        if (/[\u0000-\u001f\u007f]/.test(text)) {
-            this.handledTextareaTail = '';
+    private rememberHandledTextareaText(text: string, physical = false) {
+        if (/[^\x20-\x7e\u0080-\uffff]/.test(text)) {
+            this.clearHandledTextareaContext();
             return;
         }
-        this.handledTextareaTail = (this.handledTextareaTail + text).slice(-TEXTAREA_CONTEXT_LIMIT);
+        const retainedTail = this.handledTextareaTailRequiresAnchor ? '' : this.handledTextareaTail;
+        this.handledTextareaTail = (retainedTail + text).slice(-TEXTAREA_CONTEXT_LIMIT);
+        this.handledTextareaTailRequiresAnchor = false;
+        this.handledPhysicalKeyTail = physical
+            ? (this.handledPhysicalKeyTail + text).slice(-TEXTAREA_CONTEXT_LIMIT)
+            : '';
     }
 
     private clearHandledTextareaContext() {
         this.handledTextareaTail = '';
+        this.handledTextareaTailRequiresAnchor = false;
+        this.handledPhysicalKeyTail = '';
     }
 
     private replayedPrefixLength(text: string, handledTail: string): number {
@@ -573,6 +592,27 @@ export class Xterm {
             if (text.startsWith(handledTail.slice(-length))) return length;
         }
         return 0;
+    }
+
+    private findHandledDomReplay(
+        beforeValue: string,
+        start: number,
+        handledTail: string
+    ): HandledDomReplay | undefined {
+        // Android hardware IMEs can restore already-sent terminal text into xterm's hidden textarea
+        // immediately before starting composition. Treat only an exact tail match at the caret as replay.
+        const maximum = Math.min(start, handledTail.length);
+        for (let length = maximum; length > 0; length--) {
+            const text = handledTail.slice(-length);
+            const offset = start - length;
+            if (beforeValue.slice(offset, start) === text) return { offset, text };
+        }
+        return undefined;
+    }
+
+    private removeHandledDomReplay(value: string, replay?: HandledDomReplay) {
+        if (!replay || !value.startsWith(replay.text, replay.offset)) return value;
+        return value.slice(0, replay.offset) + value.slice(replay.offset + replay.text.length);
     }
 
     private cancelComposition() {
@@ -588,7 +628,8 @@ export class Xterm {
     }
 
     private compositionText(transaction: CompositionTransaction, eventData = ''): string {
-        const current = this.terminal.textarea?.value ?? transaction.beforeValue;
+        const rawCurrent = this.terminal.textarea?.value ?? transaction.beforeValue;
+        const current = this.removeHandledDomReplay(rawCurrent, transaction.handledDomReplay);
         const before = transaction.beforeValue;
         const beforePrefix = before.slice(0, transaction.start);
         const beforeSuffix = before.slice(transaction.end);
@@ -615,10 +656,17 @@ export class Xterm {
             inserted = current.slice(prefix, current.length - suffix);
         }
         let result = inserted || reportedComposition;
-        if (!anchored && result && transaction.handledTextareaTail) {
-            const replayedLength = this.replayedPrefixLength(result, transaction.handledTextareaTail);
+        const replayContext = transaction.handledDomReplay?.text || (!anchored ? transaction.handledTextareaTail : '');
+        if (result && replayContext) {
+            const replayedLength = this.replayedPrefixLength(result, replayContext);
             if (replayedLength > 0) {
-                result = result.slice(replayedLength);
+                const replayedText = result.slice(0, replayedLength);
+                const remainder = result.slice(replayedLength);
+                const anchoredReplayIsProven =
+                    !transaction.handledDomReplay ||
+                    (reportedComposition.length > 0 && remainder === reportedComposition) ||
+                    (/^[\x20-\x7e]+$/.test(replayedText) && /[\u0080-\uffff]/.test(remainder));
+                if (anchoredReplayIsProven) result = remainder;
             }
         }
         return result;
@@ -630,6 +678,12 @@ export class Xterm {
         const text = this.compositionText(transaction, eventData);
         this.composition = undefined;
         this.pendingTextInput = undefined;
+        this.physicalKeyActions = this.physicalKeyActions.filter(
+            action =>
+                action.inputEpoch !== transaction.inputEpoch ||
+                action.connectionGeneration !== transaction.connectionGeneration ||
+                action.serverConnectionGeneration !== transaction.serverConnectionGeneration
+        );
         this.clearLocalPreedit();
         this.resetOwnedTextarea();
         const valid =
@@ -642,14 +696,14 @@ export class Xterm {
         return true;
     }
 
-    private sendPlainText(text: string) {
+    private sendPlainText(text: string, physical = false) {
         const modifier = this.inputModifier;
         this.setModifier('none');
         const outbound =
             modifier === 'ctrl' && /^[a-zA-Z]$/.test(text)
                 ? String.fromCharCode(text.toUpperCase().charCodeAt(0) - 64)
                 : text;
-        if (this.sendData(outbound)) this.rememberHandledTextareaText(text);
+        if (this.sendData(outbound)) this.rememberHandledTextareaText(text, physical);
     }
 
     private beginPhysicalKeyAction(event: KeyboardEvent) {
@@ -678,29 +732,43 @@ export class Xterm {
                 action.expectedTerminalText === data
             ) {
                 action.terminalText = data;
-                return;
+                return true;
             }
         }
+        return false;
     }
 
-    private takePhysicalKeyAction(inputType: string, data: string | null) {
-        if (inputType !== 'insertText' && inputType !== 'insertLineBreak') return undefined;
-        for (let index = 0; index < this.physicalKeyActions.length; index++) {
+    private consumePhysicalKeyEchoes(inputType: string, text: string) {
+        const textInsertion =
+            inputType === 'insertText' ||
+            inputType === 'insertReplacementText' ||
+            inputType === 'insertCompositionText' ||
+            inputType === 'insertFromComposition';
+        const lineBreak = inputType === 'insertLineBreak';
+        if (!textInsertion && !lineBreak) return { text, echo: false, lineBreak: false };
+        let remaining = text;
+        let echo = false;
+        while (true) {
+            const index = this.physicalKeyActions.findIndex(
+                action =>
+                    action.inputEpoch === this.inputEpoch &&
+                    action.connectionGeneration === this.connectionGeneration &&
+                    action.serverConnectionGeneration === this.serverConnectionGeneration &&
+                    action.terminalText !== undefined &&
+                    (lineBreak ? action.inputType === 'insertLineBreak' : action.inputType === 'insertText')
+            );
+            if (index === -1) break;
             const action = this.physicalKeyActions[index];
-            if (
-                action.inputEpoch === this.inputEpoch &&
-                action.connectionGeneration === this.connectionGeneration &&
-                action.serverConnectionGeneration === this.serverConnectionGeneration &&
-                action.inputType === inputType &&
-                action.terminalText === action.expectedTerminalText &&
-                (inputType !== 'insertText' ||
-                    data === null ||
-                    data === undefined ||
-                    action.expectedTerminalText === data)
-            )
-                return this.physicalKeyActions.splice(index, 1)[0];
+            if (lineBreak) {
+                this.physicalKeyActions.splice(index, 1);
+                return { text: remaining, echo: true, lineBreak: action.terminalText === '\r' };
+            }
+            if (!remaining.startsWith(action.terminalText!)) break;
+            remaining = remaining.slice(action.terminalText!.length);
+            this.physicalKeyActions.splice(index, 1);
+            echo = true;
         }
-        return undefined;
+        return { text: remaining, echo, lineBreak: false };
     }
 
     private ownsTextInput(event: InputEvent) {
@@ -724,9 +792,15 @@ export class Xterm {
         this.physicalKeyActions = this.physicalKeyActions.filter(action => action.terminalText !== undefined);
         this.discardedComposition = undefined;
         const textarea = this.terminal.textarea;
-        const beforeValue = textarea?.value ?? '';
-        const start = textarea?.selectionStart ?? beforeValue.length;
-        const end = textarea?.selectionEnd ?? start;
+        const rawBeforeValue = textarea?.value ?? '';
+        const rawStart = textarea?.selectionStart ?? rawBeforeValue.length;
+        const rawEnd = textarea?.selectionEnd ?? rawStart;
+        const handledDomReplay = this.findHandledDomReplay(rawBeforeValue, rawStart, this.handledPhysicalKeyTail);
+        const unanchoredHandledTextareaTail = this.handledTextareaTailRequiresAnchor ? '' : this.handledTextareaTail;
+        const removedLength = handledDomReplay?.text.length ?? 0;
+        const beforeValue = this.removeHandledDomReplay(rawBeforeValue, handledDomReplay);
+        const start = rawStart - removedLength;
+        const end = rawEnd - removedLength;
         this.composition = {
             sequence: ++this.compositionSequence,
             inputEpoch: this.inputEpoch,
@@ -735,7 +809,8 @@ export class Xterm {
             beforeValue,
             start,
             end,
-            handledTextareaTail: this.handledTextareaTail,
+            handledDomReplay,
+            handledTextareaTail: unanchoredHandledTextareaTail,
             compositionData: event.data,
             inputData: '',
             lastData: event.data,
@@ -774,7 +849,7 @@ export class Xterm {
         if (!this.ownsTextInput(event) && !this.composition) return;
         event.stopImmediatePropagation();
         if (this.composition) {
-            if (event.data !== null) {
+            if ((event.isComposing || event.inputType.includes('Composition')) && event.data !== null) {
                 this.composition.inputData = event.data;
                 this.composition.lastData = event.data;
                 this.composition.draft = event.data;
@@ -790,7 +865,6 @@ export class Xterm {
             beforeValue: this.terminal.textarea?.value ?? '',
             inputType: event.inputType,
             data: event.data,
-            physicalKeyAction: this.takePhysicalKeyAction(event.inputType, event.data),
         };
     };
 
@@ -798,10 +872,32 @@ export class Xterm {
         if (!this.ownsTextInput(event) && !this.composition && !this.discardedComposition) return;
         event.stopImmediatePropagation();
         if (this.composition) {
-            if (event.data !== null) this.composition.inputData = event.data;
-            if (event.data) this.composition.lastData = event.data;
-            this.composition.draft = this.compositionText(this.composition);
-            this.renderLocalPreedit(this.composition.draft);
+            const transaction = this.composition;
+            const previousDraft = transaction.draft;
+            if (event.data !== null) transaction.inputData = event.data;
+            if (event.data) transaction.lastData = event.data;
+            const candidate = this.compositionText(transaction);
+            const physical = this.consumePhysicalKeyEchoes(event.inputType, candidate);
+            if (physical.echo) {
+                const consumed = candidate.slice(0, candidate.length - physical.text.length);
+                if (!transaction.handledDomReplay && consumed) {
+                    transaction.handledDomReplay = { offset: transaction.start, text: consumed };
+                }
+                if (!physical.text) {
+                    transaction.inputData = transaction.compositionData;
+                    transaction.lastData = transaction.compositionData;
+                }
+            }
+            transaction.draft = physical.text;
+            this.renderLocalPreedit(transaction.draft);
+            if (
+                physical.echo &&
+                physical.text === '' &&
+                previousDraft === '' &&
+                !event.isComposing &&
+                !event.inputType.includes('Composition')
+            )
+                return;
             if (!event.isComposing && !event.inputType.includes('Composition')) this.settleComposition();
             return;
         }
@@ -816,31 +912,28 @@ export class Xterm {
             this.resetOwnedTextarea();
             return;
         }
+        const text = this.terminal.textarea?.value || event.data || transaction.data || '';
+        const physical = this.consumePhysicalKeyEchoes(transaction.inputType, text);
+        this.resetOwnedTextarea();
         if (transaction.inputType === 'insertLineBreak') {
             this.setModifier('none');
             this.clearHandledTextareaContext();
-            this.resetOwnedTextarea();
-            if (transaction.physicalKeyAction?.terminalText !== '\r') this.sendData('\r');
+            if (!physical.lineBreak) this.sendData('\r');
             return;
         }
         if (transaction.inputType === 'deleteContentBackward') {
             this.setModifier('none');
             this.clearHandledTextareaContext();
-            this.resetOwnedTextarea();
             this.sendData('\x7f');
             return;
         }
         if (transaction.inputType === 'deleteContentForward') {
             this.setModifier('none');
             this.clearHandledTextareaContext();
-            this.resetOwnedTextarea();
             this.sendData('\x1b[3~');
             return;
         }
-        const text = this.terminal.textarea?.value || event.data || transaction.data || '';
-        this.resetOwnedTextarea();
-        if (!text || transaction.physicalKeyAction?.terminalText === text) return;
-        this.sendPlainText(text);
+        if (physical.text) this.sendPlainText(physical.text);
     };
 
     private handlePaste = (event: ClipboardEvent) => {
@@ -1348,8 +1441,8 @@ export class Xterm {
     @bind
     private onTerminalData(data: string) {
         this.recordDiagnostic('terminal-data', data.length);
-        this.rememberTerminalData(data);
-        this.sendPlainText(data);
+        const physical = this.rememberTerminalData(data);
+        this.sendPlainText(data, physical);
     }
 
     private requestTakeover(ownerGeneration: number) {

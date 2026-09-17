@@ -182,6 +182,46 @@ def dispatch_bluetooth_physical_text_action(text, code, key_code, before_data_nu
     )
 
 
+def dispatch_late_bluetooth_echo_during_composition():
+    evaluate(
+        """(async () => {
+            const textarea = document.querySelector('.xterm-helper-textarea');
+            const keyOptions = {
+                key:'1', code:'Digit1', keyCode:49, which:49,
+                bubbles:true, cancelable:true
+            };
+            textarea.dispatchEvent(new KeyboardEvent('keydown', keyOptions));
+            await new Promise(resolve => setTimeout(resolve, 0));
+            textarea.dispatchEvent(new KeyboardEvent('keyup', keyOptions));
+            textarea.dispatchEvent(new CompositionEvent('compositionstart', {data:'', bubbles:true}));
+            textarea.dispatchEvent(new InputEvent('beforeinput', {
+                data:null, inputType:'insertText', isComposing:false,
+                bubbles:true, cancelable:true
+            }));
+            textarea.value = '1';
+            textarea.setSelectionRange(1, 1);
+            textarea.dispatchEvent(new InputEvent('input', {
+                data:'1', inputType:'insertText', isComposing:false, bubbles:true
+            }));
+            textarea.dispatchEvent(new CompositionEvent('compositionupdate', {data:'일', bubbles:true}));
+            textarea.dispatchEvent(new InputEvent('beforeinput', {
+                data:'일', inputType:'insertCompositionText', isComposing:true,
+                bubbles:true, cancelable:true
+            }));
+            textarea.value = '1일';
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            textarea.dispatchEvent(new InputEvent('input', {
+                data:'일', inputType:'insertCompositionText', isComposing:true, bubbles:true
+            }));
+            textarea.dispatchEvent(new CompositionEvent('compositionend', {data:'일', bubbles:true}));
+            textarea.dispatchEvent(new InputEvent('input', {
+                data:'일', inputType:'insertText', isComposing:false, bubbles:true
+            }));
+            return true;
+        })()"""
+    )
+
+
 def dispatch_physical_enter_action():
     evaluate(
         """(() => {
@@ -890,6 +930,12 @@ try:
     results['bluetoothNullBeforeInputDataBytes'] = bluetooth_null_data_hex
     assert bluetooth_null_data_hex == '31', bluetooth_null_data_hex
 
+    late_bluetooth_composition_hex = capture_toolbar_bytes(
+        dispatch_late_bluetooth_echo_during_composition, settle=True
+    )
+    results['bluetoothLateEchoDuringCompositionBytes'] = late_bluetooth_composition_hex
+    assert late_bluetooth_composition_hex == '31ec9dbc', late_bluetooth_composition_hex
+
     bluetooth_composition_value = '1일'
     bluetooth_composition_hex = capture_toolbar_bytes(
         lambda: (
@@ -900,6 +946,28 @@ try:
     )
     results['bluetoothKeyupFirstThenCompositionBytes'] = bluetooth_composition_hex
     assert bluetooth_composition_hex == bluetooth_composition_value.encode().hex(), bluetooth_composition_hex
+
+    bluetooth_anchored_replay_hex = capture_toolbar_bytes(
+        lambda: (
+            dispatch_bluetooth_physical_text_action('1', 'Digit1', 49, before_data_null=True),
+            dispatch_composition_scenario('1', '11일', '', input_data=''),
+        ),
+        settle=True,
+    )
+    results['bluetoothAnchoredReplayThenCompositionBytes'] = bluetooth_anchored_replay_hex
+    assert bluetooth_anchored_replay_hex == bluetooth_composition_value.encode().hex(), bluetooth_anchored_replay_hex
+
+    bluetooth_blurred_anchor_hex = capture_toolbar_bytes(
+        lambda: (
+            dispatch_bluetooth_physical_text_action('1', 'Digit1', 49, before_data_null=True),
+            blur_textarea(),
+            terminal_tap(),
+            dispatch_composition_scenario('1', '11일', '', input_data=''),
+        ),
+        settle=True,
+    )
+    results['bluetoothBlurThenAnchoredReplayBytes'] = bluetooth_blurred_anchor_hex
+    assert bluetooth_blurred_anchor_hex == bluetooth_composition_value.encode().hex(), bluetooth_blurred_anchor_hex
 
     stale_physical_hex = capture_toolbar_bytes(
         lambda: (
@@ -990,6 +1058,38 @@ try:
     )
     results['imeIntentionalRepeatBytes'] = intentional_repeat_hex
     assert intentional_repeat_hex == intentional_repeat_value.encode().hex(), intentional_repeat_hex
+
+    anchored_intentional_repeat_hex = capture_toolbar_bytes(
+        lambda: (
+            dispatch_textarea_edit('insertText', 'a', 'a', 'a'),
+            dispatch_composition_scenario('a', intentional_repeat_value, '', input_data=''),
+        ),
+        settle=True,
+    )
+    results['imeAnchoredIntentionalRepeatBytes'] = anchored_intentional_repeat_hex
+    assert anchored_intentional_repeat_hex == intentional_repeat_value.encode().hex(), anchored_intentional_repeat_hex
+
+    anchored_korean_repeat_value = '가가'
+    anchored_korean_repeat_hex = capture_toolbar_bytes(
+        lambda: (
+            dispatch_textarea_edit('insertText', '가', '가', '가'),
+            dispatch_composition_scenario('가', anchored_korean_repeat_value, '', input_data=''),
+        ),
+        settle=True,
+    )
+    results['imeAnchoredKoreanIntentionalRepeatBytes'] = anchored_korean_repeat_hex
+    assert anchored_korean_repeat_hex == anchored_korean_repeat_value.encode().hex(), anchored_korean_repeat_hex
+
+    anchored_repeated_tail_value = 'aaaa'
+    anchored_repeated_tail_hex = capture_toolbar_bytes(
+        lambda: (
+            dispatch_textarea_edit('insertText', 'aa', 'aa', 'aa'),
+            dispatch_composition_scenario('aa', anchored_repeated_tail_value, '', input_data=''),
+        ),
+        settle=True,
+    )
+    results['imeAnchoredRepeatedTailBytes'] = anchored_repeated_tail_hex
+    assert anchored_repeated_tail_hex == anchored_repeated_tail_value.encode().hex(), anchored_repeated_tail_hex
 
     mismatched_dom_value = '간'
     mismatched_data_hex = capture_toolbar_bytes(
