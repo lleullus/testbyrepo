@@ -41,13 +41,15 @@ An affirmative current `/승인게이트` requires displaying the exact request 
 
 Use Product Thesis for product meaning, behavior, UI policy, failure/recovery and success meaning. Reuse sufficient originals; revise only affected meaning. Preserve the complete product promise even when current construction is smaller. Never substitute convenient implementation for an explicit required behavior or means.
 
-Current-state investigation supplies evidence, not authority. Reuse current load-bearing evidence and inspect changed anchors instead of repeating an entire investigation. Do not assume a stored source is current merely because its report says complete.
+Product-definition and refinement use `product-thesis/SKILL.md` and its bounded exploration reference inside that role. Breadth, Depth and a supplied Completion Brief help identify questions; they create no Exploration stage, new approval or implicit permission to continue beyond the requested boundary. An exact source/section locator can reopen a question, not restore an old invocation, activate a historical artifact or select the authoritative current Scope.
+
+Current-state investigation supplies evidence, not authority. Reuse current load-bearing evidence and inspect changed anchors instead of repeating an entire investigation. Do not assume a stored source is current merely because its report says complete. Direct authorized reads may suffice; the `repository-investigation` capability is optional within product-definition work and retains its own execution and durable-handoff rules. Neither its completion nor a Brief concern adopts product policy.
 
 A Transition Baseline (`BASELINE-NNN.md`) is an optional approved transition contract, not a snapshot or mode. Bind its exact applicable revision and current approval; file presence alone does not activate it. Main applies its measured Block, invariants, entry/exit/readback, continuation/abort and atomic boundaries while fixing the current Scope under `scope-shaper/SKILL.md`. Reuse boundaries already fixed by that authority instead of reselecting them for method convenience. Coarse Blocks may still leave a current construction choice to Main; ordinary work needs no Baseline. Baseline applicability never expands a narrower current stage request.
 
 ## Canonical authority flow
 
-1. Investigate only facts needed by the current request.
+1. Investigate only facts needed by the current request, before or during meaning refinement as necessary; no standalone investigation is a mandatory Thesis predecessor.
 2. Perform or reuse Product Thesis. Product decisions needed to choose a Scope are resolved in that original, not in a new Matt document.
 3. Main reconciles current evidence with any applicable transition contract and fixes one durable current outcome in `SCOPE.md` before method writing, using `scope-shaper/SKILL.md` as its contract-authoring instructions, not a separate Shaper stage or invocation. Reuse a sufficient current Scope. Resolve material product choices in Thesis; Scope records includes/excludes and observable acceptance against the exact originals.
 4. Execution planning owns technical methods, dependencies, actual work division and integration. A single worker does not require Workstreams boilerplate. Plan cannot strengthen, weaken or replace Scope acceptance.
@@ -77,7 +79,7 @@ During the normal successful Verify → Coverage path, routine progress or a par
 
 Route by the decision that must change, not by words such as owner, persistence or readback. Reconcile changed evidence first; do not revise a contract merely to explain drift.
 
-- Product promise, policy or success meaning changes: revise the affected Thesis original, then reassess applicable Baseline, Scope and Plan. Unrelated new revisions do not automatically invalidate old bound work.
+- Product promise, policy or success meaning changes: use the Product-Thesis refinement procedure to create the affected new ordinal revision without overwriting referenced originals, identify connected semantic consequences, then reassess applicable Baseline, Scope and Plan. A ripple statement identifies impact; it does not perform another owner's mutation or decide verification sufficiency. Unrelated new revisions do not automatically invalidate old bound work.
 - Approved transition boundaries, permitted states or ordering must change: Main revises the affected Baseline under its existing delegated/approval authority, preserving bound history, before projecting an affected Scope. Do not silently redefine approved geography in Scope or Plan.
 - Scope omits an applicable original obligation or its unfixed construction choice is wrong: Main corrects the current contract from current evidence under `scope-shaper/SKILL.md`, preserving the Goal, required items and approved boundaries. Do not invent ACs inside verification.
 - Meaning and approved boundaries stay unchanged, but cause, internal ownership/interface, readback method or target/effect strategy changes: revise the affected Plan and obtain independent method review before dependent implementation; this does not change the user-selected implementing actor.

@@ -4,7 +4,7 @@ IIS is a host-independent skill/document workflow: Main reconciles current state
 
 ## Components
 
-- `product-thesis/`: product meaning, Behavior/UI, failure/recovery and success observations.
+- `product-thesis/`: product meaning, Behavior/UI, failure/recovery and success observations, with bounded exploration/refinement inside the same role.
 - `scope-shaper/`: Main's current Scope contract instructions, template and validator; no separate Shaper stage or invocation.
 - `companion-skills/scope-plan/`: method preparation and independent Plan Review.
 - `companion-skills/scope-implement/`, `scope-verify/`, `scope-coverage/`: implementation, independent semantic verification and read-only post-success review.
@@ -40,6 +40,14 @@ Thesis source storage is authorized before model/approval closure but does not a
 Scope lives at `docs/planning/work/<kebab-case-slug>/SCOPE.md`, using `Schema: iis-scope/v1`, `Project-Root`, `Status`, `## Product Authority`, `## Outcome`, `## Acceptance`, and optional `## Open Decisions`/`## Transition Authority`. `draft` preserves unresolved meaning, `ready` admits reviewed work, `done` records completed verification/Coverage and Main's confirmed status change, and `superseded` marks an unconsumed replaced contract. The standalone validator checks structure and exact bound sources; it does not decide semantic completeness.
 
 Main fixes the current Scope before method writing; Plan chooses implementation methods without redefining Outcome or Acceptance. The same independent Plan Review checks fidelity to bound originals and method sufficiency, recording exact reviewed files and actual-byte hashes with `iis-scope-plan-review/v2`; no extra review stage or host-generated authority digest is required. Re-entry follows the changed decision: Thesis meaning, Baseline geography, Main's Scope application, or Plan method. Missing required delegated-role selections are resolved by the user or returned as `MODEL_SELECTION_REQUIRED`, never by a hidden default.
+
+### Product-Thesis exploration and refinement
+
+[Product Thesis](product-thesis/SKILL.md) uses a [bounded exploration procedure](product-thesis/references/exploration.md): current question → connected Breadth → deciding Depth/evidence → semantic judgment → affected revision and bounded ripple check. These are reasoning activities inside the same role, not mandatory serialized stages or a new authority. Direct reads may suffice; repository investigation is optional, and a supplied Product Completion Brief is an inspection lens rather than a gate.
+
+Preserve observations, inferences, hypotheses, material unknowns and deciding counterexamples at their actual strength. An implementation defect does not require changing clear product meaning. Changed meaning receives a new ordinal revision without rewriting referenced sources; important rationale and impact use ordinary existing records, not an exploration ledger. Source identity, Scope binding, repository/runtime identity, evidence applicability and semantic applicability are distinct checks used only when relevant. A new product needs neither a pre-existing Scope nor deployed-runtime evidence to define its requested meaning.
+
+No Node registry, persistent cursor, graph-based dispatch or Observatory schema change is introduced. Existing exact source/section locators support revisiting a question; they do not restore past authority or PASS. Behavioral evaluation is specified in [refinement scenarios](evaluation/product-thesis/refinement-scenarios.md), separately from historical cohorts. These scenarios are not executed results or an automatic semantic grader; editing the skill does not prove improved agent behavior or a reloaded installation.
 
 ## Verification and completion
 

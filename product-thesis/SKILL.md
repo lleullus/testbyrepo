@@ -1,17 +1,31 @@
 ---
 name: product-thesis
-description: "Define or revise IIS product meaning, behavior, UI policy and success observations in one recoverable Thesis source. Reuse sufficient existing meaning; do not create a separate Matt or Spec contract."
+description: "Define or refine IIS product meaning through bounded questions, evidence and counterexamples. Preserve the complete promise in recoverable Thesis revisions; reuse sufficient meaning without a new stage, graph or approval ceremony."
 ---
 
 # Product Thesis
 
 Thesis owns what the product promises and why, including the behavior necessary to make that promise true. The current planning owner performs this work directly unless current user authority explicitly selects another permitted execution arrangement. Write in the user's language.
 
+Use [references/exploration.md](references/exploration.md) when performing product-definition or refinement work. It is this role's operating procedure, not a separate Exploration owner, invocation, artifact or gate. A sufficient existing Thesis can be reused without replaying exploration.
+
 ## Entry and authority
 
 The single IIS entry interprets the current request first. A discussion or status query is not permission to write product authority. An explicit Thesis request ends after its requested product-definition result. Main's current-state reconciliation and Scope authoring may create or amend Thesis when applicable meaning is missing; sufficient existing meaning is reused without a new ceremony.
 
 Current user instructions take precedence over adopted product originals and derived necessity. Current implementation is evidence, not automatic product policy. Preserve explicit required outcomes and required means. Candidate or replaceable means are not completion obligations. Separate direct user choices from agent-derived decisions under actual delegation.
+
+## Bounded exploration and refinement
+
+Thesis may be developed iteratively. The failure to avoid is losing why meaning changed, what remains unknown and which connected obligations need reassessment, not making more than one revision. Treat a claimed user problem as supplied experience, observed evidence or an untested hypothesis at its actual strength; do not invent a measured shortfall to justify this procedure or a preferred feature.
+
+Start from the current request, exact applicable originals and one decision-relevant focus question. For initial definition the question may cover the complete core promise. Breadth identifies connected meaning areas and unresolved siblings; Depth follows a selected claim, counterexample or causal relation only far enough to change that decision. Neither is a workflow mode, a fixed checklist or an instruction to descend automatically into Scope, Plan or implementation.
+
+Distinguish direct observations, evidence-backed inferences, untested hypotheses, unknowns and counterexamples from semantic decisions. A plausible failure is not an observed incident; a refuted cause must not become product policy. First decide whether the finding changes product meaning at all. An implementation violating clear meaning, an omitted Scope obligation, a method problem or an evidence gap goes to its existing owner through Main, not into an ever-growing Thesis.
+
+Use direct authorized reads when sufficient. `repository-investigation` is an optional evidence capability for material cross-boundary tracing, competing explanations or reusable evidence handoff; use its owning contract when selected, without a mandatory investigation artifact, hidden delegation or new model choice. A supplied `PRODUCT-COMPLETION-BRIEF` may provide selective false-success and missing-meaning questions. It is not required input, a checklist to pass or permission to expand this request.
+
+When meaning must change, adopt it under existing authority, preserve referenced revisions, and inspect only connected semantic consequences and downstream impact. Stop this exploration when the focus question is decided, a decisive evidence/authority limit is reached, further investigation cannot change the decision, or another owner must act. Report the exact unresolved boundary; then obey the current request's continuation or stop rule. Exploration sufficiency is neither product completion nor a verifier verdict.
 
 ## Product promise
 
@@ -55,8 +69,14 @@ An unrooted explicit product-definition request may store its source in one repo
 
 Scope references every applicable exact original and its full UTF-8 SHA-256. Hashes prove byte identity, not product meaning, approval or automatic currentness. A new unrelated revision does not invalidate an older bound contract. A newer user instruction affecting the bound contract requires an explicit affected-source/Scope reassessment; the old hash is not permission to ignore it. Never overwrite history to make old evidence look current.
 
+Keep material unresolved meaning in the source and deciding evidence locators, revision rationale and affected downstream references in the ordinary result, commit explanation or existing project record as needed. Preserve original evidence attribution and state retrieval limits. Do not create an exploration ledger or append every rejected hypothesis to Thesis. An exact source path, section and revision/digest suffice for navigation; no stable Node ID, alias registry or persistent resume cursor is required.
+
+Apply the reference's currentness distinctions only where they can change this product decision. No Scope binding or deployed runtime is a prerequisite for defining a new product. Missing runtime evidence cannot prove runtime behavior, but it need not prevent a product meaning already determined by the user's requirements.
+
 ## Result and boundary
 
-Report the actual source, product promise, material choices and unresolved limitations. `CALIBRATED` means the applicable product meaning is settled and the counterexamples close; it does not mean every future policy is specified or the product exists. `USER_INPUT_REQUIRED` identifies the exact unresolved current product choice. Preserve the unresolved source honestly when storage is authorized.
+Report the actual source, product promise, material choices and unresolved limitations. For refinement, include the changed meaning, deciding evidence or counterexample, material remaining unknowns and bounded ripple/next-owner result where relevant; no mandatory terminal form is added. `CALIBRATED` means the applicable product meaning is settled and the counterexamples close; it does not mean every future policy is specified or the product exists. `USER_INPUT_REQUIRED` identifies the exact unresolved current product choice. Preserve the unresolved source honestly when storage is authorized.
+
+A decisive missing evidence or capability limit is not automatically a user-owned product choice. Report that incomplete boundary in ordinary prose rather than manufacturing `CALIBRATED`, requesting an arbitrary user decision or introducing a new status enum. Non-decisive unknowns remain explicit without blocking settled meaning.
 
 Do not select construction order, define the current Scope implicitly, choose technical methods, issue verification verdicts or mark delivery complete. Return to the same IIS Main, which obeys the user's requested stage boundary. Product source storage does not authorize further stages.
