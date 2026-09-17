@@ -11,6 +11,8 @@ import { ZmodemAddon } from './addons/zmodem';
 
 import '@xterm/xterm/css/xterm.css';
 
+const TEXTAREA_CONTEXT_LIMIT = 64;
+
 interface TtydTerminal extends Terminal {
     fit(): void;
 }
@@ -32,6 +34,9 @@ interface CompositionTransaction {
     beforeValue: string;
     start: number;
     end: number;
+    handledTextareaTail: string;
+    compositionData: string;
+    inputData: string;
     lastData: string;
     draft: string;
     cancelled: boolean;
@@ -295,6 +300,7 @@ export class Xterm {
     private discardedComposition?: CompositionTransaction;
     private pendingTextInput?: TextInputTransaction;
     private compositionTextareaStyle?: { width: string; height: string; lineHeight: string };
+    private handledTextareaTail = '';
     private pointerCandidate?: PointerCandidate;
     private physicalKeyActions: PhysicalKeyAction[] = [];
     private toolbarInteraction = false;
@@ -482,6 +488,7 @@ export class Xterm {
     }
 
     private invalidateInputOwner(blur: boolean) {
+        this.clearHandledTextareaContext();
         this.inputEpoch++;
         this.pendingTextInput = undefined;
         this.pointerCandidate = undefined;
@@ -546,6 +553,27 @@ export class Xterm {
         textarea.setSelectionRange(0, 0);
     }
 
+    private rememberHandledTextareaText(text: string) {
+        // eslint-disable-next-line no-control-regex
+        if (/[\u0000-\u001f\u007f]/.test(text)) {
+            this.handledTextareaTail = '';
+            return;
+        }
+        this.handledTextareaTail = (this.handledTextareaTail + text).slice(-TEXTAREA_CONTEXT_LIMIT);
+    }
+
+    private clearHandledTextareaContext() {
+        this.handledTextareaTail = '';
+    }
+
+    private replayedPrefixLength(text: string, handledTail: string): number {
+        const maximum = Math.min(Math.max(0, text.length - 1), handledTail.length);
+        for (let length = maximum; length > 0; length--) {
+            if (text.startsWith(handledTail.slice(-length))) return length;
+        }
+        return 0;
+    }
+
     private cancelComposition() {
         const transaction = this.composition;
         if (!transaction) return false;
@@ -563,23 +591,44 @@ export class Xterm {
         const before = transaction.beforeValue;
         const beforePrefix = before.slice(0, transaction.start);
         const beforeSuffix = before.slice(transaction.end);
+        const anchored = beforePrefix.length > 0 || beforeSuffix.length > 0;
+        const reportedComposition =
+            eventData || transaction.compositionData || transaction.inputData || transaction.lastData;
+        let inserted: string;
         if (
             current.startsWith(beforePrefix) &&
             current.endsWith(beforeSuffix) &&
             current.length >= beforePrefix.length + beforeSuffix.length
-        )
-            return current.slice(beforePrefix.length, current.length - beforeSuffix.length);
-        let prefix = 0;
-        while (prefix < before.length && prefix < current.length && before[prefix] === current[prefix]) prefix++;
-        let suffix = 0;
-        while (
-            suffix < before.length - prefix &&
-            suffix < current.length - prefix &&
-            before[before.length - 1 - suffix] === current[current.length - 1 - suffix]
-        )
-            suffix++;
-        const inserted = current.slice(prefix, current.length - suffix);
-        return inserted || eventData || transaction.lastData;
+        ) {
+            inserted = current.slice(beforePrefix.length, current.length - beforeSuffix.length);
+        } else {
+            let prefix = 0;
+            while (prefix < before.length && prefix < current.length && before[prefix] === current[prefix]) prefix++;
+            let suffix = 0;
+            while (
+                suffix < before.length - prefix &&
+                suffix < current.length - prefix &&
+                before[before.length - 1 - suffix] === current[current.length - 1 - suffix]
+            )
+                suffix++;
+            inserted = current.slice(prefix, current.length - suffix);
+        }
+        if (!anchored && inserted && inserted !== reportedComposition) {
+            const replayedLength = this.replayedPrefixLength(inserted, transaction.handledTextareaTail);
+            if (replayedLength > 0) {
+                const remainder = inserted.slice(replayedLength);
+                if (
+                    [
+                        reportedComposition,
+                        transaction.compositionData,
+                        transaction.inputData,
+                        transaction.lastData,
+                    ].includes(remainder)
+                )
+                    return remainder;
+            }
+        }
+        return inserted || reportedComposition;
     }
 
     private settleComposition(eventData = '') {
@@ -595,7 +644,7 @@ export class Xterm {
             transaction.inputEpoch === this.inputEpoch &&
             transaction.connectionGeneration === this.connectionGeneration &&
             transaction.serverConnectionGeneration === this.serverConnectionGeneration;
-        if (valid && text) this.sendData(text);
+        if (valid && text && this.sendData(text)) this.rememberHandledTextareaText(text);
         this.emitInputState();
         return true;
     }
@@ -603,11 +652,11 @@ export class Xterm {
     private sendPlainText(text: string) {
         const modifier = this.inputModifier;
         this.setModifier('none');
-        if (modifier === 'ctrl' && /^[a-zA-Z]$/.test(text)) {
-            this.sendData(String.fromCharCode(text.toUpperCase().charCodeAt(0) - 64));
-            return;
-        }
-        this.sendData(text);
+        const outbound =
+            modifier === 'ctrl' && /^[a-zA-Z]$/.test(text)
+                ? String.fromCharCode(text.toUpperCase().charCodeAt(0) - 64)
+                : text;
+        if (this.sendData(outbound)) this.rememberHandledTextareaText(text);
     }
 
     private beginPhysicalKeyAction(event: KeyboardEvent) {
@@ -677,18 +726,21 @@ export class Xterm {
         this.pendingTextInput = undefined;
         this.physicalKeyActions.length = 0;
         this.discardedComposition = undefined;
-        this.resetOwnedTextarea();
         const textarea = this.terminal.textarea;
-        const start = textarea?.selectionStart ?? textarea?.value.length ?? 0;
+        const beforeValue = textarea?.value ?? '';
+        const start = textarea?.selectionStart ?? beforeValue.length;
         const end = textarea?.selectionEnd ?? start;
         this.composition = {
             sequence: ++this.compositionSequence,
             inputEpoch: this.inputEpoch,
             connectionGeneration: this.connectionGeneration,
             serverConnectionGeneration: this.serverConnectionGeneration,
-            beforeValue: textarea?.value ?? '',
+            beforeValue,
             start,
             end,
+            handledTextareaTail: this.handledTextareaTail,
+            compositionData: event.data,
+            inputData: '',
             lastData: event.data,
             draft: event.data,
             cancelled: false,
@@ -702,6 +754,7 @@ export class Xterm {
         event.stopImmediatePropagation();
         if (!this.composition) return;
         this.composition.lastData = event.data;
+        this.composition.compositionData = event.data;
         this.composition.draft = event.data;
         this.renderLocalPreedit(event.data);
     };
@@ -711,10 +764,12 @@ export class Xterm {
         const transaction = this.composition;
         if (!transaction) return;
         transaction.lastData = event.data || transaction.lastData;
+        if (event.data) transaction.compositionData = event.data;
         transaction.ended = true;
         const sequence = transaction.sequence;
         window.setTimeout(() => {
-            if (this.composition?.sequence === sequence) this.settleComposition(event.data);
+            if (this.composition?.sequence === sequence)
+                this.settleComposition(event.data || transaction.compositionData);
         }, 0);
     };
 
@@ -723,6 +778,7 @@ export class Xterm {
         event.stopImmediatePropagation();
         if (this.composition) {
             if (event.data !== null) {
+                this.composition.inputData = event.data;
                 this.composition.lastData = event.data;
                 this.composition.draft = event.data;
                 this.renderLocalPreedit(event.data);
@@ -745,11 +801,11 @@ export class Xterm {
         if (!this.ownsTextInput(event) && !this.composition && !this.discardedComposition) return;
         event.stopImmediatePropagation();
         if (this.composition) {
+            if (event.data !== null) this.composition.inputData = event.data;
             if (event.data) this.composition.lastData = event.data;
-            this.composition.draft = this.compositionText(this.composition, event.data ?? '');
+            this.composition.draft = this.compositionText(this.composition);
             this.renderLocalPreedit(this.composition.draft);
-            if (!event.isComposing && !event.inputType.includes('Composition'))
-                this.settleComposition(event.data ?? '');
+            if (!event.isComposing && !event.inputType.includes('Composition')) this.settleComposition();
             return;
         }
         if (this.discardedComposition) {
@@ -765,18 +821,21 @@ export class Xterm {
         }
         if (transaction.inputType === 'insertLineBreak') {
             this.setModifier('none');
+            this.clearHandledTextareaContext();
             this.resetOwnedTextarea();
             if (transaction.physicalKeyAction?.terminalText !== '\r') this.sendData('\r');
             return;
         }
         if (transaction.inputType === 'deleteContentBackward') {
             this.setModifier('none');
+            this.clearHandledTextareaContext();
             this.resetOwnedTextarea();
             this.sendData('\x7f');
             return;
         }
         if (transaction.inputType === 'deleteContentForward') {
             this.setModifier('none');
+            this.clearHandledTextareaContext();
             this.resetOwnedTextarea();
             this.sendData('\x1b[3~');
             return;
@@ -904,18 +963,21 @@ export class Xterm {
     }
 
     public sendEscape() {
+        this.clearHandledTextareaContext();
         this.setModifier('none');
         if (this.cancelComposition()) return;
         this.sendData('\x1b');
     }
 
     public sendTab() {
+        this.clearHandledTextareaContext();
         const shifted = this.inputModifier === 'shift';
         this.setModifier('none');
         this.sendData(shifted ? '\x1b[Z' : '\t');
     }
 
     public sendEnter() {
+        this.clearHandledTextareaContext();
         this.setModifier('none');
         if (this.composition) {
             this.settleComposition();
@@ -925,6 +987,7 @@ export class Xterm {
     }
 
     public sendArrow(direction: 'left' | 'up' | 'down' | 'right') {
+        this.clearHandledTextareaContext();
         const shifted = this.inputModifier === 'shift';
         this.setModifier('none');
         const suffix = { left: 'D', up: 'A', down: 'B', right: 'C' }[direction];
@@ -1249,7 +1312,7 @@ export class Xterm {
     }
 
     @bind
-    public sendData(data: string | Uint8Array) {
+    public sendData(data: string | Uint8Array): boolean {
         const { socket, textEncoder } = this;
         if (
             this.displaced ||
@@ -1258,7 +1321,7 @@ export class Xterm {
             this.serverConnectionGeneration <= 0 ||
             socket?.readyState !== WebSocket.OPEN
         )
-            return;
+            return false;
 
         if (typeof data === 'string') {
             const payload = new Uint8Array(data.length * 3 + 1);
@@ -1272,6 +1335,7 @@ export class Xterm {
             socket.send(payload);
         }
         this.recordDiagnostic('input-sent', typeof data === 'string' ? data.length : data.byteLength);
+        return true;
     }
 
     @bind

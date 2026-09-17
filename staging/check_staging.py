@@ -12,7 +12,7 @@ import urllib.request
 
 import websocket
 
-URL = os.environ.get('WEBTERM_URL', 'http://127.0.0.1:7684/')
+URL = os.environ.get('WEBTERM_URL', 'http://127.0.0.1:7684/?diagnostics=1')
 
 
 def free_port():
@@ -243,6 +243,8 @@ def start_composition(text):
     evaluate(
         f"""(() => {{
             const textarea = document.querySelector('.xterm-helper-textarea');
+            textarea.value = '';
+            textarea.setSelectionRange(0, 0);
             textarea.dispatchEvent(new CompositionEvent('compositionstart', {{data:'', bubbles:true}}));
             const before = textarea.value;
             textarea.setSelectionRange(before.length, before.length);
@@ -262,6 +264,50 @@ def end_composition(text):
             const textarea = document.querySelector('.xterm-helper-textarea');
             textarea.dispatchEvent(new CompositionEvent('compositionend', {{data:{json.dumps(text)}, bubbles:true}}));
             textarea.dispatchEvent(new InputEvent('input', {{data:{json.dumps(text)}, inputType:'insertText', isComposing:false, bubbles:true}}));
+            return true;
+        }})()"""
+    )
+    time.sleep(0.05)
+
+def dispatch_composition_scenario(
+    before_value,
+    dom_value,
+    composition_data,
+    input_data=None,
+    final_order='end-then-input',
+):
+    input_data = composition_data if input_data is None else input_data
+    evaluate(
+        f"""(() => {{
+            const textarea = document.querySelector('.xterm-helper-textarea');
+            textarea.value = {json.dumps(before_value)};
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            textarea.dispatchEvent(new CompositionEvent('compositionstart', {{data:'', bubbles:true}}));
+            textarea.dispatchEvent(new CompositionEvent('compositionupdate', {{
+                data:{json.dumps(composition_data)}, bubbles:true
+            }}));
+            textarea.dispatchEvent(new InputEvent('beforeinput', {{
+                data:{json.dumps(input_data)}, inputType:'insertCompositionText', isComposing:true,
+                bubbles:true, cancelable:true
+            }}));
+            textarea.value = {json.dumps(dom_value)};
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            textarea.dispatchEvent(new InputEvent('input', {{
+                data:{json.dumps(input_data)}, inputType:'insertCompositionText', isComposing:true, bubbles:true
+            }}));
+            const end = () => textarea.dispatchEvent(new CompositionEvent('compositionend', {{
+                data:{json.dumps(composition_data)}, bubbles:true
+            }}));
+            const finalInput = () => textarea.dispatchEvent(new InputEvent('input', {{
+                data:{json.dumps(input_data)}, inputType:'insertText', isComposing:false, bubbles:true
+            }}));
+            if ({json.dumps(final_order)} === 'input-then-end') {{
+                finalInput();
+                end();
+            }} else {{
+                end();
+                finalInput();
+            }}
             return true;
         }})()"""
     )
@@ -407,7 +453,7 @@ def capture_toolbar_bytes(action, application_cursor=False, settle=False):
     term_input('\x03')
     time.sleep(0.1)
     settled_read = (
-        "import time;time.sleep(0.15);ready,_,_=select.select([fd],[],[],0);"
+        "import time;time.sleep(0.3);ready,_,_=select.select([fd],[],[],0.7);"
         "data+=os.read(fd,64) if ready else b'';"
         if settle
         else ''
@@ -420,7 +466,7 @@ def capture_toolbar_bytes(action, application_cursor=False, settle=False):
         "ready,_,_=select.select([fd],[],[],2.0);data=os.read(fd,64) if ready else b'';"
         + settled_read
         + "termios.tcsetattr(fd,termios.TCSADRAIN,old);"
-        + f"print('\\n\\x1b[?1l{marker}_HEX='+data.hex(),flush=True)"
+        + f"print('\\n\\x1b[?1l{marker}_HEX='+data.hex()+'\\n'+{(marker + '_')!r}+'DONE',flush=True)"
     )
     send_command('python3 -c ' + shlex.quote(script))
     wait_text(marker + '_READY')
@@ -428,7 +474,7 @@ def capture_toolbar_bytes(action, application_cursor=False, settle=False):
         f"Boolean(window.term) && window.term.modes.applicationCursorKeysMode === {str(application_cursor).lower()}"
     )
     action()
-    text = wait_text(marker + '_HEX=')
+    text = wait_text(marker + '_DONE')
     matches = re.findall(re.escape(marker) + r'_HEX=([0-9a-f]*)', text)
     if not matches:
         raise AssertionError(f'key bytes not captured for {marker}: {text[-1200:]}')
@@ -470,20 +516,20 @@ def capture_visible_preedit(text):
         f"print({(marker + '_READY')!r},flush=True);"
         "tty.setraw(fd);termios.tcflush(fd,termios.TCIFLUSH);"
         "ready,_,_=select.select([fd],[],[],0.6);pre=os.read(fd,64) if ready else b'';"
-        f"print('\\n{marker}_PRE='+pre.hex(),flush=True);"
+        f"print('\\n{marker}_PRE='+pre.hex()+'\\n'+{(marker + '_PRE_')!r}+'DONE',flush=True);"
         "ready,_,_=select.select([fd],[],[],2.0);post=os.read(fd,64) if ready else b'';"
         "termios.tcsetattr(fd,termios.TCSADRAIN,old);"
-        f"print('\\n{marker}_POST='+post.hex(),flush=True)"
+        f"print('\\n{marker}_POST='+post.hex()+'\\n'+{(marker + '_POST_')!r}+'DONE',flush=True)"
     )
     send_command('python3 -c ' + shlex.quote(script))
     wait_text(marker + '_READY')
     start_composition(text)
     visible = preedit_state()
-    before_commit_text = wait_text(marker + '_PRE=')
+    before_commit_text = wait_text(marker + '_PRE_DONE')
     before_matches = re.findall(re.escape(marker) + r'_PRE=([0-9a-f]*)', before_commit_text)
     assert before_matches and before_matches[-1] == '', before_commit_text[-1200:]
     end_composition(text)
-    after_commit_text = wait_text(marker + '_POST=')
+    after_commit_text = wait_text(marker + '_POST_DONE')
     after_matches = re.findall(re.escape(marker) + r'_POST=([0-9a-f]*)', after_commit_text)
     assert after_matches, after_commit_text[-1200:]
     cleared = preedit_state()
@@ -740,7 +786,11 @@ try:
 
     physical_enter_hex = capture_toolbar_bytes(dispatch_physical_enter_action, settle=True)
     results['physicalEnterDualEventBytes'] = physical_enter_hex
-    assert physical_enter_hex == '0d', physical_enter_hex
+    assert physical_enter_hex == '0d', {
+        'hex': physical_enter_hex,
+        'events': evaluate("window.__r8PhysicalEnterEvents"),
+        'diagnostics': ui_state()['diagnostics']['events'][-12:],
+    }
     physical_enter_events = evaluate("window.__r8PhysicalEnterEvents")
     results['physicalEnterSenderEvents'] = physical_enter_events
     assert [event['event'] for event in physical_enter_events] == ['terminal-data', 'input-sent'], physical_enter_events
@@ -839,6 +889,99 @@ try:
         assert cleared['textareaValue'] == '', composition_result
     results['syntheticCompositionPreedit'] = composition_results
     results['syntheticCompositionBytes'] = composition_results['한']['afterCommitPtyHex']
+
+    gboard_value = '1일'
+    gboard_hex = capture_toolbar_bytes(
+        lambda: (
+            dispatch_textarea_edit('insertText', '1', '1', '1'),
+            dispatch_composition_scenario('1', gboard_value, '일'),
+        ),
+        settle=True,
+    )
+    results['imeGboardRestoredPrefixBytes'] = gboard_hex
+    assert gboard_hex == gboard_value.encode().hex(), gboard_hex
+
+    late_rehydration_hex = capture_toolbar_bytes(
+        lambda: (
+            dispatch_textarea_edit('insertText', '1', '1', '1'),
+            dispatch_composition_scenario('', gboard_value, '일'),
+        ),
+        settle=True,
+    )
+    results['imeLateRehydrationBytes'] = late_rehydration_hex
+    assert late_rehydration_hex == gboard_value.encode().hex(), late_rehydration_hex
+
+    physical_mixed_hex = capture_toolbar_bytes(
+        lambda: (
+            dispatch_physical_text_action('1', 'Digit1', 49),
+            dispatch_composition_scenario('', gboard_value, '일'),
+        ),
+        settle=True,
+    )
+    results['imePhysicalAsciiThenCompositionBytes'] = physical_mixed_hex
+    assert physical_mixed_hex == gboard_value.encode().hex(), physical_mixed_hex
+
+    multiple_ascii_value = '12한'
+    multiple_ascii_hex = capture_toolbar_bytes(
+        lambda: (
+            dispatch_textarea_edit('insertText', '12', '12', '12'),
+            dispatch_composition_scenario('', multiple_ascii_value, '한'),
+        ),
+        settle=True,
+    )
+    results['imeMultipleAsciiPrefixBytes'] = multiple_ascii_hex
+    assert multiple_ascii_hex == multiple_ascii_value.encode().hex(), multiple_ascii_hex
+
+    intentional_repeat_value = 'aa'
+    intentional_repeat_hex = capture_toolbar_bytes(
+        lambda: (
+            dispatch_textarea_edit('insertText', 'a', 'a', 'a'),
+            dispatch_composition_scenario('', intentional_repeat_value, 'a'),
+        ),
+        settle=True,
+    )
+    results['imeIntentionalRepeatBytes'] = intentional_repeat_hex
+    assert intentional_repeat_hex == intentional_repeat_value.encode().hex(), intentional_repeat_hex
+
+    mismatched_dom_value = '간'
+    mismatched_data_hex = capture_toolbar_bytes(
+        lambda: dispatch_composition_scenario('', mismatched_dom_value, '각'), settle=True
+    )
+    results['imeCompositionDataDomMismatchBytes'] = mismatched_data_hex
+    assert mismatched_data_hex == mismatched_dom_value.encode().hex(), mismatched_data_hex
+
+    composition_order_results = {}
+    for final_order in ('end-then-input', 'input-then-end'):
+        order_value = '순'
+        order_hex = capture_toolbar_bytes(
+            lambda final_order=final_order: dispatch_composition_scenario(
+                '', order_value, order_value, final_order=final_order
+            ),
+            settle=True,
+        )
+        composition_order_results[final_order] = order_hex
+        assert order_hex == order_value.encode().hex(), (final_order, order_hex)
+    results['imeCompositionFinalEventOrderBytes'] = composition_order_results
+
+    control_boundaries = {
+        'arrow': (lambda: tap('.arrow-left'), b'\x1b[D'),
+        'backspace': (lambda: dispatch_textarea_edit('deleteContentBackward', '', None, None), b'\x7f'),
+        'enter': (lambda: tap('.enter-button'), b'\r'),
+    }
+    control_boundary_results = {}
+    for boundary, (control_action, control_bytes) in control_boundaries.items():
+        boundary_hex = capture_toolbar_bytes(
+            lambda control_action=control_action: (
+                dispatch_textarea_edit('insertText', '1', '1', '1'),
+                control_action(),
+                dispatch_composition_scenario('', gboard_value, '일'),
+            ),
+            settle=True,
+        )
+        expected = b'1' + control_bytes + gboard_value.encode()
+        control_boundary_results[boundary] = boundary_hex
+        assert boundary_hex == expected.hex(), (boundary, boundary_hex, expected.hex())
+    results['imeControlBoundaryBytes'] = control_boundary_results
 
     accumulated_value = '한글abc'
     accumulated_space_hex = capture_toolbar_bytes(
