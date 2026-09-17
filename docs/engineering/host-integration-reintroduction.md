@@ -4,9 +4,9 @@
 
 2026-09-15에 IIS의 OMP 본체 종속 기능과 Scope 플러그인을 제거하고, 스킬과 일반 도구로 수행하는 구조로 전환했다. 이 문서는 나중에 그 기능이 다시 필요할 때 참고 코드를 찾고 현재 구조에 맞게 재도입하는 방법을 남긴다. 재도입 승인, 필수 후속 작업, 새 IIS 단계는 아니다.
 
-현재 제품 계약은 **Thesis → Scope → Plan·독립 Review → 구현 → 독립 검증 → Coverage → Main의 완료 기록**이다. 기본 IIS에는 전용 실행 CLI, 호스트 verifier profile, 불투명 terminal handle이 필요하지 않다. 현재 Plan Review는 `iis-scope-plan-review/v2`, 설치는 `iis-bundle/v4`·`iis-install/v4`, 패키징 protocol은 `4`, family는 `iis-skills`다. 이 패키징 버전은 실행 프로토콜이 아니다.
+현재 제품 계약은 **Thesis → Scope → Plan·독립 Review → 구현 → 독립 검증 → Production Heuristic Probe → Main의 완료 기록**이다. 기본 IIS에는 전용 실행 CLI, 호스트 verifier profile, 불투명 terminal handle이 필요하지 않다. 현재 Plan Review는 `iis-scope-plan-review/v2`, 설치는 `iis-bundle/v4`·`iis-install/v4`, 패키징 protocol은 `4`, family는 `iis-skills`다. 이 패키징 버전은 실행 프로토콜이 아니다.
 
-현재 원본: [README](../../README.md), [의존성 지도](ready-runtime/dependency-map.md), [검증 경계](ready-runtime/verification.md), [Plan](../../companion-skills/scope-plan/SKILL.md), [검증](../../companion-skills/scope-verify/SKILL.md), [Coverage](../../companion-skills/scope-coverage/SKILL.md).
+현재 원본: [README](../../README.md), [의존성 지도](ready-runtime/dependency-map.md), [검증 경계](ready-runtime/verification.md), [Plan](../../companion-skills/scope-plan/SKILL.md), [검증](../../companion-skills/scope-verify/SKILL.md), [Production Heuristic Probe](../../companion-skills/production-heuristic-probing/SKILL.md).
 
 ## 1. 커밋 통합 뒤에도 참고 코드를 찾는 방법
 
@@ -68,7 +68,7 @@ git show 2300ce22cf2da3a295d7ccbc3202c682631592ed:packages/coding-agent/src/task
 
 현재 main에서 개발하고, 필요한 과거 함수와 동작만 참고한다. 예를 들어 원본 hash 확인이나 현재 Review v2의 구조 검사는 일반 명령/라이브러리로 먼저 해결할 수 있다. 이미 있는 Scope validator나 설치 도구를 재사용하고, OMP에서 호출하기 편해야 할 때만 얇은 플러그인 연결부를 추가한다.
 
-이 경로에서는 독립 verifier 결과와 Coverage를 확인하는 Main의 현재 책임을 유지한다. 보고서 경로를 불투명 문자열로 바꾸거나 UUID를 붙였다는 이유로 host-owned provenance가 생겼다고 주장하지 않는다. 플러그인이 없어도 기본 IIS를 수행할 수 있어야 한다.
+이 경로에서는 독립 verifier 결과와 Production Heuristic Probe를 확인하는 Main의 현재 책임을 유지한다. Probe의 실제 invocation/action/effect/currentness/cleanup 기록 없이 host-owned provenance나 완료 적격성이 생겼다고 주장하지 않는다. 플러그인이 없어도 기본 IIS를 수행할 수 있어야 한다.
 
 ### 호스트가 verifier 결과의 귀속과 완료 기록을 강제해야 하는 경우
 
@@ -82,7 +82,7 @@ git show 2300ce22cf2da3a295d7ccbc3202c682631592ed:packages/coding-agent/src/task
 
 1. **현재 요청과 부족한 동작을 특정한다.** 편의 자동화인지 host-owned 결과 귀속인지 선택하고, 실제 관찰할 성공 조건을 정한다. 과거 구현 전체 복구를 시작점으로 삼지 않는다.
 2. **현재 main을 구현 기준으로 삼는다.** 태그는 별도 worktree의 참고 자료로 사용한다. `45deb08` 전체 cherry-pick이나 `a00a457` 전체 revert는 스킬·설치·평가기까지 되돌리므로 선택적 재도입 방법이 아니다.
-3. **관련 계약과 구현을 같이 맞춘다.** 현재 Scope·Thesis·Review v2, verifier 결과 수령, Coverage, 완료 기록의 연결을 따른다. 원본 binding과 finalization만 옮기더라도 입력 schema와 실제 결과 전달 경로를 먼저 맞춘다. 필요한 범위의 과거 테스트도 새 계약에 맞춰 가져온다.
+3. **관련 계약과 구현을 같이 맞춘다.** 현재 Scope·Thesis·Review v2, verifier 결과 수령, Production Heuristic Probe, 완료 기록의 연결을 따른다. 원본 binding과 finalization만 옮기더라도 입력 schema와 실제 verifier/Probe 결과 전달 경로를 먼저 맞춘다. 필요한 범위의 과거 테스트도 새 계약에 맞춰 가져온다.
 4. **설치 경로는 실행 기능과 구분한다.** 단순 편의 플러그인은 기존 extension 설치 방식을 쓸 수 있다. IIS 관리 payload나 metadata 계약을 실제 바꾸는 경우에만 새 packaging/migration을 설계한다. 현행 v4 manifest에 v3 파일을 끼워 넣거나 과거 release를 덮어쓰지 않는다.
 5. **격리 환경에서 연결을 검증한다.** 아래 관찰을 필요한 보장에 맞게 확인한 뒤, 운영 반영을 별도 수행한다. 운영 반영 전에는 영향받는 작업과 효과가 정리됐는지 확인하고, 반영 후에는 실제 새 세션의 로드된 도구·스킬·프로토콜을 확인한다. 소스 수정·설치 링크 변경만으로 기존 세션이 갱신됐다고 판단하지 않는다.
 
@@ -94,8 +94,8 @@ git show 2300ce22cf2da3a295d7ccbc3202c682631592ed:packages/coding-agent/src/task
 
 - **기본 경로:** 플러그인 없는 클라이언트에서도 현재 스킬 기반 작업이 수행된다. 선택 기능이 기본 실행의 숨은 필수 의존성이 되지 않는다.
 - **입력과 현재성:** 현재 Scope·Thesis·Review v2를 사용하고, 중요한 원본·대상 변경이 생기면 오래된 판단으로 완료를 기록하지 않는다. 허용된 scenario effect는 stable target 변경과 구분한다.
-- **실제 결과 전달:** host-owned 귀속을 약속한다면 실제 독립 verifier의 완료 결과를 통해 확인한다. fixture terminal이나 복사한 JSON으로 그 보장이 검증됐다고 하지 않는다. FAILED·INCONCLUSIVE·누락 결과가 완료로 진행하지 않아야 한다.
-- **완료 기록:** 성공한 독립 검증 뒤 Coverage가 완료되고 중요한 공백이 없을 때만 해당 Scope의 상태를 바꾼다. 재시도·응답 유실 후 실제 기록을 확인하고, 이미 `done`인 파일을 새 완료 성과로 세지 않는다.
+- **실제 결과 전달:** host-owned 귀속을 약속한다면 실제 독립 verifier와 Production Heuristic Probe의 완료 결과를 통해 확인한다. Probe result에는 invocation/action/effect/currentness/cleanup/settlement가 귀속되어야 한다. fixture terminal이나 복사한 JSON으로 그 보장이 검증됐다고 하지 않는다. FAILED·INCONCLUSIVE·누락 결과가 완료로 진행하지 않아야 한다.
+- **완료 기록:** 성공한 독립 검증 뒤 Probe가 `COMPLETE`이고 Scope-material finding/limitation이 없으며 모든 Probe 효과가 정리됐을 때만 해당 Scope의 상태를 바꾼다. 재시도·응답 유실 후 실제 기록을 확인하고, 이미 `done`인 파일을 새 완료 성과로 세지 않는다.
 - **설치와 제거:** 격리된 client root에서 기존 사용자 파일 보존, 플러그인 설치·제거·rollback을 확인한다. host 전용 보장을 선택한 경로는 필요한 capability가 없으면 분명히 실행 불가로 보고하며 그 보장을 조용히 낮추지 않는다.
 - **일반 도구:** 보통의 명령 실패는 오류 결과로 처리하며, 관련 없는 편집·명령 실행을 막는 전역 잠금이나 도구 가로채기를 다시 도입하지 않는다.
 

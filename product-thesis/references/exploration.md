@@ -70,7 +70,7 @@ Preserve referenced Thesis revisions byte-for-byte. A changed contract receives 
 
 A bounded **ripple check** asks which connected meanings and current downstream obligations the change can affect: for example success/readback changing failure policy, identity, persistence or UI wording. Inspect the actual connection, not every section or every historical Scope. Source identifiers, exact locators and relevant current evidence support the impact statement. A selector is not a substitute for reading the full bound originals when the downstream role requires them.
 
-An impact statement identifies possible affected acceptance and dependencies; it does not exempt an obligation, retain a prior PASS or decide verification evidence sufficiency. The independent verifier owns observation retention and any fresh whole-Scope verdict under `scope-verify`; Coverage owns its later read-only search. Preserve completed Scope history and connect relevant obligations to current repair/preservation work rather than reopening every done Scope. Stop/no-reentry and actor continuity remain in force.
+An impact statement identifies possible affected acceptance and dependencies; it does not exempt an obligation, retain a prior PASS or decide verification evidence sufficiency. The independent verifier owns observation retention and any fresh whole-Scope verdict under `scope-verify`; the Production Heuristic Probe owns whether its later bounded search can be targeted under `production-heuristic-probing`. Preserve completed Scope history and connect relevant obligations to current repair/preservation work rather than reopening every done Scope. Stop/no-reentry and actor continuity remain in force.
 
 ## Currentness and resuming a question
 

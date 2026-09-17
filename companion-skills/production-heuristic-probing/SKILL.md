@@ -55,9 +55,13 @@ Use the caller-selected model/effort under the existing IIS selection policy. Do
 
 A material finding states the exact Scope/Thesis obligation, actual mechanism or service path, minimal reachable trigger/condition, wrong result, the verifier observation that cannot distinguish it, and the narrowest next action. Separate observed facts from inference.
 
+For every executed Probe action, preserve the actual independent invocation identity and result reference, exact trigger/action, authorized mutable effect path or state, authoritative readback and raw evidence location, stable target/runtime identity before and after, and cleanup/settlement result. A read-only investigation records `Probe effect paths: None` and still identifies its actual reads/evidence. Missing action, currentness or settlement attribution is a material result limitation, not an implicit successful cleanup.
+
 ### Scope materiality
 
 A real production defect outside the current Scope is still reportable, but it does not automatically block this Scope. Mark it `OUT_OF_SCOPE` unless it invalidates the verified target/currentness or an explicit premise of this Scope. Only a finding or evidence limit that can materially falsify the current approved Scope result withholds normal completion progression.
+
+Classify limitations by the same rule. A Scope-material limitation withholds completion. An out-of-scope limitation is reported separately and does not block this Scope unless it prevents target/currentness attribution or invalidates a load-bearing Scope premise.
 
 ### Production access unavailable
 
@@ -67,31 +71,37 @@ Lack of live/production access does not become `None found`. Fall back to read-o
 
 The Probe is not an open-ended hunt. Its frontier is the current Scope, the verifier's observation boundary and concrete implementation/runtime clues. Stop when every material candidate raised within that frontier is resolved as dismissal, finding or exact limitation. Do not search remote possibilities merely because another input might exist, require a fixed finding count, or keep probing after the current hypothesis is discriminated.
 
-`COMPLETE` means this bounded investigation finished; it may contain findings and is not proof that all bugs are absent. Tool failure, missing evidence, unsafe required effects or unfinished material investigation is `PARTIAL` or `BLOCKED`, never a synthetic no-finding result.
+`COMPLETE` means this bounded investigation finished; it may contain findings and is not proof that all bugs are absent. Tool failure, missing evidence, unsafe required effects, unattributable action/currentness/settlement or unfinished material investigation is `PARTIAL` or `BLOCKED`, never a synthetic no-finding result.
 
 ## Result
 
-Return one ordinary result preserving actual Probe identity, target and evidence references:
+Return one ordinary result preserving the complete execution/readback boundary needed by the caller:
 
 ```text
 PRODUCTION HEURISTIC PROBE RESULT
+Independent Probe invocation: <actual identity and result/evidence reference>
 Scope: <exact canonical Scope>
 Reviewed verification: <exact report and primary-evidence references | None for standalone investigation>
 Target and authority: <exact current identities and authority limits>
+Probe actions and primary evidence: <trigger/action/authoritative readback/raw evidence | Read-only inspection only>
+Probe effect paths: <mutable paths/state, authorized effects and attribution | None>
+Currentness before / after: <stable source/config/runtime identities and limitations>
+Cleanup and settlement: <actual final state/readback and limitations | None>
 Completion: COMPLETE | PARTIAL | BLOCKED
 Scope-material findings: None | <material findings>
 Out-of-scope findings: None | <findings that do not block this Scope>
-Limitations: None | <exact evidence/authority/investigation limits>
+Scope-material limitations: None | <limits that withhold this Scope's completion>
+Out-of-scope limitations: None | <limits that do not block this Scope>
 ```
 
 ## Caller continuation
 
 The caller preserves the verifier's unchanged semantic verdict while the Probe runs.
 
-- `COMPLETE` with no unresolved Scope-material finding/evidence gap permits Main to apply the currentness and status-only recording procedure in `scope-verify/SKILL.md`.
-- A Scope-material reachable violation or evidence limit withholds recording and routes the exact finding/limit under `iis-workflow`'s existing re-entry rules. It does not overwrite `VERIFIED` with a Probe verdict or authorize automatic repair.
-- `PARTIAL`/`BLOCKED`, missing attribution or unsafe required effects withhold completion and state the exact next owner/action.
-- An out-of-scope finding is routed separately and does not block the current Scope unless it invalidates the current target or a load-bearing Scope premise.
+- `COMPLETE` with attributable invocation/actions/evidence/currentness, all Probe effects settled, and no unresolved Scope-material finding or limitation permits Main to apply the currentness and status-only recording procedure in `scope-verify/SKILL.md`.
+- A Scope-material reachable violation or limitation withholds recording and routes the exact finding/limit under `iis-workflow`'s existing re-entry rules. It does not overwrite `VERIFIED` with a Probe verdict or authorize automatic repair.
+- `PARTIAL`/`BLOCKED`, missing invocation/action/effect/currentness/cleanup attribution, or unsafe/unknown required effects withhold completion and state the exact next owner/action.
+- An out-of-scope finding or limitation is routed separately and does not block the current Scope unless it invalidates the current target or a load-bearing Scope premise.
 - Any stable source/config/authority change caused independently while Probe is running requires a fresh current-target verifier cycle. Probe does not patch or resume the old verdict.
 
 For follow-up after correction, targeted probing is allowed only when the predecessor Probe is attributable, its basis is readable, unresolved items are exact, a new settled whole-Scope verifier result exists for the current target, and the unchanged basis outside the follow-up frontier remains applicable. Otherwise perform the normal Scope-bounded Probe. Do not create a Probe registry, fingerprint store, scheduler, approval layer or new lifecycle state.
