@@ -44,6 +44,7 @@ import type {
   SaveState,
 } from './types'
 import { isRealizationComplete, countActiveJobs, isJobStoppable } from '@/domain/currency'
+import { ACTIVE_CUT_COUNT_MISMATCH_MESSAGE } from '@/domain/rebaseline'
 
 let _toastCounter = 0
 function nextMutationId(): string {
@@ -599,49 +600,42 @@ export const useStudioStore = defineStore('studio', () => {
     shouldApply?: () => boolean,
   ): Promise<DraftGenerationResponseDTO | null> {
     if (!topic.trim()) {
-      addToast('주제 또는 시놉시스를 입력하세요.', 'alert')
+      throw new Error('주제 또는 시놉시스를 입력하세요.')
+    }
+
+    const result = await postGenerateDraft({ topic, cut_count: cutCount })
+    if (result.cut_count < 1 || result.cuts.length !== result.cut_count) {
+      throw new Error('Studio baseline draft must contain a non-empty dynamic cut set')
+    }
+    if (server.value?.baseline && server.value.cuts.length !== result.cut_count) {
+      throw new Error(ACTIVE_CUT_COUNT_MISMATCH_MESSAGE)
+    }
+    if (shouldApply && !shouldApply()) {
+      addToast('입력이 변경되어 생성 결과를 적용하지 않았습니다.', 'alert')
       return null
     }
-    try {
-      const result = await postGenerateDraft({ topic, cut_count: cutCount })
-      if (result.cut_count < 1 || result.cuts.length !== result.cut_count) {
-        throw new Error('Studio baseline draft must contain a non-empty dynamic cut set')
-      }
-      if (shouldApply && !shouldApply()) {
-        addToast('입력이 변경되어 생성 결과를 적용하지 않았습니다.', 'alert')
-        return null
-      }
-      if (server.value?.baseline && server.value.cuts.length !== result.cut_count) {
-        throw new Error('기존 활성 컷 수와 다른 초안은 먼저 컷 구성을 명시적으로 변경해야 합니다.')
-      }
-      const activeIds = server.value?.baseline ? server.value.cuts.map((cut) => cut.cut_id) : result.cuts.map((cut) => cut.display_order)
-      const structure: BaselineStructureDTO = {
-        source_brief: result.source_brief,
-        cuts: result.cuts.map((cut, index) => ({
-          cut_id: activeIds[index] as CutId,
-          role: cut.role,
-          beat: cut.beat,
-        })),
-      }
-      const intents = result.cuts.map((cut, index) => ({
+    const activeIds = server.value?.baseline
+      ? server.value.cuts.map((cut) => cut.cut_id)
+      : result.cuts.map((cut) => cut.display_order)
+    const structure: BaselineStructureDTO = {
+      source_brief: result.source_brief,
+      cuts: result.cuts.map((cut, index) => ({
         cut_id: activeIds[index] as CutId,
-        intent: {
-          prompt: cut.prompt,
-          dialogue: cut.dialogue,
-          prompt_origin: 'llm_draft' as const,
-        },
-      }))
-      setBaselineDraft(structure, intents, false)
-      addToast('초안이 생성되었습니다. 검토 후 승인하세요.', 'status')
-      return result
-    } catch (err) {
-      if (err instanceof ApiError) {
-        addToast(`AI 콘티 생성 실패: ${err.body.message}`, 'alert')
-      } else {
-        addToast('AI 콘티 생성 실패 — 다시 시도하거나 수동 입력을 사용하세요.', 'alert')
-      }
-      return null
+        role: cut.role,
+        beat: cut.beat,
+      })),
     }
+    const intents = result.cuts.map((cut, index) => ({
+      cut_id: activeIds[index] as CutId,
+      intent: {
+        prompt: cut.prompt,
+        dialogue: cut.dialogue,
+        prompt_origin: 'llm_draft' as const,
+      },
+    }))
+    setBaselineDraft(structure, intents, false)
+    addToast('초안이 생성되었습니다. 검토 후 승인하세요.', 'status')
+    return result
   }
 
   // --- Save dispatchers ---

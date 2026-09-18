@@ -2,6 +2,11 @@
 import { computed, ref } from 'vue'
 import { useStudioStore } from '@/store/studio'
 import type { CutId, BaselineStructureDTO, BaselineCutIntentInputDTO } from '@/api/contracts'
+import {
+  ACTIVE_CUT_COUNT_MISMATCH_MESSAGE,
+  draftGenerationErrorMessage,
+  resolveRebaselineCutCount,
+} from '@/domain/rebaseline'
 
 const store = useStudioStore()
 
@@ -16,6 +21,9 @@ const localEditVersion = ref(0)
 const cutCount = ref(5)
 const cuts = ref<Array<{ cut_id: CutId; role: string; beat: string }>>([])
 const intents = ref<Array<{ cut_id: CutId; prompt: string; dialogue: string; prompt_origin: BaselineCutIntentInputDTO['prompt_origin'] }>>([])
+
+const hasBaseline = computed(() => Boolean(store.server?.baseline))
+const activeCutCount = computed(() => store.server?.cuts.length ?? 1)
 
 function resizeCuts(nextCount: number) {
   const count = Number.isSafeInteger(nextCount) && nextCount >= 1 ? nextCount : 1
@@ -36,7 +44,17 @@ function resizeCuts(nextCount: number) {
   markLocalEdit()
 }
 
-const hasBaseline = computed(() => store.server?.baseline !== null)
+function onCutCountChange() {
+  if (hasBaseline.value) {
+    cutCount.value = resolveRebaselineCutCount(
+      true,
+      activeCutCount.value,
+      cutCount.value,
+    )
+    return
+  }
+  resizeCuts(cutCount.value)
+}
 
 function markLocalEdit() {
   localEditVersion.value += 1
@@ -54,8 +72,11 @@ function open() {
   const structure = draft?.structure ?? baseline?.structure
   const draftIntents = draft?.intents
   generationError.value = ''
-  const activeCount = store.server?.cuts.length ?? 5
-  cutCount.value = structure?.cuts.length ?? activeCount
+  cutCount.value = resolveRebaselineCutCount(
+    Boolean(baseline),
+    activeCutCount.value,
+    structure?.cuts.length,
+  )
   if (structure) {
     sourceBrief.value = structure.source_brief
     cuts.value = structure.cuts.map((cut) => ({ ...cut }))
@@ -68,8 +89,8 @@ function open() {
   if (draftIntents) {
     intents.value = draftIntents.map(({ cut_id, intent }) => ({ cut_id, ...intent }))
     editorVisible.value = true
-  } else if (store.server?.baseline) {
-    intents.value = store.server.cuts.map((cut) => ({
+  } else if (baseline) {
+    intents.value = store.server!.cuts.map((cut) => ({
       cut_id: cut.cut_id,
       prompt: cut.effective_intent?.prompt ?? '',
       dialogue: cut.effective_intent?.dialogue ?? '',
@@ -92,7 +113,6 @@ function handleCancel(event: Event) {
   }
 }
 
-
 function showManualEditor() {
   editorVisible.value = true
   markLocalEdit()
@@ -101,34 +121,60 @@ function showManualEditor() {
 async function generateDraft() {
   if (!sourceBrief.value.trim()) {
     generationError.value = '주제 또는 시놉시스를 입력하세요.'
-    await store.generateBaselineDraft('', cutCount.value)
     return
   }
+
+  const requestCount = resolveRebaselineCutCount(
+    hasBaseline.value,
+    activeCutCount.value,
+    cutCount.value,
+  )
+  if (cutCount.value !== requestCount) {
+    cutCount.value = requestCount
+  }
+
   const requestVersion = localEditVersion.value
   const requestTopic = sourceBrief.value
-  const requestCount = cutCount.value
   generationError.value = ''
   isGenerating.value = true
   try {
     const result = await store.generateBaselineDraft(
       requestTopic,
       requestCount,
-      () => localEditVersion.value === requestVersion && sourceBrief.value === requestTopic && cutCount.value === requestCount,
+      () =>
+        localEditVersion.value === requestVersion &&
+        sourceBrief.value === requestTopic &&
+        cutCount.value === requestCount,
     )
     if (!result) {
-      generationError.value = '생성에 실패했습니다. 입력을 확인하고 다시 시도하거나 수동 입력을 사용하세요.'
+      generationError.value = '입력이 변경되어 생성 결과를 적용하지 않았습니다. 현재 입력으로 다시 생성하세요.'
       return
     }
-    if (store.server?.baseline && store.server.cuts.length !== result.cut_count) {
-      generationError.value = '기존 활성 컷 수와 다른 초안입니다. 먼저 컷 추가/비활성화로 구성을 명시적으로 변경하세요.'
-      return
+    if (hasBaseline.value && activeCutCount.value !== result.cut_count) {
+      throw new Error(ACTIVE_CUT_COUNT_MISMATCH_MESSAGE)
     }
+
+    // Keep the user's topic intact on every failure path. Replace it only after
+    // a fully validated draft has been accepted for the current dialog state.
     sourceBrief.value = result.source_brief
     cutCount.value = result.cut_count
-    const activeIds = store.server?.baseline ? store.server.cuts.map((cut) => cut.cut_id) : result.cuts.map((cut) => cut.display_order)
-    cuts.value = result.cuts.map((cut, index) => ({ cut_id: activeIds[index] as CutId, role: cut.role, beat: cut.beat }))
-    intents.value = result.cuts.map((cut, index) => ({ cut_id: activeIds[index] as CutId, prompt: cut.prompt, dialogue: cut.dialogue, prompt_origin: 'llm_draft' as const }))
+    const activeIds = hasBaseline.value
+      ? store.server!.cuts.map((cut) => cut.cut_id)
+      : result.cuts.map((cut) => cut.display_order)
+    cuts.value = result.cuts.map((cut, index) => ({
+      cut_id: activeIds[index] as CutId,
+      role: cut.role,
+      beat: cut.beat,
+    }))
+    intents.value = result.cuts.map((cut, index) => ({
+      cut_id: activeIds[index] as CutId,
+      prompt: cut.prompt,
+      dialogue: cut.dialogue,
+      prompt_origin: 'llm_draft' as const,
+    }))
     editorVisible.value = true
+  } catch (err) {
+    generationError.value = draftGenerationErrorMessage(err)
   } finally {
     isGenerating.value = false
   }
@@ -194,8 +240,21 @@ defineExpose({ open })
         </label>
         <label class="field-label count-label" for="cut-count">
           컷 수
-          <input id="cut-count" class="field-input" type="number" min="1" step="1" v-model.number="cutCount" @change="resizeCuts(cutCount)" />
+          <input
+            id="cut-count"
+            class="field-input"
+            type="number"
+            min="1"
+            step="1"
+            v-model.number="cutCount"
+            :disabled="hasBaseline || isGenerating || isSubmitting"
+            :aria-describedby="hasBaseline ? 'cut-count-lock-hint' : undefined"
+            @change="onCutCountChange"
+          />
         </label>
+        <p v-if="hasBaseline" id="cut-count-lock-hint" class="count-hint">
+          기존 프로젝트에서는 현재 활성 컷 수({{ activeCutCount }})와 동기화됩니다. 컷 수 변경은 컷 추가 또는 비활성화 기능을 사용하세요.
+        </p>
         <div class="ai-actions">
           <button class="btn btn-ai" type="button" :disabled="isGenerating || isSubmitting" :aria-busy="isGenerating ? 'true' : 'false'" @click="generateDraft">
             {{ isGenerating ? 'AI 콘티 생성 중…' : 'AI 콘티 자동 생성' }}
@@ -257,6 +316,10 @@ defineExpose({ open })
 }
 .ai-start h3 { font-size: var(--font-size-body); font-weight: 700; }
 .topic-input { min-height: 76px; }
+.count-hint {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
 .ai-actions { display: flex; gap: var(--sp-8); flex-wrap: wrap; }
 .generation-status { color: var(--accent); font-size: var(--font-size-sm); }
 .generation-error { color: var(--text-danger, #b42318); font-size: var(--font-size-sm); }
@@ -285,6 +348,12 @@ defineExpose({ open })
   border-radius: var(--radius-inner);
   font-size: var(--font-size-body);
   background: var(--surface-white);
+}
+.field-input:disabled {
+  cursor: not-allowed;
+  color: var(--text-secondary);
+  background: var(--surface-light);
+  opacity: 1;
 }
 .field-textarea { resize: vertical; line-height: var(--line-height); }
 .rebaseline-footer {
