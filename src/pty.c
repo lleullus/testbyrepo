@@ -46,7 +46,16 @@ static void alloc_cb(uv_handle_t *unused, size_t suggested_size, uv_buf_t *buf) 
 static void close_cb(uv_handle_t *handle) { free(handle); }
 
 static void async_free_cb(uv_handle_t *handle) {
-  free((uv_async_t *) handle -> data);
+  pty_process *process = container_of((uv_async_t *)handle, pty_process, async);
+  process_free(process);
+  free(process);
+}
+
+static void process_maybe_close(pty_process *process) {
+  if (process == NULL || process->close_started || !process->pty_eof_observed || !process->exit_callback_delivered)
+    return;
+  process->close_started = true;
+  uv_close((uv_handle_t *)&process->async, async_free_cb);
 }
 
 pty_buf_t *pty_buf_init(char *base, size_t len) {
@@ -72,11 +81,13 @@ static void read_cb(uv_stream_t *stream, ssize_t n, const uv_buf_t *buf) {
   if (n < 0) {
     uv_read_stop(stream);
     process->paused = true;
+    process->pty_eof_observed = true;
     if (n != UV_EOF) {
       fprintf(stderr, "pty read: %s (%s)\n", uv_err_name((int)n), uv_strerror((int)n));
       if (process_running(process)) pty_kill(process, SIGTERM);
     }
     process->read_cb(process, NULL, true);
+    process_maybe_close(process);
     free(buf->base);
     return;
   }
@@ -388,7 +399,7 @@ void pty_get_process_tree_idents(pid_t root_pid, pid_t extra_pgid, proc_ident_t 
         if (closing != NULL && closing[1] == ' ') {
           char *p = closing + 2;
           char state = 0;
-          int ppid = 0, pgrp = 0;
+          int ppid = 0, pgrp = 0, session_id = 0;
           unsigned long long starttime = 0;
           int token_idx = 0;
           while (*p != '\0') {
@@ -399,6 +410,7 @@ void pty_get_process_tree_idents(pid_t root_pid, pid_t extra_pgid, proc_ident_t 
             if (token_idx == 0) state = *token_start;
             else if (token_idx == 1) ppid = atoi(token_start);
             else if (token_idx == 2) pgrp = atoi(token_start);
+            else if (token_idx == 3) session_id = atoi(token_start);
             else if (token_idx == 19) {
               starttime = strtoull(token_start, NULL, 10);
               break;
@@ -408,6 +420,7 @@ void pty_get_process_tree_idents(pid_t root_pid, pid_t extra_pgid, proc_ident_t 
 
           if (state != 'Z') {
             bool matches = false;
+            if ((pid_t)session_id == root_pid) matches = true;
             for (size_t i = 0; i < count; i++) {
               if (idents[i].pid == (pid_t)ppid) {
                 matches = true;
@@ -457,6 +470,7 @@ void pty_expand_tree_idents(proc_ident_t **idents_inout, size_t *count_inout) {
 #ifdef __linux__
   proc_ident_t *idents = *idents_inout;
   size_t count = *count_inout;
+  const pid_t root_pid = idents[0].pid;
   size_t cap = count + 32;
   idents = xrealloc(idents, cap * sizeof(proc_ident_t));
 
@@ -487,7 +501,7 @@ void pty_expand_tree_idents(proc_ident_t **idents_inout, size_t *count_inout) {
         if (closing != NULL && closing[1] == ' ') {
           char *p = closing + 2;
           char state = 0;
-          int ppid = 0, pgrp = 0;
+          int ppid = 0, pgrp = 0, session_id = 0;
           unsigned long long starttime = 0;
           int token_idx = 0;
           while (*p != '\0') {
@@ -498,6 +512,7 @@ void pty_expand_tree_idents(proc_ident_t **idents_inout, size_t *count_inout) {
             if (token_idx == 0) state = *token_start;
             else if (token_idx == 1) ppid = atoi(token_start);
             else if (token_idx == 2) pgrp = atoi(token_start);
+            else if (token_idx == 3) session_id = atoi(token_start);
             else if (token_idx == 19) {
               starttime = strtoull(token_start, NULL, 10);
               break;
@@ -507,6 +522,7 @@ void pty_expand_tree_idents(proc_ident_t **idents_inout, size_t *count_inout) {
 
           if (state != 'Z') {
             bool matches = false;
+            if ((pid_t)session_id == root_pid) matches = true;
             for (size_t i = 0; i < count; i++) {
               if (idents[i].pid == (pid_t)ppid && pty_proc_ident_alive(&idents[i])) {
                 matches = true;
@@ -831,32 +847,31 @@ static bool fd_duplicate(int fd, uv_pipe_t *pipe) {
 }
 
 static void wait_cb(void *arg) {
-  pty_process *process = (pty_process *) arg;
-
+  pty_process *process = (pty_process *)arg;
+  int stat = 0;
   pid_t pid;
-  int stat;
   do
     pid = waitpid(process->pid, &stat, 0);
-  while (pid != process->pid && errno == EINTR);
+  while (pid < 0 && errno == EINTR);
 
-  if (WIFEXITED(stat)) {
+  process->wait_complete = true;
+  process->wait_succeeded = pid == process->pid;
+  process->wait_error = process->wait_succeeded ? 0 : errno;
+  if (process->wait_succeeded && WIFEXITED(stat)) {
     process->exit_code = WEXITSTATUS(stat);
-  }
-  if (WIFSIGNALED(stat)) {
+  } else if (process->wait_succeeded && WIFSIGNALED(stat)) {
     int sig = WTERMSIG(stat);
     process->exit_code = 128 + sig;
     process->exit_signal = sig;
   }
-
   uv_async_send(&process->async);
 }
 
 static void async_cb(uv_async_t *async) {
-  pty_process *process = (pty_process *) async->data;
+  pty_process *process = (pty_process *)async->data;
+  process->exit_callback_delivered = true;
   process->exit_cb(process);
-
-  uv_close((uv_handle_t *) async, async_free_cb);
-  process_free(process);
+  process_maybe_close(process);
 }
 
 int pty_spawn(pty_process *process, pty_read_cb on_read_cb, pty_exit_cb on_exit_cb) {

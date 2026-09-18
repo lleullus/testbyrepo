@@ -4,23 +4,42 @@
 
 #include "pty.h"
 
-// client message
+// v4 session protocol
+#define SESSION_PROTOCOL_VERSION 4
+#define SESSION_ID_LENGTH 32
+#define CLIENT_INSTANCE_ID_LENGTH 32
+#define SUCCESSOR_TOKEN_BYTES 32
+#define SUCCESSOR_TOKEN_HEX_LENGTH 64
+#define SESSION_READY_DEADLINE_MS 30000
+#define V4_INPUT_HEADER_SIZE 9
+#define V4_OUTPUT_HEADER_SIZE 25
+#define OUTPUT_CAPACITY (8ULL * 1024ULL * 1024ULL)
+#define OUTPUT_CHUNK_SIZE (64ULL * 1024ULL)
+#define OUTPUT_CHUNK_COUNT 128
+#define CLIENT_MESSAGE_MAX (1024ULL * 1024ULL)
+_Static_assert(OUTPUT_CHUNK_SIZE * OUTPUT_CHUNK_COUNT == OUTPUT_CAPACITY, "output ring size mismatch");
+
+// client messages
 #define INPUT '0'
 #define RESIZE_TERMINAL '1'
 #define PAUSE '2'
 #define RESUME '3'
 #define HEARTBEAT '4'
-#define SESSION_READY '5'
+#define REPLAY_APPLIED '5'
 #define TAKEOVER '6'
+#define REBASE_ACK '7'
 #define JSON_DATA '{'
 
-// server message
+// server messages
 #define OUTPUT '0'
 #define SET_WINDOW_TITLE '1'
 #define SET_PREFERENCES '2'
 #define SET_SESSION_STATE '3'
 #define REPLAY_END '4'
 #define HEARTBEAT_REPLY '5'
+#define READY_ACK '6'
+#define SESSION_NACK '7'
+#define REPLAY_GAP '8'
 
 // url paths
 struct endpoints {
@@ -44,6 +63,8 @@ enum session_state {
   SESSION_STATE_PURGED
 };
 
+enum owner_phase { OWNER_ATTACHING = 0, OWNER_REPLAYING, OWNER_READY };
+enum approval_kind { APPROVAL_NONE = 0, APPROVAL_CREATE, APPROVAL_SUCCESSOR, APPROVAL_TAKEOVER };
 
 struct pss_http {
   char path[128];
@@ -59,7 +80,11 @@ struct pss_tty {
   char user[30];
   char address[50];
   char path[128];
-  char resume_id[33];
+  char resume_id[SESSION_ID_LENGTH + 1];
+  char client_instance_id[CLIENT_INSTANCE_ID_LENGTH + 1];
+  uint64_t connect_sequence;
+  uint64_t lease_epoch;
+  enum approval_kind approval_kind;
   bool session_accepted;
   bool input_ready;
   bool replay_end_sent;
@@ -71,15 +96,36 @@ struct pss_tty {
   bool state_update_pending;
   bool takeover_offered;
   bool takeover_pending;
+  bool ready_ack_pending;
+  bool nack_pending;
+  bool gap_pending;
+  bool gap_sent;
+  bool fragment_rejected;
+  bool session_ref_held;
+  bool recovery_only_slot;
+  bool degraded_consent;
   uint64_t connection_generation;
   uint64_t requested_position;
   uint64_t send_position;
   uint64_t replay_target;
   uint64_t reported_session_id;
-  uint64_t offered_owner_generation;
+  uint64_t observed_lease_epoch;
   uint64_t replay_start;
   bool replay_lost;
+  uint64_t sync_id;
+  uint64_t gap_lost_start;
+  uint64_t gap_lost_end;
+  uint64_t gap_retained_start;
+  uint64_t gap_retained_end;
+  uint64_t gap_target;
+  uint64_t rebase_generation;
   char session_state[32];
+  char nack_code[32];
+  char nack_detail[64];
+  uint64_t nack_expected_position;
+  uint64_t nack_received_position;
+  char ready_token[SUCCESSOR_TOKEN_HEX_LENGTH + 1];
+  uint8_t ready_token_hash[SUCCESSOR_TOKEN_BYTES];
   char heartbeat[65];
   size_t heartbeat_len;
   char **args;
@@ -91,10 +137,6 @@ struct pss_tty {
 
   pty_process *process;
   struct tty_session *session;
-
-  struct tty_session *pending_session;
-  uint16_t pending_columns;
-  uint16_t pending_rows;
   int lws_close_status;
 };
 

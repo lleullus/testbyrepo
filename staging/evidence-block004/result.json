@@ -1,0 +1,47 @@
+{
+  "binarySha256": "457ce883713011223fd486954aa073844761a85f1d2baa0f762273b45a54743f",
+  "bundleSha256": "d5e5d46fbdf6ef450d88ccc439ff3e5f38c9a0da70adcb71ba2bd668acdd7096",
+  "errors": 0,
+  "failures": 0,
+  "isolatedPortsOnly": true,
+  "limits": [
+    "BLOCK-005 buffer/reaper/pruning defects are outside this check",
+    "Android hardware is not exercised"
+  ],
+  "operatingPort": 7683,
+  "scenarios": {
+    "B4-E1": {
+      "epochs": [
+        1,
+        2
+      ],
+      "samePtyPid": "92172"
+    },
+    "B4-E2": {
+      "casEpoch": 2,
+      "conflict": 1,
+      "readyDeadline": "expired"
+    },
+    "B4-E3": {
+      "animationFrames": 0,
+      "fallbackGeometry": true,
+      "frozenCapability": true,
+      "parserCallbacks": 1
+    },
+    "B4-E4": {
+      "ackPosition": 0,
+      "nack": "POSITION_MISMATCH"
+    },
+    "B4-E5": {
+      "freshSession": "113764ebdeee4e978013d49fa52314a2",
+      "retained": true
+    },
+    "B4-E6": {
+      "latestReady": true,
+      "preemptedAttempts": 2,
+      "ptyBytes": 0
+    }
+  },
+  "schema": "block004-self-check/v1",
+  "testsRun": 6
+}

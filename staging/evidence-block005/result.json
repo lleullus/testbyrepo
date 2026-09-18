@@ -1,0 +1,62 @@
+{
+  "binarySha256": "457ce883713011223fd486954aa073844761a85f1d2baa0f762273b45a54743f",
+  "bundleSha256": "d5e5d46fbdf6ef450d88ccc439ff3e5f38c9a0da70adcb71ba2bd668acdd7096",
+  "errors": 0,
+  "failures": 0,
+  "isolatedPortsOnly": true,
+  "limits": [
+    "ASan/UBSan not exercised by this native candidate",
+    "Browser degraded overlay is compiled into the real bundle; raw-wire checks exercise server GAP/rebase"
+  ],
+  "operatingPort": 7683,
+  "scenarios": {
+    "B5-E1": {
+      "lost": {
+        "end": 2097161,
+        "start": 0
+      },
+      "port": 39641,
+      "producerCompletedWhilePaused": true,
+      "retainedBytes": 8388608
+    },
+    "B5-E2": {
+      "degradedAck": true,
+      "oldReplayEndBlocked": true,
+      "reachableTarget": 10485769,
+      "syncId": 1
+    },
+    "B5-E3": {
+      "memorySafetyLimit": "native non-sanitized runtime",
+      "rootExit": 23,
+      "sanitizerCapability": false,
+      "serverAlive": true,
+      "waitpidAnyEvents": 0
+    },
+    "B5-E4": {
+      "maxRetained": 1,
+      "protectedViewerReadable": true,
+      "retainedObserved": 2,
+      "serverAlive": true
+    },
+    "B5-E5": {
+      "fragmentAcceptedBytes": 65536,
+      "limit": 1048576,
+      "oversizeRejected": true
+    },
+    "B5-E6": {
+      "deadlineSeconds": 32400,
+      "exitCode": 23,
+      "finalMarker": true,
+      "serverAlive": true
+    }
+  },
+  "schema": "block005-self-check/v1",
+  "sourceSha256": {
+    "html/src/components/terminal/xterm/index.ts": "3acbc4b1993dc1e32435095df15618830d67b2125ff0ae713f7861bdd3bcfc60",
+    "src/protocol.c": "8322d0f3e4b1215251dfa774bcd7024daeb0596a675380c8db6c302daedcdcd9",
+    "src/pty.c": "2925c0d6265b4bfd554b0f920a584a5a804074c517ea7687e0b63fc2e13e26e9",
+    "src/pty.h": "5cd800bb3485f8aeb8e909ab4434724a289426b67c9c72d8c5652564eba9d332",
+    "src/server.h": "ed19e2f8a8f1879982b909e325294f8f9aff840133e037b311009c833a94a61b"
+  },
+  "testsRun": 9
+}

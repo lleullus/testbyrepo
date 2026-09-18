@@ -49,6 +49,12 @@ struct pty_process_ {
   bool paused;
   bool async_initialized;
   bool thread_started;
+  bool wait_complete;
+  bool wait_succeeded;
+  int wait_error;
+  bool pty_eof_observed;
+  bool exit_callback_delivered;
+  bool close_started;
   pty_read_cb read_cb;
   pty_exit_cb exit_cb;
   void *ctx;

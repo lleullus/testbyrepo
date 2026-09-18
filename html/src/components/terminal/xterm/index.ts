@@ -101,7 +101,9 @@ export interface TtydDiagnosticsSnapshot {
         | 'takeover-pending'
         | 'session-displaced'
         | 'session-stale'
-        | 'disconnected';
+        | 'disconnected'
+        | 'sync-required'
+        | 'degraded';
     connectionGeneration: number;
     serverConnectionGeneration: number;
     terminalEpoch: number;
@@ -114,6 +116,7 @@ export interface TtydDiagnosticsSnapshot {
     focusIntent: 'inactive' | 'typing';
     composing: boolean;
     connectInFlight: boolean;
+    continuityAvailable: boolean;
     heartbeatOutstanding: boolean;
     pendingBytes: number;
     pendingAgeMs: number;
@@ -148,6 +151,9 @@ enum Command {
     SET_SESSION_STATE = '3',
     REPLAY_END = '4',
     HEARTBEAT_REPLY = '5',
+    READY_ACK = '6',
+    SESSION_NACK = '7',
+    REPLAY_GAP = '8',
 
     // client side
     INPUT = '0',
@@ -155,8 +161,9 @@ enum Command {
     PAUSE = '2',
     RESUME = '3',
     HEARTBEAT = '4',
-    SESSION_READY = '5',
+    REPLAY_APPLIED = '5',
     TAKEOVER = '6',
+    REBASE_ACK = '7',
 }
 type Preferences = ITerminalOptions & ClientOptions;
 
@@ -184,13 +191,18 @@ export interface FlowControl {
 export interface SessionRequest {
     id: string;
     intent: 'create' | 'resume';
+    clientInstanceId: string;
+    connectSequence: number;
+    successorToken?: string;
+    leaseEpoch?: number;
     persisted: boolean;
 }
 
 export interface SessionBinding {
     current?: SessionRequest;
     create(): SessionRequest;
-    markCreated(request: SessionRequest): void;
+    begin(request: SessionRequest, fresh: boolean): SessionRequest;
+    commitReady(request: SessionRequest, successorToken: string, leaseEpoch: number): boolean;
 }
 
 export interface XtermOptions {
@@ -233,6 +245,28 @@ const HEARTBEAT_TIMEOUT_MS = 30_000;
 
 type AttemptResult = 'ready' | 'retry' | 'stop';
 
+interface GapRecord {
+    sessionId: string;
+    leaseEpoch: number;
+    syncId: number;
+    lost: { start: number; end: number };
+    retained: { start: number; end: number };
+    target: number;
+    accepted: boolean;
+}
+
+interface ReplayBarrier {
+    attemptId: number;
+    terminalEpoch: number;
+    sessionId: string;
+    leaseEpoch: number;
+    target: number;
+    signal: AbortSignal;
+    sent: boolean;
+    syncId?: number;
+    acceptIncomplete: boolean;
+}
+
 export class Xterm {
     private disposables: IDisposable[] = [];
     private socketDisposables: IDisposable[] = [];
@@ -246,8 +280,12 @@ export class Xterm {
     private serverConnectionGeneration = 0;
     private terminalEpoch = 0;
     private sessionDiagnosticId = 0;
+    private leaseEpoch = 0;
     private appliedPosition = 0;
+    private receivePosition = 0;
     private replayTarget = 0;
+    private replayBarrier?: ReplayBarrier;
+    private degradedGap?: GapRecord;
     private inputReady = false;
     private parserCallbacks = 0;
     private renderEvents = 0;
@@ -258,6 +296,7 @@ export class Xterm {
     private connectionState: TtydDiagnosticsSnapshot['state'] = 'disconnected';
     private isExitedRetained = false;
     private diagnosticEvents: TtydDiagnosticEvent[] = [];
+    private continuityAvailable = true;
     private diagnosticsEnabled = new URLSearchParams(window.location.search).get('diagnostics') === '1';
     private terminal!: Terminal;
     private fitAddon = new FitAddon();
@@ -282,9 +321,12 @@ export class Xterm {
     private disposed = false;
     private preferencesApplied = false;
     private connectPromise?: Promise<void>;
+    private activeAttempt?: AbortController;
     private attemptResolve?: (result: AttemptResult) => void;
     private fetchAbort?: AbortController;
     private reconnectStartedAt = 0;
+    private visibleRecoveryMs = 0;
+    private visibleRecoveryStartedAt?: number;
     private reconnectAttempts = 0;
     private reconnectTimer?: number;
     private reconnectDelayResolve?: () => void;
@@ -297,7 +339,7 @@ export class Xterm {
     private consumeRecoveryClick = false;
     private displaced = false;
     private takeoverPending = false;
-    private takeoverOwnerGeneration = 0;
+    private takeoverLeaseEpoch = 0;
     private inputModifier: InputModifier = 'none';
     private focusIntent: InputOwnerSnapshot['focusIntent'] = 'inactive';
     private inputEpoch = 0;
@@ -322,15 +364,13 @@ export class Xterm {
         private fontSizeCb: (fontSize: number) => void = () => undefined
     ) {
         this.request = options.session.current;
+        this.continuityAvailable = this.request?.persisted ?? true;
     }
 
     dispose() {
         this.disposed = true;
         this.invalidateInputOwner(true);
-        this.connectionGeneration++;
-        this.fetchAbort?.abort();
-        this.fetchAbort = undefined;
-        this.clearReconnectTimers();
+        this.abortActiveAttempt();
         this.clearHeartbeat();
         this.clearSocket(true);
         if (this.animationFrame !== undefined) {
@@ -369,6 +409,7 @@ export class Xterm {
             focusIntent: this.focusIntent,
             composing: this.composition !== undefined && !this.composition.cancelled,
             connectInFlight: this.connectPromise !== undefined,
+            continuityAvailable: this.continuityAvailable,
             heartbeatOutstanding: this.heartbeatNonce !== undefined,
             pendingBytes: this.pendingBytes,
             pendingAgeMs: this.pendingSince === 0 ? 0 : now - this.pendingSince,
@@ -411,7 +452,7 @@ export class Xterm {
 
     private sendFlowControl(command: Command.PAUSE | Command.RESUME) {
         const socket = this.socket;
-        if (socket?.readyState !== WebSocket.OPEN) return;
+        if (socket?.readyState !== WebSocket.OPEN || this.leaseEpoch <= 0) return;
         if (command === Command.PAUSE) {
             if (this.flowPausedGeneration === this.connectionGeneration) return;
             this.flowPausedGeneration = this.connectionGeneration;
@@ -419,7 +460,7 @@ export class Xterm {
             if (this.flowPausedGeneration !== this.connectionGeneration) return;
             this.flowPausedGeneration = undefined;
         }
-        socket.send(this.textEncoder.encode(command));
+        socket.send(this.textEncoder.encode(command + JSON.stringify({ leaseEpoch: this.leaseEpoch })));
         this.recordDiagnostic(command === Command.PAUSE ? 'flow-pause' : 'flow-resume', this.pendingBytes);
     }
 
@@ -1118,19 +1159,43 @@ export class Xterm {
         return true;
     }
 
+    private abortActiveAttempt() {
+        const hadAttempt = this.activeAttempt !== undefined || this.connectPromise !== undefined;
+        this.degradedGap = undefined;
+        this.activeAttempt?.abort();
+        this.activeAttempt = undefined;
+        this.fetchAbort?.abort();
+        this.fetchAbort = undefined;
+        this.replayBarrier = undefined;
+        this.connectionGeneration++;
+        this.clearReconnectTimers();
+        this.clearSocket(true);
+        if (hadAttempt) this.recordDiagnostic('attempt-aborted', this.connectionGeneration);
+    }
+
     private requestRecovery(createNew: boolean) {
-        if (this.disposed || this.displaced || this.connectPromise) return;
+        if (this.disposed || this.displaced) return;
+        this.abortActiveAttempt();
         if (createNew || !this.request || this.connectionState === 'no-session') {
             this.request = this.options.session.create();
+            this.continuityAvailable = this.request.persisted;
             this.appliedPosition = 0;
+            this.receivePosition = 0;
             this.replayTarget = 0;
+            this.leaseEpoch = 0;
+            this.isExitedRetained = false;
             this.terminalEpoch++;
+        } else {
+            this.request = this.options.session.begin(this.request, true);
+            this.continuityAvailable = this.continuityAvailable && this.request.persisted;
         }
+        if (!this.continuityAvailable) this.recordDiagnostic('continuity-unavailable');
         this.takeoverPending = false;
-        this.takeoverOwnerGeneration = 0;
+        this.takeoverLeaseEpoch = 0;
         this.connectionState = 'disconnected';
         this.automaticRecoveryExhausted = false;
         this.reconnectStartedAt = performance.now();
+        this.visibleRecoveryMs = 0;
         this.reconnectAttempts = 0;
         this.beginRecovery();
     }
@@ -1144,18 +1209,6 @@ export class Xterm {
             return message;
         }
         return undefined;
-    }
-
-    private async waitForGeometry(): Promise<boolean> {
-        this.fit();
-        const deadline = performance.now() + ATTEMPT_TIMEOUT_MS;
-        while (!this.disposed && !this.lastValidGeometry && performance.now() < deadline) {
-            const frame = createDeferred<void>();
-            window.requestAnimationFrame(() => frame.resolve());
-            await frame.promise;
-            this.fit();
-        }
-        return this.lastValidGeometry !== undefined;
     }
 
     private sendCurrentGeometry() {
@@ -1177,7 +1230,8 @@ export class Xterm {
             return;
         socket.send(
             this.textEncoder.encode(
-                Command.RESIZE_TERMINAL + JSON.stringify({ columns: geometry.cols, rows: geometry.rows })
+                Command.RESIZE_TERMINAL +
+                    JSON.stringify({ leaseEpoch: this.leaseEpoch, columns: geometry.cols, rows: geometry.rows })
             )
         );
         this.lastSentGeometry = { serverGeneration: this.serverConnectionGeneration, ...geometry };
@@ -1397,6 +1451,7 @@ export class Xterm {
             if (this.pendingBytes === 0) this.pendingSince = 0;
             if (generation === this.connectionGeneration && endPosition !== undefined)
                 this.appliedPosition = Math.max(this.appliedPosition, endPosition);
+            this.maybeCompleteReplayBarrier();
             if (this.flowPausedGeneration === this.connectionGeneration && this.pendingBytes < low)
                 this.sendFlowControl(Command.RESUME);
         };
@@ -1418,23 +1473,20 @@ export class Xterm {
             this.displaced ||
             !this.inputReady ||
             this.isExitedRetained ||
-            this.serverConnectionGeneration <= 0 ||
+            this.leaseEpoch <= 0 ||
             socket?.readyState !== WebSocket.OPEN
         )
             return false;
 
-        if (typeof data === 'string') {
-            const payload = new Uint8Array(data.length * 3 + 1);
-            payload[0] = Command.INPUT.charCodeAt(0);
-            const stats = textEncoder.encodeInto(data, payload.subarray(1));
-            socket.send(payload.subarray(0, (stats.written as number) + 1));
-        } else {
-            const payload = new Uint8Array(data.length + 1);
-            payload[0] = Command.INPUT.charCodeAt(0);
-            payload.set(data, 1);
-            socket.send(payload);
-        }
-        this.recordDiagnostic('input-sent', typeof data === 'string' ? data.length : data.byteLength);
+        const encoded = typeof data === 'string' ? textEncoder.encode(data) : data;
+        const payload = new Uint8Array(encoded.byteLength + 9);
+        payload[0] = Command.INPUT.charCodeAt(0);
+        const view = new DataView(payload.buffer);
+        view.setUint32(1, Math.floor(this.leaseEpoch / 0x1_0000_0000));
+        view.setUint32(5, this.leaseEpoch >>> 0);
+        payload.set(encoded, 9);
+        socket.send(payload);
+        this.recordDiagnostic('input-sent', encoded.byteLength);
         return true;
     }
 
@@ -1444,36 +1496,42 @@ export class Xterm {
         const physical = this.rememberTerminalData(data);
         this.sendPlainText(data, physical);
     }
-
-    private requestTakeover(ownerGeneration: number) {
+    private requestTakeover(observedLeaseEpoch: number) {
         const socket = this.socket;
-        const geometry = this.lastValidGeometry;
+        const geometry = this.lastValidGeometry ?? { cols: 80, rows: 24 };
+        const request = this.request;
         if (
             this.disposed ||
             this.displaced ||
             this.takeoverPending ||
-            ownerGeneration <= 0 ||
-            !geometry ||
+            observedLeaseEpoch <= 0 ||
+            !request ||
             socket?.readyState !== WebSocket.OPEN
         )
             return;
+        this.request = this.options.session.begin(request, true);
         this.takeoverPending = true;
-        this.takeoverOwnerGeneration = ownerGeneration;
+        this.takeoverLeaseEpoch = observedLeaseEpoch;
         this.connectionState = 'takeover-pending';
         this.overlayAddon.clearAction();
         this.overlayAddon.showOverlay('Takeover requested...');
         socket.send(
             this.textEncoder.encode(
-                Command.TAKEOVER + JSON.stringify({ ownerGeneration, columns: geometry.cols, rows: geometry.rows })
+                Command.TAKEOVER +
+                    JSON.stringify({
+                        observedLeaseEpoch,
+                        connectSequence: this.request.connectSequence,
+                        columns: geometry.cols,
+                        rows: geometry.rows,
+                    })
             )
         );
-        this.recordDiagnostic('takeover-requested', ownerGeneration);
+        this.recordDiagnostic('takeover-requested', observedLeaseEpoch);
     }
 
     private cancelTakeover() {
-        if (this.displaced || this.inputReady) return;
+        this.takeoverLeaseEpoch = 0;
         this.takeoverPending = false;
-        this.takeoverOwnerGeneration = 0;
         this.invalidateInputOwner(true);
         this.clearSocket(true);
         this.clearHeartbeat();
@@ -1486,9 +1544,8 @@ export class Xterm {
 
     private enterDisplaced() {
         if (this.displaced) return;
-        this.displaced = true;
+        this.takeoverLeaseEpoch = 0;
         this.takeoverPending = false;
-        this.takeoverOwnerGeneration = 0;
         this.inputReady = false;
         this.invalidateInputOwner(true);
         this.connectionGeneration++;
@@ -1504,25 +1561,33 @@ export class Xterm {
     }
 
     private beginRecovery() {
-        if (this.disposed || this.displaced || this.connectPromise || !this.request) return;
-        this.connectPromise = this.runRecovery().finally(() => {
-            this.connectPromise = undefined;
+        if (this.disposed || this.displaced || !this.request) return;
+        if (document.visibilityState !== 'hidden' && this.visibleRecoveryStartedAt === undefined)
+            this.visibleRecoveryStartedAt = performance.now();
+        const promise = this.runRecovery();
+        this.connectPromise = promise;
+        void promise.finally(() => {
+            if (this.connectPromise === promise) this.connectPromise = undefined;
         });
+    }
+
+    private currentVisibleRecoveryMs() {
+        return (
+            this.visibleRecoveryMs +
+            (this.visibleRecoveryStartedAt === undefined ? 0 : performance.now() - this.visibleRecoveryStartedAt)
+        );
     }
 
     private async runRecovery() {
         this.clearHeartbeat();
         while (!this.disposed && !this.displaced) {
-            const elapsed = performance.now() - this.reconnectStartedAt;
-            if (elapsed >= RECONNECT_WINDOW_MS || !this.reconnect) {
+            if (this.currentVisibleRecoveryMs() >= RECONNECT_WINDOW_MS || !this.reconnect) {
                 this.showManualReconnect();
                 return;
             }
-
             const result = await this.connectAttempt();
             if (result === 'ready' || result === 'stop' || this.disposed) return;
-
-            const remaining = RECONNECT_WINDOW_MS - (performance.now() - this.reconnectStartedAt);
+            const remaining = RECONNECT_WINDOW_MS - this.currentVisibleRecoveryMs();
             if (remaining <= 0) continue;
             const delay = Math.min(1000 * 2 ** Math.min(this.reconnectAttempts, 3), RECONNECT_MAX_DELAY_MS, remaining);
             this.reconnectAttempts++;
@@ -1533,31 +1598,22 @@ export class Xterm {
                 this.reconnectDelayResolve = undefined;
                 delayGate.resolve();
             }, delay);
+            const signal = this.activeAttempt?.signal;
+            const abortDelay = () => delayGate.resolve();
+            signal?.addEventListener('abort', abortDelay, { once: true });
             await delayGate.promise;
+            signal?.removeEventListener('abort', abortDelay);
+            if (signal?.aborted) return;
         }
-    }
-
-    private async waitForParserDrain(): Promise<boolean> {
-        const deadline = performance.now() + ATTEMPT_TIMEOUT_MS;
-        while (!this.disposed && this.pendingBytes > 0 && performance.now() < deadline) {
-            const parserTick = createDeferred<void>();
-            window.setTimeout(parserTick.resolve, 16);
-            await parserTick.promise;
-        }
-        if (this.pendingBytes === 0) return true;
-        this.connectionState = 'terminal-state-lost';
-        this.overlayAddon.showAction('Terminal parser did not settle. Input remains blocked.', 'Retry', event =>
-            this.claimRecoveryPointer(event)
-        );
-        return false;
     }
 
     private async connectAttempt(): Promise<AttemptResult> {
-        if (!(await this.waitForParserDrain()) || !(await this.waitForGeometry()) || !this.request || this.disposed)
-            return 'stop';
+        if (!this.request || this.disposed) return 'stop';
         this.invalidateInputOwner(true);
         const generation = ++this.connectionGeneration;
-        const request = this.request;
+        const request = { ...this.request };
+        const controller = new AbortController();
+        this.activeAttempt = controller;
         this.clearSocket(true);
         this.flowPausedGeneration = undefined;
         this.inputReady = false;
@@ -1566,18 +1622,8 @@ export class Xterm {
         this.overlayAddon.clearAction();
         this.overlayAddon.showOverlay('Connecting...');
 
-        this.fetchAbort?.abort();
-        const controller = new AbortController();
         this.fetchAbort = controller;
-        const tokenTimeout = Math.min(
-            TOKEN_TIMEOUT_MS,
-            RECONNECT_WINDOW_MS - (performance.now() - this.reconnectStartedAt)
-        );
-        if (tokenTimeout <= 0) {
-            this.fetchAbort = undefined;
-            return 'retry';
-        }
-        this.attemptTimer = window.setTimeout(() => controller.abort(), tokenTimeout);
+        this.attemptTimer = window.setTimeout(() => controller.abort(), TOKEN_TIMEOUT_MS);
         try {
             const response = await fetch(this.options.tokenUrl, { signal: controller.signal, cache: 'no-store' });
             if (!response.ok) throw new Error(`token response ${response.status}`);
@@ -1585,18 +1631,17 @@ export class Xterm {
             if (typeof body.token !== 'string') throw new Error('token response missing token');
             this.token = body.token;
         } catch (error) {
-            if (!this.disposed) console.warn(`[ttyd] fetch ${this.options.tokenUrl}:`, error);
-            return this.disposed ? 'stop' : 'retry';
+            if (controller.signal.aborted) return 'stop';
+            console.warn(`[ttyd] fetch ${this.options.tokenUrl}:`, error);
+            return 'retry';
         } finally {
             if (this.attemptTimer !== undefined) window.clearTimeout(this.attemptTimer);
             this.attemptTimer = undefined;
             if (this.fetchAbort === controller) this.fetchAbort = undefined;
         }
 
-        if (this.disposed || generation !== this.connectionGeneration) return 'stop';
-        const url = new URL(this.options.wsBaseUrl);
-        url.searchParams.set('resume', request.id);
-        const socket = new WebSocket(url, ['tty']);
+        if (controller.signal.aborted || this.disposed || generation !== this.connectionGeneration) return 'stop';
+        const socket = new WebSocket(this.options.wsBaseUrl, ['tty']);
         socket.binaryType = 'arraybuffer';
         this.socket = socket;
         this.socketDisposables.push(
@@ -1608,35 +1653,30 @@ export class Xterm {
 
         const attempt = createDeferred<AttemptResult>();
         this.attemptResolve = attempt.resolve;
-        const attemptTimeout = Math.min(
-            ATTEMPT_TIMEOUT_MS,
-            RECONNECT_WINDOW_MS - (performance.now() - this.reconnectStartedAt)
-        );
-        if (attemptTimeout <= 0) {
-            this.clearSocket(true);
-            this.settleAttempt('retry');
-            return attempt.promise;
-        }
+        const abortAttempt = () => this.settleAttempt('stop');
+        controller.signal.addEventListener('abort', abortAttempt, { once: true });
         this.attemptTimer = window.setTimeout(() => {
             if (generation !== this.connectionGeneration) return;
             this.recordDiagnostic('attempt-timeout', generation);
             this.clearSocket(true);
             this.settleAttempt('retry');
-        }, attemptTimeout);
-        return attempt.promise;
+        }, ATTEMPT_TIMEOUT_MS);
+        const result = await attempt.promise;
+        controller.signal.removeEventListener('abort', abortAttempt);
+        if (this.activeAttempt === controller) this.activeAttempt = undefined;
+        return result;
     }
 
     private handleSocketOpen(socket: WebSocket, generation: number, request: SessionRequest) {
         if (socket !== this.socket || generation !== this.connectionGeneration || this.disposed) return;
-        const geometry = this.lastValidGeometry;
-        if (!geometry) {
-            this.clearSocket(true);
-            this.settleAttempt('retry');
-            return;
-        }
+        const geometry = this.lastValidGeometry ?? { cols: 80, rows: 24 };
         const message = JSON.stringify({
-            version: 3,
+            version: 4,
+            resumeId: request.id,
             intent: request.intent,
+            clientInstanceId: request.clientInstanceId,
+            connectSequence: request.connectSequence,
+            successorToken: request.intent === 'resume' ? request.successorToken : undefined,
             replayPosition: this.appliedPosition,
             AuthToken: this.token,
             columns: geometry.cols,
@@ -1712,14 +1752,19 @@ export class Xterm {
     private handleVisibilityReturn() {
         this.fit();
         if (document.visibilityState === 'hidden') {
+            if (this.visibleRecoveryStartedAt !== undefined) {
+                this.visibleRecoveryMs += performance.now() - this.visibleRecoveryStartedAt;
+                this.visibleRecoveryStartedAt = undefined;
+            }
             this.invalidateInputOwner(true);
             return;
         }
+        if (this.visibleRecoveryStartedAt === undefined) this.visibleRecoveryStartedAt = performance.now();
         if (this.disposed || this.displaced) return;
         if (this.inputReady) {
             this.sendHeartbeat();
         } else if (!this.automaticRecoveryExhausted) {
-            if (this.reconnectStartedAt === 0) this.reconnectStartedAt = performance.now();
+            this.abortActiveAttempt();
             this.beginRecovery();
         }
     }
@@ -1756,7 +1801,9 @@ export class Xterm {
         const nonce = `${this.connectionGeneration}:${++this.heartbeatCounter}`;
         this.heartbeatNonce = nonce;
         this.heartbeatSentAt = Date.now();
-        socket.send(this.textEncoder.encode(Command.HEARTBEAT + nonce));
+        socket.send(
+            this.textEncoder.encode(Command.HEARTBEAT + JSON.stringify({ leaseEpoch: this.leaseEpoch, nonce }))
+        );
         this.recordDiagnostic('heartbeat-sent', this.heartbeatCounter);
     }
 
@@ -1801,49 +1848,111 @@ export class Xterm {
         return prefs;
     }
 
-    private async settleReplay(socket: WebSocket, generation: number, position: number, truncated: boolean) {
-        const deadline = performance.now() + ATTEMPT_TIMEOUT_MS;
-        while (
-            !this.disposed &&
-            socket === this.socket &&
-            generation === this.connectionGeneration &&
-            (this.pendingBytes > 0 || this.appliedPosition < position) &&
-            performance.now() < deadline
-        ) {
-            const parserTick = createDeferred<void>();
-            window.setTimeout(parserTick.resolve, 16);
-            await parserTick.promise;
-        }
-        if (
-            this.disposed ||
-            socket !== this.socket ||
-            generation !== this.connectionGeneration ||
-            this.pendingBytes > 0 ||
-            this.appliedPosition < position
-        ) {
-            this.recordDiagnostic('replay-settlement-failed', position);
-            this.clearSocket(true);
-            this.settleAttempt('retry');
-            return;
-        }
-
-        for (let frame = 0; frame < 2; frame++) {
-            const rendered = createDeferred<void>();
-            window.requestAnimationFrame(() => rendered.resolve());
-            await rendered.promise;
-        }
-        if (socket !== this.socket || generation !== this.connectionGeneration || socket.readyState !== WebSocket.OPEN)
-            return;
+    private beginReplayBarrier(position: number, truncated: boolean) {
+        const controller = this.activeAttempt;
+        const request = this.request;
+        if (!controller || !request || controller.signal.aborted || this.leaseEpoch <= 0) return;
+        const barrier: ReplayBarrier = {
+            attemptId: this.connectionGeneration,
+            terminalEpoch: this.terminalEpoch,
+            sessionId: request.id,
+            leaseEpoch: this.leaseEpoch,
+            target: position,
+            signal: controller.signal,
+            sent: false,
+            syncId: this.degradedGap?.syncId,
+            acceptIncomplete: this.degradedGap?.accepted === true,
+        };
+        this.replayBarrier = barrier;
         this.replayTarget = position;
+        this.connectionState = this.degradedGap ? 'degraded' : truncated ? 'terminal-state-lost' : 'replaying';
+        controller.signal.addEventListener(
+            'abort',
+            () => {
+                if (this.replayBarrier === barrier) this.replayBarrier = undefined;
+            },
+            { once: true }
+        );
+        this.maybeCompleteReplayBarrier();
+    }
+
+    private maybeCompleteReplayBarrier() {
+        const barrier = this.replayBarrier;
+        const socket = this.socket;
+        if (
+            !barrier ||
+            barrier.sent ||
+            barrier.signal.aborted ||
+            barrier.attemptId !== this.connectionGeneration ||
+            barrier.terminalEpoch !== this.terminalEpoch ||
+            barrier.sessionId !== this.request?.id ||
+            barrier.leaseEpoch !== this.leaseEpoch ||
+            this.appliedPosition < barrier.target ||
+            (this.degradedGap !== undefined && !this.degradedGap.accepted)
+        )
+            return;
+        barrier.sent = true;
         if (this.isExitedRetained) {
             this.inputReady = false;
             this.invalidateInputOwner(true);
-            this.recordDiagnostic('replay-settled', position);
+            this.replayBarrier = undefined;
+            this.recordDiagnostic('retained-replay-settled', barrier.target);
+            this.settleAttempt('ready');
             return;
         }
-        this.connectionState = truncated ? 'terminal-state-lost' : 'replaying';
-        socket.send(this.textEncoder.encode(Command.SESSION_READY + JSON.stringify({ position })));
-        this.recordDiagnostic('replay-settled', position);
+        if (socket?.readyState !== WebSocket.OPEN) return;
+        socket.send(
+            this.textEncoder.encode(
+                Command.REPLAY_APPLIED +
+                    JSON.stringify({
+                        sessionId: barrier.sessionId,
+                        leaseEpoch: barrier.leaseEpoch,
+                        position: barrier.target,
+                        ...(barrier.syncId === undefined
+                            ? {}
+                            : { syncId: barrier.syncId, acceptIncomplete: barrier.acceptIncomplete }),
+                    })
+            )
+        );
+        this.recordDiagnostic('replay-applied', barrier.target);
+    }
+
+    private acceptIncompleteGap() {
+        const gap = this.degradedGap;
+        const socket = this.socket;
+        if (!gap || gap.accepted || socket?.readyState !== WebSocket.OPEN) return;
+        this.invalidateInputOwner(true);
+        gap.accepted = true;
+        this.receivePosition = gap.retained.start;
+        this.connectionState = 'degraded';
+        socket.send(
+            this.textEncoder.encode(
+                Command.REBASE_ACK +
+                    JSON.stringify({
+                        sessionId: gap.sessionId,
+                        leaseEpoch: gap.leaseEpoch,
+                        syncId: gap.syncId,
+                        rebasePosition: gap.retained.start,
+                    })
+            )
+        );
+        this.overlayAddon.showOverlay('출력 일부 손실 / 화면 상태 불완전 — 최신 출력 동기화 중');
+        this.recordDiagnostic('explicit-rebase', gap.retained.start);
+    }
+
+    private enterReplayGap(gap: GapRecord) {
+        this.inputReady = false;
+        this.invalidateInputOwner(true);
+        this.replayBarrier = undefined;
+        this.flowPausedGeneration = undefined;
+        this.degradedGap = gap;
+        this.connectionState = 'sync-required';
+        this.overlayAddon.showChoices('출력 일부 손실 / 화면 상태 불완전', [
+            { label: '불완전한 화면에서 계속', action: () => this.acceptIncompleteGap() },
+            { label: 'Retry', action: () => this.requestRecovery(false) },
+            { label: 'Start New Session', action: () => this.requestRecovery(true) },
+        ]);
+        this.recordDiagnostic('buffer-overrun', gap.lost.end - gap.lost.start);
     }
 
     private onSocketData(event: MessageEvent, socket: WebSocket, generation: number) {
@@ -1853,19 +1962,29 @@ export class Xterm {
         const bytes = new Uint8Array(rawData);
         if (bytes.length === 0) return;
         const command = String.fromCharCode(bytes[0]);
-
         switch (command) {
             case Command.OUTPUT: {
-                if (bytes.length < 9) return;
+                if (bytes.length < 25) return;
                 const view = new DataView(rawData);
-                const endPosition = view.getUint32(1) * 0x1_0000_0000 + view.getUint32(5);
-                const data = rawData.slice(9);
-                if (this.zmodemAddon) {
-                    this.writeFunc(data);
-                    this.appliedPosition = Math.max(this.appliedPosition, endPosition);
-                } else {
-                    this.writeData(new Uint8Array(data), endPosition, generation);
+                const lease = view.getUint32(1) * 0x1_0000_0000 + view.getUint32(5);
+                const start = view.getUint32(9) * 0x1_0000_0000 + view.getUint32(13);
+                const end = view.getUint32(17) * 0x1_0000_0000 + view.getUint32(21);
+                if (lease !== this.leaseEpoch || end < start || end - start !== bytes.length - 25) return;
+                if (end <= this.receivePosition) break;
+                if (start > this.receivePosition) {
+                    this.connectionState = 'sync-required';
+                    this.inputReady = false;
+                    this.replayBarrier = undefined;
+                    this.invalidateInputOwner(true);
+                    this.overlayAddon.showAction('Output gap detected. Input remains blocked.', 'Retry', event =>
+                        this.claimRecoveryPointer(event)
+                    );
+                    break;
                 }
+                const skip = Math.max(0, this.receivePosition - start);
+                const data = bytes.slice(25 + skip);
+                this.receivePosition = end;
+                this.writeData(data, end, generation);
                 break;
             }
             case Command.SET_WINDOW_TITLE:
@@ -1886,15 +2005,16 @@ export class Xterm {
                 const message = JSON.parse(this.textDecoder.decode(rawData.slice(1))) as {
                     version?: number;
                     state?: string;
+                    sessionId?: string;
                     sessionDiagnosticId?: number;
                     connectionGeneration?: number;
-                    ownerGeneration?: number;
+                    leaseEpoch?: number;
+                    ownerPhase?: string;
                     replay?: { from?: number; to?: number; truncated?: boolean };
-                    inputReady?: boolean;
                     exitCode?: number;
                     exitSignal?: number;
                 };
-                if (message.version !== 3 || typeof message.state !== 'string') {
+                if (message.version !== 4 || typeof message.state !== 'string') {
                     this.connectionState = 'session-error';
                     this.overlayAddon.showAction('Session protocol mismatch.', 'Retry', pointer =>
                         this.claimRecoveryPointer(pointer)
@@ -1905,75 +2025,51 @@ export class Xterm {
                 this.serverConnectionGeneration = message.connectionGeneration ?? 0;
                 this.sessionDiagnosticId = message.sessionDiagnosticId ?? 0;
                 this.replayTarget = message.replay?.to ?? 0;
-                const truncated = message.replay?.truncated === true;
                 this.recordDiagnostic(`session-${message.state}`, this.serverConnectionGeneration);
 
-                if (message.state === 'displaced') {
+                if (message.state === 'displaced' || message.state === 'superseded') {
                     this.enterDisplaced();
                     this.settleAttempt('stop');
                     return;
                 }
-
-                if (message.state === 'checking') {
-                    this.inputReady = false;
-                    this.invalidateInputOwner(true);
-                    this.connectionState = 'checking-owner';
-                    this.overlayAddon.showOverlay('Checking previous connection...');
-                    break;
-                }
                 if (message.state === 'exited_retained') {
                     this.isExitedRetained = true;
+                    this.leaseEpoch = message.leaseEpoch ?? 0;
                     this.takeoverPending = false;
-                    this.takeoverOwnerGeneration = 0;
+                    this.takeoverLeaseEpoch = 0;
                     this.inputReady = false;
                     this.invalidateInputOwner(true);
                     this.connectionState = 'session-exited-retained';
-                    const exitCode = message.exitCode ?? 0;
-                    const exitSignal = message.exitSignal ?? 0;
                     const statusText =
-                        exitSignal > 0 ? `작업 완료 (신호: ${exitSignal})` : `작업 완료 (종료 코드: ${exitCode})`;
-                    const notice = truncated ? `${statusText} - 이전 출력이 절사됨 (최신 8 MiB 보존)` : statusText;
-                    this.overlayAddon.showAction(notice, 'Start New Session', pointer =>
+                        (message.exitSignal ?? 0) > 0
+                            ? `작업 완료 (신호: ${message.exitSignal})`
+                            : `작업 완료 (종료 코드: ${message.exitCode ?? 0})`;
+                    this.overlayAddon.showAction(statusText, 'Start New Session', pointer =>
                         this.claimRecoveryPointer(pointer, true)
                     );
                     break;
                 }
                 if (message.state === 'created' || message.state === 'attached') {
                     this.takeoverPending = false;
-                    this.takeoverOwnerGeneration = 0;
+                    this.takeoverLeaseEpoch = 0;
+                    this.leaseEpoch = message.leaseEpoch ?? 0;
+                    this.isExitedRetained = false;
+                    this.inputReady = false;
+                    this.invalidateInputOwner(true);
+                    this.connectionState = 'replaying';
+                    this.receivePosition = message.state === 'created' ? 0 : this.appliedPosition;
+                    this.degradedGap = undefined;
                     this.overlayAddon.clearAction();
-                    if (message.state === 'created' && this.request) this.options.session.markCreated(this.request);
-                    if (message.inputReady) {
-                        this.inputReady = true;
-                        this.reconnectStartedAt = 0;
-                        this.reconnectAttempts = 0;
-                        this.automaticRecoveryExhausted = false;
-                        this.connectionState = truncated ? 'terminal-state-lost' : 'application-ready';
-                        this.overlayAddon.showOverlay(
-                            truncated ? '이전 출력이 절사됨 (최신 8 MiB 보존)' : 'Input ready',
-                            600
-                        );
-                        if (this.request && !this.request.persisted)
-                            this.overlayAddon.showOverlay('Ephemeral session: reload continuity is unavailable.', 2500);
-                        this.startHeartbeat();
-                        this.settleAttempt('ready');
-                        const handshake = this.handshakeGeometry;
-                        if (handshake?.connectionGeneration === generation) {
-                            this.lastSentGeometry = {
-                                serverGeneration: this.serverConnectionGeneration,
-                                cols: handshake.cols,
-                                rows: handshake.rows,
-                            };
-                        }
-                        this.sendCurrentGeometry();
-                        const isTouchDevice =
-                            (window.matchMedia?.('(pointer: coarse)').matches ?? false) || navigator.maxTouchPoints > 0;
-                        if (!isTouchDevice) this.activateTypingFocus();
-                    } else {
-                        this.inputReady = false;
-                        this.invalidateInputOwner(true);
-                        this.connectionState = 'replaying';
-                        this.overlayAddon.showOverlay('Session accepted. Restoring screen...');
+                    this.overlayAddon.showOverlay('Session accepted. Restoring screen...');
+                    if (message.state === 'created') {
+                        const resetEpoch = this.terminalEpoch;
+                        this.terminal.write('', () => {
+                            if (resetEpoch !== this.terminalEpoch) return;
+                            this.terminal.reset();
+                            this.appliedPosition = 0;
+                            this.pendingBytes = 0;
+                            this.recordDiagnostic('fresh-terminal-reset');
+                        });
                     }
                     break;
                 }
@@ -1981,29 +2077,29 @@ export class Xterm {
                 this.invalidateInputOwner(true);
                 this.automaticRecoveryExhausted = true;
                 this.takeoverPending = false;
-                if (message.state === 'conflict' && typeof message.ownerGeneration === 'number') {
-                    this.takeoverOwnerGeneration = message.ownerGeneration;
+                if (message.state === 'conflict' && typeof message.leaseEpoch === 'number') {
+                    this.takeoverLeaseEpoch = message.leaseEpoch;
                     this.connectionState = 'session-conflict';
                     this.overlayAddon.showChoices('세션이 이미 다른 탭에서 사용 중입니다', [
                         {
                             label: '이 화면으로 가져오기 (Take Over)',
-                            action: () => this.requestTakeover(message.ownerGeneration as number),
+                            action: () => this.requestTakeover(message.leaseEpoch as number),
                         },
                         { label: '취소', action: () => this.cancelTakeover() },
                     ]);
                     this.settleAttempt('stop');
                     break;
                 }
-                this.takeoverOwnerGeneration = 0;
+                this.takeoverLeaseEpoch = 0;
                 const stopped = message.state as
-                    'conflict' | 'stale' | 'expired' | 'exited' | 'unknown' | 'error' | 'rejected_capacity';
+                    'stale' | 'expired' | 'exited' | 'unknown' | 'error' | 'rejected_capacity' | 'version_mismatch';
                 const labels: Record<string, readonly [string, string]> = {
-                    conflict: ['Session ownership changed. Reconnect to recheck.', 'Retry'],
                     stale: ['Session ownership changed. Reconnect to recheck.', 'Retry'],
                     expired: ['Session expired. No new shell was started.', 'Start New Session'],
-                    exited: ['Session exited. Results are not retained by this block.', 'Start New Session'],
+                    exited: ['Session exited.', 'Start New Session'],
                     unknown: ['Recovery target cannot be confirmed.', 'Start New Session'],
                     rejected_capacity: ['서버 수용 한도에 도달했습니다. 잠시 후 다시 시도하십시오.', 'Retry'],
+                    version_mismatch: ['Session protocol mismatch.', 'Retry'],
                     error: ['Session protocol error. No shell was started.', 'Retry'],
                 };
                 const [label, action] = labels[stopped] ?? labels.error;
@@ -2015,23 +2111,144 @@ export class Xterm {
                 this.settleAttempt('stop');
                 break;
             }
+            case Command.REPLAY_GAP: {
+                const message = JSON.parse(this.textDecoder.decode(rawData.slice(1))) as {
+                    version?: number;
+                    sessionId?: string;
+                    leaseEpoch?: number;
+                    syncId?: number;
+                    reason?: string;
+                    lost?: { start?: number; end?: number };
+                    retained?: { start?: number; end?: number };
+                    target?: number;
+                };
+                const values = [
+                    message.syncId,
+                    message.lost?.start,
+                    message.lost?.end,
+                    message.retained?.start,
+                    message.retained?.end,
+                    message.target,
+                ];
+                if (
+                    message.version !== 4 ||
+                    message.sessionId !== this.request?.id ||
+                    message.leaseEpoch !== this.leaseEpoch ||
+                    message.reason !== 'BUFFER_OVERRUN' ||
+                    values.some(value => typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) ||
+                    message.lost!.start! > message.lost!.end! ||
+                    message.lost!.end !== message.retained!.start ||
+                    message.retained!.start! > message.retained!.end! ||
+                    message.target !== message.retained!.end
+                )
+                    break;
+                this.enterReplayGap({
+                    sessionId: message.sessionId!,
+                    leaseEpoch: message.leaseEpoch,
+                    syncId: message.syncId!,
+                    lost: { start: message.lost!.start!, end: message.lost!.end! },
+                    retained: { start: message.retained!.start!, end: message.retained!.end! },
+                    target: message.target!,
+                    accepted: false,
+                });
+                break;
+            }
             case Command.REPLAY_END: {
                 const message = JSON.parse(this.textDecoder.decode(rawData.slice(1))) as {
                     version?: number;
+                    sessionId?: string;
+                    leaseEpoch?: number;
                     position?: number;
                     truncated?: boolean;
                 };
-                if (message.version === 3 && typeof message.position === 'number')
-                    void this.settleReplay(socket, generation, message.position, message.truncated === true);
+                if (
+                    message.version === 4 &&
+                    message.sessionId === this.request?.id &&
+                    message.leaseEpoch === this.leaseEpoch &&
+                    typeof message.position === 'number'
+                )
+                    this.beginReplayBarrier(message.position, message.truncated === true);
                 break;
             }
             case Command.HEARTBEAT_REPLY: {
-                const nonce = this.textDecoder.decode(rawData.slice(1));
-                if (nonce === this.heartbeatNonce) {
+                const message = JSON.parse(this.textDecoder.decode(rawData.slice(1))) as {
+                    leaseEpoch?: number;
+                    nonce?: string;
+                };
+                if (message.leaseEpoch === this.leaseEpoch && message.nonce === this.heartbeatNonce) {
                     this.heartbeatNonce = undefined;
                     this.heartbeatSentAt = 0;
                     this.recordDiagnostic('heartbeat-received', this.heartbeatCounter);
                 }
+                break;
+            }
+            case Command.READY_ACK: {
+                const message = JSON.parse(this.textDecoder.decode(rawData.slice(1))) as {
+                    version?: number;
+                    sessionId?: string;
+                    leaseEpoch?: number;
+                    position?: number;
+                    successorToken?: string;
+                    degraded?: boolean;
+                    syncId?: number;
+                };
+                const barrier = this.replayBarrier;
+                if (
+                    message.version !== 4 ||
+                    message.sessionId !== this.request?.id ||
+                    message.leaseEpoch !== this.leaseEpoch ||
+                    message.position !== barrier?.target ||
+                    typeof message.successorToken !== 'string' ||
+                    !this.request ||
+                    (this.degradedGap !== undefined &&
+                        (message.degraded !== true || message.syncId !== this.degradedGap.syncId))
+                )
+                    break;
+                const persisted = this.options.session.commitReady(
+                    this.request,
+                    message.successorToken,
+                    this.leaseEpoch
+                );
+                this.continuityAvailable = this.continuityAvailable && persisted;
+                if (!this.continuityAvailable) this.recordDiagnostic('continuity-unavailable');
+                this.replayBarrier = undefined;
+                this.inputReady = true;
+                this.reconnectStartedAt = 0;
+                this.visibleRecoveryMs = 0;
+                this.visibleRecoveryStartedAt = undefined;
+                this.reconnectAttempts = 0;
+                this.automaticRecoveryExhausted = false;
+                this.connectionState = this.degradedGap ? 'degraded' : 'application-ready';
+                if (this.degradedGap)
+                    this.overlayAddon.showOverlay('출력 일부 손실 / 화면 상태 불완전 — 제한된 입력 사용 중');
+                else if (this.continuityAvailable) this.overlayAddon.showOverlay('Input ready', 600);
+                else
+                    this.overlayAddon.showOverlay(
+                        '저장 공간 부족: 세션 연속성 비활성화됨 (Session continuity unavailable)'
+                    );
+                this.startHeartbeat();
+                this.settleAttempt('ready');
+                this.sendCurrentGeometry();
+                break;
+            }
+            case Command.SESSION_NACK: {
+                const message = JSON.parse(this.textDecoder.decode(rawData.slice(1))) as {
+                    version?: number;
+                    sessionId?: string;
+                    leaseEpoch?: number;
+                    code?: string;
+                    detail?: string;
+                };
+                if (message.version !== 4 || message.sessionId !== this.request?.id) break;
+                this.inputReady = false;
+                this.replayBarrier = undefined;
+                this.connectionState = 'terminal-state-lost';
+                this.overlayAddon.showAction(
+                    `${message.code ?? 'SYNC_REQUIRED'}: ${message.detail ?? 'Replay rejected'}`,
+                    'Retry',
+                    event => this.claimRecoveryPointer(event)
+                );
+                this.settleAttempt('stop');
                 break;
             }
             default:

@@ -8,42 +8,115 @@ import type { ClientOptions, FlowControl, SessionBinding, SessionRequest } from 
 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const path = window.location.pathname.replace(/[/]+$/, '');
 const endpoint = `${window.location.origin}${path}`;
-const sessionKey = `webterm.session.v1:${endpoint}`;
+const sessionKey = `webterm.session.v2:${endpoint}`;
 const validSessionId = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{32}$/i.test(value);
+const validToken = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
 const randomSessionId = () =>
     Array.from(window.crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
 
-let currentSession: SessionRequest | undefined;
+type StoredBindingV2 = {
+    version: 2;
+    id: string;
+    clientInstanceId: string;
+    state: 'pending-create' | 'approved';
+    connectSequence: number;
+    successorToken?: string;
+    leaseEpoch?: number;
+    inFlight?: { intent: 'create' | 'resume'; connectSequence: number };
+};
+
+let storedBinding: StoredBindingV2 | undefined;
 try {
     const stored = window.sessionStorage.getItem(sessionKey);
     if (stored !== null) {
-        const parsed = JSON.parse(stored) as { version?: unknown; id?: unknown };
-        if (parsed.version === 1 && validSessionId(parsed.id)) {
-            currentSession = { id: parsed.id, intent: 'resume', persisted: true };
-        } else {
-            window.sessionStorage.removeItem(sessionKey);
-        }
+        const parsed = JSON.parse(stored) as StoredBindingV2;
+        if (
+            parsed.version === 2 &&
+            validSessionId(parsed.id) &&
+            validSessionId(parsed.clientInstanceId) &&
+            Number.isSafeInteger(parsed.connectSequence) &&
+            parsed.connectSequence >= 0 &&
+            ((parsed.state === 'approved' && validToken(parsed.successorToken)) || parsed.state === 'pending-create')
+        )
+            storedBinding = parsed;
+        else window.sessionStorage.removeItem(sessionKey);
     }
 } catch {
-    currentSession = undefined;
+    storedBinding = undefined;
+}
+
+const persist = (binding: StoredBindingV2) => {
+    try {
+        window.sessionStorage.setItem(sessionKey, JSON.stringify(binding));
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+const requestFrom = (binding: StoredBindingV2, intent: 'create' | 'resume', sequence: number): SessionRequest => ({
+    id: binding.id,
+    intent,
+    clientInstanceId: binding.clientInstanceId,
+    connectSequence: sequence,
+    successorToken: binding.successorToken,
+    leaseEpoch: binding.leaseEpoch,
+    persisted: true,
+});
+
+let currentSession: SessionRequest | undefined;
+if (storedBinding) {
+    const intent = storedBinding.state === 'approved' ? 'resume' : 'create';
+    const sequence = storedBinding.inFlight?.connectSequence ?? storedBinding.connectSequence + 1;
+    storedBinding.inFlight = { intent, connectSequence: sequence };
+    const persisted = persist(storedBinding);
+    currentSession = requestFrom(storedBinding, intent, sequence);
+    currentSession.persisted = persisted;
 }
 
 const session = {
     current: currentSession,
     create() {
-        const request: SessionRequest = { id: randomSessionId(), intent: 'create', persisted: false };
-        try {
-            window.sessionStorage.setItem(sessionKey, JSON.stringify({ version: 1, id: request.id }));
-            request.persisted = true;
-        } catch {
-            request.persisted = false;
-        }
+        const binding: StoredBindingV2 = {
+            version: 2,
+            id: randomSessionId(),
+            clientInstanceId: randomSessionId(),
+            state: 'pending-create',
+            connectSequence: 0,
+            inFlight: { intent: 'create', connectSequence: 1 },
+        };
+        storedBinding = binding;
+        const request = requestFrom(binding, 'create', 1);
+        request.persisted = persist(binding);
         this.current = request;
         return request;
     },
-    markCreated(request: SessionRequest) {
+    begin(request: SessionRequest, fresh: boolean) {
+        const binding = storedBinding;
+        if (!binding || binding.id !== request.id || binding.clientInstanceId !== request.clientInstanceId)
+            return request;
+        if (!fresh) return request;
+        const sequence = Math.max(binding.connectSequence, binding.inFlight?.connectSequence ?? 0) + 1;
+        binding.inFlight = { intent: request.intent, connectSequence: sequence };
+        const next = { ...request, connectSequence: sequence, persisted: persist(binding) };
+        this.current = next;
+        return next;
+    },
+    commitReady(request: SessionRequest, successorToken: string, leaseEpoch: number) {
+        const binding = storedBinding;
+        if (!binding || binding.id !== request.id || !validToken(successorToken)) return false;
+        binding.state = 'approved';
+        binding.connectSequence = request.connectSequence;
+        binding.successorToken = successorToken;
+        binding.leaseEpoch = leaseEpoch;
+        delete binding.inFlight;
+        const persisted = persist(binding);
         request.intent = 'resume';
+        request.successorToken = successorToken;
+        request.leaseEpoch = leaseEpoch;
+        request.persisted = persisted;
         this.current = request;
+        return persisted;
     },
 } as SessionBinding;
 
