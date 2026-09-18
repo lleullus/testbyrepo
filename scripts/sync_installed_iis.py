@@ -198,7 +198,7 @@ def check_install(store: Path) -> dict:
     state = read_json(store / "installed.json")
     if state.get("schema") != INSTALL_SCHEMA or state.get("family") != NEW_FAMILY:
         raise ValueError("unsupported installed skills contract")
-    manifest = check_candidate_release(store, state["bundle_id"])
+    manifest = check_release(store, state["bundle_id"])
     expected_pointer = {"kind": "symlink", "target": str(release_path(store, state["bundle_id"]))}
     if entry_identity(store / "current") != expected_pointer:
         raise ValueError("installed current pointer drift")

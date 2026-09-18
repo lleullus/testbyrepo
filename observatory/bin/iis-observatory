@@ -18,4 +18,4 @@ if [ -n "${PYTHONPATH:-}" ]; then
 else
   export PYTHONPATH="$ROOT/src"
 fi
-exec "${PYTHON:-python3}" -m iis_observatory "$@"
+exec "${PYTHON:-python3}" -B -m iis_observatory "$@"

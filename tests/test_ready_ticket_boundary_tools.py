@@ -186,6 +186,14 @@ class BundleInstallTests(unittest.TestCase):
             self.activate(manifest)
         self.assertFalse(self.host.exists())
 
+    def test_installed_release_uses_its_own_manifest_during_upgrade(self) -> None:
+        manifest = self.prepare()
+        self.activate(manifest)
+        future_required = self.installer.REQUIRED + ("companion-skills/future-role/SKILL.md",)
+        with mock.patch.object(self.installer, "REQUIRED", future_required):
+            state = self.installer.check_install(self.store)
+        self.assertEqual(state["bundle_id"], manifest["bundle_id"])
+
     def test_cli_inspect_reports_candidate_contract_without_loading_host(self) -> None:
         manifest = self.prepare()
         result = subprocess.run([sys.executable, str(SYNC), "inspect", "--store", str(self.store),
