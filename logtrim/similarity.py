@@ -1,54 +1,61 @@
-"""유사도 계산 모듈.
+"""Canonical typed-token matching; optional packages never change decisions."""
+from __future__ import annotations
 
-두 문자열의 유사도를 0.0~1.0 범위로 계산합니다.
-rapidfuzz가 설치되어 있으면 우선 사용하고, 아니면 difflib로 fallback합니다.
-"""
+import re
 
-import difflib
+TOKEN = re.compile(r"<[A-Z][A-Z0-9_]*>|[^\s<>]+|[<>]")
+FAMILY = {
+    "<IPV4>": "<IP>", "<IPV6>": "<IP>", "<IP>": "<IP>",
+    "<UUID>": "<ID>", "<HEX>": "<ID>", "<ID>": "<ID>",
+}
 
-_rapidfuzz_available = False
-try:
-    import rapidfuzz  # noqa: F401
 
-    _rapidfuzz_available = True
-except ImportError:
-    pass
+def tokenize(text: str) -> tuple[str, ...]:
+    return tuple(TOKEN.findall(text))
+
+
+def family(token: str) -> str:
+    return FAMILY.get(token, token)
+
+
+def score_tokens(a, b) -> int:
+    """0..10000. Different literals or incompatible slot types cannot merge."""
+    if len(a) != len(b):
+        return 0
+    if not a:
+        return 10000
+    total = 0
+    for x, y in zip(a, b):
+        if x == y:
+            total += 10000
+        elif family(x) == family(y):
+            total += 9000
+        else:
+            return 0
+    return total // len(a)
+
+
+def merge_template(a, b) -> list[str]:
+    if score_tokens(a, b) == 0:
+        raise ValueError("incompatible templates")
+    return [x if x == y else family(x) for x, y in zip(a, b)]
 
 
 def compute_similarity(a: str, b: str) -> float:
-    """두 문자열의 유사도를 0.0~1.0 범위로 계산합니다.
-
-    rapidfuzz가 설치되어 있으면 rapidfuzz.fuzz.ratio를 우선 사용하고,
-    아니면 difflib.SequenceMatcher.ratio()로 fallback합니다.
-
-    Args:
-        a: 첫 번째 문자열
-        b: 두 번째 문자열
-
-    Returns:
-        0.0 ~ 1.0 범위의 유사도 (1.0 = 완전 일치)
-    """
-    if _rapidfuzz_available:
-        return rapidfuzz.fuzz.ratio(a, b) / 100.0
-    return difflib.SequenceMatcher(None, a, b).ratio()
+    return score_tokens(tokenize(a), tokenize(b)) / 10000
 
 
 def token_similarity(a: str, b: str) -> float:
-    """공백 기준 tokenize 후 토큰 시퀀스 유사도를 계산합니다.
+    return compute_similarity(a, b)
 
-    Args:
-        a: 첫 번째 문자열
-        b: 두 번째 문자열
 
-    Returns:
-        0.0 ~ 1.0 범위의 토큰 유사도 (1.0 = 완전 일치)
-    """
-    tokens_a = a.split()
-    tokens_b = b.split()
-
-    if not tokens_a and not tokens_b:
-        return 1.0
-    if not tokens_a or not tokens_b:
-        return 0.0
-
-    return difflib.SequenceMatcher(None, tokens_a, tokens_b).ratio()
+def render_template(original: str, template) -> str:
+    matches = list(TOKEN.finditer(original))
+    if len(matches) != len(template):
+        raise ValueError("template and representative have different token counts")
+    result, pos = [], 0
+    for match, token in zip(matches, template):
+        result.extend((original[pos:match.start()], token))
+        pos = match.end()
+    result.append(original[pos:])
+    return "".join(result)

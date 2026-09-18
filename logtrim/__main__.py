@@ -1,10 +1,4 @@
-#!/usr/bin/env python3
-"""logtrim entry point for `python -m logtrim`."""
-
-from __future__ import annotations
-
-import sys
-from logtrim.cli import main
+from .cli import main
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

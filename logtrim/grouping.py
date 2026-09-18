@@ -1,219 +1,222 @@
-"""로그 그룹화 모듈.
-
-유사한 로그 라인들을 패턴 기반으로 그룹화합니다.
-exact match 우선, 그 다음 유사도 비교를 통해 버킷을 최적화합니다.
-"""
-
+"""Disk-backed exact aggregation and bounded, leader-constrained clustering."""
 from __future__ import annotations
 
-from collections import Counter
+import hashlib
+import json
+import math
+import sqlite3
+import tempfile
+import time
+from collections import Counter, OrderedDict
+from dataclasses import asdict
 from datetime import datetime
-from typing import Iterator
+from pathlib import Path
 
-from logtrim.models import LogPattern
-from logtrim.patterns import extract_pattern, parse_timestamp
-from logtrim.similarity import compute_similarity
-
-
-class _UnionFind:
-    """소집합 병합을 위한 유니온파인드 구조."""
-
-    def __init__(self) -> None:
-        self.parent: dict[str, str] = {}
-        self.rank: dict[str, int] = {}
-
-    def find(self, x: str) -> str:
-        if x not in self.parent:
-            self.parent[x] = x
-            self.rank[x] = 0
-        if self.parent[x] != x:
-            self.parent[x] = self.find(self.parent[x])
-        return self.parent[x]
-
-    def union(self, x: str, y: str) -> None:
-        rx, ry = self.find(x), self.find(y)
-        if rx == ry:
-            return
-        if self.rank[rx] < self.rank[ry]:
-            rx, ry = ry, rx
-        self.parent[ry] = rx
-        if self.rank[rx] == self.rank[ry]:
-            self.rank[rx] += 1
+from . import __version__
+from .io_utils import assemble
+from .models import Cluster, Config, LogPattern, ResourceLimit
+from .patterns import Normalizer
+from .similarity import family, merge_template, render_template, score_tokens
 
 
-def _block_key(pattern: str, n_tokens: int = 2) -> str:
-    """블록 키 생성: 패턴의 앞부분 토큰으로 유사한 패턴만 비교.
+class DrainIndex:
+    """Fixed-depth typed paths, relaxed prefixes and token-count fallback.
 
-    Args:
-        pattern: 패턴 문자열
-        n_tokens: 블록 키에 사용할 토큰 수
-
-    Returns:
-        패턴의 앞 n_tokens 토큰을 공백으로 연결한 문자열
+    This is Drain-inspired, not an implementation of the Drain paper.
+    Each indexed lookup reads at most its quota; no all-pairs scan occurs.
     """
-    tokens = pattern.split()
-    return " ".join(tokens[:n_tokens])
+    def __init__(self, db, config):
+        self.db, self.config = db, config
+
+    def keys(self, event):
+        base = [event.parser, event.anchors, len(event.tokens)]
+        route = [family(t) for t in event.tokens[:self.config.depth]]
+        result = []
+        for suffix in (route, route[:1], []):
+            key = hashlib.sha256(json.dumps(base + [suffix], ensure_ascii=True).encode()).digest()
+            if key not in result:
+                result.append(key)
+        return result
+
+    def add(self, event, cid):
+        self.db.executemany("INSERT OR IGNORE INTO nodes VALUES (?,?)",
+                            ((key, cid) for key in self.keys(event)))
+
+    def query(self, event):
+        keys, found = self.keys(event), set()
+        budget = self.config.max_candidates
+        for i, key in enumerate(keys):
+            quota = (budget + len(keys) - i - 1) // (len(keys) - i)
+            rows = self.db.execute("SELECT cid FROM nodes WHERE key=? ORDER BY cid LIMIT ?",
+                                   (key, quota))
+            for (cid,) in rows:
+                found.add(cid)
+            budget -= quota
+        return sorted(found)
 
 
-def _length_bucket(pattern: str, bucket_size: int = 20) -> int:
-    """패턴 길이를 버킷으로 분류.
+class Analyzer:
+    def __init__(self, config: Config | None = None, rules: list[dict] | None = None,
+                 work_dir: str | None = None):
+        self.config = config or Config()
+        self.stats = Counter()
+        self.normalizer = Normalizer(self.config, rules, self.stats)
+        self.cache = OrderedDict()
+        self._tmp = tempfile.TemporaryDirectory(prefix="logtrim-", dir=work_dir)
+        self.db = None
+        try:
+            self.db = sqlite3.connect(str(Path(self._tmp.name) / "state.sqlite"))
+            self.db.execute(f"PRAGMA cache_size=-{int(self.config.sqlite_cache_kib)}")
+            self.db.execute("PRAGMA temp_store=FILE")
+            self.db.execute("PRAGMA mmap_size=0")
+            self.db.executescript("""
+                CREATE TABLE clusters(id INTEGER PRIMARY KEY, n INTEGER, body TEXT);
+                CREATE INDEX ranking ON clusters(n DESC,id);
+                CREATE TABLE exact(key TEXT PRIMARY KEY,cid INTEGER) WITHOUT ROWID;
+                CREATE TABLE nodes(key BLOB,cid INTEGER,PRIMARY KEY(key,cid)) WITHOUT ROWID;
+            """)
+            self.index = DrainIndex(self.db, self.config)
+        except BaseException:
+            self.close()
+            raise
+        self.started = time.perf_counter_ns()
+        self.phase_events = Counter()
+        self.current_started = False
 
-    Args:
-        pattern: 패턴 문자열
-        bucket_size: 버킷 크기
+    def __enter__(self):
+        return self
 
-    Returns:
-        길이 버킷 인덱스
-    """
-    return len(pattern) // bucket_size
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
 
+    def close(self):
+        if self.db is not None:
+            self.db.close()
+            self.db = None
+        self.cache.clear()
+        self._tmp.cleanup()
 
-def _group_patterns_internal(
-    patterns: list[str],
-    counts: dict[str, int],
-    threshold: float,
-) -> list[LogPattern]:
-    """내부 헬퍼: 패턴 리스트와 카운터로부터 그룹을 생성합니다.
+    def get(self, cid: int) -> Cluster:
+        row = self.db.execute("SELECT body FROM clusters WHERE id=?", (cid,)).fetchone()
+        if row is None:
+            raise KeyError(cid)
+        return Cluster(**json.loads(row[0]))
 
-    Uses a blocking index to avoid O(n^2) pairwise comparisons.
-    Only patterns sharing the same block key are compared.
+    def _remember(self, key, cid):
+        self.cache[key] = cid
+        self.cache.move_to_end(key)
+        if len(self.cache) > self.config.cache_size:
+            self.cache.popitem(last=False)
 
-    Args:
-        patterns: 고유 패턴 리스트
-        counts: 패턴별 카운터
-        threshold: 유사도 임계값
-
-    Returns:
-        LogPattern 인스턴스 리스트 (count 내림차순 정렬)
-    """
-    if not patterns:
-        return []
-
-    uf = _UnionFind()
-
-    # Build 2D blocking index: (prefix_block_key, length_bucket)
-    # Similar patterns must share both prefix AND similar length
-    blocks: dict[tuple[str, int], list[str]] = {}
-    for p in patterns:
-        key = _block_key(p)
-        bucket = _length_bucket(p)
-        blocks.setdefault((key, bucket), []).append(p)
-
-    # Compare only within the same 2D block
-    for (key, bucket), block_patterns in blocks.items():
-        if len(block_patterns) == 1:
-            continue
-        for i in range(len(block_patterns)):
-            for j in range(i + 1, len(block_patterns)):
-                sim = compute_similarity(block_patterns[i], block_patterns[j])
-                if sim >= threshold:
-                    uf.union(block_patterns[i], block_patterns[j])
-
-    # 그룹별로 모으기
-    groups: dict[str, list[str]] = {}
-    for p in patterns:
-        root = uf.find(p)
-        groups.setdefault(root, []).append(p)
-
-    # 각 그룹에서 대표 패턴 선택 (가장 높은 count를 가진 패턴)
-    result: list[LogPattern] = []
-    for members in groups.values():
-        rep = max(members, key=lambda p: counts.get(p, 0))
-        total_count = sum(counts.get(p, 0) for p in members)
-        result.append(
-            LogPattern(
-                pattern=rep,
-                count=total_count,
-                sample="",
-                first_seen=datetime.min,
-                last_seen=datetime.min,
-            )
-        )
-
-    # count 내림차순 정렬
-    result.sort(key=lambda p: p.count, reverse=True)
-    return result
-
-
-def group_logs(
-    lines: Iterator[str],
-    threshold: float = 0.85,
-) -> Iterator[LogPattern]:
-    """로그 라인들을 패턴 기반으로 그룹화합니다.
-
-    Args:
-        lines: 원본 로그 라인 이터레이터
-        threshold: 유사도 임계값 (기본 0.85)
-
-    Yields:
-        LogPattern 인스턴스 (count 내림차순)
-    """
-    # 1. 패턴 추출 및 카운팅, 타임스탬프/샘플 추적
-    pattern_counter: Counter = Counter()
-    pattern_first_seen: dict[str, datetime] = {}
-    pattern_last_seen: dict[str, datetime] = {}
-    pattern_sample: dict[str, str] = {}
-    unique_patterns: list[str] = []
-
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-
-        pattern = extract_pattern(line)
-        ts = parse_timestamp(line)
-
-        pattern_counter[pattern] += 1
-
-        if pattern not in pattern_sample:
-            pattern_sample[pattern] = line
-            unique_patterns.append(pattern)
-            if ts is not None:
-                pattern_first_seen[pattern] = ts
+    def ingest(self, lines, phase: str = "main"):
+        if phase not in {"main", "baseline", "current"}:
+            raise ValueError("invalid analysis phase")
+        if phase == "baseline" and self.current_started:
+            raise ValueError("baseline must precede current input")
+        if phase == "current":
+            self.current_started = True
+        for record in assemble(lines, self.config, self.stats):
+            start = time.perf_counter_ns()
+            event = self.normalizer.normalize(record.text)
+            self.stats["normalize_ns"] += time.perf_counter_ns() - start
+            key, new_exact = event.key(), False
+            cid = self.cache.get(key)
+            if cid is None:
+                row = self.db.execute("SELECT cid FROM exact WHERE key=?", (key,)).fetchone()
+                cid = row[0] if row else None
+            if cid is None:
+                new_exact = True
+                start = time.perf_counter_ns()
+                ranked = []
+                for candidate in self.index.query(event):
+                    cluster = self.get(candidate)
+                    self.stats["comparisons"] += 1
+                    if cluster.parser != event.parser or cluster.anchors != list(event.anchors):
+                        continue
+                    score = min(score_tokens(cluster.leader, event.tokens),
+                                score_tokens(cluster.template, event.tokens))
+                    if score:
+                        ranked.append((score, candidate))
+                ranked.sort(key=lambda x: (-x[0], x[1]))
+                minimum = math.ceil(self.config.threshold * 10000)
+                margin = math.ceil(self.config.min_margin * 10000)
+                if ranked and ranked[0][0] >= minimum:
+                    second = ranked[1][0] if len(ranked) > 1 else 0
+                    if ranked[0][0] - second >= margin:
+                        cid = ranked[0][1]
+                    else:
+                        self.stats["ambiguous_events"] += 1
+                self.stats["lookup_ns"] += time.perf_counter_ns() - start
+            if cid is None:
+                if self.config.max_clusters and self.stats["clusters"] >= self.config.max_clusters:
+                    raise ResourceLimit("max_clusters reached")
+                cid = self.stats["clusters"] + 1
+                cluster = Cluster(cid, event.pattern, list(event.tokens), list(event.tokens),
+                                  event.parser, list(event.anchors))
+                self.index.add(event, cid)
+                self.stats["clusters"] += 1
             else:
-                pattern_first_seen[pattern] = datetime.min
+                cluster = self.get(cid)
+                # Baseline templates stay frozen; leaders never change in any mode.
+                if not (phase == "current" and cluster.baseline):
+                    cluster.template = merge_template(cluster.template, event.tokens)
+            sample = None
+            if self.config.sample_mode != "none":
+                sample = record.text if self.config.sample_mode == "raw" else event.pattern
+                sample = sample[:self.config.sample_chars]
+            cluster.observe(event, phase, sample)
+            self.db.execute("INSERT OR REPLACE INTO clusters VALUES (?,?,?)",
+                            (cid, cluster.count, json.dumps(asdict(cluster), ensure_ascii=True,
+                                                           allow_nan=False)))
+            if new_exact:
+                self.db.execute("INSERT INTO exact VALUES (?,?)", (key, cid))
+                self.stats["exact_patterns"] += 1
+            self._remember(key, cid)
+            self.stats["events"] += 1
+            self.stats["event_physical_lines"] += record.physical_lines
+            self.stats["timestamp_missing"] += event.timestamp is None
+            self.phase_events[phase] += 1
+            if self.stats["events"] % 1000 == 0:
+                self.db.commit()
+        self.db.commit()
+        return self
 
-        # last_seen 업데이트
-        if ts is not None:
-            if pattern not in pattern_last_seen:
-                pattern_last_seen[pattern] = ts
-            else:
-                if ts > pattern_last_seen[pattern]:
-                    pattern_last_seen[pattern] = ts
-        elif pattern not in pattern_last_seen:
-            pattern_last_seen[pattern] = datetime.min
+    def summary(self) -> dict:
+        # Verify once per report, not on every mini-batch ingest.
+        total = self.db.execute("SELECT COALESCE(SUM(n),0) FROM clusters").fetchone()[0]
+        if total != self.stats["events"]:
+            raise RuntimeError("count conservation invariant failed")
+        events, count = self.stats["events"], self.stats["clusters"]
+        return {
+            "schema_version": "3.0", "tool_version": __version__,
+            "backend": "stdlib-typed-leader", "storage": "temporary-sqlite",
+            "config_digest": self.config.digest(self.normalizer.rule_specs),
+            "config": asdict(self.config), "original_count": self.stats["physical_lines"],
+            "logical_events": events, "exact_patterns": self.stats["exact_patterns"],
+            "trimmed_count": count, "threshold": self.config.threshold,
+            "compression_ratio": 100 * (1 - count / events) if events else 0.0,
+            "phase_events": dict(self.phase_events), "counts_exact": True,
+            "candidate_search": "bounded-approximate", "input_order_sensitive": True,
+            "elapsed_ns": time.perf_counter_ns() - self.started,
+            "diagnostics": dict(self.stats),
+        }
 
-    # 2. 그룹화
-    patterns_list = list(pattern_counter.keys())
-    groups = _group_patterns_internal(patterns_list, dict(pattern_counter), threshold)
-
-    # 3. 각 그룹에 sample, first_seen, last_seen 주입
-    for group in groups:
-        rep_pattern = group.pattern
-        group.sample = pattern_sample.get(rep_pattern, rep_pattern)
-        group.first_seen = pattern_first_seen.get(rep_pattern, datetime.min)
-        group.last_seen = pattern_last_seen.get(rep_pattern, datetime.min)
-
-    yield from groups
+    def rows(self):
+        for (body,) in self.db.execute("SELECT body FROM clusters ORDER BY n DESC,id"):
+            cluster = Cluster(**json.loads(body))
+            row = asdict(cluster)
+            row.pop("leader")
+            row["representative"] = cluster.pattern
+            row["pattern"] = render_template(cluster.pattern, cluster.template)
+            row["rarity"] = -math.log2(cluster.count / max(1, self.stats["events"]))
+            yield row
 
 
-def group_patterns(
-    pattern_counts: dict[str, int],
-    threshold: float = 0.85,
-) -> Iterator[LogPattern]:
-    """정규화된 패턴들의 카운터로부터 그룹화합니다.
-
-    Args:
-        pattern_counts: 패턴별 카운터 딕셔너리
-        threshold: 유사도 임계값 (기본 0.85)
-
-    Yields:
-        LogPattern 인스턴스 (count 내림차순)
-    """
-    patterns = list(pattern_counts.keys())
-    groups = _group_patterns_internal(patterns, pattern_counts, threshold)
-
-    for group in groups:
-        # sample은 대표 패턴 자체, timestamp는 기본값
-        group.sample = group.pattern
-        yield group
+def group_logs(lines, threshold: float = 0.85):
+    """Compatibility iterator; aggregation finishes before the first result."""
+    with Analyzer(Config(threshold=threshold)) as analyzer:
+        analyzer.ingest(lines)
+        for row in analyzer.rows():
+            yield LogPattern(row["pattern"], row["count"], row["sample"],
+                             datetime.fromisoformat(row["first_seen"]) if row["first_seen"] else None,
+                             datetime.fromisoformat(row["last_seen"]) if row["last_seen"] else None)

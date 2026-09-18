@@ -1,23 +1,17 @@
 [build-system]
-requires = ["setuptools>=45"]
+requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "logtrim"
-version = "0.2.0"
-description = "Log Trimmer CLI — 시스템 로그 패턴 기반 유사도 트리밍 도구"
+version = "3.0.0"
+description = "Zero-runtime-dependency, bounded-state log pattern analyzer"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
 dependencies = []
-
-[project.optional-dependencies]
-fast = ["rapidfuzz>=3.0.0"]
-test = ["pytest>=7.0.0"]
 
 [project.scripts]
 logtrim = "logtrim.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["logtrim*"]
-exclude = ["tests*", "test_data*"]

@@ -1,169 +1,154 @@
-"""CLI 오케스트레이션 모듈.
-
-argparse 기반 CLI 진입점, 인자 파싱, 메인 로직 흐름 orchestration.
-
-Flow: read → extract_pattern → group → format → write
-"""
-
+"""Command-line entry points."""
 from __future__ import annotations
 
 import argparse
+import itertools
+import json
+import math
+import os
+import sqlite3
 import sys
-from typing import Iterator
+from dataclasses import asdict
 
-from logtrim.grouping import group_logs
-from logtrim.io_utils import iter_lines, write_output
-from logtrim.report import format_output
-
-
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """CLI 인자를 파싱합니다.
-
-    Args:
-        argv: 명령줄 인자 리스트. None이면 sys.argv[1:] 사용.
-
-    Returns:
-        파싱된 argparse.Namespace 객체.
-
-    Raises:
-        ValueError: threshold가 0.80~0.90 범위를 벗어나면.
-    """
-    parser = argparse.ArgumentParser(
-        prog="logtrim",
-        description="로그 줄을 패턴화하고 중복을 압축합니다.",
-    )
-    parser.add_argument(
-        "input",
-        nargs="?",
-        default="-",
-        help="입력 파일 경로 또는 '-' (stdin, 기본값: '-')",
-    )
-    parser.add_argument(
-        "output",
-        nargs="?",
-        default="-",
-        help="출력 파일 경로 또는 '-' (stdout, 기본값: '-')",
-    )
-    parser.add_argument(
-        "--threshold",
-        type=float,
-        default=0.85,
-        help="유사도 임계값 (0.80~0.90, 기본값: 0.85)",
-    )
-    parser.add_argument(
-        "--format",
-        choices=["text", "json"],
-        default="text",
-        help="출력 포맷 ('text' 또는 'json', 기본값: 'text')",
-    )
-
-    args = parser.parse_args(argv)
-
-    if args.threshold < 0.80 or args.threshold > 0.90:
-        raise ValueError(
-            f"Invalid threshold: {args.threshold} (must be 0.80-0.90)"
-        )
-
-    return args
+from . import __version__
+from .grouping import Analyzer
+from .io_utils import ensure_distinct, iter_lines, write_output
+from .models import Config, ResourceLimit
+from .patterns import Normalizer
+from .report import diff_rows, render
 
 
-def run(
-    input_path: str,
-    output_path: str,
-    threshold: float = 0.85,
-    fmt: str = "text",
-) -> int:
-    """메인 로직: read → extract_pattern → group → format → write.
+def load_rules(path):
+    if not path:
+        return []
+    with open(path, "rb") as source:
+        content = source.read(65537)
+    if len(content) > 65536:
+        raise ValueError("rules file exceeds 64 KiB")
+    data = json.loads(content)
+    if not isinstance(data, dict) or set(data) != {"version", "rules"} or data["version"] != 1:
+        raise ValueError("rules file must contain version=1 and rules")
+    if not isinstance(data["rules"], list):
+        raise ValueError("rules must be a list")
+    return data["rules"]
 
-    Args:
-        input_path: 입력 파일 경로 또는 "-" (stdin).
-        output_path: 출력 파일 경로 또는 "-" (stdout).
-        threshold: 유사도 임계값 (0.80~0.90).
-        fmt: 출력 포맷 ("text" 또는 "json").
 
-    Returns:
-        종료 코드 (0=성공, 1=에러).
+def parse_args(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if not argv or argv[0] not in {"analyze", "diff", "explain", "-h", "--help", "--version"}:
+        argv.insert(0, "analyze")
+    parser = argparse.ArgumentParser(prog="logtrim")
+    parser.add_argument("--version", action="version", version=__version__)
+    sub = parser.add_subparsers(dest="command", required=True)
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--threshold", type=float, default=0.85)
+    common.add_argument("--min-margin", type=float, default=0.02)
+    common.add_argument("--max-candidates", type=int, default=64)
+    common.add_argument("--max-event-bytes", type=int, default=65536)
+    common.add_argument("--max-event-lines", type=int, default=256)
+    common.add_argument("--max-tokens", type=int, default=2048)
+    common.add_argument("--max-clusters", type=int, default=0)
+    common.add_argument("--max-input-bytes", type=int, default=0)
+    common.add_argument("--cache-size", type=int, default=256)
+    common.add_argument("--sqlite-cache-kib", type=int, default=8192)
+    common.add_argument("--depth", type=int, default=4)
+    common.add_argument("--multiline", choices=["auto", "off"], default="auto")
+    common.add_argument("--sample-mode", choices=["none", "redacted", "raw"], default="none")
+    common.add_argument("--syslog-year", type=int)
+    common.add_argument("--timezone-minutes", type=int, default=0)
+    common.add_argument("--rules")
+    common.add_argument("--work-dir", help="directory for private temporary SQLite state")
+    common.add_argument("--encoding", default="utf-8")
+    common.add_argument("--decode-errors", choices=["strict", "replace"], default="strict")
+    common.add_argument("--format", choices=["text", "json", "jsonl", "markdown", "html"], default="text")
+    common.add_argument("--top", type=int, default=0)
+    common.add_argument("--debug", action="store_true")
+    analyze = sub.add_parser("analyze", parents=[common])
+    analyze.add_argument("input", nargs="?", default="-")
+    analyze.add_argument("output", nargs="?", default="-")
+    analyze.add_argument("--rare-max-count", type=int, default=0)
+    diff = sub.add_parser("diff", parents=[common])
+    diff.add_argument("baseline")
+    diff.add_argument("current")
+    diff.add_argument("-o", "--output", default="-")
+    diff.add_argument("--min-ratio", type=float, default=2.0)
+    diff.add_argument("--changes-only", action="store_true")
+    explain = sub.add_parser("explain", parents=[common])
+    explain.add_argument("--line", required=True)
+    return parser.parse_args(argv)
 
-    Raises:
-        FileNotFoundError: 입력 파일을 찾을 수 없으면.
-        PermissionError: 파일에 접근 권한이 없으면.
-        ValueError: threshold가 유효하지 않으면.
-    """
-    # threshold 검증
-    if threshold < 0.80 or threshold > 0.90:
-        raise ValueError(
-            f"Invalid threshold: {threshold} (must be 0.80-0.90)"
-        )
 
-    # 1. 입력 라인 읽기
-    raw_lines = list(iter_lines(input_path))
-    original_count = len(raw_lines)
-
-    # 2. 패턴 추출 및 그룹화 (group_logs 내부에서 extract_pattern 호출)
-    groups = list(group_logs(iter(raw_lines), threshold=threshold))
-
-    # 3. 요약 메타데이터 계산
-    trimmed_count = len(groups)
-    if original_count == 0:
-        compression_ratio = 0.0
-    else:
-        compression_ratio = (1 - trimmed_count / original_count) * 100
-
-    summary = {
-        "original_count": original_count,
-        "trimmed_count": trimmed_count,
-        "compression_ratio": compression_ratio,
-        "threshold": threshold,
-    }
-
-    # 4. LogPattern → dict 변환 (datetime → ISO string for JSON compatibility)
-    patterns = []
-    for g in groups:
-        patterns.append({
-            "pattern": g.pattern,
-            "count": g.count,
-            "sample": g.sample,
-            "first_seen": g.first_seen.isoformat() if g.first_seen else None,
-            "last_seen": g.last_seen.isoformat() if g.last_seen else None,
-        })
-
-    # 5. 출력 포맷팅
-    output = format_output(summary, patterns, fmt=fmt)
-
-    # 6. 출력 쓰기
-    write_output(iter([output]), output_path)
-
+def execute(args):
+    names = ("threshold", "min_margin", "max_candidates", "max_event_bytes", "max_event_lines",
+             "max_tokens", "max_clusters", "max_input_bytes", "cache_size", "sqlite_cache_kib",
+             "depth", "sample_mode", "syslog_year", "timezone_minutes")
+    config = Config(**{key: getattr(args, key) for key in names},
+                    multiline=args.multiline == "auto")
+    rules = load_rules(args.rules)
+    if args.top < 0 or getattr(args, "rare_max_count", 0) < 0:
+        raise ValueError("report limits must be nonnegative")
+    if args.command == "explain":
+        normalizer = Normalizer(config, rules)
+        event = asdict(normalizer.normalize(args.line))
+        if event["timestamp"] is not None:
+            event["timestamp"] = event["timestamp"].isoformat()
+        event["diagnostics"] = dict(normalizer.stats)
+        write_output([json.dumps(event, ensure_ascii=True, allow_nan=False) + "\n"], "-")
+        return 0
+    inputs = [args.input] if args.command == "analyze" else [args.baseline, args.current]
+    if inputs.count("-") > 1:
+        raise ValueError("stdin can be used for only one diff input")
+    if args.command == "diff" and (not math.isfinite(args.min_ratio) or args.min_ratio <= 1):
+        raise ValueError("min_ratio must be finite and greater than one")
+    ensure_distinct(inputs, args.output)
+    with Analyzer(config, rules, args.work_dir) as analyzer:
+        phases = ["main"] if args.command == "analyze" else ["baseline", "current"]
+        for path, phase in zip(inputs, phases):
+            lines = iter_lines(path, config, analyzer.stats, args.encoding, args.decode_errors)
+            try:
+                analyzer.ingest(lines, phase)
+            finally:
+                lines.close()
+        rows = analyzer.rows() if args.command == "analyze" else diff_rows(analyzer, args.min_ratio)
+        if args.command == "analyze" and args.rare_max_count:
+            rows = (row for row in rows if row["count"] <= args.rare_max_count)
+        if args.command == "diff" and args.changes_only:
+            rows = (row for row in rows if row["change"] != "STABLE")
+        if args.top:
+            rows = itertools.islice(rows, args.top)
+        summary = analyzer.summary()
+        summary["report_filter"] = {"top": args.top,
+                                    "rare_max_count": getattr(args, "rare_max_count", 0),
+                                    "changes_only": getattr(args, "changes_only", False)}
+        write_output(render(summary, rows, args.format), args.output)
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
-    """CLI 진입점.
+def run(input_path: str, output_path: str = "-", threshold: float = 0.85,
+        fmt: str = "text") -> int:
+    return execute(parse_args(["analyze", input_path, output_path,
+                               "--threshold", str(threshold), "--format", fmt]))
 
-    인자 파싱 → run 실행 → 결과 반환. 모든 예외를 캐치하여
-    exit code 1로 처리합니다.
 
-    Args:
-        argv: 명령줄 인자 리스트. None이면 sys.argv[1:] 사용.
-
-    Returns:
-        종료 코드 (0=성공, 1=에러).
-    """
+def main(argv=None):
+    args = parse_args(argv)
     try:
-        args = parse_args(argv)
-        return run(args.input, args.output, args.threshold, args.format)
-    except FileNotFoundError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
-    except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
-    except PermissionError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+        return execute(args)
+    except KeyboardInterrupt:
+        print("logtrim: interrupted", file=sys.stderr)
+        return 130
+    except BrokenPipeError:
+        # Prevent a second BrokenPipeError during interpreter shutdown.
+        try:
+            with open(os.devnull, "w") as sink:
+                os.dup2(sink.fileno(), sys.stdout.fileno())
+        except (OSError, ValueError):
+            pass
+        return 0
+    except (ResourceLimit, ValueError, OSError, UnicodeError, sqlite3.Error, LookupError) as exc:
+        if args.debug:
+            raise
+        code = (3 if isinstance(exc, ResourceLimit) else 1 if isinstance(exc, UnicodeError)
+                else 2 if isinstance(exc, ValueError) else 1)
+        print(f"logtrim: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return code
