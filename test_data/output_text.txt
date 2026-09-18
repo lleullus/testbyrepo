@@ -1,0 +1,564 @@
+# Log Trimmer Output
+# input_lines=8145
+# exact_patterns=8145
+# grouped_patterns=556
+# compression_ratio=93.17372621240024%
+# threshold=0.85
+
+COUNT    PATTERN
+300    [<TIMESTAMP>] Namespace: default
+300    [<TIMESTAMP>] Restart Count: <NUMBER>
+300    [<TIMESTAMP>] Environment: <none>
+300    [<TIMESTAMP>] Limits: cpu=<NUMBER> memory=256Mi
+300    [<TIMESTAMP>] Labels: app=web pod-template-hash=<NUMBER>
+300    [<TIMESTAMP>] Start Time: <TIMESTAMP>
+300    [<TIMESTAMP>] Requests: cpu=50m memory=64Mi
+300    [<TIMESTAMP>] Container ID: containerd:<PATH>
+300    [<TIMESTAMP>] Name: default<PATH>
+300    [<TIMESTAMP>] MAC: <MAC>
+300    [<TIMESTAMP>] Node: <DOMAIN><PATH>
+300    [<TIMESTAMP>] IP: <IPV4>
+300    [<TIMESTAMP>] IPs: IP: <IPV4>
+300    [<TIMESTAMP>] Ready: True
+208    [<TIMESTAMP>] State: Waiting
+193    [<TIMESTAMP>] Mounts: <PATH> from kube-<IDENT>ss-<NUMBER> (ro)
+145    [<TIMESTAMP>] Started: <TIMESTAMP>
+139    [<TIMESTAMP>] default<PATH> <NUMBER><PATH> Completed <NUMBER> 20m
+132    [<TIMESTAMP>] AUDIT: delete <PATH> from <IPV4> user=user@<DOMAIN> result=internal-error
+119    [<TIMESTAMP>] monitoring<PATH> <NUMBER><PATH> Completed <NUMBER> 72m
+108    [<TIMESTAMP>] app<PATH> <NUMBER><PATH> Running <NUMBER> 159d14h
+107    [<TIMESTAMP>] Mounts: <PATH> from kube-<IDENT>ss-e (ro)
+103    [<TIMESTAMP>] kube-system<PATH> <NUMBER><PATH> Completed <NUMBER> 8m
+ 92    [<TIMESTAMP>] State: Terminated
+ 72    [<TIMESTAMP>] AUDIT: user=user@<DOMAIN> verb=list resource=pods<PATH> namespace=monitoring src=<IPV4> responseCode=<NUMBER>
+ 69    [<TIMESTAMP>] AUDIT: user=user@<DOMAIN> verb=list resource=secrets namespace=default src=<IPV4> responseCode=<NUMBER>
+ 56    [<TIMESTAMP>] <DOMAIN> kubelet[<NUMBER>]: W0424 <NUMBER> <DOMAIN>:<NUMBER> Node created
+ 54    [<TIMESTAMP>] <DOMAIN> systemd-logind[<NUMBER>]: New session <NUMBER> of user root
+ 52    [<TIMESTAMP>] <DOMAIN> docker[<NUMBER>]: time="<TIMESTAMP>" level=warn msg="Image pulled" container=<UUID>
+ 45    [<TIMESTAMP>] <DOMAIN> rsyslogd[<NUMBER>]: action resumed (module=imuxsock)
+ 41    [<TIMESTAMP>] <DOMAIN> CRON[<NUMBER>]: (admin) CMD (<PATH>
+ 41    [<TIMESTAMP>] <DOMAIN> kernel: [<NUMBER>.<NUMBER>] memory sda: info ext4
+ 40    [<TIMESTAMP>] <DOMAIN> systemd[<NUMBER>]: Stopped <DOMAIN>.
+ 38    [<TIMESTAMP>] <DOMAIN> containerd[<NUMBER>]: time="<TIMESTAMP>" level=warn msg="Starting containerd" address=<IPV4>:<NUMBER>
+ 36    [<TIMESTAMP>] <DOMAIN> NetworkManager[<NUMBER>]: <warn device disconnected (eth1: connected)
+ 34    [<TIMESTAMP>] AUDIT: update <PATH> from <IPV4> user=system:admin result=success
+ 33    [<TIMESTAMP>] <DOMAIN> sshd[<NUMBER>]: Disconnected password for admin from <IPV4> port <NUMBER> ssh2
+ 31    [<TIMESTAMP>] app<PATH> <NUMBER><PATH> Pending <NUMBER> 68m
+ 28    [<TIMESTAMP>] AUDIT: patch <PATH> from <IPV4> user=system:serviceaccount:kube-system:controller-manager result=forbidden
+ 28    [<TIMESTAMP>] [FATAL] [default<PATH> Cache miss for key=<UUID>
+ 27    [<TIMESTAMP>] AUDIT: user=system:serviceaccount:kube-system:controller-manager verb=delete resource=pods namespace= src=<IPV4> responseCode=<NUMBER>
+ 25    [<TIMESTAMP>] <DOMAIN> systemd[<NUMBER>]: Stopping <DOMAIN>.
+ 21    [<TIMESTAMP>] AUDIT: update <PATH> from <IPV4> user=system:serviceaccount:kube-system:controller-manager result=success
+ 20    [<TIMESTAMP>] <HEX> <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+ 19    [<TIMESTAMP>] [DEBUG] [default<PATH> Cache hit for key=<UUID>
+ 19    [<TIMESTAMP>] INFO applied: applied index <NUMBER> 299ms
+ 19    [<TIMESTAMP>] WARN committed: committed index <NUMBER> 72ms
+ 19    [<TIMESTAMP>] <HEX> <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container sidecar)
+ 18    [<TIMESTAMP>] <HEX> <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+ 18    [<TIMESTAMP>] INFO rejected: rejected Raft message from <UUID>
+ 18    [<TIMESTAMP>] <HEX> <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+ 17    [<TIMESTAMP>] INFO snapshot: saved snapshot log index <NUMBER>
+ 17    [<TIMESTAMP>] <HEX> <NUMBER> <DOMAIN>:<NUMBER>] Started container logger in pod default<PATH> with ID <UUID>
+ 17    [<TIMESTAMP>] INFO committed: committed index <NUMBER> 7ms
+ 17    [<TIMESTAMP>] AUDIT: user=system:serviceaccount:kube-system:controller-manager verb=create resource=deployments namespace=kube-system src=<IPV4> responseCode=<NUMBER>
+ 17    [<TIMESTAMP>] WARN applied: applied index <NUMBER> 813ms
+ 16    [<TIMESTAMP>] INFO peer <IPV4>:<NUMBER> is healthy
+ 16    [<TIMESTAMP>] WARN slow request: took 1817ms but wanted 92ms
+ 16    [<TIMESTAMP>] [INFO] [default<PATH> Cache hit for key=<UUID>
+ 16    [<TIMESTAMP>] WARN rejected: rejected Raft message from <UUID>
+ 16    [<TIMESTAMP>] WARN compact: compacted revision <NUMBER> takes 563ms
+ 15    [<TIMESTAMP>] WARN new leader: elected <UUID> term <NUMBER>
+ 15    [<TIMESTAMP>] <DOMAIN> rsyslogd[<NUMBER>]: omfwd: TCP connect failed (module=omfile)
+ 15    [<TIMESTAMP>] [DEBUG] [default<PATH> Failed to connect to <IPV4>:<NUMBER> - timeout after 7s
+ 15    [<TIMESTAMP>] WARN peer <IPV4>:<NUMBER> is healthy
+ 15    [<TIMESTAMP>] [INFO] [default<PATH> Retrying request to <IPV4> (attempt <NUMBER><PATH>
+ 15    [<TIMESTAMP>] WARN leader changed: <UUID> -> <UUID>
+ 14    [<TIMESTAMP>] [FATAL] [default<PATH> GC pause: 172ms
+ 14    [<TIMESTAMP>] INFO compact: compacted revision <NUMBER> takes 2973ms
+ 14    [<TIMESTAMP>] <HEX> <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+ 13    [<TIMESTAMP>] [DEBUG] [default<PATH> Connection to <IPV4>:<NUMBER> established
+ 13    [<TIMESTAMP>] WARN publish: local member <UUID> published
+ 13    [<TIMESTAMP>] INFO new leader: elected <UUID> term <NUMBER>
+ 13    [<TIMESTAMP>] [FATAL] [default<PATH> Pod default<PATH> started on node <DOMAIN>
+ 13    [<TIMESTAMP>] INFO publish: local member <UUID> published
+ 13    [<TIMESTAMP>] <HEX> <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+ 12    [<TIMESTAMP>] [INFO] [default<PATH> TLS handshake failed with <IPV4>: certificate expired
+ 12    [<TIMESTAMP>] [INFO] [default<PATH> Connection to <IPV4>:<NUMBER> established
+ 12    [<TIMESTAMP>] [ERROR] [default<PATH> Health check failed: connection refused to <IPV4>
+ 12    [<TIMESTAMP>] [DEBUG] [default<PATH> Readiness probe failed: connection refused to <IPV4>:<NUMBER>
+ 12    [<TIMESTAMP>] [INFO] [default<PATH> GC pause: 173ms
+ 12    [<TIMESTAMP>] [FATAL] [default<PATH> TLS handshake failed with <IPV4>: certificate expired
+ 12    [<TIMESTAMP>] [ERROR] [default<PATH> Connection to <IPV4>:<NUMBER> established
+ 12    [<TIMESTAMP>] [ERROR] [default<PATH> Pod default<PATH> terminated: exit code <NUMBER>
+ 12    [<TIMESTAMP>] [WARN] [default<PATH> Cache hit for key=<UUID>
+ 12    [<TIMESTAMP>] [ERROR] [default<PATH> Container init pulling image postgres:latest
+ 11    [<TIMESTAMP>] <HEX> <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+ 11    [<TIMESTAMP>] [ERROR] [default<PATH> Health check passed (latency=68ms)
+ 11    [<TIMESTAMP>] [INFO] [default<PATH> Received signal SIGTERM
+ 11    [<TIMESTAMP>] <DOMAIN> sshd[<NUMBER>]: Failed password for ec2-user from <IPV4> port <NUMBER> ssh2
+ 11    [<TIMESTAMP>] [ERROR] [default<PATH> Cache hit for key=<UUID>
+ 11    [<TIMESTAMP>] [INFO] [default<PATH> Pulling image "<DOMAIN><PATH>
+ 11    [<TIMESTAMP>] [ERROR] [default<PATH> Container logger started successfully
+ 11    [<TIMESTAMP>] [FATAL] [default<PATH> Memory usage: <NUMBER>% (2260MB / 6944MB)
+ 11    [<TIMESTAMP>] <HEX> <NUMBER> <DOMAIN>:<NUMBER>] Container sidecar in pod default<PATH> is Ready
+ 10    [<TIMESTAMP>] [INFO] [default<PATH> OOMKilled: container main exceeded memory limit 512Mi
+ 10    [<TIMESTAMP>] [INFO] [default<PATH> Request processed in 2356ms
+ 10    [<TIMESTAMP>] [DEBUG] [default<PATH> OOMKilled: container init exceeded memory limit 256Mi
+ 10    [<TIMESTAMP>] [FATAL] [default<PATH> Connection to <IPV4>:<NUMBER> established
+ 10    [<TIMESTAMP>] [DEBUG] [default<PATH> GC pause: 305ms
+ 10    [<TIMESTAMP>] [FATAL] [default<PATH> Failed to connect to <IPV4>:<NUMBER> - timeout after 6s
+ 10    [<TIMESTAMP>] [ERROR] [default<PATH> Database query took 5539ms on <IPV4>:<NUMBER>
+ 10    [<TIMESTAMP>] INFO slow request: took 3431ms but wanted 69ms
+ 10    [<TIMESTAMP>] <DOMAIN> containerd[<NUMBER>]: time="<TIMESTAMP>" level=info msg="Loading plugin" address=<IPV4>:<NUMBER>
+ 10    [<TIMESTAMP>] [ERROR] [default<PATH> Request processed in 3272ms
+ 10    [<TIMESTAMP>] [DEBUG] [default<PATH> Liveness probe failed: HTTP probe failed with statuscode: <NUMBER>
+ 10    [<TIMESTAMP>] [WARN] [default<PATH> OOMKilled: container proxy exceeded memory limit 512Mi
+ 10    [<TIMESTAMP>] [INFO] [default<PATH> Failed to connect to <IPV4>:<NUMBER> - timeout after 7s
+ 10    [<TIMESTAMP>] [DEBUG] [default<PATH> Request processed in 4224ms
+ 10    [<TIMESTAMP>] [ERROR] [default<PATH> OOMKilled: container proxy exceeded memory limit 512Mi
+ 10    [<TIMESTAMP>] [WARN] [default<PATH> Connection to <IPV4>:<NUMBER> established
+  9    [<TIMESTAMP>] [DEBUG] [default<PATH> Container main pulling image redis:<NUMBER>.<NUMBER>
+  9    [<TIMESTAMP>] [FATAL] [default<PATH> Pulling image "<DOMAIN><PATH>
+  9    [<TIMESTAMP>] [FATAL] [default<PATH> Container init started successfully
+  9    [<TIMESTAMP>] [WARN] [default<PATH> Request processed in 2282ms
+  9    [<TIMESTAMP>] [ERROR] [default<PATH> GC pause: 318ms
+  9    [<TIMESTAMP>] [INFO] [default<PATH> Container logger pulling image nginx:<NUMBER>.<NUMBER>
+  9    [<TIMESTAMP>] [DEBUG] [default<PATH> Pod default<PATH> started on node <DOMAIN>
+  9    [<TIMESTAMP>] INFO leader changed: <UUID> -> <UUID>
+  9    [<TIMESTAMP>] [WARN] [default<PATH> Readiness probe failed: connection refused to <IPV4>:<NUMBER>
+  9    [<TIMESTAMP>] [ERROR] [default<PATH> Memory usage: <NUMBER>% (1249MB / 7902MB)
+  9    [<TIMESTAMP>] [FATAL] [default<PATH> Health check passed (latency=12ms)
+  9    [<TIMESTAMP>] [ERROR] [default<PATH> DNS resolution failed for <DOMAIN>
+  8    [<TIMESTAMP>] [DEBUG] [default<PATH> Pulling image "<DOMAIN><PATH>
+  8    [<TIMESTAMP>] [DEBUG] [default<PATH> Received signal SIGINT
+  8    [<TIMESTAMP>] [FATAL] [default<PATH> Container logger created with ID <UUID>
+  8    [<TIMESTAMP>] [WARN] [default<PATH> Received signal SIGINT
+  8    [<TIMESTAMP>] [FATAL] [default<PATH> Thread pool exhausted: active=<NUMBER> max=<NUMBER>
+  8    [<TIMESTAMP>] [WARN] [default<PATH> Container logger pulling image python:<NUMBER>.<NUMBER>
+  8    [<TIMESTAMP>] [ERROR] [default<PATH> TLS handshake failed with <IPV4>: certificate expired
+  8    [<TIMESTAMP>] [FATAL] [default<PATH> Liveness probe failed: HTTP probe failed with statuscode: <NUMBER>
+  8    [<TIMESTAMP>] [INFO] [default<PATH> Container logger created with ID <UUID>
+  8    [<TIMESTAMP>] WARN snapshot: saved snapshot log index <NUMBER>
+  8    [<TIMESTAMP>] <HEX> <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "nginx:<NUMBER>.<NUMBER>": rpc error: code = Unknown desc = failed to pull and unpack image
+  8    [<TIMESTAMP>] [FATAL] [default<PATH> Retrying request to <IPV4> (attempt <NUMBER><PATH>
+  7    [<TIMESTAMP>] [ERROR] [default<PATH> Liveness probe failed: HTTP probe failed with statuscode: <NUMBER>
+  7    [<TIMESTAMP>] [ERROR] [default<PATH> Successfully pulled image "nginx:<NUMBER>.<NUMBER>"
+  7    [<TIMESTAMP>] [ERROR] [default<PATH> Failed to connect to <IPV4>:<NUMBER> - timeout after 23s
+  7    [<TIMESTAMP>] [WARN] [default<PATH> Liveness probe failed: HTTP probe failed with statuscode: <NUMBER>
+  7    [<TIMESTAMP>] [WARN] [default<PATH> Failed to connect to <IPV4>:<NUMBER> - timeout after 3s
+  7    [<TIMESTAMP>] [WARN] [default<PATH> Pulling image "<DOMAIN><PATH>
+  7    [<TIMESTAMP>] [WARN] [default<PATH> Database query took 9006ms on <IPV4>:<NUMBER>
+  7    [<TIMESTAMP>] [FATAL] [default<PATH> Health check failed: connection refused to <IPV4>
+  7    [<TIMESTAMP>] [FATAL] [default<PATH> Request processed in 2587ms
+  7    [<TIMESTAMP>] [WARN] [default<PATH> DNS resolution failed for <DOMAIN>
+  7    [<TIMESTAMP>] [INFO] [default<PATH> Health check passed (latency=87ms)
+  7    [<TIMESTAMP>] [ERROR] [default<PATH> Thread pool exhausted: active=<NUMBER> max=<NUMBER>
+  7    [<TIMESTAMP>] [DEBUG] [default<PATH> Health check failed: connection refused to <IPV4>
+  7    [<TIMESTAMP>] [FATAL] [default<PATH> Successfully pulled image "nginx:latest"
+  7    [<TIMESTAMP>] [FATAL] [default<PATH> Database query took 5343ms on <IPV4>:<NUMBER>
+  7    [<TIMESTAMP>] [DEBUG] [default<PATH> Container proxy created with ID <UUID>
+  7    [<TIMESTAMP>] [WARN] [default<PATH> Pod default<PATH> terminated: exit code <NUMBER>
+  7    [<TIMESTAMP>] [DEBUG] [default<PATH> Thread pool exhausted: active=<NUMBER> max=<NUMBER>
+  7    [<TIMESTAMP>] [INFO] [default<PATH> Health check failed: connection refused to <IPV4>
+  7    [<TIMESTAMP>] [INFO] [default<PATH> Pod default<PATH> terminated: exit code <NUMBER>
+  7    [<TIMESTAMP>] [FATAL] [default<PATH> OOMKilled: container sidecar exceeded memory limit 1Gi
+  7    [<TIMESTAMP>] [DEBUG] [default<PATH> Memory usage: <NUMBER>% (131MB / 3716MB)
+  6    [<TIMESTAMP>] [WARN] [default<PATH> Thread pool exhausted: active=<NUMBER> max=<NUMBER>
+  6    [<TIMESTAMP>] [WARN] [default<PATH> Health check passed (latency=20ms)
+  6    [<TIMESTAMP>] [WARN] [default<PATH> Health check failed: connection refused to <IPV4>
+  6    [<TIMESTAMP>] [FATAL] [default<PATH> Pod default<PATH> terminated: exit code <NUMBER>
+  6    [<TIMESTAMP>] [DEBUG] [default<PATH> DNS resolution failed for <DOMAIN>
+  6    [<TIMESTAMP>] [DEBUG] [default<PATH> Pod default<PATH> terminated: exit code <NUMBER>
+  6    [<TIMESTAMP>] [FATAL] [default<PATH> DNS resolution failed for <DOMAIN>
+  6    [<TIMESTAMP>] [WARN] [default<PATH> Memory usage: <NUMBER>% (3789MB / 7306MB)
+  6    [<TIMESTAMP>] [ERROR] [default<PATH> Pod default<PATH> started on node <DOMAIN>
+  6    [<TIMESTAMP>] <HEX> <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "redis:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  6    [<TIMESTAMP>] [FATAL] [default<PATH> Readiness probe failed: connection refused to <IPV4>:<NUMBER>
+  5    [<TIMESTAMP>] [DEBUG] [default<PATH> Database query took 3423ms on <IPV4>:<NUMBER>
+  5    [<TIMESTAMP>] [DEBUG] [default<PATH> Retrying request to <IPV4> (attempt <NUMBER><PATH>
+  5    [<TIMESTAMP>] [INFO] [default<PATH> Successfully pulled image "nginx:<NUMBER>.<NUMBER>"
+  5    [<TIMESTAMP>] [WARN] [default<PATH> Successfully pulled image "nginx:<NUMBER>.<NUMBER>"
+  5    [<TIMESTAMP>] [ERROR] [default<PATH> Pulling image "<DOMAIN><PATH>
+  5    [<TIMESTAMP>] [DEBUG] [default<PATH> TLS handshake failed with <IPV4>: certificate expired
+  5    [<TIMESTAMP>] [ERROR] [default<PATH> Retrying request to <IPV4> (attempt <NUMBER><PATH>
+  5    [<TIMESTAMP>] [WARN] [default<PATH> Pod default<PATH> started on node <DOMAIN>
+  5    [<TIMESTAMP>] [DEBUG] [default<PATH> Health check passed (latency=29ms)
+  5    [<TIMESTAMP>] [ERROR] [default<PATH> Received signal SIGINT
+  5    [<TIMESTAMP>] [ERROR] [default<PATH> Container proxy created with ID <UUID>
+  5    [<TIMESTAMP>] [INFO] [default<PATH> Memory usage: <NUMBER>% (1490MB / 7597MB)
+  5    [<TIMESTAMP>] [FATAL] [default<PATH> Container init pulling image postgres:<NUMBER>-alpine
+  5    [<TIMESTAMP>] [WARN] [default<PATH> Container sidecar created with ID <UUID>
+  5    [<TIMESTAMP>] [INFO] [default<PATH> Successfully pulled image "redis:latest"
+  4    [<TIMESTAMP>] [INFO] [default<PATH> Liveness probe failed: HTTP probe failed with statuscode: <NUMBER>
+  4    [<TIMESTAMP>] [FATAL] [default<PATH> Received signal SIGINT
+  4    [<TIMESTAMP>] [INFO] [default<PATH> Pod default<PATH> started on node <DOMAIN>
+  4    [<TIMESTAMP>] [WARN] [default<PATH> GC pause: 411ms
+  4    [<TIMESTAMP>] [WARN] [default<PATH> Container init started successfully
+  4    [<TIMESTAMP>] [INFO] [default<PATH> DNS resolution failed for <DOMAIN>
+  4    [<TIMESTAMP>] [WARN] [default<PATH> TLS handshake failed with <IPV4>: certificate expired
+  4    [<TIMESTAMP>] [FATAL] [default<PATH> Received signal SIGTERM
+  4    [<TIMESTAMP>] [FATAL] [default<PATH> Successfully pulled image "postgres:latest"
+  4    [<TIMESTAMP>] [ERROR] [default<PATH> Readiness probe failed: connection refused to <IPV4>:<NUMBER>
+  3    [<TIMESTAMP>] [WARN] [default<PATH> Retrying request to <IPV4> (attempt <NUMBER><PATH>
+  3    [<TIMESTAMP>] [ERROR] [default<PATH> Successfully pulled image "nginx:latest"
+  3    [<TIMESTAMP>] [ERROR] [default<PATH> Received signal SIGTERM
+  3    [<TIMESTAMP>] [INFO] [default<PATH> Container proxy started successfully
+  3    [<TIMESTAMP>] [DEBUG] [default<PATH> Successfully pulled image "redis:latest"
+  3    [<TIMESTAMP>] [INFO] [default<PATH> Readiness probe failed: connection refused to <IPV4>:<NUMBER>
+  2    [<TIMESTAMP>] [INFO] [default<PATH> Thread pool exhausted: active=<NUMBER> max=<NUMBER>
+  2    [<TIMESTAMP>] I9040424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container logger)
+  2    [<TIMESTAMP>] [DEBUG] [default<PATH> Container logger started successfully
+  2    [<TIMESTAMP>] INFO slow request: took 640ms but wanted 59ms
+  2    [<TIMESTAMP>] <DOMAIN> sshd[<NUMBER>]: Connection closed keyboard-interactive for ec2-user from <IPV4> port <NUMBER> ssh2
+  2    [<TIMESTAMP>] WARN slow request: took 500ms but wanted 62ms
+  2    [<TIMESTAMP>] [WARN] [default<PATH> Successfully pulled image "redis:latest"
+  2    [<TIMESTAMP>] [DEBUG] [default<PATH> Received signal SIGTERM
+  2    [<TIMESTAMP>] [INFO] [default<PATH> Database query took 9096ms on <IPV4>:<NUMBER>
+  2    [<TIMESTAMP>] W1190424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I5070424 <NUMBER> <DOMAIN>:<NUMBER>] Container proxy in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W2780424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "postgres:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] W8840424 <NUMBER> <DOMAIN>:<NUMBER>] Started container init in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I7890424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] W9210424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] W1500424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "redis:<NUMBER>.<NUMBER>": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] I5490424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I7630424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I6110424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I5440424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container logger)
+  1    [<TIMESTAMP>] W5690424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I9950424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I5570424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I4280424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I6270424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I2660424 <NUMBER> <DOMAIN>:<NUMBER>] Container init in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W2200424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W7740424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I2040424 <NUMBER> <DOMAIN>:<NUMBER>] Container sidecar in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W8560424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I5040424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] W2860424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container init)
+  1    [<TIMESTAMP>] W3540424 <NUMBER> <DOMAIN>:<NUMBER>] Container init in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I2700424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W8280424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] W4680424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container proxy)
+  1    [<TIMESTAMP>] I3790424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I3850424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I4280424 <NUMBER> <DOMAIN>:<NUMBER>] Container sidecar in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W4080424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W2300424 <NUMBER> <DOMAIN>:<NUMBER>] Started container sidecar in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I3810424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] W7400424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I7050424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I3650424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I2710424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I6470424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W2070424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container init)
+  1    [<TIMESTAMP>] I9900424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W9460424 <NUMBER> <DOMAIN>:<NUMBER>] Container logger in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I2040424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W9090424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "nginx:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] I5460424 <NUMBER> <DOMAIN>:<NUMBER>] Container proxy in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W7460424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I3720424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I5160424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I4730424 <NUMBER> <DOMAIN>:<NUMBER>] Started container proxy in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I1950424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I8880424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W3160424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I9910424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W5200424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "postgres:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] W8090424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] <DOMAIN> kernel: [<NUMBER>.<NUMBER>] device nvme0n1: detected ext4
+  1    [<TIMESTAMP>] I8720424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W3320424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W1000424 <NUMBER> <DOMAIN>:<NUMBER>] Container proxy in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W6080424 <NUMBER> <DOMAIN>:<NUMBER>] Started container main in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I4740424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] W1390424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] W4880424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I5640424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "nginx:<NUMBER>.<NUMBER>": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] W1420424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I6460424 <NUMBER> <DOMAIN>:<NUMBER>] Container init in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W5020424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W1530424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W3780424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I1820424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I9850424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I6780424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W2080424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W5500424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container logger)
+  1    [<TIMESTAMP>] I4260424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I4970424 <NUMBER> <DOMAIN>:<NUMBER>] Container init in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W9920424 <NUMBER> <DOMAIN>:<NUMBER>] Container sidecar in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W4600424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I4070424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I3280424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I3180424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I1190424 <NUMBER> <DOMAIN>:<NUMBER>] Started container logger in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W3020424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I9440424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I7020424 <NUMBER> <DOMAIN>:<NUMBER>] Started container sidecar in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W8280424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W9820424 <NUMBER> <DOMAIN>:<NUMBER>] Started container init in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I9030424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W2960424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] W1890424 <NUMBER> <DOMAIN>:<NUMBER>] Container sidecar in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W1100424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container init)
+  1    [<TIMESTAMP>] I8830424 <NUMBER> <DOMAIN>:<NUMBER>] Container sidecar in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W8280424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I5450424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] W2510424 <NUMBER> <DOMAIN>:<NUMBER>] Container init in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W1130424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W4610424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W1290424 <NUMBER> <DOMAIN>:<NUMBER>] Started container proxy in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W5890424 <NUMBER> <DOMAIN>:<NUMBER>] Container main in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W8790424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I4550424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I5000424 <NUMBER> <DOMAIN>:<NUMBER>] Container logger in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W3450424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W7110424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W2200424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] W8990424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I5620424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W4110424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I3820424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container proxy)
+  1    [<TIMESTAMP>] W9580424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W6890424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W6820424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container logger)
+  1    [<TIMESTAMP>] I6920424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W6440424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I1960424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container main)
+  1    [<TIMESTAMP>] W4740424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "redis:<NUMBER>.<NUMBER>": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] W5550424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I9250424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "nginx:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] W6550424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I4230424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W5600424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I7220424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] W6410424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W1440424 <NUMBER> <DOMAIN>:<NUMBER>] Container sidecar in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I1970424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I5770424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W8540424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I8960424 <NUMBER> <DOMAIN>:<NUMBER>] Container main in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I8650424 <NUMBER> <DOMAIN>:<NUMBER>] Container logger in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I9400424 <NUMBER> <DOMAIN>:<NUMBER>] Started container logger in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W5480424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I8380424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W9100424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "nginx:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] I5380424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W6250424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container sidecar)
+  1    [<TIMESTAMP>] I4680424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container main)
+  1    [<TIMESTAMP>] I4090424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container init)
+  1    [<TIMESTAMP>] W2530424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W6080424 <NUMBER> <DOMAIN>:<NUMBER>] Container logger in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I2050424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "postgres:<NUMBER>.<NUMBER>": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] I1140424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "redis:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] [WARN] [default<PATH> Container logger pulling image redis:latest
+  1    [<TIMESTAMP>] I4050424 <NUMBER> <DOMAIN>:<NUMBER>] Started container proxy in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W7670424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W8960424 <NUMBER> <DOMAIN>:<NUMBER>] Container proxy in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W2150424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I6160424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W5940424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W8780424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "nginx:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] W4670424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I2710424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I2450424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] W5880424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W7140424 <NUMBER> <DOMAIN>:<NUMBER>] Container sidecar in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W2340424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I6820424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I9650424 <NUMBER> <DOMAIN>:<NUMBER>] Started container init in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I6700424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W4560424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I2550424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I4600424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container init)
+  1    [<TIMESTAMP>] I8770424 <NUMBER> <DOMAIN>:<NUMBER>] Container proxy in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W9690424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W2320424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container logger)
+  1    [<TIMESTAMP>] W4360424 <NUMBER> <DOMAIN>:<NUMBER>] Started container main in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I8540424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W6920424 <NUMBER> <DOMAIN>:<NUMBER>] Started container init in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W3090424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container main)
+  1    [<TIMESTAMP>] W3140424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I9230424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] W8460424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] W6660424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "redis:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] W6890424 <NUMBER> <DOMAIN>:<NUMBER>] Started container init in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W3590424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] W2100424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "redis:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] W9580424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W5550424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I2080424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container sidecar)
+  1    [<TIMESTAMP>] I1820424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "postgres:<NUMBER>.<NUMBER>": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] I6390424 <NUMBER> <DOMAIN>:<NUMBER>] Started container proxy in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I3750424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container main)
+  1    [<TIMESTAMP>] I6480424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I8080424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W2090424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W9530424 <NUMBER> <DOMAIN>:<NUMBER>] Started container init in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I8190424 <NUMBER> <DOMAIN>:<NUMBER>] Container logger in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I9290424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W5120424 <NUMBER> <DOMAIN>:<NUMBER>] Container proxy in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I9580424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I5660424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I9620424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container sidecar)
+  1    [<TIMESTAMP>] I4660424 <NUMBER> <DOMAIN>:<NUMBER>] Started container sidecar in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I6280424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container proxy)
+  1    [<TIMESTAMP>] I7790424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W3580424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "redis:<NUMBER>.<NUMBER>": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] I9290424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W5870424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W3710424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I6210424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container sidecar)
+  1    [<TIMESTAMP>] I9790424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] W8660424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I7650424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W3670424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W8150424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W1080424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container logger)
+  1    [<TIMESTAMP>] W7030424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I6890424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "redis:<NUMBER>.<NUMBER>": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] W4300424 <NUMBER> <DOMAIN>:<NUMBER>] Container proxy in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W4670424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] W8370424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I9540424 <NUMBER> <DOMAIN>:<NUMBER>] Container init in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I8610424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I7280424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] W3230424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W7270424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] W6450424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I3730424 <NUMBER> <DOMAIN>:<NUMBER>] Container init in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W4890424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I9590424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "postgres:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] I1600424 <NUMBER> <DOMAIN>:<NUMBER>] Started container init in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W7700424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I2690424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I6100424 <NUMBER> <DOMAIN>:<NUMBER>] Started container init in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I4980424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I2020424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] W5640424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W5440424 <NUMBER> <DOMAIN>:<NUMBER>] Started container logger in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I6500424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I7260424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W9940424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W3480424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I5370424 <NUMBER> <DOMAIN>:<NUMBER>] Container logger in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I3690424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "redis:<NUMBER>.<NUMBER>": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] I1100424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "nginx:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] W1210424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I8550424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container proxy)
+  1    [<TIMESTAMP>] I3580424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W3800424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W6280424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I9910424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] [ERROR] [default<PATH> Container proxy pulling image redis:latest
+  1    [<TIMESTAMP>] W6730424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W5260424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I8400424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W8730424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container logger)
+  1    [<TIMESTAMP>] W5480424 <NUMBER> <DOMAIN>:<NUMBER>] Container logger in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I8750424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container proxy)
+  1    [<TIMESTAMP>] W8010424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I8270424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container init)
+  1    [<TIMESTAMP>] I4270424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I3910424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I4550424 <NUMBER> <DOMAIN>:<NUMBER>] Container main in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W2620424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I6210424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I3600424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] W1120424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I7670424 <NUMBER> <DOMAIN>:<NUMBER>] Started container proxy in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W6300424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container main)
+  1    [<TIMESTAMP>] W2530424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "redis:<NUMBER>.<NUMBER>": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] I6150424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I6880424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W1200424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W1490424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W7810424 <NUMBER> <DOMAIN>:<NUMBER>] Started container init in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W7180424 <NUMBER> <DOMAIN>:<NUMBER>] Container logger in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W9900424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] W6620424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I6400424 <NUMBER> <DOMAIN>:<NUMBER>] Started container init in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W5680424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I8740424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container proxy)
+  1    [<TIMESTAMP>] I8070424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I8190424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I7540424 <NUMBER> <DOMAIN>:<NUMBER>] Started container init in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I4130424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container logger)
+  1    [<TIMESTAMP>] W9950424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W1340424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I3330424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] W6840424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] [FATAL] [default<PATH> Successfully pulled image "nginx:<NUMBER>.<NUMBER>"
+  1    [<TIMESTAMP>] I1710424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W3520424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W4870424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I2030424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I3820424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I4240424 <NUMBER> <DOMAIN>:<NUMBER>] Started container logger in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W9120424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I5430424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W5410424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I5150424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W7690424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I8070424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I9640424 <NUMBER> <DOMAIN>:<NUMBER>] Container logger in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I7160424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I8490424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I4590424 <NUMBER> <DOMAIN>:<NUMBER>] Started container logger in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W1980424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I3290424 <NUMBER> <DOMAIN>:<NUMBER>] Started container proxy in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W4670424 <NUMBER> <DOMAIN>:<NUMBER>] Container logger in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I3970424 <NUMBER> <DOMAIN>:<NUMBER>] Started container init in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I3800424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] I8110424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I7860424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W5060424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W2710424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] W8840424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I3760424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I3160424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I5420424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I9320424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I7850424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W1600424 <NUMBER> <DOMAIN>:<NUMBER>] Container proxy in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I4710424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] I3390424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container sidecar)
+  1    [<TIMESTAMP>] I3200424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I3400424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container logger)
+  1    [<TIMESTAMP>] W3240424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "nginx:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] I2680424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I4420424 <NUMBER> <DOMAIN>:<NUMBER>] Started container logger in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W6920424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I7250424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I6310424 <NUMBER> <DOMAIN>:<NUMBER>] Started container main in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] I4410424 <NUMBER> <DOMAIN>:<NUMBER>] Attempting to kill pod default<PATH> (Container logger)
+  1    [<TIMESTAMP>] W9790424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] W7060424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "nginx:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] W5210424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I7780424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W2610424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W2670424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] W3150424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] W9250424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "redis:latest": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] I5080424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] W4560424 <NUMBER> <DOMAIN>:<NUMBER>] Container main in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] W3050424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to pull image "postgres:<NUMBER>.<NUMBER>": rpc error: code = Unknown desc = failed to pull and unpack image
+  1    [<TIMESTAMP>] W8970424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] [DEBUG] [default<PATH> Container proxy pulling image nginx:latest
+  1    [<TIMESTAMP>] W6640424 <NUMBER> <DOMAIN>:<NUMBER>] Started container init in pod default<PATH> with ID <UUID>
+  1    [<TIMESTAMP>] W8570424 <NUMBER> <DOMAIN>:<NUMBER>] Error syncing pod default<PATH> skipping: failed to StartContainer: Error response from daemon: rpc error: code = Unknown
+  1    [<TIMESTAMP>] I6320424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I5170424 <NUMBER> <DOMAIN>:<NUMBER>] Volume <UUID> mounted for pod default<PATH>
+  1    [<TIMESTAMP>] I2870424 <NUMBER> <DOMAIN>:<NUMBER>] Container sidecar in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I1890424 <NUMBER> <DOMAIN>:<NUMBER>] Node <DOMAIN> status update: Ready=True
+  1    [<TIMESTAMP>] I4160424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W6020424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] [DEBUG] [default<PATH> Successfully pulled image "postgres:<NUMBER>.<NUMBER>"
+  1    [<TIMESTAMP>] W6420424 <NUMBER> <DOMAIN>:<NUMBER>] Failed to list *<DOMAIN>: Get "<URL> dial tcp <IPV4>:<NUMBER>: connect: connection refused
+  1    [<TIMESTAMP>] W9430424 <NUMBER> <DOMAIN>:<NUMBER>] Container proxy in pod default<PATH> is Ready
+  1    [<TIMESTAMP>] I7610424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>
+  1    [<TIMESTAMP>] I6830424 <NUMBER> <DOMAIN>:<NUMBER>] Pod default<PATH> is not scheduled: waiting
+  1    [<TIMESTAMP>] W8910424 <NUMBER> <DOMAIN>:<NUMBER>] SyncLoop (PLEG): event for pod default<PATH>

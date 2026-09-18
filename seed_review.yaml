@@ -1,0 +1,94 @@
+goal: >
+  시스템 로그를 패턴 기반으로 유사도 트리밍하는 Python CLI 도구 개발.
+  K8s, 노드, 파드 등 전체 시스템 로그를 입력받아 중복 패턴을 제거하고
+  발생 횟수를 카운트하여 압축된 로그 파일 출력.
+
+constraints:
+  - Python >= 3.10
+  - 표준 라이브러리 + python-dateutil, rapidfuzz(선택)만 사용
+  - 외부 DB 또는 서버 불필요
+  - 단일 스크립트 또는 소규모 패키지 구조
+  - 소규모 배치 처리 대상 (수 MB ~ 수백 MB)
+
+acceptance_criteria:
+  - 입력 파일(path 또는 stdin)에서 로그 라인을 읽음
+  - 각 라인을 패턴 추출하여 변수 부분(숫자, IP, UUID, MAC, 경로, 도메인, 타임스탬프 등) 자동 감지
+  - 추출된 패턴 간 유사도를 80~90% 기준으로 비교
+  - 유사한 로그는 하나로 그룹화되고 카운트 추가
+  - 출력 파일에 트리밍된 로그 + 발생 횟수 기록
+  - 파워셸에서 python trim.py input.txt output.txt 로 실행 가능
+
+ontology_schema:
+  name: LogLine
+  description: 단일 로그 라인
+  fields:
+    - name: raw
+      type: string
+      description: 원본 로그 텍스트
+    - name: pattern
+      type: string
+      description: 변수 제거 후 추출된 패턴
+    - name: timestamp
+      type: datetime
+      description: 로그 타임스탬프 (감지 시)
+  name: LogPattern
+  description: 중복 제거된 로그 패턴
+  fields:
+    - name: pattern
+      type: string
+      description: 정규화된 패턴 문자열
+    - name: count
+      type: int
+      description: 발생 횟수
+    - name: sample
+      type: string
+      description: 대표 원본 로그 (첫 등장)
+    - name: first_seen
+      type: datetime
+      description: 최초 등장 시간
+    - name: last_seen
+      type: datetime
+      description: 최종 등장 시간
+  name: TrimmedLog
+  description: 트리밍 결과
+  fields:
+    - name: patterns
+      type: array
+      description: 그룹화된 패턴 목록 (count 내림차순)
+    - name: original_count
+      type: int
+      description: 원본 로그 라인 수
+    - name: trimmed_count
+      type: int
+      description: 트리밍 후 라인 수
+    - name: compression_ratio
+      type: float
+      description: 압축률 (%)
+
+evaluation_principles:
+  - weight: 30
+    name: Pattern Accuracy
+    description: 변수 감지가 정확하고 패턴 추출이 논리적으로 분할되어야 함
+  - weight: 25
+    name: Compression Ratio
+    description: 원본 대비 압축률이 높아야 함 (목표: 50% 이상)
+  - weight: 20
+    name: Execution Speed
+    description: 소규모 로그 기준 100MB/분 이내 처리
+  - weight: 15
+    name: Usability
+    description: 단일 명령어로 간편 실행
+  - weight: 10
+    name: Extensibility
+    description: 패턴 규칙 추가, 유사도 임계값 조정 가능
+
+exit_conditions:
+  - python trim.py input.txt output.txt 실행 시 정상 출력 생성
+  - 출력 파일에 카운트 포함 패턴 로그 기록
+  - 유사도 임계값 80~90%에서 논리적 그룹화 검증 완료
+  - CI 또는 로컬 테스트 통과
+
+metadata:
+  version: 1.0.0
+  timestamp: 2026-04-24
+  ambiguity_score: 0.1

@@ -1,0 +1,5 @@
+- Failed Artifact: docs/implementation-plan.md (v1)
+- Reset Subject: Log Trimmer CLI 구현 계획 (fresh artifact)
+- Fail Anchor: outside-in-supervision fail — (1) seed ontology_schema 및 models.py 매핑이 artifact 내에서 evidence 없이 주장됨, (2) regex 순서에 IPv6와 URL이 포함되나 dedicated 구현/테스트 태스크가 없음, (3) output writer가 grouping 이전에 소개됨
+- Required Reset: (1) seed ontology_schema를 직접 참조하여 models.py 매핑을 artifact 내에 명시적 evidence로 기재, (2) regex 순서(IPv6, URL 포함)에 dedicated 구현/테스트 태스크 배정, (3) output writer를 grouping 이후로 재배치
+- Do Not Carry Forward: evidence 없는 seed ontology_schema 주장, IPv6/URL 미포함 regex 순서, output writer → grouping 이전 ordering

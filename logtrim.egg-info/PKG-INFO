@@ -1,3 +1,15 @@
+Metadata-Version: 2.4
+Name: logtrim
+Version: 0.2.0
+Summary: Log Trimmer CLI — 시스템 로그 패턴 기반 유사도 트리밍 도구
+License: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Provides-Extra: fast
+Requires-Dist: rapidfuzz>=3.0.0; extra == "fast"
+Provides-Extra: test
+Requires-Dist: pytest>=7.0.0; extra == "test"
+
 # Log Trimmer CLI
 
 시스템 로그를 패턴 기반으로 유사도 트리밍하는 Python CLI 도구.

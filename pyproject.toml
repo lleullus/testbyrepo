@@ -4,22 +4,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "logtrim"
-version = "0.1.0"
-description = "Offline log trimming utility for Linux, Kubernetes, pod, component, and journal output."
+version = "0.2.0"
+description = "Log Trimmer CLI — 시스템 로그 패턴 기반 유사도 트리밍 도구"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [
-  { name = "logtrim contributors" }
-]
 dependencies = []
+
+[project.optional-dependencies]
+fast = ["rapidfuzz>=3.0.0"]
+test = ["pytest>=7.0.0"]
 
 [project.scripts]
 logtrim = "logtrim.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["logtrim*"]
-exclude = ["tests*", "tests.*"]
-
-[tool.setuptools.package-data]
-logtrim = ["*.py", "*.txt", "*.md"]
+exclude = ["tests*", "test_data*"]

@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""logtrim entry point for `python -m logtrim`."""
-
-from __future__ import annotations
+"""Log Trimmer CLI — python trim.py input.txt output.txt"""
 
 import sys
 from logtrim.cli import main
