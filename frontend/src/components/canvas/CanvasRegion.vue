@@ -12,9 +12,9 @@ import CompositionCanvas from './CompositionCanvas.vue'
 .canvas-region-inner {
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   overflow: auto;
+  padding: 16px;
+  overscroll-behavior: contain;
 }
 </style>

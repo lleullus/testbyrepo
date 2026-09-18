@@ -109,12 +109,16 @@ function onBubbleSelect(bubbleId: string) {
       />
       <div v-else class="cut-placeholder"><span>컷 {{ slot.cut_id }}</span></div>
       <div v-if="imageForCut(slot.cut_id)?.stale" class="stale-overlay"><span class="stale-badge">STALE</span></div>
-      <div
+      <button
         v-for="bubble in reanchorBubbles.filter((item) => item.cut_id === slot.cut_id)"
         :key="bubble.bubble_id"
+        type="button"
         class="reanchor-required"
-        role="alert"
-      >수동 재배치 필요 · {{ bubble.bubble_id }}</div>
+        :class="{ selected: store.selection.bubbleId === bubble.bubble_id }"
+        :aria-pressed="store.selection.bubbleId === bubble.bubble_id"
+        :aria-label="`말풍선 ${bubble.bubble_id} 수동 재배치 선택`"
+        @click.stop="onBubbleSelect(bubble.bubble_id)"
+      >수동 재배치 필요 · {{ bubble.bubble_id }}</button>
     </div>
 
     <template v-for="bubble in anchoredBubbles" :key="bubble.bubble_id">
@@ -140,13 +144,16 @@ function onBubbleSelect(bubbleId: string) {
 </template>
 
 <style scoped>
-.composition-surface { position: relative; width: 100%; background: #ffffff; overflow: hidden; container-type: inline-size; }
+.composition-surface { position: relative; width: min(100%, 1024px); margin-inline: auto; flex: none; background: #ffffff; overflow: hidden; container-type: inline-size; }
 .cut-slot { position: absolute; left: 0; width: 100%; background: #ffffff; overflow: hidden; }
 .cut-image { width: 100%; height: 100%; object-fit: contain; display: block; user-select: none; pointer-events: none; }
 .cut-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #1E2028; color: #5E6572; font-size: 24px; font-weight: 700; }
 .stale-overlay { position: absolute; inset: 0; background: rgba(161, 92, 0, 0.12); display: flex; align-items: flex-start; justify-content: flex-end; padding: var(--sp-4); }
 .stale-badge { background: var(--color-stale); color: #fff; font-size: var(--font-size-xs); font-weight: 700; padding: 2px var(--sp-4); border-radius: var(--radius-inner); }
-.reanchor-required { position: absolute; top: var(--sp-8); left: var(--sp-8); padding: var(--sp-4) var(--sp-8); color: var(--color-error); background: rgba(255,255,255,.9); font-size: var(--font-size-xs); z-index: 4; }
+.reanchor-required { position: absolute; top: var(--sp-8); left: var(--sp-8); max-width: calc(100% - (2 * var(--sp-8))); padding: var(--sp-4) var(--sp-8); border: 1px solid currentColor; border-radius: var(--radius-inner); color: var(--color-error); background: rgba(255,255,255,.9); font-size: var(--font-size-xs); text-align: start; cursor: pointer; z-index: 4; }
+.reanchor-required:hover,
+.reanchor-required:focus-visible,
+.reanchor-required.selected { background: #fff; box-shadow: 0 0 0 2px rgba(180, 35, 24, .2); }
 .save-status-overlay { position: absolute; bottom: var(--sp-8); right: var(--sp-8); z-index: 10; }
 .save-status-badge { background: var(--color-error); color: #fff; font-size: var(--font-size-xs); font-weight: 600; padding: 2px var(--sp-8); border-radius: var(--radius-inner); }
 .save-status-unsaved .save-status-badge { background: var(--color-stale); }

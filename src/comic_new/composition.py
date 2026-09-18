@@ -124,6 +124,26 @@ def normalize_color(val: Any, field_name: str) -> str:
     return val.upper()
 
 
+def _normalize_ordered_cut_ids(
+    ordered_cut_ids: Sequence[int] | None,
+    slot_count: int,
+) -> list[int] | None:
+    """Validate stable active cut identities against the ordered slot count."""
+    if ordered_cut_ids is None:
+        return None
+    if isinstance(ordered_cut_ids, (str, bytes, bytearray)) or not isinstance(ordered_cut_ids, Sequence):
+        raise CompositionValidationError("ordered_cut_ids must be a sequence")
+    ids = list(ordered_cut_ids)
+    if (
+        len(ids) != slot_count
+        or not ids
+        or any(isinstance(cid, bool) or not isinstance(cid, int) or cid < 1 for cid in ids)
+        or len(set(ids)) != len(ids)
+    ):
+        raise CompositionValidationError("ordered_cut_ids must be unique positive IDs matching slot heights")
+    return ids
+
+
 def _normalize_bubble_style(b: dict[str, Any], idx: int) -> dict[str, Any]:
     """Validate and normalize fields shared by anchored and legacy bubbles."""
     bubble_id = b.get("bubble_id")
@@ -176,11 +196,17 @@ def _normalize_bubble_style(b: dict[str, Any], idx: int) -> dict[str, Any]:
     }
 
 
-def normalize_state(state: dict[str, Any]) -> dict[str, Any]:
+def normalize_state(
+    state: dict[str, Any],
+    ordered_cut_ids: Sequence[int] | None = None,
+) -> dict[str, Any]:
     """Normalize composition state into the strict canonical schema v2.
 
     v1/global bubbles are accepted only by the store's one-shot migration. The
     runtime/API path is deliberately v2-only so there is no dual authority.
+    When the authoritative ordered active cut IDs are available, bubble owners
+    are validated by stable membership rather than by comparing ID magnitude
+    with the number of slots.
     """
     if not isinstance(state, dict):
         raise CompositionValidationError(f"Composition state must be a dict, got {type(state)}")
@@ -207,6 +233,8 @@ def normalize_state(state: dict[str, Any]) -> dict[str, Any]:
         if isinstance(height, bool) or not isinstance(height, int) or height <= 0:
             raise CompositionValidationError(f"slot_heights_px[{idx}] must be a positive integer, got {height!r}")
         normalized_heights.append(height)
+    normalized_cut_ids = _normalize_ordered_cut_ids(ordered_cut_ids, len(normalized_heights))
+    active_cut_ids = set(normalized_cut_ids) if normalized_cut_ids is not None else None
     if state.get("fit") != "contain":
         raise CompositionValidationError(f"fit must be 'contain', got {state.get('fit')!r}")
     font_sha256 = state.get("font_sha256")
@@ -244,8 +272,10 @@ def normalize_state(state: dict[str, Any]) -> dict[str, Any]:
             raise CompositionValidationError(f"Duplicate bubble_id {bubble_id!r} at index {idx}")
         seen_bubble_ids.add(bubble_id)
         cut_id = style["cut_id"]
-        if cut_id > len(normalized_heights):
-            raise CompositionValidationError(f"cut_id at index {idx} has no matching slot: {cut_id}")
+        if active_cut_ids is not None and cut_id not in active_cut_ids:
+            raise CompositionValidationError(
+                f"cut_id at index {idx} is not in the ordered active cut set: {cut_id}"
+            )
         if status == "ANCHORED":
             x_pct = normalize_percentage(raw.get("local_x_pct"), f"bubbles[{idx}].local_x_pct")
             y_pct = normalize_percentage(raw.get("local_y_pct"), f"bubbles[{idx}].local_y_pct")
@@ -299,14 +329,9 @@ def compute_cut_slots(
         raise CompositionValidationError("slot_heights_px must be a non-empty sequence")
     if isinstance(gap_px, bool) or not isinstance(gap_px, int) or gap_px < 0:
         raise CompositionValidationError(f"gap_px must be a non-negative integer, got {gap_px!r}")
-    if ordered_cut_ids is None:
+    ids = _normalize_ordered_cut_ids(ordered_cut_ids, len(slot_heights_px))
+    if ids is None:
         ids = list(range(1, len(slot_heights_px) + 1))
-    else:
-        if isinstance(ordered_cut_ids, (str, bytes, bytearray)) or not isinstance(ordered_cut_ids, Sequence):
-            raise CompositionValidationError("ordered_cut_ids must be a sequence")
-        ids = list(ordered_cut_ids)
-        if len(ids) != len(slot_heights_px) or not ids or any(isinstance(cid, bool) or not isinstance(cid, int) or cid < 1 for cid in ids) or len(set(ids)) != len(ids):
-            raise CompositionValidationError("ordered_cut_ids must be unique positive IDs matching slot heights")
     slots: list[ResolvedSlot] = []
     cursor = 0
     for idx, height in enumerate(slot_heights_px):
@@ -439,23 +464,29 @@ def render_canonical(
     ordered_cut_ids: Sequence[int] | None = None,
 ) -> RenderedArtifactBytes:
     """Render a v2 composition using its resolved integer slot layout and contain fit."""
-    norm_state = normalize_state(state)
     if isinstance(composition_revision, bool) or not isinstance(composition_revision, int) or composition_revision <= 0:
         raise CompositionValidationError(f"composition_revision must be a positive integer, got {composition_revision!r}")
     if not isinstance(cuts, list) or not cuts:
         raise CompositionRenderError("cuts must be a non-empty list")
-    if len(norm_state["slot_heights_px"]) != len(cuts):
-        raise CompositionRenderError(
-            f"composition slot count {len(norm_state['slot_heights_px'])} does not match cuts ({len(cuts)})"
-        )
 
     cut_payload_ids = [c.get("cut_id") for c in cuts if isinstance(c, dict)]
-    if len(cut_payload_ids) != len(cuts) or len(set(cut_payload_ids)) != len(cut_payload_ids):
+    if (
+        len(cut_payload_ids) != len(cuts)
+        or any(isinstance(cid, bool) or not isinstance(cid, int) or cid < 1 for cid in cut_payload_ids)
+        or len(set(cut_payload_ids)) != len(cut_payload_ids)
+    ):
         raise CompositionRenderError("cuts must contain unique positive cut IDs")
     if ordered_cut_ids is None:
         ordered_cut_ids = cut_payload_ids
     elif list(ordered_cut_ids) != cut_payload_ids:
         raise CompositionRenderError("cuts are not in the supplied ordered active cut set")
+
+    norm_state = normalize_state(state, ordered_cut_ids)
+    if len(norm_state["slot_heights_px"]) != len(cuts):
+        raise CompositionRenderError(
+            f"composition slot count {len(norm_state['slot_heights_px'])} does not match cuts ({len(cuts)})"
+        )
+
     cut_closure: list[dict[str, Any]] = []
     decoded_cuts: list[Image.Image] = []
     for idx, c in enumerate(cuts):

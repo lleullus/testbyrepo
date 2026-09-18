@@ -102,19 +102,29 @@ export const useStudioStore = defineStore('studio', () => {
     if (!server.value) return false
     return isRealizationComplete([...server.value.cuts])
   })
+  const activeCutIds = computed(
+    () => new Set((server.value?.cuts ?? []).map((cut) => cut.cut_id)),
+  )
 
   const hasAnyDraft = computed(() => {
+    const hasActiveIntentDraft = Object.keys(drafts.intents).some((cid) =>
+      activeCutIds.value.has(Number(cid) as CutId),
+    )
     return (
       drafts.composition !== null ||
-      Object.keys(drafts.intents).length > 0 ||
+      hasActiveIntentDraft ||
       drafts.baseline !== null
     )
   })
 
   const hasAnySaveProblem = computed(() => {
-    return Object.values(saves).some(
-      (s) => s.state === 'pending' || s.state === 'failed' || s.state === 'conflict' || s.state === 'base-changed',
-    )
+    return Object.entries(saves).some(([key, save]) => {
+      if (key.startsWith('intent-')) {
+        const cutId = Number(key.slice('intent-'.length)) as CutId
+        if (!activeCutIds.value.has(cutId)) return false
+      }
+      return save.state === 'pending' || save.state === 'failed' || save.state === 'conflict' || save.state === 'base-changed'
+    })
   })
 
   const hasBlockingEdit = computed(() => {
@@ -205,6 +215,7 @@ export const useStudioStore = defineStore('studio', () => {
     }
     server.value = snap
     recoverSelection(snap)
+    const snapshotActiveCutIds = new Set(snap.cuts.map((cut) => cut.cut_id))
     // Mark any affected draft as base-changed if the server moved ahead
     if (drafts.composition) {
       const draftBaseRev = drafts.composition.baseAuthorityRevision
@@ -216,6 +227,8 @@ export const useStudioStore = defineStore('studio', () => {
       }
     }
     for (const [cidStr, draft] of Object.entries(drafts.intents)) {
+      const cutId = Number(cidStr) as CutId
+      if (!snapshotActiveCutIds.has(cutId)) continue
       if (draft && snap.authority_revision > draft.baseAuthorityRevision) {
         const key = `intent-${cidStr}`
         if (saves[key]?.state !== 'failed' && saves[key]?.state !== 'conflict') {
@@ -942,6 +955,8 @@ export const useStudioStore = defineStore('studio', () => {
         baseline_id: server.value.baseline.baseline_id,
       })
       applySnapshot(result.snapshot)
+      delete drafts.intents[cutId]
+      delete saves[`intent-${cutId}`]
       if (selection.cutId === cutId) selectCut(result.snapshot.cuts[0].cut_id)
     } catch (err) {
       if (err instanceof ApiError && err.currentSnapshot) applySnapshot(err.currentSnapshot)

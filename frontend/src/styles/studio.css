@@ -31,6 +31,11 @@
   background: var(--canvas-bg);
 }
 
+.canvas-region > * {
+  min-width: 0;
+  min-height: 0;
+}
+
 .right-panel {
   grid-area: right;
   min-width: 0;
