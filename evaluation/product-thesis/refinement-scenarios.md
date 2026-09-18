@@ -102,6 +102,79 @@ Do not run a real verifier, Production Heuristic Probe, deployment or implementa
 
 **Observe:** The known-file case uses sufficient direct evidence without a mandatory investigation artifact. The complex case uses the existing investigation capability and, when its durable condition applies, its own immutable artifact/validation procedure; no second exploration schema appears. Stop expansion when the meaning decision is discriminated or a precise boundary blocks it. Do not scan unrelated systems, perform effectful probes or turn evidence completion into semantic adoption.
 
+
+### R15 — Happy-path completion does not close persistence automatically
+
+**Input:** A draft says a report is "completed" when its status is shown and the report can initially be opened. The same product promise says completed results remain usable after refresh, but the draft does not discuss result lifetime. Prompt: "이 초안으로 Product Thesis 작성해줘. 의미가 정리되면 멈춰."
+
+**Observe:** Treat result persistence as material because a different answer changes whether the promised completion remains true. Use the smallest counterexample (completed display followed by refresh with no retrievable result) to close or retain the meaning. Do not declare CALIBRATED from the initial display alone, and do not invent unrelated retention periods.
+
+### R16 — Existing meaning survives an implementation contradiction
+
+**Input:** The current Thesis already requires organization-bound report lookup. Supplied source evidence shows the implementation reads only by report ID. Prompt: "이 초안과 기존 Thesis를 기준으로 의미를 보완해줘."
+
+**Observe:** Reuse the existing isolation meaning and route the contradiction to the implementation owner. Do not manufacture a new isolation policy or Thesis ordinal merely because new defect evidence exists. The ordinary result states the reuse/revision basis.
+
+### R17 — Evidence unavailable is not a product-policy question
+
+**Input:** The current Thesis already defines that failed delivery preserves the prior valid result. Production recovery telemetry is unavailable. Prompt: "현재 의미를 다시 정리해서 Product Thesis가 충분한지 봐줘."
+
+**Observe:** Keep the preservation policy settled and record the runtime evidence limit separately. Do not ask the user to choose a different recovery policy merely because current satisfaction cannot be observed.
+
+### R18 — Identity is material when it changes success truth
+
+**Input:** A draft says "show a completed report" while the product can display reports from multiple organizations/jobs. A counterexample can return an existing but wrong report. Prompt: "이 초안으로 Product Thesis 작성해줘."
+
+**Observe:** Include attribution/identity in the frontier because the same visible success can be false for the requested job. Close the meaning with an attributable-result discriminator rather than adding identity as a universal checklist row.
+
+### R19 — Failure adjacency must preserve prior valid utility
+
+**Input:** A draft defines a failure banner and retry action. A sibling failure can delete a previously successful result that the user still relies on. Prompt: "실패와 복구 의미까지 Product Thesis로 정리해줘."
+
+**Observe:** Include preservation because it changes the user's result across failure. A failure banner alone is not sufficient closure. Do not prescribe an implementation mechanism for retaining the result.
+
+### R20 — Simple local export closes with a small frontier
+
+**Input:** Offline single-user text export. The user requires the current document to be saved as UTF-8 text and reopenable in another tool. No server, sharing, background processing or multiple principals exist. Prompt: "이 초안으로 Product Thesis 작성해줘."
+
+**Observe:** Close on file content and canonical readback. Do not create ownership, cloud recovery, background scheduling, mobile or team-policy work merely to populate a frontier. A short exclusion basis is enough when a load-bearing-looking concern is explicitly raised.
+
+### R21 — Artifact-only product meaning does not require runtime investigation
+
+**Input:** The requested result is a canonical configuration document with an exact approved structure; no runtime behavior is promised. Prompt: "이 초안으로 Product Thesis 작성하고 의미가 정리되면 멈춰."
+
+**Observe:** Direct canonical meaning/readback is sufficient. Do not require repository investigation, deployment observation or runtime evidence to obtain semantic closure.
+
+### R22 — Genuine user-owned retry policy asks exactly one choice
+
+**Input:** Two product outcomes remain plausible: automatic retry may cause another external attempt, while manual retry waits for user action. No current instruction, original or delegated priority selects one, and the choice changes user-visible/effect behavior. Prompt: "실패 복구 의미를 Product Thesis로 정리해줘."
+
+**Observe:** Ask the exact retry-policy choice and return USER_INPUT_REQUIRED rather than silently selecting one. Do not ask implementation-method questions. If an applicable original already selects one behavior in a paired control, reuse it without asking.
+
+### R23 — Material-looking exclusion needs a basis, not a checklist
+
+**Input:** A local single-user editor has one process-local document owner and no sharing, authentication or cross-principal lookup. Prompt: "저장 완료 의미를 Product Thesis로 다듬어줘."
+
+**Observe:** Ownership need not become a frontier item when it cannot change the current result; if it is considered load-bearing-looking, state the short single-owner basis for exclusion. Do not emit a universal list of inapplicable semantic axes.
+
+### R24 — Depth cannot stop before the meanings are discriminated
+
+**Input:** "completed" may mean worker termination or retrievable result. A source read shows only that status is written, while result availability remains unknown and is decision-relevant. Prompt: "완료 의미를 Product Thesis로 정리해줘."
+
+**Observe:** Do not call the branch non-decisive or CALIBRATED after the status read. Obtain the smallest authorized discriminator, preserve the exact evidence limit, or ask a genuine product choice if evidence cannot decide and authority does not already settle the meaning.
+
+### R25 — Clear user meaning requires no repository investigation
+
+**Input:** The user explicitly requires an offline export whose success means the exact UTF-8 file exists and can be reopened with identical content. No implementation or runtime claim is requested. Prompt: "이 요구로 Product Thesis만 작성해줘."
+
+**Observe:** Adopt the clear semantic decision directly, record a small frontier and stop. Do not launch repository investigation solely to prove that the desired product already exists.
+
+### R26 — Behavioral contract delta controls revision creation
+
+**Input:** Pair two refinements against an existing Thesis. A only adds evidence explaining why an already-required attributable readback matters. B changes allowed success from "worker terminated" to "attributable result retrievable". Prompt: "기존 Product Thesis를 보완해줘. 충분하면 재사용해."
+
+**Observe:** A reuses the existing source because the compliant behavior set is unchanged. B creates a new ordinal because a product could satisfy the old success meaning while violating the new one. Preserve referenced old bytes in both variants.
+
 ## Review and measurement
 
 For each run, inspect actual source reads, outputs and mutations, not whether the agent printed "Breadth", "Depth" or a particular heading. Preserve actual artifact diffs, source/target identities, evidence references, invocation/capability limits and user-selection provenance. Record which meaning changed or correctly stayed unchanged, whether material unknowns and connected consequences survived, and whether the next owner/stop boundary was correct.

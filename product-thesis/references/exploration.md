@@ -22,6 +22,20 @@ Focus question, deciding unknown and stopping condition may be expressed in a fe
 
 Stop a branch when the decision is sufficiently discriminated, the necessary observation exceeds current authority or access, further work is non-decisive, or the issue belongs to another owner. After a productive depth observation, return to the affected siblings instead of restarting the entire product investigation. Bounded stopping may produce an incomplete result; it never makes an unresolved condition satisfied.
 
+## Semantic frontier calibration
+
+Calibrate Breadth and Depth against a bounded semantic frontier rather than the model's preferred amount of exploration.
+
+- **Frontier source:** current user instructions, exact applicable Thesis originals, the complete core utility loop, explicit required outcomes/means, concrete observations/contradictions and distinctions that can change the current Scope choice.
+- **Inclusion test:** include a distinction when different answers can change the user-visible result, success truth/attribution, material identity/ownership, failure/recovery/preservation outcome or current construction outcome/Acceptance. This is the materiality test; no universal semantic row is required.
+- **Exclusion test:** exclude pure implementation method, non-applicable future capability, explicit Non-Goals, already-settled authority that needs no reassessment, or distinctions whose alternatives leave the current product result and truth boundary unchanged. When a boundary looks load-bearing, preserve the short basis for exclusion; do not list every irrelevant lens.
+- **Minimum discriminator:** close each material item with the smallest concrete counterexample, causal-loop break, authority rule, Scope consequence or exact user/evidence boundary that separates materially different meanings. Runtime execution is not required merely to define product meaning.
+- **Breadth closure:** Breadth is sufficient only when every material item raised by the inclusion test is resolved/reused, a genuine user-owned choice, an exact evidence limit, routed to another owner, or excluded with basis. Deep work on one item does not close an unexamined material sibling.
+- **Depth entry:** enter Depth only when a frontier item is unresolved, alternative answers can change the product result/current Scope, and a specific evidence, counterexample or causal relation can discriminate it.
+- **Depth stop:** stop when one meaning is decided by current authority and the discriminator, the distinction becomes a genuine user-owned choice, an exact evidence/authority limit blocks the deciding observation, another owner is established, or another observation cannot change the semantic disposition.
+
+Do not turn this calibration into a checklist, fixed frontier size, questionnaire, separate artifact or requirement to investigate the repository. A simple artifact-only or explicitly settled request can close with a very small frontier.
+
 ## Evidence and semantic judgment
 
 Keep six distinctions in ordinary explanation, using only those relevant to the finding:
@@ -36,6 +50,8 @@ Keep six distinctions in ordinary explanation, using only those relevant to the 
 | Semantic decision | What the product must mean or preserve, adopted under user instructions or actual delegation. Completed requires the promised result to be attributable and retrievable. |
 
 Do not turn a hypothesis into an observed defect, a code mechanism into product policy, or a recommendation into explicit user approval. Separate source, test intent, actual test execution and runtime observations. A product promise can be settled from clear user requirements while its implementation cause or runtime satisfaction remains unknown. Conversely, when an unknown could change the meaning decision, retain that exact limitation and seek only the deciding evidence or genuinely user-owned choice.
+
+For frontier closure, distinguish a **semantic unknown** from an **evidence unknown**. A semantic unknown leaves materially different product outcomes unresolved and may become a user-owned choice only after existing authority and deciding evidence are exhausted. An evidence unknown limits a claim about current implementation/runtime satisfaction; it does not reopen an already settled product policy. Record the appropriate frontier disposition instead of converting one into the other.
 
 Technical exploration is read-only evidence acquisition here, not Plan writing, product repair or a prototype permission. An effectful probe requires its actual existing owner and concrete authority. Unavailable evidence is not permission to use a surrogate as proof.
 
@@ -66,7 +82,7 @@ Several consequences can coexist, but do not create duplicated issues or repairs
 
 Before adopting new meaning, identify the authoritative reason, the counterexample it must close and the existing promise it must preserve. Resolve determinable choices without an extra ceremony. Keep material unresolved product choices explicit. Do not add a technical cause, optional means or every review concern to the required product outcomes.
 
-Preserve referenced Thesis revisions byte-for-byte. A changed contract receives a new `THESIS-NNN.md` ordinal, preserving unchanged meaning and updating only affected meaning and its causal consequences. No semantic change means no new revision solely to record another inspection. Never repair stale bindings by overwriting an old source or silently updating hashes to the latest file. Main must assess the applicability of the new meaning and any affected Scope through existing authority.
+Preserve referenced Thesis revisions byte-for-byte. A changed contract receives a new `THESIS-NNN.md` ordinal, preserving unchanged meaning and updating only affected meaning and its causal consequences. Apply a behavioral contract-delta test: if a reasonable product can satisfy the old required/allowed/forbidden behavior, truth/identity boundary or material failure/recovery/preservation policy while violating the newly adopted meaning, or vice versa, the semantic contract changed. Additional evidence, an implementation contradiction, a corrected causal explanation, an evidence-access limit or wording cleanup that leaves the compliant behavior set unchanged does not require a new revision. No semantic change means no new revision solely to record another inspection. Never repair stale bindings by overwriting an old source or silently updating hashes to the latest file. Main must assess the applicability of the new meaning and any affected Scope through existing authority.
 
 A bounded **ripple check** asks which connected meanings and current downstream obligations the change can affect: for example success/readback changing failure policy, identity, persistence or UI wording. Inspect the actual connection, not every section or every historical Scope. Source identifiers, exact locators and relevant current evidence support the impact statement. A selector is not a substitute for reading the full bound originals when the downstream role requires them.
 
@@ -97,7 +113,9 @@ Keep adopted meaning and material open product choices in the Thesis. Where a la
 
 Do not put transient evidence uncertainty into `Open Product Meaning` as though it were an undecided policy. Preserve evidence limits alongside the relevant claim or in the result. If a durable handoff is required, ensure the cited records are actually accessible under existing retention authority; a conversation-only reference is not durable just because it has an ID. Report that limit rather than inventing a new store.
 
-Return the actual source or unchanged-source reuse, settled meaning, deciding evidence/rationale, exact material unknowns and affected existing owner only as needed. `CALIBRATED` is a product-meaning result, not exploration coverage, runtime success or delivery completion. `USER_INPUT_REQUIRED` is for genuinely unresolved current product choices, not generic lack of tools or runtime evidence. A decisive evidence/capability block remains an ordinary incomplete result. Main applies the current request's permitted next step; this procedure neither starts a new stage nor forces a broader authorized request to stop merely because one question ended.
+Return the actual source or unchanged-source reuse, settled meaning, deciding evidence/rationale, exact material unknowns and affected existing owner only as needed. For `CALIBRATED`, new-revision or unchanged-source-reuse results, concise ordinary prose must make recoverable: the focus decision; the material semantic frontier selected and why; the deciding counterexample/discriminator; the settled or reused meaning; any material user-owned choice or evidence limit; the basis for excluding any load-bearing-looking boundary; and whether the source was reused or a new ordinal was required. A trivial case can satisfy this in a few sentences; no fixed headings or second artifact are required.
+
+`CALIBRATED` requires the current focus/core utility and success truth meaning to be settled, every material frontier item to have a grounded disposition, no unresolved current product choice, and no concrete material counterexample that still passes while the adopted meaning is false. It is a product-meaning result, not exploration coverage, runtime success or delivery completion. `USER_INPUT_REQUIRED` is for genuinely unresolved current product choices that pass the question gate, not generic lack of tools or runtime evidence. A decisive evidence/capability block remains an ordinary incomplete result. Main applies the current request's permitted next step; this procedure neither starts a new stage nor forces a broader authorized request to stop merely because one question ended.
 
 ## Worked discrimination: asynchronous reports
 
