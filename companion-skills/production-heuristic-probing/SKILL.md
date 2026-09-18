@@ -16,6 +16,7 @@ For the normal IIS completion path, the finalization-owning caller supplies the 
 - **Completed verification:** exact unchanged result from the completed independent verifier invocation, its actual identity and raw primary-evidence locations, including initial state, trigger/order, readbacks, observation windows, cleanup and currentness.
 - **Target/source identity:** exact stable target paths and byte/runtime identities, declared scenario-effect paths, bound source paths/digests and verification pre/post currentness observations.
 - **Prior Probe:** exact predecessor Probe result plus correction/new evidence for follow-up, or `None`.
+- **Correction navigation for follow-up:** exact predecessor finding/reproducer and primary evidence, corrected-target mutation attribution, implementation regression/durable-reproducer disposition, verifier fresh/retained evidence basis and any same-assumption sibling or execution/environment limit, or `None` for a normal first Probe.
 - **User instructions:** current read-only/execution limits, external-effect authority and selected model/effort policy.
 
 Tell the worker: **read every bound Thesis source, the exact Scope, the current implementation paths and the verifier's primary evidence directly before judgment.** Caller summaries, prior success labels and latest-file lookup are navigation only.
@@ -53,10 +54,24 @@ Use the caller-selected model/effort under the existing IIS selection policy. Do
 3. Compare the verifier's selected counterexamples, dismissals and observation limits with reachable states in the current implementation. Look specifically for a shared framing omission or a material-looking boundary excluded without a discriminating basis; do not repeat an already sufficient verifier trace merely to agree with it.
 4. Search for the smallest discriminating trigger before designing a broad workaround: one byte, one pixel, one line, one header, one selector, one state bit, one ordering change or the narrowest equivalent input that separates conforming from failing behavior.
 5. Prefer abnormal and boundary conditions over replaying normal inputs already discriminated by verification. Investigate hidden route selection, stale identity, auth/session boundaries, cache/currentness, network/provider transition, UI/render versus stored state, modality conversion and lifecycle state only when connected to the current Scope or a concrete observed clue.
-6. Inspect verifier primary evidence rather than its narrative alone. For load-bearing claims compare exact initial state, trigger/order, identity, readback, observation window and settlement against reachable states the implementation can produce. A passing verifier observation is not repeated merely to agree with it.
-7. For each candidate, resolve it as an evidence-backed dismissal, a concrete finding or an exact evidence/authority limit. An unexecuted branch alone is not a finding.
+6. When a concrete falsified assumption is found, perform one bounded same-assumption sibling sweep before termination where safe: inspect only paths sharing the evidenced parser, owner, state flag, token, shared helper or invariant that can produce the same Scope-material failure. Do not scan unrelated similarly named code or continue after the bounded family is resolved.
+7. Inspect verifier primary evidence rather than its narrative alone. For load-bearing claims compare exact initial state, trigger/order, identity, readback, observation window and settlement against reachable states the implementation can produce. A passing verifier observation is not repeated merely to agree with it.
+8. For each candidate, resolve it as an evidence-backed dismissal, a concrete finding or an exact evidence/authority limit. An unexecuted branch alone is not a finding.
 
-A material finding states the exact Scope/Thesis obligation, actual mechanism or service path, minimal reachable trigger/condition, wrong result, the verifier observation that cannot distinguish it, and the narrowest next action. Separate observed facts from inference.
+A material finding states the exact Scope/Thesis obligation, actual mechanism or service path, minimal reachable trigger/condition, wrong result, the verifier observation that cannot distinguish it, the directly connected same-assumption sibling boundary examined or bounded, and the narrowest next action. Separate observed facts from inference.
+
+### Durable reproducer handoff
+
+When a material finding depends on a one-off script, non-obvious command sequence or temporary fixture, preserve enough exact content for the authorized implementation/tooling owner to rerun it after the Probe ends:
+
+- exact script bytes or complete command and an exact locator/digest;
+- required initial state, configuration, arguments and environment assumptions;
+- target and verification-mechanism identity;
+- actual failing authoritative readback and observation window;
+- authorized effect path, cleanup and settlement result; and
+- any condition not executed or only inferred.
+
+An expiring `/tmp` pathname, terminal scrollback or prose paraphrase alone is not a usable reproducer. A short reproducer may be embedded in the ordinary result; a longer one may be stored only in an existing authorized evidence location. Do not copy secrets or protected production data and do not mutate the stable product or shared test source. State whether project-regression promotion is `REQUIRED`, whether durable reproduction without automation is the narrow safe option, or why no executable regression is applicable. These descriptions guide correction; they are not new canonical statuses and do not authorize repair.
 
 For every executed Probe action, preserve the actual independent invocation identity and result reference, exact trigger/action, authorized mutable effect path or state, authoritative readback and raw evidence location, stable target/runtime identity before and after, and cleanup/settlement result. A read-only investigation records `Probe effect paths: None` and still identifies its actual reads/evidence. Missing action, currentness or settlement attribution is a material result limitation, not an implicit successful cleanup.
 
@@ -72,9 +87,9 @@ Lack of live/production access does not become `None found`. Fall back to read-o
 
 ## Termination
 
-The Probe is not an open-ended hunt. Its frontier is the current Scope, the verifier's observation boundary and concrete implementation/runtime clues, including clues that the earlier frontier selection or exclusion basis was incomplete. Stop when every material candidate raised within that frontier is resolved as dismissal, finding or exact limitation. Do not search remote possibilities merely because another input might exist, require a fixed finding count, or keep probing after the current hypothesis is discriminated.
+The Probe is not an open-ended hunt. Its frontier is the current Scope, the verifier's observation boundary and concrete implementation/runtime clues, including clues that the earlier frontier selection or exclusion basis was incomplete. Stop when every material candidate raised within that frontier and every directly evidenced same-assumption sibling raised by a finding is resolved as dismissal, finding or exact limitation. Do not search remote possibilities merely because another input might exist, require a fixed finding count, or keep probing after the current hypothesis is discriminated.
 
-`COMPLETE` means this bounded residual investigation finished; it may contain findings and is not proof that all bugs are absent. Tool failure, missing evidence, unsafe required effects, unattributable action/currentness/settlement or unfinished material investigation is `PARTIAL` or `BLOCKED`, never a synthetic no-finding result.
+`COMPLETE` means this bounded residual investigation finished; it may contain findings and is not proof that all bugs are absent. Tool failure, missing evidence, unsafe required effects, unattributable action/currentness/settlement, unusable material reproducer handoff or unfinished material investigation is `PARTIAL` or `BLOCKED`, never a synthetic no-finding result.
 
 ## Result
 
@@ -87,6 +102,7 @@ Scope: <exact canonical Scope>
 Reviewed verification: <exact report and primary-evidence references | None for standalone investigation>
 Target and authority: <exact current identities and authority limits>
 Probe actions and primary evidence: <trigger/action/authoritative readback/raw evidence | Read-only inspection only>
+Reproducer and regression handoff: <exact content/locator/digest, initial state, failing readback, sibling boundary and promotion guidance | None>
 Probe effect paths: <mutable paths/state, authorized effects and attribution | None>
 Currentness before / after: <stable source/config/runtime identities and limitations>
 Cleanup and settlement: <actual final state/readback and limitations | None>
@@ -102,9 +118,9 @@ Out-of-scope limitations: None | <limits that do not block this Scope>
 The caller preserves the verifier's unchanged semantic verdict while the Probe runs.
 
 - `COMPLETE` with attributable invocation/actions/evidence/currentness, all Probe effects settled, and no unresolved Scope-material finding or limitation permits Main to apply the currentness and status-only recording procedure in `scope-verify/SKILL.md`.
-- A Scope-material reachable violation or limitation withholds recording and routes the exact finding/limit under `iis-workflow`'s existing re-entry rules. It does not overwrite `VERIFIED` with a Probe verdict or authorize automatic repair.
+- A Scope-material reachable violation or limitation withholds recording and routes the exact finding, usable reproducer/limit and current target to the currently authorized implementation/tooling actor under `iis-workflow`'s existing re-entry rules. It does not overwrite `VERIFIED` with a Probe verdict or authorize automatic repair.
 - `PARTIAL`/`BLOCKED`, missing invocation/action/effect/currentness/cleanup attribution, or unsafe/unknown required effects withhold completion and state the exact next owner/action.
 - An out-of-scope finding or limitation is routed separately and does not block the current Scope unless it invalidates the current target or a load-bearing Scope premise.
 - Any stable source/config/authority change caused independently while Probe is running requires a fresh current-target verifier cycle. Probe does not patch or resume the old verdict.
 
-For follow-up after correction, targeted probing is allowed only when the predecessor Probe is attributable, its basis is readable, unresolved items are exact, a new settled whole-Scope verifier result exists for the current target, and the unchanged basis outside the follow-up frontier remains applicable. Otherwise perform the normal Scope-bounded Probe. Do not create a Probe registry, fingerprint store, scheduler, approval layer or new lifecycle state.
+For follow-up after correction, targeted probing is the first acquisition path only when the predecessor Probe is attributable, its finding/reproducer and basis are readable, unresolved items are exact, a new settled whole-Scope verifier result exists for the current target, and the unchanged basis outside the follow-up frontier remains applicable. Begin with the predecessor trigger, the corrected assumption, directly connected same-assumption siblings and any observation gap changed by the new verifier result. Expand to the normal Scope-bounded frontier when a new material clue, invalid past exclusion, changed dependency or unreadable/unattributable evidence prevents the targeted basis. Targeting never permits ignoring a newly reachable Scope-material path. Do not create a Probe registry, fingerprint store, scheduler, approval layer or new lifecycle state.

@@ -13,10 +13,10 @@ The caller binds one exact construction unit before dispatch:
 - **Thesis:** every Scope-bound project-local Thesis source, exact path, revision and full UTF-8 SHA-256; preserve the complete source set.
 - **Scope:** exact canonical `docs/planning/work/<slug>/SCOPE.md` path.
 - **Transition Authority:** when the Scope has `## Transition Authority`, preserve each exact project-local baseline path and full SHA-256 and apply only its selected approved Block/conditions. If the section is absent, no baseline is required. A digest proves bytes, not approval or continuation authority.
-- **Plan Review:** exact outside-Project-Root `plan_review_path` containing schema `iis-scope-plan-review/v2`, one current `ADMIT` for this Scope, the independent reviewer provenance and its unchanged rationale/findings/conditions.
-- **Plan:** exact reviewed method paths, implementation-grounded failure frontier and conditional first work.
+- **Plan Review:** exact outside-Project-Root `plan_review_path` containing schema `iis-scope-plan-review/v2`, one current `ADMIT` for this Scope, the independent reviewer provenance and its unchanged rationale/findings/conditions. The path and provenance must be readable from the implementation environment for this handoff; otherwise preserve the exact access/retention limit rather than reconstructing admission.
+- **Plan:** exact reviewed method paths, implementation-grounded failure frontier, executable discriminator disposition, non-obvious execution prerequisites and conditional first work.
 - **User instructions:** current permitted actions, selected execution mode and model/effort.
-- **Existing evidence:** implementation baseline, findings and readback locations, or `None supplied`. For correction, include the exact Verify/Probe finding and primary evidence, current authorized actor/model/effort/mode, permitted next action and authority limits.
+- **Existing evidence:** implementation baseline, findings and readback locations, or `None supplied`. For correction, include the exact Verify/Probe finding and primary evidence, repeatable reproducer or evidence limit, current target, current authorized actor/model/effort/mode, permitted next action, prior-effect settlement, regression guidance, directly connected same-assumption sibling basis and non-obvious build/fixture/readback/cleanup handoff.
 
 Tell the implementing actor: **read all bound Thesis sources, the exact Scope and the exact current Plan Review directly before implementation, including product purpose, complete loop, false-success distinctions, failure/recovery meaning, Acceptance and authoritative readback.** A summary or file-name lookup is not a substitute. These sources bound the work; they do not authorize Scope expansion.
 
@@ -28,18 +28,18 @@ Tell the implementing actor: **read all bound Thesis sources, the exact Scope an
 > - A double for an ancillary dependency does not invalidate an unrelated real boundary. Distinguish observed boundaries from boundaries replaced by doubles.
 > - If required evidence is unavailable, preserve the gap in the implementation result. Do not infer success or obtain evidence through unauthorized actions.
 
-Forward the source assignment unchanged and append exact role documents, target, plan/review, allowed effects and result path. The caller does not create a lease, execution database, hidden retry phase or replacement worker.
+Forward the source assignment unchanged and append exact role documents, target, plan/review, predecessor finding/reproducer when applicable, allowed effects and result path. The caller does not create a lease, execution database, hidden retry phase or replacement worker.
 
 ## Purpose and authority
 
-This role implements one existing ready Scope and performs implementer self-check. It does not redesign Thesis/Scope, select another outcome, write a new Plan, issue the independent semantic verdict, dispatch the Production Heuristic Probe or change Scope status. The separate verifier owns its verdict; Main owns eligible status recording after the independent Production Heuristic Probe.
+This role implements one existing ready Scope and performs implementer self-check. It does not redesign Thesis/Scope, select another outcome, write a new Plan, issue the independent semantic verdict, dispatch the Production Heuristic Probe or change Scope status. The separate verifier owns its verdict and evidence-retention decisions; Main owns eligible status recording after the independent Production Heuristic Probe.
 
 ## Inputs and admission
 
 The normal input is exact `Status: ready`. A `draft`, `blocked` or `superseded` Scope is not admitted. A `done` Scope is not reimplemented; report its existing completion/diagnostic state.
 Before admission, compare any validator `transition_authorities` records with the Scope's exact section and preserve their currentness. Do not add a transition mode or mandatory stage merely because a baseline exists.
 
-Immediately before the first source mutation, the actual implementing actor uses the supplied canonical Scope validator and ordinary read/hash tools to confirm the exact Project Root, ready Scope, bound Thesis and applicable Transition bytes, reviewed Plans and outside-root Plan Review. Compare actual bytes against the v2 review's source/Plan records and the caller-supplied review digest. Confirm the completed independent review's attribution, exact `ADMIT`, permitted start scope, conditions and lack of unresolved material findings. A valid-looking field set is not independent review evidence. Missing, stale or non-admitted review stops affected implementation with the exact reason and next owner; do not invent admission.
+Immediately before the first source mutation, the actual implementing actor uses the supplied canonical Scope validator and ordinary read/hash tools to confirm the exact Project Root, ready Scope, bound Thesis and applicable Transition bytes, reviewed Plans and outside-root Plan Review. Compare actual bytes against the v2 review's source/Plan records and the caller-supplied review digest. Confirm the completed independent review's attribution, exact `ADMIT`, permitted start scope, conditions and lack of unresolved material findings. Confirm the artifact and load-bearing provenance/evidence are actually readable. A valid-looking field set, copied summary or dead temporary path is not independent review evidence. Missing, stale, inaccessible or non-admitted review stops affected implementation with the exact reason and next owner; do not invent admission.
 
 Repeat this currentness and admission check immediately before `Completion: COMPLETE`. If Scope, Thesis, applicable Transition, Plan, review, validator, target identity or required readback is stale/unavailable, do not claim COMPLETE. Return `PARTIAL` or `BLOCKED` with the exact boundary and next owner.
 
@@ -64,9 +64,10 @@ Before the first source-file change, the actor:
 1. reads every bound Thesis source, exact Scope, Plan, Plan Review and applicable references;
 2. identifies the observable result and the applicable preservation/non-goal boundaries;
 3. reads the reviewed failure frontier as navigation and chooses the cheapest real self-checks that discriminate the changed behavior. For a material state/ownership/threshold/interruption/terminal transition, the selected check includes the approved recovery or terminal result and the minimum subsequent operation/readback on the same relevant identity/state; it does not reset away residue unless reset is the approved recovery. Reuse Scope scenarios without rewriting their full matrix;
-4. traces the real product entry to the deciding state/effect and readback, separating this Scope's owner from existing or external owners;
-5. records pre-existing working-tree changes separately from this Scope delta;
-6. confirms the first change advances the observable result or an approved invariant.
+4. for a known correction, reopens the predecessor finding's usable reproducer/primary evidence, failing readback, target/mechanism identity and cleanup, and selects the regression/durable-reproducer disposition without treating the predecessor verdict as current-target proof;
+5. traces the real product entry to the deciding state/effect and readback, separating this Scope's owner from existing or external owners;
+6. records pre-existing working-tree changes separately from this Scope delta;
+7. confirms the first change advances the observable result or an approved invariant.
 
 If a material meaning/authority conflict or missing canonical source prevents faithful implementation, stop `BLOCKED`; do not choose a convenient interpretation.
 
@@ -74,13 +75,13 @@ If a material meaning/authority conflict or missing canonical source prevents fa
 
 Implement the smallest reviewed change that satisfies the Scope's `Outcome`, all applicable `Acceptance` obligations and preservation/failure conditions. Preserve existing behavior already satisfying the Scope. Do not add speculative telemetry, fallback, persistence, recovery guarantees, interfaces or tests without a direct contract anchor or a concrete necessary failure path.
 
-Apply the reuse, deletion and consolidation choices in `references/implement.md` before adding structure; smallest means coherent and easier to understand, not merely fewer lines. These choices remain within the reviewed method and existing revision boundary.
+Apply the reuse, deletion, consolidation, correction-reproducer, execution-handoff and transition-closure choices in `references/implement.md` before adding structure; smallest means coherent and easier to understand, not merely fewer lines. These choices remain within the reviewed method and existing revision boundary.
 
 For each finding supplied by the caller or discovered in scope, identify it before claiming completion and give it one disposition: directly fixed, fixed with the same evidenced cause group, separately fixed, or returned at a contract/material-method boundary with the exact owner under `iis-workflow`'s re-entry rules. Do not pass known related findings to the verifier as if they were closed. Connect each change to its Acceptance scenario, impact span, cheapest discriminating check, real acceptance readback and external-condition limit.
 
-For correction, include the actual delta, mutation attribution, relevant causal/state/config/runtime/persistence/identity/effect surfaces, self-check and remaining uncertainty in the existing result. Any claimed unaffected obligation is navigation for the verifier, not permission to omit verification. Preserve the origin of pre-existing changes rather than adopting them as this invocation's work.
+For correction, include the actual delta, mutation attribution, relevant causal/state/config/runtime/persistence/identity/effect surfaces, predecessor finding/reproducer, regression or durable-reproducer disposition, directly connected same-assumption sibling basis, fresh corrected-target self-check, non-obvious execution handoff and remaining uncertainty in the existing result. Any claimed unaffected obligation is navigation for the verifier, not permission to omit verification. Preserve the origin of pre-existing changes rather than adopting them as this invocation's work.
 
-Use `references/implement.md` to distinguish contract changes from material method changes under `iis-workflow`'s re-entry rules. A change to meaning, approved transition geography or the current outcome returns to Main for its owning original, not to a method rewrite. With those contracts unchanged, stop mutation that depends on a material method change and return the result below. Expected output-byte changes within the reviewed method create a new verification target but do not alone require Plan revision.
+Use `references/implement.md` to distinguish contract changes from material method changes under `iis-workflow`'s re-entry rules. A change to meaning, approved transition geography or the current outcome returns to Main for its owning original, not to a method rewrite. With those contracts unchanged, a correction stays within the admitted method only when the same reviewed state/effect owner, shared interface, persistence policy, authoritative readback and safety/settlement premise remain intact. If one of those admission-controlling premises changes or cannot be established, stop mutation that depends on it and return the result below. Expected output-byte changes, discovery of a new fact and addition of a regression case do not alone require Plan revision.
 
 ```text
 SCOPE IMPLEMENT RESULT
@@ -88,7 +89,9 @@ Scope: <exact Scope>
 Completion: PARTIAL | BLOCKED
 Material method change: yes
 Reviewed direction: <current Plan/reviewed method>
+Changed Plan anchor and approved premise: <exact anchor/premise>
 New direct evidence: <exact observation>
+Changed owner/interface/readback/effect/safety condition: <exact change>
 Affected plan scope: <exact section>
 Current working-tree state: <exact state>
 Next allowed action: revise affected Plan -> independent review -> fresh implementation invocation preserving the current authorized actor/model/effort/mode
@@ -98,7 +101,7 @@ Do not keep the prior invocation alive through a continuation flag or edit the b
 
 ## Completion self-check
 
-Before COMPLETE, confirm current admission, faithful Scope outcome and preserved exclusions, disposition of known in-scope findings, and actual self-check evidence for the changed behavior. For each selected material transition, confirm that the self-check reached the contract-allowed recovery or terminal result and required follow-up observation without an unrelated state reset. Keep pre-existing changes separate. State unobserved external conditions and limits honestly. Do not repeat already-current observations, require a second full verifier cycle, or mechanically exercise every listed failure mechanism when it is irrelevant to the change.
+Before COMPLETE, confirm current admission, faithful Scope outcome and preserved exclusions, disposition of known in-scope findings, and actual self-check evidence for the changed behavior. For each selected material transition, confirm that the self-check reached the contract-allowed recovery or terminal result and required follow-up observation without an unrelated state reset. For each material Verify/Probe correction, confirm an inspectable regression/durable-reproducer disposition, fresh corrected-target observation where available, and bounded same-assumption sibling handling. Confirm the next role can use any non-obvious build/command/fixture/readback/reset/cleanup handoff or preserve the exact access/environment limit. Keep pre-existing changes separate. State unobserved external conditions and limits honestly. Do not repeat already-current observations, require a second full verifier cycle, or mechanically exercise every listed failure mechanism when it is irrelevant to the change.
 
 Tests or source inspection are supporting evidence when they do not exercise the required product boundary. Do not claim semantic verification from implementer evidence.
 
@@ -111,11 +114,13 @@ SCOPE IMPLEMENT RESULT
 Scope: <exact Scope path>
 Execution Mode: SUBAGENT | DIRECT
 Implemented result: <observable change and known finding dispositions>
+Correction evidence: <predecessor finding/reproducer, regression disposition and same-assumption sibling basis | None>
 Self-check: <actual command/readback/evidence and limits>
+Execution handoff: <build/tool/command/fixture/readback/reset/cleanup identities and limits | trivial/not applicable>
 Plan admission at completion: CURRENT | <actual failure>
-Verification handoff: <exact stable target/navigation; independent verdict not issued>
+Verification handoff: <exact stable target, mutation attribution, relevant prior-evidence locators; independent evidence breadth/verdict not decided>
 Remaining limits: <only material gaps, method changes or next-owner action>
 Completion: COMPLETE | BLOCKED | PARTIAL
 ```
 
-For a non-complete result, explain the governing constraint, observed blocker, preserved working state and exact next action. Do not add a second mandatory provenance form or infer a product defect from a transport/tool failure.
+For a non-complete result, explain the governing constraint, observed blocker, preserved working state and exact next action. Do not add a second mandatory provenance/correction form or infer a product defect from a transport/tool failure.
