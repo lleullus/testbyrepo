@@ -13,8 +13,8 @@ The caller binds one exact construction unit before dispatch:
 - **Thesis:** every Scope-bound project-local Thesis source, exact path, revision and full UTF-8 SHA-256; preserve the complete source set.
 - **Scope:** exact canonical `docs/planning/work/<slug>/SCOPE.md` path.
 - **Transition Authority:** when the Scope has `## Transition Authority`, preserve each exact project-local baseline path and full SHA-256 and apply only its selected approved Block/conditions. If the section is absent, no baseline is required. A digest proves bytes, not approval or continuation authority.
-- **Plan Review:** exact outside-Project-Root `plan_review_path` containing schema `iis-scope-plan-review/v2`, one current `ADMIT` for this Scope and the independent reviewer provenance.
-- **Plan:** exact reviewed method paths and conditional first work.
+- **Plan Review:** exact outside-Project-Root `plan_review_path` containing schema `iis-scope-plan-review/v2`, one current `ADMIT` for this Scope, the independent reviewer provenance and its unchanged rationale/findings/conditions.
+- **Plan:** exact reviewed method paths, implementation-grounded failure frontier and conditional first work.
 - **User instructions:** current permitted actions, selected execution mode and model/effort.
 - **Existing evidence:** implementation baseline, findings and readback locations, or `None supplied`. For correction, include the exact Verify/Probe finding and primary evidence, current authorized actor/model/effort/mode, permitted next action and authority limits.
 
@@ -63,7 +63,7 @@ Before the first source-file change, the actor:
 
 1. reads every bound Thesis source, exact Scope, Plan, Plan Review and applicable references;
 2. identifies the observable result and the applicable preservation/non-goal boundaries;
-3. chooses the cheapest real self-checks that discriminate the changed behavior, reusing Scope scenarios without rewriting their full matrix;
+3. reads the reviewed failure frontier as navigation and chooses the cheapest real self-checks that discriminate the changed behavior. For a material state/ownership/threshold/interruption/terminal transition, the selected check includes the approved recovery or terminal result and the minimum subsequent operation/readback on the same relevant identity/state; it does not reset away residue unless reset is the approved recovery. Reuse Scope scenarios without rewriting their full matrix;
 4. traces the real product entry to the deciding state/effect and readback, separating this Scope's owner from existing or external owners;
 5. records pre-existing working-tree changes separately from this Scope delta;
 6. confirms the first change advances the observable result or an approved invariant.
@@ -98,7 +98,7 @@ Do not keep the prior invocation alive through a continuation flag or edit the b
 
 ## Completion self-check
 
-Before COMPLETE, confirm current admission, faithful Scope outcome and preserved exclusions, disposition of known in-scope findings, and actual self-check evidence for the changed behavior. Keep pre-existing changes separate. State unobserved external conditions and limits honestly. Do not repeat already-current observations, require a second full verifier cycle, or mechanically exercise every listed failure mechanism when it is irrelevant to the change.
+Before COMPLETE, confirm current admission, faithful Scope outcome and preserved exclusions, disposition of known in-scope findings, and actual self-check evidence for the changed behavior. For each selected material transition, confirm that the self-check reached the contract-allowed recovery or terminal result and required follow-up observation without an unrelated state reset. Keep pre-existing changes separate. State unobserved external conditions and limits honestly. Do not repeat already-current observations, require a second full verifier cycle, or mechanically exercise every listed failure mechanism when it is irrelevant to the change.
 
 Tests or source inspection are supporting evidence when they do not exercise the required product boundary. Do not claim semantic verification from implementer evidence.
 

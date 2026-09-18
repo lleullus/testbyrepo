@@ -29,7 +29,7 @@ Before the first source change:
 
 1. Read the Scope `Outcome`, `Acceptance`, Non-Goals, Product Authority and transition/re-entry notes together with every bound Thesis source.
 2. State one observable product result and the truth boundary that proves it.
-3. Choose self-checks that discriminate the changed behavior and applicable preservation boundaries. Reuse the Scope scenarios; do not transcribe a second scenario matrix or pre-run the independent verifier's entire procedure.
+3. Read the reviewed Plan frontier and the independent review rationale/findings/conditions as navigation, then choose self-checks that discriminate the changed behavior and applicable preservation boundaries. Reuse the Scope scenarios; do not transcribe a second scenario matrix, treat the frontier as a new product contract or pre-run the independent verifier's entire procedure.
 4. Trace the current entrypoint through deciding writers/readers and state/effect owners to the authoritative readback. Distinguish existing, this Scope, external and unowned paths.
 5. Separate pre-existing working-tree changes from the Scope delta.
 6. Confirm the first mutation is directly tied to the observable result or an approved invariant.
@@ -57,6 +57,8 @@ Next allowed action: revise affected Plan -> independent review -> fresh impleme
 ## 5. Implementation loop
 
 Work from observable result to smallest coherent change. Preserve existing behavior that already satisfies the Scope. For each meaningful change, perform a cheap discriminating check and the minimum real acceptance-path readback available under authority. Do not add a broad hardening layer, speculative fallback, telemetry, persistence or recovery operation without a direct contract anchor or a concrete plausible failure path.
+
+When a change affects a material state transition, ownership transfer, interruption, resource-threshold crossing or terminal-state transition, the self-check must not end when the intermediate action merely starts or completes. Keep the relevant identity and state intact until the approved recovery or terminal result is observed, then perform the minimum subsequent operation or authoritative readback needed to expose stalled progress, stale flags, duplicate delivery or incomplete cleanup. Do not replace that continuity check with a fresh object, session, browser, worker or process unless recreation is itself the approved recovery behavior. The expected terminal may be an explicit failure or gap result when that is what the existing contract requires; do not invent a success policy.
 
 Before adding a layer or branch, consider whether reusing, deleting or consolidating existing paths achieves the same approved result. Prefer coherence, fewer concepts/branches/duplicates and lower reader load over raw LOC reduction; forced compression, giant functions or removal of necessary failure handling is not a smaller coherent change. Remove code made obsolete by this change where appropriate, without unrelated cleanup or speculative refactoring. Reconsidering the problem from first principles is a thinking technique, not permission to change cause, owner, shared interface, persistence, readback or effect strategy; those changes return through the Plan revision boundary above.
 
@@ -87,6 +89,7 @@ Before completion, repeat the same ordinary-tool admission and currentness check
 
 - every Scope obligation and Non-Goal boundary remains unchanged;
 - changed behavior has current discriminating self-check evidence, with material unobserved conditions explicit;
+- every selected material transition trace reaches its contract-allowed recovery or terminal result and required follow-up observation without an unrelated state reset;
 - each supplied/self-discovered finding has one of the four dispositions;
 - self-checks use the actual boundary promised by the changed behavior, rather than a surrogate;
 - no unresolved material authority, currentness, effect-settlement or attribution limit is being hidden;

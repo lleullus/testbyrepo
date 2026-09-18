@@ -32,9 +32,11 @@ Tell the worker: **read every bound Thesis source, the exact Scope, the current 
 
 Answer one bounded question: **even if the verifier's recorded observations are correct, can an actual reachable service or implementation path still violate the same approved Scope outcome, or expose a material false-success path, while those observations pass?**
 
-The Probe owns independent post-verification heuristic search and verifier-evidence sanity checking. It is not a second semantic verifier: `scope-verify` owns Scope admission, every authored Acceptance scenario, evidence sufficiency and the only `VERIFIED | FAILED | INCONCLUSIVE` verdict. Main owns completion recording. The Probe never rewrites Thesis, Scope, Plan, verifier evidence or Scope status and never turns a heuristic finding into an Acceptance verdict.
+The Probe owns independent post-verification residual heuristic search and verifier-evidence sanity checking. It is not a second semantic verifier: `scope-verify` owns Scope admission, every authored Acceptance scenario, implementation-grounded evidence sufficiency and the only `VERIFIED | FAILED | INCONCLUSIVE` verdict. Main owns completion recording. The Probe never rewrites Thesis, Scope, Plan, verifier evidence or Scope status and never turns a heuristic finding into an Acceptance verdict.
 
-The Probe's distinctive job is to test actual behavior where specification-shaped checking is weak: minimal abnormal inputs, hidden routing, state transitions and adjacent UI/auth/cache/network/modality boundaries. It may also inspect implementation and raw evidence read-only when active probing is unavailable or unnecessary.
+The Probe's distinctive job is to test actual behavior where specification-shaped checking is weak: minimal abnormal inputs, hidden routing, state transitions and adjacent UI/auth/cache/network/modality boundaries. It also challenges failure-frontier omissions, shared Plan/Review/Verify framing and unsupported `unreachable` or `non-material` exclusions when current implementation or evidence provides a concrete clue. It may inspect implementation and raw evidence read-only when active probing is unavailable or unnecessary.
+
+A known material failure assumption or evidence gap that should have prevented `VERIFIED` is not delegated to the Probe for routine completion. Preserve it as a Scope-material finding or limitation and route it through the existing verifier/re-entry boundary; do not convert the Probe into a repair step or a second Acceptance cycle.
 
 ## Invocation
 
@@ -48,10 +50,11 @@ Use the caller-selected model/effort under the existing IIS selection policy. Do
 
 1. Establish the exact Scope `Outcome`, authored `Acceptance`, applicable Thesis meaning and the verifier's actual observation boundary. Preserve explicit Non-Goals and do not invent new requirements.
 2. Trace the current ordinary entrypoint through deciding routers, writers/readers, state/effect owners and authoritative readback. Cross an adjacent boundary only when a concrete clue can change the current hypothesis.
-3. Search for the smallest discriminating trigger before designing a broad workaround: one byte, one pixel, one line, one header, one selector, one state bit, one ordering change or the narrowest equivalent input that separates conforming from failing behavior.
-4. Prefer abnormal and boundary conditions over replaying normal inputs already discriminated by verification. Investigate hidden route selection, stale identity, auth/session boundaries, cache/currentness, network/provider transition, UI/render versus stored state, modality conversion and lifecycle state only when connected to the current Scope or a concrete observed clue.
-5. Inspect verifier primary evidence rather than its narrative alone. For load-bearing claims compare exact initial state, trigger/order, identity, readback, observation window and settlement against reachable states the implementation can produce. A passing verifier observation is not repeated merely to agree with it.
-6. For each candidate, resolve it as an evidence-backed dismissal, a concrete finding or an exact evidence/authority limit. An unexecuted branch alone is not a finding.
+3. Compare the verifier's selected counterexamples, dismissals and observation limits with reachable states in the current implementation. Look specifically for a shared framing omission or a material-looking boundary excluded without a discriminating basis; do not repeat an already sufficient verifier trace merely to agree with it.
+4. Search for the smallest discriminating trigger before designing a broad workaround: one byte, one pixel, one line, one header, one selector, one state bit, one ordering change or the narrowest equivalent input that separates conforming from failing behavior.
+5. Prefer abnormal and boundary conditions over replaying normal inputs already discriminated by verification. Investigate hidden route selection, stale identity, auth/session boundaries, cache/currentness, network/provider transition, UI/render versus stored state, modality conversion and lifecycle state only when connected to the current Scope or a concrete observed clue.
+6. Inspect verifier primary evidence rather than its narrative alone. For load-bearing claims compare exact initial state, trigger/order, identity, readback, observation window and settlement against reachable states the implementation can produce. A passing verifier observation is not repeated merely to agree with it.
+7. For each candidate, resolve it as an evidence-backed dismissal, a concrete finding or an exact evidence/authority limit. An unexecuted branch alone is not a finding.
 
 A material finding states the exact Scope/Thesis obligation, actual mechanism or service path, minimal reachable trigger/condition, wrong result, the verifier observation that cannot distinguish it, and the narrowest next action. Separate observed facts from inference.
 
@@ -69,9 +72,9 @@ Lack of live/production access does not become `None found`. Fall back to read-o
 
 ## Termination
 
-The Probe is not an open-ended hunt. Its frontier is the current Scope, the verifier's observation boundary and concrete implementation/runtime clues. Stop when every material candidate raised within that frontier is resolved as dismissal, finding or exact limitation. Do not search remote possibilities merely because another input might exist, require a fixed finding count, or keep probing after the current hypothesis is discriminated.
+The Probe is not an open-ended hunt. Its frontier is the current Scope, the verifier's observation boundary and concrete implementation/runtime clues, including clues that the earlier frontier selection or exclusion basis was incomplete. Stop when every material candidate raised within that frontier is resolved as dismissal, finding or exact limitation. Do not search remote possibilities merely because another input might exist, require a fixed finding count, or keep probing after the current hypothesis is discriminated.
 
-`COMPLETE` means this bounded investigation finished; it may contain findings and is not proof that all bugs are absent. Tool failure, missing evidence, unsafe required effects, unattributable action/currentness/settlement or unfinished material investigation is `PARTIAL` or `BLOCKED`, never a synthetic no-finding result.
+`COMPLETE` means this bounded residual investigation finished; it may contain findings and is not proof that all bugs are absent. Tool failure, missing evidence, unsafe required effects, unattributable action/currentness/settlement or unfinished material investigation is `PARTIAL` or `BLOCKED`, never a synthetic no-finding result.
 
 ## Result
 

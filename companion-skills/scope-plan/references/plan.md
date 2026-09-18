@@ -26,6 +26,14 @@ An experiment affecting product source/data/schema, shared runtime, a provider o
 
 Compare alternative methods only for a real fork where a wrong choice materially matters, not every obvious local change. Candidates share the same Scope, constraints and discriminating criteria; the existing owner checks primary evidence and converges on one Plan. A synthesis of candidate parts is itself the final method to review, not automatically supported by candidate agreement or individual results. Preserve current user selection, invocation authority, no-hidden-fan-out and Planner/Reviewer nested-delegation limits; this technique creates no Arena/Swarm runner or extra role.
 
+## Implementation-grounded failure frontier
+
+Derive a bounded failure frontier from the actual implementation and the approved Scope, not from a fixed risk roster. Identify only load-bearing state or lifecycle transitions, owners and competing actors, identities or generations, resource thresholds, scheduler or timeout dependencies, persistence or reset paths, interruption or partial-completion points, and cleanup or async-lifetime boundaries that can change the approved result. Do not enumerate irrelevant dimensions or their Cartesian product.
+
+For each material boundary, keep one concise connection in the Plan: the exact implementation anchor, the assumption that can fail, a reachable failure condition, the existing Thesis/Scope obligation that would become false, and the smallest trace or observation that distinguishes a conforming implementation from that failure. A dimension name, test count or normal-path success is not a discriminator by itself. If a plausible-looking boundary is excluded because it is non-material, unreachable or outside the Scope, state that basis only when the exclusion is load-bearing to the proposed method.
+
+A trace that crosses a material state transition, ownership transfer, interruption, resource threshold or terminal-state change does not end at the intermediate effect. Keep the relevant identity and state intact through the contract-allowed recovery or terminal result and one minimum subsequent operation or authoritative readback that exposes residue, stalled progress or duplicate effect. Do not recreate the object, session or process before that observation unless recreation is itself the approved recovery contract.
+
 ## Required method substance
 
 Include only what is necessary to implement and self-check this Scope:
@@ -35,7 +43,7 @@ Include only what is necessary to implement and self-check this Scope:
 3. Cause hypothesis, competing explanation and falsifying observation only when a concrete finding or unresolved premise requires them. Distinguish observed reach from inference.
 4. Actual entry/read paths, deciding writers/readers, internal and external owners, shared interfaces, affected callers/data and state/effect lifetime. For material state, identify key, creation, updates, reads, resets, success/failure/completion and identity paths. Where versions or states coexist, identify reachable old/new producer-consumer combinations, persisted data/generated artifacts and configuration precedence, with the compatibility or migration checks they require; this does not invent a backward-compatibility promise or require a Baseline.
 5. Change structure, prerequisites, partial failure, interruption, resumption, late/duplicate response, external-effect and cleanup boundaries.
-6. Implementer self-check and final acceptance/readback. For each material failure, connect the cheapest valid discriminating check, the bounded same-assumption impact span, the minimum real acceptance path and the current-target condition for verifier handoff. Identify artifact/build/service readiness, scenario state changes, settlement and cleanup owners where required.
+6. Implementer self-check and final acceptance/readback. For each material failure in the implementation-grounded frontier, connect the cheapest valid discriminating check, the bounded same-assumption impact span, any required transition closure, the minimum real acceptance path and the current-target condition for verifier handoff. Identify artifact/build/service readiness, scenario state changes, settlement and cleanup owners where required.
 7. Local implementation discretion, conditional first work and exact conditions that return the affected method to review.
 
 Separate helper/source checks and ancillary doubles from proof through the required acceptance boundary. A runtime promise requires real entry, transition/effect and authoritative readback. A document/artifact promise can be established by direct canonical inspection. An unavailable environment is an evidence limit, not permission to redefine success. State required initial conditions: post-cleanup absence does not prove a pre-existing artifact was removed; onset does not prove settlement; publisher output does not prove subscriber/rendered state.
@@ -62,4 +70,4 @@ The independent Reviewer, not the Planner, owns the ADMIT judgment. A Plan hash 
 
 ## Planner return
 
-Return the exact Plan path, `EXISTING`/`PROPOSED`/`UNRESOLVED` grounding, conditional start bundles, primary evidence, unresolved limits and current working-tree assumptions to the preparation lead. Do not implement product source, mutate Scope/Thesis, write a verification verdict or claim delivery completion.
+Return the exact Plan path, `EXISTING`/`PROPOSED`/`UNRESOLVED` grounding, the implementation-grounded failure frontier and discriminators, conditional start bundles, primary evidence, unresolved limits and current working-tree assumptions to the preparation lead. Do not implement product source, mutate Scope/Thesis, write a verification verdict or claim delivery completion.
