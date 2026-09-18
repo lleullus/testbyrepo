@@ -45,6 +45,15 @@ Main fixes the current Scope before method writing; Plan chooses implementation 
 
 [Product Thesis](product-thesis/SKILL.md) uses a [bounded exploration procedure](product-thesis/references/exploration.md): current question → connected Breadth → deciding Depth/evidence → semantic judgment → affected revision and bounded ripple check. These are reasoning activities inside the same role, not mandatory serialized stages or a new authority. Direct reads may suffice; repository investigation is optional, and a supplied Product Completion Brief is an inspection lens rather than a gate.
 
+Natural-language request examples include:
+
+- `테시스 시작하기` — establish or reuse the applicable source and define the core promise.
+- `테시스 이어쌓기` — select the next decision-relevant meaning and integrate it, or report that no material contract delta is needed.
+- `테시스 새 요구 반영 — 수정 결과의 재실행 관계 중심` — integrate supplied meaning while preserving its obligation strength and connected consequences.
+- `테시스 점검하기 — 완료 결과 보존 중심` — assess sufficiency read-only and report the exact unresolved boundary.
+
+These are intent examples, not required commands, workflow modes or persistent presets. The user selects the purpose and may name a focus; Product-Thesis selects the bounded Breadth and Depth needed inside the same role. Each invocation reconstructs the current exact source rather than resuming a hidden cursor, and a Thesis-only request does not continue into Scope or delivery.
+
 Preserve observations, inferences, hypotheses, material unknowns and deciding counterexamples at their actual strength. An implementation defect does not require changing clear product meaning. Changed meaning receives a new ordinal revision without rewriting referenced sources; important rationale and impact use ordinary existing records, not an exploration ledger. Source identity, Scope binding, repository/runtime identity, evidence applicability and semantic applicability are distinct checks used only when relevant. A new product needs neither a pre-existing Scope nor deployed-runtime evidence to define its requested meaning.
 
 No Node registry, persistent cursor, graph-based dispatch or Observatory schema change is introduced. Existing exact source/section locators support revisiting a question; they do not restore past authority or PASS. Behavioral evaluation is specified in [refinement scenarios](evaluation/product-thesis/refinement-scenarios.md), separately from historical cohorts. These scenarios are not executed results or an automatic semantic grader; editing the skill does not prove improved agent behavior or a reloaded installation.

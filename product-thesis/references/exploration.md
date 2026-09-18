@@ -14,6 +14,12 @@ A trigger may be a new user requirement, actual observation, contradiction, rele
 
 Focus question, deciding unknown and stopping condition may be expressed in a few sentences. Do not require a form or a complete exploration map before writing an authorized partial Thesis.
 
+## Select a continuation focus
+
+For continuation or refinement, select one decision-relevant focus, or the smallest inseparable set, rather than reopening the whole product. Prefer the user's explicit focus; otherwise prefer a gap or contradiction that can change the core utility or success truth, then one that can change the current Scope choice, then a material sibling directly affected by the latest semantic change. If none exists, reuse the current source and stop.
+
+Reconstruct the exact current source and authority on every invocation. A prior next-candidate or result is context, not a persistent cursor or renewed authority. Follow the positive utility loop before accumulating failure and recovery rules. An optional focus narrows attention, not authority or Breadth: include connected material distinctions whose answers can make the selected focus false. Translate an implementation-worded focus into product-significant result, preservation or truth meaning; when only method remains, keep Thesis unchanged and route it to its existing owner.
+
 ## Breadth and Depth
 
 **Breadth** identifies connected meaning areas at a comparable level, including material siblings that have not been examined. Derive axes from the product and current question. Identity, success, preservation or recovery may be useful lenses, not universal required rows. Distinguish not examined, partly examined, sufficient for this question, inapplicable with a reason, and blocked or unresolved. These are local descriptions, not canonical status enums or a percentage denominator. A deeply investigated identity question does not establish an unexamined recovery policy.

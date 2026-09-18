@@ -15,6 +15,17 @@ The single IIS entry interprets the current request first. A discussion or statu
 
 Current user instructions take precedence over adopted product originals and derived necessity. Current implementation is evidence, not automatic product policy. Preserve explicit required outcomes and required means. Candidate or replaceable means are not completion obligations. Separate direct user choices from agent-derived decisions under actual delegation.
 
+## Request intents
+
+Interpret the user's product-definition purpose, not a required command phrase. Preserve any optional focus and explicit limits.
+
+- **Start product meaning:** establish or reuse the applicable source and define the complete core promise. An existing applicable Thesis is not ignored merely because the user says to start.
+- **Continue the Thesis:** select the next decision-relevant unresolved, contradictory or omitted meaning from the current source and integrate only an actual semantic contract delta. If no such focus remains, reuse the source and stop without manufacturing another revision.
+- **Integrate a supplied requirement:** preserve its provenance and obligation strength, reconcile overlap or conflict with existing meaning, and update only affected consequences. Mention does not automatically promote a candidate or future capability into a current required outcome.
+- **Assess sufficiency:** reconstruct the current semantic frontier and report settled meaning and exact gaps without adopting meaning or writing a source unless the user separately authorizes refinement.
+
+These intents use the same bounded exploration procedure. They create no mode, stage, status, persistent cursor, automatic continuation or downstream authority. A user focus guides selection but cannot exclude a connected material distinction whose answer can make that focus false. Translate an implementation-worded focus into its product-significant outcome, or route it to the existing owner when only method remains.
+
 ## Bounded exploration and refinement
 
 Thesis may be developed iteratively. The failure to avoid is losing why meaning changed, what remains unknown and which connected obligations need reassessment, not making more than one revision. Treat a claimed user problem as supplied experience, observed evidence or an untested hypothesis at its actual strength; do not invent a measured shortfall to justify this procedure or a preferred feature.

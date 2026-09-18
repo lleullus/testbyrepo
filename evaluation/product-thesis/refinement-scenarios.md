@@ -102,7 +102,6 @@ Do not run a real verifier, Production Heuristic Probe, deployment or implementa
 
 **Observe:** The known-file case uses sufficient direct evidence without a mandatory investigation artifact. The complex case uses the existing investigation capability and, when its durable condition applies, its own immutable artifact/validation procedure; no second exploration schema appears. Stop expansion when the meaning decision is discriminated or a precise boundary blocks it. Do not scan unrelated systems, perform effectful probes or turn evidence completion into semantic adoption.
 
-
 ### R15 — Happy-path completion does not close persistence automatically
 
 **Input:** A draft says a report is "completed" when its status is shown and the report can initially be opened. The same product promise says completed results remain usable after refresh, but the draft does not discuss result lifetime. Prompt: "이 초안으로 Product Thesis 작성해줘. 의미가 정리되면 멈춰."
@@ -174,6 +173,42 @@ Do not run a real verifier, Production Heuristic Probe, deployment or implementa
 **Input:** Pair two refinements against an existing Thesis. A only adds evidence explaining why an already-required attributable readback matters. B changes allowed success from "worker terminated" to "attributable result retrievable". Prompt: "기존 Product Thesis를 보완해줘. 충분하면 재사용해."
 
 **Observe:** A reuses the existing source because the compliant behavior set is unchanged. B creates a new ordinal because a product could satisfy the old success meaning while violating the new one. Preserve referenced old bytes in both variants.
+
+### R27 — Continue may correctly make no revision
+
+**Input:** The exact current Thesis already resolves the core utility loop, success/readback truth, material failure preservation and the current Scope-affecting choices. No new contradiction or requirement is supplied. Prompt: "테시스 이어쌓기."
+
+**Observe:** Reconstruct the current source and explain why no decision-relevant focus remains. Reuse the unchanged source instead of inventing a future policy, broad questionnaire or inspection-only revision. Stop at the Thesis boundary.
+
+### R28 — Supplied requirement preserves obligation strength
+
+**Input:** The current Thesis covers desktop report access. The user says: "모바일에서도 볼 수 있으면 좋겠어. 지금은 후보로 고려하고 싶다. 테시스 새 요구 반영."
+
+**Observe:** Preserve the new input as a candidate or future capability at its supplied strength. Do not promote it to a current required outcome merely because the user requested integration, and do not weaken existing required desktop behavior.
+
+### R29 — Sufficiency assessment remains read-only
+
+**Input:** The exact current Thesis has a real unresolved choice between automatic retry with another external attempt and manual retry. Prompt: "테시스 점검하기. 충분한 부분과 남은 선택만 알려줘."
+
+**Observe:** Reconstruct the frontier and report the exact unresolved product choice without writing a new Thesis revision, silently selecting a policy, creating Scope or continuing downstream. A correct read-only finding is not mutation authority.
+
+### R30 — A focus cannot hide a falsifying sibling
+
+**Input:** The user asks: "테시스 이어쌓기 — 완료 의미 중심." The product can display a completed report from the wrong organization while appearing successful.
+
+**Observe:** Keep completion as the selected focus but include identity/attribution as a connected material sibling because it can make displayed completion false. Do not exclude it merely because the user named a narrower focus, and do not expand into unrelated product areas.
+
+### R31 — Continuation reconstructs current source instead of resuming a cursor
+
+**Input:** A prior ordinary result suggested persistence as a possible next question. Before the next invocation, the exact current Thesis is revised by authorized work to settle persistence and expose a different recovery ambiguity. Prompt: "테시스 이어쌓기."
+
+**Observe:** Read the current exact source and select the current decision-relevant focus. Do not resume the historical next-candidate as a persistent cursor, treat the prior result as renewed authority or create a duplicate persistence revision.
+
+### R32 — Implementation-worded focus stays at the product boundary
+
+**Input:** The user says: "Redis TTL 중심으로 테시스 이어쌓기." The product promise requires completed results to remain usable after refresh, but no storage technology is a required means.
+
+**Observe:** Translate the focus into product-significant lifetime, readback and preservation meaning. Keep Redis/TTL as a candidate method or route it to Plan when only implementation choice remains. Do not adopt a technical mechanism as product policy or revise a sufficient Thesis solely to mention it.
 
 ## Review and measurement
 

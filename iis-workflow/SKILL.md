@@ -16,7 +16,7 @@ A current request starts work; old artifacts and standing preferences do not sta
 | Opinion or design discussion | Explain and evaluate; no planning artifacts or product mutation merely from the discussion. |
 | Status or remaining work | Read recorded state, explain limitations, stop. No execution of the next pointer. |
 | Investigation only | Collect evidence and the requested report; evidence does not adopt product policy. |
-| Thesis only | Create or revise product meaning and stop. |
+| Thesis only | Create, refine, integrate or assess product meaning as requested, then stop; assessment-only remains read-only. |
 | Scope only | Select and record the current outcome and stop before methods or delivery. |
 | Plan and Review only | Produce grounded methods and actual independent review; no product implementation. |
 | Implement, do not verify | Current independently reviewed method, implementation and self-check; no verifier, Probe or verified completion. |
@@ -24,6 +24,8 @@ A current request starts work; old artifacts and standing preferences do not sta
 | Build a specified outcome | Perform necessary planning and authorized delivery until that assigned result is satisfied. One Scope is not the whole result unless evidence establishes it. |
 | Fail and report / no re-entry | Preserve the exact result and stop cross-owner corrective continuation. Local correction is not a new owner cycle only within the currently admitted implementing actor's still-running invocation, reviewed method and authorized mutation surface; it neither transfers authority to Main nor keeps a completed invocation open. |
 | Stop during execution | Stop new dispatch, contain authorized work, distinguish cancellation receipt from actual settlement and report remaining work. |
+
+Natural-language Thesis intents such as starting product meaning, continuing the current Thesis, integrating a supplied requirement or assessing sufficiency refine this Thesis-only request contract. They are not workflow modes, persistent presets, artifact statuses or required command syntax. Preserve an optional user focus and explicit limits; Product-Thesis selects the bounded Breadth and Depth needed for that intent. An assessment-only intent does not authorize source mutation, and none of these intents authorizes continuation into Scope, Plan or delivery without a broader current request.
 
 Read-only and stage-only requests use this same path. Do not recreate a manual mode. Deployment, purchases, credentials, production changes and destructive external actions require their own concrete authority; a build request is not blanket permission for them.
 
