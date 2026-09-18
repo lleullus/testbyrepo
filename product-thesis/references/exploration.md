@@ -26,6 +26,8 @@ Stop a branch when the decision is sufficiently discriminated, the necessary obs
 
 Calibrate Breadth and Depth against a bounded semantic frontier rather than the model's preferred amount of exploration.
 
+Do not infer either axis from the other: depth on one item provides no breadth disposition for material siblings, and breadth enumeration provides no depth discrimination.
+
 - **Frontier source:** current user instructions, exact applicable Thesis originals, the complete core utility loop, explicit required outcomes/means, concrete observations/contradictions and distinctions that can change the current Scope choice.
 - **Inclusion test:** include a distinction when different answers can change the user-visible result, success truth/attribution, material identity/ownership, failure/recovery/preservation outcome or current construction outcome/Acceptance. This is the materiality test; no universal semantic row is required.
 - **Exclusion test:** exclude pure implementation method, non-applicable future capability, explicit Non-Goals, already-settled authority that needs no reassessment, or distinctions whose alternatives leave the current product result and truth boundary unchanged. When a boundary looks load-bearing, preserve the short basis for exclusion; do not list every irrelevant lens.
