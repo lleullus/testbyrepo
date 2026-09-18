@@ -17,7 +17,9 @@ class CorrectiveReuseContractTests(unittest.TestCase):
             "iis-workflow/SKILL.md": (
                 "usable reproducer or evidence limit",
                 "still-running independent verifier",
-                "same reviewed state/effect owner",
+                "admission-controlling premises stay unchanged",
+                "faithfully realizes the reviewed method",
+                "not alone a Plan revision",
             ),
             "companion-skills/scope-plan/references/plan.md": (
                 "executable disposition",
