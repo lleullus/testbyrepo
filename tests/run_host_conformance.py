@@ -263,7 +263,7 @@ with tempfile.TemporaryDirectory(prefix="iis-host-conformance-", dir="/tmp") as 
         binding,
         invocation,
         {"readback/stdout": b"actual-value\n"},
-    )
+    )["evidence"]
     supervisor.complete_assurance_invocation(
         binding,
         invocation,
