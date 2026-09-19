@@ -307,7 +307,7 @@ def _required_outcomes(
         bullets = [
             re.sub(r"^\s*[-*+]\s+", "", line).strip()
             for line in body.splitlines()
-            if re.match(r"^\\s*[-*+]\\s+", line)
+            if re.match(r"^\s*[-*+]\s+", line)
         ]
         values = bullets or [paragraph.strip() for paragraph in re.split(r"\n\s*\n", body) if paragraph.strip()]
         for value in values:
