@@ -283,7 +283,7 @@ class HostSupervisor:
             scope_bytes=scope_bytes,
             logical_path=logical_path,
         )
-        invocation_id = "role-" + os.urandom(16).hex
+        invocation_id = "role-" + os.urandom(16).hex()
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             db.execute(
