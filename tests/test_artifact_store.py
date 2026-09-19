@@ -94,6 +94,7 @@ class ArtifactStoreTests(unittest.TestCase):
         first_snapshot = self.store.capture_mapping({logical: b"first\n"}, kind="candidate")
         first = {"snapshot": first_snapshot, "path": logical}
         publish_ref(self.store, first, self.project, logical, expected_prior=None)
+        target.chmod(0o644)
         target.write_bytes(b"user-change\n")
         second_snapshot = self.store.capture_mapping({logical: b"first\n"}, kind="candidate")
         second = {"snapshot": second_snapshot, "path": logical}
