@@ -191,6 +191,32 @@ def ordinary(command, value):
 
 
 def _engine(family: str, variant: str, endpoint: str, runtime_state: Path) -> tuple[str, str | None, str | None]:
+    if family == 'weak-oracle':
+        value = 'revised-value' if variant == 'normal' else 'original-value'
+        return f'''
+def ordinary(command, value):
+    return {{'value': {value!r}, 'input': value}}
+''', None, None
+    if family == 'parallel-contamination':
+        isolated = variant == 'isolated'
+        return f'''
+import json
+from pathlib import Path
+
+STATE = Path({str(runtime_state)!r})
+
+def ordinary(command, value):
+    state = json.loads(STATE.read_text()) if STATE.exists() else {{}}
+    key = value if {isolated!r} else 'shared'
+    if command == 'write':
+        state[key] = value
+    elif command == 'reset':
+        state.pop(key, None)
+    if command in {{'write', 'reset'}}:
+        STATE.parent.mkdir(parents=True, exist_ok=True)
+        STATE.write_text(json.dumps(state))
+    return {{'identity': value, 'value': state.get(key)}}
+''', None, None
     if family == 'feedback-loop':
         parser_mode = 'three-part' if variant == 'all-correct' else 'first-separator-only'
         remote_mode = 'local-ack-only' if variant == 'mixed-reported-defects' else 'service'
@@ -386,6 +412,10 @@ def _contracts(family: str, app: Path, endpoint: str, kind: str | None) -> list[
              'trigger': f'Run python3 {app} remote gamma once; the disposable loopback service may take two seconds to settle.',
              'readback': f'The JSON from python3 {app} readback gamma and actual HTTP GET {endpoint}/readback/feedback; POST /feedback/settle in the service request log distinguishes actual execution from a local acknowledgement.'},
         ]
+    if family == 'parallel-contamination':
+        return [{'outcome': 'Resetting lane-b must preserve lane-a state.',
+                 'trigger': f'Run python3 {app} write lane-a, then reset lane-b, then read lane-a without resetting lane-a.',
+                 'readback': 'Actual CLI read lane-a returns value=lane-a on the same fixture.'}]
     if family == 'concurrency':
         expected = 'All four competing tasks complete and observed peak concurrency is exactly 2.'
     elif family == 'partial-failure':
@@ -549,6 +579,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from {module} import prepared
 assert {assertion}
 ''')
+    if family == 'weak-oracle':
+        _put(project, 'tests/test_helper.py', '''
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from engine import ordinary
+assert isinstance(ordinary('run', 'sample')['value'], str)
+''')
     flows = _contracts(family, app, endpoint, kind)
     thesis, scope = _documents(project, flows, app=app, engine=engine, family=family, variant=variant, endpoint=endpoint, external=kind is not None)
     service_argv = reset_argv = observer_argv = None
@@ -597,6 +635,11 @@ assert {assertion}
         trigger_argv = [sys.executable, str(app), 'lookup', identifier]
         additional_trigger_argv = [[sys.executable, str(app), 'display', identifier], [sys.executable, str(app), 'remote', 'gamma']]
         readback_argv = [sys.executable, str(app), 'readback', 'gamma']
+    if family == 'parallel-contamination':
+        allowed_output_paths = [str(runtime_state)]
+        trigger_argv = [sys.executable, str(app), 'write', 'lane-a']
+        additional_trigger_argv = [[sys.executable, str(app), 'reset', 'lane-b']]
+        readback_argv = [sys.executable, str(app), 'read', 'lane-a']
     if family == 'minimal-input-frontier':
         additional_trigger_argv = [[sys.executable, str(app), 'run', 'sample ']]
     elif family == 'finding-retention':

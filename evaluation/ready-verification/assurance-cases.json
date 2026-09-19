@@ -1,0 +1,20 @@
+{
+  "schema": "iis-assurance-cases/v1",
+  "status": "NOT_RUN",
+  "purpose": "Evaluator-only causal cases and controls; not actor prompts, model execution or performance results.",
+  "cases": [
+    {"id":"wrong-entry","fixture":"fixture_catalog.materialize:wrong-entry/holdout","normal_twin":"shared-assumption-bias/correct","discriminator":"Compare helper success with actual ordinary CLI JSON value."},
+    {"id":"weak-oracle","fixture":"fixture_catalog.materialize:weak-oracle/defective","normal_twin":"weak-oracle/normal","discriminator":"Weak string-type assertion passes both twins; actual value distinguishes original-value from revised-value."},
+    {"id":"baseline-omission","fixture":"test_assurance_baseline.BaselineTests.test_unmapped_authored_acceptance_is_rejected","normal_twin":"all authored Acceptance paragraphs mapped","discriminator":"Delete one required mapping while preserving the unchanged bound Scope; validation must reject."},
+    {"id":"framing","fixture":"fixture_catalog.materialize:shared-assumption-bias/defective","normal_twin":"shared-assumption-bias/correct","discriminator":"Plausible implementation-report narrative claims success while actual ordinary entry returns old value; compare early versus post-hypothesis disclosure."},
+    {"id":"duplicate-lanes","fixture":"external lane action traces; score_assurance","normal_twin":"distinct reachable trigger/readback traces","discriminator":"Identical initial-state/trigger/readback from two lane names does not increase unique causal detection."},
+    {"id":"state-identity","fixture":"failure_space_fixtures.TerminalLifecycle","normal_twin":"defective=false","discriminator":"Observe exit, start new, then first input on the same instance, not a replacement."},
+    {"id":"target-mechanism-drift","fixture":"test_assurance_evidence.EvidenceTests.test_runtime_identity_drift_invalidates_existing_results","normal_twin":"same final target/runtime/mechanism binding","discriminator":"Change native runtime identity or source binding after capture; old results cannot close."},
+    {"id":"parallel-contamination","fixture":"fixture_catalog.materialize:parallel-contamination/shared","normal_twin":"parallel-contamination/isolated","discriminator":"write lane-a; reset lane-b; read lane-a. Shared-key cleanup loses lane-a, isolated identity preserves it."},
+    {"id":"non-idempotent-uncertainty","fixture":"corrective_reuse_fixtures.InvocationCommandHarness","normal_twin":"authoritative applied readback obtained","discriminator":"Lose response after one applied effect; count readback proves application and blind replay would duplicate it."},
+    {"id":"correction","fixture":"corrective_reuse_fixtures.run_reproducer","normal_twin":"write_target defective=false","discriminator":"Preserved cursor trigger fails predecessor with CURSOR_OVERRUN and succeeds corrected target with STREAM_CONTINUES."},
+    {"id":"false-block-control","fixture":"test_assurance_evidence.EvidenceTests.test_actual_native_output_supports_artifact_control","normal_twin":"same normal case","discriminator":"Valid direct native observation closes without fabricated production runtime or fresh implementation Plan."},
+    {"id":"incomplete-control","fixture":"test_assurance_evaluation.CausalScoreTests.test_all_blocked_is_not_a_quality_success","normal_twin":"observed defect plus successful normal twin","discriminator":"Always BLOCKED cannot satisfy detection, normal control and incomplete thresholds; attempts and costs remain counted."},
+    {"id":"behavioral-document-change","fixture":"exact candidate skill snapshot and actual host invocation","normal_twin":"non-behavioral canonical artifact","discriminator":"Skill source changes behavior; .md alone cannot remove required behavioral attack/observation from Baseline."}
+  ]
+}

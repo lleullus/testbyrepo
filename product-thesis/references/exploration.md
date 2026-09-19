@@ -80,7 +80,7 @@ Route by what decision must change, not by the selected section or the vocabular
 | Product promise, behavior policy or success meaning is ambiguous or must change | Product-Thesis owner resolves only affected meaning within authority. Ask only for materially unresolved user-owned alternatives. |
 | Approved transition ordering, allowed intermediate state or invariant must change | Main handles applicable Baseline revision and approval before dependent construction. |
 | Scope omits an adopted obligation or its unfixed outcome choice is wrong | Main reassesses the exact current Scope under `scope-shaper`. |
-| Meaning and approved boundaries stand; method, cause, internal interface or readback strategy changes | Existing Plan owner and independent method review precede dependent implementation. |
+| Meaning and approved boundaries stand; method, cause, internal interface or readback strategy changes | Existing Plan owner revises affected method/Assurance Baseline before dependent implementation. |
 | Implementation contradicts already clear meaning | Preserve Thesis and route the defect to the currently authorized implementation actor. |
 | Evidence is stale, missing or unable to observe the required boundary | Identify the evidence/mechanism owner and the smallest permitted observation. Do not infer a product defect or rewrite meaning to fit the available check. |
 
@@ -94,7 +94,7 @@ Preserve referenced Thesis revisions byte-for-byte. A changed contract receives 
 
 A bounded **ripple check** asks which connected meanings and current downstream obligations the change can affect: for example success/readback changing failure policy, identity, persistence or UI wording. Inspect the actual connection, not every section or every historical Scope. Source identifiers, exact locators and relevant current evidence support the impact statement. A selector is not a substitute for reading the full bound originals when the downstream role requires them.
 
-An impact statement identifies possible affected acceptance and dependencies; it does not exempt an obligation, retain a prior PASS or decide verification evidence sufficiency. The independent verifier owns observation retention and any fresh whole-Scope verdict under `scope-verify`; the Production Heuristic Probe owns whether its later bounded search can be targeted under `production-heuristic-probing`. Preserve completed Scope history and connect relevant obligations to current repair/preservation work rather than reopening every done Scope. Stop/no-reentry and actor continuity remain in force.
+An impact statement identifies affected acceptance and dependencies; it does not exempt an obligation or retain old success. New target completion evidence is acquired under the current Assurance Baseline and `iis-workflow` closure contract. Prior observations remain navigation/reproduction, not approval by another role. Preserve completed Scope history and connect relevant obligations to current repair/preservation rather than reopening every done Scope. Stop/no-reentry and actor continuity remain in force.
 
 ## Currentness and resuming a question
 

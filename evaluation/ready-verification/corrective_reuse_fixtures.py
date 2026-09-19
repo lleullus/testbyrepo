@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
-from typing import Iterable, Mapping
+from typing import Iterable
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -137,8 +137,8 @@ class MethodPremise:
     safety_condition: str
 
 
-def method_change_kind(reviewed: MethodPremise, candidate: MethodPremise) -> str:
-    return "SAME_REVIEWED_METHOD" if reviewed == candidate else "MATERIAL_METHOD_CHANGE"
+def method_change_kind(current: MethodPremise, candidate: MethodPremise) -> str:
+    return "SAME_METHOD" if current == candidate else "MATERIAL_METHOD_CHANGE"
 
 
 @dataclass(frozen=True)
@@ -164,6 +164,8 @@ def evidence_action(
 ) -> str:
     if not dependency_span_bounded:
         return "BROADEN_FRESH_ACQUISITION"
+    if record.original_target != current_target:
+        return "FRESH_OBSERVATION"
     if record.mechanism_id != mechanism_id or record.runtime_config_id != runtime_config_id:
         return "FRESH_OBSERVATION"
     if record.dependencies.intersection(changed_dependencies):
@@ -175,14 +177,6 @@ def evidence_action(
     return "RETAIN_WITH_ORIGINAL_ATTRIBUTION"
 
 
-def write_review_artifact(path: Path, payload: Mapping[str, object]) -> tuple[Path, str]:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return path, sha256_file(path)
-
-
-def review_handoff_is_readable(path: Path, expected_sha256: str) -> bool:
-    return path.is_file() and sha256_file(path) == expected_sha256
 
 
 def loaded_contract_matches(

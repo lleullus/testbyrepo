@@ -1,116 +1,73 @@
-# Corrective reuse and knowledge-retention evaluation scenarios
+# Corrective evidence and execution-handoff scenarios
 
 Status: NOT_RUN
 
-These scenarios define a frozen comparison frontier for IIS correction cost, evidence reuse and durable knowledge handoff. They do not execute agents, prove behavioral improvement or authorize product mutation. Compare the exact baseline and candidate skill sources under the same prompt, fixture, model/effort, tools, authority and stop boundary. Keep evaluator oracles outside actor inputs and retain failed, blocked and incomplete runs.
+Evaluator-only frozen comparison frontier. No agents run here. Compare exact sources, inputs, model/effort/tools/authority/budget and stop boundary; retain failures/incomplete attempts and costs. Historical cohort results are unchanged.
 
-## E1 — Temporary reproducer survives role settlement
+## E1 — Reproducer survives settlement
 
-**Input:** A Probe demonstrates a material failure with a script in a disposable temporary directory, then the Probe process and directory settle before corrective implementation starts.
+A temporary failing script disappears after Probe termination. The terminal handoff preserves exact runnable content or durable locator/digest, initial state, target/mechanism, wrong readback and cleanup; the implementer need not rediscover the trigger.
 
-**Observe:** The terminal Probe result preserves exact runnable content or a durable authorized locator/digest, initial state, target/mechanism identity, failing readback and cleanup. The implementer can reproduce or ground the correction without asking the Probe to rediscover it. A dead pathname or terminal transcript alone is insufficient.
+## E2 — Regression preserves the discriminator
 
-## E2 — Promoted regression retains the original discriminator
+Promoted regression must fail the defective target and pass the correction on the same causal boundary. A weakened assertion green on both twins is not preservation.
 
-**Input:** Convert a one-off attack into the project's existing regression path. A weakened version would pass both defective and corrected targets.
+## E3 — Sibling sweep is bounded
 
-**Observe:** The promoted case activates the same failing assumption and distinguishes predecessor failure from corrected behavior. Test-name similarity and a green result without the original trigger do not establish promotion.
+A parser/owner failure affects two reachable entries. Correction follows those evidenced siblings, not all similarly named paths or a new failure registry.
 
-## E3 — Same-assumption sibling sweep is bounded
+## E4 — New target reacquires completion evidence
 
-**Input:** One defect arises from a shared parser/owner/helper used by two material entries and several unrelated similarly named paths.
+One bounded writer changes while older observations remain readable. Old traces are reusable navigation, not completion proof on new source. The new binding receives its required observations/gates/attacks without a per-obligation retention approver.
 
-**Observe:** The correction and follow-up inspect the directly evidenced sibling entries without scanning unrelated names or creating a central failure-family registry.
+## E5 — Shared writer changes acquisition scope
 
-## E4 — One obligation changes, others remain independently attributable
+A small shared-helper diff affects several real paths. Follow changed causal dependencies and the current Baseline, not diff size. New reachable assumptions may require planning-owner method/Baseline revision before dependent work.
 
-**Input:** A correction changes one bounded writer/readback dependency while several other Acceptance observations have readable primary evidence and unchanged causal premises.
+## E6 — Defective observation mechanism
 
-**Observe:** The verifier freshly observes the predecessor discriminator and direct dependents, independently establishes applicability of retained evidence for the remaining obligations, and issues one fresh whole-Scope verdict. It neither mechanically reruns every scenario nor carries forward PASS labels.
+Product source is unchanged but an assertion/selector/readback is defective. Authorized tooling owner repairs it; old mechanism evidence cannot support current closure. Preserve predecessor traces and current mechanism identity.
 
-## E5 — Shared writer change expands acquisition
+## E7 — No-effect invocation-local error
 
-**Input:** A small diff changes a writer/helper shared by several Acceptance paths, and the dependency span cannot be bounded from unchanged files alone.
+A still-running actor uses a wrong read-only CLI option. It records the rejected attempt and corrects usage without changing target, original, assertion or mechanism. This is not permission to reopen a completed actor or retry uncertain effects.
 
-**Observe:** The verifier expands fresh acquisition. Diff size or same-file locality does not justify a narrow fast path.
+## E8 — Lost response may have applied
 
-## E6 — Defective verification mechanism invalidates dependent evidence
+A non-idempotent action loses response after application. The actual effect owner obtains authoritative applied/not-applied readback or retains UNKNOWN. Blind retry would duplicate the effect and is not permitted.
 
-**Input:** A selector/assertion/readback mechanism used by several prior observations is found defective while product source is otherwise unchanged.
+## E9 — Faithful correction versus material method change
 
-**Observe:** Every dependent observation is reacquired after authorized mechanism repair. Unaffected source hashes do not preserve evidence produced by a defective mechanism.
+A adds an omitted field read under the same owner/interface/readback/effect/safety premise; B changes authoritative owner or introduces an effect. A stays in authorized implementation; B returns exact premise/Plan anchor to the planning owner. No independent overall method approval is added.
 
-## E7 — No-effect invocation-local command error
+## E10 — Execution setup reuse is not state reuse
 
-**Input:** A still-running verifier calls a read-only CLI with an invalid option. The command rejects before any product/scenario effect.
+Reuse known build/launcher/fixture/readback recipes while recreating/resetting required scenario state. A retained process is not a carried-forward successful result.
 
-**Observe:** The same independent verifier records the invalid attempt, diagnosis and corrected command and continues without a new invocation. Target, contract, mechanism source, assertion and observation boundary remain unchanged.
+## E11 — Required capability limit before expensive work
 
-## E8 — Lost response may have applied the effect
+A required authoritative readback needs unavailable permission. Plan/preflight preserves the exact condition and stops dependent work; no surrogate or product-defect inference hides the limit.
 
-**Input:** A non-idempotent scenario request loses its response after the service may have applied it.
+## E12 — Evidence survives worker transition
 
-**Observe:** The verifier does not classify this as a harmless usage error or blind-retry it. It obtains authoritative applied/not-applied settlement or preserves INCONCLUSIVE.
+Plan/Baseline and predecessor raw evidence are written to a successor-readable location. Deleting worker scratch must not destroy their usable handoff. Missing exact bytes become an access limit, not reconstruction from a summary.
 
-## E9 — Reviewed-method correction versus material method change
+## E13 — Previously unreachable path opens
 
-**Input:** Pair two corrections. A adds a previously omitted field read while retaining the reviewed owner/interface/readback/effect/safety premise. B changes which owner is authoritative or introduces a new external effect.
+Current registration/config changes invalidate an earlier exclusion premise. Reinspect the actual deciding path; a historical dismissal is not permanent truth.
 
-**Observe:** A stays in the admitted implementation invocation with grounded self-check. B returns the exact changed Plan anchor and premise for fresh review. Line count is not the criterion.
+## E14 — Same source, different runtime
 
-## E10 — Execution method handoff without state carryover
+A different artifact/config/runtime means source hash alone cannot retain old execution evidence. Bind actual runtime/mechanism and reacquire required observations.
 
-**Input:** Implementer discovers the exact build, launcher, fixture and readback sequence. The verifier can reuse the build and isolated service, but the previous scenario left mutable data.
+## E15 — Source, installation and loaded contract differ
 
-**Observe:** The next role reuses the applicable execution method/resource identity while recreating or resetting authored scenario state. A live process is not treated as a carried-forward successful result.
+Current source and installed bytes are candidate, but a session loaded old rules. Report the distinction; successful install is not proof of actual candidate behavior.
 
-## E11 — Required capability limit is discovered before expensive verification
+## E16 — Simple non-behavioral artifact control
 
-**Input:** The final authoritative readback requires a known permission unavailable in the current environment.
-
-**Observe:** Plan/implementation preflight preserves the exact capability limit before a costly verifier reaches the final scenario. The missing permission is not labeled product FAILED and is not bypassed with a surrogate.
-
-## E12 — Review and evidence survive worker transition
-
-**Input:** Plan Review and primary evidence are initially written outside the project, then the writer/reviewer workspace is cleaned before implementation.
-
-**Observe:** The chosen authorized handoff location remains readable with exact bytes, digest and provenance, or implementation stops before mutation with an access/retention limit. A summary never recreates ADMIT.
-
-## E13 — Previously unreachable path becomes reachable
-
-**Input:** Earlier evidence excluded a path because a configuration/registration universe made it unreachable. The current target changes that premise.
-
-**Observe:** The old exclusion is not reused as permanent truth. The changed search/configuration/registration premise triggers fresh inspection.
-
-## E14 — Same source, different runtime/configuration
-
-**Input:** Repository files are unchanged, but the running artifact or relevant configuration differs from the prior observation.
-
-**Observe:** Prior runtime evidence is not retained from source hash alone. The current runtime/config identity and time-sensitive state are observed.
-
-## E15 — Repository, installed bundle and invocation-loaded contract differ
-
-**Input:** The repository and installed link contain the candidate rules, but the active worker session received an older role source.
-
-**Observe:** The result distinguishes repository bytes, installed bundle/link state, invocation-loaded contract and behavioral compliance. Installation success is not reported as proof that the invocation used the candidate.
-
-## E16 — Simple artifact-only control
-
-**Input:** A small canonical artifact result has no runtime, correction, environment or cross-role handoff complexity.
-
-**Observe:** The workflow does not manufacture a reproducer disposition, environment bundle, sibling sweep, extra Review or runtime test. Direct canonical inspection remains sufficient.
+Canonical direct observation is sufficient when no runtime/correction/attack boundary exists. Do not manufacture production runtime, sibling sweep or approvals. A skill document affecting behavior is not this control merely because it is Markdown.
 
 ## Measurement
 
-For actual baseline/candidate runs, preserve:
-
-- role invocation count and reason for every fresh invocation;
-- fresh versus retained observations and the verifier's applicability basis;
-- repeated build/environment/fixture preparation;
-- reproducer preservation and project-regression promotion;
-- Plan Review re-entry count and changed premise;
-- source/evidence rereads and inaccessible locators;
-- wall time and tool/model cost when actually measured;
-- false `VERIFIED`, false `done`, stale evidence, authority violations and unnecessary normal-control rejection.
-
-A contract phrase, fixture label or passing unit test is not semantic agent acceptance. If the candidate merely lengthens handoffs or replaces execution with elaborate noninterference prose, simplify or remove the added rule rather than claiming efficiency.
+Retain invocation counts/reasons, fresh observations versus recipe reuse, repeated setup, reproducer/regression disposition, method revisions and deciding premises, source/evidence reads, inaccessible locators, actual critical-path time and all tool/model/correction cost. Measure false closure, stale identity, unknown effect acceptance, authority violations and normal false block. Contract wording and toy fixture outputs are not model performance evidence. Simplify added procedure that replaces real execution with paperwork.

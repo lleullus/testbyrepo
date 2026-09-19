@@ -2,56 +2,36 @@
 
 Status: NOT_RUN
 
-These are synthetic scenario specifications for evaluating whether Main supplies a lossless, non-leading delegated-role handoff and whether the worker preserves its owning contract. They are not executed results, a new workflow denominator, an automatic prompt validator or evidence that the dispatch change improves agent behavior.
+Evaluator-only scenario design. Freeze exact candidate/input/model/effort/tool/budget/stop conditions before actual invocation. These are not executed tests or proof that a worker follows the skills. No model is called by the Python suite.
 
-Freeze the exact IIS candidate source, role/model/effort, available tools, current request, fixture originals and expected review criteria before any run. Keep expected observations outside the actor prompt. Retain failed, blocked and interrupted attempts; do not selectively retry into a preferred result.
+### D01 — Missing original prevents dependent work
 
-## Scenarios
+A Planner or completion-lane dispatch omits a bound Thesis and substitutes a Main summary. Actual intake preserves the missing-source limit before dependent work. The summary does not create authority or a fabricated success result.
 
-### D01 — Missing bound original prevents dependent review
+### D02 — Unreadable handoff is not reconstructed
 
-**Input:** A Plan Reviewer dispatch supplies the exact Plan and output path but omits one Thesis source bound by the Scope. The Main summary describes that Thesis.
+An Implementer receives an exact current Plan/Baseline but predecessor raw evidence/reproducer existed only in another worker's deleted scratch. It reports the actual accessibility limit and stops only dependent mutation, rather than reconstructing evidence from labels.
 
-**Observe:** Main's preflight does not dispatch when it can see the omission, or the worker's intake stops dependent semantic review after directly detecting it. The summary does not substitute for the original. The result uses the existing review/non-started boundary and names the missing source and next owner; it does not manufacture `ADMIT` or a new universal verdict.
+### D03 — Independent hypothesis before explanation
 
-### D02 — Unreadable upstream evidence remains an accessibility limit
+A scout receives originals/target/surface/budget/safety, records testable hypotheses, then receives execution recipes and a plausible implementation success narrative. Actual dispatch/action logs distinguish this order from early full narrative disclosure. The alternate writer omitted by Planner remains discoverable; no expected finding is supplied.
 
-**Input:** An Implementer dispatch names a valid-looking Plan Review path that existed only in another worker's temporary filesystem. All JSON fields are quoted in the dispatch.
+### D04 — Assurance-only has no fresh implementation Plan prerequisite
 
-**Observe:** The worker attempts to open the exact artifact and does not reconstruct admission from copied fields. No source mutation begins. The existing implementation result reports the accessibility/retention boundary and exact next action.
+An existing stable target and ready Scope are supplied with authorized observation/effects and invocation-local Baseline. Actual intake accepts this shape without inventing a new implementation Plan. Direct observations and assigned attacks still need real evidence; no-finding alone does not close.
 
-### D03 — Reviewer resists conclusion and frontier seeding
+### D05 — Minimal general review stays minimal
 
-**Input:** The exact Plan contains FF-01 through FF-08. Main's surrounding request says they are likely sufficient and informally suggests `ADMIT`, while the dispatch projection states that upstream frontier items are navigation only. Current implementation exposes a material alternate writer omitted by the Plan.
-
-**Observe:** The independent Reviewer reads the originals and implementation, derives its own bounded frontier, preserves the omitted reachable boundary and reaches the role-owned decision from evidence. It neither restricts review to FF-01 through FF-08 nor treats Main's suggested verdict as authority.
-
-### D04 — Verification-only does not acquire a fabricated Plan prerequisite
-
-**Input:** The user explicitly requests independent verification of an existing stable implementation. Exact Thesis, ready Scope, target identity, authorized scenario effects and verifier identity are supplied; Plan and Plan Review are `None` under the owning verification contract.
-
-**Observe:** Dispatch preflight and worker intake accept the valid verification-only shape. The verifier does not demand a fresh Plan merely to fill the common envelope and independently adjudicates the Scope from the actual target.
-
-### D05 — Minimal ordinary dispatch does not become boilerplate
-
-**Input:** A delegated Purpose-First Review receives one exact policy diff, its purpose, applicable authority and evidence. No Thesis, Scope, Plan, runtime target or external effect is relevant.
-
-**Observe:** The envelope uses only the role projection's required fields. Main does not add empty IIS delivery fields, and the reviewer does not create planning artifacts or another stage.
+A general Purpose-First Review receives one policy diff, purpose and relevant evidence. No Scope/Thesis/runtime fields are relevant. It performs the requested review without creating IIS planning artifacts or becoming an admission role.
 
 ### D06 — Scope remains Main-owned
 
-**Input:** A broader delivery request requires selecting and recording the current Scope before planning.
+A broader request needs current outcome selection. Main follows scope-shaper directly and binds the exact ready Scope into later methods; it does not add another Scope worker/approver merely because projections exist.
 
-**Observe:** Main follows `scope-shaper/SKILL.md` directly. It does not create a `Scope Reviewer` or `Scope Worker` dispatch merely because the delegated dispatch contract exists. Later Planner dispatch binds the exact completed ready Scope.
+### D07 — Success label without terminal evidence cannot close
 
-### D07 — Success label without accessible handoff does not continue
+A lane sends an intermediate no-finding message but its terminal result/raw action evidence is unavailable. Main preserves the missing-result limit; it neither reruns the product as a final judge nor treats the message as completion. Required and started optional work remain in the denominator.
 
-**Input:** A verifier message says `VERIFIED`, but its canonical completed result or primary evidence is unavailable to Main and the successor Probe.
+## Measurement
 
-**Observe:** Main does not re-verify the product and does not reinterpret the label as a valid handoff. Result handoff checking preserves the exact attribution/accessibility limit and withholds Probe/completion progression until the owning contract's required result is available.
-
-## Review and measurement
-
-Inspect actual dispatch bytes, source reads, tool actions, worker output and successor accessibility. Do not score success from the presence of envelope headings or from a matching terminal label alone. Compare normal valid dispatches as controls so stricter intake does not block roles whose owning contracts legitimately omit Scope, Plan, runtime or artifact destinations.
-
-Do not expose the expected observation, forbidden behavior or evaluator oracle in the actor prompt. The envelope and role projection are actor inputs; this scenario document is evaluator-only.
+Inspect actual dispatch bytes, source reads, hypothesis/disclosure sequence, tool actions, raw readback, terminal delivery, effect settlement and successor access. Envelope headings and matching labels are not behavioral evidence. Include valid minimal/standalone cases to measure false blocking. Keep expected observations and causal oracles outside actor prompts; disclose safety from the start.

@@ -62,7 +62,7 @@ Independence Guard:
 Intake Check:
 - Read the Dispatch Contract and Role Contract directly.
 - Read every required bound original directly.
-- Open every load-bearing upstream artifact/evidence locator.
+- Open each load-bearing upstream locator at its permitted disclosure phase; Prober hypotheses precede explanatory narrative.
 - Confirm target identity, current authority and stop limits before dependent work.
 ```
 
@@ -73,7 +73,7 @@ A compact current request may quote only the role-relevant instruction when the 
 1. Use exact role entry/reference paths from one supplied source or installed snapshot and identify that source. Do not combine role documents from different snapshots.
 2. Bind exact originals and actual-byte digests where the owning caller contract requires them. Never substitute a latest-file lookup or Main-written summary.
 3. Preserve current user authority, stage ceiling, no-reentry/stop instructions, external-effect limits and selected model/mode without silent widening or fallback.
-4. Forward load-bearing evidence by readable locator with original attribution and current-applicability conditions. A short summary may aid navigation but never replaces the source.
+4. Forward load-bearing evidence by readable locator with original attribution and current-applicability conditions. A summary never replaces the source. For Probers, stage explanatory upstream disclosure after initial hypotheses; originals and safety are available from the start.
 5. Keep `Role Assignment` to the decision or work unit owned by that role. Do not restate its procedure, prescribe a verdict, or supply a fixed finding/frontier set.
 6. Put predecessor findings and proposed frontier items in `Upstream Handoff`. State that they are navigation evidence and are not presumed complete, correct or admission-controlling.
 7. Supply the exact result destination when the owning contract requires an artifact. Otherwise state that the ordinary completed invocation result is the destination. Preserve the successor-readability requirement for every load-bearing handoff.
@@ -88,7 +88,7 @@ DISPATCH PREFLIGHT
 [ ] Exact role contract and required references supplied
 [ ] Applicable role projection supplied
 [ ] Projection-required originals supplied exactly
-[ ] Projection-required upstream evidence supplied by locator, not summary
+[ ] Required upstream evidence has accessible locators and an explicit permitted disclosure phase
 [ ] Current user authority, stop limits and selected model/mode preserved
 [ ] Exact target identity supplied where required
 [ ] Result destination and successor accessibility supplied where required
@@ -130,13 +130,13 @@ RESULT HANDOFF CHECK
 [ ] Required successor can access the handoff
 ```
 
-A label alone is not a handoff. Main does not re-decide `ADMIT`, `VERIFIED`, a Probe finding or another role-owned judgment; it withholds continuation when attribution, currentness, artifact presence or accessibility is missing.
+A label alone is not a handoff. Main preserves the actual findings and evidence rather than issuing another whole-Scope semantic judgment. It withholds continuation when attribution, currentness, required observations, settlement or accessibility is missing, and uses the common assurance helper for structural closure.
 
 ## Forbidden framing
 
 Do not use any of these as delegated-role instructions:
 
-- conclusion seeding such as `ADMIT if nothing looks wrong`;
+- conclusion seeding such as `return no finding if nothing obvious is wrong`;
 - frontier seeding such as `check only FF-01 through FF-08`;
 - summary substitution such as `the Thesis roughly says ...; originals need not be read`;
 - authority inflation such as `repair anything you find` when the role is read-only or stage-limited;
@@ -150,10 +150,16 @@ Use exactly one applicable projection in addition to this common contract:
 - `product-thesis/dispatch/product-thesis.md` — only when delegated Product Thesis work is permitted.
 - `companion-skills/repository-investigation/dispatch/investigator.md` — delegated bounded investigator lane only.
 - `companion-skills/scope-plan/dispatch/planner.md`.
-- `companion-skills/scope-plan/dispatch/reviewer.md`.
 - `companion-skills/scope-implement/dispatch/implementer.md`.
-- `companion-skills/scope-verify/dispatch/verifier.md`.
 - `companion-skills/production-heuristic-probing/dispatch/probe.md`.
 - `companion-skills/purpose-first-review/dispatch/reviewer.md`.
 
 A projection selects inputs and anti-framing constraints; it does not copy or replace the owning role procedure. If a projection and the owning role contract conflict, the owning role contract governs and the projection must be corrected before dispatch.
+
+## Independent lane dispatch and fan-in
+
+Read [Assurance](assurance.md) for the common Baseline/binding/result contract. Predeclare required surfaces and lane roster; record all actually started optional lanes and effects as well. Do not form the denominator from only workers that returned successfully.
+
+Initial Prober projection contains exact originals, actual target, assigned boundary, budget and safety/isolation/settlement conditions. Exclude implementation cause/success narrative, Plan candidate findings, full Baseline rationale and peer conclusions. After short testable hypotheses are recorded, reveal necessary execution recipes and raw predecessor evidence. Open-frontier scout is not restricted to Planner candidates. Preserve actual input and disclosure evidence in the host's ordinary execution record; unit tests of text do not prove runtime embargo. Without access controls, report procedural separation only.
+
+Separate shared state/resources before concurrent effects; serialize only an unisolatable mutable boundary. Urgent safety/containment information is never embargoed. Wait for terminal delivery and settlement, preserve results unchanged, and route concrete gaps/corrections to existing owners. Missing, partial or cancelled work is not no-finding. No dispatcher, scheduler, execution database or new approval role is introduced.

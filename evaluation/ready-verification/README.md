@@ -1,36 +1,34 @@
 # IIS evaluation materials and standalone tools
 
-This directory retains case definitions, disposable product fixtures, a label-only scorer and historical observations. It does not execute agents, authenticate verifier reports, advance Scope status or prove current workflow success. IIS now uses skills and ordinary host tools; no OMP extension, private terminal store or custom host profile is required.
+This directory retains disposable causal fixtures, offline scorers and historical observations. No tool here invokes models/subagents, authenticates evidence or changes Scope status. Separately authorized real-invocation experiments are described in [assurance scenarios](assurance-scenarios.md), not run by the Python test suite.
 
 ## Available tools and data
 
-- `score_result.py`: standard-library Python scorer for externally supplied record arrays against `manifest.json`. It checks labels, duplicates, missing cases, repetitions and reported target mutation. `release_pass` is the historical label-score field, **not** semantic acceptance, Production Heuristic Probe completion or permission to mark a Scope done. Review actual evidence independently.
-- `fixture_catalog.py`: importable builder of disposable local products and loopback-service fixtures via `materialize(case, project, support, port=...)`. It returns commands and paths; it does not launch services or agents. The caller owns initialization, readiness and shutdown of each exact service. Never substitute production credentials/services or manufacture operator approval.
-- `implementation_fixtures.py`: importable implementation/preparation fixtures using the same product builder helpers. These are synthetic starting states, not successful execution evidence.
-- `manifest.json`, `planning-cases.json`, `completion-cases.json`, `goal-cases.json`: case definitions and reviewer oracles. Keep expected outcomes outside actor inputs. A manual experiment must freeze its own exact inputs, model, repetitions and observation boundaries before execution; these files alone are not a runnable cohort.
-- `../product-thesis/cases.json` and `../product-thesis/run.py prepare`: retained prompt/metadata preparation only, without model invocation or automatic semantic grading.
-- `baseline-observations.json` and the dated sections below: immutable historical evidence, not candidate results.
+- `score_assurance.py EXPERIMENT.json RECORDS.json`: offline frozen-case causal trace scoring, exact run/variant/repetition denominator, target/input binding, raw evidence, mutation/settlement, normal/incomplete controls, cost and lane contribution. It never grants production completion. See assurance-scenarios.md for the input contract and authenticity limits.
+- `assurance-cases.json`: current evaluator-only case/control catalog; `assurance-scenarios.md`: same-target/end-to-end comparison and ablations, Status NOT_RUN until actual authorized cohort execution.
+- `fixture_catalog.py`: `materialize(case, project, support, port=...)` creates disposable product/authority source and returns native command paths. Includes weak-oracle and shared/isolated cleanup twins. Caller owns all execution, services, readiness and settlement; never substitute production credentials.
+- `failure_space_fixtures.py` and `corrective_reuse_fixtures.py`: causal state/identity/reproducer/settlement models, not model performance or product completion evidence.
+- `score_result.py` and `manifest.json`: retained historical label-only scoring. `release_pass` is not semantic acceptance, Production Heuristic Probe completion or write authority. Historical planning/completion/goal case inventories are comparison data, not active roles.
+- `implementation_fixtures.py`: synthetic starting states using existing builders, not successful execution evidence.
+- `../product-thesis/run.py prepare`: prompt/metadata preparation only, no model invocation or automatic semantic grading.
+- `baseline-observations.json` and Historical observations below: immutable old-release evidence, never relabeled as candidate results.
 
 ```text
-python3 -B evaluation/ready-verification/score_result.py <external-record-array.json> --manifest evaluation/ready-verification/manifest.json
-python3 -B evaluation/product-thesis/run.py prepare <case-id> --arena <new-private-directory> --variant <declared-variant> --repetition <declared-repetition>
-python3 -B scripts/sync_installed_iis.py prepare --source <complete-checkout> --store <private-store>
-python3 -B scripts/sync_installed_iis.py inspect --store <private-store> --bundle <bundle-id>
+python3 -B evaluation/ready-verification/score_assurance.py EXPERIMENT.json RECORDS.json
+python3 -B evaluation/ready-verification/score_result.py RECORDS.json --manifest evaluation/ready-verification/manifest.json
 ```
-
-The installer prepares a protocol-4 skills-only payload without loading Node or activating an installation. Protocol 4 describes packaging, not an execution or verifier protocol. OMP and Codex are optional installation-path adapters.
 
 ## Retired execution paths
 
-`run_agent.py`, `prepare_environment.py`, `calibrate.py`, `planning.py`, `completion.py`, `goal.py`, `implementation.py`, `topology.py` and `inspect_run.py` were retired with the Scope boundary extension. Their OMP capture, private verifier terminal, automated finalization and dependent aggregation paths are no longer current commands. Product Thesis's former `run` command was also removed. Historical commands below require their own pinned historical source and environment; no compatibility execution mode or replacement runner is provided.
+The old host-specific cohort runners, private terminal store and automatic finalizer remain retired. Their historical commands require pinned historical sources, not a compatibility mode or new runner. Old approval roles are not fallback current authorities.
 
 ## Current observation boundary
 
-Use the current IIS skills for independent Plan Review, implementation, independent verification and an independent bounded Production Heuristic Probe. A verifier reports the exact Scope/Thesis and actual target paths, scenario-effect paths, real observations/evidence, before/after currentness and its original `VERIFIED`, `FAILED` or `INCONCLUSIVE` judgment. The Probe records its actual invocation, actions and primary evidence, effect paths, before/after target/runtime identity, cleanup and settlement, and Scope-material versus out-of-scope findings and limitations. Main checks attribution/currentness, settled verifier and Probe effects, and Probe `COMPLETE` without unresolved Scope-material findings or limitations before editing only the ready-to-done status and reading it back. These are procedural responsibilities, not host-enforced authentication.
+Plan/Assurance Baseline declares required evidence, real readback predicates and actual attack surfaces. Authorized implementation self-check is separate from independent Production Heuristic Probe lanes. Main preserves terminal results and native observations, all started effects and current target/original identity, then runs structural evidence closure. Direct observation failure or unknown cannot be offset by no-finding labels. EVIDENCE_COMPLETE is not a semantic credential or automatic status writer.
 
-Keep verdict, completion eligibility and observed Scope status distinct. Synthetic history, a matching label, clean process exit, source digest or an old runner's success cannot establish current delivery. Preserve failed/partial attempts and evidence limits; never repair a case or retry selectively into success.
+Record actual dispatch bytes/disclosure order for hypothesis-before-narrative experiments; text tests cannot prove embargo or independent thought. Keep fixed case oracles outside actor input. Preserve failed/partial/cancelled/skipped runs and cost, not just successful replacements. New source/runtime/mechanism requires current evidence. Main's status-only recording and whole-request boundary live in iis-workflow. Source/install identity does not prove an active session loaded the contract.
 
-The standalone document validators remain in their owning skill directories. They check structure and source references, not semantic verification or actual product success.
+The standard-library Python suite exercises local helper/fixture/install behavior without models. Actual behavioral evaluation remains separately authorized and NOT_RUN until performed.
 
 ## Historical observations (old releases only)
 

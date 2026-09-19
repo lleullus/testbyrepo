@@ -1,40 +1,29 @@
 # Production Heuristic Probe dispatch projection
 
-This projection selects inputs for one independent bounded Probe invocation. Probe method, materiality and completion remain owned by `production-heuristic-probing/SKILL.md`.
-
 ## Required
 
-- Exact Project Root.
-- Every bound Thesis original and exact Scope with actual-byte SHA-256.
-- Applicable Transition Authority paths/digests, or `None` when absent.
-- Exact completed independent verifier result, actual invocation identity and readable primary evidence.
-- Exact stable target/source/runtime identities and verifier before/after currentness observations.
-- Declared Probe effect authority, protected surfaces, cleanup/settlement limits and selected model/effort.
-- Actual separate Probe invocation identity and ordinary result destination.
-- Exact predecessor Probe result, finding/reproducer and corrected-target navigation when this is a follow-up; otherwise `None`.
+- Exact current request and Project Root/target identity; current stage/action/stop/effect authority and user-selected model/effort.
+- For completion lanes: exact Scope, every bound Thesis/approved Transition path/digest, final source/execution binding, lane ID, assigned surfaces, minimum attempts and budget.
+- For standalone investigation: exact requested boundary/target; canonical originals when applicable, otherwise explicitly None. No prior overall result or implementation Plan prerequisite.
+- Actual separate invocation/result destination, authorized namespaces, protected surfaces, isolation and cleanup/settlement owner.
+- Same-snapshot role/common assurance contracts. Scope-less standalone uses their evidence discipline without fabricating a completion binding.
 
 ## Optional
 
-- Current implementation paths and verifier observation gaps as navigation.
-- Implementation regression/reproducer disposition and directly connected same-assumption sibling basis for follow-up.
+After initial hypothesis capture only: needed execution recipe, current native results, predecessor finding/reproducer, correction/sibling navigation and accessible raw evidence.
 
 ## Forbidden framing
 
-- Do not ask the Probe to repeat the verifier merely to agree with it.
-- Do not seed a finding, no-finding result, fixed risk roster or expected completion eligibility.
-- Do not ask it to resolve a known evidence gap that should have prevented `VERIFIED`.
-- Do not authorize stable target, protected production state, Thesis, Scope, Plan, verifier evidence or status mutation.
+Before hypotheses do not disclose implementation cause/success narrative, Plan candidate findings, full Baseline rationale or peer conclusions. Never hide safety facts. Do not prescribe no-finding, require every Acceptance approval, or authorize stable target/shared mechanism/original/status changes.
 
 ## Assignment pattern
 
-```text
-Search the current Scope-bounded residual reachable failure paths or observation gaps supported by concrete implementation or verifier-evidence clues, using the smallest safe discriminating trigger.
-```
+From these originals and this exact target, derive and record testable hypotheses, then attempt the smallest permitted traces that can falsify an existing promise at your assigned actual boundary. A scout is not restricted to Planner candidates.
 
 ## Independence guard
 
-Treat the verifier's recorded observations as evidence, not as a complete search frame. Do not re-adjudicate every Acceptance scenario; challenge only residual reachable paths, unsupported exclusions or observation gaps grounded in the current target and evidence.
+Use a separate invocation. Capture hypotheses before explanatory upstream disclosure. Isolate mutable resources or serialize their shared boundary. Preserve actual input/disclosure evidence; absent host access controls, report procedural embargo rather than enforced isolation. Safety/containment facts bypass embargo.
 
 ## Result
 
-Return one `PRODUCTION HEURISTIC PROBE RESULT` with actual invocation/actions, primary evidence, target/effect currentness, durable reproducer handoff when material, cleanup/settlement, Scope-material and out-of-scope findings/limitations, and `COMPLETE | PARTIAL | BLOCKED`. Do not issue a second semantic verdict or record completion.
+PRODUCTION HEURISTIC PROBE RESULT plus the structured lane result when bound for completion: actual hypotheses/actions/readbacks/evidence, target/invocation, finding disposition/reproducer, effects/settlement and separate search outcome and COMPLETE/PARTIAL/BLOCKED. No overall semantic verdict, repair or completion recording.

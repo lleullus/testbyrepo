@@ -72,7 +72,7 @@ Challenge the proposed meaning:
 - Could displayed success belong to the wrong identity, revision or cause?
 - Could failure, repetition or late output destroy a result the product promises to preserve?
 
-Resolve only material contradictions. Do not invent adjacent requirements to make review look thorough. Product acceptance meaning belongs here; Scope makes its current application observable, and the verifier owns exact evidence collection and adjudication.
+Resolve only material contradictions. Do not invent adjacent requirements to make review look thorough. Product acceptance meaning belongs here; Scope makes its current application observable. The planning owner maps those obligations to actual evidence and independent attack surfaces; structural closure does not replace product meaning or create another semantic judge.
 
 ## Decisions and confirmation
 

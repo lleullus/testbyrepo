@@ -20,7 +20,7 @@ Use this projection only when the current user authority and the owning Product 
 
 ## Forbidden framing
 
-- Do not require Scope, Plan or Plan Review merely to begin Product Thesis work.
+- Do not require Scope, implementation Plan or Assurance Baseline merely to begin Product Thesis work.
 - Do not tell the worker which semantic conclusion or revision decision to reach.
 - Do not promote an implementation defect, hypothesis or optional capability into product policy.
 - Do not imply permission to continue into Scope, Plan or delivery.

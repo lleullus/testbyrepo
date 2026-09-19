@@ -102,22 +102,22 @@ Main은 현재 상태를 대조하면서 독립적으로 설명하고 결과를 
 
 성능 목표는 기존 요구나 비교 가능한 측정 기준이 있으면 이를 사용한다. 없다면 필요한 사용 조건과 목표의 근거를 계획에서 구체화하고, 임의의 응답 시간이나 개선율을 확정하지 않는다.
 
-제품 동작·상태·실패와 복구 정책은 Thesis에, 적용되는 승인 전환 경계·순서는 Baseline에, 이번에 완성할 결과와 수락 조건은 Scope에, 실행 방법은 Plan에 둔다. 기존 독립 Plan Review에서 원본에 대한 계약의 충실성과 방법의 충분성을 구분해 확인하며 별도 검토 단계는 만들지 않는다. 구현 중 다른 결정이 필요하면 Main이 IIS의 re-entry 규칙으로 해당 원본에 반환한다. 내부 코드 변경이나 특정 장치의 설치 자체를 사용자 결과의 달성으로 보지 않는다.
+제품 동작·상태·실패와 복구 정책은 Thesis에, 승인된 전환 경계·순서는 Transition Baseline에, 현재 결과와 수락 조건은 Scope에, 구현 방법과 증거 실행 기준은 Plan 및 Assurance Baseline에 둔다. Planner는 원본에 근거한 방법과 실제 관측 경로를 작성하며 독립 종합 승인 역할은 두지 않는다. 구현 중 다른 결정이 필요하면 Main이 기존 re-entry 규칙으로 해당 원본에 반환한다. 코드 변경이나 장치 설치 자체를 사용자 결과 달성으로 보지 않는다.
 
 ## 7. 기존 IIS 담당 범위로 연결하고 요청한 지점에서 종료한다
 
 제품 의미가 타당한데 구현이나 표현이 약속을 충족하지 못하는 경우에는 해당 동작·계획·구현 수준의 문제로 다룬다. 구현 결함을 발견했다는 이유만으로 Product Thesis를 다시 정의하지 않는다. 새로운 제품 의미를 정하거나 본질적으로 바꿔야 하는 경우, 또는 실제 근거가 기존 의미의 핵심 전제를 무효화한 경우에만 기존 조건에 따라 제품 의미 담당자로 돌아간다.
 
-Main이 현재 제품 상태와 Thesis, 적용되는 Baseline을 대조해 Scope 계약을 고정하며 별도 Shaper 단계나 호출은 두지 않는다. 이미 정확한 Scope와 현재 근거가 충분하면 중복 작성하지 않고 요청한 단계로 진입한다. 실행 방법은 Plan과 독립 Plan Review에서 다룬다. 검토만·Thesis만·Scope만·Plan과 Review만 같은 단계 제한은 해당 결과에서 멈추며, 기존 구현의 검증만 요청했다면 새 Plan이나 구현을 선행 조건으로 만들지 않는다.
+Main이 현재 상태와 Thesis, 적용되는 승인 Transition을 대조해 Scope를 고정하며 별도 Shaper 호출은 두지 않는다. 정확한 Scope와 근거가 충분하면 재사용한다. 방법은 Plan과 Assurance Baseline에서 다룬다. 검토만·Thesis만·Scope만·계획만 요청은 해당 단계에서 멈춘다. 기존 구현 assurance-only는 invocation-local Baseline으로 진입하며 새 구현 Plan이나 구현을 요구하지 않는다.
 
 결과 보고에는 판단 기준과 출처, 주요 근거와 한계, 선택한 개선 범위와 보류 이유, 개선 후 확인할 결과, 요청한 단계의 산출물이 드러나면 된다. 기존 IIS 산출물에 충분히 담겨 있다면 별도 감사 보고서나 중복 문서를 만들지 않는다.
 
-현재 요청에 다른 종료점이 없는 이 브리프의 기본 계획 범위는 하나의 `ready` Scope, 해당 Plan과 실제 독립 Plan Review까지다. 계획 완료는 현재 원본과 일치하는 검토 결과가 `ADMIT`이고 중요한 미해결 문제가 없을 때만 인정한다. 이것은 제품의 구현·검증 완료나 Scope의 `done`을 뜻하지 않는다. 계획만 요청된 경우 구현이나 다음 Scope를 자동 시작하지 않는다.
+다른 종료점이 없는 이 브리프의 기본 계획 범위는 하나의 ready Scope와 grounded Plan/Assurance Baseline까지다. 원본·구조·증거 경로와 실제 실행 전제를 확인하고 미해결 조건을 명시한다. 계획 완료는 제품 완료나 Scope done이 아니며 계획만 요청된 경우 구현·공격·다음 Scope를 자동 시작하지 않는다.
 
-구현·검증까지 명시한 요청은 그 허용 범위까지 이어간다. 구현자의 self-check와 별도 검증자의 의미 판정을 구분하고, 성공한 독립 검증 뒤에는 독립 Production Heuristic Probe를 수행한다. Main은 실제 완료된 독립 검증의 `VERIFIED`와 Probe의 `COMPLETE`, 현재 Scope를 무효화하는 중요한 finding/evidence gap의 부재를 확인한다. 결과의 귀속·현재성, 검증한 원본·대상의 유지와 실행 효과의 정리도 확인한 뒤 일반 파일 도구로 해당 Scope의 상태만 `ready`에서 `done`으로 바꾸고 실제 기록을 읽어 확인한다. 검증 원판정과 Probe 결과, 완료 기록은 분리하며, 실패·불확정·누락·오래된 증거를 완료로 바꾸지 않는다. 이는 절차상 책임이지 호스트가 강제하는 인증이나 잠금은 아니다.
+구현·assurance까지 명시한 요청은 허용 범위까지 이어간다. 구현자 self-check, 필수 직접 관측/native gate, 독립 Production Heuristic Probe의 반례 탐색을 구분한다. Main은 사전에 정한 결과 집합과 실제 시작한 invocation/effect의 귀속·현재성·정산을 확인하고 구조적 evidence closure를 계산한다. 실패한 관측, 중요한 미해결 반례·후보, 증거 누락·불명·drift는 no-finding으로 상쇄되지 않는다. 현재 EVIDENCE_COMPLETE와 사용자 권한·대상 유지가 확인되면 Scope 상태만 ready→done으로 바꾸고 실제 status-only delta를 읽어 확인한다. 원본 결과·closure·완료 기록은 분리한다. 구조 검사나 hash가 의미적 성공·호스트 인증·잠금 또는 쓰기 권한을 증명하지 않는다.
 
 Scope 하나의 완료를 요청 전체의 완료로 간주하지 않는다. Main은 처음 요청한 결과와 남은 필수 항목을 다시 대조하고, 현재 사용자 권한과 종료 조건 안에서만 후속 작업을 진행한다. 운영 배포·외부 변경에는 별도 구체적 권한이 필요하며, 현재 사용자의 중지나 단계 제한을 우선한다.
 
 살펴본 범위에서 변경을 정당화할 결함이나 개선 기회가 없다면, 판단 범위와 근거를 밝히고 변경하지 않는 결론을 낼 수 있다. 결정적인 정보가 부족하다면 무엇이 어떤 선택을 막는지 명시한다. 어느 경우에도 제품 전체가 완벽하다고 선언하거나, 결과물을 만들기 위해 개선 과제를 억지로 생성하지 않는다.
 
-현행 역할·종료 조건의 원본: [IIS](iis-workflow/SKILL.md), [Thesis](product-thesis/SKILL.md), [Scope](scope-shaper/SKILL.md), [Plan·독립 Review](companion-skills/scope-plan/SKILL.md), [검증·완료 기록](companion-skills/scope-verify/SKILL.md), [Production Heuristic Probe](companion-skills/production-heuristic-probing/SKILL.md).
+현행 역할·종료 조건의 원본: [IIS 및 완료 기록](iis-workflow/SKILL.md), [Thesis](product-thesis/SKILL.md), [Scope](scope-shaper/SKILL.md), [Plan/Baseline](companion-skills/scope-plan/SKILL.md), [Assurance 증거 계약](iis-workflow/references/assurance.md), [Production Heuristic Probe](companion-skills/production-heuristic-probing/SKILL.md).

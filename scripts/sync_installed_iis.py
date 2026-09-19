@@ -26,28 +26,28 @@ PAYLOAD_ROOTS = (
     "iis-workflow", "product-thesis", "scope-shaper", "iis-observatory", "repo-snapshot",
     "observatory/bin", "observatory/src",
     "companion-skills/scope-plan", "companion-skills/scope-implement",
-    "companion-skills/scope-verify", "companion-skills/production-heuristic-probing",
+    "companion-skills/production-heuristic-probing",
     "companion-skills/repository-investigation", "companion-skills/purpose-first-review",
     "iis_path_contract.py",
 )
 REQUIRED = (
     "iis-workflow/SKILL.md", "product-thesis/SKILL.md",
+    "iis-workflow/references/assurance.md", "iis-workflow/tools/assurance.py",
     "scope-shaper/SKILL.md", "scope-shaper/tools/validate_scope.py",
     "iis-observatory/SKILL.md", "repo-snapshot/SKILL.md",
     "observatory/bin/iis-observatory", "observatory/src/iis_observatory/__main__.py",
     "companion-skills/scope-plan/SKILL.md",
     "companion-skills/scope-plan/references/plan.md",
-    "companion-skills/scope-plan/references/review.md",
     "companion-skills/scope-implement/SKILL.md",
     "companion-skills/scope-implement/references/implement.md",
-    "companion-skills/scope-verify/SKILL.md",
-    "companion-skills/scope-verify/references/verify.md",
     "companion-skills/production-heuristic-probing/SKILL.md",
     "companion-skills/repository-investigation/SKILL.md",
     "companion-skills/purpose-first-review/SKILL.md",
     "iis_path_contract.py",
 )
 CANDIDATE_RETIRED = (
+    "companion-skills/scope-verify", "companion-skills/scope-plan/references/review.md",
+    "companion-skills/scope-plan/dispatch/reviewer.md",
     "iis-adaptive-planning", "matt", "delivery-runtime", "delivery-tools",
     "companion-skills/ready-ticket-plan", "companion-skills/ready-ticket-implement",
     "companion-skills/ready-ticket-verify", "companion-skills/ready-ticket-coverage",
@@ -214,7 +214,9 @@ def inspect(store: Path, bundle_id: str | None = None) -> dict:
         if bundle_id is None:
             installed = check_install(store)
             bundle_id = installed["bundle_id"]
-        manifest = check_candidate_release(store, bundle_id)
+            manifest = read_json(release_path(store, bundle_id) / "bundle.json")
+        else:
+            manifest = check_candidate_release(store, bundle_id)
         return {"bundle_id": manifest["bundle_id"], "family": manifest["family"],
                 "protocol": manifest["protocol"],
                 "files": len(manifest["files"]), "loaded_identity": "NOT_CHECKED"}

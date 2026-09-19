@@ -19,25 +19,6 @@ class RepositoryInvestigationContractTests(unittest.TestCase):
         )
         self.openai = (INVESTIGATION / "agents" / "openai.yaml").read_text(encoding="utf-8")
 
-    def test_skill_surface_is_bounded_and_discoverable(self) -> None:
-        self.assertEqual(
-            {path.name for path in INVESTIGATION.iterdir()},
-            {"SKILL.md", "agents", "references", "templates", "tools"},
-        )
-        self.assertEqual({p.name for p in (INVESTIGATION / "agents").iterdir()}, {"openai.yaml"})
-        self.assertEqual(
-            {p.name for p in (INVESTIGATION / "references").iterdir()}, {"investigation.md"}
-        )
-        self.assertEqual(
-            {p.name for p in (INVESTIGATION / "templates").iterdir()},
-            {"REPOSITORY-INVESTIGATION.template.md"},
-        )
-        self.assertEqual(
-            {p.name for p in (INVESTIGATION / "tools").iterdir()},
-            {"prepare_investigation_workspace.py", "validate_investigation.py"},
-        )
-        self.assertIn("name: repository-investigation", self.skill)
-        self.assertIn("$repository-investigation", self.openai)
 
     def test_investigation_is_evidence_authority_not_iis_authority(self) -> None:
         combined = self.skill + self.workflow

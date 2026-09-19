@@ -79,6 +79,28 @@ class FixtureBoundaryTests(unittest.TestCase):
             "consumer": "display", "identifier": "org:west:item-42", "label": "org/west/item-42",
         })
 
+    def test_weak_oracle_passes_both_twins_but_actual_value_differs(self):
+        for variant, expected in (("defective", "original-value"), ("normal", "revised-value")):
+            metadata = self.catalog.materialize(
+                {"family": "weak-oracle", "variant": variant},
+                self.root / f"{variant}-product", self.root / f"{variant}-support", port=12345,
+            )
+            helper = subprocess.run([sys.executable, str(Path(metadata["project_root"]) / "tests/test_helper.py")], env=self.environment, capture_output=True)
+            actual = subprocess.run(metadata["trigger_argv"], env=self.environment, check=True, capture_output=True, text=True)
+            self.assertEqual(helper.returncode, 0)
+            self.assertEqual(json.loads(actual.stdout)["value"], expected)
+
+    def test_other_lane_cleanup_requires_resource_isolation(self):
+        for variant, expected in (("shared", None), ("isolated", "lane-a")):
+            metadata = self.catalog.materialize(
+                {"family": "parallel-contamination", "variant": variant},
+                self.root / f"{variant}-product", self.root / f"{variant}-support", port=12345,
+            )
+            for argv in (metadata["trigger_argv"], metadata["additional_trigger_argv"][0]):
+                subprocess.run(argv, env=self.environment, check=True, capture_output=True)
+            readback = subprocess.run(metadata["readback_argv"], env=self.environment, check=True, capture_output=True, text=True)
+            self.assertEqual(json.loads(readback.stdout), {"identity": "lane-a", "value": expected})
+
     def test_feedback_loop_remote_execution_is_separate_and_observable(self):
         for variant, should_post in (("mixed-reported-defects", False), ("all-correct", True)):
             with self.subTest(variant=variant):

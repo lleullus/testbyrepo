@@ -109,8 +109,8 @@ class CorrectiveReuseFixtureTests(unittest.TestCase):
             self.assertEqual(harness.authoritative_readback(), 1)
             self.assertNotEqual(harness.authoritative_readback(), 0, "blind retry would duplicate the effect")
 
-    def test_method_boundary_uses_reviewed_premises_not_diff_size(self) -> None:
-        reviewed = self.fx.MethodPremise(
+    def test_method_boundary_uses_current_premises_not_diff_size(self) -> None:
+        current = self.fx.MethodPremise(
             "session-owner", "proc-stat", "none", "session-id", "signal-owner", "settled-child"
         )
         same_method = self.fx.MethodPremise(
@@ -119,14 +119,14 @@ class CorrectiveReuseFixtureTests(unittest.TestCase):
         new_owner = self.fx.MethodPremise(
             "foreground-group", "proc-stat", "none", "session-id", "signal-owner", "settled-child"
         )
-        self.assertEqual(self.fx.method_change_kind(reviewed, same_method), "SAME_REVIEWED_METHOD")
-        self.assertEqual(self.fx.method_change_kind(reviewed, new_owner), "MATERIAL_METHOD_CHANGE")
+        self.assertEqual(self.fx.method_change_kind(current, same_method), "SAME_METHOD")
+        self.assertEqual(self.fx.method_change_kind(current, new_owner), "MATERIAL_METHOD_CHANGE")
 
     def test_evidence_reuse_and_broadening_controls(self) -> None:
         record = self.fx.EvidenceApplicability(
             obligation="legacy-output",
             original_target="target-a",
-            original_invocation="verify-a",
+            original_invocation="observation-a",
             dependencies=frozenset({"legacy-reader"}),
             mechanism_id="harness-a",
             runtime_config_id="config-a",
@@ -141,7 +141,7 @@ class CorrectiveReuseFixtureTests(unittest.TestCase):
         )
         self.assertEqual(
             self.fx.evidence_action(changed_dependencies={"new-writer"}, **common),
-            "RETAIN_WITH_ORIGINAL_ATTRIBUTION",
+            "FRESH_OBSERVATION",
         )
         self.assertEqual(
             self.fx.evidence_action(changed_dependencies={"legacy-reader"}, **common),
@@ -161,17 +161,11 @@ class CorrectiveReuseFixtureTests(unittest.TestCase):
             ),
             "BROADEN_FRESH_ACQUISITION",
         )
+        self.assertEqual(
+            self.fx.evidence_action(changed_dependencies=(), **{**common, "current_target": "target-a"}),
+            "RETAIN_WITH_ORIGINAL_ATTRIBUTION",
+        )
 
-    def test_review_handoff_requires_original_readable_bytes(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            review, digest = self.fx.write_review_artifact(
-                root / "durable" / "review.json",
-                {"schema": "iis-scope-plan-review/v2", "decision": "ADMIT"},
-            )
-            self.assertTrue(self.fx.review_handoff_is_readable(review, digest))
-            review.unlink()
-            self.assertFalse(self.fx.review_handoff_is_readable(review, digest))
 
     def test_repository_install_and_invocation_identity_are_distinct(self) -> None:
         self.assertTrue(

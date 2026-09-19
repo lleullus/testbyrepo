@@ -4,9 +4,9 @@
 
 2026-09-15에 IIS의 OMP 본체 종속 기능과 Scope 플러그인을 제거하고, 스킬과 일반 도구로 수행하는 구조로 전환했다. 이 문서는 나중에 그 기능이 다시 필요할 때 참고 코드를 찾고 현재 구조에 맞게 재도입하는 방법을 남긴다. 재도입 승인, 필수 후속 작업, 새 IIS 단계는 아니다.
 
-현재 제품 계약은 **Thesis → Scope → Plan·독립 Review → 구현 → 독립 검증 → Production Heuristic Probe → Main의 완료 기록**이다. 기본 IIS에는 전용 실행 CLI, 호스트 verifier profile, 불투명 terminal handle이 필요하지 않다. 현재 Plan Review는 `iis-scope-plan-review/v2`, 설치는 `iis-bundle/v4`·`iis-install/v4`, 패키징 protocol은 `4`, family는 `iis-skills`다. 이 패키징 버전은 실행 프로토콜이 아니다.
+현재 제품 계약은 **Thesis → Scope → Plan/Assurance Baseline → 구현 → 실제 관측/native gates → 독립 Production Heuristic Probe lanes → evidence closure → Main 완료 기록**이다. 독립 종합 승인·전체 Scope 의미 판정 역할이나 대체 final judge는 없다. 작은 Python helper는 binding·native capture·구조적 closure를 담당하며 agent 실행·상태 쓰기·호스트 인증을 하지 않는다. 설치는 `iis-bundle/v4`·`iis-install/v4`, 패키징 protocol `4`, family `iis-skills`를 유지한다.
 
-현재 원본: [README](../../README.md), [의존성 지도](ready-runtime/dependency-map.md), [검증 경계](ready-runtime/verification.md), [Plan](../../companion-skills/scope-plan/SKILL.md), [검증](../../companion-skills/scope-verify/SKILL.md), [Production Heuristic Probe](../../companion-skills/production-heuristic-probing/SKILL.md).
+현재 원본: [README](../../README.md), [의존성 지도](ready-runtime/dependency-map.md), [증거·검증 경계](ready-runtime/verification.md), [Plan](../../companion-skills/scope-plan/SKILL.md), [Assurance](../../iis-workflow/references/assurance.md), [Production Heuristic Probe](../../companion-skills/production-heuristic-probing/SKILL.md).
 
 ## 1. 커밋 통합 뒤에도 참고 코드를 찾는 방법
 

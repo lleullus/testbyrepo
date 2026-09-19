@@ -1,7 +1,7 @@
 """Defect/control models for failure-space completeness evaluation.
 
 They prove the proposed discriminator separates nearby implementations; they do
-not execute IIS roles or manufacture verifier evidence.
+not execute IIS roles or establish delivery completion.
 """
 from __future__ import annotations
 
@@ -114,5 +114,5 @@ def implementation_frontier(*, artifact_only: bool, runtime_clues: Iterable[str]
 
 def evidence_disposition(*, required_runtime_available: bool, contradiction_observed: bool) -> str:
     if contradiction_observed:
-        return "FAILED"
-    return "VERIFIED" if required_runtime_available else "INCONCLUSIVE"
+        return "VIOLATED"
+    return "SATISFIED" if required_runtime_available else "UNOBSERVABLE"

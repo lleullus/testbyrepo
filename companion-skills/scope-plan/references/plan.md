@@ -1,79 +1,57 @@
-# Scope Planner: execution method, not product authority
+# Scope Planner: method and evidence preparation
 
 ## Method unit
 
-Read every bound Thesis source and the exact Scope in full before choosing a method. The Thesis is the source of product purpose, complete utility loop, behavior/UI meaning, failure/recovery rules, identity and truth boundaries. The Scope applies that meaning to one current observable result. Do not weaken either source to make a method easier. Do not select a future Scope or create a new product policy in this Plan.
-
-Confirm the exact Scope path, `Schema: iis-scope/v1`, `Status: ready`, `Outcome`, `Acceptance`, `Product Authority`, optional `Transition Authority`, `Non-Goals` and any applicable transition/re-entry note. If `Transition Authority` exists, compare each exact project-local baseline path and full SHA-256 with canonical validator `transition_authorities`; apply only the selected approved Block/conditions. An absent section means no baseline is required. A digest is byte identity, not approval or continuation authority. Read current implementation and supplied immutable evidence directly. A report, candidate name or remembered symbol is navigation, not current product evidence. Reopen only load-bearing anchors whose change could alter this method; do not perform a repository-wide audit or repeat a user-reported observation merely to confirm it.
-
-Use `<Project-Root>/docs/planning/work/<work-slug>/plans/PLAN-NNN.md`. Keep references acyclic and point to exact sections. A Plan is a method and navigation aid, not an additional product authority or acceptance contract.
+Read the exact ready Scope and every bound Thesis directly. Preserve purpose, complete product loop, UI/behavior, failure/recovery, identity/truth and authoritative result. Apply approved Transition only when bound. Plan cannot strengthen/weaken Outcome or Acceptance, select future Scope or redefine product meaning.
 
 ## Code Grounding
 
-Before presenting a method as ready for independent review, classify each load-bearing premise as `EXISTING`, `PROPOSED` or `UNRESOLVED`:
+Classify each load-bearing premise:
 
-- **EXISTING:** exact target, definition and relevant use paths with file/range or canonical key; actual observation and currentness; what the evidence establishes. A file-open receipt or source definition alone is not proof of deployed schema, runtime state or an external effect.
-- **PROPOSED:** the new design, the Scope obligation or necessary failure path it serves, grounded interfaces, intended state/ownership transition and decisive check. Do not relabel an unverified existing object as proposed.
-- **UNRESOLVED:** missing fact, smallest discriminating observation, required authority/environment, dependent work forbidden until then and next owner. Do not state it as fact or defer a cheap authorized primary-source check to implementation.
+- EXISTING: exact definition and relevant use/readback paths, current primary observation and its limit. A source definition does not establish deployment or provider behavior.
+- PROPOSED: the new method, existing obligation/failure it serves, interfaces/state/effect transition and deciding check.
+- UNRESOLVED: missing fact, minimum discriminating observation, environment/authority, dependent mutation forbidden and next owner.
 
-Keep concise claim-to-evidence references beside the method or in an exact shared section. Reuse supplied evidence only while target, scope, relevant bytes and premises remain current. Git revision alone neither invalidates all evidence nor proves runtime state.
+Reuse sufficient investigation anchors while their bytes, runtime and applicability remain current. When preservation depends on historical choices, inspect only the connected decision/source, not all history. Do not promote a past decision into fresh permission. A cheap permitted read should be performed, not deferred to implementation.
 
-When current evidence leaves a material preservation or dependency question unresolved, trace the changed surface to its relevant consumer/state owner and consult the bounded historical Scope, Plan or change record that can answer it. Keep the useful source/revision/section and evidence locators beside the existing grounding; do not search all history or promote a past decision into current authority. A missing current obligation returns to Main, not an invented Plan requirement.
-
-When an unresolved premise can be decided within current authority, use the smallest discriminating experiment: premise -> inputs and reproducible action -> observed support/refutation -> remaining limits. Classify a CLI by its actual reads, writes, processes and external effects, not by being an existing tool. Pure computation or local-library comparisons confined to disposable scratch may use the Planner permission in `../SKILL.md`; record evidence before cleanup. Scratch observations do not establish deployed behavior, real-data behavior or provider semantics. If execution is unavailable or effects are unclear, retain `UNRESOLVED`.
-
-An experiment affecting product source/data/schema, shared runtime, a provider or the real Acceptance surface belongs in `UNRESOLVED` and the conditional-first-work bundle below. State the required environment and authority alongside permitted initial work, discriminating readback, prohibited dependent work and refutation owner. The implementation owner performs such initial work only after independent Review and `ADMIT`; admission does not supply user permission for external effects or credentials.
-
-Compare alternative methods only for a real fork where a wrong choice materially matters, not every obvious local change. Candidates share the same Scope, constraints and discriminating criteria; the existing owner checks primary evidence and converges on one Plan. A synthesis of candidate parts is itself the final method to review, not automatically supported by candidate agreement or individual results. Preserve current user selection, invocation authority, no-hidden-fan-out and Planner/Reviewer nested-delegation limits; this technique creates no Arena/Swarm runner or extra role.
+Bounded pure computation/disposable scratch may decide a premise within planning authority. Effects on project source/data/schema, shared runtime or providers require authorized conditional first work. A settled failed command is evidence, not a new workflow state or reason for blind replay.
 
 ## Implementation-grounded failure frontier
 
-Derive a bounded failure frontier from the actual implementation and the approved Scope, not from a fixed risk roster. Identify only load-bearing state or lifecycle transitions, owners and competing actors, identities or generations, resource thresholds, scheduler or timeout dependencies, persistence or reset paths, interruption or partial-completion points, and cleanup or async-lifetime boundaries that can change the approved result. Do not enumerate irrelevant dimensions or their Cartesian product.
+Trace actual entry → routing → deciding writers/readers → state/effect → authoritative readback. Consider only connected competing writers, identity/generation, thresholds, ordering, interruption, persistence/reset, external-effect and lifetime boundaries that can falsify an existing obligation. Do not enumerate a Cartesian risk matrix.
 
-For each material boundary, keep one concise connection in the Plan: the exact implementation anchor, the assumption that can fail, a reachable failure condition, the existing Thesis/Scope obligation that would become false, and the smallest trace or observation that distinguishes a conforming implementation from that failure. A dimension name, test count or normal-path success is not a discriminator by itself. If a plausible-looking boundary is excluded because it is non-material, unreachable or outside the Scope, state that basis only when the exclusion is load-bearing to the proposed method.
+For each material boundary connect the implementation anchor, failure assumption, reachable trigger, existing obligation and minimal discriminator. Identify its executable disposition: existing project test/build/CI path, implementation-owned minimum regression, environment/authority-dependent real observation, or grounded reason automation is unsuitable and a repeatable alternative. A named test is not proof its setup/assertion distinguishes defective and conforming behavior.
 
-For each selected discriminator, also identify its executable disposition without creating a second test plan: an existing project test/command that activates the same condition and authoritative readback; an implementation-owned minimum case to add to the existing project test/build/CI path; an environment- or authority-dependent observation with its prerequisite; or a reason executable automation is unsafe or unsuitable together with the repeatable alternative evidence. A named test is not sufficient unless its setup and assertion distinguish the failing implementation. Planner and Reviewer do not mutate the project harness; they define what the admitted Implement work must preserve or add.
-
-A trace that crosses a material state transition, ownership transfer, interruption, resource threshold or terminal-state change does not end at the intermediate effect. Keep the relevant identity and state intact through the contract-allowed recovery or terminal result and one minimum subsequent operation or authoritative readback that exposes residue, stalled progress or duplicate effect. Do not recreate the object, session or process before that observation unless recreation is itself the approved recovery contract.
+Keep identity/state intact through the required recovery/terminal result and minimum subsequent operation or authoritative readback exposing residue/stalled progress/duplicate effects. Resetting or using another instance is allowed only when it is the adopted recovery. Load-bearing unreachable/non-material exclusions need a deciding basis.
 
 ## Required method substance
 
-Include only what is necessary to implement and self-check this Scope:
+Record only the necessary originals and current evidence; outcome/preservation/non-goals; actual owners/interfaces and persistence/identity paths; dependencies/change structure; conditional first work; actual build/launcher/fixture/readback/reset/cleanup recipes; self-check; minimum real observation; and unresolved premises. Compare alternate methods only where a real choice changes the result. Do not add telemetry, fallback, recovery policy or architecture without a direct requirement or realistic required failure correction.
 
-1. Exact Thesis/Scope anchors, current code/search/environment evidence and any transition constraint.
-2. Observable outcome to achieve; behavior, UI, failure/recovery and preservation conditions to keep; Scope and Non-Goals.
-3. Cause hypothesis, competing explanation and falsifying observation only when a concrete finding or unresolved premise requires them. Distinguish observed reach from inference.
-4. Actual entry/read paths, deciding writers/readers, internal and external owners, shared interfaces, affected callers/data and state/effect lifetime. For material state, identify key, creation, updates, reads, resets, success/failure/completion and identity paths. Where versions or states coexist, identify reachable old/new producer-consumer combinations, persisted data/generated artifacts and configuration precedence, with the compatibility or migration checks they require; this does not invent a backward-compatibility promise or require a Baseline.
-5. Change structure, prerequisites, partial failure, interruption, resumption, late/duplicate response, external-effect and cleanup boundaries.
-6. Implementer self-check and final acceptance/readback. For each material failure in the implementation-grounded frontier, connect the cheapest valid discriminating check, its executable disposition in the existing project path, the bounded same-assumption impact span, any required transition closure, the minimum real acceptance path and the current-target condition for verifier handoff. Identify the actual build/launcher/fixture/selector/readback/cleanup method when non-obvious, what preparation may be reused, what scenario state must be recreated or reset, artifact/build/service readiness, settlement and cleanup owners, and any known environment or permission limit.
-7. Local implementation discretion, conditional first work and exact conditions that return the affected method to review.
+Use the Assurance Baseline contract at `../../../iis-workflow/references/assurance.md`. Every Acceptance paragraph receives evidence; runtime/artifact identity, observation predicate and required lane set are explicit. A direct observation failure blocks closure independently of no-findings. Preserve the difference between project evidence and a model's explanation. A behavioral document change requires behavior-relevant evidence; an extension is not a runtime exemption.
 
-Separate helper/source checks and ancillary doubles from proof through the required acceptance boundary. A runtime promise requires real entry, transition/effect and authoritative readback. A document/artifact promise can be established by direct canonical inspection. An unavailable environment is an evidence limit, not permission to redefine success. State required initial conditions: post-cleanup absence does not prove a pre-existing artifact was removed; onset does not prove settlement; publisher output does not prove subscriber/rendered state.
-
-Do not add telemetry, fallback, persistence, recovery guarantees, new acceptance surfaces or broad hardening without a direct Thesis/Scope anchor or a concrete realistic failure path whose correction is required for the approved outcome. Prefer the smallest decisive observation and first coherent implementation move.
+The frontier guides method construction but is not an exhaustive Prober assignment. Initial lane projections carry actual surface/safety/budget/originals, not Planner's preferred explanation. The open-frontier scout starts from the target and product contract.
 
 ## Conditional first work
 
-For every implementation-time premise that can be safely decided before dependent work, write one complete bundle:
+For each unresolved implementation-time premise keep the bundle beside its method:
 
-- `plan_anchor`: exact Plan section;
-- `permitted_initial_work`: bounded first work;
-- `discriminating_observation`: actual readback separating support and refutation;
-- `dependent_work_not_yet_permitted`: expansion forbidden until that readback;
-- `response_if_refuted`: work to stop and exact method or contract owner under `iis-workflow`'s re-entry rules.
+- plan_anchor;
+- permitted_initial_work;
+- discriminating_observation;
+- dependent_work_not_yet_permitted;
+- response_if_refuted and exact method/authority owner.
 
-Support permits only the already reviewed direction. Refutation or insufficient evidence stops dependent mutation and returns `PARTIAL` or `BLOCKED` with the exact owner. Safe unrelated work may continue only when ownership, state and effect independence are explicit.
+Current authority plus the required readback, not an approval label, decides dependent execution. Unsupported/refuted/unknown premises stop only dependent work; unrelated work may continue when ownership/effects are independent. Destructive/non-idempotent effects require actual preconditions before mutation, not a later attack to discover missing permission.
 
-Where a known verifier or Probe correction is being planned, bind the predecessor finding and primary evidence, the repeatable reproducer or exact evidence limitation, the project regression path expected from implementation, the same-assumption sibling boundary that is materially connected, and the environment/readback prerequisites. This navigation does not carry forward a verdict or let the Planner decide which current-target observations the verifier may retain.
+## Correction and revision ownership
 
-## Revision ownership
+Bind predecessor finding, raw evidence, usable reproducer or exact limit, current target/effect settlement, regression guidance, directly evidenced same-assumption siblings and non-obvious execution handoff. Preserve old attempts; do not count old success as current evidence.
 
-Naming, private helpers and equivalent local edits are the admitted implementer's discretion. With the outcome and approved boundaries unchanged, a changed cause, internal owner/interface, persistence mechanism, readback method or target/effect strategy is a material method change: stop affected implementation, revise this Plan and obtain a fresh independent review. Changes to promised meaning, approved transition geography or the current outcome instead return to Main for the owning original under `iis-workflow`'s re-entry rules; do not redefine them in Plan. Expected output-byte changes within the reviewed method do not alone require revision. Method revision preserves the user-selected implementation actor/model/effort/mode; a fresh invocation is not a new selection. Do not edit a bound Plan merely to satisfy admission.
+Equivalent local names/private helpers and faithful realization of unchanged method are implementer discretion. A changed cause, owner/interface, persistence strategy, readback, target/effect or safety/settlement premise requires the planning owner to revise affected Plan/Baseline before dependent implementation. No independent method approval is inserted. Meaning/Transition/Scope decisions return to their original owners. Actor/model/effort continuity survives a fresh invocation; only current explicit user selection changes it.
 
-Classify the boundary by the reviewed premise, not by line count or by the mere discovery of a new fact. A correction stays within the admitted method when it faithfully realizes the same reviewed state/effect owner, shared interface, persistence policy, authoritative readback and safety/settlement condition. It is material when one of those admission-controlling premises changes or their preservation cannot be established. A material-method return must identify the exact Plan anchor, the prior approved premise, the new observation and how it changes owner/interface/readback/effect or safety; `small change` and `same file` are not sufficient bases in either direction.
+Do not remove failed required evidence after seeing results. Preserve revision reason and old attempts, and obtain fresh completion evidence for the new binding. No per-obligation LLM retention adjudication or new review lifecycle is introduced.
 
-The independent Reviewer, not the Planner, owns the ADMIT judgment. A Plan hash detects byte drift; it does not prove semantic sufficiency. Preserve the exact reviewer artifact and its findings/limits.
+## Return
 
-## Planner return
-
-Return the exact Plan path, `EXISTING`/`PROPOSED`/`UNRESOLVED` grounding, the implementation-grounded failure frontier and discriminators, their executable disposition and non-obvious execution prerequisites, conditional start bundles, primary evidence locators with current applicability conditions, unresolved limits and current working-tree assumptions to the preparation lead. Do not implement product source, mutate Scope/Thesis, write a verification verdict or claim delivery completion.
+Return the exact current Plan/Baseline, structural validation, EXISTING/PROPOSED/UNRESOLVED grounding, actual entry/readback methods, conditional permissions, frontier/discriminator dispositions, evidence locations and accessibility limits. Never implement, mutate originals or claim completion of the product.

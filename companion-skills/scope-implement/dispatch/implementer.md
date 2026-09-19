@@ -1,42 +1,30 @@
 # Scope Implementer dispatch projection
 
-This projection selects invocation inputs for the admitted implementing actor. Implementation procedure and boundaries remain owned by `scope-implement/SKILL.md` and `references/implement.md`.
-
 ## Required
 
-- Exact Project Root.
-- Every bound Thesis original and exact ready Scope with actual-byte SHA-256.
-- Applicable Transition Authority paths/digests, or `None` when absent.
-- Exact reviewed Plan paths/digests.
-- Exact current `iis-scope-plan-review/v2` artifact, digest, independent provenance, `ADMIT`, start scope, findings and conditions.
-- Exact stable target and baseline working-tree/effect state, including pre-existing changes.
-- Current implementation authority, permitted mutations/effects, stop/no-reentry limits and selected actor/mode/model/effort.
-- Exact predecessor Verify/Probe finding, primary evidence, usable reproducer/limit, correction authority and prior-effect settlement when applicable.
-- Non-obvious build/command/fixture/readback/reset/cleanup handoff when already established.
-- Ordinary implementation-result destination or exact requested report path.
+- Exact Project Root, ready Scope and all bound Thesis/approved Transition originals with actual-byte digests.
+- Current Plan/Assurance Baseline paths/digests and executable preconditions.
+- Exact target/working-tree/effect state, including pre-existing changes.
+- Current mutation/effect/stop authority and selected actor/mode/model/effort.
+- Corrective predecessor finding, raw evidence, usable reproducer/limit and settled effects when applicable.
+- Non-obvious build/command/fixture/readback/reset/cleanup handoff and accessible ordinary result destination.
 
 ## Optional
 
-- Existing implementation evidence and current environment limits.
-- Navigation claims about unaffected obligations, never as verification exemptions.
+Existing self-check evidence and current environment limits. Impact claims remain navigation, not permission to retain old completion results.
 
 ## Forbidden framing
 
-- Do not authorize Thesis, Scope, Plan or Plan Review mutation.
-- Do not widen the reviewed method or external-effect authority.
-- Do not treat `ADMIT`, a passing self-check or a historical verdict as product verification.
-- Do not prescribe blind retry after an uncertain non-idempotent effect.
+Do not authorize Thesis/Scope/Transition/Plan/Baseline mutation, expand methods/effect authority, treat self-check as delivery completion or blindly replay non-idempotent effects.
 
 ## Assignment pattern
 
-```text
-Implement the exact admitted method for this Scope, perform the cheapest valid self-checks for the changed behavior, and return the stable current target and evidence handoff without issuing a semantic verification verdict.
-```
+Implement this current method inside the exact Scope and authority, self-check the changed real boundary and hand off the actual target/native evidence without changing Scope Status.
 
 ## Independence guard
 
-The Plan and Review bind the admitted method; they do not prove implementation success or authorize Scope expansion. Predecessor findings are correction inputs, not current-target verdicts.
+Current method and preconditions bound execution, not proof of implementation success. Predecessor findings are correction inputs, not current success or a license to widen Scope.
 
 ## Result
 
-Return `SCOPE IMPLEMENT RESULT` under the owning contract with actual delta and attribution, finding dispositions, discriminating self-checks and limits, execution handoff, current admission, stable verification target and `COMPLETE | PARTIAL | BLOCKED`. Never change Scope status.
+SCOPE IMPLEMENT RESULT with delta/pre-existing attribution, finding dispositions, self-check, current Plan/Baseline, target/seal state, native capture and correction/execution handoff, effects and COMPLETE/PARTIAL/BLOCKED. Scope remains ready.

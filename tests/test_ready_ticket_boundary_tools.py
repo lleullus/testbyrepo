@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import tarfile
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -193,6 +194,36 @@ class BundleInstallTests(unittest.TestCase):
         with mock.patch.object(self.installer, "REQUIRED", future_required):
             state = self.installer.check_install(self.store)
         self.assertEqual(state["bundle_id"], manifest["bundle_id"])
+
+    def test_frozen_v4_upgrade_retirement_rollback_inspect_and_remove(self) -> None:
+        frozen = self.root / "frozen-v4"
+        frozen.mkdir()
+        with tarfile.open(ROOT / "tests/fixtures/iis-v4-c856dd7.tar") as archive:
+            archive.extractall(frozen, filter="data")
+        spec = importlib.util.spec_from_file_location("frozen_iis_installer", frozen / "scripts/sync_installed_iis.py")
+        old = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(old)
+        previous = old.prepare(frozen, self.store)
+        old.activate(self.store, previous["bundle_id"], {"omp": self.host}, quiescent=True)
+        retired = self.host / "skills/scope-verify"
+        self.assertTrue(retired.is_symlink())
+        user = self.host / "skills/user-owned"
+        user.mkdir()
+        (user / "SKILL.md").write_text("preserve me")
+        self.assertEqual(self.installer.inspect(self.store)["bundle_id"], previous["bundle_id"])
+        with self.assertRaises(ValueError):
+            self.installer.inspect(self.store, previous["bundle_id"])
+        candidate = self.prepare()
+        self.activate(candidate)
+        self.assertFalse(retired.exists() or retired.is_symlink())
+        self.assertEqual(self.installer.inspect(self.store)["bundle_id"], candidate["bundle_id"])
+        self.installer.rollback(self.store, quiescent=True)
+        self.assertTrue(retired.is_symlink())
+        self.assertEqual(self.installer.inspect(self.store)["bundle_id"], previous["bundle_id"])
+        self.installer.remove(self.store, quiescent=True)
+        self.assertFalse(retired.exists() or retired.is_symlink())
+        self.assertEqual((user / "SKILL.md").read_text(), "preserve me")
+        self.assertTrue((self.store / "releases" / previous["bundle_id"]).exists())
 
     def test_cli_inspect_reports_candidate_contract_without_loading_host(self) -> None:
         manifest = self.prepare()

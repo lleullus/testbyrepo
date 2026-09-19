@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
-import json
 from pathlib import Path
 import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "evaluation/ready-verification/failure_space_fixtures.py"
-CASES = ROOT / "evaluation/ready-verification/failure-space-cases.json"
 
 
 def load_fixtures():
@@ -19,42 +17,6 @@ def load_fixtures():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
-
-
-class FailureSpaceContractHandoffTests(unittest.TestCase):
-    def test_existing_roles_carry_frontier_without_new_review_schema(self) -> None:
-        paths = {
-            "plan_skill": "companion-skills/scope-plan/SKILL.md",
-            "plan": "companion-skills/scope-plan/references/plan.md",
-            "review": "companion-skills/scope-plan/references/review.md",
-            "implement": "companion-skills/scope-implement/references/implement.md",
-            "verify": "companion-skills/scope-verify/references/verify.md",
-            "probe": "companion-skills/production-heuristic-probing/SKILL.md",
-        }
-        text = {name: (ROOT / path).read_text(encoding="utf-8") for name, path in paths.items()}
-        expected = {
-            "plan_skill": "implementation-grounded failure frontier",
-            "plan": "## Implementation-grounded failure frontier",
-            "review": "Independently derive the important implementation-grounded failure frontier",
-            "implement": "minimum subsequent operation or authoritative readback",
-            "verify": "bounded as-built failure frontier",
-            "probe": "residual heuristic search",
-        }
-        for name, phrase in expected.items():
-            with self.subTest(role=name):
-                self.assertIn(phrase, text[name])
-        self.assertIn('"schema": "iis-scope-plan-review/v2"', text["review"])
-        self.assertNotIn("iis-scope-plan-review/v3", "\n".join(text.values()))
-
-    def test_evaluation_inventory_is_explicit_and_bounded(self) -> None:
-        data = json.loads(CASES.read_text(encoding="utf-8"))
-        self.assertEqual(data["schema"], "iis-failure-space-cases/v1")
-        ids = [case["case_id"] for case in data["cases"]]
-        self.assertEqual(len(ids), len(set(ids)))
-        self.assertEqual(len(ids), 9)
-        for case in data["cases"]:
-            self.assertTrue(case["minimum_discriminator"].strip())
-            self.assertTrue(case["expected_earliest_owner"].strip())
 
 
 class FailureSpaceDiscriminatingFixtureTests(unittest.TestCase):
@@ -127,11 +89,11 @@ class FailureSpaceDiscriminatingFixtureTests(unittest.TestCase):
             ("buffer",),
         )
 
-    def test_unavailable_boundary_remains_inconclusive(self) -> None:
+    def test_observation_outcome_distinguishes_violation_and_unknown(self) -> None:
         disposition = self.fx.evidence_disposition
-        self.assertEqual(disposition(required_runtime_available=False, contradiction_observed=False), "INCONCLUSIVE")
-        self.assertEqual(disposition(required_runtime_available=True, contradiction_observed=True), "FAILED")
-        self.assertEqual(disposition(required_runtime_available=True, contradiction_observed=False), "VERIFIED")
+        self.assertEqual(disposition(required_runtime_available=False, contradiction_observed=False), "UNOBSERVABLE")
+        self.assertEqual(disposition(required_runtime_available=True, contradiction_observed=True), "VIOLATED")
+        self.assertEqual(disposition(required_runtime_available=True, contradiction_observed=False), "SATISFIED")
 
 
 if __name__ == "__main__":

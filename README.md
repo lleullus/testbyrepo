@@ -1,81 +1,78 @@
 # IIS Planning Skills
 
-IIS is a host-independent skill/document workflow: Main reconciles current state and Thesis into a fixed Scope → Plan → implementation → independent verification → Production Heuristic Probe → Main's completion record. It requires ordinary file, command and independent-invocation facilities, not a patched OMP, a delivery plugin or a dedicated execution CLI. Product and acceptance meaning belongs to Thesis, the current outcome and observable acceptance contract to Scope, methods to Plan, and the semantic verdict to the independent verifier.
+IIS is a host-independent skill/document workflow: current request → Thesis and ready Scope → grounded Plan plus Assurance Baseline → authorized implementation/self-check → exact source/execution binding → required native gates and direct observations → independent adversarial Prober lanes → structural evidence closure → Main's conditional status-only record.
+
+There is no independent overall Plan approval role, whole-Scope semantic adjudicator or replacement final judge. Product meaning remains in Thesis/Scope; the evidence policy does not prove arbitrary semantic completeness. Ordinary file/command/delegation tools suffice. No patched OMP, execution plugin, controller database or agent runner is required.
 
 ## Components
 
-- `product-thesis/`: product meaning, Behavior/UI, failure/recovery and success observations, with bounded exploration/refinement inside the same role.
-- `scope-shaper/`: Main's current Scope contract instructions, template and validator; no separate Shaper stage or invocation.
-- `companion-skills/scope-plan/`: method preparation and independent Plan Review.
-- `companion-skills/scope-implement/`, `scope-verify/`, `production-heuristic-probing/`: implementation, independent semantic verification and bounded production-heuristic probing after successful verification.
-- `iis-workflow/`: current-request routing, continuation and completion responsibility.
-- `iis-observatory/`, `observatory/bin/`, `observatory/src/`: optional read-only project state inspection.
-- `repo-snapshot/`: independent Git working-tree snapshot utility.
-- `companion-skills/repository-investigation/` and `purpose-first-review/`: supporting investigation and review skills.
-- `scope-shaper/tools/validate_scope.py` and `iis_path_contract.py`: standalone Python structure/path/source-reference checks, not semantic acceptance or completion authorization.
-- `evaluation/`: retained case descriptions, disposable fixture preparation, historical observations and offline scoring. The host-specific delivery runner is retired; see its existing README for the remaining commands and their limits.
+- `product-thesis/`: complete product meaning, behavior/UI, failure/recovery/preservation and authoritative success observations. Its bounded exploration stays inside the role.
+- `scope-shaper/`: Main's Scope authoring instructions, canonical template and validator, not a separate invocation.
+- `companion-skills/scope-plan/`: grounded methods, conditional first work and Assurance Baseline.
+- `companion-skills/scope-implement/`: authorized implementation, native self-check and correction/execution handoff.
+- `companion-skills/production-heuristic-probing/`: independent minimal-counterexample lanes and standalone bounded investigation.
+- `iis-workflow/`: latest-request routing, stage/effect authority, fan-in, re-entry and status recording.
+- [`iis-workflow/references/assurance.md`](iis-workflow/references/assurance.md) and `iis-workflow/tools/assurance.py`: evidence schema, currentness, native foreground gate capture and structural closure. No agent/model invocation or Scope writer.
+- `companion-skills/repository-investigation/` and `purpose-first-review/`: supporting evidence and general review capabilities. General purpose review is not an implementation-admission role.
+- `iis-observatory/`, `observatory/`: optional conservative read-only Scope/project state model.
+- `repo-snapshot/`: independent Git snapshot utility, not automatic target sealing.
+- `evaluation/`: disposable causal fixtures, offline scorers, explicit unexecuted scenarios and historical results. No model runner.
+
+## Product and evidence contracts
+
+Thesis sources normally live at `docs/planning/product-thesis/<meaning-slug>/THESIS-NNN.md`. Preserve referenced revisions; refine only materially changed meaning. A newer unrelated source does not automatically replace an old bound original. Investigation and a Completion Brief supply evidence/lenses, not product approval.
+
+Scope is `docs/planning/work/<slug>/SCOPE.md`, schema `iis-scope/v1`, with exact project-local Product Authority, Outcome and Acceptance. `draft` means unresolved meaning, `ready` means sufficient meaning/observation to plan, `done` is Main's conditional recorded completion, and `superseded` retains an unconsumed replacement. Structural closure BLOCKED is not a new Scope status. A digest proves bytes, not success or permission.
+
+The optional approved Transition Baseline preserves Block/order/invariant/continuation/abort/atomic boundaries. It is distinct from Assurance Baseline. Main fixes current Scope from originals and actual state without Spec/Ticket/extra Increment layers. Plan owns methods and executable preconditions, not weaker success criteria.
+
+Assurance Baseline is one `iis-assurance` JSON fence under the Plan's `## Assurance Baseline`; assurance-only can use invocation-local JSON without a fresh implementation Plan. It maps every authored Acceptance paragraph to evidence, records native gate commands and observation predicates, actual attack surfaces/required lanes, budget, isolation and settlement. It is not a mini-spec or approval certificate.
+
+Clean committed Git source is the initial seal format. No automatic commit, push or repo-snapshot occurs. If commit is unauthorized or working bytes are unsealed, return TARGET_NOT_SEALED rather than attributing them to HEAD. Build artifacts/runtime/mechanisms are identified separately. Store evidence/disposable mutable fixture state outside the sealed source root.
+
+Gate success, direct observation and adversarial search are distinct. Direct readback must satisfy its declared predicate; violated/unobservable results block even if gates pass and lanes find nothing. Every required and actually started result/effect participates in closure. New target evidence is reacquired; old traces remain reproduction/navigation only.
+
+Before hypotheses, Probers receive originals, actual target, assigned surface, budget and safety, not implementation narrative/Plan candidate findings/peer conclusions. Reveal needed recipes and predecessor raw evidence afterward. Isolate mutable resources before fan-out; separate worktrees alone are insufficient. Report procedural embargo unless host access controls actually enforce it. No-finding is bounded search evidence, not universal correctness.
+
+## Commands and limits
+
+```text
+python3 -B scope-shaper/tools/validate_scope.py /absolute/project/docs/planning/work/example/SCOPE.md --json
+python3 -B iis-workflow/tools/assurance.py --help
+python3 -B iis-workflow/tools/assurance.py validate /absolute/PLAN.md
+```
+
+The assurance reference documents `bind`, `bind-execution`, `run`, `close` and `recording`, including exact data inputs. `close` returns EVIDENCE_COMPLETE or BLOCKED/reasons. Main additionally checks actual host attribution, current request/authority, unchanged originals/target and settled effects before changing only ready→done and reading back the exact delta. The helper neither authenticates arbitrary JSON nor grants mutation authority. One Scope's closure is not the whole request's completion.
+
+Planning-only and implementation-only stop at their boundaries. Standalone Probe can operate without canonical Scope but cannot create done eligibility. Historical done is diagnostic input, not a new completion event. Material method changes return to Plan/Baseline owner; product/transition changes to their existing authority; actual correction stays with the selected authorized implementing actor.
 
 ## Optional skill installation
 
-Skills can be read directly from this source tree. The existing installer packages one immutable snapshot and optionally links it into a supported client's skill directory; it does not execute IIS work.
+Read skills directly from source or prepare one immutable payload and link it into a supported client. Source edits do not change installed skills automatically.
 
 ```bash
-python3 scripts/sync_installed_iis.py prepare --source /absolute/source --store /absolute/iis-store
-python3 scripts/sync_installed_iis.py inspect --store /absolute/iis-store --bundle <reported-sha256>
-python3 scripts/sync_installed_iis.py activate --store /absolute/iis-store --bundle <reported-sha256> --host omp --confirm-quiescent
+python3 -B scripts/sync_installed_iis.py prepare --source /absolute/source --store /absolute/iis-store
+python3 -B scripts/sync_installed_iis.py inspect --store /absolute/iis-store --bundle <reported-sha256>
+python3 -B scripts/sync_installed_iis.py activate --store /absolute/iis-store --bundle <reported-sha256> --host omp --confirm-quiescent
 ```
 
-Use `--host codex` for that optional path adapter, or include both installed hosts when they share `current`. Neither adapter is a workflow requirement. The payload uses `iis-bundle/v4`, installation metadata uses `iis-install/v4`, and family is `iis-skills`. Protocol `4` versions packaging only; there is no host profile, boundary-tool protocol or host terminal schema.
+Packaging remains `iis-bundle/v4`, `iis-install/v4`, protocol `4`, family `iis-skills`; topology changes do not require a packaging-version bump. `inspect --bundle` checks new-candidate topology; `inspect` without a bundle validates the installed release against its own manifest and managed links, including after rollback to an older v4 topology.
 
-`prepare` does not change installation links. `inspect` checks release bytes and required skill files. `activate` requires affected IIS work and effects to be settled, not shutdown of unrelated services. A cancellation receipt alone is not settlement. Previously managed v3 Scope installs are accepted only as a migration source: their managed Scope extension link is removed, while unrelated user skills/extensions, private historical state, releases and snapshots are preserved. `--migrate` is needed for an unmanaged entry and preserves a recovery snapshot.
+`activate` checks the new candidate and the previous installation separately, retires only managed obsolete links and refuses intervening user changes. All hosts sharing current must be in activation scope. `--migrate` snapshots an unmanaged entry only with explicit permission. Old releases/snapshots/user entries are preserved. v3 Scope installations remain retirement sources only; historical v3 usage requires its matching host source.
 
-`rollback --confirm-quiescent` and `remove --confirm-quiescent` preserve history and refuse intervening user changes. They change installation entries, not product effects or OMP source. Restoring a historical v3 installation would also require its matching host source; it is not an alternate current operating mode. Installation does not restart clients or prove existing sessions reloaded the skills; `loaded_identity: NOT_CHECKED` remains explicit.
+`rollback --confirm-quiescent` and `remove --confirm-quiescent` restore installation entries, not product effects. Use disposable stores/client roots for tests. Operating activation requires exact current authority and settled affected work; cancellation receipt is not settlement. Installation does not restart clients or prove session reload: loaded_identity remains NOT_CHECKED.
 
-Model configuration, credentials and product planning/evidence are not bundled. IIS preserves explicit user-selected model policy rather than supplying model presets. Observatory's independent data installer remains `python3 scripts/sync_installed_observatory.py`.
+OMP and Codex are optional path adapters; OpenCode is a different client. Model settings, credentials and project planning/evidence are not packaged. `scripts/sync_installed_observatory.py` remains a separate Codex Observatory skill-copy utility, not part of OMP assurance activation.
 
-## Product and planning contracts
-
-Thesis source storage is authorized before model/approval closure but does not approve product meaning or implementation. Sources normally live at `docs/planning/product-thesis/<meaning-slug>/THESIS-NNN.md`; preserve referenced revisions. Optional Transition Baseline remains a transition map, not a replacement Thesis or a second operating mode. Main reuses fixed construction boundaries and chooses a current durable outcome only where the originals leave that choice open. Existing Block predicates suffice unless an actual independent handoff or prescribed order needs a finer boundary; no universal boundary catalog is required.
-
-Scope lives at `docs/planning/work/<kebab-case-slug>/SCOPE.md`, using `Schema: iis-scope/v1`, `Project-Root`, `Status`, `## Product Authority`, `## Outcome`, `## Acceptance`, and optional `## Open Decisions`/`## Transition Authority`. `draft` preserves unresolved meaning, `ready` admits reviewed work, `done` records completed verification/Probe and Main's confirmed status change, and `superseded` marks an unconsumed replaced contract. The standalone validator checks structure and exact bound sources; it does not decide semantic completeness.
-
-Main fixes the current Scope before method writing; Plan chooses implementation methods without redefining Outcome or Acceptance. The same independent Plan Review checks fidelity to bound originals and method sufficiency, recording exact reviewed files and actual-byte hashes with `iis-scope-plan-review/v2`; no extra review stage or host-generated authority digest is required. Re-entry follows the changed decision: Thesis meaning, Baseline geography, Main's Scope application, or Plan method. Missing required delegated-role selections are resolved by the user or returned as `MODEL_SELECTION_REQUIRED`, never by a hidden default.
-
-### Product-Thesis exploration and refinement
-
-[Product Thesis](product-thesis/SKILL.md) uses a [bounded exploration procedure](product-thesis/references/exploration.md): current question → connected Breadth → deciding Depth/evidence → semantic judgment → affected revision and bounded ripple check. These are reasoning activities inside the same role, not mandatory serialized stages or a new authority. Direct reads may suffice; repository investigation is optional, and a supplied Product Completion Brief is an inspection lens rather than a gate.
-
-Natural-language request examples include:
-
-- `테시스 시작하기` — establish or reuse the applicable source and define the core promise.
-- `테시스 이어쌓기` — select the next decision-relevant meaning and integrate it, or report that no material contract delta is needed.
-- `테시스 새 요구 반영 — 수정 결과의 재실행 관계 중심` — integrate supplied meaning while preserving its obligation strength and connected consequences.
-- `테시스 점검하기 — 완료 결과 보존 중심` — assess sufficiency read-only and report the exact unresolved boundary.
-
-These are intent examples, not required commands, workflow modes or persistent presets. The user selects the purpose and may name a focus; Product-Thesis selects the bounded Breadth and Depth needed inside the same role. Each invocation reconstructs the current exact source rather than resuming a hidden cursor, and a Thesis-only request does not continue into Scope or delivery.
-
-Preserve observations, inferences, hypotheses, material unknowns and deciding counterexamples at their actual strength. An implementation defect does not require changing clear product meaning. Changed meaning receives a new ordinal revision without rewriting referenced sources; important rationale and impact use ordinary existing records, not an exploration ledger. Source identity, Scope binding, repository/runtime identity, evidence applicability and semantic applicability are distinct checks used only when relevant. A new product needs neither a pre-existing Scope nor deployed-runtime evidence to define its requested meaning.
-
-No Node registry, persistent cursor, graph-based dispatch or Observatory schema change is introduced. Existing exact source/section locators support revisiting a question; they do not restore past authority or PASS. Behavioral evaluation is specified in [refinement scenarios](evaluation/product-thesis/refinement-scenarios.md), separately from historical cohorts. These scenarios are not executed results or an automatic semantic grader; editing the skill does not prove improved agent behavior or a reloaded installation.
-
-## Verification and completion
+## Tests and evaluation
 
 ```text
-Current user intent + actual product state
-  → Thesis when meaning needs definition or revision
-  → Main reconciles applicable Baseline/current state and fixes Scope
-  → Plan and independent Plan Review
-  → Implementation → independent Verification
-  → independent Production Heuristic Probe after VERIFIED
-  → Main records ready → done with ordinary file tools and readback
+python3 -B -m unittest discover -s tests
+PYTHONPATH=observatory/src python3 -B -m unittest discover -s observatory/tests
 ```
 
-The verifier records every authored Acceptance result, actual observations and evidence, exact original/target identities, declared scenario effects, currentness and settlement. The Probe independently looks for minimal abnormal triggers, hidden service/implementation paths and observation gaps that can still falsify the same Scope while preserving the verifier's semantic verdict. Main does not issue a second semantic verdict. Completion requires attributable completed independent verification, a complete Probe with no unresolved Scope-material finding/evidence gap, current authority/target, settled effects and current user permission. Main then edits only the Scope status and reads back the actual result. Failed, inconclusive, missing or stale evidence cannot become completion.
+These Python suites do not invoke models or subagents. They include local subprocess/disposable service fixtures, source/path validation, actual helper closure and installation lifecycle checks. The frozen v4 fixture is exported from c856dd7257d518b2eba361f289ff6b28a74d731a rather than generated from new topology constants.
 
-These are procedural responsibilities, not host-enforced authentication or locks. Hashes, report fields and process exits do not by themselves prove independent judgment or success. No replacement runtime, opaque credential store or execution CLI is introduced. Scope completion is not automatically completion of the user's whole request.
+Actual model behavior, hypothesis diversity, framing resistance and detection/cost require separately authorized experiments. Scenarios marked NOT_RUN remain unexecuted. Neither unit-test success nor matching labels establishes those outcomes. See [current verification boundaries](docs/engineering/ready-runtime/verification.md) and [evaluation materials](evaluation/ready-verification/README.md).
 
-Read-only and stage-only requests stop at their requested boundary. Historical planning revisions and completed evidence are not rewritten to claim a new completion. IIS has no controller database, persistent Goal state, execution roster, attempt ledger, evidence cache, event/replay engine or generic workflow DSL.
-
-## Optional future host integration
-
-See the [host integration reintroduction guide](docs/engineering/host-integration-reintroduction.md) for the archived Scope tools and separate OMP source references, selective reintroduction steps, and current contract boundaries. This is reference material, not a planned or required runtime dependency.
+[Historical host integration](docs/engineering/host-integration-reintroduction.md) is reference material, not a runtime dependency or planned reinstall.
