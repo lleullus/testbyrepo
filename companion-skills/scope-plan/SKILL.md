@@ -9,7 +9,7 @@ description: "Prepare the grounded method and Assurance Baseline for one exact r
 
 Supply one exact canonical Project Root and the host-admitted fixed Scope; every bound executor-owned Thesis reference; applicable approved Transition reference and conditions, or None; exact readable investigation/primary-evidence anchors with applicability, or None; predecessor finding/reproducer/current target/settlement when correcting; current user stage/effect/stop authority and selected execution mode/model/effort; exact Plan destination. Use one role-source snapshot and include `references/plan.md` and `iis-workflow/references/assurance.md` from that snapshot.
 
-Tell the worker to read the Scope and all bound originals directly before choosing methods. Summaries and latest-file lookup do not replace original meaning, failure/recovery, preserved behavior or authoritative readback. Preserve supplied investigation as evidence, not product authority. No independent admission artifact is an input or output.
+Tell the worker to read the Scope and all bound originals directly before choosing methods. Summaries and latest-file lookup do not replace original meaning, failure/recovery, preserved behavior or authoritative readback. Preserve supplied investigation as evidence, not product authority. The worker does not author an admission artifact; the trusted host supplies the registered admission context.
 
 ### Evidence boundary — copy into each assignment
 
@@ -20,7 +20,7 @@ Tell the worker to read the Scope and all bound originals directly before choosi
 
 ## Entry and ownership
 
-Require the host's current `iis-admission/v1` result for role `scope-plan`; structure-only `VALID` or a hand-written ready string is insufficient. Read original bytes and current implementation. Draft/superseded/done are not ordinary method-writing inputs. An applicable Transition constrains order, invariant, effects and continuation; file presence alone creates no new authority.
+Require the host's current `iis-admission/v2` result for role `scope-plan`; structure-only `VALID` or a hand-written ready string is insufficient. Read original bytes and current implementation. Draft/superseded/done are not ordinary method-writing inputs. An applicable Transition constrains order, invariant, effects and continuation; file presence alone creates no new authority.
 
 The Planner owns faithful execution methods, remaining open method choices and the evidence execution Baseline, never product meaning, Thesis-bound construction selection, Scope selection, implementation or final success. Treat bound Thesis product obligations and adopted construction decisions as EXISTING authority. Write `docs/planning/work/<work-slug>/plans/PLAN-NNN.md`, preserving prior referenced methods. Do not create a second specification, evidence registry or approval lifecycle.
 
@@ -41,4 +41,4 @@ Only bounded disposable scratch experiments isolated from product originals, the
 
 ## Result
 
-Return SCOPE PLAN RESULT with exact Project Root/Scope/Plan; Baseline locator/digest and structural validation; grounded frontier/discriminator dispositions; conditional first work; primary evidence/accessibility; unresolved premises and next owner; Completion COMPLETE, PARTIAL or BLOCKED. COMPLETE means a current usable method/Baseline with explicit bounded conditions, not product success or permission for unauthorized effects. Unresolved conditions forbidding all implementation return BLOCKED. Scope remains ready. Planning-only stops here.
+Return SCOPE PLAN RESULT with exact Project Root/Scope/Plan; Baseline fixed locator and structural validation; grounded frontier/discriminator dispositions; conditional first work; primary evidence/accessibility; unresolved premises and next owner; Completion COMPLETE, PARTIAL or BLOCKED. COMPLETE means a current usable method/Baseline with explicit bounded conditions, not product success or permission for unauthorized effects. Unresolved conditions forbidding all implementation return BLOCKED. Scope remains ready. Planning-only stops here.

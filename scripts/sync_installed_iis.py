@@ -33,7 +33,7 @@ PAYLOAD_ROOTS = (
 REQUIRED = (
     "iis-workflow/SKILL.md", "product-thesis/SKILL.md",
     "product-thesis/tools/lifecycle.py", "product-thesis/tools/thesis.py",
-    "iis_artifacts/store.py", "iis_artifacts/admission.py",
+    "iis_artifacts/refs.py", "iis_artifacts/store.py", "iis_artifacts/publication.py", "iis_artifacts/admission.py", "iis_artifacts/host.py", "iis_artifacts/supervisor.py", "iis_artifacts/linux_worker.py", "iis_artifacts/supervisor_cli.py",
     "iis-workflow/references/assurance.md", "iis-workflow/tools/assurance.py",
     "scope-shaper/SKILL.md", "scope-shaper/tools/validate_scope.py",
     "iis-observatory/SKILL.md", "repo-snapshot/SKILL.md",

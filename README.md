@@ -11,7 +11,7 @@ There is no independent overall Plan approval role, whole-Scope semantic adjudic
 - `companion-skills/scope-plan/`: grounded methods, conditional first work and Assurance Baseline.
 - `companion-skills/scope-implement/`: authorized implementation, native self-check and correction/execution handoff.
 - `companion-skills/production-heuristic-probing/`: independent minimal-counterexample lanes and standalone bounded investigation.
-- `iis_artifacts/`: executor-owned fixed snapshot storage, publication and common downstream admission without content-derived IDs.\n- `iis-workflow/`: latest-request routing, stage/effect authority, fan-in, re-entry and status recording.
+- `iis_artifacts/`: executor-owned fixed snapshot storage, recoverable publication, common admission, and the enforced Linux supervisor boundary. In enforced mode the supervisor and worker use different UIDs; workers cannot select the store or mint review/admission records.\n- `iis-workflow/`: latest-request routing, stage/effect authority, fan-in, re-entry and status recording.
 - [`iis-workflow/references/assurance.md`](iis-workflow/references/assurance.md) and `iis-workflow/tools/assurance.py`: evidence schema, currentness, native foreground gate capture and structural closure. No agent/model invocation or Scope writer.
 - `companion-skills/repository-investigation/` and `purpose-first-review/`: supporting evidence and general review capabilities. General purpose review is not an implementation-admission role.
 - `iis-observatory/`, `observatory/`: optional conservative read-only Scope/project state model.
@@ -39,7 +39,7 @@ Before hypotheses, Probers receive originals, actual target, assigned surface, b
 ```text
 python3 -B scope-shaper/tools/validate_scope.py /absolute/project/docs/planning/work/example/SCOPE.md --json
 python3 -B iis-workflow/tools/assurance.py --help
-python3 -B iis-workflow/tools/assurance.py --store /trusted/iis-store --project-id <project-id> validate /absolute/PLAN.md\npython3 -B -m iis_artifacts.admission --help\npython3 -B product-thesis/tools/thesis.py --help
+python3 -B iis-workflow/tools/assurance.py --store /trusted/iis-store --project-id <project-id> validate /absolute/PLAN.md\npython3 -B product-thesis/tools/thesis.py --help\nsudo python3 -B iis_artifacts/supervisor_cli.py --help
 ```
 
 The assurance reference documents `bind`, `bind-execution`, `run`, `close` and `recording`, including exact data inputs. `close` returns EVIDENCE_COMPLETE or BLOCKED/reasons. Main additionally checks actual host attribution, current request/authority, unchanged originals/target and settled effects before changing only ready→done and reading back the exact delta. The helper neither authenticates arbitrary JSON nor grants mutation authority. One Scope's closure is not the whole request's completion.
@@ -76,3 +76,12 @@ These Python suites do not invoke models or subagents. They include Product Thes
 Actual model behavior, hypothesis diversity, framing resistance and detection/cost require separately authorized experiments. Scenarios marked NOT_RUN remain unexecuted. Neither unit-test success nor matching labels establishes those outcomes. See [current verification boundaries](docs/engineering/ready-runtime/verification.md) and [evaluation materials](evaluation/ready-verification/README.md).
 
 [Historical host integration](docs/engineering/host-integration-reintroduction.md) is reference material, not a runtime dependency or planned reinstall.
+
+
+### Enforced host boundary
+
+The first enforced host is the Linux supervisor in `iis_artifacts/supervisor.py` plus `linux_worker.py`. The supervisor must run under a UID that is different from the worker UID; the shipped concrete subprocess adapter requires root so it can drop to the configured unprivileged worker UID/GID. The artifact store stays supervisor-owned and private. Review/role workers receive read-only handoff copies, not store access.
+
+`IIS_SUPERVISOR_SOCKET` is the worker-facing control path. The worker may request Thesis progress, submit a candidate, inspect or cancel; it cannot provide a replacement current request, register review completion directly, resume a changed request, or start downstream roles. Those operations remain trusted-host APIs.
+
+If this UID/process separation and actual review/role dispatch adapter are unavailable, IIS may still be used as advisory documents, but the host must not claim enforced `CALIBRATED`, admission, or Assurance execution.

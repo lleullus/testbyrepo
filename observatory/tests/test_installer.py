@@ -33,6 +33,7 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             command = bin_dir / "iis-observatory"
             self.assertTrue(command.is_symlink())
+            self.assertTrue((target / "iis_artifacts/refs.py").is_file())
             version = subprocess.run(
                 [str(command), "version"],
                 check=True,

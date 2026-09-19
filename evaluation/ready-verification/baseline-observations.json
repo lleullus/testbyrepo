@@ -10,12 +10,12 @@
     "authoritative_readback_type": "ordinary CLI stdout",
     "source_only_substitution": false,
     "probe_admission_state": "human-readable COMPLETE baseline handoff",
+    "pre_project_root_digest": "not retained as a machine digest in the baseline run",
+    "post_project_root_digest": "not retained as a machine digest in the baseline run",
     "target_mutated": true,
     "target_drift": true,
     "elapsed_seconds": null,
     "confirmed_observation": "The preceding Probe directly observed the target entrypoint returning wrong; the verifier later returned VERIFIED after the disposable product file had changed to return adjusted. Independent post-run inspection confirmed the file content changed during that verification cycle.",
-    "evidence_limit": "Only this target-mutation production-path case was captured before the user requested stopping further OMP-based repetitions; other manifest cases remain unrun.",
-    "pre_project_root_capture": "not retained as a fixed machine identity in the historical baseline run",
-    "post_project_root_capture": "not retained as a fixed machine identity in the historical baseline run"
+    "evidence_limit": "Only this target-mutation production-path case was captured before the user requested stopping further OMP-based repetitions; other manifest cases remain unrun."
   }
 ]

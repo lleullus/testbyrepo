@@ -21,7 +21,7 @@ Product Thesis is the one IIS area allowed to use bounded executor-owned work st
 
 The enforced phases are `WORKING → CANDIDATE_READY → CHALLENGING → CLOSURE_CHECK → CLOSED`. Rework returns to `WORKING`; genuinely unresolved user choice, decisive evidence limits, exhausted budget, cancellation or host failure end in their explicit non-success states. A process exit, an authored `CALIBRATED` string or a model-produced JSON flag never creates closure.
 
-The trusted host, not the model, records actual review invocation start/completion. Before closure it requires:
+The trusted supervisor, not the model or worker CLI, records actual review invocation start/completion and pins each review to the host-owned current request generation and exact candidate generation. Before closure it requires:
 - one original-input frontier/omission review that is not satisfied by the author's own already-complete narrative,
 - one counterexample review against the exact current candidate,
 - a grounded disposition for every known material frontier item,
@@ -31,7 +31,7 @@ The trusted host, not the model, records actual review invocation start/completi
 
 Changing the candidate creates a new fixed candidate and invalidates candidate-specific closure. Previous observations may remain evidence when still applicable, but the final candidate receives a fresh bounded counterexample review. The lifecycle records `CALIBRATED`; the Thesis document itself does not carry a success label.
 
-The fixed candidate and review records live in the host-owned artifact store outside the worker's mutable project surface. References are opaque executor-allocated `{snapshot, path}` values, never content-derived identifiers. Strong enforcement is claimed only when the worker cannot modify the store, lifecycle state or host invocation record.
+The fixed candidate and review records live in the supervisor-owned artifact store outside the worker's mutable project surface. References are opaque executor-allocated `{snapshot, path}` values, never content-derived identifiers. Strong enforcement is available only through the UID-separated Linux supervisor: workers cannot choose the store, write lifecycle/review records, replace the trusted current request, or mint downstream admission. Without that boundary, Product Thesis work is advisory and cannot issue an enforced `CALIBRATED`.
 
 ## Request intents
 

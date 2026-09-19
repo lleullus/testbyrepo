@@ -80,6 +80,14 @@ if [[ "$SOURCE_REAL" != "$TARGET" ]]; then
   trap 'rm -rf -- "$STAGING"' EXIT
   mkdir -p "$STAGING"
   cp -a "$SOURCE_DIR"/. "$STAGING"/
+  COMMON_REFS="$SOURCE_DIR/../iis_artifacts/refs.py"
+  if [[ ! -f "$COMMON_REFS" ]]; then
+    echo "Missing common IIS source-ref parser: $COMMON_REFS" >&2
+    exit 5
+  fi
+  mkdir -p "$STAGING/iis_artifacts"
+  printf '%s\n' '"""Standalone Observatory shim for the shared IIS source-ref parser."""' > "$STAGING/iis_artifacts/__init__.py"
+  cp -- "$COMMON_REFS" "$STAGING/iis_artifacts/refs.py"
   mv -- "$STAGING" "$TARGET"
   trap - EXIT
 fi

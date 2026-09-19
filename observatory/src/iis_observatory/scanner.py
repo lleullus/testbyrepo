@@ -7,6 +7,8 @@ import json
 import re
 from urllib.parse import unquote
 
+from iis_artifacts.refs import RefError, source_refs_from_section
+
 from .markdown import extract_sections, parse_artifact
 from .model import (
     Artifact,
@@ -167,48 +169,28 @@ def _scan_direct_scope(
 
 
 def _source_refs(body: str, label: str, state: ProjectState, scope: Artifact, *, product: bool) -> list[dict[str, str]]:
-    match = re.findall(r"^```iis-sources\s*\n(.*?)^```\s*$", body, re.M | re.S)
-    if len(match) != 1:
-        state.issues.append(Issue("IIS510" if product else "IIS515", f"{label} requires one iis-sources JSON block.", "error", scope.relative_path))
-        return []
     try:
-        raw = json.loads(match[0])
-    except json.JSONDecodeError:
-        state.issues.append(Issue("IIS510" if product else "IIS515", f"{label} JSON is invalid.", "error", scope.relative_path))
-        return []
-    if not isinstance(raw, list) or not raw:
-        state.issues.append(Issue("IIS514" if product else "IIS519", f"{label} needs at least one fixed source reference.", "error", scope.relative_path))
+        raw = source_refs_from_section(body, label)
+    except RefError as exc:
+        state.issues.append(
+            Issue("IIS510" if product else "IIS515", str(exc), "error", scope.relative_path)
+        )
         return []
     values: list[dict[str, str]] = []
-    seen: set[tuple[str, str]] = set()
     for item in raw:
-        if not isinstance(item, dict) or set(item) != {"snapshot", "path"}:
-            state.issues.append(Issue("IIS510" if product else "IIS515", f"{label} source ref must contain snapshot and path.", "error", scope.relative_path))
-            continue
-        snapshot, path = item.get("snapshot"), item.get("path")
-        if not isinstance(snapshot, str) or re.fullmatch(r"snap-[0-9a-f]{32}", snapshot) is None:
-            state.issues.append(Issue("IIS510" if product else "IIS515", f"{label} snapshot id is invalid.", "error", scope.relative_path))
-            continue
-        if not isinstance(path, str) or path.startswith("/") or ".." in Path(path).parts:
-            state.issues.append(Issue("IIS511" if product else "IIS516", f"{label} path must stay project-relative.", "error", scope.relative_path))
-            continue
+        path = item["path"]
         if product and not path.startswith("docs/planning/product-thesis/"):
-            state.issues.append(Issue("IIS511", f"Product Authority is not a Product Thesis path: {path}", "error", scope.relative_path))
+            state.issues.append(
+                Issue("IIS511", f"Product Authority is not a Product Thesis path: {path}", "error", scope.relative_path)
+            )
             continue
-        key = (snapshot, path)
-        if key in seen:
-            state.issues.append(Issue("IIS512" if product else "IIS517", f"{label} source is duplicated.", "error", scope.relative_path))
-            continue
-        seen.add(key)
         live = state.repository_path / path
         values.append({
-            "snapshot": snapshot,
-            "path": path,
+            **item,
             "live_path": str(live),
             "current": "admission-required",
         })
     return values
-
 
 def _validate_direct_scope(
     state: ProjectState,
@@ -315,7 +297,12 @@ def _required_outcomes(
                 continue
             entry = {
                 "text": value,
-                "source": f"{authority['snapshot']}:{authority['path']}",
+                "source": f"live:{authority['path']}",
+                "fixed_source_ref": {
+                    "snapshot": authority["snapshot"],
+                    "path": authority["path"],
+                },
+                "source_strength": "live-projection",
                 "status": "unassessed",
             }
             all_outcomes.append(entry)

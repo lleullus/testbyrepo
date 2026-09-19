@@ -51,16 +51,17 @@ def close_fixture_thesis(store: ArtifactStore, project: Path, thesis: Path) -> d
         "RESOLVED",
         "The fixture explicitly supplies the adopted Thesis as a precondition; agent Thesis behavior is not the subject of this downstream case.",
     )
-    source_review = LIFECYCLE.begin_review(store, run, "SOURCE_FRONTIER", [original_ref])
+    source_review = LIFECYCLE.begin_review(store, run, "SOURCE_FRONTIER", LIFECYCLE.required_review_inputs(store, run, "SOURCE_FRONTIER"))
     LIFECYCLE.complete_review(store, source_review, result={"fixture": True, "model_invoked": False})
     candidate = LIFECYCLE.submit_candidate(store, run, thesis, logical, expected_generation=0)
-    challenge = LIFECYCLE.begin_review(store, run, "CANDIDATE_COUNTEREXAMPLE", [candidate])
+    challenge = LIFECYCLE.begin_review(store, run, "CANDIDATE_COUNTEREXAMPLE", LIFECYCLE.required_review_inputs(store, run, "CANDIDATE_COUNTEREXAMPLE"))
     LIFECYCLE.complete_review(store, challenge, result={"fixture": True, "model_invoked": False}, findings=[])
     result = LIFECYCLE.close_request(
         store,
         run,
         project,
         limitations="Synthetic precondition closure only; no model behavior is claimed.",
+        expected_generation=1,
     )
     if result.get("result") != "CALIBRATED":
         raise ValueError(f"fixture Thesis failed to close: {result}")

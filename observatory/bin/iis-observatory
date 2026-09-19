@@ -14,8 +14,8 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$SCRIPT")" && pwd)
 ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 
 if [ -n "${PYTHONPATH:-}" ]; then
-  export PYTHONPATH="$ROOT/src:$PYTHONPATH"
+  export PYTHONPATH="$ROOT/src:$ROOT:$ROOT/..:$PYTHONPATH"
 else
-  export PYTHONPATH="$ROOT/src"
+  export PYTHONPATH="$ROOT/src:$ROOT:$ROOT/.."
 fi
 exec "${PYTHON:-python3}" -B -m iis_observatory "$@"

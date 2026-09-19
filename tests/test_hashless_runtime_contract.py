@@ -10,6 +10,9 @@ ACTIVE_HASHLESS = [
     ROOT / "iis_artifacts" / "store.py",
     ROOT / "iis_artifacts" / "publication.py",
     ROOT / "iis_artifacts" / "admission.py",
+    ROOT / "iis_artifacts" / "supervisor.py",
+    ROOT / "iis_artifacts" / "linux_worker.py",
+    ROOT / "iis_artifacts" / "supervisor_cli.py",
     ROOT / "product-thesis" / "tools" / "lifecycle.py",
     ROOT / "product-thesis" / "tools" / "thesis.py",
     ROOT / "scope-shaper" / "tools" / "validate_scope.py",
@@ -39,8 +42,19 @@ class HashlessRuntimeContractTests(unittest.TestCase):
         assurance = (ROOT / "iis-workflow" / "tools" / "assurance.py").read_text(encoding="utf-8")
         self.assertIn("iis-scope/v2", scope)
         self.assertIn("iis-assurance/v2", assurance)
-        self.assertIn("iis-assurance-binding/v2", assurance)
-        self.assertIn("iis-assurance-result/v2", assurance)
+        self.assertIn("iis-assurance-binding/v3", assurance)
+        self.assertIn("iis-assurance-result/v3", assurance)
+        self.assertIn("iis-assurance-closure/v3", assurance)
+
+    def test_worker_facing_thesis_cli_cannot_select_a_store(self) -> None:
+        cli = (ROOT / "product-thesis" / "tools" / "thesis.py").read_text(encoding="utf-8")
+        self.assertNotIn("--store", cli)
+        self.assertNotIn("--project-id", cli)
+        self.assertIn("IIS_SUPERVISOR_SOCKET", cli)
+
+    def test_assurance_execution_cli_requires_supervisor(self) -> None:
+        assurance = (ROOT / "iis-workflow" / "tools" / "assurance.py").read_text(encoding="utf-8")
+        self.assertIn("HOST_SUPERVISOR_REQUIRED", assurance)
 
     def test_installer_is_protocol_five_with_allocated_release_ids(self) -> None:
         installer = (ROOT / "scripts" / "sync_installed_iis.py").read_text(encoding="utf-8")

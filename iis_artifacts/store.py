@@ -35,6 +35,7 @@ class ArtifactStore:
             raise ArtifactStoreError("project store must be a real directory")
         os.chmod(self.root, 0o700)
         (self.root / "snapshots").mkdir(mode=0o700, exist_ok=True)
+        (self.root / "executions").mkdir(mode=0o700, exist_ok=True)
         self.db_path = self.root / "state.sqlite"
         self._init_schema()
 
@@ -81,16 +82,21 @@ class ArtifactStore:
                 """
             )
 
+    @staticmethod
+    def sequence_in(db: sqlite3.Connection, name: str = "global") -> int:
+        row = db.execute("SELECT value FROM counters WHERE name = ?", (name,)).fetchone()
+        value = 1 if row is None else int(row["value"]) + 1
+        db.execute(
+            "INSERT INTO counters(name, value) VALUES(?, ?) "
+            "ON CONFLICT(name) DO UPDATE SET value = excluded.value",
+            (name, value),
+        )
+        return value
+
     def next_sequence(self, name: str = "global") -> int:
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT value FROM counters WHERE name = ?", (name,)).fetchone()
-            value = 1 if row is None else int(row["value"]) + 1
-            db.execute(
-                "INSERT INTO counters(name, value) VALUES(?, ?) "
-                "ON CONFLICT(name) DO UPDATE SET value = excluded.value",
-                (name, value),
-            )
+            value = self.sequence_in(db, name)
             db.execute("COMMIT")
             return value
 
@@ -114,12 +120,12 @@ class ArtifactStore:
             for raw_path, raw_value in sorted(files.items()):
                 relative = validate_relative_path(raw_path)
                 if isinstance(raw_value, tuple):
-                    data, mode = raw_value
+                    data, source_mode = raw_value
                 else:
-                    data, mode = raw_value, 0o444
+                    data, source_mode = raw_value, 0o444
                 if not isinstance(data, (bytes, bytearray)):
                     raise ArtifactStoreError("snapshot content must be bytes")
-                source_mode = int(mode) & 0o777
+                source_mode = int(source_mode) & 0o777
                 stored_mode = source_mode & 0o555
                 target = staging.joinpath(*relative.split("/"))
                 target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -151,6 +157,41 @@ class ArtifactStore:
                 shutil.rmtree(destination, ignore_errors=True)
             raise
 
+    @staticmethod
+    def _read_regular_beneath(root: Path, relative: str) -> tuple[bytes, int]:
+        relative = validate_relative_path(relative)
+        parts = relative.split("/")
+        flags_dir = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        flags_file = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        root_fd = os.open(root, flags_dir)
+        current_fd = root_fd
+        opened: list[int] = []
+        try:
+            for part in parts[:-1]:
+                next_fd = os.open(part, flags_dir, dir_fd=current_fd)
+                opened.append(next_fd)
+                current_fd = next_fd
+            file_fd = os.open(parts[-1], flags_file, dir_fd=current_fd)
+            try:
+                details = os.fstat(file_fd)
+                if not stat.S_ISREG(details.st_mode):
+                    raise ArtifactStoreError(f"snapshot input must be a regular file: {relative}")
+                chunks: list[bytes] = []
+                while True:
+                    chunk = os.read(file_fd, 1024 * 1024)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                return b"".join(chunks), stat.S_IMODE(details.st_mode)
+            finally:
+                os.close(file_fd)
+        except OSError as exc:
+            raise ArtifactStoreError(f"unsafe or unavailable snapshot input: {relative}") from exc
+        finally:
+            for fd in reversed(opened):
+                os.close(fd)
+            os.close(root_fd)
+
     def capture_files(
         self,
         root: Path,
@@ -168,26 +209,10 @@ class ArtifactStore:
             if not raw.is_absolute():
                 raw = root / raw
             try:
-                lexical = raw.relative_to(root)
+                relative = raw.relative_to(root).as_posix()
             except ValueError as exc:
                 raise ArtifactStoreError(f"capture path escapes root: {raw}") from exc
-            current = root
-            for part in lexical.parts:
-                current = current / part
-                if current.is_symlink():
-                    raise ArtifactStoreError(f"snapshot input may not traverse a symlink: {raw}")
-            try:
-                details = current.lstat()
-            except OSError as exc:
-                raise ArtifactStoreError(f"cannot inspect snapshot input: {raw}") from exc
-            if not stat.S_ISREG(details.st_mode):
-                raise ArtifactStoreError(f"snapshot input must be a regular file: {raw}")
-            canonical = current.resolve(strict=True)
-            try:
-                relative = canonical.relative_to(root).as_posix()
-            except ValueError as exc:
-                raise ArtifactStoreError(f"capture path escapes root: {raw}") from exc
-            values[relative] = (canonical.read_bytes(), stat.S_IMODE(details.st_mode))
+            values[relative] = self._read_regular_beneath(root, relative)
         return self.capture_mapping(
             values,
             kind=kind,
@@ -195,6 +220,35 @@ class ArtifactStore:
             producer_run=producer_run,
             producer_invocation=producer_invocation,
         )
+
+    def _tree_paths(self, root: Path, exclude_top: tuple[str, ...]) -> list[str]:
+        root = Path(root).resolve(strict=True)
+        result: list[str] = []
+        for current, dirs, files in os.walk(root, topdown=True, followlinks=False):
+            current_path = Path(current)
+            relative_dir = current_path.relative_to(root)
+            if relative_dir.parts and relative_dir.parts[0] in exclude_top:
+                dirs[:] = []
+                continue
+            kept_dirs = []
+            for name in sorted(dirs):
+                child = current_path / name
+                relative = child.relative_to(root)
+                if relative.parts and relative.parts[0] in exclude_top:
+                    continue
+                if child.is_symlink():
+                    raise ArtifactStoreError(f"snapshot tree contains a symlink: {relative.as_posix()}")
+                kept_dirs.append(name)
+            dirs[:] = kept_dirs
+            for name in sorted(files):
+                child = current_path / name
+                relative = child.relative_to(root)
+                if relative.parts and relative.parts[0] in exclude_top:
+                    continue
+                if child.is_symlink():
+                    raise ArtifactStoreError(f"snapshot tree contains a symlink: {relative.as_posix()}")
+                result.append(relative.as_posix())
+        return sorted(result)
 
     def capture_tree(
         self,
@@ -207,36 +261,80 @@ class ArtifactStore:
         producer_invocation: str | None = None,
     ) -> str:
         root = Path(root).resolve(strict=True)
-        paths: list[Path] = []
-        for path in sorted(root.rglob("*")):
-            relative = path.relative_to(root)
-            if relative.parts and relative.parts[0] in exclude_top:
-                continue
-            if path.is_symlink():
-                raise ArtifactStoreError(f"snapshot tree contains a symlink: {relative.as_posix()}")
-            if path.is_file():
-                paths.append(path)
-        return self.capture_files(
-            root,
-            paths,
+        before = self._tree_paths(root, exclude_top)
+        values: dict[str, tuple[bytes, int]] = {}
+        for relative in before:
+            values[relative] = self._read_regular_beneath(root, relative)
+        after = self._tree_paths(root, exclude_top)
+        if before != after:
+            raise ArtifactStoreError("INPUT_CAPTURE_UNAVAILABLE: source file set changed during capture")
+        for relative, expected in values.items():
+            if self._read_regular_beneath(root, relative) != expected:
+                raise ArtifactStoreError(f"INPUT_CAPTURE_UNAVAILABLE: source changed during capture: {relative}")
+        return self.capture_mapping(
+            values,
             kind=kind,
             origin=origin,
             producer_run=producer_run,
             producer_invocation=producer_invocation,
         )
 
+    def snapshot_record(self, snapshot_id: str) -> dict[str, object]:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT id, kind, origin, producer_run, producer_invocation, created_sequence "
+                "FROM snapshots WHERE id=?",
+                (snapshot_id,),
+            ).fetchone()
+        if row is None:
+            raise ArtifactStoreError(f"unknown snapshot: {snapshot_id}")
+        return dict(row)
+
     def snapshot_files(self, snapshot_id: str) -> list[dict[str, int | str]]:
+        self.snapshot_record(snapshot_id)
         with self.connect() as db:
             rows = db.execute(
                 "SELECT path, mode FROM snapshot_files WHERE snapshot_id = ? ORDER BY path",
                 (snapshot_id,),
             ).fetchall()
         if not rows:
-            raise ArtifactStoreError(f"unknown or empty snapshot: {snapshot_id}")
+            raise ArtifactStoreError(f"empty snapshot: {snapshot_id}")
         return [{"path": row["path"], "mode": int(row["mode"])} for row in rows]
+
+    def ref_record(self, value: object) -> dict[str, object]:
+        item = validate_ref(value)
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT s.id AS snapshot, s.kind, s.origin, s.producer_run, s.producer_invocation, "
+                "s.created_sequence, f.path, f.mode "
+                "FROM snapshots s JOIN snapshot_files f ON f.snapshot_id=s.id "
+                "WHERE s.id=? AND f.path=?",
+                (item["snapshot"], item["path"]),
+            ).fetchone()
+        if row is None:
+            raise ArtifactStoreError("snapshot reference is not registered")
+        return dict(row)
+
+    def assert_producer(
+        self,
+        value: object,
+        *,
+        run_id: str | None = None,
+        invocation_id: str | None = None,
+        kind: str | None = None,
+    ) -> dict[str, object]:
+        row = self.ref_record(value)
+        if run_id is not None and row["producer_run"] != run_id:
+            raise ArtifactStoreError("EVIDENCE_RUN_MISMATCH")
+        if invocation_id is not None and row["producer_invocation"] != invocation_id:
+            raise ArtifactStoreError("EVIDENCE_INVOCATION_MISMATCH")
+        if kind is not None and row["kind"] != kind:
+            raise ArtifactStoreError("EVIDENCE_KIND_MISMATCH")
+        return row
 
     def resolve(self, value: object) -> Path:
         item = validate_ref(value)
+        self.ref_record(item)
         path = self.root / "snapshots" / item["snapshot"]
         if path.is_symlink() or not path.is_dir():
             raise ArtifactStoreError("snapshot reference names an unknown or unsafe snapshot")
@@ -245,7 +343,7 @@ class ArtifactStore:
             if path.is_symlink():
                 raise ArtifactStoreError("snapshot reference traverses a symlink")
         if not path.is_file():
-            raise ArtifactStoreError("snapshot reference does not name a stored file")
+            raise ArtifactStoreError("registered snapshot file is missing")
         return path
 
     def read_bytes(self, value: object) -> bytes:
@@ -263,22 +361,63 @@ class ArtifactStore:
     def compare_tree(self, snapshot_id: str, root: Path, *, exclude_top: tuple[str, ...] = (".git",)) -> bool:
         root = Path(root).resolve(strict=True)
         stored = {str(row["path"]): row for row in self.snapshot_files(snapshot_id)}
-        current: dict[str, Path] = {}
-        for path in sorted(root.rglob("*")):
-            relative = path.relative_to(root)
-            if relative.parts and relative.parts[0] in exclude_top:
-                continue
-            if path.is_symlink():
-                return False
-            if path.is_file():
-                current[relative.as_posix()] = path
-        if set(stored) != set(current):
+        try:
+            current_paths = self._tree_paths(root, exclude_top)
+        except ArtifactStoreError:
+            return False
+        if set(stored) != set(current_paths):
             return False
         for relative, row in stored.items():
-            path = current[relative]
-            stored_path = self.root / "snapshots" / snapshot_id / relative
-            if path.read_bytes() != stored_path.read_bytes():
+            try:
+                data, mode = self._read_regular_beneath(root, relative)
+            except ArtifactStoreError:
                 return False
-            if stat.S_IMODE(path.stat().st_mode) != int(row["mode"]):
+            stored_path = self.root / "snapshots" / snapshot_id / relative
+            if data != stored_path.read_bytes() or mode != int(row["mode"]):
                 return False
         return True
+
+    def materialize_snapshot(self, snapshot_id: str, destination: Path, *, read_only: bool = False) -> Path:
+        destination = Path(destination)
+        if destination.exists() or destination.is_symlink():
+            raise ArtifactStoreError("execution destination already exists")
+        destination.mkdir(parents=True, mode=0o755 if read_only else 0o700)
+        directories: set[Path] = {destination}
+        try:
+            for row in self.snapshot_files(snapshot_id):
+                relative = str(row["path"])
+                target = destination.joinpath(*relative.split("/"))
+                target.parent.mkdir(parents=True, exist_ok=True, mode=0o755 if read_only else 0o700)
+                current = target.parent
+                while current != destination.parent and current.is_relative_to(destination):
+                    directories.add(current)
+                    if current == destination:
+                        break
+                    current = current.parent
+                source = self.root / "snapshots" / snapshot_id / relative
+                with target.open("xb") as stream:
+                    stream.write(source.read_bytes())
+                source_mode = int(row["mode"])
+                if read_only:
+                    target.chmod(0o555 if source_mode & 0o111 else 0o444)
+                else:
+                    target.chmod(source_mode)
+            if read_only:
+                for directory in sorted(directories, key=lambda item: len(item.parts), reverse=True):
+                    directory.chmod(0o555)
+            return destination
+        except BaseException:
+            for directory in sorted(directories, key=lambda item: len(item.parts)):
+                try:
+                    directory.chmod(0o755)
+                except OSError:
+                    pass
+            shutil.rmtree(destination, ignore_errors=True)
+            raise
+
+    def delete_snapshot(self, snapshot_id: str) -> None:
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("DELETE FROM snapshots WHERE id=?", (snapshot_id,))
+            db.execute("COMMIT")
+        shutil.rmtree(self.root / "snapshots" / snapshot_id, ignore_errors=True)

@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from iis_artifacts.refs import RefError, validate_ref
+from iis_artifacts.refs import RefError, source_refs_from_section
 from iis_path_contract import PathContractError, canonical_project_root, require_canonical_regular_file, require_work_slug
 
 
@@ -50,34 +50,15 @@ def metadata(text: str, name: str) -> str:
 
 
 def source_refs(body: str, label: str) -> list[dict[str, str]]:
-    blocks = re.findall(r"^```iis-sources\s*\n(.*?)^```\s*$", body, re.M | re.S)
-    if len(blocks) != 1:
-        raise ScopeValidationError(f"{label} requires one iis-sources JSON block")
     try:
-        value = json.loads(blocks[0])
-    except json.JSONDecodeError as exc:
-        raise ScopeValidationError(f"invalid {label} JSON") from exc
-    if not isinstance(value, list) or not value:
-        raise ScopeValidationError(f"{label} needs at least one source reference")
-    result: list[dict[str, str]] = []
-    seen: set[tuple[str, str]] = set()
-    for item in value:
-        try:
-            ref = validate_ref(item)
-        except RefError as exc:
-            raise ScopeValidationError(f"invalid {label} source reference: {exc}") from exc
-        key = (ref["snapshot"], ref["path"])
-        if key in seen:
-            raise ScopeValidationError(f"duplicate {label} source reference")
-        seen.add(key)
-        result.append(ref)
-    return result
+        return source_refs_from_section(body, label)
+    except RefError as exc:
+        raise ScopeValidationError(str(exc)) from exc
 
-
-def validate_text(text: str, logical_path: str, *, live_scope: Path | None = None) -> dict:
+def validate_text(text: str, logical_path: str, *, live_scope: Path | None = None, trusted_uid: int | None = None) -> dict:
     if metadata(text, "Schema") != "iis-scope/v2":
         raise ScopeValidationError("unsupported Scope schema; current admission requires iis-scope/v2")
-    root = canonical_project_root(metadata(text, "Project-Root"), writable=False)
+    root = canonical_project_root(metadata(text, "Project-Root"), writable=False, trusted_uid=trusted_uid)
     expected = Path(logical_path)
     if expected.is_absolute():
         try:
@@ -113,19 +94,19 @@ def validate_text(text: str, logical_path: str, *, live_scope: Path | None = Non
     }
 
 
-def validate(scope: Path) -> dict:
+def validate(scope: Path, *, trusted_uid: int | None = None) -> dict:
     scope = require_canonical_regular_file(scope)
     text = scope.read_text(encoding="utf-8")
-    root = canonical_project_root(metadata(text, "Project-Root"), writable=False)
+    root = canonical_project_root(metadata(text, "Project-Root"), writable=False, trusted_uid=trusted_uid)
     try:
         logical = scope.relative_to(root).as_posix()
     except ValueError as exc:
         raise ScopeValidationError("Scope is outside Project-Root") from exc
-    return validate_text(text, logical, live_scope=scope)
+    return validate_text(text, logical, live_scope=scope, trusted_uid=trusted_uid)
 
 
-def validate_bytes(data: bytes, logical_path: str) -> dict:
-    return validate_text(data.decode("utf-8"), logical_path)
+def validate_bytes(data: bytes, logical_path: str, *, trusted_uid: int | None = None) -> dict:
+    return validate_text(data.decode("utf-8"), logical_path, trusted_uid=trusted_uid)
 
 
 def main() -> int:

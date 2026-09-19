@@ -95,12 +95,12 @@ def _preclose_thesis(store: ArtifactStore, project: Path, thesis: Path) -> dict:
         "RESOLVED",
         "The case explicitly supplies this Thesis as an adopted precondition; semantic authoring is outside the downstream case.",
     )
-    source_review = LIFECYCLE.begin_review(store, run_id, "SOURCE_FRONTIER", [original_ref])
+    source_review = LIFECYCLE.begin_review(store, run_id, "SOURCE_FRONTIER", LIFECYCLE.required_review_inputs(store, run_id, "SOURCE_FRONTIER"))
     LIFECYCLE.complete_review(store, source_review, result={"fixture": "synthetic precondition", "model_invoked": False})
     candidate = LIFECYCLE.submit_candidate(store, run_id, thesis, logical, expected_generation=0)
-    candidate_review = LIFECYCLE.begin_review(store, run_id, "CANDIDATE_COUNTEREXAMPLE", [candidate])
+    candidate_review = LIFECYCLE.begin_review(store, run_id, "CANDIDATE_COUNTEREXAMPLE", LIFECYCLE.required_review_inputs(store, run_id, "CANDIDATE_COUNTEREXAMPLE"))
     LIFECYCLE.complete_review(store, candidate_review, result={"fixture": "synthetic precondition", "model_invoked": False}, findings=[])
-    closed = LIFECYCLE.close_request(store, run_id, project, limitations="Synthetic fixture closure; no model behavior is claimed.")
+    closed = LIFECYCLE.close_request(store, run_id, project, limitations="Synthetic fixture closure; no model behavior is claimed.", expected_generation=1)
     if closed.get("result") != "CALIBRATED":
         raise ValueError(f"synthetic Thesis fixture did not close: {closed}")
     return candidate

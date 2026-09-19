@@ -26,6 +26,12 @@ class BaselineTests(AssuranceFixture, unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "UNASSIGNED_SURFACE"):
             assurance.validate_baseline(self.baseline, self.store)
 
+    def test_assurance_binding_requires_registered_host_admission(self):
+        with self.store.connect() as db:
+            db.execute("DELETE FROM admissions")
+        with self.assertRaisesRegex(Exception, "HOST_ADMISSION_REQUIRED"):
+            assurance.bind(self.baseline_path, self.store, self.root, self.execution)
+
     def test_dirty_working_source_can_bind_but_later_drift_blocks(self):
         self.command.write_text("print('captured-value')\n", encoding="utf-8")
         command_snapshot = self.store.capture_files(self.root, [self.command], kind="source")
@@ -36,6 +42,12 @@ class BaselineTests(AssuranceFixture, unittest.TestCase):
         self.command.write_text("print('different-after-bind')\n", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "TARGET_DRIFT"):
             assurance.current(self.baseline_path, self.store, self.binding)
+
+    def test_binding_dict_cannot_be_rewritten_as_a_new_execution(self):
+        forged = dict(self.binding)
+        forged["run_id"] = "run-forged"
+        with self.assertRaisesRegex(ValueError, "BINDING_RECORD_MISMATCH"):
+            assurance.current(self.baseline_path, self.store, forged)
 
     def test_exact_plan_block_is_usable_without_self_identity_field(self):
         plan = self.arena / "PLAN.md"

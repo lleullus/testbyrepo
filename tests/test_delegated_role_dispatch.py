@@ -23,6 +23,9 @@ class DispatchPayloadTests(unittest.TestCase):
             "iis-workflow/references/delegated-role-dispatch.md",
             "iis-workflow/references/assurance.md",
             "iis-workflow/tools/assurance.py",
+            "iis_artifacts/supervisor.py",
+            "iis_artifacts/linux_worker.py",
+            "iis_artifacts/supervisor_cli.py",
         }
         self.assertTrue(expected.issubset(packaged), sorted(expected - packaged))
         self.assertFalse(any(path.startswith("companion-skills/scope-verify/") for path in packaged))

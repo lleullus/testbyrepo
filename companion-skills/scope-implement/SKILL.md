@@ -9,7 +9,7 @@ description: "Implement one ready IIS Scope using its current Plan/Assurance Bas
 
 Supply exact Project Root, host-admitted fixed ready Scope, every bound executor-owned Thesis/Transition ref and applicable conditions. Supply the current fixed Plan/Baseline refs, readable primary evidence, target/current working-tree assumptions, permitted mutations/effects, stop/no-reentry limits and user-selected actor/mode/model/effort. Use one role source snapshot with `references/implement.md` and `iis-workflow/references/assurance.md`.
 
-For correction include unchanged predecessor finding, raw evidence, usable reproducer or exact limit, regression guidance, directly connected same-assumption sibling basis, current target, prior-effect settlement and actual build/fixture/readback/cleanup handoff. Missing predecessor evidence is not replaced with a label or summary. No independent method admission artifact is required.
+For correction include unchanged predecessor finding, raw evidence, usable reproducer or exact limit, regression guidance, directly connected same-assumption sibling basis, current target, prior-effect settlement and actual build/fixture/readback/cleanup handoff. Missing predecessor evidence is not replaced with a label or summary. The worker does not author a method admission credential; the trusted host supplies the registered admission context.
 
 Tell the worker to read all bound originals and the exact Scope/Plan/Baseline directly before mutation, preserving product purpose, complete loop, false-success distinctions, failure/recovery and authoritative readback. Originals bound the work; they do not expand current authority.
 
@@ -22,7 +22,7 @@ Tell the worker to read all bound originals and the exact Scope/Plan/Baseline di
 
 ## Admission and ownership
 
-Immediately before mutation use the canonical Scope validator and common Baseline validator; require ready, current exact originals, Plan/Baseline and current actor authority. Check required real preconditions before dependent effects. Draft/superseded/done do not start normal implementation. Missing/stale inputs return PARTIAL/BLOCKED and exact next owner.
+Immediately before mutation require the trusted host's registered `iis-admission/v2` context for `scope-implement`, then use the canonical Scope validator and common Baseline validator; require ready, current exact originals, Plan/Baseline and current actor authority. Check required real preconditions before dependent effects. Draft/superseded/done do not start normal implementation. Missing/stale inputs return PARTIAL/BLOCKED and exact next owner.
 
 The implementer owns authorized product/project-tooling changes and self-check. It may choose private helpers, internal names and equivalent local structure that leave Thesis/Transition/Plan decisions unchanged. It does not edit Thesis/Transition/Scope/Baseline, redefine outcomes, start Prober lanes or change Status. A ready Scope stays ready. Main's orchestration role does not grant repair authority; a user-selected DIRECT implementer may implement within its explicit stage.
 
