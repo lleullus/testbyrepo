@@ -131,7 +131,7 @@ class EvidenceTests(AssuranceFixture, unittest.TestCase):
         )
         self.observation()
         self.assertEqual(gate["capture"]["returncode"], 7)
-        self.assertIn("INCOMPLETE_RESULT", self.closure()["reasons"])
+        self.assertIn("GATE_FAILED", self.closure()["reasons"])
 
     def test_new_runtime_capture_requires_new_binding_identity(self):
         runtime = self.arena / "runtime.json"

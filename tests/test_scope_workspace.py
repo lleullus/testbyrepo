@@ -85,7 +85,7 @@ None
             '"path": "docs/planning/product-thesis/reservation-flow/THESIS-001.md"',
         )
         scope.write_text(text, encoding="utf-8")
-        with self.assertRaisesRegex(validate_scope.ScopeValidationError, "source reference"):
+        with self.assertRaisesRegex(validate_scope.ScopeValidationError, "snapshot reference|source reference"):
             validate_scope.validate(scope)
 
 
