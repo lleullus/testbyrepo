@@ -15,7 +15,7 @@
         1,
         2
       ],
-      "samePtyPid": "237013"
+      "samePtyPid": "323975"
     },
     "B4-E2": {
       "casEpoch": 2,
@@ -33,7 +33,7 @@
       "nack": "POSITION_MISMATCH"
     },
     "B4-E5": {
-      "freshSession": "df4444d3c9f14e92b591a697746e8e39",
+      "freshSession": "965b718e7a454578ae43fd7832d5e3f0",
       "retained": true
     },
     "B4-E6": {
