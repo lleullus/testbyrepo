@@ -207,8 +207,22 @@ static struct server *server_new(int argc, char **argv, int start) {
   return ts;
 }
 
+static void close_loop_handle(uv_handle_t *handle, void *arg) {
+  (void)arg;
+  if (!uv_is_closing(handle)) uv_close(handle, NULL);
+}
+
 static void server_free(struct server *ts) {
   if (ts == NULL) return;
+
+  uv_walk(ts->loop, close_loop_handle, NULL);
+  uv_run(ts->loop, UV_RUN_DEFAULT);
+  int rc = uv_loop_close(ts->loop);
+  if (rc == 0)
+    free(ts->loop);
+  else
+    lwsl_err("failed to close libuv loop: %s (%s)\n", uv_err_name(rc), uv_strerror(rc));
+
   if (ts->credential != NULL) free(ts->credential);
   if (ts->auth_header != NULL) free(ts->auth_header);
   if (ts->index != NULL) free(ts->index);
@@ -227,9 +241,6 @@ static void server_free(struct server *ts) {
     }
   }
 
-  uv_loop_close(ts->loop);
-
-  free(ts->loop);
   free(ts);
 }
 
@@ -632,6 +643,7 @@ int main(int argc, char **argv) {
 
   for (int i = 0; i < sig_count; i++) {
     uv_signal_stop(&signals[i]);
+    uv_close((uv_handle_t *)&signals[i], NULL);
   }
 #undef sig_count
 

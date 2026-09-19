@@ -75,6 +75,21 @@ interface PointerCandidate {
     selection: string;
 }
 
+interface SessionStateMessage {
+    version?: number;
+    state?: string;
+    sessionId?: string;
+    sessionDiagnosticId?: number;
+    connectionGeneration?: number;
+    leaseEpoch?: number;
+    ownerPhase?: string;
+    replay?: { from?: number; to?: number; truncated?: boolean };
+    exitCode?: number;
+    exitSignal?: number;
+    retryable?: boolean;
+    retryAfterMs?: number;
+}
+
 interface TtydDiagnosticEvent {
     at: number;
     event: string;
@@ -92,6 +107,7 @@ export interface TtydDiagnosticsSnapshot {
         | 'render-lagging'
         | 'terminal-state-lost'
         | 'session-conflict'
+        | 'session-owner-check-busy'
         | 'session-expired'
         | 'session-exited'
         | 'session-unknown'
@@ -2031,18 +2047,7 @@ export class Xterm {
                 }
                 break;
             case Command.SET_SESSION_STATE: {
-                const message = JSON.parse(this.textDecoder.decode(rawData.slice(1))) as {
-                    version?: number;
-                    state?: string;
-                    sessionId?: string;
-                    sessionDiagnosticId?: number;
-                    connectionGeneration?: number;
-                    leaseEpoch?: number;
-                    ownerPhase?: string;
-                    replay?: { from?: number; to?: number; truncated?: boolean };
-                    exitCode?: number;
-                    exitSignal?: number;
-                };
+                const message = JSON.parse(this.textDecoder.decode(rawData.slice(1))) as SessionStateMessage;
                 if (message.version !== 4 || typeof message.state !== 'string') {
                     this.connectionState = 'session-error';
                     this.overlayAddon.showAction('Session protocol mismatch.', 'Retry', pointer =>
@@ -2100,6 +2105,27 @@ export class Xterm {
                             this.recordDiagnostic('fresh-terminal-reset');
                         });
                     }
+                    break;
+                }
+                if (message.state === 'owner_check_busy') {
+                    this.inputReady = false;
+                    this.invalidateInputOwner(true);
+                    this.recoveryPauseReason = undefined;
+                    this.takeoverPending = false;
+                    this.takeoverLeaseEpoch = 0;
+                    this.connectionState = 'session-owner-check-busy';
+                    this.overlayAddon.clearAction();
+                    this.overlayAddon.showOverlay('Session is preparing. Retrying...');
+                    const retryAfterMs =
+                        typeof message.retryAfterMs === 'number' && message.retryAfterMs > 0
+                            ? message.retryAfterMs
+                            : 1000;
+                    const retryGeneration = generation;
+                    this.reconnectTimer = window.setTimeout(() => {
+                        this.reconnectTimer = undefined;
+                        if (this.disposed || this.displaced || retryGeneration !== this.connectionGeneration) return;
+                        this.requestRecovery(false);
+                    }, retryAfterMs);
                     break;
                 }
                 this.inputReady = false;

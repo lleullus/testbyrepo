@@ -24,6 +24,9 @@ static char initial_cmds[] = {SET_WINDOW_TITLE, SET_PREFERENCES, SET_SESSION_STA
 #define SESSION_TOMBSTONE_MAX 256
 #define SESSION_TOMBSTONE_MAX_AGE_MS SESSION_GRACE_DEFAULT_MS
 #define JSON_SAFE_INTEGER_MAX 9007199254740991ULL
+#define SESSION_REAPER_MAX_RETRIES 5
+#define SESSION_REAPER_RETRY_BASE_MS 200ULL
+#define SESSION_REAPER_QUARANTINE_MS 5000ULL
 
 struct approval_record {
   enum approval_kind kind;
@@ -359,10 +362,10 @@ static void session_destroy_requested(struct tty_session *session) {
   session_drop_registry(session);
 }
 static void session_maybe_complete_purge(struct tty_session *session) {
-  if (session == NULL || session->state != SESSION_STATE_TERMINATING || session->reap_failed ||
-      !session->process_tree_reaped || !session->root_exit_observed || !session->pty_eof_observed ||
-      session->process != NULL || session->process_ref || session->client != NULL || session->viewer_ref ||
-      session->expiry_timer != NULL || session->ready_deadline_timer != NULL || session->reaper_ref)
+  if (session == NULL || session->state != SESSION_STATE_TERMINATING || !session->process_tree_reaped ||
+      !session->root_exit_observed || !session->pty_eof_observed || session->process != NULL ||
+      session->process_ref || session->client != NULL || session->viewer_ref || session->expiry_timer != NULL ||
+      session->ready_deadline_timer != NULL || session->reaper_ref)
     return;
   session->state = SESSION_STATE_PURGED;
   lwsl_notice("session lifecycle complete: transitioned to PURGED\n");
@@ -398,6 +401,7 @@ struct session_reaper {
   uv_timer_t timer;
   uint64_t grace_ms;
   int step;
+  unsigned retries;
   proc_ident_t *idents;
   size_t idents_count;
 };
@@ -432,23 +436,35 @@ static void session_reaper_timer_cb(uv_timer_t *timer) {
       }
     }
 
+    reaper->step = 2;
     if (any_alive) {
-      reaper->step = 2;
-      uv_timer_start(timer, session_reaper_timer_cb, 200, 0);
+      if (uv_timer_start(timer, session_reaper_timer_cb, SESSION_REAPER_RETRY_BASE_MS, 0) == 0) return;
+      reaper->session->reap_failed = true;
+      lwsl_err("failed to schedule process tree reap verification: pid %d\n", reaper->root_pid);
+      uv_close((uv_handle_t *)timer, session_reaper_close_cb);
       return;
     }
   }
 
   const bool remaining_alive = pty_tree_idents_alive(reaper->idents, reaper->idents_count);
-  if (reaper->session != NULL) {
-    if (remaining_alive) {
-      reaper->session->state = SESSION_STATE_TERMINATING;
+  if (remaining_alive) {
+    reaper->session->state = SESSION_STATE_TERMINATING;
+    uint64_t delay = SESSION_REAPER_QUARANTINE_MS;
+    if (reaper->retries < SESSION_REAPER_MAX_RETRIES) {
+      reaper->retries++;
+      delay = SESSION_REAPER_RETRY_BASE_MS << reaper->retries;
+      if (delay > SESSION_REAPER_QUARANTINE_MS) delay = SESSION_REAPER_QUARANTINE_MS;
+    } else if (!reaper->session->reap_failed) {
       reaper->session->reap_failed = true;
-      lwsl_err("process tree reap incomplete: pid %d remaining in TERMINATING\n", reaper->root_pid);
-    } else {
-      reaper->session->process_tree_reaped = true;
-      lwsl_notice("process tree reaped completely: pid %d awaiting lifecycle completion\n", reaper->root_pid);
+      lwsl_err("process tree reap delayed: pid %d moved to quarantine checks\n", reaper->root_pid);
     }
+    if (uv_timer_start(timer, session_reaper_timer_cb, delay, 0) == 0) return;
+    reaper->session->reap_failed = true;
+    lwsl_err("failed to schedule process tree quarantine check: pid %d\n", reaper->root_pid);
+  } else {
+    reaper->session->reap_failed = false;
+    reaper->session->process_tree_reaped = true;
+    lwsl_notice("process tree reaped completely: pid %d awaiting lifecycle completion\n", reaper->root_pid);
   }
 
   uv_timer_stop(timer);
@@ -527,7 +543,7 @@ static void session_start_expiry(struct tty_session *session) {
   if (uv_timer_init(server->loop, timer) != 0) {
     free(timer);
     session->state = SESSION_STATE_TERMINATING;
-    session->reap_failed = true;
+    session_reap_tree(session, 0);
     return;
   }
   session->expiry_timer = timer;
@@ -538,8 +554,8 @@ static void session_start_expiry(struct tty_session *session) {
     session->expiry_timer = NULL;
     timer->data = NULL;
     session->state = SESSION_STATE_TERMINATING;
-    session->reap_failed = true;
     uv_close((uv_handle_t *)timer, expiry_timer_close_cb);
+    session_reap_tree(session, 0);
   }
 }
 
@@ -941,6 +957,7 @@ static void prepare_conflict_response(struct pss_tty *pss, struct tty_session *s
   pss->replay_start = pss->replay_target = 0;
   pss->replay_lost = false;
   pss->close_after_state = false;
+  if (pss->recovery_only_slot) lws_set_timeout(pss->wsi, PENDING_TIMEOUT_SHUTDOWN_FLUSH, 5);
   pss->takeover_offered = true;
   pss->takeover_pending = false;
   if (pss->initialized || pss->initial_cmd_index >= (int)sizeof(initial_cmds)) pss->state_update_pending = true;
@@ -1669,6 +1686,7 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
           break;
         }
         case TAKEOVER: {
+          lws_set_timeout(wsi, NO_PENDING_TIMEOUT, 0);
           json_tokener *tok = json_tokener_new();
           json_object *obj = json_tokener_parse_ex(tok, pss->buffer + 1, pss->len - 1);
           uint64_t observed = 0, sequence = 0, columns = 0, rows = 0;
@@ -1847,7 +1865,7 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
         lwsl_notice("exiting due to the --once/--exit-no-conn option.\n");
         force_exit = true;
         lws_cancel_service(context);
-        exit(0);
+        uv_stop(server->loop);
       }
       break;
     }

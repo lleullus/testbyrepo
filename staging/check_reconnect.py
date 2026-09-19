@@ -464,7 +464,7 @@ def raw_duplicate(resume_id):
     contender.send_binary(
         json.dumps(
             {
-                'version': 3,
+                'version': 4,
                 'intent': 'resume',
                 'replayPosition': 0,
                 'AuthToken': auth_token,
@@ -481,7 +481,7 @@ def raw_duplicate(resume_id):
             if not isinstance(message, bytes) or message[:1] != b'3':
                 continue
             state = json.loads(message[1:])
-            assert state['version'] == 3, state
+            assert state['version'] == 4, state
             states.append(state['state'])
             if state['state'] == 'checking':
                 contender.send_binary(b'0echo CONTENDER_SHOULD_NOT_RUN\r')
