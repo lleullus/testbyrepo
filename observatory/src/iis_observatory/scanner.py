@@ -167,7 +167,7 @@ def _scan_direct_scope(
 
 
 def _source_refs(body: str, label: str, state: ProjectState, scope: Artifact, *, product: bool) -> list[dict[str, str]]:
-    match = re.findall(r"^```iis-sources\\s*\\n(.*?)^```\\s*$", body, re.M | re.S)
+    match = re.findall(r"^```iis-sources\s*\n(.*?)^```\s*$", body, re.M | re.S)
     if len(match) != 1:
         state.issues.append(Issue("IIS510" if product else "IIS515", f"{label} requires one iis-sources JSON block.", "error", scope.relative_path))
         return []
@@ -305,11 +305,11 @@ def _required_outcomes(
         if not body or body.strip().lower() == "none":
             continue
         bullets = [
-            re.sub(r"^\\s*[-*+]\\s+", "", line).strip()
+            re.sub(r"^\s*[-*+]\s+", "", line).strip()
             for line in body.splitlines()
             if re.match(r"^\\s*[-*+]\\s+", line)
         ]
-        values = bullets or [paragraph.strip() for paragraph in re.split(r"\\n\\s*\\n", body) if paragraph.strip()]
+        values = bullets or [paragraph.strip() for paragraph in re.split(r"\n\s*\n", body) if paragraph.strip()]
         for value in values:
             if value.lower() == "none":
                 continue
