@@ -2,11 +2,11 @@
 
 Result: CALIBRATED | USER_INPUT_REQUIRED
 
-<!-- Content guide, not a required field count or exploration ledger. Use a result label only when its meaning is established; report a decisive evidence/capability block in ordinary prose. Preserve referenced revisions; changed contracts receive a new THESIS-NNN ordinal. -->
+<!-- Content guide, not a required field count or exploration ledger. Use a result label only when its meaning is established; report a decisive evidence/capability block in ordinary prose. Preserve referenced revisions; changed binding contracts receive a new THESIS-NNN ordinal. For load-bearing statements, preserve in ordinary prose whether each is a product obligation, observed current fact, adopted construction decision or unresolved premise; these distinctions do not require four new fixed sections. -->
 
 ## Source Authority
 
-<Actual user instructions, adopted choices and applicable prior authority. Distinguish explicit requirements from derived necessity and agent recommendations from direct approval. Exact prior sources are references, not automatically active authority.>
+<Actual user instructions, adopted choices and applicable prior authority. Distinguish explicit requirements from derived necessity and agent recommendations from direct approval. Keep observed current facts distinct from adopted future construction decisions and unresolved premises; a construction decision may bind downstream work without becoming a permanent product promise. Exact prior sources are references, not automatically active authority.>
 
 ## Reason to Exist
 

@@ -36,7 +36,7 @@ def reject_symlink_chain(project: Path, relative: Path) -> None:
     current = project
     for part in relative.parts:
         current = current / part
-        if current.exists() and current.is_symlink():
+        if current.is_symlink():
             raise ValueError("fixture path may not traverse a symlink")
 
 
@@ -56,6 +56,97 @@ def materialize_fixture_files(project: Path, entries: list[dict]) -> list[dict]:
         target.write_text(entry["content"], encoding="utf-8")
         metadata.append({"path": key, "sha256": sha(target)})
     return metadata
+
+
+def file_reference(path: Path) -> dict:
+    return {"path": str(path), "sha256": sha(path)}
+
+
+def materialize_role_fixture(project: Path, spec: dict | None) -> dict | None:
+    if spec is None:
+        return None
+    kind = spec.get("kind")
+    if kind not in {"planner", "implementer"}:
+        raise ValueError("unsupported role fixture kind")
+
+    thesis = project / fixture_relative_path(spec["thesis_path"])
+    if thesis.is_symlink() or not thesis.is_file():
+        raise ValueError("role fixture Thesis must be a regular fixture file")
+
+    acceptance = spec["acceptance"].strip()
+    outcome = spec["outcome"].strip()
+    if not acceptance or not outcome or "\n\n" in acceptance:
+        raise ValueError("role fixture needs one nonempty Acceptance paragraph")
+
+    scope = project / "docs" / "planning" / "work" / spec["work_slug"] / "SCOPE.md"
+    scope.parent.mkdir(parents=True, exist_ok=True)
+    if scope.exists() or scope.is_symlink():
+        raise ValueError("role fixture Scope already exists")
+    scope.write_text(
+        f"# {spec['scope_title']}\n"
+        "Schema: iis-scope/v1\n"
+        f"Project-Root: {project}\n"
+        "Status: ready\n\n"
+        "## Product Authority\n"
+        f"- {thesis} sha256:{sha(thesis)}\n\n"
+        "## Outcome\n"
+        f"{outcome}\n\n"
+        "## Acceptance\n"
+        f"{acceptance}\n\n"
+        "## Open Decisions\n"
+        "None\n",
+        encoding="utf-8",
+    )
+
+    plan = scope.parent / "plans" / "PLAN-001.md"
+    plan.parent.mkdir(parents=True, exist_ok=True)
+    result = {
+        "kind": kind,
+        "thesis": file_reference(thesis),
+        "scope": file_reference(scope),
+        "transition": "None applicable",
+        "authority": spec["authority"],
+    }
+    if kind == "planner":
+        result["plan_destination"] = str(plan)
+        return result
+
+    observation_id = "obs-result"
+    surface_id = "implementation-surface"
+    baseline = {
+        "schema": "iis-assurance/v1",
+        "scope": file_reference(scope),
+        "obligations": [{"anchor": acceptance, "evidence": [observation_id]}],
+        "gates": [],
+        "observations": [{
+            "id": observation_id,
+            "initial_state": spec["observation"]["initial_state"],
+            "trigger": spec["observation"]["trigger"],
+            "readback": spec["observation"]["readback"],
+            "predicate": spec["observation"]["predicate"],
+        }],
+        "surfaces": [{"id": surface_id, "boundary": spec["surface"]}],
+        "lanes": [{
+            "id": "probe-implementation-surface",
+            "surfaces": [surface_id],
+            "required": True,
+            "min_actions": 1,
+            "budget": "one bounded counterexample attempt",
+            "safety": "Use only disposable project-local state; no external effects.",
+        }],
+        "no_probe_reason": None,
+    }
+    plan.write_text(
+        "# Synthetic evaluation Plan\n\n"
+        "## Method\n"
+        + spec["method"].strip()
+        + "\n\n## Assurance Baseline\n```iis-assurance\n"
+        + json.dumps(baseline, ensure_ascii=False, indent=2, sort_keys=True)
+        + "\n```\n",
+        encoding="utf-8",
+    )
+    result["plan"] = file_reference(plan)
+    return result
 
 
 def case_by_id(case_id: str) -> dict:
@@ -79,6 +170,7 @@ def prepare(case_id: str, arena: Path, variant: str, repetition: int) -> Path:
     project.mkdir(parents=True, mode=0o700)
     evidence.mkdir(mode=0o700)
     fixture_files = materialize_fixture_files(project, case.get("fixture_files", []))
+    role_fixture = materialize_role_fixture(project, case.get("role_fixture"))
     context = {
         "case_id": case_id,
         "fixture": case.get("fixture", "brief-only"),
@@ -104,6 +196,21 @@ def prepare(case_id: str, arena: Path, variant: str, repetition: int) -> Path:
         prompt += "\nFixture source files (inspect the actual project files):\n" + "".join(
             f"- {item['path']}\n" for item in fixture_files
         )
+    if role_fixture:
+        prompt += (
+            "\nExact canonical role inputs generated from the fixture bytes:\n"
+            f"- Product Thesis: {role_fixture['thesis']['path']} sha256:{role_fixture['thesis']['sha256']}\n"
+            f"- Ready Scope: {role_fixture['scope']['path']} sha256:{role_fixture['scope']['sha256']}\n"
+            f"- Transition: {role_fixture['transition']}\n"
+        )
+        if role_fixture["kind"] == "planner":
+            prompt += f"- Plan destination: {role_fixture['plan_destination']}\n"
+        else:
+            prompt += (
+                f"- Current Plan/Assurance Baseline: {role_fixture['plan']['path']} "
+                f"sha256:{role_fixture['plan']['sha256']}\n"
+            )
+        prompt += f"- Current role authority: {role_fixture['authority']}\n"
     metadata = {
         "schema": "iis-product-thesis-case/v1",
         "case_id": case_id,
@@ -117,6 +224,7 @@ def prepare(case_id: str, arena: Path, variant: str, repetition: int) -> Path:
         "case_file_sha256": sha(CASES),
         "fixture_builder_sha256": sha(Path(__file__)),
         "fixture_files": fixture_files,
+        "role_fixture": role_fixture,
         "model": protocol["model"],
         "thinking": protocol["thinking"],
         "required_observations": case["required_observations"],

@@ -1,0 +1,27 @@
+name: IIS tests
+
+on:
+  push:
+    branches:
+      - snapshot/iis-skills
+
+permissions:
+  contents: read
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Run IIS unittest suite
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 -B -m unittest discover -s tests -v 2>&1 | tee unittest.log
+      - name: Preserve unittest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iis-unittest-log
+          path: unittest.log

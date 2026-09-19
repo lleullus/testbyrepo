@@ -6,7 +6,7 @@ There is no independent overall Plan approval role, whole-Scope semantic adjudic
 
 ## Components
 
-- `product-thesis/`: complete product meaning, behavior/UI, failure/recovery/preservation and authoritative success observations. Its bounded exploration stays inside the role.
+- `product-thesis/`: complete product meaning, behavior/UI, failure/recovery/preservation, authoritative success observations and any grounded construction decision required to make the current product result determinate. Its bounded exploration stays inside the role.
 - `scope-shaper/`: Main's Scope authoring instructions, canonical template and validator, not a separate invocation.
 - `companion-skills/scope-plan/`: grounded methods, conditional first work and Assurance Baseline.
 - `companion-skills/scope-implement/`: authorized implementation, native self-check and correction/execution handoff.
@@ -20,11 +20,11 @@ There is no independent overall Plan approval role, whole-Scope semantic adjudic
 
 ## Product and evidence contracts
 
-Thesis sources normally live at `docs/planning/product-thesis/<meaning-slug>/THESIS-NNN.md`. Preserve referenced revisions; refine only materially changed meaning. A newer unrelated source does not automatically replace an old bound original. Investigation and a Completion Brief supply evidence/lenses, not product approval.
+Thesis sources normally live at `docs/planning/product-thesis/<meaning-slug>/THESIS-NNN.md`. Preserve referenced revisions. Create a new ordinal when the binding contract changes: product meaning, required means, a downstream-binding adopted construction decision, or a load-bearing factual premise whose refutation requires a different faithful downstream plan. Evidence/rationale-only additions and implementation defects under an unchanged binding decision do not by themselves require a revision. A newer unrelated source does not automatically replace an old bound original. Investigation and a Completion Brief supply evidence/lenses, not product approval.
 
 Scope is `docs/planning/work/<slug>/SCOPE.md`, schema `iis-scope/v1`, with exact project-local Product Authority, Outcome and Acceptance. `draft` means unresolved meaning, `ready` means sufficient meaning/observation to plan, `done` is Main's conditional recorded completion, and `superseded` retains an unconsumed replacement. Structural closure BLOCKED is not a new Scope status. A digest proves bytes, not success or permission.
 
-The optional approved Transition Baseline preserves Block/order/invariant/continuation/abort/atomic boundaries. It is distinct from Assurance Baseline. Main fixes current Scope from originals and actual state without Spec/Ticket/extra Increment layers. Plan owns methods and executable preconditions, not weaker success criteria.
+The optional approved Transition Baseline preserves Block/order/invariant/continuation/abort/atomic boundaries. It is distinct from Assurance Baseline. Main fixes current Scope from originals and actual state without Spec/Ticket/extra Increment layers. Plan owns faithful execution methods and executable preconditions left open by Thesis/Transition; it does not reselect Thesis-bound construction decisions or weaker success criteria.
 
 Assurance Baseline is one `iis-assurance` JSON fence under the Plan's `## Assurance Baseline`; assurance-only can use invocation-local JSON without a fresh implementation Plan. It maps every authored Acceptance paragraph to evidence, records native gate commands and observation predicates, actual attack surfaces/required lanes, budget, isolation and settlement. It is not a mini-spec or approval certificate.
 
@@ -44,7 +44,7 @@ python3 -B iis-workflow/tools/assurance.py validate /absolute/PLAN.md
 
 The assurance reference documents `bind`, `bind-execution`, `run`, `close` and `recording`, including exact data inputs. `close` returns EVIDENCE_COMPLETE or BLOCKED/reasons. Main additionally checks actual host attribution, current request/authority, unchanged originals/target and settled effects before changing only ready→done and reading back the exact delta. The helper neither authenticates arbitrary JSON nor grants mutation authority. One Scope's closure is not the whole request's completion.
 
-Planning-only and implementation-only stop at their boundaries. Standalone Probe can operate without canonical Scope but cannot create done eligibility. Historical done is diagnostic input, not a new completion event. Material method changes return to Plan/Baseline owner; product/transition changes to their existing authority; actual correction stays with the selected authorized implementing actor.
+Planning-only and implementation-only stop at their boundaries. Standalone Probe can operate without canonical Scope but cannot create done eligibility. Historical done is diagnostic input, not a new completion event. A Thesis-bound factual premise or adopted construction decision change returns to Product-Thesis; approved transition order/intermediate authority/invariant changes return to Transition; Plan-only method/oracle/safety changes return to Plan/Baseline; faithful implementation correction stays with the selected authorized implementing actor.
 
 ## Optional skill installation
 

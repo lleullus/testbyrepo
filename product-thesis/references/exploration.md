@@ -62,7 +62,7 @@ This is a selectable causal path, not a mandatory infrastructure checklist. Inve
 
 ## Evidence and semantic judgment
 
-Keep six distinctions in ordinary explanation, using only those relevant to the finding:
+Keep these distinctions in ordinary explanation, using only those relevant to the finding:
 
 | Kind | Meaning and example |
 | --- | --- |

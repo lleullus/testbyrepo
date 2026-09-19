@@ -366,6 +366,15 @@
           "content": "import sqlite3\nDB_PATH = \"var/app.sqlite3\"\n\ndef readback(job_id: str):\n    with sqlite3.connect(DB_PATH) as db:\n        return db.execute(\"select value from results where job_id = ?\", (job_id,)).fetchone()\n"
         }
       ],
+      "role_fixture": {
+        "kind": "planner",
+        "work_slug": "plan-preserves-thesis-decision",
+        "thesis_path": "docs/planning/product-thesis/job-storage/THESIS-001.md",
+        "scope_title": "Preserve bound job-result authority",
+        "outcome": "The current outcome keeps completed job results attributable and retrievable after restart through the Thesis-bound SQLite-backed authoritative store and readback path.",
+        "acceptance": "After a job is completed and the process restarts, the same job result is read back through the bound SQLite-backed authoritative store and remains attributable to that job.",
+        "authority": "Planning-only. Read the disposable fixture and write only the exact Plan destination; do not implement, Probe or change Scope status."
+      },
       "required_observations": [
         "Planner treats the Thesis-bound construction decision as existing authority rather than reselecting architecture.",
         "Plan concretizes faithful execution and evidence while choosing only methods left open by the originals."
@@ -426,10 +435,31 @@
       "prompt": "현재 Product Thesis, Transition과 Plan 결정은 그대로다. fixture의 구현이 계획과 동일한 observable behavior를 내지만 private helper 이름과 내부 함수 분해만 다르다. 이 차이가 어느 owner의 결정인지 판단하고 현재 구현 범위에서 처리해.",
       "fixture_files": [
         {
+          "path": "docs/planning/product-thesis/worker-completion/THESIS-001.md",
+          "content": "# Worker completion thesis\n\nProduct obligation: completing a job writes the job-specific value to the authoritative supplied store and returns that same value.\n\nAdopted construction decision: the current delivery keeps the provided store as the authoritative state owner for this completion path.\n"
+        },
+        {
           "path": "src/worker.py",
           "content": "def _persist_value(store, job_id, value):\n    store[job_id] = value\n\ndef complete(store, job_id, value):\n    _persist_value(store, job_id, value)\n    return store[job_id]\n"
         }
       ],
+      "role_fixture": {
+        "kind": "implementer",
+        "work_slug": "local-implementation-discretion",
+        "thesis_path": "docs/planning/product-thesis/worker-completion/THESIS-001.md",
+        "scope_title": "Preserve worker completion behavior",
+        "outcome": "The worker completion entry keeps the provided store as authoritative state and preserves the same job-specific completion result; private helper naming is not part of the bound result.",
+        "acceptance": "Calling complete with a job ID and value writes that value to the authoritative supplied store for the same job and returns the same value without changing another job entry.",
+        "authority": "Implementation-only inside the disposable fixture. No external effects, Thesis/Scope/Plan edits, Probe execution or status recording.",
+        "method": "Preserve the complete(store, job_id, value) entry, the provided store as state owner and the job-specific write/readback behavior. The Plan does not bind private helper names or equivalent local function decomposition.",
+        "surface": "Actual src/worker.py complete entry, provided store mutation and returned job-specific value.",
+        "observation": {
+          "initial_state": "A disposable mapping contains an unrelated job entry and no entry for the target job.",
+          "trigger": "Call complete(store, target_job, target_value) through src/worker.py.",
+          "readback": "Read store[target_job], the returned value and the unrelated job entry.",
+          "predicate": "The target entry and return value equal target_value and the unrelated job entry is unchanged."
+        }
+      },
       "required_observations": [
         "Private helper naming/equivalent local structure remains Implementer discretion when all bound decisions stay unchanged.",
         "No Thesis revision or Plan rewrite is created solely for the local code shape."
@@ -445,6 +475,10 @@
       "downstream_planning": true,
       "fixture_files": [
         {
+          "path": "docs/planning/product-thesis/result-migration/THESIS-001.md",
+          "content": "# Result migration thesis\n\nProduct obligation: migration preserves every currently valid result and does not begin a destructive cutover unless an exact restorable source snapshot has been verified.\n\nRequired means: the load-bearing source snapshot precondition must be established before destructive migration effects.\n"
+        },
+        {
           "path": "config/migration.json",
           "content": "{\"source_snapshot_verified\": false, \"target\": \"new_store\"}\n"
         },
@@ -453,6 +487,15 @@
           "content": "def migrate(db):\n    db.execute(\"drop table old_results\")\n    db.execute(\"create table new_results(id text primary key, value text not null)\")\n"
         }
       ],
+      "role_fixture": {
+        "kind": "planner",
+        "work_slug": "irreversible-effect-precondition",
+        "thesis_path": "docs/planning/product-thesis/result-migration/THESIS-001.md",
+        "scope_title": "Protect destructive result migration",
+        "outcome": "Prepare the current migration so existing valid results remain preserved and destructive cutover is dependent on the Thesis-required verified source snapshot precondition.",
+        "acceptance": "Before any destructive migration statement runs, an exact restorable source snapshot is verified; if that precondition is not established, dependent destructive migration does not run and only work with independent state and effects may continue.",
+        "authority": "Planning-only. Inspect the disposable fixture and write only the exact Plan destination; do not execute migration, Probe or status recording."
+      },
       "required_observations": [
         "The load-bearing precondition is required or the dependent destructive effect is blocked before mutation.",
         "Future Probe coverage is not used as permission to perform the irreversible effect.",

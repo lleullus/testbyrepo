@@ -5,7 +5,9 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+README = ROOT / "README.md"
 PRODUCT = ROOT / "product-thesis" / "SKILL.md"
+TEMPLATE = ROOT / "product-thesis" / "templates" / "PRODUCT-THESIS.template.md"
 EXPLORATION = ROOT / "product-thesis" / "references" / "exploration.md"
 WORKFLOW = ROOT / "iis-workflow" / "SKILL.md"
 SCOPE = ROOT / "scope-shaper" / "SKILL.md"
@@ -52,6 +54,25 @@ class ProductThesisDecisionOwnershipContractTests(unittest.TestCase):
         self.assertIn("Small diff, private code or technical vocabulary does not make a decision implementation-local.", implement)
         self.assertIn("earliest decision that must change", probe)
         self.assertIn("Multiple no-finding lanes never cancel one material finding", probe)
+
+    def test_readme_and_template_match_binding_revision_model(self) -> None:
+        readme = README.read_text(encoding="utf-8")
+        template = TEMPLATE.read_text(encoding="utf-8")
+        for phrase in (
+            "downstream-binding adopted construction decision",
+            "load-bearing factual premise",
+            "returns to Product-Thesis",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, readme)
+        for phrase in (
+            "product obligation",
+            "observed current fact",
+            "adopted construction decision",
+            "unresolved premise",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, template)
 
     def test_no_reviewer_verifier_or_semantic_final_judge_is_reintroduced(self) -> None:
         texts = "\n".join(

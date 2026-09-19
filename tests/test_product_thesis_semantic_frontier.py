@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -15,6 +16,12 @@ EXPLORATION = ROOT / "product-thesis" / "references" / "exploration.md"
 SCENARIOS = ROOT / "evaluation" / "product-thesis" / "refinement-scenarios.md"
 CASES = ROOT / "evaluation" / "product-thesis" / "cases.json"
 RUN = ROOT / "evaluation" / "product-thesis" / "run.py"
+ROLE_FIXTURE_IDS = {
+    "S16-plan-preserves-thesis-decision",
+    "S19-local-implementation-discretion",
+    "S20-irreversible-effect-precondition",
+}
+
 NEW_CASE_IDS = {
     "S1-frontier-persistence",
     "S2-existing-meaning-defect-reuse",
@@ -128,7 +135,7 @@ class ProductThesisSemanticFrontierContractTests(unittest.TestCase):
                     self.assertTrue(fixture_path.is_file())
                     self.assertEqual(fixture["sha256"], hashlib.sha256(fixture_path.read_bytes()).hexdigest())
 
-    def test_fixture_paths_reject_traversal_and_symlinks(self) -> None:
+    def test_fixture_paths_reject_traversal_absolute_and_symlinks(self) -> None:
         run = load_run()
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -136,6 +143,8 @@ class ProductThesisSemanticFrontierContractTests(unittest.TestCase):
             project.mkdir()
             with self.assertRaises(ValueError):
                 run.materialize_fixture_files(project, [{"path": "../escape.txt", "content": "x"}])
+            with self.assertRaises(ValueError):
+                run.materialize_fixture_files(project, [{"path": str(root / "absolute.txt"), "content": "x"}])
 
             outside = root / "outside"
             outside.mkdir()
@@ -143,6 +152,75 @@ class ProductThesisSemanticFrontierContractTests(unittest.TestCase):
             link.symlink_to(outside, target_is_directory=True)
             with self.assertRaises(ValueError):
                 run.materialize_fixture_files(project, [{"path": "linked/escape.txt", "content": "x"}])
+
+            broken_target = outside / "missing.txt"
+            broken_link = project / "broken.txt"
+            broken_link.symlink_to(broken_target)
+            with self.assertRaises(ValueError):
+                run.materialize_fixture_files(project, [{"path": "broken.txt", "content": "x"}])
+            self.assertFalse(broken_target.exists())
+
+    def test_role_fixtures_materialize_canonical_admission_inputs(self) -> None:
+        cohort = json.loads(CASES.read_text(encoding="utf-8"))
+        run = load_run()
+        with tempfile.TemporaryDirectory() as directory:
+            arena = Path(directory)
+            for case_id in sorted(ROLE_FIXTURE_IDS):
+                metadata_path = run.prepare(
+                    case_id,
+                    arena,
+                    cohort["protocol"]["variants"][0],
+                    cohort["protocol"]["repetitions"][0],
+                )
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                role = metadata["role_fixture"]
+                self.assertIsNotNone(role)
+                prompt = metadata["prompt"]
+
+                for name in ("thesis", "scope"):
+                    ref = role[name]
+                    path = Path(ref["path"])
+                    self.assertTrue(path.is_file())
+                    self.assertEqual(ref["sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
+                    self.assertIn(str(path), prompt)
+
+                scope_check = subprocess.run(
+                    [
+                        sys.executable,
+                        "-B",
+                        str(ROOT / "scope-shaper" / "tools" / "validate_scope.py"),
+                        role["scope"]["path"],
+                        "--json",
+                    ],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(scope_check.returncode, 0, scope_check.stderr or scope_check.stdout)
+
+                if role["kind"] == "implementer":
+                    plan = Path(role["plan"]["path"])
+                    self.assertTrue(plan.is_file())
+                    self.assertEqual(role["plan"]["sha256"], hashlib.sha256(plan.read_bytes()).hexdigest())
+                    self.assertIn(str(plan), prompt)
+                    baseline_check = subprocess.run(
+                        [
+                            sys.executable,
+                            "-B",
+                            str(ROOT / "iis-workflow" / "tools" / "assurance.py"),
+                            "validate",
+                            str(plan),
+                        ],
+                        cwd=ROOT,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(baseline_check.returncode, 0, baseline_check.stderr or baseline_check.stdout)
+                    self.assertIn('"status": "VALID"', baseline_check.stdout)
+                else:
+                    destination = Path(role["plan_destination"])
+                    self.assertFalse(destination.exists())
+                    self.assertIn(str(destination), prompt)
 
     def test_cases_cover_material_omission_and_non_overreach_controls(self) -> None:
         cases = {
