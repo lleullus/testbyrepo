@@ -244,6 +244,7 @@ const HEARTBEAT_INTERVAL_MS = 5_000;
 const HEARTBEAT_TIMEOUT_MS = 30_000;
 
 type AttemptResult = 'ready' | 'retry' | 'stop';
+type RecoveryPauseReason = 'budget' | 'terminal' | 'disabled';
 
 interface GapRecord {
     sessionId: string;
@@ -335,7 +336,7 @@ export class Xterm {
     private heartbeatNonce?: string;
     private heartbeatSentAt = 0;
     private heartbeatCounter = 0;
-    private automaticRecoveryExhausted = false;
+    private recoveryPauseReason?: RecoveryPauseReason;
     private consumeRecoveryClick = false;
     private displaced = false;
     private takeoverPending = false;
@@ -1175,6 +1176,9 @@ export class Xterm {
 
     private requestRecovery(createNew: boolean) {
         if (this.disposed || this.displaced) return;
+        this.inputReady = false;
+        this.invalidateInputOwner(true);
+        this.clearHeartbeat();
         this.abortActiveAttempt();
         if (createNew || !this.request || this.connectionState === 'no-session') {
             this.request = this.options.session.create();
@@ -1193,10 +1197,7 @@ export class Xterm {
         this.takeoverPending = false;
         this.takeoverLeaseEpoch = 0;
         this.connectionState = 'disconnected';
-        this.automaticRecoveryExhausted = false;
-        this.reconnectStartedAt = performance.now();
-        this.visibleRecoveryMs = 0;
-        this.reconnectAttempts = 0;
+        this.resetRecoveryBudget();
         this.beginRecovery();
     }
 
@@ -1578,11 +1579,35 @@ export class Xterm {
         );
     }
 
+    private resetRecoveryBudget() {
+        const now = performance.now();
+        this.reconnectStartedAt = now;
+        this.visibleRecoveryMs = 0;
+        this.visibleRecoveryStartedAt = document.visibilityState === 'hidden' ? undefined : now;
+        this.reconnectAttempts = 0;
+        this.recoveryPauseReason = undefined;
+    }
+
+    private resumeRecoveryBudget() {
+        if (this.disposed || this.displaced || !this.request || !this.reconnect) return;
+        this.inputReady = false;
+        this.invalidateInputOwner(true);
+        this.clearHeartbeat();
+        this.abortActiveAttempt();
+        this.connectionState = 'disconnected';
+        this.resetRecoveryBudget();
+        this.beginRecovery();
+    }
+
     private async runRecovery() {
         this.clearHeartbeat();
         while (!this.disposed && !this.displaced) {
-            if (this.currentVisibleRecoveryMs() >= RECONNECT_WINDOW_MS || !this.reconnect) {
-                this.showManualReconnect();
+            if (!this.reconnect) {
+                this.showManualReconnect('disabled');
+                return;
+            }
+            if (this.currentVisibleRecoveryMs() >= RECONNECT_WINDOW_MS) {
+                this.showManualReconnect('budget');
                 return;
             }
             const result = await this.connectAttempt();
@@ -1705,11 +1730,9 @@ export class Xterm {
             return;
         }
         this.overlayAddon.showOverlay('Connection lost. Recovering...');
-        this.reconnectStartedAt = performance.now();
-        this.reconnectAttempts = 0;
-        this.automaticRecoveryExhausted = false;
+        this.resetRecoveryBudget();
         if (this.reconnect) this.beginRecovery();
-        else this.showManualReconnect();
+        else this.showManualReconnect('disabled');
     }
 
     private settleAttempt(result: AttemptResult) {
@@ -1740,8 +1763,8 @@ export class Xterm {
         this.attemptResolve = undefined;
     }
 
-    private showManualReconnect() {
-        this.automaticRecoveryExhausted = true;
+    private showManualReconnect(reason: 'budget' | 'disabled' = 'budget') {
+        this.recoveryPauseReason = reason;
         this.connectionState = 'disconnected';
         this.overlayAddon.showAction('Automatic recovery paused.', 'Reconnect', event =>
             this.claimRecoveryPointer(event)
@@ -1759,14 +1782,28 @@ export class Xterm {
             this.invalidateInputOwner(true);
             return;
         }
-        if (this.visibleRecoveryStartedAt === undefined) this.visibleRecoveryStartedAt = performance.now();
-        if (this.disposed || this.displaced) return;
+        if (this.disposed || this.displaced || !this.request) return;
         if (this.inputReady) {
-            this.sendHeartbeat();
-        } else if (!this.automaticRecoveryExhausted) {
-            this.abortActiveAttempt();
-            this.beginRecovery();
+            if (this.reconnect) {
+                this.recordDiagnostic('visibility-return-recovery', this.connectionGeneration);
+                this.requestRecovery(false);
+            } else {
+                this.sendHeartbeat();
+            }
+            return;
         }
+
+        if (this.recoveryPauseReason === 'budget') {
+            this.resumeRecoveryBudget();
+            return;
+        }
+
+        if (this.recoveryPauseReason === 'terminal' || this.recoveryPauseReason === 'disabled' || !this.reconnect)
+            return;
+
+        if (this.visibleRecoveryStartedAt === undefined) this.visibleRecoveryStartedAt = performance.now();
+        this.abortActiveAttempt();
+        this.beginRecovery();
     }
 
     private startHeartbeat() {
@@ -1787,15 +1824,7 @@ export class Xterm {
         if (this.heartbeatNonce) {
             if (Date.now() - this.heartbeatSentAt < HEARTBEAT_TIMEOUT_MS) return;
             this.recordDiagnostic('heartbeat-timeout', this.connectionGeneration);
-            this.inputReady = false;
-            this.invalidateInputOwner(true);
-            this.clearSocket(true);
-            this.clearHeartbeat();
-            this.connectionState = 'disconnected';
-            this.reconnectStartedAt = performance.now();
-            this.reconnectAttempts = 0;
-            this.automaticRecoveryExhausted = false;
-            this.beginRecovery();
+            this.requestRecovery(false);
             return;
         }
         const nonce = `${this.connectionGeneration}:${++this.heartbeatCounter}`;
@@ -2075,7 +2104,7 @@ export class Xterm {
                 }
                 this.inputReady = false;
                 this.invalidateInputOwner(true);
-                this.automaticRecoveryExhausted = true;
+                this.recoveryPauseReason = 'terminal';
                 this.takeoverPending = false;
                 if (message.state === 'conflict' && typeof message.leaseEpoch === 'number') {
                     this.takeoverLeaseEpoch = message.leaseEpoch;
@@ -2217,7 +2246,7 @@ export class Xterm {
                 this.visibleRecoveryMs = 0;
                 this.visibleRecoveryStartedAt = undefined;
                 this.reconnectAttempts = 0;
-                this.automaticRecoveryExhausted = false;
+                this.recoveryPauseReason = undefined;
                 this.connectionState = this.degradedGap ? 'degraded' : 'application-ready';
                 if (this.degradedGap)
                     this.overlayAddon.showOverlay('출력 일부 손실 / 화면 상태 불완전 — 제한된 입력 사용 중');

@@ -1747,16 +1747,23 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
             } else if (session != NULL && (session->process == NULL || !process_running(session->process))) {
               prepare_unattached_response(pss, "exited", session->diagnostic_id);
             } else if (session != NULL) {
-              uint8_t presented_hash[SUCCESSOR_TOKEN_BYTES];
+              uint8_t presented_hash[SUCCESSOR_TOKEN_BYTES] = {0};
               const bool same_client = !strcmp(client_id, session->owner_client_instance_id);
+              const bool presented_successor = decode_token_hash(successor, presented_hash);
               const bool exact_retry = same_client && sequence == session->last_approval.connect_sequence;
               const bool newer_create_retry = same_client && !strcmp(intent, "create") &&
                   session->last_approval.kind == APPROVAL_CREATE && session->owner_phase != OWNER_READY &&
                   sequence > session->last_approval.connect_sequence;
+              const bool newer_successor_retry = same_client && !strcmp(intent, "resume") &&
+                  session->last_approval.kind == APPROVAL_SUCCESSOR && session->owner_phase != OWNER_READY &&
+                  session->last_approval.has_credential_hash &&
+                  sequence > session->last_approval.connect_sequence && presented_successor &&
+                  lws_timingsafe_bcmp(presented_hash, session->last_approval.credential_hash,
+                                      SUCCESSOR_TOKEN_BYTES) == 0;
               const bool valid_successor = same_client && sequence > session->owner_connect_sequence &&
-                  session->successor_token_valid && decode_token_hash(successor, presented_hash) &&
+                  session->successor_token_valid && presented_successor &&
                   lws_timingsafe_bcmp(presented_hash, session->successor_token_hash, SUCCESSOR_TOKEN_BYTES) == 0;
-              if (exact_retry || newer_create_retry) {
+              if (exact_retry || newer_create_retry || newer_successor_retry) {
                 if (session->client != NULL) fence_owner(session, session->client, "superseded");
                 if (!grant_owner(pss, session, session->last_approval.kind, (uint16_t)columns, (uint16_t)rows, false))
                   prepare_unattached_response(pss, "error", session->diagnostic_id);

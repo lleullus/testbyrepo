@@ -1,6 +1,6 @@
 {
-  "binarySha256": "457ce883713011223fd486954aa073844761a85f1d2baa0f762273b45a54743f",
-  "bundleSha256": "d5e5d46fbdf6ef450d88ccc439ff3e5f38c9a0da70adcb71ba2bd668acdd7096",
+  "binarySha256": "6facadae33d3f387afd4513146a523359063027aafe4946a0dedf6d47e344d16",
+  "bundleSha256": "390d0b68f47ee3dc4af671ca2ce902f3328954a6c0db103086f5a3c94473037a",
   "errors": 0,
   "failures": 0,
   "isolatedPortsOnly": true,
@@ -15,7 +15,7 @@
         1,
         2
       ],
-      "samePtyPid": "92172"
+      "samePtyPid": "237013"
     },
     "B4-E2": {
       "casEpoch": 2,
@@ -33,7 +33,7 @@
       "nack": "POSITION_MISMATCH"
     },
     "B4-E5": {
-      "freshSession": "113764ebdeee4e978013d49fa52314a2",
+      "freshSession": "df4444d3c9f14e92b591a697746e8e39",
       "retained": true
     },
     "B4-E6": {

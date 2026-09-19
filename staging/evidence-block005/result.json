@@ -1,6 +1,6 @@
 {
-  "binarySha256": "457ce883713011223fd486954aa073844761a85f1d2baa0f762273b45a54743f",
-  "bundleSha256": "d5e5d46fbdf6ef450d88ccc439ff3e5f38c9a0da70adcb71ba2bd668acdd7096",
+  "binarySha256": "6facadae33d3f387afd4513146a523359063027aafe4946a0dedf6d47e344d16",
+  "bundleSha256": "390d0b68f47ee3dc4af671ca2ce902f3328954a6c0db103086f5a3c94473037a",
   "errors": 0,
   "failures": 0,
   "isolatedPortsOnly": true,
@@ -15,7 +15,7 @@
         "end": 2097161,
         "start": 0
       },
-      "port": 39641,
+      "port": 46589,
       "producerCompletedWhilePaused": true,
       "retainedBytes": 8388608
     },
@@ -52,8 +52,8 @@
   },
   "schema": "block005-self-check/v1",
   "sourceSha256": {
-    "html/src/components/terminal/xterm/index.ts": "3acbc4b1993dc1e32435095df15618830d67b2125ff0ae713f7861bdd3bcfc60",
-    "src/protocol.c": "8322d0f3e4b1215251dfa774bcd7024daeb0596a675380c8db6c302daedcdcd9",
+    "html/src/components/terminal/xterm/index.ts": "7b2d72d6867ba39792f85c42cdc81b0d698e5dc051785884fb56d34d08b14437",
+    "src/protocol.c": "698391096305284691ebe7a5fe4bc3519c17fe58c53b732108e455fd8664f8d0",
     "src/pty.c": "2925c0d6265b4bfd554b0f920a584a5a804074c517ea7687e0b63fc2e13e26e9",
     "src/pty.h": "5cd800bb3485f8aeb8e909ab4434724a289426b67c9c72d8c5652564eba9d332",
     "src/server.h": "ed19e2f8a8f1879982b909e325294f8f9aff840133e037b311009c833a94a61b"
