@@ -1,0 +1,7 @@
+GitHub connector write test
+
+Repository: lleullus/testbyrepo
+Branch: connector-write-test-20260919-2129
+Base commit: 360098dad7b6fe5a6c8c105d0b6d62e819ebec9a
+Date: 2026-09-19 Asia/Seoul
+Purpose: verify that the connected GitHub tool can create a commit and advance a branch.
