@@ -26,7 +26,7 @@ class ThesisLifecycleRuntimeTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.project = self.root / "project"
-        self.project.mkdir()
+        self.project.mkdir(mode=0o700)
         self.store = ArtifactStore(self.root / "store", "project")
         self.logical = "docs/planning/product-thesis/demo/THESIS-001.md"
         self.candidate = self.project / self.logical
@@ -57,7 +57,7 @@ class ThesisLifecycleRuntimeTests(unittest.TestCase):
     def run_source_review(self, run_id: str) -> None:
         inputs = lifecycle.required_review_inputs(self.store, run_id, "SOURCE_FRONTIER")
         inv = lifecycle.begin_review(self.store, run_id, "SOURCE_FRONTIER", inputs)
-        lifecycle.complete_review(self.store, inv, result={"host_terminal": True, "review": "source"})
+        lifecycle.complete_review(self.store, inv, result={"completion": "COMPLETE", "review": "source"})
 
     def submit_candidate(self, run_id: str, generation: int) -> dict:
         return lifecycle.submit_candidate(
@@ -74,7 +74,7 @@ class ThesisLifecycleRuntimeTests(unittest.TestCase):
         return lifecycle.complete_review(
             self.store,
             inv,
-            result={"host_terminal": True, "review": "candidate"},
+            result={"completion": "COMPLETE", "review": "candidate"},
             findings=findings or [],
         )
 
@@ -188,7 +188,7 @@ class ThesisLifecycleRuntimeTests(unittest.TestCase):
         inv = lifecycle.begin_review(self.store, run_id, "CANDIDATE_COUNTEREXAMPLE", inputs)
         lifecycle.cancel(self.store, run_id)
         self.assertEqual(lifecycle.close_request(self.store, run_id, self.project)["result"], "CANCELLED")
-        lifecycle.complete_review(self.store, inv, result={"host_terminal": True, "late": True})
+        lifecycle.complete_review(self.store, inv, result={"completion": "COMPLETE", "late": True})
         review = next(item for item in lifecycle.inspect(self.store, run_id)["reviews"] if item["invocation_id"] == inv)
         self.assertEqual(review["status"], "LATE")
         self.assertEqual(lifecycle.evaluate_closure(self.store, run_id)["result"], "CANCELLED")
@@ -279,6 +279,91 @@ class ThesisLifecycleRuntimeTests(unittest.TestCase):
         fixed_scope = admission["scope"]
         scope.write_text(scope.read_text(encoding="utf-8").replace("Return the attributable result.", "MUTATED LIVE SCOPE."), encoding="utf-8")
         self.assertNotIn(b"MUTATED LIVE SCOPE", self.store.read_bytes(fixed_scope))
+
+    def test_semantic_premise_cannot_be_deferred_like_implementation_detail(self):
+        run_id, _ = self.ready_to_close()
+        lifecycle.add_premise(self.store, run_id, premise_id="identity", statement="Identity unresolved", kind="semantic", depends_on="Core Utility")
+        with self.assertRaisesRegex(lifecycle.ThesisLifecycleError, "CANNOT_BE_DEFERRED"):
+            lifecycle.disposition_premise(self.store, run_id, "identity", "DEFERRED_NONBLOCKING", "Decide later")
+        self.assertIn("BLOCKING_PREMISE_UNRESOLVED", {item["reason"] for item in lifecycle.evaluate_closure(self.store, run_id)["tasks"]})
+        lifecycle.add_premise(self.store, run_id, premise_id="build", statement="Build not run", kind="implementation_satisfaction", depends_on="Implementation")
+        lifecycle.disposition_premise(self.store, run_id, "build", "DEFERRED_NONBLOCKING", "Implementation owns the build")
+
+    def test_post_review_decision_change_requires_current_challenge(self):
+        run_id, _ = self.ready_to_close()
+        lifecycle.add_frontier(self.store, run_id, item_id="recovery", origin="new evidence", question="What survives retry?", material_change="Preservation changes", decision_bearing=True)
+        lifecycle.disposition_frontier(self.store, run_id, "recovery", "RESOLVED", "Preserve the prior result")
+        self.assertIn("CURRENT_CANDIDATE_CHALLENGE_REQUIRED", {item["reason"] for item in lifecycle.evaluate_closure(self.store, run_id)["tasks"]})
+        inputs = lifecycle.required_review_inputs(self.store, run_id, "CANDIDATE_COUNTEREXAMPLE")
+        invocation = lifecycle.begin_review(self.store, run_id, "CANDIDATE_COUNTEREXAMPLE", inputs)
+        received = json.loads(lifecycle.review_record(self.store, invocation)["inputs_json"])
+        state_ref = next(ref for ref in received if ref["path"] == "review/work-state.json")
+        self.assertIn(b"Preserve the prior result", self.store.read_bytes(state_ref))
+        lifecycle.complete_review(self.store, invocation, result={"completion": "COMPLETE"})
+        self.assertEqual(lifecycle.close_request(self.store, run_id, self.project)["result"], "CALIBRATED")
+
+    def test_user_wait_cannot_be_released_by_worker_disposition(self):
+        run_id, _ = self.ready_to_close()
+        lifecycle.disposition_frontier(self.store, run_id, "truth", "USER_CHOICE", "User must select identity")
+        self.assertEqual(lifecycle.close_request(self.store, run_id, self.project)["result"], "WAITING_USER")
+        with self.assertRaisesRegex(lifecycle.ThesisLifecycleError, "WAITING_USER"):
+            lifecycle.disposition_frontier(self.store, run_id, "truth", "RESOLVED", "Worker selected identity")
+        lifecycle.resume(self.store, run_id, "User selects account identity")
+        self.assertIsNone(lifecycle.inspect(self.store, run_id)["candidate"])
+
+    def test_late_review_preserves_material_findings_without_satisfying_new_candidate(self):
+        run_id = self.start()
+        self.add_resolved_frontier(run_id)
+        self.run_source_review(run_id)
+        self.submit_candidate(run_id, 0)
+        invocation = lifecycle.begin_review(self.store, run_id, "CANDIDATE_COUNTEREXAMPLE", lifecycle.required_review_inputs(self.store, run_id, "CANDIDATE_COUNTEREXAMPLE"))
+        self.candidate.write_text("# Revised Thesis\nPreserve the result.\n")
+        self.submit_candidate(run_id, 1)
+        finding = {"finding_id": "late", "anchor": "Core Utility", "scenario": "Retry loses result", "apparent_success": "Response exists", "broken_result": "Prior result lost", "materiality": "MATERIAL"}
+        lifecycle.complete_review(self.store, invocation, result={"completion": "COMPLETE"}, findings=[finding])
+        state = lifecycle.inspect(self.store, run_id)
+        self.assertEqual(state["reviews"][-1]["status"], "STALE")
+        self.assertEqual(state["findings"][0]["broken_result"], "Prior result lost")
+        self.assertIn("CURRENT_CANDIDATE_CHALLENGE_REQUIRED", {item["reason"] for item in lifecycle.evaluate_closure(self.store, run_id)["tasks"]})
+
+    def test_material_finding_dismissal_requires_rechallenge(self):
+        run_id, _ = self.ready_to_close()
+        keys = self.run_candidate_review(run_id, findings=[{"finding_id":"cross-account", "anchor":"Core Utility", "scenario":"Other account reads result", "apparent_success":"Result exists", "broken_result":"Attribution false", "materiality":"MATERIAL"}])
+        lifecycle.disposition_finding(self.store, run_id, keys[0], "DISMISSED", "Author claims exclusion")
+        self.assertIn("CURRENT_CANDIDATE_CHALLENGE_REQUIRED", {item["reason"] for item in lifecycle.evaluate_closure(self.store, run_id)["tasks"]})
+        self.run_candidate_review(run_id)
+        self.assertEqual(lifecycle.close_request(self.store, run_id, self.project)["result"], "CALIBRATED")
+
+    def test_closure_cannot_recover_another_live_publisher(self):
+        run_id, _ = self.ready_to_close()
+        import threading
+        entered, release = threading.Event(), threading.Event()
+        import iis_artifacts.publication as publication
+        original = publication._replace_live
+        outcomes = []
+        def paused(*args, **kwargs):
+            entered.set()
+            if not release.wait(5):
+                raise RuntimeError("publication barrier timeout")
+            return original(*args, **kwargs)
+        def publish():
+            try:
+                outcomes.append(lifecycle.close_request(self.store, run_id, self.project))
+            except BaseException as exc:
+                outcomes.append(exc)
+        with mock.patch.object(publication, "_replace_live", side_effect=paused):
+            worker = threading.Thread(target=publish)
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(5))
+                with self.assertRaisesRegex(RuntimeError, "STORE_OPERATION_IN_PROGRESS"):
+                    lifecycle.close_request(self.store, run_id, self.project)
+            finally:
+                release.set()
+                worker.join(5)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(outcomes[0]["result"], "CALIBRATED")
+        self.assertEqual(self.candidate.read_bytes(), self.store.read_bytes(outcomes[0]["candidate"]))
 
 
 if __name__ == "__main__":

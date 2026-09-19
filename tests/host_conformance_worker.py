@@ -30,7 +30,7 @@ for item in inputs:
 if payload["kind"] == "product-thesis-review":
     print(json.dumps({
         "result": {
-            "host_terminal": True,
+            "completion": "COMPLETE",
             "worker_uid": os.geteuid(),
             "store_access": "blocked",
         },

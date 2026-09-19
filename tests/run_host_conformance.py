@@ -62,7 +62,7 @@ with tempfile.TemporaryDirectory(prefix="iis-host-conformance-", dir="/tmp") as 
         "if payload[\"kind\"] == \"product-thesis-review\":\n"
         "    print(json.dumps({\n"
         "        \"result\": {\n"
-        "            \"host_terminal\": True,\n"
+        "            \"completion\": \"COMPLETE\",\n"
         "            \"worker_uid\": os.geteuid(),\n"
         "            \"store_access\": \"blocked\",\n"
         "        },\n"

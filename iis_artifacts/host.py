@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 
 from . import supervisor as _core
+from .admission import admission_record, AdmissionError
+from .store import ArtifactStoreError
 
 HostBoundaryError = _core.HostBoundaryError
 HostIntegrationUnavailable = _core.HostIntegrationUnavailable
@@ -39,6 +41,12 @@ class HostSupervisor(_core.HostSupervisor):
         record = ASSURANCE._binding_record(self.store, binding.get("binding_id", ""))
         if record["binding_json"] != ASSURANCE._canonical(binding):
             raise ValueError("BINDING_RECORD_MISMATCH")
+        if Path(binding["source"]["root"]) != self.project_root:
+            raise ValueError("FOREIGN_PROJECT")
+        admission = admission_record(self.store, binding["admission_id"])
+        request = json.loads(admission["request_ref_json"])
+        if self.store.read_bytes(request).decode("utf-8") != self.current_request:
+            raise ValueError("ADMISSION_CURRENT_REQUEST_MISMATCH")
         return record
 
     def _validate_gate_paths(self, baseline_path: Path, binding: dict, gate_id: str) -> None:
@@ -149,17 +157,12 @@ class HostSupervisor(_core.HostSupervisor):
             evidence = json.loads(row["evidence_json"])
             if row["state"] == "SETTLED" and not evidence:
                 raise ValueError("MISSING_EVIDENCE")
-            ASSURANCE.references(
-                self.store,
-                evidence,
-                empty=row["state"] != "SETTLED",
-                run_id=binding["run_id"],
-            )
+            ASSURANCE.effect_evidence(self.store, binding, evidence, settled=row["state"] == "SETTLED")
 
     def close_assurance(self, baseline_path: Path, binding: dict) -> dict:
         try:
             self._validate_assurance_ledgers(binding)
-        except (ValueError, KeyError, TypeError, OSError) as exc:
+        except (ValueError, KeyError, TypeError, OSError, ArtifactStoreError, AdmissionError) as exc:
             return {
                 "schema": "iis-assurance-closure/v3",
                 "binding": binding.get("binding_id") if isinstance(binding, dict) else None,

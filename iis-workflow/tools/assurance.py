@@ -16,9 +16,9 @@ from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from iis_artifacts.admission import require_admission
+from iis_artifacts.admission import require_admission, AdmissionError
 from iis_artifacts.refs import validate_ref
-from iis_artifacts.store import ArtifactStore
+from iis_artifacts.store import ArtifactStore, ArtifactStoreError
 
 SPEC = importlib.util.spec_from_file_location("iis_scope_validator", ROOT / "scope-shaper/tools/validate_scope.py")
 assert SPEC is not None and SPEC.loader is not None
@@ -286,6 +286,9 @@ def _map_path(binding: dict, value: str) -> str:
 
 def _begin_invocation(store: ArtifactStore, binding: dict, kind: str, item_id: str) -> str:
     _binding_record(store, binding["binding_id"])
+    baseline = json.loads(store.read_bytes(binding["baseline"]))
+    collection = {"gate": "gates", "observation": "observations", "probe": "lanes"}.get(kind)
+    need(collection is not None and item_id in rows(baseline[collection], collection), "FOREIGN_STARTED_WORK")
     invocation_id = "inv-" + uuid.uuid4().hex
     with store.connect() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -309,6 +312,9 @@ def begin_host_invocation(store: ArtifactStore, binding: dict, kind: str, item_i
 
 
 def capture_invocation_evidence(store: ArtifactStore, binding: dict, invocation_id: str, files: dict[str, bytes]) -> list[dict]:
+    with store.connect() as db:
+        row = db.execute("SELECT status FROM assurance_invocations WHERE invocation_id=? AND binding_id=?", (invocation_id, binding["binding_id"])).fetchone()
+    need(row is not None and row["status"] == "STARTED", "EVIDENCE_INVOCATION_NOT_ACTIVE")
     snapshot = store.capture_mapping(files, kind="evidence", producer_run=binding["run_id"], producer_invocation=invocation_id)
     return [{"snapshot": snapshot, "path": path} for path in files]
 
@@ -320,6 +326,7 @@ def _complete_invocation(store: ArtifactStore, binding: dict, invocation_id: str
         raise ValueError("INVOCATION_NOT_ACTIVE")
     need(result.get("binding") == binding["binding_id"], "RESULT_BINDING_MISMATCH")
     need(result.get("invocation") == invocation_id, "RESULT_INVOCATION_MISMATCH")
+    need(result.get("kind") == row["kind"] and result.get("id") == row["item_id"], "RESULT_ITEM_MISMATCH")
     references(store, result.get("evidence"), run_id=binding["run_id"], invocation_id=invocation_id)
     result_snapshot = store.capture_mapping(
         {f"results/{invocation_id}.json": (_canonical(result) + "\n").encode("utf-8")},
@@ -341,13 +348,25 @@ def _complete_invocation(store: ArtifactStore, binding: dict, invocation_id: str
 
 
 def complete_host_invocation(store: ArtifactStore, binding: dict, invocation_id: str, result: dict) -> dict:
+    with store.connect() as db:
+        row = db.execute("SELECT kind FROM assurance_invocations WHERE invocation_id=? AND binding_id=?", (invocation_id, binding["binding_id"])).fetchone()
+    need(row is not None and row["kind"] in {"observation", "probe"}, "NATIVE_GATE_CAPTURE_REQUIRED")
     return _complete_invocation(store, binding, invocation_id, result)
+
+
+def effect_evidence(store: ArtifactStore, binding: dict, evidence: list[dict], *, settled: bool) -> None:
+    references(store, evidence, empty=not settled, run_id=binding["run_id"])
+    with store.connect() as db:
+        for ref in evidence:
+            producer = store.assert_producer(ref, run_id=binding["run_id"], kind="evidence")
+            row = db.execute("SELECT status FROM assurance_invocations WHERE invocation_id=? AND binding_id=?", (producer["producer_invocation"], binding["binding_id"])).fetchone()
+            need(row is not None, "EFFECT_EVIDENCE_INVOCATION_UNKNOWN")
 
 
 def record_effect(store: ArtifactStore, binding: dict, effect_id: str, *, owner: str, state: str, evidence: list[dict]) -> None:
     need(text(effect_id) and text(owner), "INVALID_EFFECT")
     need(state in {"STARTED", "SETTLED", "UNKNOWN"}, "INVALID_EFFECT_STATE")
-    references(store, evidence, empty=True, run_id=binding["run_id"])
+    effect_evidence(store, binding, evidence, settled=state == "SETTLED")
     with store.connect() as db:
         db.execute("BEGIN IMMEDIATE")
         db.execute(
@@ -388,22 +407,30 @@ def run_gate(
 ) -> dict:
     baseline = current(baseline_path, store, binding)
     gate = rows(baseline["gates"], "gates")[gate_id]
-    invocation = _begin_invocation(store, binding, "gate", gate_id)
     output = output.resolve()
     need(not output.is_relative_to(Path(binding["source"]["root"])), "EVIDENCE_INSIDE_TARGET")
     output.mkdir(parents=True, exist_ok=False)
     original_argv = gate["argv"]
     executed_argv = [_map_path(binding, item) for item in original_argv]
     executed_cwd = _map_path(binding, gate["cwd"])
+    jobs_path = None if gate["jobs_path"] is None else Path(_map_path(binding, gate["jobs_path"]))
+    if jobs_path is not None and not jobs_path.is_absolute():
+        jobs_path = Path(executed_cwd) / jobs_path
+    if gate["jobs"] and jobs_path is not None:
+        need(not jobs_path.exists() and not jobs_path.is_symlink(), "JOB_EXPORT_ALREADY_EXISTS")
+    invocation = _begin_invocation(store, binding, "gate", gate_id)
     started = time.monotonic()
-    env = {**os.environ, "IIS_ASSURANCE_RUN_ID": binding["run_id"], "IIS_ASSURANCE_GATE_ID": gate_id}
+    env = {**os.environ, "IIS_ASSURANCE_RUN_ID": binding["run_id"], "IIS_ASSURANCE_GATE_ID": gate_id,
+           "IIS_ASSURANCE_INVOCATION_ID": invocation, "IIS_ASSURANCE_JOBS_PATH": str(jobs_path) if jobs_path is not None else ""}
     runner = _native_runner if runner is None else runner
-    code, stdout, stderr, failure = runner(executed_argv, executed_cwd, env, gate["timeout"])
+    try:
+        code, stdout, stderr, failure = runner(executed_argv, executed_cwd, env, gate["timeout"])
+    except Exception as exc:
+        code, stdout, stderr, failure = None, b"", b"", f"GATE_RUNNER_FAILED:{exc}"
     (output / "stdout").write_bytes(stdout)
     (output / "stderr").write_bytes(stderr)
     evidence_map: dict[str, bytes] = {f"{gate_id}/stdout": stdout, f"{gate_id}/stderr": stderr}
     jobs_data = None
-    jobs_path = None if gate["jobs_path"] is None else Path(_map_path(binding, gate["jobs_path"]))
     if gate["jobs"] and jobs_path is not None and jobs_path.is_file():
         jobs_data = jobs_path.read_bytes()
         (output / "jobs.json").write_bytes(jobs_data)
@@ -435,6 +462,7 @@ def run_gate(
 def check_gate(store: ArtifactStore, gate: dict, result: dict, binding: dict) -> None:
     capture = result["capture"]
     need(capture["argv"] == gate["argv"] and capture["cwd"] == gate["cwd"], "GATE_MECHANISM_MISMATCH")
+    need(capture["executed_argv"] == [_map_path(binding, value) for value in gate["argv"]] and capture["executed_cwd"] == _map_path(binding, gate["cwd"]), "EXECUTED_MECHANISM_MISMATCH")
     need(type(capture["returncode"]) is int and capture["returncode"] == 0 and capture["failure"] is None, "GATE_FAILED")
     need(type(capture["elapsed_seconds"]) in (int, float) and capture["elapsed_seconds"] >= 0, "MISSING_NATIVE_CAPTURE")
     for key in ("stdout", "stderr"):
@@ -445,6 +473,7 @@ def check_gate(store: ArtifactStore, gate: dict, result: dict, binding: dict) ->
         store.assert_producer(capture["jobs"], run_id=binding["run_id"], invocation_id=result["invocation"])
         jobs = json.loads(store.read_bytes(capture["jobs"]))
         need(jobs["run_id"] == binding["run_id"] and jobs["gate_id"] == gate["id"], "STALE_JOB_EXPORT")
+        need(jobs.get("invocation_id") == result["invocation"], "STALE_JOB_INVOCATION")
         need(all(jobs["jobs"].get(name) == "SUCCESS" for name in gate["jobs"]), "REQUIRED_JOB_NOT_SUCCESSFUL")
 
 
@@ -513,8 +542,8 @@ def close(baseline_path: Path, store: ArtifactStore, binding: dict) -> dict:
                 check_probe(store, definition, result, binding)
         for effect in effect_rows:
             need(text(effect["owner"]) and effect["state"] == "SETTLED", "UNSETTLED_EFFECT")
-            references(store, json.loads(effect["evidence_json"]), empty=True, run_id=binding["run_id"])
-    except (ValueError, KeyError, TypeError, OSError, subprocess.CalledProcessError) as exc:
+            effect_evidence(store, binding, json.loads(effect["evidence_json"]), settled=True)
+    except (ValueError, KeyError, TypeError, OSError, ArtifactStoreError, AdmissionError, subprocess.CalledProcessError) as exc:
         reasons.append(str(exc))
     return {"schema": "iis-assurance-closure/v3", "binding": binding.get("binding_id"), "status": "BLOCKED" if reasons else "EVIDENCE_COMPLETE", "reasons": reasons}
 

@@ -113,7 +113,14 @@ class HostSupervisor:
         )
         return LIFECYCLE.inspect(self.store, run_id)
 
+    def _require_current_thesis(self, run_id: str) -> dict:
+        state = LIFECYCLE.inspect(self.store, run_id)
+        if self.store.read_bytes(state["request"]).decode("utf-8") != self.current_request:
+            raise HostBoundaryError("THESIS_CURRENT_REQUEST_MISMATCH")
+        return state
+
     def submit_candidate(self, run_id: str, data: bytes, logical_path: str, expected_generation: int) -> dict:
+        self._require_current_thesis(run_id)
         return LIFECYCLE.submit_candidate_bytes(
             self.store,
             run_id,
@@ -126,6 +133,7 @@ class HostSupervisor:
         return LIFECYCLE.inspect(self.store, run_id)
 
     def apply_thesis_proposal(self, run_id: str, proposal: dict) -> dict:
+        self._require_current_thesis(run_id)
         if not isinstance(proposal, dict):
             raise ValueError("proposal must be an object")
         kind = proposal.get("kind")
@@ -177,67 +185,47 @@ class HostSupervisor:
         return LIFECYCLE.inspect(self.store, run_id)
 
     def _current_review_need(self, run_id: str) -> str | None:
-        state = LIFECYCLE.inspect(self.store, run_id)
-        req_gen = state["request_generation"]
-        reviews = state["reviews"]
-        if not any(
-            row["phase"] == "SOURCE_FRONTIER"
-            and row["request_generation"] == req_gen
-            and row["status"] == "COMPLETE"
-            for row in reviews
-        ):
+        verdict = LIFECYCLE.evaluate_closure(self.store, run_id)
+        reasons = {item["reason"] for item in verdict.get("tasks", [])}
+        if "REVIEW_RESULT_PENDING" in reasons:
+            raise HostIntegrationUnavailable("REVIEW_SETTLEMENT_REQUIRED")
+        if "SOURCE_FRONTIER_REVIEW_REQUIRED" in reasons:
             return "SOURCE_FRONTIER"
-        candidate = state["candidate"]
-        if candidate is None:
-            return None
-        generation = state["generation"]
-        if not any(
-            row["phase"] == "CANDIDATE_COUNTEREXAMPLE"
-            and row["request_generation"] == req_gen
-            and row["candidate_generation"] == generation
-            and row["status"] == "COMPLETE"
-            for row in reviews
-        ):
+        if "CURRENT_CANDIDATE_CHALLENGE_REQUIRED" in reasons and "CANDIDATE_REQUIRED" not in reasons:
             return "CANDIDATE_COUNTEREXAMPLE"
         return None
 
     def drive_thesis(self, run_id: str) -> dict:
+        self._require_current_thesis(run_id)
         if self.review_dispatcher is None:
             raise HostIntegrationUnavailable("REVIEW_DISPATCHER_UNAVAILABLE")
         phase = self._current_review_need(run_id)
         if phase is None:
             return LIFECYCLE.evaluate_closure(self.store, run_id)
         inputs = LIFECYCLE.required_review_inputs(self.store, run_id, phase)
-        state = LIFECYCLE.inspect(self.store, run_id)
-        candidate = state["candidate"]
         invocation_id = LIFECYCLE.begin_review(self.store, run_id, phase, inputs)
-        try:
-            result = self.review_dispatcher(phase, run_id, inputs, candidate)
-        except BaseException as exc:
-            # The STARTED ledger entry intentionally remains and blocks closure.
-            raise HostIntegrationUnavailable(f"REVIEW_DISPATCH_FAILED:{exc}") from exc
-        if not isinstance(result, dict):
-            raise HostIntegrationUnavailable("REVIEW_DISPATCH_RETURNED_INVALID_RESULT")
-        review_result = result.get("result")
-        if not isinstance(review_result, dict) or not review_result:
-            raise HostIntegrationUnavailable("REVIEW_RESULT_REQUIRED")
-        finding_keys = LIFECYCLE.complete_review(
-            self.store,
-            invocation_id,
-            result=review_result,
-            frontier=result.get("frontier", []),
-            findings=result.get("findings", []),
-        )
-        return {
-            "invocation_id": invocation_id,
-            "finding_keys": finding_keys,
-            "state": LIFECYCLE.inspect(self.store, run_id),
+        invocation = LIFECYCLE.review_record(self.store, invocation_id)
+        candidate = None if invocation["candidate_snapshot"] is None else {
+            "snapshot": invocation["candidate_snapshot"], "path": invocation["candidate_path"]
         }
+        try:
+            result = self.review_dispatcher(phase, run_id, json.loads(invocation["inputs_json"]), candidate)
+            if not isinstance(result, dict) or not isinstance(result.get("result"), dict) or not result["result"]:
+                raise HostIntegrationUnavailable("REVIEW_RESULT_REQUIRED")
+            finding_keys = LIFECYCLE.complete_review(
+                self.store, invocation_id, result=result["result"],
+                frontier=result.get("frontier", []), findings=result.get("findings", []),
+            )
+        except BaseException as exc:
+            if LIFECYCLE.review_record(self.store, invocation_id)["status"] == "STARTED":
+                LIFECYCLE.complete_review(self.store, invocation_id, result={"completion": "FAILED", "error": str(exc)})
+            raise HostIntegrationUnavailable(f"REVIEW_DISPATCH_FAILED:{exc}") from exc
+        return {"invocation_id": invocation_id, "finding_keys": finding_keys, "state": LIFECYCLE.inspect(self.store, run_id)}
 
     def close_thesis(self, run_id: str, *, limitations: str = "") -> dict:
         if self.review_dispatcher is None:
             raise HostIntegrationUnavailable("REVIEW_DISPATCHER_UNAVAILABLE")
-        state = LIFECYCLE.inspect(self.store, run_id)
+        state = self._require_current_thesis(run_id)
         return LIFECYCLE.close_request(
             self.store,
             run_id,
@@ -257,8 +245,8 @@ class HostSupervisor:
         return {"status": "CURRENT_REQUEST_UPDATED"}
 
     def resume_thesis(self, run_id: str, request: str, *, budget_increment: int | None = None) -> dict:
-        self.set_current_request(request)
         LIFECYCLE.resume(self.store, run_id, request, budget_increment=budget_increment)
+        self.set_current_request(request)
         return LIFECYCLE.inspect(self.store, run_id)
 
     def admit_scope_bytes(self, *, role: str, scope_bytes: bytes, logical_path: str) -> dict:
@@ -272,6 +260,7 @@ class HostSupervisor:
             {"snapshot": snapshot, "path": logical_path},
             role=role,
             current_request=self.current_request,
+            project_root=self.project_root,
             project_owner_uid=self.project_owner_uid,
         )
 
@@ -371,6 +360,11 @@ class HostSupervisor:
     # Admin RPC: only the supervisor UID may connect.
     def handle_admin(self, request: dict) -> dict:
         action = request.get("action")
+        if action == "settle_thesis_review":
+            evidence = {path: base64.b64decode(value, validate=True) for path, value in request["evidence_b64"].items()}
+            return LIFECYCLE.settle_review(self.store, request["invocation_id"], evidence)
+        if action == "cancel_thesis":
+            return self.cancel_thesis(request["run_id"])
         if action == "start_thesis":
             return self.start_thesis(
                 originals=request.get("originals"),
@@ -411,7 +405,8 @@ class HostSupervisor:
         raise ValueError("unsupported admin action")
 
     @staticmethod
-    def _read_request(connection: socket.socket) -> dict:
+    def _read_request(connection: socket.socket, timeout: float = 30.0) -> dict:
+        connection.settimeout(timeout)
         raw = b""
         while not raw.endswith(b"\n"):
             chunk = connection.recv(65536)

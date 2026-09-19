@@ -23,7 +23,7 @@ class SupervisorBoundaryTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.project = self.root / "project"
-        self.project.mkdir()
+        self.project.mkdir(mode=0o700)
 
     def supervisor(self, **kwargs):
         return HostSupervisor(
@@ -57,7 +57,7 @@ class SupervisorBoundaryTests(unittest.TestCase):
 
     def test_no_role_dispatcher_means_no_role_start(self) -> None:
         supervisor = self.supervisor(
-            review_dispatcher=lambda phase, run, inputs, candidate: {"result": {"terminal": True}}
+            review_dispatcher=lambda phase, run, inputs, candidate: {"result": {"completion": "COMPLETE"}}
         )
         with self.assertRaisesRegex(HostIntegrationUnavailable, "ROLE_DISPATCHER_UNAVAILABLE"):
             supervisor.admit_and_start(
@@ -131,6 +131,42 @@ class SupervisorBoundaryTests(unittest.TestCase):
         result = json.loads(raw)
         self.assertEqual(result["status"], "BLOCKED")
         self.assertEqual(result["reason"], "UNAUTHORIZED_PEER")
+
+    def test_failed_review_requires_trusted_settlement_before_retry(self):
+        import base64
+        def failed(*args):
+            raise RuntimeError("review process failed")
+        supervisor = self.supervisor(review_dispatcher=failed)
+        run_id = supervisor.start_thesis()["run_id"]
+        with self.assertRaisesRegex(HostIntegrationUnavailable, "DISPATCH_FAILED"):
+            supervisor.drive_thesis(run_id)
+        review = supervisor.inspect_thesis(run_id)["reviews"][0]
+        with self.assertRaisesRegex(HostIntegrationUnavailable, "SETTLEMENT_REQUIRED"):
+            supervisor.drive_thesis(run_id)
+        with self.assertRaisesRegex(ValueError, "unsupported"):
+            supervisor.handle({"action":"settle_thesis_review", "invocation_id":review["invocation_id"]})
+        supervisor.handle_admin({"action":"settle_thesis_review", "invocation_id":review["invocation_id"], "evidence_b64":{"exit.txt":base64.b64encode(b"Callback returned; no process or effects started.").decode()}})
+        supervisor.review_dispatcher = lambda *args: {"result":{"completion":"COMPLETE"}}
+        supervisor.drive_thesis(run_id)
+        self.assertEqual([item["status"] for item in supervisor.inspect_thesis(run_id)["reviews"]], ["SETTLED", "COMPLETE"])
+
+    def test_blocked_review_is_not_successful_completion(self):
+        supervisor = self.supervisor(review_dispatcher=lambda *args: {"result":{"completion":"BLOCKED", "error":"Required input missing"}})
+        run_id = supervisor.start_thesis()["run_id"]
+        supervisor.drive_thesis(run_id)
+        self.assertNotEqual(supervisor.close_thesis(run_id)["result"], "CALIBRATED")
+        self.assertEqual(supervisor.inspect_thesis(run_id)["reviews"][0]["status"], "BLOCKED")
+
+    def test_partial_control_frame_times_out_without_hanging_next_read(self):
+        receiver, sender = socket.socketpair()
+        with receiver, sender:
+            sender.sendall(b'{"action":')
+            with self.assertRaises(TimeoutError):
+                HostSupervisor._read_request(receiver, timeout=0.02)
+        receiver, sender = socket.socketpair()
+        with receiver, sender:
+            sender.sendall(b'{"action":"inspect"}\n')
+            self.assertEqual(HostSupervisor._read_request(receiver)["action"], "inspect")
 
 
 if __name__ == "__main__":

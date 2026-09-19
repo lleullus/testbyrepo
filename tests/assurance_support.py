@@ -70,7 +70,7 @@ class AssuranceFixture:
             "SOURCE_FRONTIER",
             lifecycle.required_review_inputs(self.store, thesis_run, "SOURCE_FRONTIER"),
         )
-        lifecycle.complete_review(self.store, source_inv, result={"host_terminal": True, "fixture": "source"})
+        lifecycle.complete_review(self.store, source_inv, result={"completion": "COMPLETE", "fixture": "source"})
         candidate = lifecycle.submit_candidate(
             self.store,
             thesis_run,
@@ -84,7 +84,7 @@ class AssuranceFixture:
             "CANDIDATE_COUNTEREXAMPLE",
             lifecycle.required_review_inputs(self.store, thesis_run, "CANDIDATE_COUNTEREXAMPLE"),
         )
-        lifecycle.complete_review(self.store, challenge_inv, result={"host_terminal": True, "fixture": "challenge"})
+        lifecycle.complete_review(self.store, challenge_inv, result={"completion": "COMPLETE", "fixture": "challenge"})
         closed = lifecycle.close_request(
             self.store,
             thesis_run,

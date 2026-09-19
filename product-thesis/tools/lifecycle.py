@@ -1,6 +1,7 @@
 """Stateful Product Thesis work controlled by a trusted host."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 from pathlib import Path
 import uuid
@@ -8,10 +9,10 @@ import re
 
 from iis_artifacts.publication import RevisionConflict, publish_ref, published_ref, recover_pending
 from iis_artifacts.refs import validate_ref, validate_relative_path
-from iis_artifacts.store import ArtifactStore
+from iis_artifacts.store import ArtifactStore, store_serialized
 
 TERMINAL = {"CLOSED", "BUDGET_EXHAUSTED", "CANCELLED", "FAILED"}
-MUTATION_BLOCKED = TERMINAL | {"CLOSING"}
+MUTATION_BLOCKED = TERMINAL | {"CLOSING", "WAITING_USER"}
 FRONTIER_DISPOSITIONS = {"RESOLVED", "REUSED", "USER_CHOICE", "EVIDENCE_LIMIT", "OTHER_OWNER", "EXCLUDED_WITH_BASIS"}
 PREMISE_DISPOSITIONS = {"RESOLVED", "USER_CHOICE", "EVIDENCE_LIMIT", "DEFERRED_NONBLOCKING", "OTHER_OWNER"}
 
@@ -74,7 +75,9 @@ def _schema(store: ArtifactStore) -> None:
               candidate_path TEXT,
               status TEXT NOT NULL,
               inputs_json TEXT NOT NULL,
+              work_state_json TEXT,
               result_ref_json TEXT,
+              settlement_refs_json TEXT,
               started_sequence INTEGER NOT NULL,
               completed_sequence INTEGER
             );
@@ -115,7 +118,7 @@ def _schema(store: ArtifactStore) -> None:
         )
         required_columns = {
             "thesis_runs": {"request_ref_json", "request_generation", "budget_total", "budget_used"},
-            "thesis_reviews": {"request_generation", "candidate_generation", "result_ref_json"},
+            "thesis_reviews": {"request_generation", "candidate_generation", "result_ref_json", "work_state_json", "settlement_refs_json"},
             "thesis_findings": {"finding_key", "reported_id", "initial_disposition"},
         }
         for table, required in required_columns.items():
@@ -239,6 +242,34 @@ def _require_mutable(row) -> None:
         raise ThesisLifecycleError(f"Thesis run is not mutable in phase {row['phase']}")
 
 
+@contextmanager
+def _mutation(store: ArtifactStore, run_id: str):
+    _schema(store)
+    with store.connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute("SELECT * FROM thesis_runs WHERE run_id=?", (run_id,)).fetchone()
+        if row is None:
+            raise ThesisLifecycleError("unknown Thesis run")
+        _require_mutable(row)
+        yield db, row
+        db.execute("COMMIT")
+
+
+def _work_state(db, row) -> str:
+    values = {}
+    for table, key in (("thesis_frontier", "item_id"), ("thesis_premises", "premise_id"), ("thesis_findings", "finding_key")):
+        values[table] = [dict(item) for item in db.execute(
+            f"SELECT * FROM {table} WHERE run_id=? AND request_generation=? ORDER BY {key}",
+            (row["run_id"], row["request_generation"]),
+        )]
+    values["dispositions"] = [dict(item) for item in db.execute(
+        "SELECT d.* FROM thesis_finding_dispositions d JOIN thesis_findings f ON f.finding_key=d.finding_key "
+        "WHERE f.run_id=? AND f.request_generation=? ORDER BY d.sequence",
+        (row["run_id"], row["request_generation"]),
+    )]
+    return json.dumps(values, ensure_ascii=False, sort_keys=True)
+
+
 def add_frontier(
     store: ArtifactStore,
     run_id: str,
@@ -249,11 +280,10 @@ def add_frontier(
     material_change: str,
     decision_bearing: bool,
 ) -> None:
-    row = _run(store, run_id)
-    _require_mutable(row)
+    _schema(store)
     if not all(isinstance(value, str) and value.strip() for value in (item_id, origin, question, material_change)):
         raise ThesisLifecycleError("frontier item fields must be nonempty")
-    with store.connect() as db:
+    with _mutation(store, run_id) as (db, row):
         db.execute(
             "INSERT INTO thesis_frontier(run_id,request_generation,item_id,origin,question,material_change,decision_bearing) "
             "VALUES(?,?,?,?,?,?,?) ON CONFLICT(run_id,request_generation,item_id) DO UPDATE SET "
@@ -264,27 +294,25 @@ def add_frontier(
 
 
 def disposition_frontier(store: ArtifactStore, run_id: str, item_id: str, disposition: str, basis: str) -> None:
-    row = _run(store, run_id)
-    _require_mutable(row)
+    _schema(store)
     if disposition not in FRONTIER_DISPOSITIONS or not basis.strip():
         raise ThesisLifecycleError("invalid frontier disposition or basis")
-    with store.connect() as db:
+    with _mutation(store, run_id) as (db, row):
         changed = db.execute(
             "UPDATE thesis_frontier SET disposition=?,basis=? WHERE run_id=? AND request_generation=? AND item_id=?",
             (disposition, basis, run_id, row["request_generation"], item_id),
         ).rowcount
-    if changed != 1:
-        raise ThesisLifecycleError("unknown frontier item")
+        if changed != 1:
+            raise ThesisLifecycleError("unknown frontier item")
 
 
 def add_premise(store: ArtifactStore, run_id: str, *, premise_id: str, statement: str, kind: str, depends_on: str) -> None:
-    row = _run(store, run_id)
-    _require_mutable(row)
+    _schema(store)
     if kind not in {"semantic", "binding_construction", "implementation_satisfaction"}:
         raise ThesisLifecycleError("invalid premise kind")
     if not all(isinstance(value, str) and value.strip() for value in (premise_id, statement, depends_on)):
         raise ThesisLifecycleError("premise fields must be nonempty")
-    with store.connect() as db:
+    with _mutation(store, run_id) as (db, row):
         db.execute(
             "INSERT INTO thesis_premises(run_id,request_generation,premise_id,statement,kind,depends_on) VALUES(?,?,?,?,?,?) "
             "ON CONFLICT(run_id,request_generation,premise_id) DO UPDATE SET statement=excluded.statement,"
@@ -294,17 +322,24 @@ def add_premise(store: ArtifactStore, run_id: str, *, premise_id: str, statement
 
 
 def disposition_premise(store: ArtifactStore, run_id: str, premise_id: str, disposition: str, basis: str) -> None:
-    row = _run(store, run_id)
-    _require_mutable(row)
+    _schema(store)
     if disposition not in PREMISE_DISPOSITIONS or not basis.strip():
         raise ThesisLifecycleError("invalid premise disposition or basis")
-    with store.connect() as db:
+    with _mutation(store, run_id) as (db, row):
+        premise = db.execute(
+            "SELECT kind FROM thesis_premises WHERE run_id=? AND request_generation=? AND premise_id=?",
+            (run_id, row["request_generation"], premise_id),
+        ).fetchone()
+        if premise is None:
+            raise ThesisLifecycleError("unknown premise")
+        if premise["kind"] != "implementation_satisfaction" and disposition not in {"RESOLVED", "USER_CHOICE", "EVIDENCE_LIMIT"}:
+            raise ThesisLifecycleError("BLOCKING_PREMISE_CANNOT_BE_DEFERRED")
         changed = db.execute(
             "UPDATE thesis_premises SET disposition=?,basis=? WHERE run_id=? AND request_generation=? AND premise_id=?",
             (disposition, basis, run_id, row["request_generation"], premise_id),
         ).rowcount
-    if changed != 1:
-        raise ThesisLifecycleError("unknown premise")
+        if changed != 1:
+            raise ThesisLifecycleError("unknown premise")
 
 
 def _thesis_logical_path(value: str) -> str:
@@ -346,10 +381,6 @@ def submit_candidate_bytes(
             db.execute("ROLLBACK")
             store.delete_snapshot(snapshot)
             raise ThesisLifecycleError("GENERATION_CONFLICT")
-        db.execute(
-            "UPDATE thesis_reviews SET status='STALE' WHERE run_id=? AND status='STARTED' AND phase='CANDIDATE_COUNTEREXAMPLE'",
-            (run_id,),
-        )
         db.execute(
             "UPDATE thesis_runs SET candidate_snapshot=?,candidate_path=?,generation=generation+1,"
             "phase='CANDIDATE_READY',last_error=NULL WHERE run_id=?",
@@ -405,6 +436,12 @@ def begin_review(store: ArtifactStore, run_id: str, phase: str, inputs: list[dic
     missing = [item for item in required if (item["snapshot"], item["path"]) not in supplied]
     if missing:
         raise ThesisLifecycleError("REVIEW_INPUT_MISMATCH")
+    work_state = None
+    if phase == "CANDIDATE_COUNTEREXAMPLE":
+        with store.connect() as db:
+            work_state = _work_state(db, row)
+        snapshot = store.capture_mapping({"review/work-state.json": work_state.encode("utf-8")}, kind="review-input", producer_run=run_id)
+        normalized.append({"snapshot": snapshot, "path": "review/work-state.json"})
 
     with store.connect() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -412,6 +449,12 @@ def begin_review(store: ArtifactStore, run_id: str, phase: str, inputs: list[dic
         if current is None or current["phase"] in MUTATION_BLOCKED:
             db.execute("ROLLBACK")
             raise ThesisLifecycleError("Thesis run cannot start review")
+        if any(current[key] != row[key] for key in ("request_generation", "generation", "candidate_snapshot", "candidate_path")):
+            raise ThesisLifecycleError("REVIEW_INPUT_MISMATCH")
+        if work_state is not None and _work_state(db, current) != work_state:
+            raise ThesisLifecycleError("REVIEW_STATE_CHANGED")
+        if db.execute("SELECT 1 FROM thesis_reviews WHERE run_id=? AND status IN ('STARTED','BLOCKED','FAILED')", (run_id,)).fetchone():
+            raise ThesisLifecycleError("REVIEW_SETTLEMENT_REQUIRED")
         total = current["budget_total"]
         used = int(current["budget_used"])
         if total is not None and used >= int(total):
@@ -422,8 +465,8 @@ def begin_review(store: ArtifactStore, run_id: str, phase: str, inputs: list[dic
         candidate_generation = int(current["generation"]) if phase == "CANDIDATE_COUNTEREXAMPLE" else None
         db.execute(
             "INSERT INTO thesis_reviews(invocation_id,run_id,request_generation,candidate_generation,phase,"
-            "candidate_snapshot,candidate_path,status,inputs_json,result_ref_json,started_sequence,completed_sequence) "
-            "VALUES(?,?,?,?,?,?,?,'STARTED',?,NULL,?,NULL)",
+            "candidate_snapshot,candidate_path,status,inputs_json,work_state_json,result_ref_json,started_sequence,completed_sequence) "
+            "VALUES(?,?,?,?,?,?,?,'STARTED',?,?,NULL,?,NULL)",
             (
                 invocation_id,
                 run_id,
@@ -433,6 +476,7 @@ def begin_review(store: ArtifactStore, run_id: str, phase: str, inputs: list[dic
                 current["candidate_snapshot"] if phase == "CANDIDATE_COUNTEREXAMPLE" else None,
                 current["candidate_path"] if phase == "CANDIDATE_COUNTEREXAMPLE" else None,
                 json.dumps(normalized, ensure_ascii=False),
+                work_state,
                 store.sequence_in(db, "thesis-review-start"),
             ),
         )
@@ -442,6 +486,15 @@ def begin_review(store: ArtifactStore, run_id: str, phase: str, inputs: list[dic
         )
         db.execute("COMMIT")
     return invocation_id
+
+
+def review_record(store: ArtifactStore, invocation_id: str) -> dict:
+    _schema(store)
+    with store.connect() as db:
+        row = db.execute("SELECT * FROM thesis_reviews WHERE invocation_id=?", (invocation_id,)).fetchone()
+    if row is None:
+        raise ThesisLifecycleError("unknown review invocation")
+    return dict(row)
 
 
 def complete_review(
@@ -455,13 +508,18 @@ def complete_review(
     _schema(store)
     if not isinstance(result, dict) or not result:
         raise ThesisLifecycleError("review result must be a nonempty object")
+    completion = result.get("completion")
+    if completion not in {"COMPLETE", "BLOCKED", "FAILED"}:
+        raise ThesisLifecycleError("REVIEW_COMPLETION_REQUIRED")
+    if not isinstance(frontier if frontier is not None else [], list) or not isinstance(findings if findings is not None else [], list):
+        raise ThesisLifecycleError("REVIEW_FINDINGS_MUST_BE_LISTS")
     with store.connect() as db:
         review = db.execute("SELECT * FROM thesis_reviews WHERE invocation_id=?", (invocation_id,)).fetchone()
     if review is None or review["status"] != "STARTED":
         raise ThesisLifecycleError("review invocation is not active")
 
     result_snapshot = store.capture_mapping(
-        {f"reviews/{invocation_id}/result.json": (json.dumps(result, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")},
+        {f"reviews/{invocation_id}/result.json": (json.dumps({"result": result, "frontier": frontier or [], "findings": findings or []}, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")},
         kind="review-result",
         producer_run=review["run_id"],
         producer_invocation=invocation_id,
@@ -488,10 +546,11 @@ def complete_review(
                     int(active["candidate_generation"]) != int(current["generation"])
                     or active["candidate_snapshot"] != current["candidate_snapshot"]
                     or active["candidate_path"] != current["candidate_path"]
+                    or active["work_state_json"] != _work_state(db, current)
                 )
             )
         )
-        if late or stale:
+        if late or current is None or current["phase"] in {"FAILED", "CLOSED"} or active["request_generation"] != current["request_generation"]:
             db.execute(
                 "UPDATE thesis_reviews SET status=?,result_ref_json=?,completed_sequence=? WHERE invocation_id=?",
                 (
@@ -508,7 +567,7 @@ def complete_review(
             db.execute("ROLLBACK")
             raise ThesisLifecycleError("review completion raced with lifecycle transition")
 
-        for item in frontier or []:
+        for item in ([] if stale else frontier or []):
             for key in ("item_id", "origin", "question", "material_change"):
                 if not isinstance(item.get(key), str) or not item[key].strip():
                     db.execute("ROLLBACK")
@@ -551,13 +610,38 @@ def complete_review(
                 raise ThesisLifecycleError("DUPLICATE_FINDING_ID_WITHIN_INVOCATION") from exc
             created_findings.append(finding_key)
 
+        status = "BLOCKED" if completion != "COMPLETE" else "STALE" if stale else "COMPLETE"
+        reviewed_state = _work_state(db, current) if active["phase"] == "CANDIDATE_COUNTEREXAMPLE" and not stale else active["work_state_json"]
         db.execute(
-            "UPDATE thesis_reviews SET status='COMPLETE',result_ref_json=?,completed_sequence=? WHERE invocation_id=?",
-            (json.dumps(result_ref), store.sequence_in(db, "thesis-review-complete"), invocation_id),
+            "UPDATE thesis_reviews SET status=?,work_state_json=?,result_ref_json=?,completed_sequence=? WHERE invocation_id=?",
+            (status, reviewed_state, json.dumps(result_ref), store.sequence_in(db, "thesis-review-complete"), invocation_id),
         )
-        db.execute("UPDATE thesis_runs SET phase='CLOSURE_CHECK' WHERE run_id=?", (review["run_id"],))
+        if current["phase"] not in MUTATION_BLOCKED and not stale:
+            db.execute("UPDATE thesis_runs SET phase='CLOSURE_CHECK' WHERE run_id=?", (review["run_id"],))
         db.execute("COMMIT")
     return created_findings
+
+
+def settle_review(store: ArtifactStore, invocation_id: str, evidence: dict[str, bytes]) -> dict:
+    """Trusted host accounts for a failed/interrupted invocation; never a successful review."""
+    review = review_record(store, invocation_id)
+    if review["status"] not in {"STARTED", "BLOCKED"}:
+        raise ThesisLifecycleError("REVIEW_NOT_AWAITING_SETTLEMENT")
+    if not evidence or not all(isinstance(value, bytes) and value for value in evidence.values()):
+        raise ThesisLifecycleError("SETTLEMENT_EVIDENCE_REQUIRED")
+    snapshot = store.capture_mapping(evidence, kind="review-settlement", producer_run=review["run_id"], producer_invocation=invocation_id)
+    refs = [{"snapshot": snapshot, "path": path} for path in evidence]
+    with store.connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        changed = db.execute(
+            "UPDATE thesis_reviews SET status='SETTLED',settlement_refs_json=?,completed_sequence=? "
+            "WHERE invocation_id=? AND status IN ('STARTED','BLOCKED')",
+            (json.dumps(refs), store.sequence_in(db, "thesis-review-settled"), invocation_id),
+        ).rowcount
+        if changed != 1:
+            raise ThesisLifecycleError("REVIEW_NOT_AWAITING_SETTLEMENT")
+        db.execute("COMMIT")
+    return {"invocation_id": invocation_id, "status": "SETTLED", "evidence": refs}
 
 def _resolve_finding_key(store: ArtifactStore, run_id: str, identifier: str) -> str:
     with store.connect() as db:
@@ -577,12 +661,11 @@ def _resolve_finding_key(store: ArtifactStore, run_id: str, identifier: str) -> 
 
 
 def disposition_finding(store: ArtifactStore, run_id: str, finding_id: str, disposition: str, basis: str) -> None:
-    row = _run(store, run_id)
-    _require_mutable(row)
+    _schema(store)
     if disposition not in {"RESOLVED", "DISMISSED", "OUT_OF_SCOPE"} or not basis.strip():
         raise ThesisLifecycleError("invalid finding disposition")
     finding_key = _resolve_finding_key(store, run_id, finding_id)
-    with store.connect() as db:
+    with _mutation(store, run_id) as (db, row):
         finding = db.execute(
             "SELECT request_generation FROM thesis_findings WHERE finding_key=?",
             (finding_key,),
@@ -620,8 +703,8 @@ def _evaluate_with_db(store: ArtifactStore, db, row) -> dict:
         tasks.append({"item": "candidate", "reason": "CANDIDATE_REQUIRED", "required_action": "Submit a fixed Thesis candidate."})
 
     started = db.execute(
-        "SELECT invocation_id FROM thesis_reviews WHERE run_id=? AND request_generation=? AND status='STARTED'",
-        (row["run_id"], req_gen),
+        "SELECT invocation_id FROM thesis_reviews WHERE run_id=? AND status IN ('STARTED','BLOCKED')",
+        (row["run_id"],),
     ).fetchall()
     for review in started:
         tasks.append({
@@ -639,8 +722,9 @@ def _evaluate_with_db(store: ArtifactStore, db, row) -> dict:
     if row["candidate_snapshot"] is not None:
         candidate_review = db.execute(
             "SELECT 1 FROM thesis_reviews WHERE run_id=? AND request_generation=? AND phase='CANDIDATE_COUNTEREXAMPLE' "
-            "AND candidate_generation=? AND candidate_snapshot=? AND candidate_path=? AND status='COMPLETE' LIMIT 1",
-            (row["run_id"], req_gen, row["generation"], row["candidate_snapshot"], row["candidate_path"]),
+            "AND candidate_generation=? AND candidate_snapshot=? AND candidate_path=? AND work_state_json=? "
+            "AND status='COMPLETE' LIMIT 1",
+            (row["run_id"], req_gen, row["generation"], row["candidate_snapshot"], row["candidate_path"], _work_state(db, row)),
         ).fetchone()
     if source_review is None:
         tasks.append({"item": "review:source", "reason": "SOURCE_FRONTIER_REVIEW_REQUIRED"})
@@ -674,7 +758,7 @@ def _evaluate_with_db(store: ArtifactStore, db, row) -> dict:
         if premise["kind"] == "implementation_satisfaction":
             continue
         disposition = premise["disposition"]
-        if disposition is None:
+        if disposition not in {"RESOLVED", "USER_CHOICE", "EVIDENCE_LIMIT"}:
             tasks.append({"item": premise["premise_id"], "reason": "BLOCKING_PREMISE_UNRESOLVED"})
         else:
             waiting_user |= disposition == "USER_CHOICE"
@@ -749,6 +833,7 @@ def _finalize_closure(
     }
 
 
+@store_serialized("thesis-close")
 def close_request(
     store: ArtifactStore,
     run_id: str,
@@ -877,7 +962,8 @@ def resume(
         budget_total = current["budget_total"]
         if budget_increment is not None:
             budget_total = (0 if budget_total is None else int(budget_total)) + int(budget_increment)
-        db.execute("UPDATE thesis_reviews SET status='STALE' WHERE run_id=? AND status='STARTED'", (run_id,))
+        if db.execute("SELECT 1 FROM thesis_reviews WHERE run_id=? AND status IN ('STARTED','BLOCKED')", (run_id,)).fetchone():
+            raise ThesisLifecycleError("REVIEW_SETTLEMENT_REQUIRED")
         db.execute(
             "UPDATE thesis_runs SET request_text=?,request_ref_json=?,request_generation=?,generation=generation+1,"
             "candidate_snapshot=NULL,candidate_path=NULL,phase='WORKING',budget_total=?,last_error=NULL WHERE run_id=?",

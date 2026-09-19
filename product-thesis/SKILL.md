@@ -29,9 +29,13 @@ The trusted supervisor, not the model or worker CLI, records actual review invoc
 - no Thesis-blocking semantic/binding premise treated as established while unresolved,
 - no unresolved material counterexample finding.
 
-Changing the candidate creates a new fixed candidate and invalidates candidate-specific closure. Previous observations may remain evidence when still applicable, but the final candidate receives a fresh bounded counterexample review. The lifecycle records `CALIBRATED`; the Thesis document itself does not carry a success label.
+Changing the candidate invalidates candidate-specific closure. The candidate challenge also receives a fixed `review/work-state.json` containing the current frontier, premises, findings and dispositions; changing that state requires a fresh candidate challenge, not a new approval role. The original-input frontier review remains separate from the author's state. Late results and their material findings are preserved without satisfying the replacement candidate. The lifecycle records `CALIBRATED`; the Thesis document itself does not carry a success label.
 
 The fixed candidate and review records live in the supervisor-owned artifact store outside the worker's mutable project surface. References are opaque executor-allocated `{snapshot, path}` values, never content-derived identifiers. Strong enforcement is available only through the UID-separated Linux supervisor: workers cannot choose the store, write lifecycle/review records, replace the trusted current request, or mint downstream admission. Without that boundary, Product Thesis work is advisory and cannot issue an enforced `CALIBRATED`.
+
+Review adapters return a nonempty `result` with `completion: COMPLETE | BLOCKED | FAILED`, plus `frontier` and `findings` lists. Only `COMPLETE` satisfies review coverage. A failed/interrupted invocation blocks another review until the trusted host records actual termination/effect readback through admin `settle_thesis_review` (`invocation_id`, nonempty `evidence_b64` files); settlement preserves the attempt and never counts as successful review. Unknown effects must not be settled merely to retry. `WAITING_USER` can resume only through the trusted-host `resume` path with current user authority; worker dispositions cannot release it. Semantic/binding premises cannot use implementation-only deferral to become complete.
+
+The strengthened review ledger requires `work_state_json` and `settlement_refs_json`. Older stores are preserved but rejected with `LEGACY_THESIS_STORE_REQUIRES_FRESH_RUNTIME`; they are not silently migrated into current execution credentials. Start a fresh store and reacquire applicable closure rather than editing historical records.
 
 ## Request intents
 

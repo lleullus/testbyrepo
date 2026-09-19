@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -138,6 +141,29 @@ class ArtifactStoreTests(unittest.TestCase):
         recover_pending(self.store, self.project)
         self.assertEqual(pending_publications(self.store), [])
         self.assertEqual(published_ref(self.store, logical), ref)
+
+    def test_fifo_is_rejected_before_blocking_open(self):
+        os.mkfifo(self.project / "fifo")
+        command = "from pathlib import Path; from iis_artifacts.store import ArtifactStore; import sys; ArtifactStore._read_regular_beneath(Path(sys.argv[1]), 'fifo')"
+        completed = subprocess.run([sys.executable, "-B", "-c", command, str(self.project)], capture_output=True, text=True, timeout=3)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("must be a regular file", completed.stderr)
+
+    def test_live_publication_cannot_be_mistaken_for_crash_recovery(self):
+        import iis_artifacts.publication as publication
+        logical = "docs/result.txt"
+        snapshot = self.store.capture_mapping({logical: b"published\n"}, kind="candidate")
+        ref = {"snapshot": snapshot, "path": logical}
+        replace = publication._replace_live
+        def intervening_recovery(*args, **kwargs):
+            with self.assertRaisesRegex(ArtifactStoreError, "STORE_OPERATION_IN_PROGRESS"):
+                recover_pending(self.store, self.project)
+            return replace(*args, **kwargs)
+        with mock.patch.object(publication, "_replace_live", side_effect=intervening_recovery):
+            publish_ref(self.store, ref, self.project, logical, expected_prior=None)
+        self.assertEqual((self.project / logical).read_bytes(), b"published\n")
+        self.assertEqual(published_ref(self.store, logical), ref)
+        self.assertEqual(pending_publications(self.store), [])
 
 
 if __name__ == "__main__":

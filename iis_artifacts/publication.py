@@ -9,7 +9,7 @@ import stat
 import uuid
 
 from .refs import validate_ref, validate_relative_path
-from .store import ArtifactStore, ArtifactStoreError
+from .store import ArtifactStore, ArtifactStoreError, store_serialized
 
 
 THESIS_REVISION = re.compile(r"^docs/planning/product-thesis/[^/]+/THESIS-[0-9]{3,}\.md$")
@@ -83,7 +83,7 @@ def _read_live(project_root: Path, logical_path: str) -> bytes | None:
             return None
         raise
     try:
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | os.O_NONBLOCK
         try:
             fd = os.open(leaf, flags, dir_fd=parent_fd)
         except FileNotFoundError:
@@ -181,7 +181,12 @@ def pending_publications(store: ArtifactStore) -> list[dict[str, object]]:
         return [dict(row) for row in db.execute("SELECT * FROM pending_publications ORDER BY created_sequence")]
 
 
+@store_serialized("publication")
 def recover_pending(store: ArtifactStore, project_root: Path) -> None:
+    _recover_pending(store, project_root)
+
+
+def _recover_pending(store: ArtifactStore, project_root: Path) -> None:
     _schema(store)
     for row in pending_publications(store):
         source = {"snapshot": row["source_snapshot"], "path": row["source_path"]}
@@ -220,6 +225,7 @@ def published_ref(store: ArtifactStore, logical_path: str) -> dict[str, str] | N
     return {"snapshot": row["snapshot_id"], "path": row["snapshot_path"]}
 
 
+@store_serialized("publication")
 def publish_ref(
     store: ArtifactStore,
     source_ref: object,
@@ -230,7 +236,7 @@ def publish_ref(
     fault_after_replace: bool = False,
 ) -> dict[str, str]:
     _schema(store)
-    recover_pending(store, project_root)
+    _recover_pending(store, project_root)
     source = validate_ref(source_ref)
     logical = validate_relative_path(logical_path)
     if source["path"] != logical:

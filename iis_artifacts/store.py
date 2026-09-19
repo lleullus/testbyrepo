@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import fcntl
+from functools import wraps
 import os
 from pathlib import Path
 import re
@@ -18,6 +20,24 @@ PROJECT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 class ArtifactStoreError(RuntimeError):
     pass
+
+
+def store_serialized(name: str):
+    """Exclude concurrent filesystem/SQLite transition owners; process exit releases it."""
+    def decorate(operation):
+        @wraps(operation)
+        def run(store, *args, **kwargs):
+            fd = os.open(store.root / f".{name}.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+            try:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError as exc:
+                    raise ArtifactStoreError(f"STORE_OPERATION_IN_PROGRESS:{name}") from exc
+                return operation(store, *args, **kwargs)
+            finally:
+                os.close(fd)
+        return run
+    return decorate
 
 
 class ArtifactStore:
@@ -162,7 +182,7 @@ class ArtifactStore:
         relative = validate_relative_path(relative)
         parts = relative.split("/")
         flags_dir = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
-        flags_file = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        flags_file = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | os.O_NONBLOCK
         root_fd = os.open(root, flags_dir)
         current_fd = root_fd
         opened: list[int] = []

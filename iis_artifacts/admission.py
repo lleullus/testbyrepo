@@ -64,6 +64,7 @@ def admit_fixed_scope(
     *,
     role: str,
     current_request: str,
+    project_root: Path,
     project_owner_uid: int | None = None,
 ) -> dict:
     _schema(store)
@@ -73,6 +74,8 @@ def admit_fixed_scope(
     scope = validate_ref(scope_ref)
     data = store.read_bytes(scope)
     authority = SCOPE.validate_bytes(data, scope["path"], trusted_uid=project_owner_uid)
+    if Path(authority["project_root"]) != Path(project_root).resolve(strict=True):
+        raise AdmissionError("FOREIGN_PROJECT")
     if authority["status"] != "ready":
         raise AdmissionError("Scope must be ready for downstream admission")
     for source in authority.get("product_authorities", []):
@@ -135,6 +138,7 @@ def admit_scope(
         fixed,
         role=role,
         current_request=current_request,
+        project_root=root,
         project_owner_uid=project_owner_uid,
     )
 

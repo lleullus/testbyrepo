@@ -101,13 +101,12 @@ class EvidenceTests(AssuranceFixture, unittest.TestCase):
     def test_zero_exit_does_not_hide_skipped_required_job(self):
         jobs = self.arena / "jobs.json"
         self.baseline["gates"][0].update(jobs=["integration"], jobs_path=str(jobs))
+        self.baseline["gates"][0]["argv"] = [sys.executable, "-B", "-c",
+            "import os,json; from pathlib import Path; "
+            "Path(os.environ['IIS_ASSURANCE_JOBS_PATH']).write_text(json.dumps({"
+            "'run_id':os.environ['IIS_ASSURANCE_RUN_ID'],'gate_id':os.environ['IIS_ASSURANCE_GATE_ID'],"
+            "'invocation_id':os.environ['IIS_ASSURANCE_INVOCATION_ID'],'jobs':{'integration':'SKIPPED'}}))"]
         self.seal()
-        with jobs.open("w", encoding="utf-8") as stream:
-            json.dump({
-                "run_id": self.binding["run_id"],
-                "gate_id": "native",
-                "jobs": {"integration": "SKIPPED"},
-            }, stream)
         gate = assurance.run_gate(
             self.baseline_path,
             self.store,

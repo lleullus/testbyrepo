@@ -21,13 +21,15 @@ The UID-separated trusted supervisor owns the `ArtifactStore` outside the mutabl
 
 `bind` is a trusted-host operation. It requires a registered `assurance` admission for the exact fixed Scope, captures the current source tree and exact Baseline, materializes an isolated execution copy, and registers `binding_id`/`run_id` in the supervisor ledger. A dirty Git worktree is not automatically rejected; the captured source tree itself is the execution target. Native Git commit IDs may still be reported as repository provenance, but IIS does not add a file or diff checksum layer.
 
-Currentness is checked by direct comparison of stored source bytes/modes with the live target and by direct comparison of the stored Baseline bytes with the current Baseline input. A changed target or Baseline blocks reuse. External runtime/service state still requires its own authoritative readback.
+Currentness is checked by direct comparison of stored source bytes/modes with the live target and stored Baseline bytes with the current input. The canonical host also requires the binding's exact admission request to match its current trusted request, and admission requires the Scope Project-Root to match the supervisor project. A changed target, Baseline or request blocks reuse. External runtime/service state still requires its own authoritative readback.
 
 Execution identity input remains `{artifacts, runtime, mechanisms, note}`, but each file reference is an executor-owned `{snapshot, path}`. Mechanisms are nonempty. Capturing a file is not proof that the runtime currently uses it; runtime identity and service/config readback remain separate obligations where load-bearing.
 
 ## Native gate capture
 
 A host gate invocation executes the declared foreground command against the captured execution copy, not the mutable working-tree source. Exact absolute source paths in argv/cwd/job-export fields are remapped to that copy. A composite token that embeds the live source root, such as a shell command string or `--config=/live/root/...`, is rejected rather than executed ambiguously. stdout, stderr and native job export are stored with the actual registered run/invocation producer. Exit zero alone does not establish product observations.
+
+Output-path and job-export preconditions are checked before registering a gate invocation. Required job exports must not preexist and must name the actual `invocation_id` as well as `run_id` and `gate_id`. The runner receives `IIS_ASSURANCE_INVOCATION_ID` and `IIS_ASSURANCE_JOBS_PATH`; generate the export during that invocation outside the read-only source copy. Existing files are rejected, not silently deleted. Public observation/Probe completion APIs cannot complete a native gate.
 
 Every result uses `iis-assurance-result/v3` and records the actual `binding_id`, invocation, evidence refs and effects. Copying a result JSON or guessing an opaque ID does not create a new invocation or producer record.
 
@@ -37,7 +39,7 @@ Observation results still distinguish `SATISFIED`, `VIOLATED`, and `UNOBSERVABLE
 
 The canonical `iis_artifacts.host.HostSupervisor` exposes host-only begin/capture/complete operations for observation and Probe invocations. These operations and effect settlement are available only through the supervisor-owned admin boundary; worker RPC cannot mint them.
 
-Main supplies actual started-invocation/effect information from the host, not a model-authored denominator. Every effect ID reported by a result must exist in the supervisor ledger. `SETTLED` requires nonempty evidence attributed to the active run; unknown or unsettled effects block. Several no-finding results never offset one unresolved material finding.
+Main supplies actual started-invocation/effect information from the host, not a model-authored denominator. Every effect ID reported by a result must exist in the supervisor ledger. `SETTLED` requires nonempty raw evidence attributed to a registered invocation of this binding; a matching run string alone is insufficient. Unknown or unsettled effects block. Several no-finding results never offset one unresolved material finding.
 
 ## Closure
 

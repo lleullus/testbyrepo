@@ -37,13 +37,8 @@ class ClosureTests(AssuranceFixture, unittest.TestCase):
         self.assertIn("REQUIRED_WORK_NOT_STARTED", self.closure()["reasons"])
 
     def test_unknown_effect_blocks_even_when_checks_pass(self):
-        self.evidence()
-        evidence = assurance.capture_invocation_evidence(
-            self.store,
-            self.binding,
-            "effect-owner",
-            {"effect/state.txt": b"unknown\n"},
-        )
+        gate, _observation = self.evidence()
+        evidence = gate["evidence"]
         assurance.record_effect(
             self.store,
             self.binding,
