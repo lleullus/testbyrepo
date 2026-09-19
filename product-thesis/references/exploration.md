@@ -18,7 +18,7 @@ Focus question, deciding unknown and stopping condition may be expressed in a fe
 
 For continuation or refinement, select one decision-relevant focus, or the smallest inseparable set, rather than reopening the whole product. Prefer the user's explicit focus; otherwise prefer a gap or contradiction that can change the core utility or success truth, then one that can change the current Scope choice, then a material sibling directly affected by the latest semantic change. If none exists, reuse the current source and stop.
 
-Reconstruct the exact current source and authority on every invocation. A prior next-candidate or result is context, not a persistent cursor or renewed authority. Follow the positive utility loop before accumulating failure and recovery rules. An optional focus narrows attention, not authority or Breadth: include connected material distinctions whose answers can make the selected focus false. Translate an implementation-worded focus into product-significant result, preservation or truth meaning; when only method remains, keep Thesis unchanged and route it to its existing owner.
+Reconstruct the exact current source and authority on every invocation. A prior next-candidate or result is context, not a persistent cursor or renewed authority. Follow the positive utility loop before accumulating failure and recovery rules. An optional focus narrows attention, not authority or Breadth: include connected material distinctions whose answers can make the selected focus false. Translate an implementation-worded focus into product-significant result, preservation or truth meaning. Do not call it method-only because it uses technical vocabulary; first determine whether a different system fact or construction choice would change the current product result or make a concrete construction decision necessary now. Keep Thesis unchanged and route to Plan only when the remaining alternatives are genuinely faithful method choices.
 
 ## Breadth and Depth
 
@@ -35,14 +35,30 @@ Calibrate Breadth and Depth against a bounded semantic frontier rather than the 
 Do not infer either axis from the other: depth on one item provides no breadth disposition for material siblings, and breadth enumeration provides no depth discrimination.
 
 - **Frontier source:** current user instructions, exact applicable Thesis originals, the complete core utility loop, explicit required outcomes/means, concrete observations/contradictions and distinctions that can change the current Scope choice.
-- **Inclusion test:** include a distinction when different answers can change the user-visible result, success truth/attribution, material identity/ownership, failure/recovery/preservation outcome or current construction outcome/Acceptance. This is the materiality test; no universal semantic row is required.
-- **Exclusion test:** exclude pure implementation method, non-applicable future capability, explicit Non-Goals, already-settled authority that needs no reassessment, or distinctions whose alternatives leave the current product result and truth boundary unchanged. When a boundary looks load-bearing, preserve the short basis for exclusion; do not list every irrelevant lens.
+- **Inclusion test:** include a distinction when different answers can change the user-visible result, success truth/attribution, material identity/ownership, failure/recovery/preservation outcome, required means or current construction outcome/Acceptance; when the user requires a specific means; or when current Scope/Plan cannot faithfully proceed without a construction decision. This is the materiality test; no universal semantic row is required.
+- **Exclusion test:** exclude an implementation detail only when all live alternatives are faithful to the same product promise and current adopted decisions and there is no need to choose one now. Private helper names, function names, equivalent internal expression, non-applicable future capability, explicit Non-Goals and already-settled authority may also be excluded on that basis. When a boundary looks load-bearing, preserve the short basis for exclusion; do not list every irrelevant lens.
 - **Minimum discriminator:** close each material item with the smallest concrete counterexample, causal-loop break, authority rule, Scope consequence or exact user/evidence boundary that separates materially different meanings. Runtime execution is not required merely to define product meaning.
 - **Breadth closure:** Breadth is sufficient only when every material item raised by the inclusion test is resolved/reused, a genuine user-owned choice, an exact evidence limit, routed to another owner, or excluded with basis. Deep work on one item does not close an unexamined material sibling.
 - **Depth entry:** enter Depth only when a frontier item is unresolved, alternative answers can change the product result/current Scope, and a specific evidence, counterexample or causal relation can discriminate it.
-- **Depth stop:** stop when one meaning is decided by current authority and the discriminator, the distinction becomes a genuine user-owned choice, an exact evidence/authority limit blocks the deciding observation, another owner is established, or another observation cannot change the semantic disposition.
+- **Depth stop:** stop when the needed fact is established; one product/construction decision is adopted under current authority; the distinction becomes a genuine user-owned choice; an exact evidence/authority limit is preserved together with the decision it leaves incomplete; or the remaining difference cannot change the product decision and is safely left as a Plan method choice. Merely saying that another owner handles technical work is not a valid stopping basis for a decision-bearing branch.
 
-Do not turn this calibration into a checklist, fixed frontier size, questionnaire, separate artifact or requirement to investigate the repository. A simple artifact-only or explicitly settled request can close with a very small frontier.
+The phrases "that is a technical problem", "Plan can decide it", "Probe will catch it later" and "the current implementation does not have that feature" are not, by themselves, valid exclusion reasons. Do not turn this calibration into a checklist, fixed frontier size, questionnaire, separate artifact or universal requirement to investigate the repository. A simple artifact-only or explicitly settled request can close with a very small frontier.
+
+## System grounding and construction decisions
+
+For an existing product or implementation, trace any system fact that can change the current product decision to the depth needed to decide it. Depending on the question, that may require following an actual path such as:
+
+```text
+user intent
+→ actual entry
+→ executing actor/runtime
+→ authoritative state/effect owner
+→ persistence/effect boundary
+→ authoritative readback
+→ user-visible result
+```
+
+This is a selectable causal path, not a mandatory infrastructure checklist. Investigate only the links whose alternatives can change the current decision. A source/runtime fact remains an observed current fact; it is not automatically product policy. A construction selected for the future is an adopted construction decision; do not write it as though it were already implemented. When current authority and evidence are sufficient and current Scope/Plan needs a concrete choice, Product-Thesis may adopt that construction decision. When multiple methods remain equally faithful and no choice is needed now, leave the method open to Plan.
 
 ## Evidence and semantic judgment
 
@@ -50,18 +66,19 @@ Keep six distinctions in ordinary explanation, using only those relevant to the 
 
 | Kind | Meaning and example |
 | --- | --- |
-| Observation | Directly read or measured fact with its target and source. Source shows status written before result persistence; source inspection alone is not a production incident. |
+| Observed current fact | Directly read or measured current-system fact with target and locator. Source shows status written before result persistence; source inspection alone is not a production incident or future policy. |
 | Evidence-backed inference | Consequence supported by observations, with limits. A persistence failure on that path could leave completed status without a result. |
 | Hypothesis | Untested explanation to discriminate. This ordering might explain a reported missing report. |
-| Unknown | A deciding fact or product choice not established. Production correction behavior has not been observed. |
-| Counterexample | A concrete state or path that can defeat a meaning or causal claim. Completed status with no attributable, retrievable result. Mark proposed versus actually observed counterexamples. |
-| Semantic decision | What the product must mean or preserve, adopted under user instructions or actual delegation. Completed requires the promised result to be attributable and retrievable. |
+| Unresolved premise | A fact not yet observed whose truth can change product meaning or an adopted construction decision. Preserve the exact deciding observation/authority limit. |
+| Counterexample | A concrete state or path that can defeat a meaning, factual premise or construction claim. Completed status with no attributable, retrievable result. Mark proposed versus actually observed counterexamples. |
+| Product obligation | What the user must receive or what success/failure/identity/preservation/recovery must mean, adopted under user instructions or actual delegation. |
+| Adopted construction decision | A concrete structure/runtime/storage/effect choice selected for the current product decision under current authority and deciding evidence. It can bind downstream work without becoming a permanent product promise. |
 
 Do not turn a hypothesis into an observed defect, a code mechanism into product policy, or a recommendation into explicit user approval. Separate source, test intent, actual test execution and runtime observations. A product promise can be settled from clear user requirements while its implementation cause or runtime satisfaction remains unknown. Conversely, when an unknown could change the meaning decision, retain that exact limitation and seek only the deciding evidence or genuinely user-owned choice.
 
 For frontier closure, distinguish a **semantic unknown** from an **evidence unknown**. A semantic unknown leaves materially different product outcomes unresolved and may become a user-owned choice only after existing authority and deciding evidence are exhausted. An evidence unknown limits a claim about current implementation/runtime satisfaction; it does not reopen an already settled product policy. Record the appropriate frontier disposition instead of converting one into the other.
 
-Technical exploration is read-only evidence acquisition here, not Plan writing, product repair or a prototype permission. An effectful probe requires its actual existing owner and concrete authority. Unavailable evidence is not permission to use a surrogate as proof.
+Technical exploration is read-only evidence acquisition here. It may support a Product-Thesis construction decision, but it is not Plan writing, implementation, product repair, deployment or prototype permission. An effectful probe requires its actual existing owner and concrete authority. Unavailable evidence is not permission to use a surrogate as proof.
 
 ## Optional evidence acquisition and inspection lenses
 
@@ -77,12 +94,12 @@ Route by what decision must change, not by the selected section or the vocabular
 
 | Finding | Consequence under existing ownership |
 | --- | --- |
-| Product promise, behavior policy or success meaning is ambiguous or must change | Product-Thesis owner resolves only affected meaning within authority. Ask only for materially unresolved user-owned alternatives. |
-| Approved transition ordering, allowed intermediate state or invariant must change | Main handles applicable Baseline revision and approval before dependent construction. |
-| Scope omits an adopted obligation or its unfixed outcome choice is wrong | Main reassesses the exact current Scope under `scope-shaper`. |
-| Meaning and approved boundaries stand; method, cause, internal interface or readback strategy changes | Existing Plan owner revises affected method/Assurance Baseline before dependent implementation. |
-| Implementation contradicts already clear meaning | Preserve Thesis and route the defect to the currently authorized implementation actor. |
-| Evidence is stale, missing or unable to observe the required boundary | Identify the evidence/mechanism owner and the smallest permitted observation. Do not infer a product defect or rewrite meaning to fit the available check. |
+| Product result, success, identity or preservation meaning changes | Product-Thesis owner revises only affected meaning within authority. |
+| A Thesis-bound construction decision or load-bearing factual premise changes | Product-Thesis owner creates an affected immutable revision before dependent Scope/Plan work. |
+| Existing product/construction decisions stand and only execution method changes | Existing Plan owner revises affected method/Assurance Baseline. |
+| Existing Plan method stands and code is wrong | Currently authorized Implementer corrects the faithful implementation. |
+| Existing→target transition order, intermediate authority or preservation invariant changes | Existing Transition authority revises the applicable Transition before dependent work. |
+| Evidence/oracle cannot distinguish the actual promise | Route to the evidence/tooling owner and, when the gap exposes an unsettled success meaning, reassess that meaning at its owning source. |
 
 Several consequences can coexist, but do not create duplicated issues or repairs for one finding. An old document or a reported concern alone neither activates a Baseline nor starts a corrective invocation. A transition contract is conditional on actual intermediate-state geography, safety/order, continuation/abort or atomic constraints; size, many files or multiple Scopes alone are insufficient. Reuse existing Block IDs and approved boundaries without creating a new node system.
 
@@ -90,7 +107,9 @@ Several consequences can coexist, but do not create duplicated issues or repairs
 
 Before adopting new meaning, identify the authoritative reason, the counterexample it must close and the existing promise it must preserve. Resolve determinable choices without an extra ceremony. Keep material unresolved product choices explicit. Do not add a technical cause, optional means or every review concern to the required product outcomes.
 
-Preserve referenced Thesis revisions byte-for-byte. A changed contract receives a new `THESIS-NNN.md` ordinal, preserving unchanged meaning and updating only affected meaning and its causal consequences. Apply a behavioral contract-delta test: if a reasonable product can satisfy the old required/allowed/forbidden behavior, truth/identity boundary or material failure/recovery/preservation policy while violating the newly adopted meaning, or vice versa, the semantic contract changed. Additional evidence, an implementation contradiction, a corrected causal explanation, an evidence-access limit or wording cleanup that leaves the compliant behavior set unchanged does not require a new revision. No semantic change means no new revision solely to record another inspection. Never repair stale bindings by overwriting an old source or silently updating hashes to the latest file. Main must assess the applicability of the new meaning and any affected Scope through existing authority.
+Preserve referenced Thesis revisions byte-for-byte. A changed binding contract receives a new `THESIS-NNN.md` ordinal, preserving unaffected decisions and updating only affected consequences. Use the behavioral contract-delta test for semantic meaning, and also create a new ordinal when required means change, a downstream-binding adopted construction decision changes, or a load-bearing factual premise is refuted such that the faithful downstream Plan must change. Additional evidence/locators, an implementation defect under an unchanged decision, or wording cleanup that leaves meaning and binding construction unchanged does not require a new revision. In ordinary rationale distinguish semantic contract delta, required-means delta, adopted-construction delta and evidence/rationale-only update without creating a new schema. Never repair stale bindings by overwriting an old source or silently updating hashes to the latest file. Main must assess the applicability of the new source and any affected Scope through existing authority.
+
+When Probe or runtime evidence falsifies an existing Thesis promise, factual premise or adopted construction decision, identify exactly what was falsified and do not overwrite the old Thesis. Revise only the affected decision in a new ordinal. If product meaning remains the same while construction changes, say so explicitly. Reassess affected Scope/Plan under the new exact source binding and reacquire target evidence; old success evidence is not inherited by the new target.
 
 A bounded **ripple check** asks which connected meanings and current downstream obligations the change can affect: for example success/readback changing failure policy, identity, persistence or UI wording. Inspect the actual connection, not every section or every historical Scope. Source identifiers, exact locators and relevant current evidence support the impact statement. A selector is not a substitute for reading the full bound originals when the downstream role requires them.
 

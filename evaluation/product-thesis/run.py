@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import uuid
 
 CASES = Path(__file__).with_name("cases.json")
@@ -21,6 +21,41 @@ def write_json(path: Path, value: object) -> None:
 
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def fixture_relative_path(raw: str) -> Path:
+    if not isinstance(raw, str) or not raw or "\\x00" in raw or "\\" in raw:
+        raise ValueError("fixture path must be a non-empty POSIX relative path")
+    parsed = PurePosixPath(raw)
+    if parsed.is_absolute() or ".." in parsed.parts:
+        raise ValueError("fixture path must stay below the project root")
+    return Path(*parsed.parts)
+
+
+def reject_symlink_chain(project: Path, relative: Path) -> None:
+    current = project
+    for part in relative.parts:
+        current = current / part
+        if current.exists() and current.is_symlink():
+            raise ValueError("fixture path may not traverse a symlink")
+
+
+def materialize_fixture_files(project: Path, entries: list[dict]) -> list[dict]:
+    metadata: list[dict] = []
+    seen: set[str] = set()
+    for entry in entries:
+        relative = fixture_relative_path(entry["path"])
+        key = relative.as_posix()
+        if key in seen:
+            raise ValueError(f"duplicate fixture path: {key}")
+        seen.add(key)
+        reject_symlink_chain(project, relative)
+        target = project / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        reject_symlink_chain(project, relative)
+        target.write_text(entry["content"], encoding="utf-8")
+        metadata.append({"path": key, "sha256": sha(target)})
+    return metadata
 
 
 def case_by_id(case_id: str) -> dict:
@@ -43,6 +78,7 @@ def prepare(case_id: str, arena: Path, variant: str, repetition: int) -> Path:
     evidence = root / "evidence"
     project.mkdir(parents=True, mode=0o700)
     evidence.mkdir(mode=0o700)
+    fixture_files = materialize_fixture_files(project, case.get("fixture_files", []))
     context = {
         "case_id": case_id,
         "fixture": case.get("fixture", "brief-only"),
@@ -64,6 +100,10 @@ def prepare(case_id: str, arena: Path, variant: str, repetition: int) -> Path:
         + ("Follow the user's exact downstream planning and stop authority; do not implement or verify a product. "
            if case.get("downstream_planning") else "Do not execute the downstream planning leaf or write other planning artifacts. ")
     )
+    if fixture_files:
+        prompt += "\nFixture source files (inspect the actual project files):\n" + "".join(
+            f"- {item['path']}\n" for item in fixture_files
+        )
     metadata = {
         "schema": "iis-product-thesis-case/v1",
         "case_id": case_id,
@@ -76,6 +116,7 @@ def prepare(case_id: str, arena: Path, variant: str, repetition: int) -> Path:
         "case_file": str(CASES),
         "case_file_sha256": sha(CASES),
         "fixture_builder_sha256": sha(Path(__file__)),
+        "fixture_files": fixture_files,
         "model": protocol["model"],
         "thinking": protocol["thinking"],
         "required_observations": case["required_observations"],

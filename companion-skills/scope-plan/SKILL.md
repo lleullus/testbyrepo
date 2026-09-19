@@ -22,18 +22,20 @@ Tell the worker to read the Scope and all bound originals directly before choosi
 
 Run the supplied canonical Scope validator and require exact VALID with Status ready. Read original bytes and current implementation. Draft/superseded/done are not ordinary method-writing inputs. An applicable Transition constrains order, invariant, effects and continuation; file presence alone creates no new authority.
 
-The Planner owns implementation methods and the evidence execution Baseline, never product meaning, Scope selection, implementation or final success. Write `docs/planning/work/<work-slug>/plans/PLAN-NNN.md`, preserving prior referenced methods. Do not create a second specification, evidence registry or approval lifecycle.
+The Planner owns faithful execution methods, remaining open method choices and the evidence execution Baseline, never product meaning, Thesis-bound construction selection, Scope selection, implementation or final success. Treat bound Thesis product obligations and adopted construction decisions as EXISTING authority. Write `docs/planning/work/<work-slug>/plans/PLAN-NNN.md`, preserving prior referenced methods. Do not create a second specification, evidence registry or approval lifecycle.
 
 Current user selection governs DIRECT or delegation. Missing delegated model selection is returned to Main; never silently substitute a model, add a hidden fan-out or invent an independent approver. No method-review role is dispatched.
 
 ## Preparation
 
-1. Read `references/plan.md` in full; classify premises EXISTING, PROPOSED or UNRESOLVED from current primary evidence.
+1. Read `references/plan.md` in full; classify premises EXISTING, PROPOSED or UNRESOLVED from current primary evidence. Bound Thesis obligations and adopted construction decisions are EXISTING authority, not options to reselect.
 2. Trace actual entry/writer/reader/state/effect/readback, preservation boundaries and the bounded failure frontier. Attach the cheapest discriminating executable disposition to each material boundary.
-3. Write implementation methods, dependencies, conditional first work and reusable execution prerequisites. Method-only unknowns may permit bounded initial work but never the dependent mutation before its deciding observation.
+3. Write code/change structure, state/effect transition, migration/launch/build/runtime method, observation/Assurance Baseline and cleanup/settlement. Choose only methods the Thesis/Transition/Scope leave open. Method-only unknowns may permit bounded initial work but never the dependent mutation before its deciding observation.
 4. Add one machine-readable Assurance Baseline under the common contract. Map every authored Acceptance paragraph to evidence, specify direct observation predicates, native gates and required attack surfaces, lane budget, isolation/effect and currentness conditions. Do not feed a scout a complete bug hypothesis list.
 5. Run the common helper's baseline validation. This checks structure/source/coverage, not semantic completeness. Preserve its actual result and unresolved premises.
 6. Return exact Plan/Baseline locations, actual-byte identity and accessible primary evidence. No independent overall approval is required or manufactured.
+
+Do not replace a Thesis-bound architecture/storage/runtime choice merely because another method is simpler or more familiar. Do not redefine an easy-to-observe internal marker as authoritative product success. Do not proceed into destructive dependent work with a known unresolved premise on the theory that a later Probe will catch it.
 
 Only bounded disposable scratch experiments isolated from product originals, the project working tree, shared services, real data and external systems are permitted in planning. Preserve exact input/action/output, mechanism identity and limits before scratch cleanup. Current read-only or no-execution instructions still win. Effectful preconditions belong to explicitly authorized conditional first work, not planning-side mutation.
 

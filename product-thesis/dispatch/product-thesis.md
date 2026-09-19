@@ -8,9 +8,11 @@ Use this projection only when the current user authority and the owning Product 
 - Exact Project Root, or the explicit temporary source context allowed by the owning contract.
 - Every applicable Thesis original by exact path/revision and actual-byte SHA-256; use `None supplied` only for a genuinely new unrooted product definition.
 - Current authority for read-only assessment versus source creation/refinement, including storage limits.
-- Exact evidence locator and applicability conditions for every technical or user-evidence claim the work will rely on.
+- Exact evidence locator and applicability conditions for every technical or user-evidence claim the work will rely on, including each load-bearing current-system fact that must be investigated for the decision.
+- When runtime evidence is load-bearing, the actual runtime/artifact/config identity and its locator.
+- Current authority boundary for adopting technical construction decisions; if a construction decision is already adopted, its exact source locator.
 - User-selected delegated execution mode/model/effort when required by current policy.
-- Exact source destination when writing is authorized, or ordinary result delivery for assessment-only work.
+- Exact destination when writing is authorized, or ordinary result delivery for assessment-only work.
 
 ## Optional
 
@@ -21,9 +23,11 @@ Use this projection only when the current user authority and the owning Product 
 ## Forbidden framing
 
 - Do not require Scope, implementation Plan or Assurance Baseline merely to begin Product Thesis work.
+- Do not pre-frame a decision as Plan-only merely because the question uses technical vocabulary.
+- Do not inject a preferred architecture as the answer; provide originals, evidence and authority instead.
 - Do not tell the worker which semantic conclusion or revision decision to reach.
-- Do not promote an implementation defect, hypothesis or optional capability into product policy.
-- Do not imply permission to continue into Scope, Plan or delivery.
+- Do not promote an implementation defect, hypothesis or optional capability into product policy, or adopt a construction choice as product norm without current decision authority.
+- Do not imply that a Thesis technical decision grants permission to continue into Scope, Plan, implementation or delivery.
 
 ## Assignment pattern
 
@@ -37,4 +41,4 @@ Supplied findings, candidate meanings and implementation explanations are eviden
 
 ## Result
 
-Return the owning Product Thesis result, including exact source creation/reuse, deciding counterexample or boundary, material unknowns and affected existing owner only as required by that contract. Do not create downstream artifacts or invoke later roles.
+Return the owning Product Thesis result in ordinary prose, making recoverable the settled product meaning, observed load-bearing facts, adopted construction decisions, unresolved premises, revision/reuse reason and next owner where applicable, together with exact source creation/reuse and deciding counterexample/boundary. Do not impose a new fixed output schema, create downstream artifacts or invoke later roles.

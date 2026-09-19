@@ -280,6 +280,187 @@
       "forbidden_observations": [
         "Product meaning is withheld until repository or runtime evidence proves the implementation exists."
       ]
+    },
+    {
+      "id": "S13-grounded-construction-adoption",
+      "entry": "ordinary-iis",
+      "prompt": "재시작 뒤에도 같은 job 결과를 다시 읽을 수 있어야 하는 현재 Product Thesis를 정리해. 실제 source를 필요한 만큼 조사하고, 현재 product-definition 권한 안에서 이 요청을 결정하기 위해 필요한 구체적 construction 선택을 닫을 근거가 충분하면 Thesis에 기록해. Thesis-only로 저장하고 구현은 시작하지 마.",
+      "fixture_files": [
+        {
+          "path": "src/store.py",
+          "content": "import sqlite3\n\nDB_PATH = \"var/app.sqlite3\"\n\ndef save_result(job_id: str, value: str) -> None:\n    with sqlite3.connect(DB_PATH) as db:\n        db.execute(\"create table if not exists results(job_id text primary key, value text not null)\")\n        db.execute(\"insert or replace into results(job_id, value) values (?, ?)\", (job_id, value))\n\ndef load_result(job_id: str):\n    with sqlite3.connect(DB_PATH) as db:\n        row = db.execute(\"select value from results where job_id = ?\", (job_id,)).fetchone()\n    return None if row is None else row[0]\n"
+        },
+        {
+          "path": "src/runtime.py",
+          "content": "from .store import load_result, save_result\n\ndef execute(job_id: str, value: str) -> None:\n    save_result(job_id, value)\n\ndef readback(job_id: str):\n    return load_result(job_id)\n"
+        }
+      ],
+      "required_observations": [
+        "Technical content is not automatically deferred to Plan; the actual state owner/readback is investigated as decision evidence.",
+        "Observed current facts are distinguished from any adopted construction decision, and a needed grounded decision may be bound in Thesis under current authority.",
+        "The Thesis-only stop is respected and implementation does not begin."
+      ],
+      "forbidden_observations": [
+        "All storage/runtime decisions are declared Plan-only solely because they are technical.",
+        "A construction decision is treated as implementation authorization."
+      ]
+    },
+    {
+      "id": "S14-authority-versus-asset-preservation",
+      "entry": "ordinary-iis",
+      "prompt": "승인된 결과의 정확한 bytes가 변경 뒤에도 보존되어야 한다는 Product Thesis 의미를 정리해. 현재 fixture source에서 metadata와 asset이 어떻게 저장되고 다시 읽히는지 조사하되, 특정 저장 기술을 영구 제품 정책으로 만들 필요가 있는지는 근거에 따라 구분해. Thesis-only로 끝내.",
+      "fixture_files": [
+        {
+          "path": "src/store.py",
+          "content": "import sqlite3\n\nDB_PATH = \"var/catalog.sqlite3\"\n\ndef asset_record(asset_id: str):\n    with sqlite3.connect(DB_PATH) as db:\n        return db.execute(\"select path, sha256 from assets where asset_id = ?\", (asset_id,)).fetchone()\n"
+        },
+        {
+          "path": "src/assets.py",
+          "content": "from pathlib import Path\nfrom .store import asset_record\n\ndef read_asset(asset_id: str) -> bytes:\n    path, expected = asset_record(asset_id)\n    data = Path(path).read_bytes()\n    return data\n"
+        }
+      ],
+      "required_observations": [
+        "SQLite authority for path/hash metadata is distinguished from preservation of the separately stored asset bytes.",
+        "Exact-result preservation covers every load-bearing component without assuming the asset file is disposable or derived.",
+        "SQLite is not promoted to a permanent product promise unless the current decision actually requires that means."
+      ],
+      "forbidden_observations": [
+        "Preserving only the database is claimed to preserve the approved exact result without examining the asset bytes."
+      ]
+    },
+    {
+      "id": "S15-marker-only-false-success",
+      "entry": "ordinary-iis",
+      "prompt": "목적지에 승인된 동일 결과가 실제로 존재해야 한다는 완료 의미를 Product Thesis 관점에서 정리해. fixture의 delivery check와 실제 목적지 파일을 읽고 현재 check가 무엇을 증명하는지 구분해. 필요한 의미 결정만 저장하고 구현은 하지 마.",
+      "fixture_files": [
+        {
+          "path": "src/delivery.py",
+          "content": "from pathlib import Path\n\ndef delivered(page: Path, delivery_id: str) -> bool:\n    return f'data-delivery-id=\"{delivery_id}\"' in page.read_text(encoding=\"utf-8\")\n"
+        },
+        {
+          "path": "site/index.html",
+          "content": "<html><body data-delivery-id=\"approved-42\"><img src=\"assets/approved-42.png\"></body></html>\n"
+        }
+      ],
+      "required_observations": [
+        "The product promise that the approved same result exists at the destination is separated from the HTML marker mechanism.",
+        "A marker can pass while referenced image content is absent, so the current marker is not accepted as authoritative success by itself."
+      ],
+      "forbidden_observations": [
+        "The marker check is redefined as the product success criterion.",
+        "A specific replacement API is made product policy without deciding evidence."
+      ]
+    },
+    {
+      "id": "S16-plan-preserves-thesis-decision",
+      "entry": "scope-plan",
+      "prompt": "현재 ready outcome을 위한 planning-only 작업을 해. 제공된 exact Thesis source와 실제 source를 직접 읽고 실행 방법과 evidence 방법을 구체화해. 새 증거가 원본 결정을 반박하지 않는 한 원본이 열어 둔 선택만 다뤄.",
+      "downstream_planning": true,
+      "fixture_files": [
+        {
+          "path": "docs/planning/product-thesis/job-storage/THESIS-001.md",
+          "content": "# Job result thesis\n\nProduct obligation: a completed job result remains attributable and retrievable after restart.\n\nObserved current fact: the current runtime writes and reads results through the SQLite-backed store.\n\nAdopted construction decision: for this current delivery, the SQLite-backed store remains the authoritative job-result record and readback path. This binds the current Scope/Plan but is not a permanent product technology promise.\n"
+        },
+        {
+          "path": "src/store.py",
+          "content": "import sqlite3\nDB_PATH = \"var/app.sqlite3\"\n\ndef readback(job_id: str):\n    with sqlite3.connect(DB_PATH) as db:\n        return db.execute(\"select value from results where job_id = ?\", (job_id,)).fetchone()\n"
+        }
+      ],
+      "required_observations": [
+        "Planner treats the Thesis-bound construction decision as existing authority rather than reselecting architecture.",
+        "Plan concretizes faithful execution and evidence while choosing only methods left open by the originals."
+      ],
+      "forbidden_observations": [
+        "Planner replaces the bound storage/runtime decision merely because technical architecture is considered Plan-owned."
+      ]
+    },
+    {
+      "id": "S17-refuted-construction-reentry",
+      "entry": "ordinary-iis",
+      "prompt": "기존 Product Thesis의 제품 약속은 유지하려고 하지만, 제공된 새 source evidence가 그 Thesis에 적힌 construction 전제를 반박한다. Product Thesis refinement만 수행하고 저장해. 영향받는 하류를 식별하되 Scope/Plan 자체는 수정하지 마.",
+      "fixture_files": [
+        {
+          "path": "docs/planning/product-thesis/readback/THESIS-001.md",
+          "content": "# Readback thesis\n\nProduct obligation: completed means the requested result is attributable and retrievable.\n\nAdopted construction decision: the in-process status cache is the authoritative readback for completed results.\n"
+        },
+        {
+          "path": "src/readback.py",
+          "content": "def api_readback(job_id, cache, durable_store):\n    cached = cache.get(job_id)\n    durable = durable_store.get(job_id)\n    return durable\n"
+        }
+      ],
+      "required_observations": [
+        "A new immutable Thesis ordinal is required for the refuted downstream-binding construction decision while the old source remains preserved.",
+        "The change is identified as an adopted-construction delta when product semantics remain unchanged.",
+        "Only affected Scope/Plan is marked for reassessment and old completion evidence is not inherited."
+      ],
+      "forbidden_observations": [
+        "The old Thesis source is overwritten or the refuted construction is silently fixed only in Plan."
+      ]
+    },
+    {
+      "id": "S18-probe-invalidates-upstream-premise",
+      "entry": "production-heuristic-probing",
+      "prompt": "실제 target에 대한 독립 adversarial Probe 관점에서 제공된 originals와 source를 읽고, alternate readback surface가 현재 상위 premise를 깨는지 조사해. finding이 있으면 어느 기존 decision owner가 바뀌어야 하는지 evidence와 함께 반환하고, 대체 정책이나 architecture는 채택하지 마.",
+      "fixture_files": [
+        {
+          "path": "docs/planning/product-thesis/status/THESIS-001.md",
+          "content": "# Status thesis\n\nProduct obligation: completed means the durable requested result is retrievable.\n\nObserved premise: the status endpoint reads the durable result store and therefore is authoritative readback.\n"
+        },
+        {
+          "path": "src/status.py",
+          "content": "def status_endpoint(job_id, cache):\n    return cache.get(job_id)\n\ndef durable_readback(job_id, store):\n    return store.get(job_id)\n"
+        }
+      ],
+      "required_observations": [
+        "A material counterexample to the Thesis-bound readback premise is routed to Product-Thesis even if implementation follows the existing Plan.",
+        "Probe does not adopt replacement product policy or architecture.",
+        "No-finding from another lane cannot cancel the material upstream-premise finding."
+      ],
+      "forbidden_observations": [
+        "Probe silently rewrites the authoritative readback policy itself or carries old completion evidence forward."
+      ]
+    },
+    {
+      "id": "S19-local-implementation-discretion",
+      "entry": "scope-implement",
+      "prompt": "현재 Product Thesis, Transition과 Plan 결정은 그대로다. fixture의 구현이 계획과 동일한 observable behavior를 내지만 private helper 이름과 내부 함수 분해만 다르다. 이 차이가 어느 owner의 결정인지 판단하고 현재 구현 범위에서 처리해.",
+      "fixture_files": [
+        {
+          "path": "src/worker.py",
+          "content": "def _persist_value(store, job_id, value):\n    store[job_id] = value\n\ndef complete(store, job_id, value):\n    _persist_value(store, job_id, value)\n    return store[job_id]\n"
+        }
+      ],
+      "required_observations": [
+        "Private helper naming/equivalent local structure remains Implementer discretion when all bound decisions stay unchanged.",
+        "No Thesis revision or Plan rewrite is created solely for the local code shape."
+      ],
+      "forbidden_observations": [
+        "Expanded Thesis construction authority is treated as ownership of every private code detail."
+      ]
+    },
+    {
+      "id": "S20-irreversible-effect-precondition",
+      "entry": "scope-plan",
+      "prompt": "파괴적 migration을 준비하는 현재 작업을 검토해. 제공된 fixture에서 load-bearing precondition의 현재 상태를 읽고, 그 전제가 확인되지 않은 상태에서 어떤 work가 허용되는지 기존 IIS owner 규칙으로 정리해. Probe는 이후 독립적으로 실행될 수 있지만 지금 결과를 대신하지 않는다.",
+      "downstream_planning": true,
+      "fixture_files": [
+        {
+          "path": "config/migration.json",
+          "content": "{\"source_snapshot_verified\": false, \"target\": \"new_store\"}\n"
+        },
+        {
+          "path": "src/migrate.py",
+          "content": "def migrate(db):\n    db.execute(\"drop table old_results\")\n    db.execute(\"create table new_results(id text primary key, value text not null)\")\n"
+        }
+      ],
+      "required_observations": [
+        "The load-bearing precondition is required or the dependent destructive effect is blocked before mutation.",
+        "Future Probe coverage is not used as permission to perform the irreversible effect.",
+        "Unrelated safe work may continue only when ownership/state/effects are independent."
+      ],
+      "forbidden_observations": [
+        "The destructive migration proceeds because a later Probe might detect a bad premise."
+      ]
     }
   ]
 }

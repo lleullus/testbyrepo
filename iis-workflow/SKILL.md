@@ -36,7 +36,7 @@ An affirmative current `/승인게이트` requires showing the exact request con
 
 ## Product and evidence sources
 
-Thesis owns complete product meaning, behavior/UI, failure/recovery/preservation, false-success distinctions and authoritative readback. Reuse sufficient originals; revise only meaning actually changed. Product-Thesis reads its bounded exploration reference. A Brief or investigation is an inspection lens, not an approval or new stage. Preserve complete promises even when current construction is smaller.
+Thesis owns complete product meaning, behavior/UI, failure/recovery/preservation, false-success distinctions and authoritative readback, and may own a grounded adopted construction decision when that decision is required to make the current product result determinate. Reuse sufficient originals; revise only affected binding meaning/decisions. Product-Thesis reads its bounded exploration reference. Investigation is evidence authority, never product authority. A Brief or investigation is an inspection lens, not an approval or new stage. Technical vocabulary does not move a decision to Plan; Plan receives settled Thesis decisions and only the method choices Thesis deliberately leaves open.
 
 Scope at `docs/planning/work/<slug>/SCOPE.md` applies exact bound Thesis and approved Transition sources to current Outcome/Acceptance. Main uses scope-shaper instructions directly; no separate Shaper invocation. Fix one current outcome before methods without recreating Spec/Ticket/Matt/Increment hierarchies. Validate canonical schema/paths/actual source digests, not semantic sufficiency by hash.
 
@@ -46,15 +46,15 @@ Reuse investigation evidence with exact source/readback locators and deciding ap
 
 ## Canonical delivery flow
 
-1. Investigate only deciding facts; perform/reuse sufficient Thesis and applicable approved Transition.
-2. Main fixes/reuses exact ready Scope against current state under scope-shaper.
-3. Planner writes grounded method plus Assurance Baseline under scope-plan. Check originals/structure/executable preconditions. There is no separate overall method approval role or approval artifact lifecycle.
-4. Current authorized implementer changes product/project tooling and self-checks under scope-implement. Preserve correction evidence and non-obvious execution handoff.
-5. Seal exact committed source, build artifact/runtime/mechanism and originals under [Assurance](references/assurance.md). No automatic commit. Unsealed target returns TARGET_NOT_SEALED, never a claim that HEAD includes working-tree changes.
-6. Acquire required native gates and direct observations on the final execution binding. A failed/unobservable direct result blocks even if other tests pass. Reuse only genuinely attributable same-binding native self-check captures.
-7. Dispatch required independent adversarial Prober lanes with surface/budget/isolation boundaries. Preserve hypotheses before narrative disclosure; scout is not given Planner candidate findings. Share safety immediately. This is bounded counterexample search, not every-Acceptance re-adjudication.
-8. Fan in every required and actually started invocation and effect unchanged. Run structural evidence closure. No new Aggregator/final judge is introduced.
-9. Only current EVIDENCE_COMPLETE plus current user authority, unchanged target/originals, settled effects and requested completion permission permits Main's status-only recording below. Reconcile remaining required outcomes before declaring the whole request complete.
+1. Investigate the facts needed for the current decision, then perform/reuse sufficient Thesis so product meaning and any required grounded construction decision are settled under current authority.
+2. When a Transition actually applies, settle its intermediate-state authority, invariants, ordering and continuation/abort boundary; technical complexity alone does not create one.
+3. Main fixes/reuses exact ready Scope against current state under scope-shaper.
+4. Planner writes the faithful execution method plus Assurance Baseline, choosing only method questions the Thesis/Transition/Scope leave open. There is no separate overall method approval role or approval artifact lifecycle.
+5. Current authorized implementer changes product/project tooling and self-checks under scope-implement, without redefining success/preservation/identity or a bound construction decision.
+6. Seal exact committed source, build artifact/runtime/mechanism and originals under [Assurance](references/assurance.md), then acquire required native gates and direct observations on the final execution binding. A failed/unobservable direct result blocks even if other tests pass.
+7. Dispatch required independent adversarial Prober lanes against different actual surfaces with surface/budget/isolation boundaries. Preserve hypotheses before narrative disclosure; scout is not given Planner candidate findings. Share safety immediately. This is bounded counterexample search, not every-Acceptance re-adjudication.
+8. Fan in every required and actually started invocation/effect unchanged and route each material finding to the earliest original decision owner that must change. A counterexample may falsify implementation, a Plan method, an approved Transition invariant, or a Thesis-bound factual premise/construction decision; the Probe does not adopt replacement policy.
+9. Reacquire evidence on the current target after any revision/correction, run structural evidence closure, and only then allow Main's existing conditional status-only recording when current EVIDENCE_COMPLETE, authority, unchanged target/originals and settled effects all hold. No new Aggregator, Reviewer, Verifier or final judge is introduced.
 
 Tools in `tools/assurance.py` perform Baseline/binding/evidence/closure checks and bounded native foreground gate capture. They never select risk/meaning, dispatch agents, repair products, write Scope or authenticate arbitrary JSON. Follow `references/assurance.md` for exact data and CLI. Runtime/production success requires actual authoritative observations; build/lint/no-finding alone is insufficient.
 
@@ -72,14 +72,16 @@ Main's request ownership is not product repair authority. Use the user-selected 
 
 Route by the decision that must change, not role vocabulary:
 
-- Product promise/policy/success meaning: Product-Thesis owner creates affected immutable revision and bounded ripple analysis. Unrelated revisions do not automatically invalidate bound work.
-- Approved transition boundary/order/invariant: its existing authority revises that contract before dependent Scope/method changes.
-- Scope omission or current construction choice: Main corrects from adopted originals/current evidence under scope-shaper; no invented Acceptance during probing.
-- Method/cause/interface/persistence/readback/target-effect/safety premise: planning owner revises affected Plan/Baseline, preserving old attempts and reasons. No independent approval cycle returns.
-- Faithful implementation correction under unchanged material method: existing authorized actor corrects/self-checks. Size/new fact/regression alone is not material revision; preserve why the premise stands.
-- Concrete product counterexample: authorized implementer gets usable reproducer/evidence, corrects and hands off exact new target. Reacquire completion evidence on the new binding; previous outputs are navigation, not carried-forward success.
-- Observation/oracle/tooling gap: its authorized tooling/evidence owner repairs or acquires the smallest deciding observation. Missing evidence is not automatically a product defect.
+- Product promise/policy/success meaning: Product-Thesis owner creates the affected immutable revision and bounded ripple analysis.
+- Thesis-bound factual premise or adopted construction decision: Product-Thesis owner revises that exact binding decision before dependent work; a technical description is not a reason to send it to Planner.
+- Approved Transition order/intermediate authority/invariant: its existing Transition authority revises that contract before dependent Scope/method changes.
+- Scope current Outcome/Acceptance application error or omission: Main corrects from adopted originals/current evidence under scope-shaper; no invented Acceptance during probing.
+- Plan-only method/oracle/safety premise left open by the originals: planning owner revises affected Plan/Baseline, preserving old attempts and reasons. No independent approval cycle returns.
+- Faithful implementation defect under unchanged Thesis/Transition/Scope/Plan decisions: existing authorized Implementer corrects/self-checks.
+- Observation/tooling gap: its authorized evidence/tooling owner repairs or acquires the smallest deciding observation; if the gap reveals that an upstream success meaning or Thesis premise itself is wrong, re-enter that upstream owner instead of redefining success in tooling.
 - Unknown external/non-idempotent effect: actual effect owner obtains applied/not-applied readback or contains; no blind retry or smaller Scope to hide uncertainty.
+
+Choose the owner by where the decision is bound in the originals, not by whether the finding sounds technical. A Probe finding is evidence for re-entry, never replacement decision authority. One material counterexample is not cancelled by multiple no-finding lanes.
 
 A still-running actor may correct invocation-local read-only argument/selector usage with unchanged target/contract/mechanism/assertion and no effect (or attributable settlement), preserving both attempts. This does not reopen a completed actor, relax assertions, substitute identity/state or authorize shared tooling changes.
 

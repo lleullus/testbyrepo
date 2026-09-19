@@ -28,6 +28,14 @@ NEW_CASE_IDS = {
     "S10-material-exclusion-basis",
     "S11-premature-depth-stop",
     "S12-clear-draft-no-investigation",
+    "S13-grounded-construction-adoption",
+    "S14-authority-versus-asset-preservation",
+    "S15-marker-only-false-success",
+    "S16-plan-preserves-thesis-decision",
+    "S17-refuted-construction-reentry",
+    "S18-probe-invalidates-upstream-premise",
+    "S19-local-implementation-discretion",
+    "S20-irreversible-effect-precondition",
 }
 
 
@@ -82,7 +90,7 @@ class ProductThesisSemanticFrontierContractTests(unittest.TestCase):
     def test_refinement_scenarios_remain_synthetic_and_not_run(self) -> None:
         scenarios = SCENARIOS.read_text(encoding="utf-8")
         self.assertIn("Status: NOT_RUN", scenarios)
-        for number in range(15, 27):
+        for number in range(15, 41):
             self.assertIn(f"### R{number:02d} —", scenarios)
         self.assertIn('not whether the agent printed "Breadth", "Depth"', scenarios)
         self.assertIn("Only scenario design is recorded here", scenarios)
@@ -115,6 +123,26 @@ class ProductThesisSemanticFrontierContractTests(unittest.TestCase):
                     metadata["prompt_sha256"],
                     hashlib.sha256(prompt.encode()).hexdigest(),
                 )
+                for fixture in metadata.get("fixture_files", []):
+                    fixture_path = Path(metadata["project_root"]) / fixture["path"]
+                    self.assertTrue(fixture_path.is_file())
+                    self.assertEqual(fixture["sha256"], hashlib.sha256(fixture_path.read_bytes()).hexdigest())
+
+    def test_fixture_paths_reject_traversal_and_symlinks(self) -> None:
+        run = load_run()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = root / "project"
+            project.mkdir()
+            with self.assertRaises(ValueError):
+                run.materialize_fixture_files(project, [{"path": "../escape.txt", "content": "x"}])
+
+            outside = root / "outside"
+            outside.mkdir()
+            link = project / "linked"
+            link.symlink_to(outside, target_is_directory=True)
+            with self.assertRaises(ValueError):
+                run.materialize_fixture_files(project, [{"path": "linked/escape.txt", "content": "x"}])
 
     def test_cases_cover_material_omission_and_non_overreach_controls(self) -> None:
         cases = {
@@ -131,6 +159,14 @@ class ProductThesisSemanticFrontierContractTests(unittest.TestCase):
             "S6-small-frontier-control",
             "S7-artifact-only-control",
             "S12-clear-draft-no-investigation",
+            "S13-grounded-construction-adoption",
+            "S14-authority-versus-asset-preservation",
+            "S15-marker-only-false-success",
+            "S16-plan-preserves-thesis-decision",
+            "S17-refuted-construction-reentry",
+            "S18-probe-invalidates-upstream-premise",
+            "S19-local-implementation-discretion",
+            "S20-irreversible-effect-precondition",
         ):
             with self.subTest(case_id=case_id):
                 self.assertIn(case_id, cases)

@@ -2,13 +2,13 @@
 
 ## Method unit
 
-Read the exact ready Scope and every bound Thesis directly. Preserve purpose, complete product loop, UI/behavior, failure/recovery, identity/truth and authoritative result. Apply approved Transition only when bound. Plan cannot strengthen/weaken Outcome or Acceptance, select future Scope or redefine product meaning.
+Read the exact ready Scope and every bound Thesis directly. Preserve purpose, complete product loop, UI/behavior, failure/recovery, identity/truth, authoritative result and any adopted construction decision that binds the current Scope. Apply approved Transition only when bound. Plan cannot strengthen/weaken Outcome or Acceptance, reselect a Thesis-bound construction decision, select future Scope or redefine product meaning.
 
 ## Code Grounding
 
 Classify each load-bearing premise:
 
-- EXISTING: exact definition and relevant use/readback paths, current primary observation and its limit. A source definition does not establish deployment or provider behavior.
+- EXISTING: exact bound product obligation/construction authority plus current definition and relevant use/readback paths, current primary observation and its limit. A Thesis construction decision is EXISTING authority for Plan even when implementation is still pending; a source definition still does not establish deployment or provider behavior.
 - PROPOSED: the new method, existing obligation/failure it serves, interfaces/state/effect transition and deciding check.
 - UNRESOLVED: missing fact, minimum discriminating observation, environment/authority, dependent mutation forbidden and next owner.
 
@@ -28,7 +28,7 @@ Keep identity/state intact through the required recovery/terminal result and min
 
 Record only the necessary originals and current evidence; outcome/preservation/non-goals; actual owners/interfaces and persistence/identity paths; dependencies/change structure; conditional first work; actual build/launcher/fixture/readback/reset/cleanup recipes; self-check; minimum real observation; and unresolved premises. Compare alternate methods only where a real choice changes the result. Do not add telemetry, fallback, recovery policy or architecture without a direct requirement or realistic required failure correction.
 
-Use the Assurance Baseline contract at `../../../iis-workflow/references/assurance.md`. Every Acceptance paragraph receives evidence; runtime/artifact identity, observation predicate and required lane set are explicit. A direct observation failure blocks closure independently of no-findings. Preserve the difference between project evidence and a model's explanation. A behavioral document change requires behavior-relevant evidence; an extension is not a runtime exemption.
+Use the Assurance Baseline contract at `../../../iis-workflow/references/assurance.md`. Every Acceptance paragraph receives evidence; runtime/artifact identity, observation predicate and required lane set are explicit. The observation method may operationalize the product truth but must not redefine an easy internal marker as that truth. A direct observation failure blocks closure independently of no-findings. Preserve the difference between project evidence and a model's explanation. A behavioral document change requires behavior-relevant evidence; an extension is not a runtime exemption.
 
 The frontier guides method construction but is not an exhaustive Prober assignment. Initial lane projections carry actual surface/safety/budget/originals, not Planner's preferred explanation. The open-frontier scout starts from the target and product contract.
 
@@ -48,7 +48,7 @@ Current authority plus the required readback, not an approval label, decides dep
 
 Bind predecessor finding, raw evidence, usable reproducer or exact limit, current target/effect settlement, regression guidance, directly evidenced same-assumption siblings and non-obvious execution handoff. Preserve old attempts; do not count old success as current evidence.
 
-Equivalent local names/private helpers and faithful realization of unchanged method are implementer discretion. A changed cause, owner/interface, persistence strategy, readback, target/effect or safety/settlement premise requires the planning owner to revise affected Plan/Baseline before dependent implementation. No independent method approval is inserted. Meaning/Transition/Scope decisions return to their original owners. Actor/model/effort continuity survives a fresh invocation; only current explicit user selection changes it.
+Equivalent local names/private helpers and faithful realization of unchanged method are implementer discretion. New evidence that refutes only a Plan-selected method/oracle/safety premise requires a Plan/Baseline revision. Evidence that refutes a Thesis-bound factual premise or adopted construction decision stops dependent work and returns to Product-Thesis; evidence that refutes approved Transition order/intermediate authority/invariant returns to Transition. A faithful implementation defect under unchanged originals returns to Implementer. Do not replace a Thesis-bound architecture because another option is simpler or more familiar. No independent method approval is inserted. Actor/model/effort continuity survives a fresh invocation; only current explicit user selection changes it.
 
 Do not remove failed required evidence after seeing results. Preserve revision reason and old attempts, and obtain fresh completion evidence for the new binding. No per-obligation LLM retention adjudication or new review lifecycle is introduced.
 

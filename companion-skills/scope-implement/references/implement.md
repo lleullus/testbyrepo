@@ -14,9 +14,9 @@ For each conditional method bundle execute only permitted_initial_work, observe 
 
 ## 3. Method boundary
 
-Implement the smallest coherent change satisfying Outcome, applicable Acceptance, failure/recovery and preservation. Equivalent naming/private helpers and faithful correction inside the same state/effect owner, interface, persistence, readback and safety premise are local discretion. Discovery of a fact, one regression or small diff is not alone material revision.
+Implement the smallest coherent change satisfying Outcome, applicable Acceptance, failure/recovery, preservation and bound Thesis construction decisions. Equivalent naming/private helpers and equivalent local structure are local discretion only when they preserve those decisions and the Plan method. Discovery of a fact, one regression or small diff is not alone material revision; conversely, small/private/technical does not make a decision implementation-local.
 
-If an admission-controlling premise changes or cannot be established, stop dependent work, record exact Plan anchor, prior premise, new observation and affected owner/interface/effect/readback, and return to the planning owner for Plan/Baseline revision. Do not edit Baseline yourself. Meaning/Transition/Scope changes route to their owners. Revision never silently changes implementing actor/model/effort or expands current authority.
+If an admission-controlling premise changes or cannot be established, stop dependent work and record the exact bound source/Plan anchor, prior premise, new observation and affected owner/interface/effect/readback. Return to Product-Thesis when the product success/preservation/identity decision or a Thesis-bound construction decision/premise must change; to Transition when intermediate order/authority/invariant must change; to Planner when only its method/oracle/safety premise changes. Do not edit Baseline yourself. Fallback/retry/cleanup/recovery must not decide a different user result. Revision never silently changes implementing actor/model/effort or expands current authority.
 
 ## 4. Implementation loop and self-check
 
