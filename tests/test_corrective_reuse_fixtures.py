@@ -33,12 +33,11 @@ class CorrectiveReuseFixtureTests(unittest.TestCase):
             ephemeral = root / "ephemeral"
             script = self.fx.write_ephemeral_reproducer(ephemeral)
             content = script.read_bytes()
-            original_digest = self.fx.sha256_file(script)
             shutil.rmtree(ephemeral)
             self.assertFalse(script.exists())
 
-            durable, digest = self.fx.preserve_reproducer(content, root / "evidence" / "cursor_repro.py")
-            self.assertEqual(digest, original_digest)
+            durable = self.fx.preserve_reproducer(content, root / "evidence" / "cursor_repro.py")
+            self.assertEqual(durable.read_bytes(), content)
 
             defective = root / "defective.json"
             corrected = root / "corrected.json"
@@ -55,8 +54,8 @@ class CorrectiveReuseFixtureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = self.fx.write_ephemeral_reproducer(root / "probe")
-            promoted, digest = self.fx.promote_regression(source, root / "project" / "tests")
-            self.assertEqual(digest, self.fx.sha256_file(source))
+            promoted = self.fx.promote_regression(source, root / "project" / "tests")
+            self.assertEqual(promoted.read_bytes(), source.read_bytes())
             defective = root / "bad.json"
             corrected = root / "good.json"
             self.fx.write_target(defective, defective=True)

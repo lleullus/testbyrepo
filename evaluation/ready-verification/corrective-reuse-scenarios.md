@@ -6,7 +6,7 @@ Evaluator-only frozen comparison frontier. No agents run here. Compare exact sou
 
 ## E1 — Reproducer survives settlement
 
-A temporary failing script disappears after Probe termination. The terminal handoff preserves exact runnable content or durable locator/digest, initial state, target/mechanism, wrong readback and cleanup; the implementer need not rediscover the trigger.
+A temporary failing script disappears after Probe termination. The terminal handoff preserves exact runnable content or durable executor-owned fixed locator, initial state, target/mechanism, wrong readback and cleanup; the implementer need not rediscover the trigger.
 
 ## E2 — Regression preserves the discriminator
 

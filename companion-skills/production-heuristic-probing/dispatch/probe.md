@@ -3,7 +3,7 @@
 ## Required
 
 - Exact current request and Project Root/target identity; current stage/action/stop/effect authority and user-selected model/effort.
-- For completion lanes: exact Scope, every bound Thesis/approved Transition path/digest, final source/execution binding, lane ID, assigned surfaces, minimum attempts and budget.
+- For completion lanes: exact admitted fixed Scope, every bound Thesis/approved Transition ref, final source/execution binding, lane ID, assigned surfaces, minimum attempts and budget.
 - For standalone investigation: exact requested boundary/target; canonical originals when applicable, otherwise explicitly None. No prior overall result or implementation Plan prerequisite.
 - Actual separate invocation/result destination, authorized namespaces, protected surfaces, isolation and cleanup/settlement owner.
 - Same-snapshot role/common assurance contracts. Scope-less standalone uses their evidence discipline without fabricating a completion binding.

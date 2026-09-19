@@ -1,75 +1,39 @@
-# Durable Snapshot Contract
+# Observatory Snapshot Contract
 
-## Purpose
+The Observatory snapshot is a durable read-only projection under `docs/planning/observatory/`. It does not become IIS authority and it never grants role admission.
 
-`iis-observatory snapshot` persists a human-readable and machine-readable **derived read model** of one repository's current IIS planning state:
+Current snapshot schema: `2.0`.
 
-```text
-docs/planning/observatory/
-├── PROJECT-OVERVIEW.md
-└── project-state.json
-```
+## Files
 
-These files are not Scope, Work Package, Increment, Spec, Ticket, verification, release, or runtime authority. Observatory never changes canonical IIS state while producing them.
+- `PROJECT-OVERVIEW.md`
+- `project-state.json`
 
-## Commands
+They are written as one projection pair. The JSON declares those filenames; the checker renders the Markdown again from stored JSON and compares the actual text directly.
 
-```bash
-iis-observatory snapshot <repo> --write
-iis-observatory snapshot <repo> --check
-```
+## Freshness
 
-`--check` is the default when neither mode flag is supplied.
+The checker returns:
 
-Freshness outcomes:
+- `CURRENT` — stored input originals equal the current observed input originals and the Markdown exactly matches the stored JSON projection.
+- `STALE` — planning/display inputs changed after generation.
+- `MISSING` — neither projection file exists.
+- `INCONSISTENT` — the pair is incomplete, malformed, based on an obsolete schema, or current planning structure is inconsistent.
 
-- `CURRENT` — stored source fingerprint equals the current source fingerprint and the Markdown checksum matches the JSON record.
-- `STALE` — canonical inputs, displayed Scope/legacy history, or displayed Adaptive provenance changed after generation.
-- `MISSING` — neither durable snapshot file exists.
-- `INCONSISTENT` — canonical planning is inconsistent, the pair is incomplete/corrupt, or the stored projection contract is invalid.
+## Direct input comparison
 
-Exit codes are `0`, `6`, `7`, and `3` respectively.
+Freshness is not Git-HEAD-based and does not use a checksum or aggregate fingerprint. Inputs include the current direct `SCOPE.md`, its work directory, available live projections of bound source paths, displayed direct/legacy history, and Adaptive provenance that is shown by the snapshot.
 
-## Source fingerprint
+For each input, the snapshot stores the repository-relative path, category, size, and actual input content. Freshness compares that stored content directly with the current observed content. Metadata such as mtime is not used as a hidden identity substitute.
 
-Freshness is content-based, not Git-HEAD-based. The fingerprint includes the current direct `SCOPE.md`, its bound Thesis sources, optional bound Transition Authority sources, the current work area (including `PLAN.md`), displayed Scope/legacy history files, and displayed Adaptive provenance. Adding, changing or removing a displayed history artifact invalidates the snapshot; historical files remain read-only projection inputs, not current product or runtime authority. `CURRENT` establishes projection freshness, not continued runtime correctness of a done Scope.
+A bound Product Thesis snapshot ref is not independently resolved by Observatory. Common host admission owns closure/currentness. The live file at the ref path may be used only as a display input and is labeled as such.
 
-It excludes `docs/planning/observatory/**`. Therefore committing a generated snapshot, or committing unrelated repository files, does not by itself make the snapshot stale.
+## Write behavior
 
-Git revision and dirty state may be recorded as generation metadata, but they do not decide freshness.
+When the stored pair is already `CURRENT`, `--write` returns `UNCHANGED` and does not rewrite the files. Otherwise it writes temporary files and replaces the Markdown then JSON, after which a full check must return `CURRENT`.
 
-## Write semantics
+A crash between replacements is detected because re-rendered Markdown no longer equals the stored JSON projection.
 
-A write is refused when current canonical planning is inconsistent. Otherwise Observatory builds Markdown and JSON from one in-memory state, writes temporary files, fsyncs them, and replaces the pair. The JSON records the SHA-256 of `PROJECT-OVERVIEW.md`; a mismatching pair is `INCONSISTENT`.
+## Boundaries
 
-When the current source fingerprint already matches the stored snapshot, `--write` returns `UNCHANGED` and does not rewrite either file or change their mtimes.
-
-## Progress visualization
-
-Snapshot progress uses typed measurements. In 0.2.1 the built-in measurement is the current Ticket delivery ratio:
-
-```text
-Current Ticket delivery: ██████░░░░ 3 / 5 (60.0%) — exact ratio
-```
-
-The bar is presentation only. Exact numerator, denominator, and percentage are always shown beside it. Fractional Unicode blocks are used for small non-zero values so a ratio such as 1.2% is not visually exaggerated into a full 10% cell.
-
-Observatory does not synthesize product-wide completion percentages, capability maturity, source coverage, or estimated ranges without an explicit future measurement provider/rubric.
-
-## Adaptive Planning boundary
-
-`docs/planning/adaptive/**` is provenance, not canonical current-state authority for Observatory. A recorded Adaptive Mandate may say `Status: active`, but the presence or content of that file does not establish current mandate activation or a Transition Baseline.
-
-Snapshot output may report that Adaptive companion provenance exists, its recorded revision/status, and its paths. It must also state that current Adaptive activation inference was not performed.
-
-Adaptive and Observatory directories are excluded from canonical artifact scanning. Legacy Scope/Increment/Spec/Ticket history remains visible but never becomes current direct Scope authority.
-
-## History
-
-`iis-observatory history` reads all `docs/planning` Git history but categorizes entries as:
-
-- canonical planning,
-- Adaptive provenance,
-- Observatory projection.
-
-This prevents a companion `Status: active` line from being presented as though it were a canonical Increment/Ticket transition.
+`CURRENT` establishes projection freshness only. It does not establish Product Thesis closure, Scope admission, runtime identity, execution success, completion evidence, or user authorization.

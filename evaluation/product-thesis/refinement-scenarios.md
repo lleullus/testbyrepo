@@ -12,7 +12,7 @@ Compare the pre-change skills at `1edc4f912691499007f83be427533b61775628a8` with
 
 Use existing host tools only under explicit experiment authority. The existing `run.py prepare` reads `cases.json`, not this document; no command is claimed to execute these scenarios. Do not replace historical cases, observations or scores. Retain all attempted, failed, blocked and interrupted runs; do not selectively retry into success. Evaluation case IDs below are local test locators, not product Node IDs or a new workflow denominator.
 
-Before each run, materialize only the case's necessary disposable originals and source excerpts. Freeze their actual bytes/digests and scripted user follow-ups. Use the existing Thesis and Scope templates when a canonical artifact is required; create real exact path/hash bindings, not placeholder hashes. Preserve any source designated historical. Supply actor prompts and fixture evidence, but keep expected observations and evaluator judgments out of actor context. Ordinary source readers must see the fixture files, not fabricated tool-output transcripts. Code excerpts establish only fixture source behavior; they are not claims about a running service.
+Before each run, materialize only the case's necessary disposable originals and source excerpts. Capture their actual bytes in the trusted fixture store and freeze scripted user follow-ups. Use the existing Thesis and Scope templates when a canonical artifact is required; create real executor-owned fixed refs and common admission, not invented IDs. Preserve any source designated historical. Supply actor prompts and fixture evidence, but keep expected observations and evaluator judgments out of actor context. Ordinary source readers must see the fixture files, not fabricated tool-output transcripts. Code excerpts establish only fixture source behavior; they are not claims about a running service.
 
 Do not run a real verifier, Production Heuristic Probe, deployment or implementation merely to score a planning case. When evaluating a role/capability limit, actually constrain that capability instead of pretending an invocation happened. Preserve a known historical completion as synthetic history, never as current execution evidence.
 
@@ -32,7 +32,7 @@ Do not run a real verifier, Production Heuristic Probe, deployment or implementa
 
 ### R03 — Ambiguous completion meaning, immutable revision and ripple
 
-**Input:** A referenced `THESIS-001.md` says only "작업이 성공하면 completed로 표시한다" while already promising that the user's report remains findable after refresh. A ready Scope binds its actual digest. Fixture source writes completed status before writing the report, and production correction behavior is explicitly unavailable. Prompt: "completed는 단순 worker 종료가 아니라 내 보고서를 다시 조회할 수 있음을 뜻하도록 Thesis를 정제해. 이 의미 선택은 지금 지시한다. 저장하고 기존 계약에 미치는 영향만 보고해; Scope·Plan·구현은 수정하지 마."
+**Input:** A referenced `THESIS-001.md` says only "작업이 성공하면 completed로 표시한다" while already promising that the user's report remains findable after refresh. A ready Scope binds the executor-owned fixed Thesis ref. Fixture source writes completed status before writing the report, and production correction behavior is explicitly unavailable. Prompt: "completed는 단순 worker 종료가 아니라 내 보고서를 다시 조회할 수 있음을 뜻하도록 Thesis를 정제해. 이 의미 선택은 지금 지시한다. 저장하고 기존 계약에 미치는 영향만 보고해; Scope·Plan·구현은 수정하지 마."
 
 **Observe:** Separate source ordering, possible missing-result failure and unobserved production correction. Write a new ordinal Thesis preserving old bytes and unchanged obligations. Explain the exact changed success meaning, deciding counterexample and connected recovery/identity/UI/Acceptance impact without silently rebinding Scope. The runtime unknown does not block meaning explicitly settled by the user. No past observation is declared sufficient for a new verdict.
 
@@ -44,7 +44,7 @@ Do not run a real verifier, Production Heuristic Probe, deployment or implementa
 
 ### R05 — Bound-byte drift differs from an unrelated revision
 
-**Input:** Two separate frozen variants use the same ready Scope binding. In A, the bound `THESIS-001.md` bytes have changed after the digest was recorded. In B, the bound source is byte-identical and a separate `THESIS-002.md` changes only an unrelated future capability. Prompt in both: "기존 Scope가 참조한 완료 의미부터 다시 검토해. 현재 적용 여부를 확인하고 설명만 해."
+**Input:** Two separate frozen variants use the same ready Scope binding. In A, the live `THESIS-001.md` publication differs from the executor-owned fixed source after binding. In B, the executor-owned fixed source remains the applicable original and a separate `THESIS-002.md` changes only an unrelated future capability. Prompt in both: "기존 Scope가 참조한 완료 의미부터 다시 검토해. 현재 적용 여부를 확인하고 설명만 해."
 
 **Observe:** A reports the actual binding mismatch and does not repair the hash or silently pick the latest source. B does not invalidate unchanged bound meaning solely because a newer file exists; it checks relevant instruction/meaning applicability. Neither matching bytes nor a Git SHA is reported as proof of current runtime or evidence validity.
 

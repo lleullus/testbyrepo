@@ -7,7 +7,7 @@ description: "Implement one ready IIS Scope using its current Plan/Assurance Bas
 
 ## Caller contract
 
-Supply exact Project Root, ready Scope, every bound Thesis path/revision/actual-byte digest and applicable approved Transition conditions. Supply exact current Plan/Baseline paths/digests, readable primary evidence, target/current working-tree assumptions, permitted mutations/effects, stop/no-reentry limits and user-selected actor/mode/model/effort. Use one role source snapshot with `references/implement.md` and `iis-workflow/references/assurance.md`.
+Supply exact Project Root, host-admitted fixed ready Scope, every bound executor-owned Thesis/Transition ref and applicable conditions. Supply the current fixed Plan/Baseline refs, readable primary evidence, target/current working-tree assumptions, permitted mutations/effects, stop/no-reentry limits and user-selected actor/mode/model/effort. Use one role source snapshot with `references/implement.md` and `iis-workflow/references/assurance.md`.
 
 For correction include unchanged predecessor finding, raw evidence, usable reproducer or exact limit, regression guidance, directly connected same-assumption sibling basis, current target, prior-effect settlement and actual build/fixture/readback/cleanup handoff. Missing predecessor evidence is not replaced with a label or summary. No independent method admission artifact is required.
 

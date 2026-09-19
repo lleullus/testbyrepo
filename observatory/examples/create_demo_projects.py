@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-import hashlib
+import json
+import uuid
 import shutil
 import sys
 
@@ -23,16 +24,18 @@ def direct_scope(repo: Path, slug: str, status: str, outcome: str, *, remaining:
 {f'- {remaining}' if remaining else ''}
 """,
     )
-    digest = hashlib.sha256(thesis.read_bytes()).hexdigest()
+    source_ref = {"snapshot": "snap-" + uuid.uuid4().hex, "path": thesis.relative_to(repo).as_posix()}
     write(
         repo / "docs/planning/work" / slug / "SCOPE.md",
         f"""# {slug.replace('-', ' ').title()}
-Schema: iis-scope/v1
+Schema: iis-scope/v2
 Project-Root: {repo}
 Status: {status}
 
 ## Product Authority
-- {thesis} sha256:{digest}
+```iis-sources
+{json.dumps([source_ref], indent=2)}
+```
 
 ## Outcome
 {outcome}

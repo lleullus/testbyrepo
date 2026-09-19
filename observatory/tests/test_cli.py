@@ -22,7 +22,7 @@ class CliTests(unittest.TestCase):
                 code = main(["overview", str(root), "--format", "json"])
             self.assertEqual(code, 0)
             payload = json.loads(output.getvalue())
-            self.assertEqual(payload["schema_version"], "2.0")
+            self.assertEqual(payload["schema_version"], "3.0")
             self.assertEqual(payload["projects"][0]["authority_mode"], "direct-scope")
             self.assertEqual(payload["projects"][0]["next_work"]["kind"], "none")
 
@@ -44,7 +44,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(code, 4)
             self.assertIn("NO IIS", output.getvalue())
 
-    def test_fail_on_inconsistent_direct_source(self) -> None:
+    def test_live_thesis_change_is_not_misreported_as_fixed_ref_failure(self) -> None:
         with TemporaryDirectory() as temp:
             fixture = DirectScopeFixtures(Path(temp))
             fixture.scope()
@@ -52,8 +52,8 @@ class CliTests(unittest.TestCase):
             output = StringIO()
             with redirect_stdout(output):
                 code = main(["scan", str(fixture.root), "--fail-on-inconsistent"])
-            self.assertEqual(code, 3)
-            self.assertIn("IIS513", output.getvalue())
+            self.assertEqual(code, 0)
+            self.assertNotIn("IIS513", output.getvalue())
 
     def test_duplicate_active_scope_is_doctor_error(self) -> None:
         with TemporaryDirectory() as temp:

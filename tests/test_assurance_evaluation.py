@@ -1,5 +1,4 @@
 import copy
-import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -20,7 +19,7 @@ class CausalScoreTests(unittest.TestCase):
         self.candidate = self.ref("candidate", {"source": "fixture-candidate"})
         self.conditions = self.ref("conditions", {"model": "not-invoked-unit-fixture", "budget": 1})
         self.inputs = self.ref("inputs", {"fixture": "paired-entry"})
-        self.manifest = {"schema": "iis-assurance-experiment/v1", "experiment_id": "exp-1", "repetitions": 1,
+        self.manifest = {"schema": "iis-assurance-experiment/v2", "experiment_id": "exp-1", "repetitions": 1,
                          "variants": {"candidate": {"candidate": [self.candidate], "conditions": [self.conditions]}},
                          "cases": [{"id": "bad", "expected": "DEFECT", "defect_id": "wrong-entry", "inputs": [self.inputs], "oracle": {"path": ["value"], "equals": "old"}},
                                    {"id": "good", "expected": "NORMAL", "defect_id": None, "inputs": [self.inputs], "oracle": {"path": ["value"], "equals": "new"}}],
@@ -31,7 +30,7 @@ class CausalScoreTests(unittest.TestCase):
         path = self.root / (name + ".json")
         raw = json.dumps(value).encode()
         path.write_bytes(raw)
-        return {"path": str(path), "sha256": hashlib.sha256(raw).hexdigest()}
+        return {"path": str(path)}
 
     def record(self, case, value):
         run = case + "-run"

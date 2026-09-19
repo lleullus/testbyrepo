@@ -19,9 +19,16 @@ jobs:
         run: |
           set -o pipefail
           python3 -B -m unittest discover -s tests -v 2>&1 | tee unittest.log
-      - name: Preserve unittest log
+      - name: Run Observatory unittest suite
+        shell: bash
+        run: |
+          set -o pipefail
+          PYTHONPATH=observatory/src python3 -B -m unittest discover -s observatory/tests -v 2>&1 | tee observatory-unittest.log
+      - name: Preserve unittest logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: iis-unittest-log
-          path: unittest.log
+          path: |
+            unittest.log
+            observatory-unittest.log

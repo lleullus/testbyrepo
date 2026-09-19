@@ -2,7 +2,7 @@
 
 ## Purpose and ownership
 
-Use this procedure inside Product-Thesis work, before or while writing meaning and when revisiting it. The current Product-Thesis owner remains the semantic decision maker under current user authority. There is no Exploration role, mandatory investigation phase, graph, controller or additional approval boundary. Main retains request ownership and downstream routing under `iis-workflow/SKILL.md`.
+Use this procedure inside Product-Thesis work, before or while writing meaning and when revisiting it. The current Product-Thesis owner remains the semantic decision maker under current user authority. There is no Exploration product owner, semantic approval board or general controller. On an enforcement-capable host, however, the Product Thesis lifecycle requires a recorded original-input frontier review and an exact-candidate counterexample review before successful closure. Main retains request ownership and downstream routing under `iis-workflow/SKILL.md`.
 
 The design concern is that repeated local additions can lose their deciding evidence, unresolved siblings and connected consequences. This is a failure mode to discriminate, not a measured claim about every IIS user. Iteration itself is normal. The useful result is an attributable meaning decision or an exact unresolved boundary, not more questions, nodes, investigations or Thesis revisions.
 
@@ -42,7 +42,7 @@ Do not infer either axis from the other: depth on one item provides no breadth d
 - **Depth entry:** enter Depth only when a frontier item is unresolved, alternative answers can change the product result/current Scope, and a specific evidence, counterexample or causal relation can discriminate it.
 - **Depth stop:** stop when the needed fact is established; one product/construction decision is adopted under current authority; the distinction becomes a genuine user-owned choice; an exact evidence/authority limit is preserved together with the decision it leaves incomplete; or the remaining difference cannot change the product decision and is safely left as a Plan method choice. Merely saying that another owner handles technical work is not a valid stopping basis for a decision-bearing branch.
 
-The phrases "that is a technical problem", "Plan can decide it", "Probe will catch it later" and "the current implementation does not have that feature" are not, by themselves, valid exclusion reasons. Do not turn this calibration into a checklist, fixed frontier size, questionnaire, separate artifact or universal requirement to investigate the repository. A simple artifact-only or explicitly settled request can close with a very small frontier.
+The phrases "that is a technical problem", "Plan can decide it", "Probe will catch it later" and "the current implementation does not have that feature" are not, by themselves, valid exclusion reasons. Do not turn this calibration into a fixed frontier size, questionnaire or universal repository audit. The executor may retain bounded work-state records needed to prevent skipped Thesis work; those records are not a second product artifact. A simple artifact-only or explicitly settled request can close with a very small frontier.
 
 ## System grounding and construction decisions
 
@@ -107,7 +107,7 @@ Several consequences can coexist, but do not create duplicated issues or repairs
 
 Before adopting new meaning, identify the authoritative reason, the counterexample it must close and the existing promise it must preserve. Resolve determinable choices without an extra ceremony. Keep material unresolved product choices explicit. Do not add a technical cause, optional means or every review concern to the required product outcomes.
 
-Preserve referenced Thesis revisions byte-for-byte. A changed binding contract receives a new `THESIS-NNN.md` ordinal, preserving unaffected decisions and updating only affected consequences. Use the behavioral contract-delta test for semantic meaning, and also create a new ordinal when required means change, a downstream-binding adopted construction decision changes, or a load-bearing factual premise is refuted such that the faithful downstream Plan must change. Additional evidence/locators, an implementation defect under an unchanged decision, or wording cleanup that leaves meaning and binding construction unchanged does not require a new revision. In ordinary rationale distinguish semantic contract delta, required-means delta, adopted-construction delta and evidence/rationale-only update without creating a new schema. Never repair stale bindings by overwriting an old source or silently updating hashes to the latest file. Main must assess the applicability of the new source and any affected Scope through existing authority.
+Preserve referenced Thesis revisions byte-for-byte. A changed binding contract receives a new `THESIS-NNN.md` ordinal, preserving unaffected decisions and updating only affected consequences. Use the behavioral contract-delta test for semantic meaning, and also create a new ordinal when required means change, a downstream-binding adopted construction decision changes, or a load-bearing factual premise is refuted such that the faithful downstream Plan must change. Additional evidence/locators, an implementation defect under an unchanged decision, or wording cleanup that leaves meaning and binding construction unchanged does not require a new revision. In ordinary rationale distinguish semantic contract delta, required-means delta, adopted-construction delta and evidence/rationale-only update without creating a new schema. Never repair stale bindings by overwriting an old source or silently rebinding a fixed reference to different bytes. Main must assess the applicability of the new source and any affected Scope through existing authority.
 
 When Probe or runtime evidence falsifies an existing Thesis promise, factual premise or adopted construction decision, identify exactly what was falsified and do not overwrite the old Thesis. Revise only the affected decision in a new ordinal. If product meaning remains the same while construction changes, say so explicitly. Reassess affected Scope/Plan under the new exact source binding and reacquire target evidence; old success evidence is not inherited by the new target.
 
@@ -117,18 +117,18 @@ An impact statement identifies affected acceptance and dependencies; it does not
 
 ## Currentness and resuming a question
 
-Reopen an exact source path, section and revision/digest, not a remembered alias or a latest-file guess. Distinguish these questions only where they are relevant to the current decision:
+Reopen an exact fixed-source reference, section and Thesis ordinal, not a remembered alias or a latest-file guess. Distinguish these questions only where they are relevant to the current decision:
 
 | Dimension | Check |
 | --- | --- |
 | Source identity | Which exact original revision and actual bytes are being read? |
-| Scope binding | If an applicable Scope exists, do its bound path/hash and the source bytes agree? |
+| Scope binding | If an applicable Scope exists, does it reference the intended executor-owned fixed source and current closure? |
 | Repository implementation | Which relevant source, configuration or build changed? |
 | Runtime identity | When runtime behavior is load-bearing, which artifact/service/config actually ran? |
 | Evidence applicability | Do the observation's causal dependencies, mechanism, external premises, window and settlement still apply? |
 | Semantic applicability | Do current instructions and adopted meaning still require the same result? |
 
-A matching source hash does not establish the other dimensions. A newer unrelated Thesis does not automatically invalidate older bound meaning. A known bound-byte mismatch cannot be ignored merely because the text seems equivalent. A repository SHA alone proves neither runtime identity nor evidence validity.
+A stored source reference does not establish runtime identity, evidence applicability or semantic currentness. A newer unrelated Thesis does not automatically invalidate older bound meaning. If a live publication differs from the executor-owned fixed source, the conflict must be handled explicitly rather than rebound by convenience. A native Git commit ID remains repository provenance, not runtime evidence.
 
 Do not require nonexistent Scopes, runtime access or six mandatory check rows for a pure product-definition question. Recheck only facts whose change can alter the current decision, and explicitly preserve unknowns that matter. Missing deployment evidence may block a runtime claim without blocking clear requested product meaning.
 
@@ -140,9 +140,9 @@ Keep adopted meaning and material open product choices in the Thesis. Where a la
 
 Do not put transient evidence uncertainty into `Open Product Meaning` as though it were an undecided policy. Preserve evidence limits alongside the relevant claim or in the result. If a durable handoff is required, ensure the cited records are actually accessible under existing retention authority; a conversation-only reference is not durable just because it has an ID. Report that limit rather than inventing a new store.
 
-Return the actual source or unchanged-source reuse, settled meaning, deciding evidence/rationale, exact material unknowns and affected existing owner only as needed. For `CALIBRATED`, new-revision or unchanged-source-reuse results, concise ordinary prose must make recoverable: the focus decision; the material semantic frontier selected and why; the deciding counterexample/discriminator; the settled or reused meaning; any material user-owned choice or evidence limit; the basis for excluding any load-bearing-looking boundary; and whether the source was reused or a new ordinal was required. A trivial case can satisfy this in a few sentences; no fixed headings or second artifact are required.
+Return the actual source or unchanged-source reuse, settled meaning, deciding evidence/rationale, exact material unknowns and affected existing owner only as needed. For lifecycle-closed, new-revision or unchanged-source-reuse results, concise ordinary prose must make recoverable: the focus decision; the material semantic frontier selected and why; the deciding counterexample/discriminator; the settled or reused meaning; any material user-owned choice or evidence limit; the basis for excluding any load-bearing-looking boundary; and whether the source was reused or a new ordinal was required. A trivial case can satisfy this in a few sentences; no fixed headings or second artifact are required.
 
-`CALIBRATED` requires the current focus/core utility and success truth meaning to be settled, every material frontier item to have a grounded disposition, no unresolved current product choice, and no concrete material counterexample that still passes while the adopted meaning is false. It is a product-meaning result, not exploration coverage, runtime success or delivery completion. `USER_INPUT_REQUIRED` is for genuinely unresolved current product choices that pass the question gate, not generic lack of tools or runtime evidence. A decisive evidence/capability block remains an ordinary incomplete result. Main applies the current request's permitted next step; this procedure neither starts a new stage nor forces a broader authorized request to stop merely because one question ended.
+Lifecycle `CALIBRATED` requires the current focus/core utility and success truth meaning to be settled, every known material frontier item to have a grounded disposition, the required host-recorded reviews to be complete, no unresolved current product choice, and no unresolved material counterexample finding. It is a product-meaning closure result, not runtime success or delivery completion. Genuine user choices and decisive evidence limits end in explicit non-success lifecycle states rather than a document label. Main applies the current request's permitted next step; this procedure neither starts a new stage nor forces a broader authorized request to stop merely because one question ended.
 
 ## Worked discrimination: asynchronous reports
 

@@ -354,7 +354,7 @@ def _render_direct_scope_state(state: ProjectState, *, lang: str, color: bool) -
             [
                 "Bound Thesis:",
                 *[
-                    f"- {item['path']} sha256:{item['sha256']} ({item.get('current', 'unknown')})"
+                    f"- {item.get('snapshot')}:{item.get('path')} (admission required)"
                     for item in state.scope_authority
                 ],
             ]
@@ -362,7 +362,7 @@ def _render_direct_scope_state(state: ProjectState, *, lang: str, color: bool) -
         if state.transition_authority:
             lines.append("Transition Authority:")
             lines.extend(
-                f"- {item['path']} sha256:{item['sha256']} ({item.get('current', 'unknown')})"
+                f"- {item.get('snapshot')}:{item.get('path')} (admission required)"
                 for item in state.transition_authority
             )
         lines.append("Outcome:")

@@ -42,15 +42,15 @@ class SnapshotTests(unittest.TestCase):
             self.assertEqual(checked.freshness, SnapshotFreshness.STALE)
             self.assertTrue(checked.changes)
 
-    def test_changed_bound_thesis_is_inconsistent_not_latest_source(self) -> None:
+    def test_changed_live_thesis_projection_makes_snapshot_stale(self) -> None:
         with TemporaryDirectory() as temp:
             fixture = DirectScopeFixtures(Path(temp))
             fixture.scope()
             write_snapshot(fixture.root)
             fixture.thesis.write_text("# Changed Thesis\n", encoding="utf-8")
             checked = check_snapshot(fixture.root)
-            self.assertEqual(checked.freshness, SnapshotFreshness.INCONSISTENT)
-            self.assertIn("IIS513", checked.reason + " " + " ".join(checked.changes))
+            self.assertEqual(checked.freshness, SnapshotFreshness.STALE)
+            self.assertTrue(any("THESIS-001.md" in change for change in checked.changes))
 
     def test_history_add_edit_delete_refreshes_stored_projection(self) -> None:
         for kind in ("scope", "legacy"):

@@ -27,7 +27,7 @@ bash /home/user01/.codex/skills/repo-snapshot/repo-snapshot.sh [SOURCE_PATH] [--
 - 저장소: `https://github.com/lleullus/testbyrepo`
 - `main`: placeholder만 유지
 - 레포별 브랜치: `snapshot/<repo-slug>`
-- 같은 slug 재실행 시 해당 브랜치를 최신 스냅샷으로 갱신 (`--force`)
+- 같은 slug 재실행 시 fast-forward일 때만 해당 브랜치를 갱신하며, 분기/재작성 상황은 충돌로 반환
 - 검토에는 브랜치 URL보다 **commit SHA URL** 사용
 
 ## Auth
@@ -44,24 +44,24 @@ bash /home/user01/.codex/skills/repo-snapshot/repo-snapshot.sh [SOURCE_PATH] [--
 
 ## Behavior
 
-1. 원본 레포를 `/tmp/oracle-snapshots/<slug>/repo`에 full 복사 (`.git` 포함, 제외 없음)
+1. 원본 레포를 실행별 `/tmp/oracle-snapshots/<slug>.run.*/repo`에 full 복사 (`.git` 포함, 제외 없음)
 2. uncommitted/untracked 변경이 있으면 복사본에만 임시 커밋
 3. 복사본 `origin`을 snapshot 원격으로 교체
 4. 원본에는 절대 push하지 않음
 5. 원격에 `main`이 없으면 placeholder README로 `main` 생성
-6. `snapshot/<slug>`에 push
+6. `snapshot/<slug>`에 force 없이 push하며 non-fast-forward는 거부
 7. 메타데이터 기록
 
 ## Local Layout
 
 ```text
-/tmp/oracle-snapshots/<slug>/
+/tmp/oracle-snapshots/<slug>.run.<unique>/
 ├── repo/
 ├── snapshot.json
 └── oracle-prompt.md
 ```
 
-`/tmp/oracle-snapshots`는 기존 호출자 호환을 위해 유지하는 역사적 경로명이며,
+`/tmp/oracle-snapshots` 상위 경로는 기존 호출자 호환을 위해 유지하되 각 실행은 독립 디렉터리를 사용하며,
 Oracle 의존성을 뜻하지 않는다.
 
 ## Output
@@ -92,3 +92,6 @@ Oracle 의존성을 뜻하지 않는다.
 - Oracle 호출은 사용자가 요청하기 전까지 하지 않는다
 - 원본 레포에서 `git push`하지 않는다
 - 토큰 파일 내용을 출력하거나 채팅에 반복하지 않는다
+
+
+이 도구는 IIS 내부 fixed artifact store가 아니다. Product Thesis/Scope/Assurance의 executor-owned snapshot 확보에는 `iis_artifacts`를 사용하며, 별도 Git snapshot 생성은 사용자가 명시적으로 요청한 경우에만 이 스킬이 수행한다.

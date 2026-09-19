@@ -50,7 +50,7 @@ The Project Root is the product/planning root. The Repository Root is the Git ro
 
 A dirty tree is not a failure. Record relevant changed paths because they are part of the current investigated target. The investigation artifact itself must not be counted as a pre-existing dirty path.
 
-Do not create a repository-wide evidence digest, retained target database, or persistent investigation session ID.
+Do not create a repository-wide checksum/fingerprint layer or a separate persistent investigation controller. Use executor-owned fixed refs only when a durable handoff actually needs one.
 
 ## 3. Bounded reconnaissance
 
@@ -138,9 +138,9 @@ Select operational/history sources only when they could change the current answe
 Every load-bearing fact references one or more named anchors. Use compact anchor records:
 
 ```text
-A1 | SOURCE | <project/repo-relative path> | <line/symbol> | <sha256 or Git identity> | ANCHOR_LOCAL
+A1 | SOURCE | <project/repo-relative path> | <line/symbol> | <fixed snapshot ref or native Git identity> | ANCHOR_LOCAL
 A2 | SEARCH | <bounded search universe> | <query/method> | <Git identity> | SEARCH_UNIVERSE
-A3 | TEST | <path::test> | <assertion/observation> | <sha256 or Git identity> | ANCHOR_LOCAL
+A3 | TEST | <path::test> | <assertion/observation> | <fixed snapshot ref or native Git identity> | ANCHOR_LOCAL
 A4 | RUNTIME | <read-only command/inspection> | <environment + readback> | <target identity> | RUNTIME_STATE
 A5 | DOC | <path/section or external source> | <version/retrieval> | <identity> | EXTERNAL_VERSION
 ```

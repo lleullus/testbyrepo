@@ -7,7 +7,7 @@ description: "독립적인 실제 경계 공격으로 최소 반례를 조사한
 
 ## Caller contract
 
-For completion lanes supply exact Project Root, Scope and all bound Thesis/approved Transition paths/digests; stable source/artifact/runtime/mechanism binding; lane ID and assigned actual surfaces, budget/minimum attempts; current action/stop authority, protected surfaces, mutable namespaces and settlement/cleanup owner; selected model/effort; actual independent invocation/result destination. Read `../../../iis-workflow/references/assurance.md` and `dispatch/probe.md` from the same source snapshot before dispatch.
+For completion lanes supply exact Project Root, admitted fixed Scope and all bound Thesis/approved Transition refs; stable source/artifact/runtime/mechanism binding; lane ID and assigned actual surfaces, budget/minimum attempts; current action/stop authority, protected surfaces, mutable namespaces and settlement/cleanup owner; selected model/effort; actual independent invocation/result destination. Read `../../../iis-workflow/references/assurance.md` and `dispatch/probe.md` from the same source snapshot before dispatch.
 
 Standalone investigation uses the exact requested boundary and target. Scope/Thesis may be None only when no canonical Scope is applicable; it returns investigation evidence only, never completion eligibility. No prior whole-Scope verdict or implementation Plan is a prerequisite. Do not invent missing product promises.
 
@@ -39,7 +39,7 @@ Isolate queue/cache/DB/tenant/browser/session/cleanup resources before concurren
 
 ## Findings, reproducer and settlement
 
-A finding records existing Scope/Thesis anchor (or standalone requested promise), reachable trigger/initial identity, actual wrong readback, raw evidence, mechanism/target attribution, examined sibling boundary and narrow next owner. Preserve exact runnable command/script bytes or durable locator/digest, prerequisites and cleanup. An expiring /tmp path or prose label is not usable correction evidence. State regression promotion guidance without editing the stable project harness.
+A finding records existing Scope/Thesis anchor (or standalone requested promise), reachable trigger/initial identity, actual wrong readback, raw evidence, mechanism/target attribution, examined sibling boundary and narrow next owner. Preserve exact runnable command/script bytes or durable executor-owned fixed locator, prerequisites and cleanup. An expiring /tmp path or prose label is not usable correction evidence. State regression promotion guidance without editing the stable project harness.
 
 Classify MATERIAL, OUT_OF_SCOPE or UNKNOWN against existing promises. Out-of-scope defects are reported separately unless they invalidate a current load-bearing identity/premise. Ambiguous materiality is an evidence gap, not a reason to silently dismiss or repair. A finding label without concrete trace does not authorize correction.
 

@@ -17,8 +17,8 @@ Usage: repo-snapshot.sh [SOURCE_PATH] [--task TEXT] [--slug NAME]
 
 Creates a full local copy of a git repo (including .git and working tree),
 pushes it to snapshot/<slug> on the snapshot remote, and writes:
-  /tmp/oracle-snapshots/<slug>/snapshot.json
-  /tmp/oracle-snapshots/<slug>/oracle-prompt.md
+  /tmp/oracle-snapshots/<slug>.run.*/snapshot.json
+  /tmp/oracle-snapshots/<slug>.run.*/oracle-prompt.md
 EOF
 }
 
@@ -107,11 +107,11 @@ if [[ -z "$SLUG" ]]; then
 fi
 
 BRANCH="snapshot/${SLUG}"
-WORKDIR="${BASE_DIR}/${SLUG}"
+mkdir -p "$BASE_DIR"
+WORKDIR="$(mktemp -d "${BASE_DIR}/${SLUG}.run.XXXXXX")"
 REPO_DIR="${WORKDIR}/repo"
 AUTH_REMOTE="https://x-access-token:${TOKEN}@github.com/lleullus/testbyrepo.git"
 
-rm -rf "$WORKDIR"
 mkdir -p "$REPO_DIR"
 rsync -a "$SRC_ROOT"/ "$REPO_DIR"/
 
@@ -159,7 +159,10 @@ ensure_main_placeholder() {
 
 ensure_main_placeholder
 
-GIT_TERMINAL_PROMPT=0 git -C "$REPO_DIR" push --force "$AUTH_REMOTE" "HEAD:refs/heads/${BRANCH}"
+if ! GIT_TERMINAL_PROMPT=0 git -C "$REPO_DIR" push "$AUTH_REMOTE" "HEAD:refs/heads/${BRANCH}"; then
+  echo "snapshot branch update is not a fast-forward; refusing to rewrite ${BRANCH}" >&2
+  exit 4
+fi
 
 COMMIT_URL="${REMOTE_WEB}/commit/${COMMIT_SHA}"
 BRANCH_URL="${REMOTE_WEB}/tree/${BRANCH}"

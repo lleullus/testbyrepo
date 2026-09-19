@@ -2,8 +2,8 @@
 
 ## Required
 
-- Exact Project Root and ready Scope with actual-byte digest.
-- Every bound Thesis original/revision/digest and applicable approved Transition conditions, or None for absent Transition.
+- Exact Project Root and host-admitted fixed ready Scope.
+- Every bound executor-owned Thesis original reference and applicable approved Transition conditions, or None for absent Transition.
 - Exact readable investigation and deciding evidence with current applicability, or None supplied.
 - Current repository/target identity, predecessor finding/reproducer/settlement when correcting.
 - Current user planning/scratch/stop authority and selected mode/model/effort.

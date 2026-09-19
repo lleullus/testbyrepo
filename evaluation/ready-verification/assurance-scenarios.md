@@ -30,7 +30,7 @@ Experiment schema `iis-assurance-experiment/v1`:
 - cases with unique id, expected DEFECT/NORMAL/LIMIT, defect_id for DEFECT, exact inputs refs and evaluator oracle `{path: [JSON keys/indices], equals: expected readback}`. Include at least one defect and normal control.
 - limits: min_detection in [0,1], max_false_completion, max_false_block, max_incomplete. Declare actual chosen values before running; no defaults silently select policy.
 
-A file ref is an absolute regular-file `{path,sha256}`. Conditions bytes preserve selected models/effort/budgets, fixture/tool source and observation boundaries. Immutable native exports must remain accessible. A hash/JSON field alone does not prove evidence authenticity; the experiment owner checks external acquisition/provenance. Arbitrary natural-language causal judgments require offline analysis, not automatic interpretation by this finite JSON oracle.
+Current Assurance refs are executor-owned `{snapshot,path}` values. Conditions preserve selected models/effort/budgets, fixture/tool source and observation boundaries. Immutable native exports must remain accessible. A copied ref/JSON field alone does not prove a new invocation or evidence provenance; the experiment owner checks actual acquisition. Arbitrary natural-language causal judgments require offline analysis, not automatic interpretation by this finite JSON oracle.
 
 Each record has experiment_id, variant, case_id, repetition, unique run_id; exact candidate/conditions/inputs refs; events refs; state COMPLETE/BLOCKED/FAILED/CANCELLED/TIMEOUT/SKIPPED; and nonnegative cost tokens/tool_calls/wall_seconds/correction_seconds. Non-complete records include reason, cannot claim EVIDENCE_COMPLETE, remain in the denominator and retain cost.
 

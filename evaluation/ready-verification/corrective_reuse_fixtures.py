@@ -7,20 +7,11 @@ IIS agents or manufacture semantic verdicts.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 import json
 from pathlib import Path
 import subprocess
 import sys
 from typing import Iterable
-
-
-def sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def sha256_file(path: Path) -> str:
-    return sha256_bytes(path.read_bytes())
 
 
 REPRODUCER_SOURCE = b'''from __future__ import annotations
@@ -48,10 +39,12 @@ def write_ephemeral_reproducer(directory: Path) -> Path:
     return path
 
 
-def preserve_reproducer(content: bytes, destination: Path) -> tuple[Path, str]:
+def preserve_reproducer(content: bytes, destination: Path) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(content)
-    return destination, sha256_file(destination)
+    if destination.read_bytes() != content:
+        raise ValueError("preserved reproducer differs from supplied bytes")
+    return destination
 
 
 def run_reproducer(script: Path, target: Path) -> subprocess.CompletedProcess[str]:
@@ -63,11 +56,14 @@ def run_reproducer(script: Path, target: Path) -> subprocess.CompletedProcess[st
     )
 
 
-def promote_regression(reproducer: Path, project_tests: Path) -> tuple[Path, str]:
+def promote_regression(reproducer: Path, project_tests: Path) -> Path:
     promoted = project_tests / "test_cursor_overrun_regression.py"
     promoted.parent.mkdir(parents=True, exist_ok=True)
-    promoted.write_bytes(reproducer.read_bytes())
-    return promoted, sha256_file(promoted)
+    original = reproducer.read_bytes()
+    promoted.write_bytes(original)
+    if promoted.read_bytes() != original:
+        raise ValueError("promoted regression differs from reproducer bytes")
+    return promoted
 
 
 @dataclass(frozen=True)

@@ -1,13 +1,14 @@
 """Executable, disposable calibration products. Oracle data stays outside them."""
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 import sys
 from textwrap import dedent
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+from host_fixture import ArtifactStore, admit_fixture_scope, close_fixture_thesis, source_block
 
 R5_CASE_VARIANTS = {
     'minimal-input-conforming-core': ('minimal-input-frontier', 'conforming-core'),
@@ -443,7 +444,7 @@ def _contracts(family: str, app: Path, endpoint: str, kind: str | None) -> list[
                       'trigger': f'Run python3 {app} run legacy.', 'readback': readback})
     return flows
 
-def _documents(project: Path, flows: list[dict[str, str]], *, app: Path, engine: Path, family: str, variant: str, endpoint: str, external: bool) -> tuple[Path, Path]:
+def _documents(project: Path, store: ArtifactStore, flows: list[dict[str, str]], *, app: Path, engine: Path, family: str, variant: str, endpoint: str, external: bool) -> tuple[Path, Path, dict]:
     work_slug = "runtime-boundary"
     thesis_path = _put(project, "docs/planning/product-thesis/runtime-boundary/THESIS-001.md", "")
     operator = family == "operator-assisted"
@@ -487,7 +488,7 @@ The ordinary entrypoint and its authoritative readback establish success, contra
 None
 """
     thesis_path.write_text(thesis, encoding="utf-8")
-    thesis_sha = hashlib.sha256(thesis_path.read_bytes()).hexdigest()
+    thesis_ref = close_fixture_thesis(store, project, thesis_path)
     acceptance = []
     for ordinal, flow in enumerate(flows, 1):
         trigger = flow["trigger"]
@@ -508,13 +509,13 @@ None
         )
     scope_path = _put(project, f"docs/planning/work/{work_slug}/SCOPE.md", f"""# Runtime boundary Scope
 
-Schema: iis-scope/v1
+Schema: iis-scope/v2
 Project-Root: {project}
 Status: ready
 
 ## Product Authority
 
-- {thesis_path} sha256:{thesis_sha}
+{source_block(thesis_ref)}
 
 ## Outcome
 
@@ -534,7 +535,8 @@ The current product must provide: {' '.join(flow['outcome'] for flow in flows)}.
                 if family == "unknown-preservation" else
                 "Previous delivery obligation: legacy input returns stable-value. A later change must preserve that current behavior; prior completion alone does not prove preservation.")
         _put(project, "investigation.txt", note + "\n")
-    return thesis_path, scope_path
+    admission = admit_fixture_scope(store, scope_path, "scope-plan")
+    return thesis_path, scope_path, admission
 
 
 def materialize(case: dict, project_root: Path, support_root: Path, *, port: int) -> dict:
@@ -546,6 +548,8 @@ def materialize(case: dict, project_root: Path, support_root: Path, *, port: int
         raise ValueError('refusing to overwrite an existing product')
     project.mkdir(parents=True, mode=0o700, exist_ok=True)
     support.mkdir(parents=True, mode=0o700, exist_ok=True)
+    store_root = project.parent / 'host-store'
+    store = ArtifactStore(store_root, 'ready-verification')
     family, variant = case['family'], case.get('variant')
     registered = R5_CASE_VARIANTS.get(case.get('case_id'))
     if registered:
@@ -588,7 +592,7 @@ from engine import ordinary
 assert isinstance(ordinary('run', 'sample')['value'], str)
 ''')
     flows = _contracts(family, app, endpoint, kind)
-    thesis, scope = _documents(project, flows, app=app, engine=engine, family=family, variant=variant, endpoint=endpoint, external=kind is not None)
+    thesis, scope, admission = _documents(project, store, flows, app=app, engine=engine, family=family, variant=variant, endpoint=endpoint, external=kind is not None)
     service_argv = reset_argv = observer_argv = None
     product_state = authority_state = request_log = implementation_report = None
     if family == 'finding-retention':
@@ -648,6 +652,7 @@ assert isinstance(ordinary('run', 'sample')['value'], str)
         additional_trigger_argv = []
         readback_argv = [sys.executable, str(app), 'readback', 'all']
     metadata = {'project_root': str(project), 'scope_path': str(scope), 'thesis_paths': [str(thesis)],
+                'store_root': str(store_root), 'project_id': 'ready-verification', 'admission': admission,
                 'target_paths': [str(app), str(engine)], 'allowed_output_paths': allowed_output_paths,
                 'trigger_argv': trigger_argv, 'readback_argv': readback_argv, 'additional_trigger_argv': additional_trigger_argv,
                 'observer_argv': observer_argv, 'service_argv': service_argv, 'reset_argv': reset_argv,

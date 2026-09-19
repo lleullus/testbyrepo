@@ -6,7 +6,6 @@ surfaces, and external conditions that an implementation worker may legitimately
 """
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 import shlex
@@ -14,6 +13,7 @@ import sys
 from typing import Any
 
 from fixture_catalog import _put
+from host_fixture import ArtifactStore, admit_fixture_scope, close_fixture_thesis, source_block
 
 
 _CASE_KEYS = (
@@ -242,7 +242,7 @@ def _flow(
         "external": external,
     }
 
-def _documents(project: Path, flows: list[dict[str, str]]) -> tuple[Path, Path]:
+def _documents(project: Path, store: ArtifactStore, flows: list[dict[str, str]]) -> tuple[Path, Path, dict]:
     thesis = _put(
         project,
         "docs/planning/product-thesis/delivery/THESIS-001.md",
@@ -258,7 +258,7 @@ def _documents(project: Path, flows: list[dict[str, str]]) -> tuple[Path, Path]:
         "- Changes to external services, credentials or operator approvals\n- Unrelated product expansion\n- Verification or finalization during implementation\n\n"
         "## Open Decisions\n\nNone\n",
     )
-    thesis_sha = hashlib.sha256(thesis.read_bytes()).hexdigest()
+    thesis_ref = close_fixture_thesis(store, project, thesis)
     scenarios = []
     for ordinal, flow in enumerate(flows, 1):
         scenarios.append(
@@ -277,13 +277,13 @@ def _documents(project: Path, flows: list[dict[str, str]]) -> tuple[Path, Path]:
         "docs/planning/work/delivery/SCOPE.md",
         f"""# Bounded product delivery Scope
 
-Schema: iis-scope/v1
+Schema: iis-scope/v2
 Project-Root: {project}
 Status: ready
 
 ## Product Authority
 
-- {thesis} sha256:{thesis_sha}
+{source_block(thesis_ref)}
 
 ## Outcome
 
@@ -300,7 +300,8 @@ The current product provides the bounded result represented by all authored Acce
 - Internal implementation topology
 """,
     )
-    return thesis, scope
+    admission = admit_fixture_scope(store, scope, "scope-implement")
+    return thesis, scope, admission
 
 
 def _observer_command(support: Path, argv: list[str]) -> tuple[Path, list[str]]:
@@ -334,7 +335,6 @@ def _source_precheck(support: Path, source: Path, output: Path) -> list[str]:
         support,
         "record_source.py",
         f'''
-import hashlib
 import json
 from pathlib import Path
 
@@ -342,7 +342,7 @@ source = Path({str(source)!r})
 raw = source.read_bytes()
 output = Path({str(output)!r})
 output.parent.mkdir(parents=True, exist_ok=True)
-record = {{"path": str(source), "sha256": hashlib.sha256(raw).hexdigest(), "bytes_read": len(raw)}}
+record = {{"path": str(source), "bytes_read": len(raw), "content": raw.decode("utf-8")}}
 output.write_text(json.dumps(record, sort_keys=True) + "\\n", encoding="utf-8")
 print(json.dumps(record, sort_keys=True))
 ''',
@@ -355,7 +355,6 @@ def _post_change_precheck(support: Path, app: Path, engine: Path, output: Path) 
         support,
         "apply_approved_change.py",
         f'''
-import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -380,8 +379,8 @@ record = {{
     "exit_code": result.returncode,
     "stdout": result.stdout,
     "stderr": result.stderr,
-    "observed_source_sha256": hashlib.sha256(before).hexdigest(),
-    "current_source_sha256": hashlib.sha256(after).hexdigest(),
+    "observed_source": before.decode("utf-8"),
+    "current_source": after.decode("utf-8"),
 }}
 output = Path({str(output)!r})
 output.parent.mkdir(parents=True, exist_ok=True)
@@ -619,7 +618,7 @@ print(json.dumps(result, sort_keys=True))
             _flow(
                 "The ordinary local command returns JSON value=revised-value and input=sample from the current source after the last approved change.",
                 trigger=trigger,
-                readback="The ordinary command result obtained after the current source identity; any result bound to an earlier source digest is historical only.",
+                readback="The ordinary command result obtained after the current source identity; any result bound to an earlier captured source is historical only.",
             )
         ]
         targets = [app, engine]
@@ -789,10 +788,12 @@ def materialize(case_key: str, project_root: Path, support_root: Path, *, port: 
         raise ValueError("refusing to overwrite an existing support tree")
     project.mkdir(parents=True, mode=0o700, exist_ok=True)
     support.mkdir(parents=True, mode=0o700, exist_ok=True)
+    store_root = project.parent / "host-store"
+    store = ArtifactStore(store_root, "ready-verification")
 
     endpoint = f"http://127.0.0.1:{port}"
     blueprint = _blueprint(case_key, project, support, endpoint)
-    thesis, scope = _documents(project, blueprint["flows"])
+    thesis, scope, admission = _documents(project, store, blueprint["flows"])
 
     service_argv = reset_argv = None
     service_path: Path | None = None
@@ -826,6 +827,9 @@ def materialize(case_key: str, project_root: Path, support_root: Path, *, port: 
         "project_root": str(project),
         "scope_path": str(scope),
         "thesis_paths": [str(thesis)],
+        "store_root": str(store_root),
+        "project_id": "ready-verification",
+        "admission": admission,
         "allowed_output_paths": [],
         "implementation_prompt": implementation_prompt,
         "trigger_argv": blueprint["trigger_argv"],

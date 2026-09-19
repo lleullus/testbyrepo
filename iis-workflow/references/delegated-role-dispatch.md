@@ -40,7 +40,7 @@ Authority And Limits:
 - User-selected model / effort:
 
 Bound Originals:
-<projection-required exact paths, actual-byte digests and authority identities>
+<projection-required executor-owned fixed refs and authority identities>
 
 Current Target:
 <exact implementation/artifact/runtime/repository identity, or None only when permitted>
@@ -71,7 +71,7 @@ A compact current request may quote only the role-relevant instruction when the 
 ## Main construction rules
 
 1. Use exact role entry/reference paths from one supplied source or installed snapshot and identify that source. Do not combine role documents from different snapshots.
-2. Bind exact originals and actual-byte digests where the owning caller contract requires them. Never substitute a latest-file lookup or Main-written summary.
+2. Bind exact originals through executor-owned fixed refs where the owning caller contract requires them. Never substitute a latest-file lookup, copied opaque ID or Main-written summary.
 3. Preserve current user authority, stage ceiling, no-reentry/stop instructions, external-effect limits and selected model/mode without silent widening or fallback.
 4. Forward load-bearing evidence by readable locator with original attribution and current-applicability conditions. A summary never replaces the source. For Probers, stage explanatory upstream disclosure after initial hypotheses; originals and safety are available from the start.
 5. Keep `Role Assignment` to the decision or work unit owned by that role. Do not restate its procedure, prescribe a verdict, or supply a fixed finding/frontier set.
@@ -100,7 +100,7 @@ If a projection-required input is absent or already known to be unreadable, do n
 
 ## Worker intake
 
-Before substantive work, the worker performs the envelope's intake check using ordinary reads. Main's path claim, digest claim or summary is not proof that the worker can access or has read the source.
+Before substantive work, the worker performs the envelope's intake check using ordinary reads. Main's path claim, copied ref or summary is not proof that the worker can access or has read the fixed source.
 
 When a required input is missing, stale, mismatched or unreadable, stop only the work that depends on it and use the owning role's existing non-started, `PARTIAL` or `BLOCKED` return contract. State:
 

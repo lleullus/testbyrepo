@@ -1,14 +1,14 @@
 # Durable `project-state.json` Schema
 
-`project-state.json` is a repository-relative, derived read model written by `iis-observatory snapshot --write`. It is not canonical Scope, Thesis, transition, Plan, implementation, or verification authority.
+`project-state.json` is a repository-relative, derived read model written by `iis-observatory snapshot --write`. It is not canonical Scope, Thesis, Transition, Plan, implementation, admission, or verification authority.
 
-Current snapshot schema: `1.0` (independent of live scan JSON `schema_version: "2.0"`).
+Current snapshot schema: `2.0` (independent of live scan JSON `schema_version: "3.0"`).
 
 ## Top-level shape
 
 ```json
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "2.0",
   "projection": {},
   "project": {},
   "planning": {},
@@ -21,38 +21,34 @@ Current snapshot schema: `1.0` (independent of live scan JSON `schema_version: "
 
 The planning projection includes:
 
-- `stage`, `health`, and `nextWork` (`kind`, `targetId`, `targetPath`, `leaf`, `reason`);
+- `stage`, `health`, and `nextWork`;
 - `authorityMode`: `direct-scope`, `legacy-history`, or `none`;
-- `current.scope` as a stable path/status reference and `current.workSlug`;
-- `scope.current` with the current `SCOPE.md` path, status, authored Outcome and Acceptance;
-- `scope.boundThesis` and optional `scope.transitionAuthority`, each preserving exact path and digest;
-- `scope.requiredOutcomes` and `scope.remainingRequiredOutcomes` preserve named source requirements with status `unassessed`; the latter retains unresolved fulfillment assessment, not a proven unfinished-work denominator;
-- `scope.active` / `scope.history` for direct Scopes;
-- `legacy.history`, `legacy.transitionRequired`, and `legacy.automaticMigration: false`;
-- `tickets` and old `followUp` only as an empty/derived compatibility projection when direct Scope is current. Legacy Tickets are not current delivery authority;
-- `issues`.
+- current Scope path/status and authored Outcome/Acceptance;
+- `scope.boundThesis` and optional `scope.transitionAuthority` as executor-owned `{snapshot,path}` refs;
+- required-outcome text derived from an available live projection only; it is not a closure or runtime verdict;
+- direct Scope history plus read-only legacy history;
+- issues.
 
-A stale Thesis or Transition Authority source is an issue and prevents an accepted snapshot write.
+Observatory validates the v2 reference shape but does not claim fixed-source currentness or Product Thesis closure. Those belong to common host admission.
 
 ## `projection`
 
 Contains projection metadata only:
 
-- `authority`: `derived-read-only`;
+- `authority: derived-read-only`;
 - `generatedBy`, `generatedAt`;
-- `sourceFingerprint`, `sourceFingerprintAlgorithm`;
-- `freshness`: `current-at-generation` in newly written files;
-- `consistency`: `consistent` for accepted writes;
-- `inputs`: repository-relative source file identities and hashes, including bound Thesis/Transition sources and displayed Scope/legacy history; history is a projection dependency, not current authority;
-- informational generation-time `git` metadata;
-- snapshot filenames and the Markdown SHA-256.
+- `freshness: current-at-generation`;
+- `consistency: consistent` for accepted writes;
+- `inputs`: repository-relative source paths and the actual stored input content used for direct freshness comparison;
+- informational generation-time Git metadata;
+- snapshot filenames.
 
-No absolute repository root is serialized as canonical snapshot identity.
+There is no IIS content digest, checksum, or aggregate fingerprint. `CURRENT` means the stored projection inputs directly equal the currently observed input originals and the rendered Markdown equals the JSON projection.
 
 ## `progress`
 
-Progress entries are typed measurements. A Ticket ratio is emitted only when the current projection actually has Tickets; direct Scope status is not converted into a Ticket ratio. Presentation bars never affect health or next-work routing.
+Progress entries are typed measurements. A Ticket ratio is emitted only when the current projection actually has Tickets. Presentation bars never affect health, admission or next-work routing.
 
 ## `adaptiveProvenance`
 
-Existing Adaptive Mandate/Trace files may be recorded as provenance. `activationInference` remains `not-performed`: a recorded `Status: active` does not activate an adaptive mode or transition baseline.
+Existing Adaptive Mandate/Trace files may be recorded as provenance. `activationInference` remains `not-performed`: a recorded status does not activate an adaptive mode or Transition.

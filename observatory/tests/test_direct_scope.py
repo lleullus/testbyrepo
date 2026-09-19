@@ -4,7 +4,6 @@ from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import hashlib
 import json
 import unittest
 
@@ -31,14 +30,19 @@ class DirectScopeFixtures:
     def scope(self, slug: str = "member", status: str = "ready", *, outcome: str = "Preserve member identity.") -> Path:
         path = self.root / f"docs/planning/work/{slug}/SCOPE.md"
         path.parent.mkdir(parents=True, exist_ok=True)
-        digest = hashlib.sha256(self.thesis.read_bytes()).hexdigest()
+        source = {
+            "snapshot": "snap-" + "a" * 32,
+            "path": self.thesis.relative_to(self.root).as_posix(),
+        }
         path.write_text(
             f"# {slug}\n"
-            "Schema: iis-scope/v1\n"
+            "Schema: iis-scope/v2\n"
             f"Project-Root: {self.root}\n"
             f"Status: {status}\n\n"
             "## Product Authority\n"
-            f"- {self.thesis} sha256:{digest}\n\n"
+            "```iis-sources\n"
+            + json.dumps([source], indent=2)
+            + "\n```\n\n"
             "## Outcome\n"
             f"{outcome}\n\n"
             "## Acceptance\n"
@@ -108,7 +112,7 @@ class DirectScopeScannerTests(unittest.TestCase):
             self.assertNotIn("Ask Matt", render_state(state))
             self.assertNotIn("TKT-001 구현", render_state(state))
 
-    def test_stale_thesis_source_is_reported_by_scan_command(self) -> None:
+    def test_live_thesis_change_does_not_fake_fixed_source_currentness(self) -> None:
         with TemporaryDirectory() as temp:
             fixture = DirectScopeFixtures(Path(temp))
             fixture.scope()
@@ -116,8 +120,9 @@ class DirectScopeScannerTests(unittest.TestCase):
             output = StringIO()
             with redirect_stdout(output):
                 code = main(["scan", str(fixture.root), "--fail-on-inconsistent"])
-            self.assertEqual(code, 3)
-            self.assertIn("IIS513", output.getvalue())
+            self.assertEqual(code, 0)
+            self.assertNotIn("IIS513", output.getvalue())
+            self.assertIn("admission", output.getvalue().lower())
 
     def test_duplicate_active_scope_is_reported_by_doctor_command(self) -> None:
         with TemporaryDirectory() as temp:

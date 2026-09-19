@@ -2,8 +2,8 @@
 
 ## Required
 
-- Exact Project Root, ready Scope and all bound Thesis/approved Transition originals with actual-byte digests.
-- Current Plan/Assurance Baseline paths/digests and executable preconditions.
+- Exact Project Root, admitted fixed ready Scope and all bound executor-owned Thesis/approved Transition originals.
+- Current fixed Plan/Assurance Baseline references and executable preconditions.
 - Exact target/working-tree/effect state, including pre-existing changes.
 - Current mutation/effect/stop authority and selected actor/mode/model/effort.
 - Corrective predecessor finding, raw evidence, usable reproducer/limit and settled effects when applicable.

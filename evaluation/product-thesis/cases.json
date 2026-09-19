@@ -312,15 +312,15 @@
       "fixture_files": [
         {
           "path": "src/store.py",
-          "content": "import sqlite3\n\nDB_PATH = \"var/catalog.sqlite3\"\n\ndef asset_record(asset_id: str):\n    with sqlite3.connect(DB_PATH) as db:\n        return db.execute(\"select path, sha256 from assets where asset_id = ?\", (asset_id,)).fetchone()\n"
+          "content": "import sqlite3\n\nDB_PATH = \"var/catalog.sqlite3\"\n\ndef asset_record(asset_id: str):\n    with sqlite3.connect(DB_PATH) as db:\n        return db.execute(\"select path from assets where asset_id = ?\", (asset_id,)).fetchone()\n"
         },
         {
           "path": "src/assets.py",
-          "content": "from pathlib import Path\nfrom .store import asset_record\n\ndef read_asset(asset_id: str) -> bytes:\n    path, expected = asset_record(asset_id)\n    data = Path(path).read_bytes()\n    return data\n"
+          "content": "from pathlib import Path\nfrom .store import asset_record\n\ndef read_asset(asset_id: str) -> bytes:\n    path, = asset_record(asset_id)\n    data = Path(path).read_bytes()\n    return data\n"
         }
       ],
       "required_observations": [
-        "SQLite authority for path/hash metadata is distinguished from preservation of the separately stored asset bytes.",
+        "SQLite authority for asset location metadata is distinguished from preservation of the separately stored asset bytes.",
         "Exact-result preservation covers every load-bearing component without assuming the asset file is disposable or derived.",
         "SQLite is not promoted to a permanent product promise unless the current decision actually requires that means."
       ],

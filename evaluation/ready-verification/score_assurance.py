@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter, defaultdict
-import hashlib
 import json
 import math
 from pathlib import Path
@@ -20,12 +19,10 @@ def load(path: Path) -> object:
 
 
 def evidence(ref: dict) -> bytes:
-    require(isinstance(ref, dict) and isinstance(ref.get("path"), str), "missing evidence locator")
+    require(isinstance(ref, dict) and set(ref) == {"path"} and isinstance(ref.get("path"), str), "missing evidence locator")
     path = Path(ref["path"])
     require(path.is_absolute() and path.is_file() and not path.is_symlink(), "unreadable evidence")
-    raw = path.read_bytes()
-    require(hashlib.sha256(raw).hexdigest() == ref.get("sha256"), "evidence digest mismatch")
-    return raw
+    return path.read_bytes()
 
 
 def refs(items: object) -> None:
@@ -58,7 +55,7 @@ def matches(trace: dict, oracle: dict) -> bool:
 
 
 def score(manifest: dict, records: list[dict]) -> dict:
-    require(manifest.get("schema") == "iis-assurance-experiment/v1", "invalid experiment")
+    require(manifest.get("schema") == "iis-assurance-experiment/v2", "invalid experiment")
     require(isinstance(manifest.get("experiment_id"), str) and bool(manifest["experiment_id"]), "missing experiment ID")
     require(type(manifest.get("repetitions")) is int and manifest["repetitions"] > 0, "invalid repetition denominator")
     cases = {case["id"]: case for case in manifest["cases"]}
@@ -154,10 +151,10 @@ def score(manifest: dict, records: list[dict]) -> dict:
                         "cost": dict(costs[name]), "duplicate_traces": duplicates[name], "lanes": contribution,
                         "detection_vectors": vectors[name],
                         "passed": detection >= limits["min_detection"] and count["false_completion"] <= limits["max_false_completion"] and count["false_block"] <= limits["max_false_block"] and count["incomplete"] <= limits["max_incomplete"]}
-    return {"schema": "iis-assurance-evaluation/v1", "experiment_id": manifest["experiment_id"],
+    return {"schema": "iis-assurance-evaluation/v2", "experiment_id": manifest["experiment_id"],
             "evaluation_pass": not errors and not missing and all(row["passed"] for row in report.values()),
             "errors": errors, "missing": missing, "variants": report,
-            "authority": "offline fixture analysis only; not production completion or evidence authentication"}
+            "authority": "offline fixture analysis only; path evidence is consumed in-place and is not a production credential"}
 
 
 def main() -> int:

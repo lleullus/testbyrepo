@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Move direct Scope observation to `iis-scope/v2` fixed source refs; Observatory displays them but leaves Product Thesis closure and role admission to the trusted host.
+- Replace source fingerprints and Markdown checksums with direct stored-original comparison for snapshot freshness and exact JSON→Markdown projection comparison.
+- Bump live scan schema to `3.0` and durable snapshot schema to `2.0`.
 - Include displayed Scope and legacy history in snapshot freshness so additions, edits and removals refresh stored projections without promoting history into current authority. Unrelated product-code changes still leave snapshots unchanged.
 
 ## 0.3.0

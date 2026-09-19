@@ -51,7 +51,7 @@ Based On: <Finding/Inference ordinals>
 
 ### Load-Bearing Anchors
 
-- A1 | SOURCE | <path> | <line/symbol> | <sha256 or Git identity> | ANCHOR_LOCAL
+- A1 | SOURCE | <path> | <line/symbol> | <fixed snapshot ref or native Git identity> | ANCHOR_LOCAL
 
 ## Investigation Charter
 

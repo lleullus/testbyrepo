@@ -1,8 +1,6 @@
 # Product Thesis
 
-Result: CALIBRATED | USER_INPUT_REQUIRED
-
-<!-- Content guide, not a required field count or exploration ledger. Use a result label only when its meaning is established; report a decisive evidence/capability block in ordinary prose. Preserve referenced revisions; changed binding contracts receive a new THESIS-NNN ordinal. For load-bearing statements, preserve in ordinary prose whether each is a product obligation, observed current fact, adopted construction decision or unresolved premise; these distinctions do not require four new fixed sections. -->
+<!-- Product meaning lives here. CALIBRATED is not authored in this document; it is a Product Thesis lifecycle result owned by the trusted executor. Preserve referenced revisions; changed binding contracts receive a new THESIS-NNN ordinal. For load-bearing statements, preserve in ordinary prose whether each is a product obligation, observed current fact, adopted construction decision or unresolved premise; these distinctions do not require four fixed sections. -->
 
 ## Source Authority
 
@@ -50,6 +48,6 @@ Result: CALIBRATED | USER_INPUT_REQUIRED
 
 ## Open Product Meaning
 
-None | <Unresolved choice, material consequences and when it must be resolved. Distinguish unresolved core/current-Scope meaning from future capability details. Saving does not resolve it. Evidence-only unknowns belong beside the relevant claim or in the result, not here as invented product choices.>
+None | <Unresolved choice, material consequences and when it must be resolved. Distinguish unresolved core/current-Scope meaning from future capability details. Saving does not resolve it. Evidence-only unknowns belong beside the relevant claim or in the lifecycle result, not here as invented product choices.>
 
-<!-- For a material revision, retain only needed trigger, deciding evidence/counterexample, unresolved limits and connected/downstream impact in the ordinary result or existing change record. Do not copy a full exploration trace, add node statuses, or replace current meaning with a revision ledger. -->
+<!-- For a material revision, retain only needed trigger, deciding evidence/counterexample, unresolved limits and connected/downstream impact in the ordinary result or existing change record. Do not copy the executor's work-state ledger into Thesis. -->

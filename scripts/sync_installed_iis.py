@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Prepare immutable protocol-4 skill payloads and switch quiescent install paths."""
+"""Prepare executor-owned protocol-5 IIS payloads and switch quiescent install paths."""
 from __future__ import annotations
 
 import argparse
+import base64
 from contextlib import contextmanager
 import fcntl
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,13 +17,13 @@ import tempfile
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = "iis-bundle/v4"
-PROTOCOL = 4
+SCHEMA = "iis-bundle/v5"
+PROTOCOL = 5
 NEW_FAMILY = "iis-skills"
-INSTALL_SCHEMA = "iis-install/v4"
-LEGACY_INSTALL_SCHEMA = "iis-install/v3"
+INSTALL_SCHEMA = "iis-install/v5"
+LEGACY_INSTALL_SCHEMAS = {"iis-install/v3", "iis-install/v4"}
 PAYLOAD_ROOTS = (
-    "iis-workflow", "product-thesis", "scope-shaper", "iis-observatory", "repo-snapshot",
+    "iis-workflow", "product-thesis", "scope-shaper", "iis-artifacts", "iis-observatory", "repo-snapshot",
     "observatory/bin", "observatory/src",
     "companion-skills/scope-plan", "companion-skills/scope-implement",
     "companion-skills/production-heuristic-probing",
@@ -32,6 +32,8 @@ PAYLOAD_ROOTS = (
 )
 REQUIRED = (
     "iis-workflow/SKILL.md", "product-thesis/SKILL.md",
+    "product-thesis/tools/lifecycle.py", "product-thesis/tools/thesis.py",
+    "iis-artifacts/store.py", "iis-artifacts/admission.py",
     "iis-workflow/references/assurance.md", "iis-workflow/tools/assurance.py",
     "scope-shaper/SKILL.md", "scope-shaper/tools/validate_scope.py",
     "iis-observatory/SKILL.md", "repo-snapshot/SKILL.md",
@@ -54,10 +56,7 @@ CANDIDATE_RETIRED = (
     "companion-skills/ready-ticket-heuristic-probe", "companion-skills/scope-coverage",
 )
 TEXT_SUFFIXES = {".md", ".py", ".js", ".json", ".yaml", ".yml", ".sh", ".toml"}
-
-
-def sha(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
+RELEASE_ID = re.compile(r"^rel-[0-9a-f]{32}$")
 
 
 def atomic_json(path: Path, value: dict) -> None:
@@ -97,10 +96,9 @@ def payload_files(source: Path) -> list[Path]:
             raise ValueError(f"incomplete candidate payload: {relative}")
     for relative in CANDIDATE_RETIRED:
         retired = source / relative
-        if (retired.is_symlink() or retired.is_file()
-                or retired.is_dir() and any(retired.iterdir())):
+        if retired.is_symlink() or retired.is_file() or retired.is_dir() and any(retired.iterdir()):
             raise ValueError(f"retired payload is still present: {relative}")
-    files = []
+    files: list[Path] = []
     for root in PAYLOAD_ROOTS:
         target = source / root
         if not target.exists():
@@ -118,8 +116,10 @@ def payload_files(source: Path) -> list[Path]:
 
 def source_origins(source: Path, explicit: list[Path] | None = None) -> list[Path]:
     origins = {source, *(path.resolve() for path in (explicit or []))}
-    result = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
-                            cwd=source, text=True, capture_output=True, check=False)
+    result = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=source, text=True, capture_output=True, check=False,
+    )
     if result.returncode == 0:
         common = Path(result.stdout.strip())
         if common.name == ".git":
@@ -134,103 +134,87 @@ def rebase(content: bytes, origins: list[Path], destination: Path) -> bytes:
 
 
 def release_path(store: Path, bundle_id: str) -> Path:
-    if not re.fullmatch(r"[0-9a-f]{64}", bundle_id):
-        raise ValueError("bundle id must be an exact SHA-256")
+    if RELEASE_ID.fullmatch(bundle_id) is None:
+        raise ValueError("release id must be an executor-allocated rel-<id>")
     destination = store / "releases" / bundle_id
     if destination.is_symlink():
         raise ValueError("release directory must not be a symlink")
     return destination
 
 
-def release_family(manifest: dict) -> str:
-    entries = manifest.get("files")
-    if not isinstance(entries, dict) or not entries:
-        raise ValueError("incomplete bundle manifest")
-    if manifest.get("family") != NEW_FAMILY:
-        raise ValueError(f"unsupported bundle family: {manifest.get('family')}")
-    return NEW_FAMILY
+def record_path(store: Path, bundle_id: str) -> Path:
+    if RELEASE_ID.fullmatch(bundle_id) is None:
+        raise ValueError("invalid release id")
+    return store / "records" / bundle_id
+
+
+def _file_set(root: Path, *, ignore: set[str]) -> set[str]:
+    result = set()
+    for path in root.rglob("*"):
+        if path.is_symlink():
+            raise ValueError(f"symlink in protected release: {path}")
+        if path.is_file():
+            relative = path.relative_to(root).as_posix()
+            if relative not in ignore:
+                result.add(relative)
+    return result
 
 
 def check_release(store: Path, bundle_id: str) -> dict:
-    """Validate one immutable skills-only release against its own manifest."""
     release = release_path(store, bundle_id)
+    record = record_path(store, bundle_id)
     manifest = read_json(release / "bundle.json")
-    if (manifest.get("schema") != SCHEMA or manifest.get("protocol") != PROTOCOL
-            or manifest.get("bundle_id") != bundle_id
-            or manifest.get("family") != NEW_FAMILY):
-        raise ValueError("bundle identity, protocol, or family mismatch")
+    record_manifest = read_json(record / "bundle.json")
+    if manifest != record_manifest:
+        raise ValueError("release manifest changed")
+    if (
+        manifest.get("schema") != SCHEMA
+        or manifest.get("protocol") != PROTOCOL
+        or manifest.get("bundle_id") != bundle_id
+        or manifest.get("family") != NEW_FAMILY
+    ):
+        raise ValueError("release identity, protocol, or family mismatch")
     entries = manifest.get("files")
     if not isinstance(entries, dict) or not entries:
-        raise ValueError("incomplete bundle manifest")
-    actual = set()
-    for path in release.rglob("*"):
-        if path.is_symlink():
-            raise ValueError(f"symlink in immutable release: {path}")
-        if path.is_file() and path.relative_to(release).as_posix() != "bundle.json":
-            actual.add(path.relative_to(release).as_posix())
-    if actual != set(entries):
-        raise ValueError("bundle file set drift")
+        raise ValueError("incomplete release manifest")
+    actual = _file_set(release, ignore={"bundle.json"})
+    protected = _file_set(record / "payload", ignore=set())
+    if actual != set(entries) or protected != set(entries):
+        raise ValueError("release file set drift")
     for relative, expected in entries.items():
+        if not isinstance(expected, dict) or set(expected) != {"mode"}:
+            raise ValueError(f"invalid release manifest entry: {relative}")
         path = release / relative
-        if not path.resolve().is_relative_to(release.resolve()):
-            raise ValueError("bundle path escapes release")
-        if not isinstance(expected, dict) or "sha256" not in expected or "mode" not in expected:
-            raise ValueError(f"invalid bundle manifest entry: {relative}")
-        if sha(path.read_bytes()) != expected["sha256"] or stat.S_IMODE(path.stat().st_mode) != expected["mode"]:
-            raise ValueError(f"bundle file drift: {relative}")
-    return {**manifest, "family": release_family(manifest)}
+        original = record / "payload" / relative
+        if path.read_bytes() != original.read_bytes():
+            raise ValueError(f"release file changed: {relative}")
+        if stat.S_IMODE(path.stat().st_mode) != expected["mode"]:
+            raise ValueError(f"release mode changed: {relative}")
+    return manifest
 
 
 def check_candidate_release(store: Path, bundle_id: str) -> dict:
     manifest = check_release(store, bundle_id)
     entries = set(manifest["files"])
     if not all(relative in entries for relative in REQUIRED):
-        raise ValueError("incomplete skills candidate manifest")
-    if any(relative == retired or relative.startswith(retired + "/")
-           for relative in entries for retired in CANDIDATE_RETIRED):
+        raise ValueError("incomplete IIS candidate manifest")
+    if any(relative == retired or relative.startswith(retired + "/") for relative in entries for retired in CANDIDATE_RETIRED):
         raise ValueError("candidate release contains retired IIS payload")
     return manifest
 
 
-def check_install(store: Path) -> dict:
-    if (store / "pending.json").exists():
-        raise ValueError("unfinished install transaction requires recovery")
-    state = read_json(store / "installed.json")
-    if state.get("schema") != INSTALL_SCHEMA or state.get("family") != NEW_FAMILY:
-        raise ValueError("unsupported installed skills contract")
-    manifest = check_release(store, state["bundle_id"])
-    expected_pointer = {"kind": "symlink", "target": str(release_path(store, state["bundle_id"]))}
-    if entry_identity(store / "current") != expected_pointer:
-        raise ValueError("installed current pointer drift")
-    for name, target in state["links"].items():
-        expected = {"kind": "symlink", "target": target} if target else {"kind": "absent"}
-        if entry_identity(Path(name)) != expected:
-            raise ValueError(f"managed install entry drift: {name}")
-    return {**state, "family": manifest["family"]}
-
-def inspect(store: Path, bundle_id: str | None = None) -> dict:
-    store = store.resolve()
-    with install_lock(store):
-        if bundle_id is None:
-            installed = check_install(store)
-            bundle_id = installed["bundle_id"]
-            manifest = read_json(release_path(store, bundle_id) / "bundle.json")
-        else:
-            manifest = check_candidate_release(store, bundle_id)
-        return {"bundle_id": manifest["bundle_id"], "family": manifest["family"],
-                "protocol": manifest["protocol"],
-                "files": len(manifest["files"]), "loaded_identity": "NOT_CHECKED"}
-
-def legacy_install_for_cutover(store: Path) -> dict:
-    """Read v3 managed links for retirement only; never activate a v3 release."""
-    state = read_json(store / "installed.json")
-    if state.get("schema") != LEGACY_INSTALL_SCHEMA:
-        raise ValueError("unsupported installed-state schema; cannot establish cutover source")
-    if state.get("family") != "scope-boundary-tools":
-        raise ValueError("unsupported legacy install family; only v3 Scope retirement is supported")
-    release = release_path(store, state["bundle_id"])
+def _legacy_release(store: Path, bundle_id: str) -> Path:
+    release = store / "releases" / bundle_id
     if not release.is_dir() or release.is_symlink():
         raise ValueError("legacy current release is missing or unsafe")
+    return release
+
+
+def legacy_install_for_cutover(store: Path) -> dict:
+    state = read_json(store / "installed.json")
+    if state.get("schema") not in LEGACY_INSTALL_SCHEMAS:
+        raise ValueError("unsupported installed-state schema")
+    release = _legacy_release(store, state["bundle_id"])
     expected_pointer = {"kind": "symlink", "target": str(release)}
     if entry_identity(store / "current") != expected_pointer:
         raise ValueError("legacy installed current pointer drift")
@@ -244,50 +228,114 @@ def legacy_install_for_cutover(store: Path) -> dict:
     return {**state, "legacy": True}
 
 
+def check_install(store: Path) -> dict:
+    if (store / "pending.json").exists():
+        raise ValueError("unfinished install transaction requires recovery")
+    state = read_json(store / "installed.json")
+    if state.get("schema") != INSTALL_SCHEMA or state.get("family") != NEW_FAMILY:
+        raise ValueError("unsupported installed IIS contract")
+    manifest = check_release(store, state["bundle_id"])
+    expected_pointer = {"kind": "symlink", "target": str(release_path(store, state["bundle_id"]))}
+    if entry_identity(store / "current") != expected_pointer:
+        raise ValueError("installed current pointer drift")
+    for name, target in state["links"].items():
+        expected = {"kind": "symlink", "target": target} if target else {"kind": "absent"}
+        if entry_identity(Path(name)) != expected:
+            raise ValueError(f"managed install entry drift: {name}")
+    return {**state, "family": manifest["family"]}
+
+
+def inspect(store: Path, bundle_id: str | None = None) -> dict:
+    store = store.resolve()
+    with install_lock(store):
+        if bundle_id is None:
+            state = read_json(store / "installed.json")
+            if state.get("schema") in LEGACY_INSTALL_SCHEMAS:
+                legacy = legacy_install_for_cutover(store)
+                return {
+                    "bundle_id": legacy["bundle_id"],
+                    "family": legacy["family"],
+                    "protocol": "legacy",
+                    "files": None,
+                    "loaded_identity": "NOT_CHECKED",
+                    "legacy_read_only": True,
+                }
+            installed = check_install(store)
+            bundle_id = installed["bundle_id"]
+            manifest = read_json(release_path(store, bundle_id) / "bundle.json")
+        else:
+            manifest = check_candidate_release(store, bundle_id)
+        return {
+            "bundle_id": manifest["bundle_id"],
+            "family": manifest["family"],
+            "protocol": manifest["protocol"],
+            "files": len(manifest["files"]),
+            "loaded_identity": "NOT_CHECKED",
+        }
+
+
 def prepare(source: Path, store: Path, origins: list[Path] | None = None) -> dict:
     source, store = source.resolve(strict=True), store.resolve()
     if store.is_relative_to(source):
-        raise ValueError("bundle store must be outside source")
+        raise ValueError("release store must be outside source")
     files = payload_files(source)
-    inputs = {path.relative_to(source).as_posix(): {"sha256": sha(path.read_bytes()),
-              "mode": stat.S_IMODE(path.stat().st_mode)} for path in files}
-    bundle_id = sha(json.dumps({"protocol": PROTOCOL, "family": NEW_FAMILY,
-                                "files": inputs}, sort_keys=True).encode())
+    initial = {
+        path.relative_to(source).as_posix(): (path.read_bytes(), stat.S_IMODE(path.stat().st_mode))
+        for path in files
+    }
+    bundle_id = "rel-" + uuid.uuid4().hex
     with install_lock(store):
         destination = release_path(store, bundle_id)
-        if destination.exists():
-            return check_candidate_release(store, bundle_id)
+        record = record_path(store, bundle_id)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        staging = Path(tempfile.mkdtemp(prefix=".staging-", dir=destination.parent))
+        record.parent.mkdir(parents=True, exist_ok=True)
+        staging = Path(tempfile.mkdtemp(prefix=".release-", dir=destination.parent))
+        record_staging = Path(tempfile.mkdtemp(prefix=".record-", dir=record.parent))
         try:
             entries = {}
             original_roots = source_origins(source, origins)
             for path in files:
                 relative = path.relative_to(source).as_posix()
-                content = path.read_bytes()
-                if sha(content) != inputs[relative]["sha256"]:
-                    raise ValueError(f"source changed during snapshot: {relative}")
-                if path.suffix in TEXT_SUFFIXES:
-                    content = rebase(content, original_roots, destination)
-                target = staging / relative
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(content)
-                mode = inputs[relative]["mode"] & 0o555
-                target.chmod(mode)
-                entries[relative] = {"sha256": sha(content), "mode": mode}
-            if payload_files(source) != files or any(sha(path.read_bytes()) != inputs[path.relative_to(source).as_posix()]["sha256"] for path in files):
-                raise ValueError("source changed during snapshot")
-            manifest = {"schema": SCHEMA, "protocol": PROTOCOL, "family": NEW_FAMILY,
-                        "bundle_id": bundle_id,
-                        "source": str(source), "source_origins": [str(path) for path in original_roots],
-                        "files": entries, "input_files": inputs}
+                before, before_mode = initial[relative]
+                if path.read_bytes() != before or stat.S_IMODE(path.stat().st_mode) != before_mode:
+                    raise ValueError(f"source changed during capture: {relative}")
+                content = rebase(before, original_roots, destination) if path.suffix in TEXT_SUFFIXES else before
+                mode = before_mode & 0o555
+                for root in (staging, record_staging / "payload"):
+                    target = root / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(content)
+                    target.chmod(mode)
+                entries[relative] = {"mode": mode}
+            current_files = payload_files(source)
+            if [item.relative_to(source).as_posix() for item in current_files] != list(initial):
+                raise ValueError("source file set changed during capture")
+            for path in current_files:
+                relative = path.relative_to(source).as_posix()
+                before, before_mode = initial[relative]
+                if path.read_bytes() != before or stat.S_IMODE(path.stat().st_mode) != before_mode:
+                    raise ValueError(f"source changed during capture: {relative}")
+            manifest = {
+                "schema": SCHEMA,
+                "protocol": PROTOCOL,
+                "family": NEW_FAMILY,
+                "bundle_id": bundle_id,
+                "source": str(source),
+                "source_origins": [str(path) for path in original_roots],
+                "files": entries,
+            }
             atomic_json(staging / "bundle.json", manifest)
+            atomic_json(record_staging / "bundle.json", manifest)
             (staging / "bundle.json").chmod(0o444)
+            (record_staging / "bundle.json").chmod(0o400)
+            os.replace(record_staging, record)
             os.replace(staging, destination)
             return check_candidate_release(store, bundle_id)
         finally:
             if staging.exists():
                 shutil.rmtree(staging)
+            if record_staging.exists():
+                shutil.rmtree(record_staging)
 
 
 def entry_identity(path: Path) -> dict:
@@ -296,21 +344,28 @@ def entry_identity(path: Path) -> dict:
     if not path.exists():
         return {"kind": "absent"}
     if path.is_file():
-        return {"kind": "file", "sha256": sha(path.read_bytes())}
+        return {
+            "kind": "file",
+            "mode": stat.S_IMODE(path.stat().st_mode),
+            "content_b64": base64.b64encode(path.read_bytes()).decode("ascii"),
+        }
     if path.is_dir():
-        contents = {}
+        entries = []
         for child in sorted(path.rglob("*")):
             relative = child.relative_to(path).as_posix()
             if child.is_symlink():
-                contents[relative] = {"link": os.readlink(child)}
+                entries.append({"path": relative, "kind": "symlink", "target": os.readlink(child)})
             elif child.is_file():
-                contents[relative] = {"sha256": sha(child.read_bytes())}
+                entries.append({
+                    "path": relative,
+                    "kind": "file",
+                    "mode": stat.S_IMODE(child.stat().st_mode),
+                    "content_b64": base64.b64encode(child.read_bytes()).decode("ascii"),
+                })
             elif child.is_dir():
-                contents[relative] = {"directory": True}
-        return {"kind": "directory", "sha256": sha(json.dumps(contents, sort_keys=True).encode())}
+                entries.append({"path": relative, "kind": "directory", "mode": stat.S_IMODE(child.stat().st_mode)})
+        return {"kind": "directory", "mode": stat.S_IMODE(path.stat().st_mode), "entries": entries}
     raise ValueError(f"unsupported install entry: {path}")
-
-
 
 
 def set_pointer(store: Path, target: str | None) -> None:
@@ -329,10 +384,13 @@ def set_pointer(store: Path, target: str | None) -> None:
 
 
 def host_links(store: Path, manifest: dict, hosts: dict[str, Path]) -> dict[str, str | None]:
-    skills = sorted(Path(name).parent for name in manifest["files"]
-                    if name.endswith("/SKILL.md") and (
-                        len(Path(name).parts) == 2
-                        or Path(name).parts[0] == "companion-skills" and len(Path(name).parts) == 3))
+    skills = sorted(
+        Path(name).parent for name in manifest["files"]
+        if name.endswith("/SKILL.md") and (
+            len(Path(name).parts) == 2
+            or Path(name).parts[0] == "companion-skills" and len(Path(name).parts) == 3
+        )
+    )
     links = {}
     for host, root in hosts.items():
         names = set()
@@ -347,10 +405,13 @@ def host_links(store: Path, manifest: dict, hosts: dict[str, Path]) -> dict[str,
 
 
 def restore_snapshot(store: Path, snapshot: dict) -> None:
-    # Check every entry before restoring any: never overwrite intervening user work.
     pointer = entry_identity(store / "current")
     pointer_targets = (snapshot["previous_current"], snapshot["target_current"])
-    if pointer not in [{"kind": "symlink", "target": target} if target else {"kind": "absent"} for target in pointer_targets]:
+    allowed_pointers = [
+        {"kind": "symlink", "target": target} if target else {"kind": "absent"}
+        for target in pointer_targets
+    ]
+    if pointer not in allowed_pointers:
         raise ValueError("current pointer changed outside the install transaction")
     touched = {item["path"] for item in snapshot["entries"]}
     for name, target in snapshot["links_after"].items():
@@ -371,6 +432,11 @@ def restore_snapshot(store: Path, snapshot: dict) -> None:
             continue
         if path.is_symlink():
             path.unlink()
+        elif path.exists():
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
         if item["before"]["kind"] != "absent":
             path.parent.mkdir(parents=True, exist_ok=True)
             os.replace(backup, path)
@@ -385,7 +451,7 @@ def restore_snapshot(store: Path, snapshot: dict) -> None:
 
 def activate(store: Path, bundle_id: str, hosts: dict[str, Path], *, quiescent: bool, migrate: bool = False) -> dict:
     if not quiescent:
-        raise ValueError("explicit quiescent-host confirmation is required; cancellation receipt is not settlement")
+        raise ValueError("explicit quiescent-host confirmation is required")
     store = store.resolve()
     hosts = {name: root.resolve() for name, root in hosts.items()}
     for root in hosts.values():
@@ -396,17 +462,17 @@ def activate(store: Path, bundle_id: str, hosts: dict[str, Path], *, quiescent: 
                 raise ValueError(f"refusing install through symlinked host namespace: {root / namespace}")
     with install_lock(store):
         if (store / "pending.json").exists():
-            raise ValueError("unfinished install transaction; use explicit rollback after containment")
+            raise ValueError("unfinished install transaction; recover it first")
         manifest = check_candidate_release(store, bundle_id)
         if (store / "installed.json").exists():
             schema = read_json(store / "installed.json").get("schema")
-            old = legacy_install_for_cutover(store) if schema == LEGACY_INSTALL_SCHEMA else check_install(store)
+            old = legacy_install_for_cutover(store) if schema in LEGACY_INSTALL_SCHEMAS else check_install(store)
         else:
             old = None
         if old and not set(old["hosts"]).issubset(hosts):
             raise ValueError("shared current pointer requires all previously installed hosts in activation scope")
         if old and any(str(hosts[name]) != root for name, root in old["hosts"].items()):
-            raise ValueError("host roots cannot move during bundle activation; remove the old install explicitly")
+            raise ValueError("host roots cannot move during activation")
         links = host_links(store, manifest, hosts)
         if old:
             for name in old["links"]:
@@ -417,7 +483,7 @@ def activate(store: Path, bundle_id: str, hosts: dict[str, Path], *, quiescent: 
         if old is None and previous_current is not None:
             raise ValueError("current pointer has no matching managed installation")
         entries = []
-        snapshot_dir = store / "snapshots" / uuid.uuid4().hex
+        snapshot_dir = store / "snapshots" / ("install-" + uuid.uuid4().hex)
         originals = dict(old["originals"]) if old else {}
         for index, (name, target) in enumerate(links.items()):
             path = Path(name)
@@ -428,7 +494,7 @@ def activate(store: Path, bundle_id: str, hosts: dict[str, Path], *, quiescent: 
                 if before != expected:
                     raise ValueError(f"managed install entry drift: {name}")
             elif before["kind"] != "absent" and not migrate:
-                raise ValueError(f"unmanaged install entry requires explicit --migrate and snapshot: {name}")
+                raise ValueError(f"unmanaged install entry requires explicit --migrate: {name}")
             if before == after:
                 continue
             item = {"path": name, "before": before, "after": after, "backup": str(snapshot_dir / str(index))}
@@ -436,10 +502,16 @@ def activate(store: Path, bundle_id: str, hosts: dict[str, Path], *, quiescent: 
             originals.setdefault(name, item)
         snapshot_dir.mkdir(parents=True)
         previous_state = read_json(store / "installed.json") if old else None
-        snapshot = {"entries": entries, "previous_current": previous_current, "previous_state": previous_state,
-                    "previous_family": old["family"] if old else None, "target_family": manifest["family"],
-                    "target_current": str(release_path(store, bundle_id)), "links_after": links,
-                    "snapshot": str(snapshot_dir / "snapshot.json")}
+        snapshot = {
+            "entries": entries,
+            "previous_current": previous_current,
+            "previous_state": previous_state,
+            "previous_family": old["family"] if old else None,
+            "target_family": manifest["family"],
+            "target_current": str(release_path(store, bundle_id)),
+            "links_after": links,
+            "snapshot": str(snapshot_dir / "snapshot.json"),
+        }
         atomic_json(snapshot_dir / "snapshot.json", snapshot)
         atomic_json(store / "pending.json", snapshot)
         try:
@@ -448,15 +520,23 @@ def activate(store: Path, bundle_id: str, hosts: dict[str, Path], *, quiescent: 
                 if entry_identity(path) != item["before"]:
                     raise ValueError(f"install entry changed after preflight: {path}")
                 if item["before"]["kind"] != "absent":
-                    os.replace(path, item["backup"])
+                    item_backup = Path(item["backup"])
+                    item_backup.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(path, item_backup)
                 if item["after"]["kind"] == "symlink":
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.symlink_to(item["after"]["target"], target_is_directory=True)
             set_pointer(store, str(release_path(store, bundle_id)))
-            state = {"schema": INSTALL_SCHEMA, "bundle_id": bundle_id, "family": manifest["family"],
-                     "hosts": {name: str(root) for name, root in hosts.items()},
-                     "links": links, "originals": originals, "snapshot": snapshot["snapshot"],
-                     "loaded_identity": "NOT_CHECKED"}
+            state = {
+                "schema": INSTALL_SCHEMA,
+                "bundle_id": bundle_id,
+                "family": manifest["family"],
+                "hosts": {name: str(root) for name, root in hosts.items()},
+                "links": links,
+                "originals": originals,
+                "snapshot": snapshot["snapshot"],
+                "loaded_identity": "NOT_CHECKED",
+            }
             atomic_json(store / "installed.json", state)
             (store / "pending.json").unlink()
             return state
@@ -491,9 +571,14 @@ def remove(store: Path, *, quiescent: bool) -> dict:
             expected = {"kind": "symlink", "target": target} if target else {"kind": "absent"}
             if entry_identity(Path(name)) != expected:
                 raise ValueError(f"refusing to remove changed install entry: {name}")
-        snapshot = {"entries": list(state["originals"].values()), "previous_current": None,
-                    "previous_state": None, "snapshot": state["snapshot"],
-                    "target_current": str(release_path(store, state["bundle_id"])), "links_after": state["links"]}
+        snapshot = {
+            "entries": list(state["originals"].values()),
+            "previous_current": None,
+            "previous_state": None,
+            "snapshot": state["snapshot"],
+            "target_current": str(release_path(store, state["bundle_id"])),
+            "links_after": state["links"],
+        }
         atomic_json(store / "pending.json", snapshot)
         restore_snapshot(store, snapshot)
         return {"removed": True, "releases_and_snapshots_preserved": True, "loaded_identity": "NOT_CHECKED"}
@@ -515,8 +600,7 @@ def main() -> int:
     try:
         if args.action == "prepare":
             manifest = prepare(args.source, args.store, args.origin)
-            result = {"bundle_id": manifest["bundle_id"], "family": manifest["family"],
-                      "files": len(manifest["files"]), "installed": False}
+            result = {"bundle_id": manifest["bundle_id"], "family": manifest["family"], "files": len(manifest["files"]), "installed": False}
         elif args.action == "inspect":
             result = inspect(args.store, args.bundle)
         elif args.action == "activate":

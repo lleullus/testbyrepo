@@ -5,26 +5,19 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable
-import hashlib
+import base64
 import json
 import os
 import re
 import subprocess
 import tempfile
 
-from .model import (
-    Artifact,
-    Health,
-    ProjectState,
-    SNAPSHOT_SCHEMA_VERSION,
-    __version__,
-)
+from .model import Artifact, Health, ProjectState, SNAPSHOT_SCHEMA_VERSION, __version__
 from .scanner import ScanOptions, scan_repository
 
 SNAPSHOT_DIRECTORY = Path("docs/planning/observatory")
 SNAPSHOT_MARKDOWN = "PROJECT-OVERVIEW.md"
 SNAPSHOT_JSON = "project-state.json"
-SOURCE_FINGERPRINT_ALGORITHM = "iis-observatory-source-v1"
 PROJECTION_AUTHORITY = "derived-read-only"
 
 
@@ -43,14 +36,14 @@ class SnapshotFreshness(str, Enum):
 class SnapshotInput:
     category: str
     path: str
-    sha256: str
+    content_b64: str
     size: int
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "category": self.category,
             "path": self.path,
-            "sha256": self.sha256,
+            "content": self.content_b64,
             "size": self.size,
         }
 
@@ -61,7 +54,6 @@ class SnapshotBundle:
     state: ProjectState
     payload: dict[str, Any]
     markdown: str
-    source_fingerprint: str
 
 
 @dataclass(frozen=True)
@@ -70,8 +62,6 @@ class SnapshotCheck:
     repository: Path
     snapshot_json: Path
     snapshot_markdown: Path
-    current_fingerprint: str | None
-    stored_fingerprint: str | None
     reason: str
     changes: tuple[str, ...] = ()
 
@@ -83,8 +73,6 @@ class SnapshotCheck:
                 "json": str(self.snapshot_json),
                 "markdown": str(self.snapshot_markdown),
             },
-            "current_source_fingerprint": self.current_fingerprint,
-            "stored_source_fingerprint": self.stored_fingerprint,
             "reason": self.reason,
             "changes": list(self.changes),
         }
@@ -99,14 +87,9 @@ class SnapshotWriteResult:
     def to_dict(self) -> dict[str, Any]:
         return {
             "action": self.action,
-            "source_fingerprint": self.bundle.source_fingerprint,
             "snapshot": {
-                "markdown": str(
-                    self.bundle.repository / SNAPSHOT_DIRECTORY / SNAPSHOT_MARKDOWN
-                ),
-                "json": str(
-                    self.bundle.repository / SNAPSHOT_DIRECTORY / SNAPSHOT_JSON
-                ),
+                "markdown": str(self.bundle.repository / SNAPSHOT_DIRECTORY / SNAPSHOT_MARKDOWN),
+                "json": str(self.bundle.repository / SNAPSHOT_DIRECTORY / SNAPSHOT_JSON),
             },
             "freshness": self.check.freshness.value,
         }
@@ -123,33 +106,19 @@ def build_snapshot(
     if state.planning_root is None:
         raise SnapshotError("The repository has no docs/planning directory.")
     if state.health == Health.INCONSISTENT or state.has_errors:
-        raise SnapshotError(
-            "Current planning artifacts are inconsistent; snapshot write is refused."
-        )
-
+        raise SnapshotError("Current planning artifacts are inconsistent; snapshot write is refused.")
     adaptive = collect_adaptive_provenance(repository)
     inputs = collect_snapshot_inputs(repository, state, adaptive)
-    source_fingerprint = compute_source_fingerprint(inputs)
     generated = generated_at or datetime.now(timezone.utc)
     if generated.tzinfo is None:
         generated = generated.replace(tzinfo=timezone.utc)
-
-    payload = _snapshot_payload(
-        repository,
-        state,
-        inputs,
-        adaptive,
-        source_fingerprint,
-        generated,
-    )
+    payload = _snapshot_payload(repository, state, inputs, adaptive, generated)
     markdown = render_project_overview(payload)
-    markdown_sha = hashlib.sha256(markdown.encode("utf-8")).hexdigest()
     payload["projection"]["files"] = {
         "projectOverview": SNAPSHOT_MARKDOWN,
-        "projectOverviewSha256": markdown_sha,
         "projectState": SNAPSHOT_JSON,
     }
-    return SnapshotBundle(repository, state, payload, markdown, source_fingerprint)
+    return SnapshotBundle(repository, state, payload, markdown)
 
 
 def collect_snapshot_inputs(
@@ -161,7 +130,7 @@ def collect_snapshot_inputs(
     paths: dict[Path, str] = {}
 
     def add_file(path: Path, category: str) -> None:
-        if not path.exists() or not path.is_file():
+        if not path.exists() or not path.is_file() or path.is_symlink():
             return
         try:
             relative = path.relative_to(repository)
@@ -169,19 +138,10 @@ def collect_snapshot_inputs(
             raise SnapshotError(f"Snapshot input escapes repository: {path}") from exc
         if relative.parts[:3] == ("docs", "planning", "observatory"):
             return
-        resolved = path.resolve()
-        try:
-            resolved.relative_to(repository)
-        except ValueError as exc:
-            raise SnapshotError(f"Snapshot input symlink escapes repository: {path}") from exc
         paths[path] = category
 
-    # The current direct Scope and its work directory are canonical inputs.
-    # Bound Thesis/Transition sources are added explicitly below. Legacy
-    # planning history is not promoted into current authority.
     if state.current_scope is not None:
-        work_root = state.current_scope.path.parent
-        for path in sorted(work_root.rglob("*.md")):
+        for path in sorted(state.current_scope.path.parent.rglob("*.md")):
             add_file(path, "canonical-scope-work")
 
     direct_artifacts: Iterable[Artifact | None] = (
@@ -200,10 +160,12 @@ def collect_snapshot_inputs(
     for authority in [*state.scope_authority, *state.transition_authority]:
         path_value = authority.get("path")
         if path_value:
-            add_file(Path(path_value), "scope-authority")
+            add_file(repository / path_value, "scope-authority-live-projection")
+
     for artifact in (*state.scope_history, *state.legacy_history):
         if artifact.path not in paths:
             add_file(artifact.path, "displayed-history")
+
     adaptive = adaptive or collect_adaptive_provenance(repository)
     for item in [*adaptive.get("mandates", []), *adaptive.get("traces", [])]:
         path_value = item.get("path")
@@ -217,32 +179,11 @@ def collect_snapshot_inputs(
             SnapshotInput(
                 category=category,
                 path=path.relative_to(repository).as_posix(),
-                sha256=hashlib.sha256(data).hexdigest(),
+                content_b64=base64.b64encode(data).decode("ascii"),
                 size=len(data),
             )
         )
     return result
-
-
-def compute_source_fingerprint(inputs: Iterable[SnapshotInput]) -> str:
-    canonical = {
-        "algorithm": SOURCE_FINGERPRINT_ALGORITHM,
-        "inputs": [
-            {
-                "category": item.category,
-                "path": item.path,
-                "sha256": item.sha256,
-            }
-            for item in sorted(inputs, key=lambda value: (value.path, value.category))
-        ],
-    }
-    encoded = json.dumps(
-        canonical,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
 def collect_adaptive_provenance(repository: Path) -> dict[str, Any]:
@@ -253,42 +194,30 @@ def collect_adaptive_provenance(repository: Path) -> dict[str, Any]:
     if root.is_dir():
         for path in sorted(root.rglob("*.md")):
             name = path.name.upper()
-            if name not in {
-                "ADAPTIVE-PLANNING-MANDATE.MD",
-                "ADAPTIVE-PLANNING-TRACE.MD",
-            }:
+            if name not in {"ADAPTIVE-PLANNING-MANDATE.MD", "ADAPTIVE-PLANNING-TRACE.MD"}:
                 continue
             metadata = _read_simple_metadata(path)
             relative = path.relative_to(repository).as_posix()
             if name == "ADAPTIVE-PLANNING-MANDATE.MD":
-                mandates.append(
-                    {
-                        "path": relative,
-                        "recordedStatus": metadata.get("status"),
-                        "revision": _parse_revision(metadata.get("revision")),
-                        "mode": metadata.get("mode"),
-                        "appliesTo": metadata.get("applies_to"),
-                    }
-                )
+                mandates.append({
+                    "path": relative,
+                    "recordedStatus": metadata.get("status"),
+                    "revision": _parse_revision(metadata.get("revision")),
+                    "mode": metadata.get("mode"),
+                    "appliesTo": metadata.get("applies_to"),
+                })
             else:
-                traces.append(
-                    {
-                        "path": relative,
-                        "mandate": metadata.get("mandate"),
-                        "currentMandateRevision": _parse_revision(
-                            metadata.get("current_mandate_revision")
-                        ),
-                    }
-                )
-
-    recorded: dict[str, Any] | None = None
+                traces.append({
+                    "path": relative,
+                    "mandate": metadata.get("mandate"),
+                    "currentMandateRevision": _parse_revision(metadata.get("current_mandate_revision")),
+                })
+    recorded = None
     if mandates:
         recorded = max(
             mandates,
             key=lambda item: (
-                item.get("revision")
-                if isinstance(item.get("revision"), int)
-                else -1,
+                item.get("revision") if isinstance(item.get("revision"), int) else -1,
                 item["path"],
             ),
         )
@@ -298,10 +227,7 @@ def collect_adaptive_provenance(repository: Path) -> dict[str, Any]:
         "traces": traces,
         "recordedMandate": recorded,
         "activationInference": "not-performed",
-        "note": (
-            "Companion provenance presence or a recorded active status does not "
-            "activate IIS Adaptive Planning for the current request."
-        ),
+        "note": "Companion provenance presence does not activate IIS Adaptive Planning for the current request.",
     }
 
 
@@ -311,132 +237,63 @@ def check_snapshot(
     state: ProjectState | None = None,
 ) -> SnapshotCheck:
     repository = repository.expanduser().resolve()
-    directory = repository / SNAPSHOT_DIRECTORY
-    json_path = directory / SNAPSHOT_JSON
-    markdown_path = directory / SNAPSHOT_MARKDOWN
+    json_path = repository / SNAPSHOT_DIRECTORY / SNAPSHOT_JSON
+    markdown_path = repository / SNAPSHOT_DIRECTORY / SNAPSHOT_MARKDOWN
+    if not json_path.exists() and not markdown_path.exists():
+        return SnapshotCheck(SnapshotFreshness.MISSING, repository, json_path, markdown_path, "No stored Observatory snapshot exists.")
+    if not json_path.is_file() or not markdown_path.is_file():
+        return SnapshotCheck(SnapshotFreshness.INCONSISTENT, repository, json_path, markdown_path, "The snapshot pair is incomplete.")
+
+    try:
+        stored = json.loads(json_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeError) as exc:
+        return SnapshotCheck(SnapshotFreshness.INCONSISTENT, repository, json_path, markdown_path, f"Cannot read stored project-state.json: {exc}")
+    if stored.get("schemaVersion") != SNAPSHOT_SCHEMA_VERSION:
+        return SnapshotCheck(SnapshotFreshness.INCONSISTENT, repository, json_path, markdown_path, "Stored snapshot schema is not current.")
+
+    projection = stored.get("projection")
+    if not isinstance(projection, dict) or projection.get("files") != {
+        "projectOverview": SNAPSHOT_MARKDOWN,
+        "projectState": SNAPSHOT_JSON,
+    }:
+        return SnapshotCheck(SnapshotFreshness.INCONSISTENT, repository, json_path, markdown_path, "Stored snapshot file declaration is invalid.")
+
+    try:
+        expected_markdown = render_project_overview(stored)
+        actual_markdown = markdown_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError, KeyError, TypeError) as exc:
+        return SnapshotCheck(SnapshotFreshness.INCONSISTENT, repository, json_path, markdown_path, f"Cannot validate snapshot pair: {exc}")
+    if actual_markdown != expected_markdown:
+        return SnapshotCheck(SnapshotFreshness.INCONSISTENT, repository, json_path, markdown_path, "PROJECT-OVERVIEW.md does not match the stored project-state projection.")
 
     state = state or scan_repository(repository, options=ScanOptions(check_links=True))
-    if state.planning_root is None:
-        return SnapshotCheck(
-            SnapshotFreshness.INCONSISTENT,
-            repository,
-            json_path,
-            markdown_path,
-            None,
-            None,
-            "The repository has no docs/planning directory.",
-        )
     if state.health == Health.INCONSISTENT or state.has_errors:
         return SnapshotCheck(
             SnapshotFreshness.INCONSISTENT,
             repository,
             json_path,
             markdown_path,
-            None,
-            None,
-            "Current canonical planning artifacts are inconsistent.",
-            tuple(f"{issue.code}: {issue.message}" for issue in state.issues),
+            "Current planning artifacts are inconsistent.",
+            tuple(f"{issue.code}: {issue.message}" for issue in state.issues if issue.severity == "error"),
         )
-
     adaptive = collect_adaptive_provenance(repository)
     current_inputs = collect_snapshot_inputs(repository, state, adaptive)
-    current_fingerprint = compute_source_fingerprint(current_inputs)
-
-    if not json_path.exists() and not markdown_path.exists():
+    changes = _compare_inputs(projection.get("inputs"), current_inputs)
+    if changes:
         return SnapshotCheck(
-            SnapshotFreshness.MISSING,
+            SnapshotFreshness.STALE,
             repository,
             json_path,
             markdown_path,
-            current_fingerprint,
-            None,
-            "No durable Observatory snapshot exists.",
+            "Planning inputs or displayed history changed after snapshot generation.",
+            tuple(changes),
         )
-    if not json_path.is_file() or not markdown_path.is_file():
-        return SnapshotCheck(
-            SnapshotFreshness.INCONSISTENT,
-            repository,
-            json_path,
-            markdown_path,
-            current_fingerprint,
-            None,
-            "Snapshot pair is incomplete; both project-state.json and PROJECT-OVERVIEW.md are required.",
-        )
-
-    try:
-        stored = json.loads(json_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        return SnapshotCheck(
-            SnapshotFreshness.INCONSISTENT,
-            repository,
-            json_path,
-            markdown_path,
-            current_fingerprint,
-            None,
-            f"Snapshot JSON is unreadable or invalid: {exc}",
-        )
-
-    if stored.get("schemaVersion") != SNAPSHOT_SCHEMA_VERSION:
-        return SnapshotCheck(
-            SnapshotFreshness.INCONSISTENT,
-            repository,
-            json_path,
-            markdown_path,
-            current_fingerprint,
-            _stored_fingerprint(stored),
-            "Snapshot schema version is unsupported or missing.",
-        )
-    projection = stored.get("projection")
-    if not isinstance(projection, dict) or projection.get("authority") != PROJECTION_AUTHORITY:
-        return SnapshotCheck(
-            SnapshotFreshness.INCONSISTENT,
-            repository,
-            json_path,
-            markdown_path,
-            current_fingerprint,
-            _stored_fingerprint(stored),
-            "Snapshot projection authority is missing or invalid.",
-        )
-
-    stored_fingerprint = _stored_fingerprint(stored)
-    files = projection.get("files") if isinstance(projection, dict) else None
-    expected_markdown_sha = (
-        files.get("projectOverviewSha256") if isinstance(files, dict) else None
-    )
-    actual_markdown_sha = hashlib.sha256(markdown_path.read_bytes()).hexdigest()
-    if not expected_markdown_sha or expected_markdown_sha != actual_markdown_sha:
-        return SnapshotCheck(
-            SnapshotFreshness.INCONSISTENT,
-            repository,
-            json_path,
-            markdown_path,
-            current_fingerprint,
-            stored_fingerprint,
-            "PROJECT-OVERVIEW.md does not match the checksum recorded in project-state.json.",
-        )
-
-    if stored_fingerprint == current_fingerprint:
-        return SnapshotCheck(
-            SnapshotFreshness.CURRENT,
-            repository,
-            json_path,
-            markdown_path,
-            current_fingerprint,
-            stored_fingerprint,
-            "Stored snapshot matches the current source fingerprint.",
-        )
-
-    stored_inputs = projection.get("inputs") if isinstance(projection, dict) else []
-    changes = _compare_inputs(stored_inputs, current_inputs)
     return SnapshotCheck(
-        SnapshotFreshness.STALE,
+        SnapshotFreshness.CURRENT,
         repository,
         json_path,
         markdown_path,
-        current_fingerprint,
-        stored_fingerprint,
-        "Planning inputs, displayed history or Adaptive provenance changed after snapshot generation.",
-        tuple(changes),
+        "Stored snapshot inputs match the current observed planning inputs.",
     )
 
 
@@ -452,24 +309,11 @@ def write_snapshot(repository: Path) -> SnapshotWriteResult:
     directory.mkdir(parents=True, exist_ok=True)
     markdown_path = directory / SNAPSHOT_MARKDOWN
     json_path = directory / SNAPSHOT_JSON
-    json_text = json.dumps(
-        bundle.payload,
-        ensure_ascii=False,
-        indent=2,
-        sort_keys=False,
-    ) + "\n"
-    _atomic_replace_pair(
-        directory,
-        markdown_path,
-        bundle.markdown,
-        json_path,
-        json_text,
-    )
+    json_text = json.dumps(bundle.payload, ensure_ascii=False, indent=2, sort_keys=False) + "\n"
+    _atomic_replace_pair(directory, markdown_path, bundle.markdown, json_path, json_text)
     after = check_snapshot(repository, state=state)
     if after.freshness != SnapshotFreshness.CURRENT:
-        raise SnapshotError(
-            f"Snapshot write did not verify as CURRENT: {after.reason}"
-        )
+        raise SnapshotError(f"Snapshot write did not verify as CURRENT: {after.reason}")
     return SnapshotWriteResult("WRITTEN", bundle, after)
 
 
@@ -480,8 +324,6 @@ def render_snapshot_check(check: SnapshotCheck) -> str:
         f"Snapshot-Freshness: {check.freshness.value}",
         f"Snapshot JSON: {check.snapshot_json}",
         f"Project Overview: {check.snapshot_markdown}",
-        f"Current Source Fingerprint: {check.current_fingerprint or 'None'}",
-        f"Stored Source Fingerprint: {check.stored_fingerprint or 'None'}",
         f"Reason: {check.reason}",
     ]
     if check.changes:
@@ -497,7 +339,6 @@ def render_snapshot_write(result: SnapshotWriteResult) -> str:
         f"Repository: {result.bundle.repository}\n"
         f"Action: {result.action}\n"
         f"Snapshot-Freshness: {result.check.freshness.value}\n"
-        f"Source-Fingerprint: {result.bundle.source_fingerprint}\n"
         f"Project Overview: {directory / SNAPSHOT_MARKDOWN}\n"
         f"Project State: {directory / SNAPSHOT_JSON}\n"
     )
@@ -524,8 +365,7 @@ def render_project_overview(payload: dict[str, Any]) -> str:
             f"- Current Scope: `{current_scope.get('path') or 'None'}`",
             f"- Scope Status: {current_scope.get('status') or 'None'}",
             f"- Work Slug: {current_scope.get('workSlug') or 'None'}",
-            f"- Next Work: {next_work.get('kind')}"
-            + (f" / {next_work.get('targetId')}" if next_work.get('targetId') else ""),
+            f"- Next Work: {next_work.get('kind')}" + (f" / {next_work.get('targetId')}" if next_work.get("targetId") else ""),
             f"- Next Leaf: {next_work.get('leaf')}",
             f"- Reason: {next_work.get('reason')}",
         ]
@@ -538,24 +378,23 @@ def render_project_overview(payload: dict[str, Any]) -> str:
             f"- Current Increment: {_snapshot_artifact_label(current.get('increment'))}",
             f"- Current Spec: {_snapshot_artifact_label(current.get('spec'))}",
             f"- Work Slug: {current.get('workSlug') or 'None'}",
-            f"- Next Work: {next_work.get('kind')}"
-            + (f" / {next_work.get('targetId')}" if next_work.get('targetId') else ""),
+            f"- Next Work: {next_work.get('kind')}" + (f" / {next_work.get('targetId')}" if next_work.get("targetId") else ""),
             f"- Next Leaf: {next_work.get('leaf')}",
             f"- Reason: {next_work.get('reason')}",
         ]
+
     lines = [
         "# IIS Project Overview",
         "",
         "Projection-Authority: derived-read-only",
         f"Generated-By: iis-observatory {projection['generatedBy']['version']}",
         f"Generated-At: {projection['generatedAt']}",
-        f"Source-Fingerprint: {projection['sourceFingerprint']}",
         "Snapshot-Freshness: current-at-generation",
         f"Projection-Consistency: {projection['consistency']}",
         f"Git-Revision-At-Generation: {git.get('head') or 'unavailable'}",
         f"Git-Dirty-At-Generation: {_yes_no(git.get('dirty')) if git.get('available') else 'unavailable'}",
         "",
-        "This file is a generated read-only projection. Canonical IIS artifacts and exact runtime evidence remain authoritative in their own domains.",
+        "This file is a generated read-only projection. It does not establish downstream admission.",
         "",
         "## Project",
         "",
@@ -569,7 +408,6 @@ def render_project_overview(payload: dict[str, Any]) -> str:
         "## Delivery Progress",
         "",
     ]
-
     if progress:
         for measurement in progress:
             rendered = _render_progress_measurement(measurement)
@@ -577,49 +415,32 @@ def render_project_overview(payload: dict[str, Any]) -> str:
                 lines.append(rendered)
     else:
         lines.append("- No exact Ticket denominator is available for the current unit.")
+
     if direct_scope:
         lines.extend(["", "## Scope", ""])
         current_scope = direct_scope.get("current") or {}
         lines.append(f"- Status: {current_scope.get('status') or 'None'}")
         lines.append(f"- Path: `{current_scope.get('path') or 'None'}`")
-        lines.append("- Bound Thesis:")
-        lines.extend(
-            f"  - {item.get('path')} sha256:{item.get('sha256')}"
-            for item in direct_scope.get("boundThesis", [])
-        )
+        lines.append("- Bound Thesis refs — admission not checked:")
+        for item in direct_scope.get("boundThesis", []):
+            lines.append(f"  - {item.get('snapshot')}:{item.get('path')}")
         transition = direct_scope.get("transitionAuthority", [])
         if transition:
-            lines.append("- Transition Authority:")
-            lines.extend(
-                f"  - {item.get('path')} sha256:{item.get('sha256')}"
-                for item in transition
-            )
+            lines.append("- Transition Authority refs:")
+            for item in transition:
+                lines.append(f"  - {item.get('snapshot')}:{item.get('path')}")
         lines.append("- Required Outcomes — fulfillment not established:")
         remaining_outcomes = direct_scope.get("remainingRequiredOutcomes", [])
         if remaining_outcomes:
             lines.extend(f"  - {item.get('text')} ({item.get('source')})" for item in remaining_outcomes)
         else:
             lines.append("  - None observed")
-        legacy = planning.get("legacy", {})
-        if legacy.get("history"):
-            lines.append("- Legacy history is read-only; automatic migration: no")
-        if legacy.get("transitionRequired"):
-            lines.append("- Legacy transition required:")
-            lines.extend(f"  - {_snapshot_artifact_label(item)}" for item in legacy["transitionRequired"])
-
 
     lines.extend(["", "## Tickets", ""])
     if tickets["items"]:
-        lines.extend(
-            [
-                "| Ticket | Artifact status | Path |",
-                "|---|---|---|",
-            ]
-        )
+        lines.extend(["| Ticket | Artifact status | Path |", "|---|---|---|"])
         for ticket in tickets["items"]:
-            lines.append(
-                f"| {ticket.get('id') or 'Unknown'} | {ticket.get('status') or 'missing'} | `{ticket['path']}` |"
-            )
+            lines.append(f"| {ticket.get('id') or 'Unknown'} | {ticket.get('status') or 'missing'} | `{ticket['path']}` |")
     else:
         lines.append("No current Tickets are associated with this planning unit.")
 
@@ -630,8 +451,7 @@ def render_project_overview(payload: dict[str, Any]) -> str:
         lines.append("### Authored next candidates")
         lines.append("")
         lines.extend(f"- {_snapshot_artifact_label(item)}" for item in candidates)
-        lines.append("")
-        lines.append("Next Increment: not yet shaped")
+        lines.extend(["", "Next Increment: not yet shaped"])
     else:
         lines.append("Authored next candidates: None")
     if deferred:
@@ -643,12 +463,8 @@ def render_project_overview(payload: dict[str, Any]) -> str:
     recorded = adaptive.get("recordedMandate")
     if recorded:
         lines.append(f"- Recorded mandate: `{recorded['path']}`")
-        lines.append(
-            f"- Recorded mandate revision: {recorded.get('revision') if recorded.get('revision') is not None else 'unknown'}"
-        )
-        lines.append(
-            f"- Recorded mandate artifact status: {recorded.get('recordedStatus') or 'unknown'}"
-        )
+        lines.append(f"- Recorded mandate revision: {recorded.get('revision') if recorded.get('revision') is not None else 'unknown'}")
+        lines.append(f"- Recorded mandate artifact status: {recorded.get('recordedStatus') or 'unknown'}")
     lines.append("- Current Adaptive mode inference: not performed")
     lines.append(f"- Boundary: {adaptive['note']}")
 
@@ -656,23 +472,19 @@ def render_project_overview(payload: dict[str, Any]) -> str:
     if planning["issues"]:
         for issue in planning["issues"]:
             suffix = f" (`{issue['path']}`)" if issue.get("path") else ""
-            lines.append(
-                f"- {issue['severity'].upper()} {issue['code']}: {issue['message']}{suffix}"
-            )
+            lines.append(f"- {issue['severity'].upper()} {issue['code']}: {issue['message']}{suffix}")
     else:
         lines.append("No planning-artifact issues were reported by this projection.")
 
-    lines.extend(
-        [
-            "",
-            "## Projection Boundaries",
-            "",
-            "- This snapshot does not change Scope, Work Package, Increment, Spec, Ticket, verification, release, or runtime state.",
-            "- It does not select among authored follow-up candidates or execute the reported next leaf.",
-            "- Overall product estimates and project-specific runtime coverage are intentionally absent until supplied by an explicit measurement provider.",
-            "",
-        ]
-    )
+    lines.extend([
+        "",
+        "## Projection Boundaries",
+        "",
+        "- This snapshot does not change canonical planning, verification, release, or runtime state.",
+        "- It does not establish Product Thesis closure or role admission.",
+        "- Runtime correctness remains an independently observed property.",
+        "",
+    ])
     return "\n".join(lines)
 
 
@@ -686,15 +498,10 @@ def _render_progress_measurement(measurement: dict[str, Any]) -> str | None:
         return None
     if not isinstance(percent, (int, float)):
         percent = (numerator / denominator * 100.0) if denominator else 0.0
-    bar = _progress_bar(percent)
-    return (
-        f"- {measurement.get('label') or 'Progress'}: {bar} "
-        f"{numerator:g} / {denominator:g} ({percent:.1f}%) — exact ratio"
-    )
+    return f"- {measurement.get('label') or 'Progress'}: {_progress_bar(percent)} {numerator:g} / {denominator:g} ({percent:.1f}%) — exact ratio"
 
 
 def _progress_bar(percent: float, width: int = 10) -> str:
-    """Render a deterministic percentage bar without overstating tiny ratios."""
     if width <= 0:
         return ""
     bounded = max(0.0, min(100.0, float(percent)))
@@ -720,37 +527,27 @@ def _snapshot_payload(
     state: ProjectState,
     inputs: list[SnapshotInput],
     adaptive: dict[str, Any],
-    source_fingerprint: str,
     generated_at: datetime,
 ) -> dict[str, Any]:
     ticket_counts = state.ticket_counts
     progress: list[dict[str, Any]] = []
     if ticket_counts["total"]:
-        percent = round(
-            ticket_counts["done"] / ticket_counts["total"] * 100.0, 6
-        )
-        progress.append(
-            {
-                "id": "current-ticket-delivery",
-                "label": "Current Ticket delivery",
-                "measurement": "exact-ratio",
-                "numerator": ticket_counts["done"],
-                "denominator": ticket_counts["total"],
-                "percent": percent,
-                "evidence": [ticket.relative_path for ticket in state.tickets],
-            }
-        )
-
+        percent = round(ticket_counts["done"] / ticket_counts["total"] * 100.0, 6)
+        progress.append({
+            "id": "current-ticket-delivery",
+            "label": "Current Ticket delivery",
+            "measurement": "exact-ratio",
+            "numerator": ticket_counts["done"],
+            "denominator": ticket_counts["total"],
+            "percent": percent,
+            "evidence": [ticket.relative_path for ticket in state.tickets],
+        })
     return {
         "schemaVersion": SNAPSHOT_SCHEMA_VERSION,
         "projection": {
             "authority": PROJECTION_AUTHORITY,
             "generatedBy": {"name": "iis-observatory", "version": __version__},
-            "generatedAt": generated_at.astimezone(timezone.utc).isoformat(
-                timespec="seconds"
-            ),
-            "sourceFingerprint": source_fingerprint,
-            "sourceFingerprintAlgorithm": SOURCE_FINGERPRINT_ALGORITHM,
+            "generatedAt": generated_at.astimezone(timezone.utc).isoformat(timespec="seconds"),
             "freshness": "current-at-generation",
             "consistency": "consistent",
             "inputs": [item.to_dict() for item in inputs],
@@ -777,29 +574,14 @@ def _snapshot_payload(
             "tickets": {
                 "counts": ticket_counts,
                 "items": [_stable_artifact_ref(item) for item in state.tickets],
-                "completed": [
-                    item.identifier or item.relative_path
-                    for item in state.completed_tickets
-                ],
-                "remaining": [
-                    item.identifier or item.relative_path
-                    for item in state.remaining_tickets
-                ],
+                "completed": [item.identifier or item.relative_path for item in state.completed_tickets],
+                "remaining": [item.identifier or item.relative_path for item in state.remaining_tickets],
             },
             "followUp": {
-                "nextCandidateWorkPackages": [
-                    _stable_artifact_ref(item)
-                    for item in state.next_candidate_work_packages
-                ],
-                "deferredWorkPackages": [
-                    _stable_artifact_ref(item) for item in state.deferred_work_packages
-                ],
+                "nextCandidateWorkPackages": [_stable_artifact_ref(item) for item in state.next_candidate_work_packages],
+                "deferredWorkPackages": [_stable_artifact_ref(item) for item in state.deferred_work_packages],
                 "nextIncrement": None,
-                "nextIncrementState": (
-                    "not-yet-shaped"
-                    if state.next_candidate_work_packages
-                    else None
-                ),
+                "nextIncrementState": "not-yet-shaped" if state.next_candidate_work_packages else None,
             },
             "nextWork": {
                 "kind": state.next_work.kind.value,
@@ -826,6 +608,8 @@ def _stable_artifact_ref(artifact: Artifact | None) -> dict[str, Any] | None:
         "path": artifact.relative_path,
         "workSlug": artifact.work_slug,
     }
+
+
 def _stable_scope_details(state: ProjectState) -> dict[str, Any] | None:
     scope = state.current_scope
     if not state.direct_scope_mode or scope is None:
@@ -843,8 +627,14 @@ def _stable_scope_details(state: ProjectState) -> dict[str, Any] | None:
         "status": scope.status,
         "active": [_stable_artifact_ref(item) for item in state.active_scopes],
         "history": [_stable_artifact_ref(item) for item in state.scope_history],
-        "boundThesis": list(state.scope_authority),
-        "transitionAuthority": list(state.transition_authority),
+        "boundThesis": [
+            {key: value for key, value in item.items() if key in {"snapshot", "path"}}
+            for item in state.scope_authority
+        ],
+        "transitionAuthority": [
+            {key: value for key, value in item.items() if key in {"snapshot", "path"}}
+            for item in state.transition_authority
+        ],
         "requiredOutcomes": list(state.required_outcomes),
         "remainingRequiredOutcomes": list(state.remaining_required_outcomes),
     }
@@ -853,24 +643,15 @@ def _stable_scope_details(state: ProjectState) -> dict[str, Any] | None:
 def _git_metadata(repository: Path) -> dict[str, Any]:
     top = _run_git_optional(repository, ["rev-parse", "--show-toplevel"])
     if top is None:
-        return {
-            "available": False,
-            "head": None,
-            "branch": None,
-            "dirty": None,
-        }
+        return {"available": False, "head": None, "branch": None, "dirty": None}
     head = _run_git_optional(repository, ["rev-parse", "HEAD"])
     branch = _run_git_optional(repository, ["branch", "--show-current"])
-    status = _run_git_optional(
-        repository, ["status", "--porcelain", "--untracked-files=normal"]
-    )
+    status = _run_git_optional(repository, ["status", "--porcelain", "--untracked-files=normal"])
     dirty_lines = []
     if status:
         for line in status.splitlines():
-            normalized = line.replace("\\", "/")
-            if "docs/planning/observatory/" in normalized:
-                continue
-            dirty_lines.append(line)
+            if "docs/planning/observatory/" not in line.replace("\\", "/"):
+                dirty_lines.append(line)
     return {
         "available": True,
         "head": head.strip() if head else None,
@@ -910,9 +691,6 @@ def _atomic_replace_pair(
         temp_paths.append(md_temp)
         json_temp = _write_temp(directory, json_path.name, json_text)
         temp_paths.append(json_temp)
-        # JSON is the check anchor and is replaced last. A crash between the two
-        # replacements yields an explicit checksum inconsistency rather than a
-        # falsely CURRENT pair.
         os.replace(md_temp, markdown_path)
         temp_paths.remove(md_temp)
         os.replace(json_temp, json_path)
@@ -927,16 +705,11 @@ def _atomic_replace_pair(
             os.close(directory_fd)
     finally:
         for path in temp_paths:
-            try:
-                path.unlink()
-            except FileNotFoundError:
-                pass
+            path.unlink(missing_ok=True)
 
 
 def _write_temp(directory: Path, name: str, content: str) -> Path:
-    descriptor, raw_path = tempfile.mkstemp(
-        prefix=f".{name}.", suffix=".tmp", dir=directory
-    )
+    descriptor, raw_path = tempfile.mkstemp(prefix=f".{name}.", suffix=".tmp", dir=directory)
     path = Path(raw_path)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
@@ -946,10 +719,7 @@ def _write_temp(directory: Path, name: str, content: str) -> Path:
         os.chmod(path, 0o644)
         return path
     except Exception:
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            pass
+        path.unlink(missing_ok=True)
         raise
 
 
@@ -978,27 +748,19 @@ def _parse_revision(value: str | None) -> int | str | None:
     return clean or None
 
 
-def _stored_fingerprint(payload: dict[str, Any]) -> str | None:
-    projection = payload.get("projection")
-    if not isinstance(projection, dict):
-        return None
-    value = projection.get("sourceFingerprint")
-    return value if isinstance(value, str) else None
-
-
-def _compare_inputs(
-    stored_inputs: Any, current_inputs: list[SnapshotInput]
-) -> list[str]:
-    stored_map: dict[str, str] = {}
+def _compare_inputs(stored_inputs: Any, current_inputs: list[SnapshotInput]) -> list[str]:
+    stored_map: dict[str, tuple[str, str, int]] = {}
     if isinstance(stored_inputs, list):
         for item in stored_inputs:
             if not isinstance(item, dict):
                 continue
             path = item.get("path")
-            digest = item.get("sha256")
-            if isinstance(path, str) and isinstance(digest, str):
-                stored_map[path] = digest
-    current_map = {item.path: item.sha256 for item in current_inputs}
+            category = item.get("category")
+            content = item.get("content")
+            size = item.get("size")
+            if isinstance(path, str) and isinstance(category, str) and isinstance(content, str) and isinstance(size, int):
+                stored_map[path] = (category, content, size)
+    current_map = {item.path: (item.category, item.content_b64, item.size) for item in current_inputs}
     changes: list[str] = []
     for path in sorted(set(current_map) - set(stored_map)):
         changes.append(f"added input: {path}")
@@ -1007,7 +769,7 @@ def _compare_inputs(
     for path in sorted(set(stored_map) & set(current_map)):
         if stored_map[path] != current_map[path]:
             changes.append(f"changed input: {path}")
-    return changes or ["source fingerprint changed"]
+    return changes
 
 
 def _snapshot_artifact_label(item: dict[str, Any] | None) -> str:
@@ -1019,9 +781,7 @@ def _snapshot_artifact_label(item: dict[str, Any] | None) -> str:
     status = item.get("status")
     label = identifier or title or path or "Unknown"
     if identifier and title:
-        clean = re.sub(
-            rf"(?i)^\s*{re.escape(identifier)}\s*[:\-]?\s*", "", title
-        ).strip()
+        clean = re.sub(rf"(?i)^\s*{re.escape(identifier)}\s*[:\-]?\s*", "", title).strip()
         if clean and clean.lower() not in {"increment", "work package"}:
             label = f"{identifier} · {clean}"
     if status:

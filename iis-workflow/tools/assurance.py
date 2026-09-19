@@ -1,33 +1,27 @@
 #!/usr/bin/env python3
-"""Bind native evidence and calculate structural closure; never run agents or write Scope."""
+"""Bind native evidence and calculate structural closure using executor-owned fixed snapshots."""
 from __future__ import annotations
 
 import argparse
-import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
 import re
-import stat
 import subprocess
 import sys
 import time
 import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from iis_artifacts.refs import validate_ref
+from iis_artifacts.store import ArtifactStore
+
 SPEC = importlib.util.spec_from_file_location("iis_scope_validator", ROOT / "scope-shaper/tools/validate_scope.py")
 assert SPEC is not None and SPEC.loader is not None
 SCOPE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SCOPE)
-
-
-def digest(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def identity(value: dict) -> str:
-    return digest(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode())
 
 
 def need(condition: bool, reason: str) -> None:
@@ -52,20 +46,10 @@ def save(path: Path, value: dict) -> None:
         stream.write("\n")
 
 
-def file_ref(path: Path) -> dict:
-    need(path.is_absolute() and path.is_file() and not path.is_symlink(), "INVALID_FILE_REFERENCE")
-    return {"path": str(path), "sha256": digest(path.read_bytes())}
-
-
-def check_ref(ref: dict) -> None:
-    need(isinstance(ref, dict) and text(ref.get("path")), "INVALID_FILE_REFERENCE")
-    need(file_ref(Path(ref["path"])) == ref, "EVIDENCE_DRIFT:" + ref["path"])
-
-
-def references(values: object, *, empty: bool = False) -> None:
+def references(store: ArtifactStore, values: object, *, empty: bool = False) -> None:
     need(isinstance(values, list) and (empty or bool(values)), "MISSING_EVIDENCE")
-    for ref in values:
-        check_ref(ref)
+    for item in values:
+        store.resolve(validate_ref(item))
 
 
 def rows(value: object, label: str) -> dict[str, dict]:
@@ -78,27 +62,31 @@ def rows(value: object, label: str) -> dict[str, dict]:
     return result
 
 
-def load_baseline(path: Path) -> tuple[dict, bytes]:
+def load_baseline(path: Path, store: ArtifactStore) -> tuple[dict, bytes]:
     raw = path.read_bytes()
     if path.suffix.lower() == ".json":
         block = raw
     else:
-        section = SCOPE.sections(raw.decode()).get("Assurance Baseline", "")
+        section = SCOPE.sections(raw.decode()) .get("Assurance Baseline", "")
         blocks = re.findall(r"^```iis-assurance\s*\n(.*?)^```\s*$", section, re.M | re.S)
         need(len(blocks) == 1, "BASELINE_BLOCK_REQUIRED")
         block = blocks[0].encode()
     value = json.loads(block)
-    validate_baseline(value)
+    validate_baseline(value, store)
     return value, block
 
 
-def validate_baseline(value: dict) -> dict:
-    need(isinstance(value, dict) and value.get("schema") == "iis-assurance/v1", "INVALID_BASELINE")
-    check_ref(value["scope"])
-    scope = Path(value["scope"]["path"])
-    authority = SCOPE.validate(scope)
+def _stored_scope(store: ArtifactStore, value: dict) -> dict:
+    ref = validate_ref(value)
+    data = store.read_bytes(ref)
+    return SCOPE.validate_bytes(data, ref["path"])
+
+
+def validate_baseline(value: dict, store: ArtifactStore) -> dict:
+    need(isinstance(value, dict) and value.get("schema") == "iis-assurance/v2", "INVALID_BASELINE")
+    authority = _stored_scope(store, value["scope"])
     need(authority["status"] == "ready", "SCOPE_NOT_READY")
-    acceptance = SCOPE.sections(scope.read_text(encoding="utf-8"))["Acceptance"]
+    acceptance = SCOPE.sections(store.read_bytes(value["scope"]).decode("utf-8"))["Acceptance"]
     paragraphs = [part.strip() for part in re.split(r"\n\s*\n", acceptance) if part.strip()]
     gates = rows(value["gates"], "gates")
     observations = rows(value["observations"], "observations")
@@ -121,7 +109,7 @@ def validate_baseline(value: dict) -> dict:
         need(isinstance(gate["argv"], list) and bool(gate["argv"]) and all(text(x) for x in gate["argv"]), "INVALID_ARGV")
         need(text(gate["cwd"]) and Path(gate["cwd"]).is_absolute(), "INVALID_CWD")
         need(type(gate["timeout"]) in (int, float) and 0 < gate["timeout"] <= 3600, "INVALID_TIMEOUT")
-        references(gate["mechanisms"])
+        references(store, gate["mechanisms"])
         need(isinstance(gate["jobs"], list) and all(text(x) for x in gate["jobs"]), "INVALID_JOBS")
         need(len(gate["jobs"]) == len(set(gate["jobs"])), "DUPLICATE_JOB")
         need((not gate["jobs"] and gate["jobs_path"] is None) or (bool(gate["jobs"]) and text(gate["jobs_path"]) and Path(gate["jobs_path"]).is_absolute()), "INVALID_JOB_EXPORT")
@@ -143,75 +131,73 @@ def validate_baseline(value: dict) -> dict:
     return authority
 
 
-def git(root: Path, *args: str) -> bytes:
-    return subprocess.run(["git", "-C", str(root), *args], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
+def capture_source(store: ArtifactStore, root: Path, run_id: str) -> dict:
+    root = Path(root).resolve(strict=True)
+    need(root.is_absolute(), "INVALID_SOURCE_ROOT")
+    snapshot = store.capture_tree(root, kind="source", origin=str(root), producer_run=run_id)
+    return {"snapshot": snapshot, "root": str(root)}
 
 
-def source_identity(root: Path, base: str) -> dict:
-    need(root.is_absolute() and root == root.resolve(), "INVALID_SOURCE_ROOT")
-    need(git(root, "rev-parse", "--show-toplevel").decode().strip() == str(root), "SOURCE_ROOT_NOT_REPOSITORY")
-    need(not git(root, "status", "--porcelain", "--untracked-files=all"), "TARGET_NOT_SEALED")
-    result = git(root, "rev-parse", "HEAD").decode().strip()
-    need(re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", base) is not None, "FULL_BASE_SHA_REQUIRED")
-    need(git(root, "rev-parse", base + "^{commit}").decode().strip() == base, "INVALID_BASE_COMMIT")
-    files = []
-    for entry in git(root, "ls-files", "--stage", "-z").split(b"\0"):
-        if not entry:
-            continue
-        header, name = entry.split(b"\t", 1)
-        mode, _, stage = header.split()
-        need(mode in (b"100644", b"100755") and stage == b"0", "UNSUPPORTED_TARGET_ENTRY")
-        path = root / os.fsdecode(name)
-        ref = file_ref(path)
-        files.append({**ref, "mode": stat.S_IMODE(path.stat().st_mode)})
-    return {"root": str(root), "base": base, "result": result, "diff_sha256": digest(git(root, "diff", "--binary", base, result, "--")), "files": files}
-
-
-def check_execution(execution: dict) -> None:
+def check_execution(store: ArtifactStore, execution: dict) -> None:
     need(isinstance(execution, dict) and text(execution.get("note")), "EXECUTION_IDENTITY_REQUIRED")
     for kind in ("artifacts", "runtime", "mechanisms"):
-        references(execution[kind], empty=kind != "mechanisms")
+        references(store, execution[kind], empty=kind != "mechanisms")
 
 
-def bind(baseline_path: Path, root: Path, base: str, execution: dict) -> dict:
-    baseline, block = load_baseline(baseline_path)
-    authority = validate_baseline(baseline)
-    need(Path(authority["project_root"]).is_relative_to(root), "FOREIGN_PROJECT")
-    check_execution(execution)
-    return {"schema": "iis-assurance-binding/v1", "run_id": uuid.uuid4().hex,
-            "baseline": {"path": str(baseline_path.resolve()), "sha256": digest(block)},
-            "scope": baseline["scope"], "authorities": authority.get("product_authorities", []) + authority.get("transition_authorities", []),
-            "source": source_identity(root, base), "execution": execution}
+def bind(baseline_path: Path, store: ArtifactStore, root: Path, execution: dict) -> dict:
+    baseline, block = load_baseline(baseline_path, store)
+    authority = validate_baseline(baseline, store)
+    project_root = Path(authority["project_root"])
+    need(project_root == Path(root).resolve(strict=True), "FOREIGN_PROJECT")
+    check_execution(store, execution)
+    run_id = "run-" + uuid.uuid4().hex
+    baseline_snapshot = store.capture_mapping(
+        {"baseline.json": block},
+        kind="source",
+        origin=str(baseline_path),
+        producer_run=run_id,
+    )
+    source = capture_source(store, root, run_id)
+    return {
+        "schema": "iis-assurance-binding/v2",
+        "binding_id": "bind-" + uuid.uuid4().hex,
+        "run_id": run_id,
+        "baseline": {"snapshot": baseline_snapshot, "path": "baseline.json"},
+        "scope": baseline["scope"],
+        "authorities": authority.get("product_authorities", []) + authority.get("transition_authorities", []),
+        "source": source,
+        "execution": execution,
+    }
 
 
-def current(baseline_path: Path, binding: dict) -> dict:
-    need(binding.get("schema") == "iis-assurance-binding/v1" and text(binding.get("run_id")), "INVALID_BINDING")
-    baseline, block = load_baseline(baseline_path)
-    need(binding["baseline"] == {"path": str(baseline_path.resolve()), "sha256": digest(block)}, "BASELINE_DRIFT")
-    authority = validate_baseline(baseline)
+def current(baseline_path: Path, store: ArtifactStore, binding: dict) -> dict:
+    need(binding.get("schema") == "iis-assurance-binding/v2" and text(binding.get("binding_id")) and text(binding.get("run_id")), "INVALID_BINDING")
+    baseline, block = load_baseline(baseline_path, store)
+    need(store.read_bytes(binding["baseline"]) == block, "BASELINE_DRIFT")
+    authority = validate_baseline(baseline, store)
     need(baseline["scope"] == binding["scope"], "SCOPE_DRIFT")
     need(binding["authorities"] == authority.get("product_authorities", []) + authority.get("transition_authorities", []), "AUTHORITY_DRIFT")
-    check_execution(binding["execution"])
+    check_execution(store, binding["execution"])
     source = binding["source"]
-    need(source_identity(Path(source["root"]), source["base"]) == source, "TARGET_DRIFT")
+    need(store.compare_tree(source["snapshot"], Path(source["root"])), "TARGET_DRIFT")
     return baseline
 
 
-def run_gate(baseline_path: Path, binding: dict, gate_id: str, output: Path) -> dict:
-    baseline = current(baseline_path, binding)
+def run_gate(baseline_path: Path, store: ArtifactStore, binding: dict, gate_id: str, output: Path) -> dict:
+    baseline = current(baseline_path, store, binding)
     gate = rows(baseline["gates"], "gates")[gate_id]
     output = output.resolve()
     need(not output.is_relative_to(Path(binding["source"]["root"])), "EVIDENCE_INSIDE_TARGET")
     output.mkdir(parents=True, exist_ok=False)
     started = time.monotonic()
     env = {**os.environ, "IIS_ASSURANCE_RUN_ID": binding["run_id"], "IIS_ASSURANCE_GATE_ID": gate_id}
-    invocation = "launch:" + uuid.uuid4().hex
+    invocation = "launch-" + uuid.uuid4().hex
     code = None
     failure = None
     stdout = stderr = b""
     try:
         process = subprocess.Popen(gate["argv"], cwd=gate["cwd"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        invocation = f"process:{process.pid}:{uuid.uuid4().hex}"
+        invocation = f"process-{process.pid}-" + uuid.uuid4().hex
         try:
             stdout, stderr = process.communicate(timeout=gate["timeout"])
             code = process.returncode
@@ -219,26 +205,50 @@ def run_gate(baseline_path: Path, binding: dict, gate_id: str, output: Path) -> 
             process.kill()
             process.wait()
             stdout, stderr = exc.output or b"", exc.stderr or b""
-            process.stdout.close()
-            process.stderr.close()
             failure = "TIMEOUT_EFFECT_SETTLEMENT_REQUIRED"
     except OSError as exc:
         failure = str(exc)
     (output / "stdout").write_bytes(stdout)
     (output / "stderr").write_bytes(stderr)
-    refs = [file_ref(output / "stdout"), file_ref(output / "stderr")]
-    jobs = None
+    evidence_map: dict[str, bytes] = {f"{gate_id}/stdout": stdout, f"{gate_id}/stderr": stderr}
+    jobs_data = None
     if gate["jobs"] and Path(gate["jobs_path"]).is_file():
-        (output / "jobs.json").write_bytes(Path(gate["jobs_path"]).read_bytes())
-        jobs = file_ref(output / "jobs.json")
-        refs.append(jobs)
-    record = {"schema": "iis-assurance-result/v1", "kind": "gate", "id": gate_id,
-              "invocation": invocation, "binding": identity(binding), "completion": "BLOCKED" if failure else "COMPLETE",
-              "evidence": refs, "effects": [], "capture": {"argv": gate["argv"], "cwd": gate["cwd"],
-              "returncode": code, "stdout": refs[0], "stderr": refs[1], "jobs": jobs,
-              "elapsed_seconds": time.monotonic() - started, "failure": failure}}
+        jobs_data = Path(gate["jobs_path"]).read_bytes()
+        (output / "jobs.json").write_bytes(jobs_data)
+        evidence_map[f"{gate_id}/jobs.json"] = jobs_data
+    evidence_snapshot = store.capture_mapping(
+        evidence_map,
+        kind="evidence",
+        origin=str(output),
+        producer_run=binding["run_id"],
+        producer_invocation=invocation,
+    )
+    stdout_ref = {"snapshot": evidence_snapshot, "path": f"{gate_id}/stdout"}
+    stderr_ref = {"snapshot": evidence_snapshot, "path": f"{gate_id}/stderr"}
+    jobs_ref = None if jobs_data is None else {"snapshot": evidence_snapshot, "path": f"{gate_id}/jobs.json"}
+    refs = [stdout_ref, stderr_ref] + ([jobs_ref] if jobs_ref else [])
+    record = {
+        "schema": "iis-assurance-result/v2",
+        "kind": "gate",
+        "id": gate_id,
+        "invocation": invocation,
+        "binding": binding["binding_id"],
+        "completion": "BLOCKED" if failure else "COMPLETE",
+        "evidence": refs,
+        "effects": [],
+        "capture": {
+            "argv": gate["argv"],
+            "cwd": gate["cwd"],
+            "returncode": code,
+            "stdout": stdout_ref,
+            "stderr": stderr_ref,
+            "jobs": jobs_ref,
+            "elapsed_seconds": time.monotonic() - started,
+            "failure": failure,
+        },
+    }
     try:
-        current(baseline_path, binding)
+        current(baseline_path, store, binding)
     except (ValueError, OSError, subprocess.CalledProcessError) as exc:
         record["completion"] = "BLOCKED"
         record["capture"]["failure"] = str(exc)
@@ -246,26 +256,27 @@ def run_gate(baseline_path: Path, binding: dict, gate_id: str, output: Path) -> 
     return record
 
 
-def check_gate(gate: dict, result: dict, binding: dict) -> None:
+def check_gate(store: ArtifactStore, gate: dict, result: dict, binding: dict) -> None:
     capture = result["capture"]
     need(capture["argv"] == gate["argv"] and capture["cwd"] == gate["cwd"], "GATE_MECHANISM_MISMATCH")
     need(type(capture["returncode"]) is int and capture["returncode"] == 0 and capture["failure"] is None, "GATE_FAILED")
     need(type(capture["elapsed_seconds"]) in (int, float) and capture["elapsed_seconds"] >= 0, "MISSING_NATIVE_CAPTURE")
     for key in ("stdout", "stderr"):
-        check_ref(capture[key])
+        store.resolve(capture[key])
         need(capture[key] in result["evidence"], "UNLINKED_NATIVE_CAPTURE")
     if gate["jobs"]:
-        check_ref(capture["jobs"])
+        need(capture["jobs"] is not None, "MISSING_JOB_EXPORT")
+        store.resolve(capture["jobs"])
         need(capture["jobs"] in result["evidence"], "UNLINKED_JOB_EXPORT")
-        jobs = read_json(Path(capture["jobs"]["path"]))
+        jobs = json.loads(store.read_bytes(capture["jobs"]))
         need(jobs["run_id"] == binding["run_id"] and jobs["gate_id"] == gate["id"], "STALE_JOB_EXPORT")
         need(all(jobs["jobs"].get(name) == "SUCCESS" for name in gate["jobs"]), "REQUIRED_JOB_NOT_SUCCESSFUL")
 
 
-def check_probe(lane: dict, result: dict) -> None:
+def check_probe(store: ArtifactStore, lane: dict, result: dict) -> None:
     outcome = result["outcome"]
     need(outcome in {"COUNTEREXAMPLE_FOUND", "NO_COUNTEREXAMPLE_WITHIN_BUDGET", "UNOBSERVABLE"}, "INVALID_PROBE_OUTCOME")
-    references(result["hypotheses"])
+    references(store, result["hypotheses"])
     actions = result["actions"]
     need(isinstance(actions, list) and len(actions) >= lane["min_actions"], "INSUFFICIENT_ACTIONS")
     attacked = set()
@@ -273,13 +284,13 @@ def check_probe(lane: dict, result: dict) -> None:
         need(action["surface"] in lane["surfaces"], "FOREIGN_ATTACK_SURFACE")
         attacked.add(action["surface"])
         need(all(text(action.get(key)) for key in ("hypothesis", "initial_state", "trigger", "readback")), "MISSING_ATTACK_TRACE")
-        references(action["evidence"])
+        references(store, action["evidence"])
     need(attacked == set(lane["surfaces"]), "UNATTACKED_SURFACE")
     need(isinstance(result["findings"], list), "MISSING_FINDING_DISPOSITION")
     material_open = False
     for finding in result["findings"]:
         need(text(finding.get("anchor")), "MISSING_FINDING_ANCHOR")
-        references(finding["evidence"])
+        references(store, finding["evidence"])
         need(finding["materiality"] in {"MATERIAL", "OUT_OF_SCOPE", "UNKNOWN"}, "INVALID_MATERIALITY")
         need(finding["disposition"] in {"OPEN", "DISMISSED"}, "INVALID_FINDING_DISPOSITION")
         need(finding["materiality"] != "UNKNOWN", "UNKNOWN_FINDING_MATERIALITY")
@@ -289,17 +300,21 @@ def check_probe(lane: dict, result: dict) -> None:
     need(outcome != "UNOBSERVABLE", "PROBE_UNOBSERVABLE")
 
 
-def close(baseline_path: Path, binding: dict, activity: dict, results: list[dict]) -> dict:
+def close(baseline_path: Path, store: ArtifactStore, binding: dict, activity: dict, results: list[dict]) -> dict:
     reasons = []
     try:
-        baseline = current(baseline_path, binding)
+        baseline = current(baseline_path, store, binding)
         need(activity["run_id"] == binding["run_id"], "FOREIGN_ACTIVITY")
-        references(activity["evidence"])
+        references(store, activity["evidence"])
         effects = rows(activity["effects"], "effects")
         for effect in effects.values():
             need(text(effect["owner"]) and effect["state"] == "SETTLED", "UNSETTLED_EFFECT")
-            references(effect["evidence"])
-        definitions = {"gate": rows(baseline["gates"], "gates"), "observation": rows(baseline["observations"], "observations"), "probe": rows(baseline["lanes"], "lanes")}
+            references(store, effect["evidence"])
+        definitions = {
+            "gate": rows(baseline["gates"], "gates"),
+            "observation": rows(baseline["observations"], "observations"),
+            "probe": rows(baseline["lanes"], "lanes"),
+        }
         started = {}
         invocations = set()
         need(isinstance(activity["started"], list), "INVALID_ACTIVITY")
@@ -313,49 +328,55 @@ def close(baseline_path: Path, binding: dict, activity: dict, results: list[dict
         need(required.issubset(started), "REQUIRED_WORK_NOT_STARTED")
         seen = set()
         for result in results:
-            need(result["schema"] == "iis-assurance-result/v1", "INVALID_RESULT")
+            need(result["schema"] == "iis-assurance-result/v2", "INVALID_RESULT")
             key = (result["kind"], result["id"])
             need(key not in seen, "DUPLICATE_RESULT")
             seen.add(key)
             need(key in started and result["invocation"] == started[key], "UNATTRIBUTABLE_RESULT")
-            need(result["binding"] == identity(binding), "RESULT_BINDING_MISMATCH")
-            references(result["evidence"])
+            need(result["binding"] == binding["binding_id"], "RESULT_BINDING_MISMATCH")
+            references(store, result["evidence"])
             need(isinstance(result["effects"], list) and all(text(x) for x in result["effects"]) and set(result["effects"]).issubset(effects), "UNRECORDED_EFFECT")
             need(result["completion"] == "COMPLETE", "INCOMPLETE_RESULT")
             definition = definitions[key[0]][key[1]]
             if key[0] == "gate":
-                check_gate(definition, result, binding)
+                check_gate(store, definition, result, binding)
             elif key[0] == "observation":
                 need(all(result[field] == definition[field] for field in ("initial_state", "trigger", "readback", "predicate")), "OBSERVATION_BOUNDARY_MISMATCH")
                 need(result["outcome"] == "SATISFIED", "OBSERVATION_NOT_SATISFIED")
             else:
-                check_probe(definition, result)
+                check_probe(store, definition, result)
         need(seen == set(started), "STARTED_RESULT_MISSING")
     except (ValueError, KeyError, TypeError, OSError, subprocess.CalledProcessError) as exc:
         reasons.append(str(exc))
-    return {"schema": "iis-assurance-closure/v1", "binding": identity(binding),
-            "status": "BLOCKED" if reasons else "EVIDENCE_COMPLETE", "reasons": reasons}
+    return {
+        "schema": "iis-assurance-closure/v2",
+        "binding": binding.get("binding_id"),
+        "status": "BLOCKED" if reasons else "EVIDENCE_COMPLETE",
+        "reasons": reasons,
+    }
 
 
 def recording(ready: bytes, done: bytes) -> dict:
     need(ready.count(b"\nStatus: ready\n") == 1, "READY_STATUS_REQUIRED")
     need(done == ready.replace(b"\nStatus: ready\n", b"\nStatus: done\n", 1), "NOT_STATUS_ONLY")
-    return {"ready_sha256": digest(ready), "done_sha256": digest(done), "status_only": True}
+    return {"status_only": True}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--store", type=Path, required=True)
+    parser.add_argument("--project-id", required=True)
     commands = parser.add_subparsers(dest="action", required=True)
     validate = commands.add_parser("validate")
     validate.add_argument("baseline", type=Path)
     seal = commands.add_parser("bind")
     seal.add_argument("baseline", type=Path)
     seal.add_argument("--root", type=Path, required=True)
-    seal.add_argument("--base", required=True)
     seal.add_argument("--execution", type=Path, required=True)
     seal.add_argument("--output", type=Path, required=True)
     execution = commands.add_parser("bind-execution")
     execution.add_argument("binding", type=Path)
+    execution.add_argument("baseline", type=Path)
     execution.add_argument("execution", type=Path)
     execution.add_argument("--output", type=Path, required=True)
     run = commands.add_parser("run")
@@ -372,26 +393,26 @@ def main() -> int:
     record.add_argument("ready", type=Path)
     record.add_argument("done", type=Path)
     args = parser.parse_args()
+    store = ArtifactStore(args.store, args.project_id)
     try:
         if args.action == "validate":
-            _, raw = load_baseline(args.baseline)
-            result = {"status": "VALID", "baseline_sha256": digest(raw)}
+            load_baseline(args.baseline, store)
+            result = {"status": "VALID"}
         elif args.action == "bind":
-            result = bind(args.baseline, args.root, args.base, read_json(args.execution))
-            need(not args.output.resolve().is_relative_to(args.root), "EVIDENCE_INSIDE_TARGET")
+            result = bind(args.baseline, store, args.root, read_json(args.execution))
+            need(not args.output.resolve().is_relative_to(args.root.resolve()), "EVIDENCE_INSIDE_TARGET")
             save(args.output, result)
         elif args.action == "bind-execution":
             old = read_json(args.binding)
-            current(Path(old["baseline"]["path"]), old)
+            current(args.baseline, store, old)
             new_execution = read_json(args.execution)
-            check_execution(new_execution)
-            result = {**old, "run_id": uuid.uuid4().hex, "execution": new_execution}
-            need(not args.output.resolve().is_relative_to(Path(old["source"]["root"])), "EVIDENCE_INSIDE_TARGET")
+            check_execution(store, new_execution)
+            result = {**old, "binding_id": "bind-" + uuid.uuid4().hex, "run_id": "run-" + uuid.uuid4().hex, "execution": new_execution}
             save(args.output, result)
         elif args.action == "run":
-            result = run_gate(args.baseline, read_json(args.binding), args.gate_id, args.output)
+            result = run_gate(args.baseline, store, read_json(args.binding), args.gate_id, args.output)
         elif args.action == "close":
-            result = close(args.baseline, read_json(args.binding), read_json(args.activity), [read_json(path) for path in args.results])
+            result = close(args.baseline, store, read_json(args.binding), read_json(args.activity), [read_json(path) for path in args.results])
         else:
             result = recording(args.ready.read_bytes(), args.done.read_bytes())
         print(json.dumps(result, indent=2, ensure_ascii=False))

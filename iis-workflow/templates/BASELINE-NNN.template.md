@@ -9,7 +9,7 @@ Applicability: `<project / transition scope and applicable authority>`
 ## Identity & Approval
 
 Source Authority:
-- Product meaning: `<exact saved Thesis source and fingerprint, or sufficient existing approved authority>`
+- Product meaning: `<exact executor-owned fixed Thesis ref, or sufficient existing approved authority>`
 - Investigation: `<exact applicable current-state evidence or None>`
 - `<exact user instruction, applicable durable decision, Thesis/Scope original or other approved source>`
 

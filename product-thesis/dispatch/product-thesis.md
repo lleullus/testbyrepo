@@ -6,7 +6,7 @@ Use this projection only when the current user authority and the owning Product 
 
 - Exact current product-definition request, focus and stop boundary.
 - Exact Project Root, or the explicit temporary source context allowed by the owning contract.
-- Every applicable Thesis original by exact path/revision and actual-byte SHA-256; use `None supplied` only for a genuinely new unrooted product definition.
+- Every applicable Thesis original through the executor-owned fixed source ref when enforcement is available; use `None supplied` only for a genuinely new unrooted product definition.
 - Current authority for read-only assessment versus source creation/refinement, including storage limits.
 - Exact evidence locator and applicability conditions for every technical or user-evidence claim the work will rely on, including each load-bearing current-system fact that must be investigated for the decision.
 - When runtime evidence is load-bearing, the actual runtime/artifact/config identity and its locator.
@@ -41,4 +41,4 @@ Supplied findings, candidate meanings and implementation explanations are eviden
 
 ## Result
 
-Return the owning Product Thesis result in ordinary prose, making recoverable the settled product meaning, observed load-bearing facts, adopted construction decisions, unresolved premises, revision/reuse reason and next owner where applicable, together with exact source creation/reuse and deciding counterexample/boundary. Do not impose a new fixed output schema, create downstream artifacts or invoke later roles.
+Return the owning Product Thesis semantic result in ordinary prose, making recoverable the settled product meaning, observed load-bearing facts, adopted construction decisions, unresolved premises, revision/reuse reason and next owner where applicable, together with exact source creation/reuse and deciding counterexample/boundary. On an enforcement-capable host, successful completion is still subject to executor-owned source-frontier review, exact-candidate challenge and lifecycle closure; the worker cannot self-issue `CALIBRATED`. Do not impose a new fixed output schema, create downstream artifacts or invoke later roles.

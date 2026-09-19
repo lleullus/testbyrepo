@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
-import hashlib
+import json
 import re
 from urllib.parse import unquote
 
@@ -166,11 +166,55 @@ def _scan_direct_scope(
     )
 
 
+def _source_refs(body: str, label: str, state: ProjectState, scope: Artifact, *, product: bool) -> list[dict[str, str]]:
+    match = re.findall(r"^```iis-sources\\s*\\n(.*?)^```\\s*$", body, re.M | re.S)
+    if len(match) != 1:
+        state.issues.append(Issue("IIS510" if product else "IIS515", f"{label} requires one iis-sources JSON block.", "error", scope.relative_path))
+        return []
+    try:
+        raw = json.loads(match[0])
+    except json.JSONDecodeError:
+        state.issues.append(Issue("IIS510" if product else "IIS515", f"{label} JSON is invalid.", "error", scope.relative_path))
+        return []
+    if not isinstance(raw, list) or not raw:
+        state.issues.append(Issue("IIS514" if product else "IIS519", f"{label} needs at least one fixed source reference.", "error", scope.relative_path))
+        return []
+    values: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in raw:
+        if not isinstance(item, dict) or set(item) != {"snapshot", "path"}:
+            state.issues.append(Issue("IIS510" if product else "IIS515", f"{label} source ref must contain snapshot and path.", "error", scope.relative_path))
+            continue
+        snapshot, path = item.get("snapshot"), item.get("path")
+        if not isinstance(snapshot, str) or re.fullmatch(r"snap-[0-9a-f]{32}", snapshot) is None:
+            state.issues.append(Issue("IIS510" if product else "IIS515", f"{label} snapshot id is invalid.", "error", scope.relative_path))
+            continue
+        if not isinstance(path, str) or path.startswith("/") or ".." in Path(path).parts:
+            state.issues.append(Issue("IIS511" if product else "IIS516", f"{label} path must stay project-relative.", "error", scope.relative_path))
+            continue
+        if product and not path.startswith("docs/planning/product-thesis/"):
+            state.issues.append(Issue("IIS511", f"Product Authority is not a Product Thesis path: {path}", "error", scope.relative_path))
+            continue
+        key = (snapshot, path)
+        if key in seen:
+            state.issues.append(Issue("IIS512" if product else "IIS517", f"{label} source is duplicated.", "error", scope.relative_path))
+            continue
+        seen.add(key)
+        live = state.repository_path / path
+        values.append({
+            "snapshot": snapshot,
+            "path": path,
+            "live_path": str(live),
+            "current": "admission-required",
+        })
+    return values
+
+
 def _validate_direct_scope(
     state: ProjectState,
     scope: Artifact,
 ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
-    """Validate the observable direct Scope boundary and bound source bytes."""
+    """Validate observable iis-scope/v2 structure without pretending to perform admission."""
     allowed_statuses = {"draft", "ready", "done", "superseded"}
     if scope.status not in allowed_statuses:
         state.issues.append(
@@ -181,9 +225,9 @@ def _validate_direct_scope(
                 scope.relative_path,
             )
         )
-    if scope.metadata.get("schema") != "iis-scope/v1":
+    if scope.metadata.get("schema") != "iis-scope/v2":
         state.issues.append(
-            Issue("IIS505", "Direct Scope does not declare Schema: iis-scope/v1.", "error", scope.relative_path)
+            Issue("IIS505", "Direct Scope does not declare Schema: iis-scope/v2.", "error", scope.relative_path)
         )
 
     project_root = scope.metadata.get("project_root")
@@ -223,110 +267,22 @@ def _validate_direct_scope(
             )
         )
 
-    authority_lines = scope.metadata.get("section_product_authority", "").splitlines()
-    authorities: list[dict[str, str]] = []
-    seen: set[Path] = set()
-    for line in authority_lines:
-        line = line.strip()
-        if not line:
-            continue
-        match = re.fullmatch(r"-\s+(/.+)\s+sha256:([0-9a-fA-F]{64})", line)
-        if not match:
-            state.issues.append(
-                Issue(
-                    "IIS510",
-                    "Product Authority must use '- /canonical/path sha256:<64-hex-digest>'.",
-                    "error",
-                    scope.relative_path,
-                )
-            )
-            continue
-        raw_path, expected = match.groups()
-        source = Path(raw_path).expanduser()
-        try:
-            resolved = source.resolve()
-            resolved.relative_to(state.repository_path / "docs" / "planning" / "product-thesis")
-        except (OSError, RuntimeError, ValueError):
-            state.issues.append(
-                Issue("IIS511", f"Product Authority is not a project-local Thesis source: {raw_path}", "error", scope.relative_path)
-            )
-            continue
-        if resolved == scope.path or resolved in seen or not resolved.is_file():
-            state.issues.append(
-                Issue("IIS512", f"Product Authority source is missing or duplicated: {raw_path}", "error", scope.relative_path)
-            )
-            continue
-        seen.add(resolved)
-        actual = hashlib.sha256(resolved.read_bytes()).hexdigest()
-        current = actual == expected.lower()
-        authorities.append({"path": str(resolved), "sha256": expected.lower(), "current": str(current).lower()})
-        if not current:
-            state.issues.append(
-                Issue(
-                    "IIS513",
-                    f"Bound Thesis source is stale: {raw_path} (expected {expected.lower()}, found {actual}).",
-                    "error",
-                    scope.relative_path,
-                )
-            )
-    if not authorities:
-        state.issues.append(Issue("IIS514", "Direct Scope needs at least one bound Thesis source.", "error", scope.relative_path))
+    authorities = _source_refs(
+        scope.metadata.get("section_product_authority", ""),
+        "Product Authority",
+        state,
+        scope,
+        product=True,
+    )
     transition = _parse_transition_authority(state, scope)
     return authorities, transition
 
 
 def _parse_transition_authority(state: ProjectState, scope: Artifact) -> list[dict[str, str]]:
-    """Read an optional approved transition source without activating it."""
     body = scope.metadata.get("section_transition_authority")
     if body is None:
         return []
-    values: list[dict[str, str]] = []
-    seen: set[Path] = set()
-    for line in body.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        match = re.fullmatch(r"-\s+(/.+)\s+sha256:([0-9a-fA-F]{64})", line)
-        if not match:
-            state.issues.append(
-                Issue(
-                    "IIS515",
-                    "Transition Authority must use '- /canonical/path sha256:<64-hex-digest>'.",
-                    "error",
-                    scope.relative_path,
-                )
-            )
-            continue
-        raw_path, expected = match.groups()
-        source = Path(raw_path).expanduser()
-        try:
-            resolved = source.resolve()
-            resolved.relative_to(state.repository_path)
-        except (OSError, RuntimeError, ValueError):
-            state.issues.append(
-                Issue("IIS516", f"Transition Authority is not project-local: {raw_path}", "error", scope.relative_path)
-            )
-            continue
-        if resolved == scope.path or resolved in seen or not resolved.is_file():
-            state.issues.append(
-                Issue("IIS517", f"Transition Authority source is missing or duplicated: {raw_path}", "error", scope.relative_path)
-            )
-            continue
-        seen.add(resolved)
-        actual = hashlib.sha256(resolved.read_bytes()).hexdigest()
-        values.append({"path": str(resolved), "sha256": expected.lower(), "current": str(actual == expected.lower()).lower()})
-        if actual != expected.lower():
-            state.issues.append(
-                Issue(
-                    "IIS518",
-                    f"Bound Transition Authority source is stale: {raw_path} (expected {expected.lower()}, found {actual}).",
-                    "error",
-                    scope.relative_path,
-                )
-            )
-    if not values:
-        state.issues.append(Issue("IIS519", "Transition Authority section needs at least one exact source.", "error", scope.relative_path))
-    return values
+    return _source_refs(body, "Transition Authority", state, scope, product=False)
 
 
 def _required_outcomes(
@@ -334,9 +290,7 @@ def _required_outcomes(
 ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     all_outcomes: list[dict[str, str]] = []
     for authority in authorities:
-        if authority.get("current") != "true":
-            continue
-        source = Path(authority["path"])
+        source = Path(authority.get("live_path", ""))
         if not source.is_file():
             continue
         try:
@@ -351,22 +305,21 @@ def _required_outcomes(
         if not body or body.strip().lower() == "none":
             continue
         bullets = [
-            re.sub(r"^\s*[-*+]\s+", "", line).strip()
+            re.sub(r"^\\s*[-*+]\\s+", "", line).strip()
             for line in body.splitlines()
-            if re.match(r"^\s*[-*+]\s+", line)
+            if re.match(r"^\\s*[-*+]\\s+", line)
         ]
-        values = bullets or [paragraph.strip() for paragraph in re.split(r"\n\s*\n", body) if paragraph.strip()]
+        values = bullets or [paragraph.strip() for paragraph in re.split(r"\\n\\s*\\n", body) if paragraph.strip()]
         for value in values:
             if value.lower() == "none":
                 continue
             entry = {
                 "text": value,
-                "source": str(source),
+                "source": f"{authority['snapshot']}:{authority['path']}",
                 "status": "unassessed",
             }
             all_outcomes.append(entry)
     return all_outcomes, list(all_outcomes)
-
 
 def _normalize_match_text(value: str) -> str:
     return re.sub(r"[^a-z0-9가-힣]+", " ", value.lower()).strip()

@@ -94,7 +94,7 @@ TEMPLATE_PLACEHOLDERS = frozenset(
         "<state/configuration/lifecycle/ownership fact>",
         "<path>",
         "<line/symbol>",
-        "<sha256 or Git identity>",
+        "<fixed snapshot ref or native Git identity>",
         "<user request>",
         "<exact bounded question>",
         "<why the answer matters without importing a desired conclusion>",
