@@ -27,7 +27,7 @@ Execution identity input remains `{artifacts, runtime, mechanisms, note}`, but e
 
 ## Native gate capture
 
-A host gate invocation executes the declared foreground command against the captured execution copy, not the mutable working-tree source. stdout, stderr and native job export are stored with the actual registered run/invocation producer. Exit zero alone does not establish product observations.
+A host gate invocation executes the declared foreground command against the captured execution copy, not the mutable working-tree source. Exact absolute source paths in argv/cwd/job-export fields are remapped to that copy. A composite token that embeds the live source root, such as a shell command string or `--config=/live/root/...`, is rejected rather than executed ambiguously. stdout, stderr and native job export are stored with the actual registered run/invocation producer. Exit zero alone does not establish product observations.
 
 Every result uses `iis-assurance-result/v3` and records the actual `binding_id`, invocation, evidence refs and effects. Copying a result JSON or guessing an opaque ID does not create a new invocation or producer record.
 
@@ -35,7 +35,9 @@ Every result uses `iis-assurance-result/v3` and records the actual `binding_id`,
 
 Observation results still distinguish `SATISFIED`, `VIOLATED`, and `UNOBSERVABLE`. Probe results still distinguish `COUNTEREXAMPLE_FOUND`, `NO_COUNTEREXAMPLE_WITHIN_BUDGET`, and `UNOBSERVABLE`. Hypotheses and action evidence use executor-owned refs.
 
-Main supplies actual started-invocation/effect information from the host, not a model-authored denominator. Unknown or unsettled effects block. Several no-finding results never offset one unresolved material finding.
+The canonical `iis_artifacts.host.HostSupervisor` exposes host-only begin/capture/complete operations for observation and Probe invocations. These operations and effect settlement are available only through the supervisor-owned admin boundary; worker RPC cannot mint them.
+
+Main supplies actual started-invocation/effect information from the host, not a model-authored denominator. Every effect ID reported by a result must exist in the supervisor ledger. `SETTLED` requires nonempty evidence attributed to the active run; unknown or unsettled effects block. Several no-finding results never offset one unresolved material finding.
 
 ## Closure
 
@@ -53,4 +55,4 @@ Probe isolation, safety, settlement and re-entry rules remain unchanged. A findi
 
 ## Trust boundary
 
-Strong enforcement requires the shipped Linux supervisor (or a conforming host with equivalent OS/process isolation) so workers cannot modify the store, binding/invocation ledger or trusted current request. When a host cannot provide that separation, it may still use the documents for advisory work but must not claim enforced binding or closure. File permissions, mtimes, sizes, path strings and model-produced receipts are not substitutes for that host boundary.
+Strong enforcement requires the shipped `iis_artifacts.host.HostSupervisor` through `supervisor_cli.py` (or a conforming host with equivalent OS/process isolation) so workers cannot modify the store, binding/invocation ledger or trusted current request. When a host cannot provide that separation, it may still use the documents for advisory work but must not claim enforced binding or closure. File permissions, mtimes, sizes, path strings and model-produced receipts are not substitutes for that host boundary.

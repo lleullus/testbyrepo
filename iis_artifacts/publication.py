@@ -45,6 +45,7 @@ def _open_parent(project_root: Path, logical_path: str, *, create: bool) -> tupl
         root_fd = os.open(Path(project_root).resolve(strict=True), flags)
     except OSError as exc:
         raise RevisionConflict("cannot open canonical project root") from exc
+    root_details = os.fstat(root_fd)
     current_fd = root_fd
     opened: list[int] = []
     try:
@@ -56,6 +57,10 @@ def _open_parent(project_root: Path, logical_path: str, *, create: bool) -> tupl
                     raise
                 os.mkdir(part, mode=0o755, dir_fd=current_fd)
                 next_fd = os.open(part, flags, dir_fd=current_fd)
+                details = os.fstat(next_fd)
+                if (details.st_uid, details.st_gid) != (root_details.st_uid, root_details.st_gid):
+                    os.fchown(next_fd, root_details.st_uid, root_details.st_gid)
+                os.fchmod(next_fd, 0o755)
             except OSError as exc:
                 raise RevisionConflict("publication path is unsafe") from exc
             opened.append(next_fd)
@@ -102,13 +107,18 @@ def _read_live(project_root: Path, logical_path: str) -> bytes | None:
         os.close(parent_fd)
 
 
-def _replace_live(project_root: Path, logical_path: str, data: bytes) -> None:
+def _replace_live(project_root: Path, logical_path: str, data: bytes, *, mode: int) -> None:
+    owner = Path(project_root).resolve(strict=True).stat()
     parent_fd, leaf = _open_parent(project_root, logical_path, create=True)
     temporary = f".{leaf}.publication-{uuid.uuid4().hex}"
     fd: int | None = None
     try:
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
         fd = os.open(temporary, flags, 0o600, dir_fd=parent_fd)
+        details = os.fstat(fd)
+        if (details.st_uid, details.st_gid) != (owner.st_uid, owner.st_gid):
+            os.fchown(fd, owner.st_uid, owner.st_gid)
+        os.fchmod(fd, mode)
         view = memoryview(data)
         while view:
             written = os.write(fd, view)
@@ -268,7 +278,9 @@ def publish_ref(
         )
         db.execute("COMMIT")
 
-    _replace_live(project_root, logical, store.read_bytes(source))
+    source_mode = int(store.ref_record(source)["mode"])
+    published_mode = 0o444 | (source_mode & 0o111)
+    _replace_live(project_root, logical, store.read_bytes(source), mode=published_mode)
     if fault_after_replace:
         raise OSError("injected publication failure after replace")
     _finalize(store, publication_id, logical, source)

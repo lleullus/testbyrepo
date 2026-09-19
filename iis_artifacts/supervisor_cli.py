@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 
 from iis_artifacts.linux_worker import LinuxWorkerCommands
 from iis_artifacts.store import ArtifactStore
-from iis_artifacts.supervisor import HostBoundaryError, HostSupervisor
+from iis_artifacts.host import HostBoundaryError, HostSupervisor
 
 
 def _json_list(raw: str, label: str) -> list[str]:
