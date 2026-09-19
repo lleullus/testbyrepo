@@ -11,6 +11,7 @@ from pathlib import Path
 import shlex
 import sys
 from typing import Any
+import uuid
 
 from fixture_catalog import _put
 from host_fixture import ArtifactStore, admit_fixture_scope, close_fixture_thesis, source_block
@@ -789,7 +790,8 @@ def materialize(case_key: str, project_root: Path, support_root: Path, *, port: 
     project.mkdir(parents=True, mode=0o700, exist_ok=True)
     support.mkdir(parents=True, mode=0o700, exist_ok=True)
     store_root = project.parent / "host-store"
-    store = ArtifactStore(store_root, "ready-verification")
+    project_id = "ready-" + uuid.uuid4().hex
+    store = ArtifactStore(store_root, project_id)
 
     endpoint = f"http://127.0.0.1:{port}"
     blueprint = _blueprint(case_key, project, support, endpoint)
@@ -828,7 +830,7 @@ def materialize(case_key: str, project_root: Path, support_root: Path, *, port: 
         "scope_path": str(scope),
         "thesis_paths": [str(thesis)],
         "store_root": str(store_root),
-        "project_id": "ready-verification",
+        "project_id": project_id,
         "admission": admission,
         "allowed_output_paths": [],
         "implementation_prompt": implementation_prompt,

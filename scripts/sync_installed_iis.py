@@ -23,7 +23,7 @@ NEW_FAMILY = "iis-skills"
 INSTALL_SCHEMA = "iis-install/v5"
 LEGACY_INSTALL_SCHEMAS = {"iis-install/v3", "iis-install/v4"}
 PAYLOAD_ROOTS = (
-    "iis-workflow", "product-thesis", "scope-shaper", "iis-artifacts", "iis-observatory", "repo-snapshot",
+    "iis-workflow", "product-thesis", "scope-shaper", "iis_artifacts", "iis-observatory", "repo-snapshot",
     "observatory/bin", "observatory/src",
     "companion-skills/scope-plan", "companion-skills/scope-implement",
     "companion-skills/production-heuristic-probing",
@@ -33,7 +33,7 @@ PAYLOAD_ROOTS = (
 REQUIRED = (
     "iis-workflow/SKILL.md", "product-thesis/SKILL.md",
     "product-thesis/tools/lifecycle.py", "product-thesis/tools/thesis.py",
-    "iis-artifacts/store.py", "iis-artifacts/admission.py",
+    "iis_artifacts/store.py", "iis_artifacts/admission.py",
     "iis-workflow/references/assurance.md", "iis-workflow/tools/assurance.py",
     "scope-shaper/SKILL.md", "scope-shaper/tools/validate_scope.py",
     "iis-observatory/SKILL.md", "repo-snapshot/SKILL.md",

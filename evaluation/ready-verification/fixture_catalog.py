@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import sys
 from textwrap import dedent
+import uuid
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -549,7 +550,8 @@ def materialize(case: dict, project_root: Path, support_root: Path, *, port: int
     project.mkdir(parents=True, mode=0o700, exist_ok=True)
     support.mkdir(parents=True, mode=0o700, exist_ok=True)
     store_root = project.parent / 'host-store'
-    store = ArtifactStore(store_root, 'ready-verification')
+    project_id = 'ready-' + uuid.uuid4().hex
+    store = ArtifactStore(store_root, project_id)
     family, variant = case['family'], case.get('variant')
     registered = R5_CASE_VARIANTS.get(case.get('case_id'))
     if registered:
@@ -652,7 +654,7 @@ assert isinstance(ordinary('run', 'sample')['value'], str)
         additional_trigger_argv = []
         readback_argv = [sys.executable, str(app), 'readback', 'all']
     metadata = {'project_root': str(project), 'scope_path': str(scope), 'thesis_paths': [str(thesis)],
-                'store_root': str(store_root), 'project_id': 'ready-verification', 'admission': admission,
+                'store_root': str(store_root), 'project_id': project_id, 'admission': admission,
                 'target_paths': [str(app), str(engine)], 'allowed_output_paths': allowed_output_paths,
                 'trigger_argv': trigger_argv, 'readback_argv': readback_argv, 'additional_trigger_argv': additional_trigger_argv,
                 'observer_argv': observer_argv, 'service_argv': service_argv, 'reset_argv': reset_argv,

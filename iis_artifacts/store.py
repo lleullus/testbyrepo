@@ -119,15 +119,16 @@ class ArtifactStore:
                     data, mode = raw_value, 0o444
                 if not isinstance(data, (bytes, bytearray)):
                     raise ArtifactStoreError("snapshot content must be bytes")
-                mode = int(mode) & 0o555
+                source_mode = int(mode) & 0o777
+                stored_mode = source_mode & 0o555
                 target = staging.joinpath(*relative.split("/"))
                 target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 with target.open("xb") as stream:
                     stream.write(bytes(data))
                     stream.flush()
                     os.fsync(stream.fileno())
-                target.chmod(mode or 0o444)
-                rows.append((relative, mode or 0o444))
+                target.chmod(stored_mode or 0o444)
+                rows.append((relative, source_mode))
             os.replace(staging, destination)
             sequence = self.next_sequence()
             with self.connect() as db:
