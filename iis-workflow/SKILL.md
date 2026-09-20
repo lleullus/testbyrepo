@@ -13,7 +13,7 @@ One current Main owns the latest request. Do not spawn an Outer Main or add a co
 | --- | --- |
 | Discussion/review/status | Inspect and explain; no implied product mutation or execution of a next pointer. |
 | Investigation | Collect bounded evidence and requested handoff; it is not product authority. |
-| Thesis only | Define/refine or assess requested meaning, preserve originals and stop. Assessment-only remains read-only. |
+| Thesis only | An unqualified request to start, continue, conduct or write the Thesis—including “테시스 진행해”—authorizes Product Thesis lifecycle work, not document-only drafting. Use trusted-host execution when enforcement is available; if it is unavailable or closure remains incomplete, return the actual blocking state rather than self-issuing `CALIBRATED`. Stop at the Thesis boundary. Assessment-only remains read-only. |
 | Scope only | Fix current outcome from originals and actual state; stop before methods/implementation. |
 | Planning only | Ground Plan plus Assurance Baseline, validate structure and return unresolved premises; no implementation, attack or status write. |
 | Implementation only | Current Plan/Baseline and real preconditions → authorized implementation/self-check; Scope stays ready. |
