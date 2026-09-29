@@ -1,0 +1,208 @@
+# 05. 외부 트래픽 진입 경로와 APISIX·Two-Arm LB — 중앙 라우팅과 원본 IP 신뢰 조건
+
+## 문서의 목적
+
+이 문서는 Kubernetes와 로드밸런서의 기본 용어를 아는 독자가 DKS-C의 외부 요청이 **어디에서 받아지고 어느 계층에서 대상 서비스로 선택되는지**, 그리고 백엔드가 클라이언트의 원본 IP를 **어떤 조건에서 신뢰할 수 있는지**를 한 흐름으로 이해하도록 돕는다. 중심 질문은 다음 두 가지다.
+
+1. 현재 외부 접근을 APISIX Gateway Cluster로 중앙화하는 구조에서 요청은 어떤 L4·L7 경로를 지나 대상 서비스에 도달하는가?
+2. Two-Arm LB는 어떤 패킷 경로 조건에서 APISIX가 실제 Source IP를 관측하게 하며, 그 관측값은 어떤 변환과 신뢰 경계를 거쳐 백엔드에 전달되는가?
+
+운영 현황은 사용자 클러스터의 외부 접근이 `dksg-ic01-khm` APISIX를 통해 통제되고 외부에서 사용자 클러스터로 직접 접근할 수 없다고 기록한다. SW 아키텍처는 APISIX를 Gateway Cluster의 Backend Gateway이자 Kubernetes Native API·REST API 서비스로 설명하고, Control Plane과 Data Plane을 분리하며 AutoScaling하는 구성을 표기한다. VCFA 인프라 자료는 애플리케이션 트래픽이 LB VIP로 들어와 IP Pool로 전달되고 워크로드로 NAT되며, Two-Arm에서는 VIP와 IP Pool NIC을 분리해 최초 요청 IP를 유지하고 Single-Arm에서는 같은 NIC을 사용해 최초 요청 IP를 잃을 수 있다고 설명한다.
+
+이 자료들로 현재 중앙 진입점의 구조와 주소 전달이 가능한 메커니즘은 설명할 수 있다. 그러나 중앙화를 처음 선택한 역사적 이유, 각 LB의 실제 no-SNAT 설정, APISIX 노드·Pod의 반환 경로, XFF 정규화 규칙, 백엔드가 신뢰하는 프록시 범위는 구조 표만으로 확정할 수 없다. 그러므로 중앙 진입점과 원본 IP 신뢰를 하나의 도입 인과 사슬로 단정하지 않고, 같은 요청에서 교차하는 두 질문으로 나누어 설명한다.
+
+## 전체 이해 지도
+
+- **외부 요청의 현재 중앙 통제 지점은 APISIX Gateway Cluster다.** 운영 현황에 기록된 외부 직접 접근 불가와 `dksg-ic01-khm` APISIX 통제는 요청이 사용자 클러스터에 바로 들어가지 않고 Gateway Cluster를 경유한다는 현재 구조를 보여 준다. 이것은 현재의 접근 경계를 설명하는 근거이지, 이 구조를 처음 도입한 이유를 증명하는 기록은 아니다.
+
+- **먼저 LB는 VIP로 들어온 L3/L4 연결을 APISIX 쪽으로 전달한다.** VIP는 외부에서 접속하는 가상 IP이고 IP Pool은 LB가 고를 수 있는 전달 대상 주소들의 집합이다. 이 단계의 L4 처리는 IP와 TCP 연결을 다루므로, LB는 VIP에 도착한 연결에서 Pool member를 선택하고 목적지 주소를 바꿀 수 있지만 Source 주소를 바꾸는지는 별도의 SNAT 설정으로 판단해야 한다.
+
+- **그다음 APISIX는 HTTP/TLS를 해석할 수 있는 L7 경로에서 대상 업스트림을 선택한다.** L7은 HTTP 요청처럼 애플리케이션 내용을 다루는 계층이며, APISIX는 Host·경로와 같은 Route 조건과 필터를 평가해 Upstream을 고른다. Reverse Proxy인 APISIX는 백엔드에 새 TCP 연결을 만들기 때문에 백엔드 소켓의 직접 peer는 일반적으로 APISIX 주소가 된다.
+
+- **따라서 중앙 라우팅과 원본 IP 보존은 서로 다른 판단이다.** VCFA가 설명하는 Two-Arm은 외부 VIP를 받는 NIC과 내부 IP Pool로 보내는 NIC을 나누는 토폴로지다. 이 분리는 LB가 Source를 보존하고 APISIX의 응답을 LB로 되돌리는 경로를 구성할 수 있게 하지만, Two-Arm이라는 이름만으로 실제 no-SNAT이나 대칭 반환이 실행되었다고 말할 수는 없다.
+
+- **APISIX가 L3/L4에서 실제 클라이언트 Source IP를 보려면 여러 조건이 함께 맞아야 한다.** LB가 no-SNAT으로 Source IP·Port를 유지하고, APISIX의 반환 경로가 LB를 다시 통과하며, CNI·오버레이·중간 NAT·프록시가 그 값을 바꾸지 않아 APISIX TCP 소켓이 실제 주소를 관측해야 한다. Single-Arm에서 대칭 반환을 위해 SNAT을 사용하면 세션은 안정적으로 돌아올 수 있어도 APISIX가 직접 보는 주소는 LB 주소가 된다.
+
+- **관측된 주소를 HTTP 요청의 원본 IP 표현으로 쓰는 단계에는 XFF와 trusted proxy 경계가 추가된다.** X-Forwarded-For(XFF)는 프록시가 원본 주소를 HTTP 헤더로 표현하는 방식이지만 외부 클라이언트도 임의로 넣을 수 있으므로 증명값이 아니다. APISIX가 외부 XFF를 정규화하고 실제로 신뢰할 수 있는 관측값으로 다시 만든 뒤, 백엔드는 APISIX 주소 범위에서 온 요청에 대해서만 그 헤더를 해석해야 하며 백엔드 직접 우회도 막혀 있어야 한다.
+
+- **L4·TLS pass-through 경로에서는 XFF가 자동으로 생기지 않는다.** APISIX가 암호화된 HTTP를 읽지 않는 순수 L4/stream 또는 TLS pass-through라면 Source IP 보존과 HTTP 헤더 주입은 별개다. 따라서 6443과 80/443이라는 포트 번호만으로 TLS 종단, HTTP Route, XFF 전달을 추론할 수 없고 각 Listener·Route 설정과 패킷을 확인해야 한다.
+
+- **IP 경로와 사용자 신원 검증은 같은 요청에서 함께 적용될 수 있지만 서로의 증거를 대신하지 않는다.** Keycloak·ADFS 연계 OIDC/JWT는 토큰으로 요청 주체의 신원·권한을 검증하는 병렬 계층이다. 허용된 네트워크 Source가 유효한 토큰을 증명하지 않으며, 유효한 토큰도 APISIX가 본 Source IP를 증명하지 않는다. 이 문서가 닫는 범위는 중앙 라우팅과 원본 IP의 보존·신뢰 조건이고, 신원·인증의 상세는 [06번 문서](06.%20통합%20신원·인증과%20무인%20서비스%20토큰.md)에서 다룬다.
+
+## 1. 중앙 진입점: 외부 요청은 어떻게 APISIX에서 대상까지 가는가?
+
+이 장의 질문은 외부 요청이 어느 지점에서 중앙 통제를 받고 어떤 행위자가 최종 백엔드를 선택하는가이다. L3/L4는 IP와 TCP 연결을 전달하는 층이고 L7은 HTTP·TLS 요청 내용을 처리하는 층이므로, 두 층을 나누어야 Gateway의 라우팅 책임과 원본 IP 보존 문제를 섞지 않을 수 있다. 운영 현황에 기록된 접근 경계와 LB의 VIP·IP Pool 구조에서 출발해 APISIX가 선택한 업스트림으로 요청을 전달하는 지점까지를 설명한다.
+
+### 현재 구조에서 확인되는 중앙 관문
+
+운영 현황은 사용자 클러스터를 DKS-C 포털(콘솔)로 관리하고 외부 접근은 `dksg-ic01-khm` APISIX를 통해 통제하며, 외부에서 사용자 클러스터로 직접 접근할 수 없다고 기록한다. 같은 자료는 사용자 클러스터에 기본 External-IP 3개, 즉 kube-apiserver, Application Ingress, SNAT이 있다고 적고 VPC와 SNAT External IP의 관계도 제시한다. 이 기록은 접근 경계와 주소 역할을 보여 주지만, 모든 포트와 모든 도메인이 동일한 Route를 사용한다는 뜻은 아니다.
+
+운영계와 개발계의 Platform 클러스터 표에는 API 게이트웨이 클러스터가 별도로 기재되어 각 행에 Kubernetes API용 VIP(6443), 웹·TLS용 VIP(80,443), 일부 환경의 SNAT 항목이 구분되어 있다. 예를 들어 표의 게이트웨이 행은 운영 `prd-dksg-ic01-khm`, 개발 `dev-dksg-ic01-khm`으로 적혀 있지만, 이 표만으로 특정 외부 요청이 어느 Listener·Route·Upstream을 거쳤는지까지는 알 수 없다.
+
+SW 아키텍처는 Gateway Cluster의 APISIX를 “DKS-C Backend Gateway”이자 K8S NativeAPI·REST API 서비스로 분류한다. 또한 Control Plane과 Data Plane을 분리하고 AutoScaling하는 구성을 표기한다. 여기서 Control/Data Plane 분리는 제어·구성 영역과 실제 트래픽 처리 영역을 나눈다는 뜻으로 읽을 수 있지만, 해당 표기는 현재 요청의 성공이나 특정 설정값을 증명하지 않는다. 자료가 지지하는 범위에서 APISIX는 외부 요청을 사용자 클러스터에 직접 노출하는 대신 중앙 Gateway 책임 범위에서 받아 구성된 대상 서비스로 넘기는 경계다. 중앙 지점이 제공하는 이 현재 효과와 “클러스터가 많아서 이 구조를 선택했다” 같은 역사적 설계 이유는 분리해야 한다.
+
+### 요청이 통과하는 두 계층
+
+예시로 클라이언트 `203.0.113.50:53124`가 `LB VIP:443`으로 연결한다고 하자. `203.0.113.50`은 문서 설명을 위한 TEST-NET 예시이며 실제 운영 주소가 아니다. VIP는 외부 연결을 받는 가상 목적지이고, IP Pool은 LB가 선택하는 APISIX 대상 묶음이다. L4 단계는 TCP 연결의 전달과 주소 변환을 결정하고, L7 단계는 APISIX가 읽을 수 있는 HTTP/TLS 요청에서 Route와 Upstream을 선택한다.
+
+| 구간 | 주된 계층 | 행위자와 입력 | 변환·선택 | 다음 출력 |
+|---|---|---|---|---|
+| 클라이언트 → LB VIP | L3/L4 | 클라이언트의 Source IP·Source Port와 VIP·Destination Port | LB가 VIP에 도착한 연결을 수신한다. 전달 정책에 따라 목적지 IP를 APISIX IP Pool 주소로 바꿀 수 있다. | APISIX로 보낼 L4 연결 |
+| LB → APISIX | L4 | LB의 VIP 연결과 APISIX Pool 대상 | LB가 Pool member를 선택한다. no-SNAT이면 Source IP·Port를 보존하고, SNAT이면 LB의 내부 주소·포트로 바꾼다. | APISIX가 관측하는 TCP peer |
+| APISIX → 업스트림 | L7 | APISIX가 수신한 HTTP/TLS 요청, Host·경로 등 Route 조건 | APISIX가 구성된 Route와 보안 필터를 평가하고 대상 Upstream으로 **새 TCP 연결**을 만든다. | 백엔드가 수신하는 연결과 HTTP 요청 |
+| 백엔드 → APISIX → LB → 클라이언트 | L3/L4·L7 | 백엔드 응답과 LB 세션 매핑 | APISIX는 새 연결의 응답을 원래 연결에 중계하고, LB는 VIP 세션의 역변환·반환을 수행한다. | 클라이언트 응답 |
+
+표에서 목적지 IP를 VIP에서 Pool 주소로 바꿀 수 있다고 한 것은 L4 전달의 목적지 변환을 말할 뿐 Source IP를 반드시 바꾼다는 뜻이 아니다. Source 보존 여부는 no-SNAT 설정과 응답이 LB로 돌아오는 경로를 별도로 확인해야 한다. 반대로 APISIX가 L7 Reverse Proxy로 새 TCP 연결을 만들면 백엔드 소켓이 보는 직접 peer는 일반적으로 APISIX 주소다. 그러므로 백엔드에 원본 IP가 필요하다면 LB의 L3 관측 조건과 APISIX의 L7 헤더 변환을 모두 확인해야 한다.
+
+이 표는 한 요청의 실행 선후를 보여 주지만, “어떤 설정이 실제로 적용되었는가”를 대신 증명하지 않는다. VIP·Pool 매핑이 존재해도 연결이 성공했다는 뜻은 아니며, Route가 정의되어 있어도 모든 요청이 그 Route에 도달했다는 뜻은 아니다. 실제 실행을 말하려면 동일 요청의 LB 세션, APISIX 연결·access log, 백엔드 수신 기록을 시간 범위로 맞춰야 한다.
+
+### 6443과 80/443을 같은 헤더 경로로 가정하지 않기
+
+운영 표에 6443과 80/443 VIP가 함께 기록되어 있어도 포트 번호만으로 TLS 종단·HTTP Route·XFF 주입 여부를 결정할 수 없다. APISIX가 TLS를 종단해 복호화된 HTTP를 읽는 경로라면 Host·경로 기반 Route와 헤더 재작성의 적용 지점이 생긴다. 반대로 TLS를 그대로 통과시키는 TLS pass-through 또는 순수 L4/stream 경로라면 APISIX가 암호화된 HTTP 헤더를 읽거나 XFF를 주입할 수 없다.
+
+특히 Kubernetes API용 6443은 실제 Listener·Route 설정에서 TLS를 어디에서 종단하는지와 HTTP를 해석하는지를 확인해야 한다. 80/443도 같은 포트 번호라는 이유로 6443과 동일한 처리 모드나 헤더 정책을 가진다고 볼 수 없다. 따라서 이 장에서 확정할 수 있는 답은 현재 자료상 외부 접근의 중앙 통제 지점이 APISIX Gateway Cluster이고, LB가 L4 연결을 APISIX Pool으로 전달한 뒤 APISIX가 L7 처리 가능한 요청의 Route 조건에 따라 업스트림을 선택한다는 데까지다. 각 VIP의 실제 Route·TLS 모드·필터와 과거 도입 이유는 운영 설정과 결정 기록이 있어야 확정된다.
+
+원본 IP의 보존·신뢰는 이 중앙화 사실에서 자동으로 따라오지 않는다. 다음 장은 LB와 APISIX 사이의 L3/L4 주소와 반환 경로를, 그다음 장은 APISIX가 새 백엔드 연결에 넣는 L7 헤더와 백엔드의 신뢰 경계를 별도로 판정한다.
+
+## 2. L3/L4 원본 IP: Two-Arm은 어떤 패킷 경로를 가능하게 하는가?
+
+이 장의 질문은 LB가 클라이언트 패킷을 APISIX로 전달할 때 Source IP가 어디에서 바뀌며, Two-Arm 토폴로지가 그 값을 APISIX까지 운반하려면 어떤 반환 조건이 필요한가이다. VCFA 인프라 자료의 핵심 구분은 LB VIP와 IP Pool NIC을 분리하는 Two-Arm과 두 기능을 같은 NIC에서 처리하는 Single-Arm이다. 이 구분은 주소 보존을 구성할 수 있는 네트워크 구조이지, DKS-C의 모든 LB가 실제로 주소를 보존한다는 설정 선언은 아니다.
+
+여기서 Source IP 보존은 APISIX가 TCP 연결의 상대 주소로 최초 클라이언트 주소를 보는 상태를 뜻한다. 반환 대칭은 APISIX의 응답 패킷도 요청을 전달한 LB를 거쳐 원래 세션으로 돌아가는 상태를 뜻한다. 하나만 확인하면 충분하지 않다. Source를 보존하면서 응답이 LB를 우회하면 TCP가 비대칭이 되고, SNAT으로 대칭을 만들면 APISIX가 보는 최초 주소가 LB 주소로 바뀐다.
+
+### Single-Arm에서 Source 보존과 반환 대칭을 함께 봐야 하는 이유
+
+Single-Arm은 VIP와 APISIX Pool 방향이 같은 NIC을 사용한다. 이때 LB가 원본 Source IP를 그대로 전달하면 APISIX 노드의 기본 게이트웨이 또는 더 구체적인 반환 라우팅이 LB를 가리키지 않을 가능성이 있다. 그러면 SYN은 LB를 거쳐 들어왔는데 SYN-ACK은 다른 게이트웨이로 나가는 비대칭 경로가 된다. 상태를 추적하는 장비나 상대방이 기대한 TCP 경로와 달라 세션이 성립하지 않거나 끊길 수 있다.
+
+이런 환경에서 LB가 Source를 자신의 내부 주소로 SNAT(Source Network Address Translation, 출발지 주소 변환)하면 APISIX는 응답을 기본 경로로 보내도 LB 주소로 되돌릴 수 있어 대칭성이 확보될 수 있다. 대신 SNAT은 TCP 4-tuple, 즉 Source IP·Port와 Destination IP·Port의 네 값을 다음처럼 바꾼다.
+
+```text
+SNAT 전:  (203.0.113.50, 53124) → (VIP, 443)
+LB 전달: (203.0.113.50, 53124) → (APISIX-Pool-IP, 443)   # no-SNAT인 경우
+SNAT 후: (LB-Internal-IP, LB-Port) → (APISIX-Pool-IP, 443)
+```
+
+SNAT 후 APISIX의 TCP 소켓이 보는 직접 peer는 `203.0.113.50`이 아니라 `LB-Internal-IP`다. 따라서 Single-Arm의 문제는 “같은 NIC이면 항상 SNAT한다”가 아니다. **Source를 보존했을 때 반환 경로가 대칭인지**, 대칭을 위해 SNAT을 선택했을 때 **APISIX에서 원본 L3 주소를 잃는지**를 함께 판정해야 한다. VCFA 자료가 말하는 Single-Arm의 “최초 요청 IP 손실”은 이 변환 효과와 맞닿아 있지만, DKS-C의 구체적인 SNAT 규칙은 별도 설정 증거가 필요하다.
+
+### Two-Arm의 패킷별 작동
+
+Two-Arm에서는 LB가 외부 VIP를 수신하는 NIC과 APISIX IP Pool로 전달하는 내부 NIC을 분리한다. VCFA 자료는 incoming과 forwarding 트래픽이 별도 NIC을 통과하고 최초 요청 IP가 유지된다고 설명한다. 그러나 이 설명은 Two-Arm 토폴로지가 제공하는 일반적인 가능성이다. 실제 DKS-C의 패킷이 같은 방식으로 전달되는지는 LB의 NAT·NIC 설정과 APISIX의 패킷·소켓 관측으로 대조해야 한다.
+
+한 요청을 패킷 단위로 읽으면 다음과 같다.
+
+1. 외부 클라이언트가 `src 203.0.113.50:53124, dst External-VIP:443`로 요청을 보낸다. 이 주소는 설명용 예시다.
+2. LB의 External NIC이 VIP 세션을 받고 Pool member를 선택한다. 이 과정에서 목적지 VIP가 APISIX Pool 주소로 바뀔 수 있지만, 목적지 변환만으로 Source가 바뀌었다고 결론 내리지는 않는다.
+3. LB가 Internal NIC을 통해 APISIX로 전달할 때 no-SNAT이어야 Source `203.0.113.50`과 Source Port `53124`가 유지된다. SNAT이면 APISIX 방향 패킷의 Source는 LB 내부 주소·포트가 된다.
+4. APISIX node/pod의 TCP 소켓이 실제 L3 peer를 `203.0.113.50`으로 보려면 LB 뒤의 CNI, node-to-pod 전달, 오버레이, 중간 NAT·프록시가 다시 주소를 바꾸지 않아야 한다.
+5. APISIX의 응답 route 또는 policy routing은 응답을 LB Internal NIC으로 보내야 하며, LB는 VIP·Pool 연결의 상태와 역변환을 유지해 응답을 클라이언트의 원래 세션으로 돌려보내야 한다.
+6. APISIX가 HTTP를 처리하는 경우에만 이 L3 관측값을 3장의 L7 헤더 변환으로 표현할 수 있다. 패킷 Source 보존과 XFF 주입은 같은 단계가 아니다.
+
+Two-Arm이 Source 보존을 가능하게 하는 핵심은 NIC의 개수 자체가 아니라 다음 조건의 결합이다.
+
+| 필요한 조건 | 패킷 수준에서 확인할 내용 | 조건이 빠질 때의 결과 |
+|---|---|---|
+| LB 전달이 no-SNAT | LB가 외부 요청의 Source IP·Port를 APISIX 방향에서 유지하는지 | APISIX는 LB 주소를 직접 peer로 관측한다. |
+| APISIX 반환 경로가 LB를 통과 | APISIX 노드의 기본 게이트웨이 또는 목적지별 route가 LB 내부 인터페이스를 향하는지 | 들어온 경로와 나가는 경로가 달라져 TCP 세션이 실패할 수 있다. |
+| APISIX까지 L3 Source가 보존 | CNI, node-to-pod 전달, 중간 NAT·프록시가 Source를 다시 바꾸지 않는지, APISIX TCP 소켓이 실제 Client IP를 보는지 | LB가 보존했더라도 APISIX 애플리케이션 관측값은 다른 주소가 된다. |
+| 반환 세션 매핑이 유효 | LB가 VIP·Pool 연결의 역변환과 상태를 유지하는지 | 응답이 클라이언트의 원래 세션으로 돌아가지 않는다. |
+
+따라서 `Two-Arm → 원본 IP 보존`은 충분조건이 아니다. 원본 IP 보존을 판단하려면 최소한 **LB no-SNAT**, **LB를 향한 APISIX 반환 경로**, **APISIX TCP 소켓의 실제 Source 관측**을 모두 확인해야 한다. DSR·Proxy Protocol 같은 다른 주소 전달 방식이 사용되는지는 제공된 세 원자료에서 확인되지 않으므로, 이 문서의 no-SNAT 경로와 혼합해 현재 구성으로 단정하지 않는다.
+
+이 장의 답은 다음과 같다. **Two-Arm은 외부 VIP와 내부 Pool 경로를 분리해 Source 보존과 대칭 반환을 함께 구성할 수 있는 토폴로지 조건이다.** LB가 SNAT하지 않고 APISIX의 반환 경로가 LB를 다시 통과하며 중간 계층을 거친 뒤 APISIX TCP 소켓이 실제 Client IP를 관측할 때에만 L3/L4 원본 IP 보존을 주장할 수 있다. 이 세 조건 중 하나라도 설정·패킷 증거가 없으면 “Two-Arm이라서 보존된다”가 아니라 “보존 가능성을 제공한다”로 범위를 제한해야 한다.
+
+## 3. L7 원본 IP 전달: XFF는 언제 신뢰 가능한 변환인가?
+
+이 장의 질문은 APISIX가 L3에서 관측한 주소를 새 백엔드 연결에 어떻게 표현하며, 백엔드 애플리케이션은 그 표현을 어느 경계에서 믿어야 하는가이다. APISIX가 L7 Reverse Proxy로 동작하면 클라이언트 연결과 백엔드 연결이 분리되므로 백엔드 TCP 소켓의 Source IP 자체는 APISIX 주소가 된다. 원본 클라이언트 주소를 전달하려면 HTTP 요청 헤더라는 별도의 변환과 trusted proxy 정책이 필요하다.
+
+### APISIX가 외부 입력을 신뢰 헤더로 바꾸는 위치
+
+외부 클라이언트는 요청에 `X-Forwarded-For`를 임의로 넣을 수 있다. 그러므로 APISIX가 그 헤더를 그대로 백엔드에 전달하거나 기존 값 뒤에 무조건 덧붙이면 백엔드는 공격자가 만든 주소를 원본 IP로 오인할 수 있다. APISIX는 먼저 연결의 Source IP를 신뢰할 수 있는 방식으로 결정하고, 외부에서 들어온 XFF 체인을 제거·정규화·덮어쓴 뒤 자신의 관측값을 신뢰 경계 안의 헤더로 만들어야 한다.
+
+개념적인 HTTP 변환은 다음과 같다.
+
+```http
+# 외부 입력 — 신뢰하지 않음
+GET /api HTTP/1.1
+Host: api.example
+X-Forwarded-For: 198.51.100.7, 10.0.0.8
+
+# APISIX가 L3에서 관측한 주소: 203.0.113.50
+# APISIX → 백엔드 새 연결 — 정규화된 표현
+GET /api HTTP/1.1
+Host: api.example
+X-Forwarded-For: 203.0.113.50
+```
+
+여기서 `203.0.113.50`은 실제 운영 주소가 아니라 설명용 값이다. 신뢰할 수 있는 앞단 프록시 체인을 별도로 정의한 경우에만 기존 체인의 특정 항목을 보존·추가할 수 있으며, 외부 클라이언트가 직접 제공한 값은 신뢰 체인으로 승격하지 않는다. `X-Real-IP`를 함께 쓰는지는 APISIX Route·플러그인 설정의 문제다. 어떤 헤더를 쓰든 외부 입력 정규화와 trusted proxy 경계를 같은 방식으로 적용해야 한다.
+
+### 백엔드가 헤더를 사용할 수 있는 조건
+
+XFF 값이 애플리케이션의 IP 접근 제어나 감사 로그에 영향을 주려면 APISIX의 재작성만으로 충분하지 않다. 다음 조건이 함께 확인되어야 한다.
+
+1. **APISIX가 실제 Source IP를 관측한다.** LB no-SNAT과 반환 경로가 맞아도 CNI·node-to-pod 전달·중간 프록시에서 주소가 바뀌면 XFF의 출발값이 이미 달라진다. 그러므로 APISIX access log의 `remote_addr`나 실제 연결 peer만 보고 소켓 경로 전체가 보존되었다고 확장하지 않는다.
+2. **APISIX가 외부 XFF를 정규화한다.** 외부 요청의 임의 헤더를 제거하고 신뢰된 관측값 또는 명시된 trusted proxy chain만 사용해야 한다. 위조 XFF가 백엔드에 그대로 남아 있으면 APISIX가 본 Source와 정책 입력이 달라진다.
+3. **백엔드가 trusted proxy를 제한한다.** 애플리케이션은 모든 요청자의 XFF를 믿지 않고 APISIX의 주소 범위·연결 경계에서 온 요청에 대해서만 APISIX가 만든 헤더를 원본 IP 표현으로 해석해야 한다.
+4. **백엔드 직접 우회가 네트워크에서 차단된다.** 방화벽·네트워크 정책·수신 주소 설계로 외부가 백엔드에 직접 연결할 수 없어야 한다. 그렇지 않으면 공격자가 APISIX를 거치지 않고 같은 헤더를 만들어 trusted proxy 정책을 우회할 수 있다.
+5. **헤더를 사용하는 정책의 적용 위치가 확인된다.** 로그 수집기, 애플리케이션 ACL, 감사 시스템이 실제로 정규화된 헤더를 읽는지와 서로 다른 프록시 계층의 헤더 우선순위가 일치하는지를 확인해야 한다.
+
+이 조건들은 “Two-Arm 효과”의 부가 설명이 아니라, L3 관측값을 L7 정책 입력으로 변환하는 별도의 조건·의존 관계다. 하나라도 빠지면 APISIX access log에서 보이는 주소, 백엔드 소켓 peer, 백엔드가 해석하는 XFF, 실제 클라이언트 주소가 서로 달라질 수 있다. 그러므로 이 경로만으로 IP 접근 제어가 정상이라고 단정하지 않는다. 확인된 설정과 같은 시점의 패킷·로그 범위 안에서만 “정규화된 IP를 정책 입력으로 사용할 수 있다”고 판단한다.
+
+### L4·TLS 경로에서는 XFF가 자동으로 생기지 않는다
+
+XFF는 HTTP 헤더이므로 APISIX가 HTTP를 해석하는 L7 경로에서만 주입·재작성할 수 있다. TLS pass-through나 순수 L4/stream 전달처럼 APISIX가 암호화된 payload를 해석하지 않는 경로라면 L3 Source 보존과 XFF 주입은 별개의 문제다. 운영 현황에 기록된 6443 VIP가 어떤 모드인지 확인되지 않은 상태에서 “6443에도 XFF가 전달된다”고 일반화할 수 없다. 실제 헤더 전달은 TLS 종단 위치, APISIX Route/플러그인 설정, 백엔드 프로토콜을 함께 대조해야 한다.
+
+요청 토큰과 사용자 신원을 검증하는 판단은 IP 경로의 다음 단계에서 자동으로 발생하는 하나의 결과가 아니다. Gateway가 Route를 선택하고 백엔드에 전달하는 동안 Keycloak·ADFS 연계 OIDC/JWT 계층은 요청 주체의 신원·권한 주장을 별도로 검증할 수 있다. 허용된 IP라고 해서 유효한 토큰이 되는 것도 아니고, 유효한 토큰이라고 해서 네트워크 경로의 Source IP가 증명되는 것도 아니다. 이 병렬 보안 판단의 프로토콜·토큰 수명·기계 인증은 [06번 문서](06.%20통합%20신원·인증과%20무인%20서비스%20토큰.md)에서 별도 범위로 다룬다.
+
+따라서 이 장의 답은 다음과 같다. **APISIX가 TCP L3에서 확인한 주소를 외부 XFF와 구분해 정규화한 뒤, 백엔드가 APISIX만 trusted proxy로 인정하고 직접 우회가 차단된 HTTP 경로에서만 XFF를 감사·IP 정책의 입력으로 사용할 수 있다.** XFF는 APISIX가 새 연결에 부여한 전달 표현이지 독립적인 암호학적 증명이 아니다. L4/TLS pass-through, 잘못된 trusted proxy, 직접 접근, 미검증 중간 NAT가 있으면 이 판단의 범위가 줄어든다. IP 기반 판단과 OIDC/JWT 신원 검증은 같은 요청 처리에서 병렬로 조합되지만 서로의 원인이나 증거를 대신하지 않는다.
+
+## 조사·증거 경로
+
+참조 자료는 APISIX의 현재 역할, 운영상 외부 접근 경계, VCFA LB의 Two-Arm·Single-Arm 구조를 설명한다. 반면 특정 VIP의 실제 Route, LB의 Source NAT 규칙, APISIX Pod가 본 TCP peer, XFF 재작성 결과, 백엔드의 trusted proxy와 방화벽 적용은 설정·런타임 증거가 있어야 한다. 아래 표에서 “가능한 동작”은 설계가 허용하는 경로이고, “실제 관측 증거”는 특정 시점에 그 경로가 실행되었다는 판단을 지지하는 자료다. 표의 확인 순서는 시스템의 실행 순서가 아니라 조사자가 증거를 수집해 판단을 좁혀 가는 순서다.
+
+| 확인하려는 질문 | 가능한 동작·조건 | 실제 관측 증거 | 그 증거가 지지하는 판단 | 그것만으로 말할 수 없는 것 |
+|---|---|---|---|---|
+| 외부 요청은 어느 중앙 지점으로 들어가는가? | 운영상 외부 접근을 APISIX Gateway Cluster로 집중하고 직접 접근을 막는 경로 | `DKS-C 운영 현황 요약.md`의 APISIX 통제·외부 직접 접근 불가 기록, DNS/VIP 조회, LB Virtual Service·Listener 설정, 통제된 요청의 응답 | 해당 도메인·VIP가 APISIX 경로를 사용하는지 | 모든 도메인·모든 포트가 같은 Route를 쓰는지, 각 Route의 보안 정책이 동일한지 |
+| Gateway Cluster에서 APISIX의 책임은 무엇인가? | APISIX가 Backend Gateway로 L7 API 요청을 Route·Upstream에 전달 | SW 아키텍처의 Gateway Cluster 표, APISIX Route·Upstream·TLS 설정, Control/Data Plane 동기화 상태 | 어떤 서비스와 포트가 APISIX 관리 범위인지 | 설정이 존재한다는 사실만으로 해당 요청의 성공·가용성을 보장하는 것 |
+| LB가 VIP를 APISIX Pool으로 어떻게 전달하는가? | VIP의 목적지를 Pool member로 바꾸고 L4 세션을 유지하는 전달 | VCFA/Avi LB Virtual Service, Pool member·NIC·NAT 설정, LB connection table | 특정 VIP가 어떤 APISIX 대상과 연결되는지 | APISIX가 실제로 원본 Source IP를 보았는지 |
+| Two-Arm에서 Source IP가 보존되는가? | External VIP NIC과 Internal Pool NIC을 분리하고 LB 전달에서 no-SNAT | LB 인터페이스·Pool NIC 설정, 세션별 LB trace 또는 양쪽 인터페이스 packet capture | LB→APISIX 구간의 실제 Source IP·Port가 원본인지 | APISIX Pod까지 같은 값이 전달되었는지, 반환 경로가 대칭인지 |
+| APISIX의 반환 경로가 LB를 통과하는가? | APISIX node의 기본 게이트웨이 또는 목적지별 route가 LB Internal NIC을 향함 | node/pod route·policy routing, ARP/neighbor, 응답 패킷 capture, TCP handshake·재전송 기록 | 요청·응답 경로가 대칭으로 구성되었는지 | 장기 연결·장애 전환 시에도 모든 경로가 동일한지 |
+| APISIX가 실제 Client IP를 TCP에서 관측하는가? | 중간 NAT·overlay·proxy가 없는 상태에서 APISIX 소켓의 peer가 Client IP | APISIX access log의 `remote_addr`/실제 연결 peer, node·pod 양쪽 capture, 통제된 고유 Source IP 요청 | 그 시점·해당 Route에서 APISIX가 본 주소 | APISIX가 그 값을 XFF로 올바르게 재작성했는지 |
+| 외부 XFF가 정규화되는가? | APISIX가 입력 XFF를 제거·덮어쓰고 관측된 주소를 신뢰 헤더로 생성 | Route·plugin 설정, 고의로 위조한 XFF를 포함한 통제 요청의 APISIX→backend capture/log | 공격자 입력과 APISIX 관측값이 분리되는지 | 헤더를 받는 모든 백엔드와 모든 Route가 같은 정책을 적용하는지 |
+| 백엔드는 어떤 프록시의 헤더를 믿는가? | trusted proxy 주소 범위를 APISIX로 한정하고 그 외 XFF를 무시·거부 | 애플리케이션·웹 서버 trusted proxy 설정, APISIX 외 source에서의 직접·우회 요청 결과 | APISIX가 만든 헤더만 정책 입력으로 사용되는지 | 애플리케이션의 모든 로그·ACL·감사 모듈이 동일한 해석을 하는지 |
+| 백엔드 직접 우회가 차단되었는가? | 방화벽·네트워크 정책·수신 경계가 APISIX 외부의 연결을 차단 | NSX/물리 방화벽 ACL, Service·NetworkPolicy, 내부·외부에서의 직접 접속 시도 기록 | 직접 연결과 헤더 위조 경로가 제한되는지 | 인증·인가 토큰이 유효하거나 서비스가 전체적으로 안전하다는 판단 |
+| IP 기반 정책이 실제로 원하는 결정을 내리는가? | 위 조건을 통과한 정규화 IP를 ACL·감사 로그의 입력으로 사용 | 허용·거부 경계값을 가진 통제 요청, APISIX·백엔드·정책 로그 상관분석 | 특정 시점·정책 버전의 IP 판단 동작 | 전 경로의 정상성, 모든 장애·변경·새 Route에서의 동일한 결과 |
+
+현재 제공된 원자료만으로는 위 표의 구조와 가능한 변환까지가 주로 확인된다. 실제 운영 결론을 내리려면 최소한 LB의 no-SNAT·route 설정, APISIX의 socket/access log와 XFF 재작성 설정, 백엔드 trusted proxy·직접 접근 차단 정책을 같은 요청의 시간 범위로 대조해야 한다. 단일 access log의 IP 한 칸이나 Two-Arm 옵션 표시만으로 전체 체인의 무결성을 판단하지 않는다.
+
+## 남아 있는 제약과 질문
+
+- **중앙화의 과거 도입 이유:** 운영 현황은 APISIX 통제와 외부 직접 접근 불가라는 현재 상태를 기록하지만, 분산 VIP·방화벽 비용이 실제 설계 결정의 원인이었다는 ADR·결정 기록은 제공되지 않았다. 현재 효과와 역사적 의도를 분리한다.
+- **실제 VIP·Route·TLS 모드:** 운영 표의 6443 및 80/443 VIP가 APISIX의 어떤 Listener·Route·Upstream으로 연결되는지, TLS를 어디에서 종단하는지, L4/stream과 HTTP 경로가 어떻게 나뉘는지 확인이 필요하다.
+- **Two-Arm의 실제 적용 범위:** VCFA 자료는 Two-Arm과 Single-Arm의 일반 동작을 설명하지만 DKS-C의 각 LB Virtual Service가 어느 NIC·Pool·NAT 정책을 쓰는지 확정하지 않는다. 운영계·개발계 또는 서비스별로 구성이 다를 수 있다.
+- **no-SNAT과 반환 라우팅:** LB가 Source를 유지하는지, APISIX node·Pod의 기본 게이트웨이·policy route가 LB 내부 인터페이스를 향하는지, CNI가 Pod까지 Source를 보존하는지 함께 확인해야 한다.
+- **XFF 신뢰 경계:** APISIX가 외부 XFF를 제거·덮어쓰는지, trusted proxy chain을 어떻게 정의하는지, `X-Real-IP` 등 보조 헤더의 우선순위가 무엇인지 Route별 설정과 통제 요청으로 확인해야 한다.
+- **백엔드 직접 우회:** 운영 요약의 “외부 직접 접근 불가” 기록은 중요한 현재 상태지만, 모든 백엔드·관리 포트·내부 경로의 방화벽 차단과 APISIX 외 source에 대한 애플리케이션 동작을 대신 증명하지 않는다.
+- **L4와 L7의 경계:** TLS pass-through·stream·비HTTP API에서는 L3 Source 보존과 XFF 주입이 자동으로 결합되지 않는다. 6443을 포함한 각 Listener의 프로토콜 처리 위치를 확인해야 한다.
+- **IP와 신원의 분리:** 원본 IP는 네트워크 경로와 프록시 신뢰의 산출물이고, Keycloak·ADFS OIDC/JWT는 요청 주체의 신원·권한을 판단하는 병렬 계층이다. 어느 하나가 다른 하나의 성공을 보장하지 않는다.
+- **보장 범위:** 이 문서는 특정 시점·설정에서 원본 IP 전달을 판단하는 방법을 설명한다. IP 접근 제어·감사 추적·가용성·침해 방지의 전체 보장이나 모든 장애 전환 경로의 정상성을 선언하지 않는다.
+
+이 문서가 닫는 답은 “중앙 Gateway 경로”와 “원본 IP 신뢰 경로”의 구조·조건·변환이다. 남은 항목은 답을 다음 문제로 미루기 위한 새로운 위기가 아니라, 설정·패킷·로그를 통해 현재 적용 범위를 확정해야 하는 운영 질문이다. 신원·인증은 이 트래픽 경로 뒤에 순차적으로 생기는 문제가 아니라 요청 처리와 병렬로 조합되는 별도 통제이며 [06번 문서](06.%20통합%20신원·인증과%20무인%20서비스%20토큰.md)에서 그 범위를 확인한다.
+
+## 상세 자료 색인
+
+| 지금 풀어야 할 질문 | 확인할 자료 | 확인할 내용 |
+|---|---|---|
+| 현재 외부 접근은 어떤 Gateway를 통과하며 직접 접근은 어떻게 제한되는가? | [`DKS-C 운영 현황 요약.md`](../DKS-C%20운영%20현황%20요약.md#시스템-아키텍처) | `dksg-ic01-khm` APISIX 통제, 외부 직접 접근 불가, 관리·사용자 클러스터의 VPC·SNAT 구조 |
+| 운영계·개발계 API Gateway VIP와 SNAT 대응은 어디에서 확인하는가? | [`DKS-C 운영 현황 요약.md`](../DKS-C%20운영%20현황%20요약.md#platform-클러스터) | API 게이트웨이 클러스터의 VIP(6443, 80/443) 및 환경별 SNAT 표. 주소 자체보다 역할·대응을 우선 확인 |
+| APISIX는 Gateway Cluster에서 어떤 책임을 가지는가? | [`DKS-C SW 아키텍처 및 기술 스택.md`](../DKS-C%20SW%20아키텍처%20및%20기술%20스택.md#gateway-cluster--backend-gateway-api-및-인증-처리) | APISIX의 Backend Gateway, Kubernetes Native API·REST API, Control/Data Plane 분리와 AutoScaling 표기 |
+| LB VIP가 어떤 Pool·NIC으로 전달되는가? | [`VCFA 인프라 아키텍처.md`](../VCFA%20인프라%20아키텍처.md#5-load-balancer-networking) | VIP 유입, IP Pool 전달·NAT, Two-Arm의 VIP/IP Pool NIC 분리, Single-Arm에서 최초 요청 IP 손실 설명 |
+| VPC와 External/SNAT IP의 구조가 LB 경로에 어떤 배경을 주는가? | [`VCFA 인프라 아키텍처.md`](../VCFA%20인프라%20아키텍처.md#4-vpc-model) | Project·Transit Gateway·VPC 대응, VPC와 SNAT External IP의 1:1 구조. 이 구조가 APISIX 원본 IP 보존을 자동 보장하는지는 별도 확인 |
+| LB가 Source IP를 SNAT하는지 어떻게 판정하는가? | [2장: L3/L4 원본 IP](#2-l3l4-원본-ip-two-arm은-어떤-패킷-경로를-가능하게-하는가) 및 LB Virtual Service·NAT 설정 | LB 양쪽 인터페이스 packet capture와 connection table로 Client Source가 APISIX까지 유지되는지 확인 |
+| APISIX 반환 패킷이 LB를 다시 통과하는가? | [2장: L3/L4 원본 IP](#2-l3l4-원본-ip-two-arm은-어떤-패킷-경로를-가능하게-하는가) 및 APISIX node·Pod route | 기본 게이트웨이·policy route, TCP handshake와 응답 패킷의 실제 경로 |
+| 외부 클라이언트가 보낸 XFF를 APISIX가 덮어쓰는가? | [3장: L7 원본 IP 전달](#3-l7-원본-ip-전달-xff는-언제-신뢰-가능한-변환인가) 및 APISIX Route/plugin 설정 | 입력 XFF 정규화·제거·재작성, APISIX access log와 백엔드 요청 헤더의 대응 |
+| 백엔드는 어떤 프록시 헤더만 신뢰하는가? | [3장: L7 원본 IP 전달](#3-l7-원본-ip-전달-xff는-언제-신뢰-가능한-변환인가) 및 애플리케이션·웹 서버 설정 | trusted proxy 주소 범위, 헤더 우선순위, APISIX 외 source의 직접 요청 처리 |
+| 6443 요청에도 XFF가 전달되는가? | [1장: 중앙 진입점](#1-중앙-진입점-외부-요청은-어떻게-apisix에서-대상까지-가는가) 및 각 Listener·TLS 설정 | TLS 종단·HTTP 해석 여부와 L4/stream·pass-through 경계. 포트 번호만으로 판단하지 않음 |
+| 원본 IP가 실제 정책·감사 판단을 바꾸는가? | [조사·증거 경로](#조사증거-경로) | 통제된 Source IP·위조 XFF 요청에 대한 LB, APISIX, 백엔드, ACL 로그의 시간별 상관관계 |
+| 네트워크 IP 판단과 사용자 신원 검증은 어떻게 함께 적용되는가? | [`06. 통합 신원·인증과 무인 서비스 토큰`](06.%20통합%20신원·인증과%20무인%20서비스%20토큰.md) | Keycloak·ADFS OIDC/JWT의 사람·기계 인증. IP 경로의 원인이나 대체 증거가 아닌 병렬 보안 계층 |
+
+색인은 제품 목록이 아니라 이 문서를 읽은 뒤 생기는 질문과 확인 위치를 정렬한다. 원자료에 없는 현재 설정·패킷 결과를 색인 문구만으로 확정하지 않으며, 실제 운영 판단은 동일 요청의 L3/L4·L7·정책 증거를 함께 대조한다.

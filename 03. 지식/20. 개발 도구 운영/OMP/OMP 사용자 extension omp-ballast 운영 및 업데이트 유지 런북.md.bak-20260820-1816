@@ -1,0 +1,259 @@
+---
+tags:
+  - OMP
+  - Oh-My-Pi
+  - extension
+  - omp-ballast
+  - 업데이트
+  - 운영-런북
+status: 적용
+created: 2026-08-15
+updated: 2026-08-19
+---
+
+# OMP 사용자 extension omp-ballast 운영 및 업데이트 유지 런북
+
+## 현재 결론
+
+`omp-ballast` extension 자체는 향후 다른 조건부 지침과 tool guard에 사용할 수 있도록 활성 상태로 유지한다. Subagent·IRC governance는 조건부화하지 않고 원래처럼 `~/.omp/agent/RULES.md`에 전체 내용을 상시 로드한다.
+
+현재 구조:
+
+```text
+~/.omp/agent/RULES.md
+  └─ 전체 subagent·IRC governance, always-on
+
+~/.omp/agent/extensions/omp-ballast/
+  └─ 원본 omp-ballast 0.1.0, 자동 탐색 활성
+
+~/.omp/agent/ballast.rules.json
+  └─ rules: [], 현재 활성 Ballast rule 없음
+
+~/.omp/agent/ballast/subagent-governance.md
+  └─ 과거 조건부화 사본, 현재 어떤 rule에서도 참조하지 않음
+```
+
+> [!IMPORTANT]
+> 현재 subagent governance는 Ballast가 전달하지 않는다. OMP의 기본 사용자 `RULES.md`가 부모와 자식 세션에 항상 제공한다. Ballast는 비활성화된 것이 아니라 활성 rule이 없는 대기 상태다.
+
+## 제품 경계와 설치 상태
+
+| 항목 | 현재 값 |
+| --- | --- |
+| Client | OMP (`omp`) |
+| 기준 OMP 버전 | `17.3.8` |
+| Extension 경로 | `~/.omp/agent/extensions/omp-ballast/` |
+| Ballast 버전 | `0.1.0` |
+| 설치 방식 | direct user extension |
+| Plugin registry | 미등록 |
+| 사용자 rules | `~/.omp/agent/ballast.rules.json` |
+| Effective Ballast rules | `0` |
+| Always-on governance | `~/.omp/agent/RULES.md` |
+| 제품 구분 지침 | `~/.omp/agent/APPEND_SYSTEM.md` |
+
+OpenCode의 `~/.config/opencode/opencode.json`과 OpenCodex의 `ocx`·`127.0.0.1:10100`은 이 설정의 소유자가 아니다.
+
+## 2026-08-16 OMP 17.3.5 업데이트 확인
+
+OMP를 `17.3.4 -> 17.3.5`로 공식 업데이트한 뒤에도 `omp-ballast`는 user extension 경로에 그대로 남았다. 확인 결과 extension package version은 `0.1.0`, `package.json#omp.extensions`는 `./index.js`, `ballast.rules.json`의 effective rule 수는 계속 `0`이다.
+
+따라서 이 extension은 OMP global package 교체로 재패치할 대상이 아니다. OMP 본체 `dist/cli.js`에 직접 들어간 로컬 패치와 달리 `~/.omp/agent/extensions/omp-ballast/`는 별도 사용자 소유 artifact로 유지된다.
+
+`omp plugin list --json`에는 Ballast가 나타나지 않는다. OMP가 사용자 extension 디렉터리의 `package.json#omp.extensions`를 자동 탐색해 `index.js`를 로드한다.
+
+## 2026-08-19 OMP 17.3.8 업데이트 확인
+
+OMP를 `17.3.5 -> 17.3.8`로 공식 업데이트한 뒤에도 Ballast 사용자 artifact와 governance 파일은 그대로 유지됐다. 업데이트 전 백업은 `~/.omp/agent/manual-backups/omp-before-17.3.8-20260819T121758Z/`에 보존했다.
+
+업데이트 후 checksum은 업데이트 전 기준과 모두 일치했다.
+
+| 파일 | SHA-256 |
+| --- | --- |
+| `extensions/omp-ballast/index.js` | `2969f0905d17fe8a133a7a19c10b5d96278115c7b6980b82075180788ce019f6` |
+| `ballast.rules.json` | `8772df49af2416bdf2f4881dd6f70452b3a0a8c31cf93f4aa1d7cb40ba0537a4` |
+| `RULES.md` | `13d10f9520681838fee159d74d5ad35682eb984724e554224521222087e071ef` |
+| `APPEND_SYSTEM.md` | `6cdfbac76c81e6a04eab51bb855f200f7b3d0130abc6db9a1ede5c1c7be901ef` |
+
+새 `omp/17.3.8` 프로세스를 실제 PTY로 실행해 `/ballast status`를 호출한 결과:
+
+```text
+omp-ballast 0.1.0
+User rules: /home/user01/.omp/agent/ballast.rules.json
+Project rules: (none)
+Effective rules: 0
+```
+
+추가 검증으로 extension 자체 `node --test tests/*.test.mjs`는 `10 pass, 0 fail`, `bun run check` syntax 검사는 통과했다. 따라서 17.3.8에서도 Ballast는 direct user extension으로 자동 탐색되며 별도 재설치·재패치가 필요하지 않다. 17.3.8 upstream에는 revived subagent가 extension runtime을 초기화하지 못하던 문제의 수정도 포함되어 있어, 현재 Ballast 운영 경계와 충돌하는 새 변경은 확인되지 않았다.
+
+## 왜 단순 구조로 복원했는가
+
+기존 296줄 `RULES.md`는 약 17.9KB지만, 이것이 실제 context overflow, 품질 저하, 유의미한 지연 또는 비용 문제를 일으켰다는 측정은 없었다.
+
+조건부화 과정에서는 다음 운영 복잡도가 추가됐다.
+
+```text
+prompt trigger 판정
+→ 부모 system prompt 조건부 주입
+→ implicit task 첫 차단
+→ 부모 재시도
+→ 자식 task prompt 보강 local patch
+→ 자식 system prompt 재주입
+```
+
+절감 효과의 절대 크기를 확인하기 전에 상대적인 95% 파일 축소율을 기준으로 최적화한 것이 문제였다. Subagent governance는 원래 전역 지침으로 잘 동작했으므로 `RULES.md`에 복원했다.
+
+Ballast는 다른 조건부 지침과 실제 tool guard에 여전히 가치가 있으므로 extension은 제거하지 않았다.
+
+## 평상시 사용법
+
+Ballast에 활성 rule이 없으므로 평소에는 아무 조작도 필요 없다.
+
+상태 확인:
+
+```text
+/ballast status
+```
+
+정상 결과:
+
+```text
+omp-ballast 0.1.0
+User rules: /home/user01/.omp/agent/ballast.rules.json
+Effective rules: 0
+```
+
+Subagent governance는 `/ballast status`에 나오지 않는 것이 정상이다. `RULES.md`에서 상시 로드되기 때문이다.
+
+## 향후 다른 조건부 지침 추가
+
+새 지침을 등록하기 전에 `$omp-ballast` skill을 읽고 가장 좁은 범위를 선택한다.
+
+판단 기준:
+
+| 목적 | 저장 위치 |
+| --- | --- |
+| 현재 대화에서만 필요 | 영구 저장하지 않음 |
+| 모든 OMP 요청에 반드시 필요 | `~/.omp/agent/RULES.md` |
+| 불변 제품·설정 경계 | `~/.omp/agent/APPEND_SYSTEM.md` |
+| 특정 사용자 prompt에서만 필요 | `~/.omp/agent/ballast.rules.json` |
+| 특정 프로젝트에서만 필요 | `<project>/.omp/ballast.rules.json` |
+| 긴 조건부 지침 | 별도 Markdown + `instructionFile` |
+| 실제 tool 실행 차단 | Ballast `toolRules` + OMP approval + sandbox |
+| 반복 가능한 사용 절차 | `~/.codex/skills/<name>/SKILL.md` |
+| 사람이 읽는 운영 이력 | Obsidian 런북 |
+
+짧은 사용자 rule 예시:
+
+```text
+/ballast pin user evidence-check | 조사, 검증 | 수치와 실질적 주장에는 출처와 기준 시점을 표시한다.
+```
+
+프로젝트 rule 예시:
+
+```text
+/ballast pin project test-policy | 테스트, test | 이 프로젝트에서는 bun test만 사용한다.
+```
+
+검증:
+
+```text
+/ballast status
+/ballast test 조사해줘
+/ballast test 이 함수 설명해줘
+```
+
+Positive prompt는 예상 rule이 매칭되고 negative prompt는 매칭되지 않아야 한다.
+
+## 운영 원칙
+
+- 의미 추론을 기대하지 않고 좁은 keyword 또는 JavaScript regex를 사용한다.
+- 프로젝트 rule은 신뢰된 저장소에서만 허용한다.
+- 사용자와 프로젝트에 같은 `id`가 있으면 프로젝트 rule이 이긴다.
+- 긴 지침은 JSON에 복제하지 않고 `instructionFile`로 분리한다.
+- `promptAction: block`만 실제 보안 경계로 사용하지 않는다.
+- 위험 행동은 `toolRules`, OMP approval, sandbox를 함께 사용한다.
+- 같은 의미의 지침을 `RULES.md`, Ballast, skill에 중복 등록하지 않는다.
+- 변경 전에는 대상 파일을 별도 timestamp 디렉터리에 백업한다.
+- `config.yml`의 동시 변경은 자동 복원하지 않고 diff를 먼저 확인한다.
+
+## OMP 업데이트 후 유지
+
+현재 OMP updater는 전역 Bun/npm package 또는 standalone binary를 교체한다. 사용자 상태인 다음 경로는 일반적인 업데이트 후 유지된다.
+
+```text
+~/.omp/agent/extensions/omp-ballast/
+~/.omp/agent/ballast.rules.json
+~/.omp/agent/RULES.md
+~/.omp/agent/APPEND_SYSTEM.md
+```
+
+파일 유지와 extension API 호환성은 별개다. OMP 업데이트 후 새 세션에서 확인한다.
+
+```text
+/ballast status
+```
+
+정상 기준:
+
+```text
+omp-ballast 0.1.0
+Effective rules: 0
+```
+
+`omp update --plugins`는 direct user extension인 Ballast를 관리하지 않는다.
+
+## 복원 및 백업 기록
+
+전체 subagent governance 원본:
+
+```text
+~/.omp/agent/RULES.md.ballast-backup-2026-08-15T15-08-24-566Z
+```
+
+원본과 현재 `RULES.md`의 SHA-256:
+
+```text
+13d10f9520681838fee159d74d5ad35682eb984724e554224521222087e071ef
+```
+
+`0.1.1-local.1` task prompt propagation 패치는 단순 구조 복원 시 제거했다. 제거 직전 상태는 다음에 보존했다.
+
+```text
+~/.omp/agent/manual-backups/omp-ballast-before-simple-rollback-20260815T170855Z/
+```
+
+원본 `0.1.0` 복원에 사용한 백업:
+
+```text
+~/.omp/agent/manual-backups/omp-ballast-task-propagation-20260815T164524Z/omp-ballast/
+```
+
+## 현재 checksum 기준
+
+| 파일 | SHA-256 |
+| --- | --- |
+| `extensions/omp-ballast/index.js` | `2969f0905d17fe8a133a7a19c10b5d96278115c7b6980b82075180788ce019f6` |
+| `ballast.rules.json` | `8772df49af2416bdf2f4881dd6f70452b3a0a8c31cf93f4aa1d7cb40ba0537a4` |
+| `RULES.md` | `13d10f9520681838fee159d74d5ad35682eb984724e554224521222087e071ef` |
+| `APPEND_SYSTEM.md` | `6cdfbac76c81e6a04eab51bb855f200f7b3d0130abc6db9a1ede5c1c7be901ef` |
+
+## 검증 결과
+
+| 항목 | 결과 |
+| --- | --- |
+| Ballast package | `0.1.0` 유지, OMP `17.3.8` PTY smoke 통과 |
+| Ballast tests | 10 pass, 0 fail |
+| Syntax check | 통과 |
+| `RULES.md` | 원본 SHA-256 일치 |
+| Ballast extension 자동 탐색 | 성공 |
+| Effective Ballast rules | `0` |
+| Ballast extension 상태 | 활성, future rules 대기 |
+| `APPEND_SYSTEM.md` | 변경하지 않음 |
+
+## 최종 운영 계약
+
+1. Subagent·IRC governance는 `RULES.md`에 상시 유지한다.
+2. Ballast로 subagent governance를 다시 조건부화하지 않는다.
+3. Ballast는 향후 다른 조건부 prompt rule과 tool guard에 사용한다.
+4. 새로운 전역·조건부 지침은 `$omp-ballast` skill로 배치 위치를 먼저 판단한다.
+5. 측정된 문제가 없으면 단순한 전역 지침을 성급하게 조건부 engine으로 바꾸지 않는다.

@@ -1,0 +1,41 @@
+{
+	"nodes":[
+		{"id":"f037574a6e5ea7be","type":"group","x":0,"y":0,"width":350,"height":180,"label":"🎭 3계층 팀 구조","color":"1"},
+		{"id":"bc2a8c3f241a4f0b","type":"text","x":15,"y":30,"width":320,"height":40,"text":"## Orchestrator (본인)\nMVP 분할 → 할당 → 분기 판정 → 최종 검수","color":"1"},
+		{"id":"d44b78a7cf13e243","type":"text","x":15,"y":80,"width":320,"height":40,"text":"## Implementation Subagent\nMVP 범위 내 구현 → R1-R12 → 완료 보고","color":"3"},
+		{"id":"16ce88a4bdacfc20","type":"text","x":15,"y":130,"width":320,"height":40,"text":"## Verification Subagent(s)\n검증 계획 → 범위/품질/증거 확인 → 통과/수정","color":"5"},
+		{"id":"81331fc508c3ae9b","type":"group","x":400,"y":0,"width":600,"height":140,"label":"🔶 Phase 0 — 태스크 분석 및 MVP 분할","color":"2"},
+		{"id":"309da5cb54654db2","type":"text","x":420,"y":30,"width":170,"height":50,"text":"1. Launch Input\n목표/모델/범위/전략","color":"2"},
+		{"id":"e9269c1685aad93f","type":"text","x":615,"y":30,"width":170,"height":50,"text":"2. 태스크 분석\nMVP 분할 / Oracle Browser","color":"3"},
+		{"id":"15a6a22de40ebbef","type":"text","x":810,"y":30,"width":170,"height":50,"text":"3. DDD-Lumin\nClassification","color":"1"},
+		{"id":"70f4a0f602403bdd","type":"text","x":420,"y":85,"width":560,"height":45,"text":"산출물: Launch Input 7필드 + MVP 분할 목록 + Classification 레코드 + Full Baseline","color":"5"},
+		{"id":"0b6d41bb659fd387","type":"group","x":400,"y":170,"width":960,"height":240,"label":"🔷 Phase 1 — MVP 순차 실행 사이클","color":"6"},
+		{"id":"5d6afb04aa4ac3d8","type":"text","x":420,"y":200,"width":140,"height":55,"text":"Step 0\nScope Packet\nminimal/strict","color":"1"},
+		{"id":"4c7cbeb6ef32efab","type":"text","x":580,"y":200,"width":140,"height":55,"text":"Step 0.5\nLumin Pre-write\nintentJson → advisory","color":"2"},
+		{"id":"8389d1f06bd9f445","type":"text","x":740,"y":200,"width":140,"height":55,"text":"Step 1\nImplementation\nSubagent 실행","color":"3"},
+		{"id":"91c0d22ff76e6477","type":"text","x":900,"y":200,"width":140,"height":55,"text":"Step 1.5\nPost-write\nDrift Check","color":"4"},
+		{"id":"438c9a3b222d8696","type":"text","x":1060,"y":200,"width":140,"height":55,"text":"Step 2\nVerification\nSubagent(s)","color":"5"},
+		{"id":"6e326fbce1b65870","type":"text","x":1220,"y":200,"width":120,"height":55,"text":"Step 3\n분기 판정\n→ 통과/수정","color":"6"},
+		{"id":"8f5d5434855d200a","type":"text","x":420,"y":275,"width":920,"height":120,"text":"#### 검증 전략\n- **단일 검증** (기본): 1명 검증 → 통과/수정\n- **Blind Double**: 2명 독립 검증, 상호 cross-check\n- **Split-Lens**: Verifier A: 범위/경계, B: 동작/테스트, C: 아키텍처/Lumin evidence\n- **Adversarial**: Primary 검증 + Challenger 반증\n- **Quorum**: 3명 이상, 증거 기반 판정\n\n> 오케스트레이터는 MVP 위험도/크기/DDD-Lumin 분류에 따라 전략을 선택한다. 다중 검증자의 결과는 **Verification Bundle**로 취합된다.","color":"5"},
+		{"id":"01fe2d01b4a59dd6","type":"group","x":400,"y":440,"width":960,"height":110,"label":"🟢 Phase 2 — 최종 검수","color":"4"},
+		{"id":"b479687cebb301ef","type":"text","x":420,"y":470,"width":920,"height":65,"text":"#### 오케스트레이터 직접 수행\n1. MVPs Done 확인 (모든 MVP가 통과 상태인가)\n2. Verification Bundle 최종 검토 (각 MVP의 검증 결과, accepted/rejected findings)\n3. DDD-Lumin Evidence 취합 (Scope Packet, Lumin evidence 상태)\n4. 누락/모순/범위 이탈 없는지 확인\n5. 최종 통과 선언 또는 재할당 결정","color":"4"},
+		{"id":"eed5a4c8ff198f74","type":"group","x":0,"y":220,"width":350,"height":330,"label":"📋 핵심 운영 기준","color":"3"},
+		{"id":"e8599d81e4056544","type":"text","x":15,"y":250,"width":320,"height":55,"text":"#### DDD-Lumin Gate\n- Lumin은 repo evidence 수집 도구, authority가 아님\n- strict/minimal/non_target 분류\n- strict 필수 조건: 새 type/helper/shape, cross-boundary import, file create/move/delete","color":"1"},
+		{"id":"5df19d6d613ab4e4","type":"text","x":15,"y":315,"width":320,"height":55,"text":"#### Hard Rules\n1. Do not write outside allowed_files\n2. Subagent Session Freshness (수정 시 clean session)\n3. Do not generate DDD-Lumin evidence\n4. MVP 분할 권한은 Orchestrator 전유\n5. Non-target/MVP도 경량 할당 패킷 필요","color":"2"},
+		{"id":"6fafb117bdf482c7","type":"text","x":15,"y":380,"width":320,"height":55,"text":"#### R1-R12 Rule Map\nR1: silent error | R2: nesting >= 3\nR3: oversized | R4: reuse before new\nR5: duplicate/dead | R6: hidden coupling\nR7: strict types | R8: circular dependency\nR9: behavior test | R10: mock boundary\nR11: edge case | R12: no test-only guard","color":"4"},
+		{"id":"3ac1a7d9a8e58a1b","type":"text","x":15,"y":445,"width":320,"height":90,"text":"#### Oracle Role (선택)\n- **Oracle Browser (분석)**: Phase 0 분석에 oracle-plus --engine browser 활용\n- **Oracle Code Mode (구현)**: Step 1 구현에 oracle-plus code 활용\n- **Oracle Browser (검증)**: 검증 서브에이전트가 oracle-plus --engine browser로 검증\n- Swarm Pre-generation: 향후 MVP Code Mode draft를 병렬 생성 (advisory only)","color":"5"}
+	],
+	"edges":[
+		{"id":"4c367c548e8ec5fb","fromNode":"309da5cb54654db2","toNode":"e9269c1685aad93f","fromSide":"right","toSide":"left","label":"→"},
+		{"id":"4fa176d276513a53","fromNode":"e9269c1685aad93f","toNode":"15a6a22de40ebbef","fromSide":"right","toSide":"left","label":"→"},
+		{"id":"0a27ba491f2a4889","fromNode":"15a6a22de40ebbef","toNode":"5d6afb04aa4ac3d8","fromSide":"bottom","toSide":"top","label":"MVP → Phase 1","color":"6"},
+		{"id":"b9421ce90b2f1d11","fromNode":"5d6afb04aa4ac3d8","toNode":"4c7cbeb6ef32efab","fromSide":"right","toSide":"left","label":"→","color":"6"},
+		{"id":"734688789cbce1f6","fromNode":"4c7cbeb6ef32efab","toNode":"8389d1f06bd9f445","fromSide":"right","toSide":"left","label":"→","color":"6"},
+		{"id":"420a60296d92f9bb","fromNode":"8389d1f06bd9f445","toNode":"91c0d22ff76e6477","fromSide":"right","toSide":"left","label":"→","color":"6"},
+		{"id":"d502c735d78ea326","fromNode":"91c0d22ff76e6477","toNode":"438c9a3b222d8696","fromSide":"right","toSide":"left","label":"→","color":"6"},
+		{"id":"8e6b7bcca3429e5c","fromNode":"438c9a3b222d8696","toNode":"6e326fbce1b65870","fromSide":"right","toSide":"left","label":"→","color":"6"},
+		{"id":"094d56c4818f10e1","fromNode":"6e326fbce1b65870","toNode":"01fe2d01b4a59dd6","fromSide":"bottom","toSide":"top","label":"MVP Done → Phase 2","color":"4"},
+		{"id":"5911c7e06457c04e","fromNode":"bc2a8c3f241a4f0b","toNode":"d44b78a7cf13e243","fromSide":"bottom","toSide":"top","label":"할당"},
+		{"id":"cb5dd05c51c9fca6","fromNode":"d44b78a7cf13e243","toNode":"16ce88a4bdacfc20","fromSide":"bottom","toSide":"top","label":"완료 보고"}
+	]
+}

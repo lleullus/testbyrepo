@@ -1,0 +1,820 @@
+---
+tags:
+  - OMP
+  - Oh-My-Pi
+  - TUI
+  - 로컬-패치
+  - 업데이트
+  - 운영-런북
+status: 적용
+created: 2026-08-15
+updated: 2026-08-19
+---
+
+# OMP assistant Markdown compact spacing 패치 및 업데이트 런북
+
+## 목적과 현재 상태
+
+이 문서는 Oh My Pi(OMP) assistant 응답 내부의 과도한 Markdown block 간격을 줄이는 로컬 변경의 구현 범위, 적용 결과, 이후 OMP 업데이트 때의 재적용 판단 절차를 고정한다.
+
+이 문서에서 OMP는 `omp` 클라이언트와 `~/.omp/agent/` 설정을 뜻한다. OpenCode 및 OpenCodex(`ocx`, `127.0.0.1:10100`)는 범위가 아니다.
+
+현재 상태:
+
+| 항목 | 값 |
+| --- | --- |
+| OMP 버전 | `17.3.8` |
+| 실행 파일 | `~/.bun/bin/omp` |
+| 실제 실행 대상 | `~/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js` |
+| `@oh-my-pi/pi-coding-agent` | `17.3.8` |
+| `@oh-my-pi/pi-tui` | `17.3.8` |
+| 현재 재패치 source | `~/project/oh-my-pi-custom-v17.3.8`, tag `v17.3.8`, commit `858f7dd91fff9b84cf8a2c6a6bb85aa0e6d03a55` |
+| 사용자 설정 | `~/.omp/agent/config.yml` |
+| 패치 상태 | `17.3.8` combined 재적용 완료 (`assistant-markdown-spacing` + `irc-full-body`) |
+| 설정 key | `tui.assistantMarkdownSpacing` |
+| 기본값 | `normal` |
+| 현재 opt-in 값 | `compact` |
+
+## 2026-08-15 적용 결과
+
+| 항목 | 값 |
+| --- | --- |
+| 상류 기준 | tag `v17.3.4`, commit `ffd53ff92a6f575d499730475a73460dd7cc2eea` |
+| 소스 checkout | `~/project/oh-my-pi-custom` |
+| 설치 bundle SHA-256 | `16af9971b0bf037e9277b2093721cee32117c4411bff06efe04607af65ed7f69` |
+| source patch SHA-256 | `02c8dab3105eefead5990a03200a2e444381e65a674b29313510d68664121284` |
+| official rollback bundle SHA-256 | `a547f8fa4457e1f96886a7ece04a27dc110f80c29b395daeb223f4a98e802a24` |
+| 테스트 | 6개 파일, 223 pass, 0 fail, 1,180 expect |
+| bundle smoke | `omp/17.3.4`, `smoke-test: ok` |
+| 설정 readback | `tui.assistantMarkdownSpacing=compact`, type `enum` |
+| 실제 TUI | assistant block 간 synthetic row 제거, fenced-code 내부 blank row 유지 확인 |
+
+> [!IMPORTANT]
+> 설치된 `src/*.ts`만 수정해서는 현재 `omp` 실행 동작이 바뀌지 않는다. `~/.bun/bin/omp`는 bundled 산출물인 `dist/cli.js`를 실행한다. 따라서 minified `dist/cli.js`를 직접 편집하지 않고, 정확한 OMP 소스 revision에서 수정·테스트·bundle 생성 후 검증된 산출물을 설치해야 한다.
+
+## 변경 원칙
+
+1. 기존 출력은 보존한다. 새 옵션의 기본값은 `normal`이다.
+2. `compact`는 assistant의 본문과 표시되는 thinking Markdown에만 적용한다.
+3. user message, tool output, 일반 Markdown, `TranscriptContainer`, `Spacer`는 변경하지 않는다.
+4. 빈 terminal row를 결과에서 일괄 제거하지 않는다. Markdown renderer가 block 사이 표현용으로 추가한 synthetic row만 억제한다.
+5. fenced code 내부 빈 줄, `<br>`, HTML 내부 개행, wrap 결과, H1 OSC 66 구조 행, list 구조, assistant/tool 경계의 semantic spacer는 유지한다.
+6. spacing mode는 component 생성 시 확정하고 runtime setter를 만들지 않는다. 이미 native scrollback에 commit된 행 수가 세션 중 바뀌지 않게 한다.
+7. 업데이트 후 과거 patch를 자동 또는 강제로 덮어쓰지 않는다. 상류 포함 여부와 새 코드 구조를 먼저 확인한다.
+8. upstream에 동등 구현이 들어오면 로컬 patch를 폐기한다. 같은 기능을 중복 적용하지 않는다.
+
+## 구현할 변경
+
+### 1. Generic Markdown renderer capability
+
+대상 소스:
+
+```text
+packages/tui/src/components/markdown.ts
+```
+
+할 일:
+
+- `blockSpacing?: "normal" | "compact"` 옵션을 추가한다.
+- 옵션 미지정 시 `normal`을 사용한다.
+- spacing mode를 `Markdown` instance lifetime 동안 immutable하게 유지한다.
+- compact일 때 다음 block token의 renderer-owned post-gap만 억제한다.
+  - heading
+  - paragraph 및 display-math paragraph
+  - block display math
+  - code 및 Mermaid
+  - blockquote의 outer post-gap
+  - horizontal rule
+  - narrow fallback 및 일반 table
+  - block separator로 정규화된 `space` token
+- list renderer 자체, H1 OSC 66 second physical row, 코드 내부 blank row는 변경하지 않는다.
+
+행 수를 바꾸는 옵션이므로 다음 identity 및 snapshot 경로에 spacing mode를 포함한다.
+
+- `RenderSignature`
+- `#renderSignature()`
+- L2 `#renderCacheKey()`
+- `#matchingStreamPrefixLineCache()`의 signature 비교
+- `#highlightStreamingDiffLines()`의 signature 비교
+- `resolveNativeScrollbackWidthEpoch()`가 만드는 snapshot `Markdown`
+
+### 2. Assistant-only wiring
+
+대상 소스:
+
+```text
+packages/coding-agent/src/modes/components/assistant-message.ts
+packages/coding-agent/src/modes/utils/interactive-context-helpers.ts
+packages/coding-agent/src/modes/components/chat-transcript-builder.ts
+packages/coding-agent/src/config/settings-schema.ts
+```
+
+할 일:
+
+- `AssistantMessageComponent` constructor가 spacing mode를 받아 immutable하게 보유한다.
+- assistant text와 visible thinking의 두 `new Markdown()` 생성점에 같은 mode를 전달한다.
+- `createAssistantMessageComponent()`가 `ctx.settings.get("tui.assistantMarkdownSpacing")`을 읽어 전달한다.
+- `ChatTranscriptBuilder`가 직접 생성하는 before-tools 및 after-tool assistant component에도 같은 설정을 전달한다.
+- schema에 다음 enum을 추가한다.
+
+```ts
+"tui.assistantMarkdownSpacing": {
+  type: "enum",
+  values: ["normal", "compact"] as const,
+  default: "normal",
+}
+```
+
+초기에는 settings panel의 실시간 toggle로 노출하지 않는다. config-file opt-in으로 시작한다. 세션 중 toggle은 이미 commit된 native scrollback을 재배치할지에 대한 별도 lifecycle 계약이 필요하기 때문이다.
+
+### 3. 변경하지 않을 소스
+
+다음 파일은 assistant construction 경로 확인과 회귀 검증에는 사용하지만 패치 대상이 아니다.
+
+```text
+packages/coding-agent/src/modes/components/transcript-container.ts
+packages/tui/src/components/spacer.ts
+packages/coding-agent/src/modes/components/user-message.ts
+packages/coding-agent/src/modes/controllers/event-controller.ts
+packages/coding-agent/src/modes/utils/ui-helpers.ts
+packages/coding-agent/src/modes/controllers/live-command-controller.ts
+packages/coding-agent/src/modes/interactive-mode.ts
+packages/coding-agent/src/modes/types.ts
+packages/coding-agent/src/config/settings.ts
+```
+
+`settings.ts`는 schema path에서 nested YAML setting을 처리하므로 별도 plumbing을 추가하지 않는다.
+
+## 확인된 assistant 생성 경로
+
+패치는 다음 두 축을 모두 커버해야 한다.
+
+1. Live/rebuild/voice 경로
+
+```text
+EventController / UiHelpers / LiveCommandController
+→ createAssistantMessageComponent(ctx)
+→ AssistantMessageComponent
+→ Markdown
+```
+
+초기 streaming assistant와 tool 이후 continuation도 같은 helper로 수렴한다.
+
+2. 별도 transcript builder 경로
+
+```text
+ChatTranscriptBuilder
+→ new AssistantMessageComponent(...)
+→ Markdown
+```
+
+`ChatTranscriptBuilder`의 before-tools와 after-tool 생성점을 모두 수정하지 않으면 parked subagent/advisor/remote transcript 중 일부만 normal spacing으로 남을 수 있다.
+
+## 실제 구현 순서
+
+### 단계 A — 재현과 기준선 고정
+
+1. `omp --version`과 실제 실행 대상 경로를 기록한다.
+2. normal mode에서 heading, 연속 paragraph, fenced code, list, blockquote, horizontal rule, table을 포함한 assistant 응답을 캡처한다.
+3. user message와 tool 결과 사이의 top-level separator 행도 함께 캡처한다.
+4. 소스 revision과 배포 package version의 대응 관계를 확인한다. package version만 보고 임의 commit을 선택하지 않는다.
+
+### 단계 B — 정확한 상류 revision에서 소스 변경
+
+1. `https://github.com/can1357/oh-my-pi.git`의 현재 설치판과 대응하는 release tag 또는 commit을 별도 source checkout에 준비한다.
+2. 먼저 `packages/tui`에 기본 `normal`인 dormant renderer capability를 구현한다.
+3. normal parity, compact token mix, cache identity, streaming final equality, native width-epoch 테스트를 통과시킨다.
+4. 그 다음 `packages/coding-agent`에 setting과 assistant-only wiring을 구현한다.
+5. live helper와 `ChatTranscriptBuilder` 두 construction 축의 integration test를 통과시킨다.
+
+### 단계 C — 배포 산출물 생성
+
+1. upstream repository가 제공하는 build/bundle 절차로 `dist/cli.js` 또는 공식 설치 형태와 동등한 배포 산출물을 만든다.
+2. 설치된 minified `dist/cli.js`를 text patch로 직접 수정하지 않는다.
+3. 현재 공식 실행 파일을 rollback용으로 보존한 뒤 검증된 산출물을 설치한다.
+4. source patch, 기준 OMP version, 기준 commit, build 명령, 산출물 SHA-256을 durable manifest에 기록한다.
+
+적용 산출물 보존 위치:
+
+```text
+~/.omp/agent/local-patches/assistant-markdown-spacing/v17.3.4/
+```
+
+| 파일 | 용도 | SHA-256 |
+| --- | --- | --- |
+| `manifest.json` | 기준 revision, 설치 경로, 검증, rollback 계약 | 별도 manifest 자체 checksum은 필수 계약이 아님 |
+| `assistant-markdown-spacing-v17.3.4.patch` | 재검토·이식용 source patch | `02c8dab3105eefead5990a03200a2e444381e65a674b29313510d68664121284` |
+| `official-dist-cli.js` | 적용 직전 official rollback bundle | `a547f8fa4457e1f96886a7ece04a27dc110f80c29b395daeb223f4a98e802a24` |
+| `custom-dist-cli.js` | 설치한 custom bundle | `16af9971b0bf037e9277b2093721cee32117c4411bff06efe04607af65ed7f69` |
+
+### 단계 D — 설정과 실제 동작 검증
+
+구현과 설치 검증을 마친 뒤 `~/.omp/agent/config.yml`에 다음 nested setting을 적용했다.
+
+```yaml
+tui:
+  assistantMarkdownSpacing: compact
+```
+
+검증 항목:
+
+- assistant heading/paragraph/code/blockquote/table 사이 synthetic blank row가 줄어든다.
+- code 내부 blank line과 `<br>`는 유지된다.
+- H1 OSC 66 구조 행은 유지된다.
+- visible thinking과 prose가 같은 compact 정책을 사용한다.
+- user message 렌더링은 기존과 같다.
+- assistant↔tool↔assistant의 top-level transcript separator는 유지된다.
+- streaming 중 보인 settled prefix와 final render prefix가 byte-identical하다.
+- normal과 compact가 같은 text/width의 L2 cache row를 서로 재사용하지 않는다.
+- terminal width 변경 후 native scrollback row count가 맞다.
+- 새 OMP 프로세스에서 설정을 다시 읽어도 compact가 유지된다.
+
+## OMP 업데이트 때마다 수행할 절차
+
+### 1. 업데이트 전
+
+```bash
+omp --version
+omp update --check
+```
+
+다음 정보를 함께 기록한다.
+
+- 현재 official version
+- 현재 custom patch 기준 version/commit
+- 현재 실행 파일 SHA-256
+- rollback backup SHA-256
+- `~/.omp/agent/config.yml`에 `tui.assistantMarkdownSpacing: compact`가 있는지
+
+rollback artifact와 manifest가 없거나 서로의 SHA-256이 맞지 않으면 업데이트 전에 먼저 복구한다.
+
+### 2. 공식 업데이트 실행
+
+```bash
+omp update
+omp --version
+```
+
+업데이트는 global package와 bundled `dist/cli.js`를 교체할 수 있다. `~/.omp/agent/config.yml`이 남아 있어도 새 official bundle에 setting 구현이 없으면 compact 기능은 작동하지 않는다.
+
+### 3. 상류 포함 여부를 먼저 판정
+
+새 버전에서 다음이 모두 확인돼야 “상류에 동등 구현 포함”으로 판정한다.
+
+- `tui.assistantMarkdownSpacing` schema가 존재하고 기본값이 `normal`이다.
+- `Markdown`에 assistant가 사용할 수 있는 `normal | compact` block-spacing 옵션이 있다.
+- compact가 renderer-owned post-gap만 억제하고 구조 행과 코드 내부 빈 줄을 보존한다.
+- spacing mode가 render signature, L2 key, streaming rendered-prefix signature에 포함된다.
+- native scrollback width-epoch snapshot이 동일 mode를 보존한다.
+- live helper와 `ChatTranscriptBuilder`가 assistant text/thinking에 설정을 전달한다.
+- user/tool/general Markdown은 기본 normal을 유지한다.
+
+일부 이름만 같거나 renderer 옵션만 있고 wiring/cache 처리가 빠진 경우는 동등 구현으로 판정하지 않는다.
+
+### 4. 상류에 완전히 포함된 경우
+
+1. 과거 local patch를 적용하지 않는다.
+2. official bundle을 그대로 사용한다.
+3. `config.yml`의 compact opt-in을 유지한다.
+4. actual TUI smoke test로 assistant 내부만 compact이고 user/tool 경계가 유지되는지 확인한다.
+5. manifest를 `upstreamed` 상태로 갱신하고 local custom executable은 폐기한다.
+
+### 5. 상류에 포함되지 않은 경우
+
+1. 새 official version에 대응하는 exact source tag/commit을 새 checkout으로 준비한다.
+2. 과거 source patch를 새 checkout에 대해 먼저 check한다.
+3. check가 실패하면 강제 적용하거나 fuzzy text replacement를 하지 않는다. 새 코드의 renderer, cache, scrollback, assistant construction 경로를 다시 검토한다.
+4. check가 성공해도 기존 테스트만 믿지 않고 새 version에서 변경된 callsite와 signature를 재확인한다.
+5. renderer 및 integration test를 다시 실행한다.
+6. 새 bundle을 다시 만들고 SHA-256을 기록한다.
+7. official bundle backup을 만든 후 새 custom bundle을 설치한다.
+8. normal parity와 compact actual TUI smoke를 모두 재검증한다.
+9. manifest의 기준 version, commit, patch SHA-256, official/custom bundle SHA-256을 갱신한다.
+
+> [!WARNING]
+> 과거 version용 patch를 설치된 minified `dist/cli.js`에 직접 적용하지 않는다. source patch check가 통과해도 bundle 생성과 runtime smoke가 끝나기 전에는 완료로 보지 않는다.
+
+## 업데이트 후 필수 회귀 검증
+
+| 검증 | 잡아야 하는 오류 |
+| --- | --- |
+| option 미지정 및 explicit `normal` golden parity | 기존 Markdown 출력 변경 |
+| compact mixed-token render | token별 post-gap 처리 누락 |
+| compact H1 OSC 66 | 구조용 second row 삭제 |
+| code 내부 blank, `<br>`, HTML newline | 전역 blank-row trimming |
+| normal→compact 및 compact→normal 동일 text/width | L2 cache key 충돌 |
+| transient append 후 final과 fresh compact final 비교 | streaming prefix의 normal row 재사용 |
+| settled prefix와 final prefix 비교 | stale native scrollback commit |
+| width-epoch capture/resolve | snapshot mode 전달 누락 |
+| thinking + prose | 두 Markdown 생성점 중 하나 누락 |
+| initial/post-tool/rebuild/`/live`/ChatTranscriptBuilder | assistant construction 경로 누락 |
+| user message 및 tool separator | assistant-only 범위 침범 |
+| 실제 OMP 재시작 | config 로드 또는 bundle 설치 누락 |
+
+## 중단 조건
+
+다음 중 하나라도 발생하면 local patch 적용을 중단한다.
+
+- 새 package version에 대응하는 source commit을 확정하지 못함
+- 상류가 일부만 구현해 local patch와 책임 범위가 겹침
+- source patch check 실패
+- normal parity 실패
+- cache, streaming 또는 width-epoch 테스트 실패
+- custom bundle build 실패
+- 실행 산출물 SHA-256과 manifest 불일치
+- official bundle rollback artifact 없음
+- user/tool separator 또는 code 내부 blank line이 변경됨
+- actual TUI에서 streaming settled prefix가 final render와 달라짐
+
+## 롤백
+
+1. OMP 프로세스를 종료한다.
+2. manifest에 기록된 official bundle backup과 SHA-256을 확인한다.
+3. official bundle을 원래 `dist/cli.js` 위치로 복구하거나 공식 updater의 강제 재설치 경로를 사용한다.
+4. `omp --version`과 실행 파일 SHA-256을 확인한다.
+5. 새 schema를 지원하지 않는 official version이면 `config.yml`의 `tui.assistantMarkdownSpacing`을 제거한다.
+6. normal mode로 실제 OMP를 실행해 user/assistant/tool transcript가 정상인지 확인한다.
+
+## 장기 종료 조건
+
+다음 조건이 모두 충족되면 이 local patch의 재적용 절차를 종료한다.
+
+- upstream release가 동등한 assistant-only compact option을 제공함
+- 기본값이 기존 호환성을 보존함
+- cache, streaming, native scrollback identity가 spacing mode를 구분함
+- live/rebuild/remote transcript 경로가 모두 해당 설정을 전달함
+- actual TUI 회귀 검증 통과
+
+그 이후에는 official OMP만 업데이트하고 `~/.omp/agent/config.yml`의 opt-in 설정만 유지한다.
+
+## 근거
+
+| 사실 주장 | 근거 |
+| --- | --- |
+| 현재 OMP 및 두 package version은 `17.3.8` | `omp --version`, v17.3.8 source package `package.json` |
+| `~/.bun/bin/omp`는 bundled `dist/cli.js`를 실행함 | symlink readback 및 `pi-coding-agent/package.json`의 `bin` |
+| package source의 `main`은 `src/index.ts`지만 CLI 배포물은 `dist/cli.js`임 | 두 package의 `package.json` |
+| build 과정은 `src/cli.ts`에서 bundle/compile 산출물을 생성함 | `scripts/bundle-dist.ts`, `scripts/build-binary.ts` |
+| renderer와 assistant wiring의 안전한 범위 | Oracle ZIP 직접 검토 세션 `slots-followup-ompforma-e13a4b944a` 및 로컬 source 확인 |
+| OMP 공식 업데이트 명령과 check/force option | `omp update --help` |
+| 현재 local patch 적용 및 검증 결과 | `~/.omp/agent/local-patches/assistant-markdown-spacing/v17.3.8/manifest.json`, `~/.omp/agent/local-patches/irc-full-body/v17.3.8/manifest.json` |
+
+## 문서 갱신 규칙
+
+현재 `status: 적용`이다. 업데이트할 때마다 새 버전의 상류 포함 여부, 새 patch와 bundle의 기준 revision·SHA-256, 테스트와 실제 TUI 검증 결과를 이 문서 또는 별도 진행 기록에 남긴다. 상류에 동등 구현이 포함되면 local bundle 재적용을 중단하고 `upstreamed` 상태로 갱신한다.
+
+## 추가 로컬 패치 — 부모 화면의 incoming·wait·outgoing send 및 subagent relay IRC 전문 표시
+
+### 상태와 목적
+
+| 항목 | 값 |
+| --- | --- |
+| 상태 | 적용 완료 |
+| 대상 checkout | `~/project/oh-my-pi-custom` |
+| 대상 package | `packages/coding-agent` |
+| production 변경 | `packages/coding-agent/src/tools/hub/messaging.ts` |
+| test 변경 | `packages/coding-agent/test/tools/irc-renderer.test.ts` |
+| 사용자 설정 추가 | 없음 |
+| persistence 변경 | 없음 |
+
+이 패치는 부모 Main 화면에서 네 종류의 IRC 본문을 `Ctrl+O` 없이 항상 전문 표시한다. subagent가 Main에게 직접 보낸 live `irc:incoming` 카드, 그 메시지를 반환하는 `hub wait` 결과 카드, Main이 subagent에게 보낸 `hub send` 결과 카드, subagent A가 subagent B에게 보낸 메시지를 Main이 관찰하는 `irc:relay` 카드다.
+
+기존 relay-only 적용본은 incoming, wait, outgoing send를 preview로 남겼다. 이 때문에 수신 카드는 `… +9 more lines`, 송신 카드는 긴 단일 행 끝이 `…`로 잘렸다. 2026-08-16 적용본부터 네 경로 모두 무손실 full-body wrapping을 사용한다. `irc:autoreply`와 일반 `hub inbox` 목록은 기존 preview/expand 정책을 유지한다.
+
+> [!IMPORTANT]
+> 이 절은 현재 적용 결과다. 활성 artifact와 검증 결과는 아래 `2026-08-16 IRC 패치 범위 확장 결과`에 기록한다.
+
+### AS-IS / TO-BE
+
+```text
+AS-IS
+┌─────────────────────────────────────────────┐
+│ IRC  AuthReviewer  →  ApiImplementer        │
+├─────────────────────────────────────────────┤
+│ 검토 결과 공유합니다.                      │
+│ 1. refresh token rotation은 정상입니다.    │
+│ 2. revoked token 재사용은 차단됩니다.      │
+│ … +12 more lines                            │
+└─────────────────────────────────────────────┘
+             Ctrl+O 후에도 최대 12줄
+
+TO-BE
+┌─────────────────────────────────────────────┐
+│ IRC  AuthReviewer  →  ApiImplementer        │
+├─────────────────────────────────────────────┤
+│ 검토 결과 공유합니다.                      │
+│                                             │
+│ 1. refresh token rotation은 정상입니다.    │
+│ 2. revoked token 재사용은 차단됩니다.      │
+│ 3. 동시 갱신 race가 있습니다.              │
+│ 4. Redis lock 범위가 잘못됐습니다.         │
+│                                             │
+│ 권장 수정:                                  │
+│ - lock key를 사용자 단위로 변경            │
+│ - lock 실패 시 409 반환                    │
+│ - token 교체를 원자화                      │
+│                                             │
+│ 최종 판단: 현재 상태로 merge하면 안 됩니다.│
+└─────────────────────────────────────────────┘
+       Ctrl+O 없이 송신자·수신자·전문 표시
+```
+
+### 확인된 현재 경로
+
+```text
+Subagent A
+  → hub send
+  → IrcBus.send(...)
+  → Subagent B에 실제 메시지 전달
+  → IrcBus.#relayToMainUi(...)
+  → customType: "irc:relay"
+  → Main AgentSession.emitIrcRelayObservation(...)
+  → IrcBridge.emitRelayObservation(...)
+  → irc_message session event
+  → buildIrcMessageCard(...)
+  → createIrcMessageCard(...)
+  → Main TUI
+```
+
+관련 소스:
+
+```text
+packages/coding-agent/src/irc/bus.ts
+packages/coding-agent/src/session/irc-bridge.ts
+packages/coding-agent/src/session/agent-session.ts
+packages/coding-agent/src/modes/utils/transcript-render-helpers.ts
+packages/coding-agent/src/modes/utils/ui-helpers.ts
+packages/coding-agent/src/modes/components/chat-transcript-builder.ts
+packages/coding-agent/src/tools/hub/messaging.ts
+```
+
+현재 `createIrcMessageCard()`에는 두 손실 지점이 있다.
+
+1. `bodyLines()` → `getPreviewLines()`가 collapsed 3줄, expanded 12줄, 고정 line width로 제한한다.
+2. 반환 직전 `truncateToWidth()`가 header와 body를 viewport 폭에서 다시 잘라낸다.
+
+따라서 `bodyLines()`의 줄 수 제한만 제거해서는 충분하지 않다. relay body와 sender→recipient route가 마지막 `truncateToWidth()`를 다시 통과하지 않도록 반환 경계까지 분리해야 한다.
+
+### 최종 구현 계약
+
+#### MUST
+
+1. `createIrcMessageCard()`에서 `card.kind === "incoming" || card.kind === "relay"`를 always-full render path로 분기한다.
+2. message-carrying `hub wait`와 성공한 `hub send` 결과도 body 전체를 항상 render-time width로 wrap한다.
+3. incoming, wait, outgoing send, relay full body에는 `bodyLines()`, `getPreviewLines()`, `BODY_LINE_WIDTH`, line-count cap을 사용하지 않는다.
+4. full body와 full sender·sender→recipient header에는 `truncateToWidth()`를 적용하지 않는다.
+5. 고정 폭에서 자르는 대신 render-time `width`에 맞춰 모든 문자를 다음 화면 행으로 wrap한다.
+6. wrapping은 중앙 TUI primitive인 `wrapTextWithAnsi`를 `tools/render-utils.ts` 경유로 사용한다. 별도 wrapping 구현이나 직접 `Bun.wrapAnsi()` 호출을 추가하지 않는다.
+7. 폭 계산은 `visibleWidth()`와 같은 TUI display-cell 모델을 사용한다. JS `length`/`slice`로 한글, emoji, combining text를 자르지 않는다.
+8. 기존 정책대로 tab은 `replaceTabs()`를 적용한다.
+9. `body.split(/\r?\n/)`의 내부 empty logical line을 quoted blank row 하나로 보존한다. `.trim()`, `.filter(line => line.trim())`로 내부 빈 줄을 버리지 않는다.
+10. 정상 폭에서 기존 header가 모두 들어가면 기존 `renderStatusLine()` 출력을 유지한다.
+11. 정상 header가 폭을 넘으면 IRC status anchor와 wrapped sender 또는 sender→recipient route를 분리한다. endpoint tail을 ellipsis로 잃지 않는다.
+12. quote/indent prefix가 너무 넓어 payload 공간이 남지 않으면 장식을 생략하고 payload 전문을 우선한다.
+13. autoreply와 일반 `hub inbox` 목록의 기존 preview/expand 동작은 유지한다.
+14. production 변경은 `messaging.ts`, 회귀 테스트 변경은 `irc-renderer.test.ts`로 제한한다. 새 근거가 없는 한 bus/session/UI wiring을 변경하지 않는다.
+
+#### SHOULD
+
+1. always-full 경로에는 stable expansion getter를 사용하거나 body가 expansion 상태와 무관하게 동일하도록 유지한다.
+2. 동일 width의 재-render는 기존 `createCachedComponent()` cache를 사용하고, width가 바뀔 때만 다시 wrap한다.
+3. 새 renderer helper는 relay 정책이 있는 `messaging.ts` 안에 둔다. 범용성이 확인되지 않은 helper를 generic TUI utility로 올리지 않는다.
+4. 테스트는 ANSI byte, 색, glyph, 정확한 wrap 위치가 아니라 전문 보존, 순서, display width, expansion 독립성 같은 observable invariant를 검증한다.
+
+#### NON-GOAL
+
+- relay를 Main session/model context에 persistence
+- OMP 재시작 후 과거 relay 복원
+- same-process transcript 전체 rebuild 후 transient relay replay
+- 별도 UI replay store, dedupe, retention 정책
+- Main이 sender 또는 recipient일 때의 기존 중복 방지 정책 변경
+- Main을 포함한 broadcast의 기존 `suppressRelay` 정책 변경
+- `hub send` 입력의 `.trim()` 의미 변경
+- autoreply 및 일반 inbox 카드 전체를 always-full로 변경
+- arbitrary message size cap 또는 send-time rejection 추가
+- 새 ANSI/control-character sanitizer 도입
+- `renderStatusLine`이나 TUI wrapping engine redesign
+
+### 구현 후 추가할 회귀 테스트
+
+`packages/coding-agent/test/tools/irc-renderer.test.ts`에 다음 계약을 고정한다.
+
+| 테스트 | 검증 계약 | 잡아야 하는 회귀 |
+| --- | --- | --- |
+| 20줄 이상 + 내부 blank + tab relay | `expanded=false`에서도 첫·중간·마지막 sentinel, 빈 행, tab 정규화, no elision; `expanded=true`와 같은 내용 | 3/12줄 제한, blank 제거, Ctrl+O 의존 재도입 |
+| 긴 단일 행 + 한글/emoji + narrow→wide→narrow | HEAD/MIDDLE/TAIL 보존, 모든 row의 display width가 viewport 이하, width 변경 후 tail 유지 | 고정 `BODY_LINE_WIDTH`, 최종 truncate, stale width cache, code-unit 절단 |
+| 긴 sender/recipient + 좁은 폭 | 양 endpoint tail과 순서 보존, viewport 폭 준수 | body만 고치고 header truncation을 남기는 오류 |
+| 12줄 이상 incoming | `expanded=false`와 `expanded=true`에서 마지막 sentinel까지 동일하게 표시하고 elision counter 없음 | Subagent→Main 진행상황 카드가 다시 3줄로 접히는 회귀 |
+| 12줄 이상 outgoing send | `expanded=false`와 `expanded=true`에서 마지막 sentinel까지 동일하게 표시하고 viewport 폭 준수 | Main→subagent 송신 카드의 line cap 또는 긴 행 ellipsis 회귀 |
+
+중앙 `wrapTextWithAnsi()`가 공백 없는 한글·emoji 장문을 hard-wrap하면서 tail을 보존하는 것은 설계 검토 중 로컬 실행으로 확인했다. 폭 12에서 모든 행이 12 cell 이하였고 마지막 `TAIL`이 유지됐다. 최종 구현 후에는 위 renderer test와 actual TUI smoke로 다시 검증한다.
+
+### 실제 TUI smoke 시나리오
+
+1. Main이 subagent A와 B를 실행한다.
+2. A가 B에게 20줄 이상의 내부 blank/tab 포함 IRC 메시지를 보내고, Main relay 카드에서 마지막 sentinel까지 확인한다.
+3. 별도 subagent가 Main에게 14줄의 incoming 메시지를 보내고 `Ctrl+O` 없이 마지막 sentinel까지 보이는지 확인한다.
+4. Main이 subagent에게 14줄과 긴 단일 행을 포함한 outgoing 메시지를 보내고 송신 결과 카드에서 마지막 sentinel까지 확인한다.
+5. 공백 없는 긴 한 줄, 한글, emoji, HEAD/MIDDLE/TAIL sentinel을 좁은 터미널과 넓은 터미널에서 확인한다.
+6. width 변경 시 tail이 사라지지 않고 행만 다시 wrap되는지 확인한다.
+7. `Ctrl+O` 전후 incoming, wait, outgoing send, relay 전문이 동일한지 확인한다.
+8. 일반 inbox 목록과 autoreply preview는 기존처럼 접히는지 확인한다.
+
+### 구현 완료 후 산출물 보존
+
+구현·테스트·bundle smoke가 끝난 버전마다 다음 feature artifact를 보존한다.
+
+```text
+~/.omp/agent/local-patches/irc-full-body/<OMP-version>/
+├─ manifest.json
+├─ irc-full-body-<OMP-version>.patch
+├─ official-dist-cli.js
+├─ custom-dist-cli.js
+├─ official-messaging.ts
+└─ custom-messaging.ts
+```
+
+`manifest.json`에는 최소 다음을 기록한다.
+
+- exact upstream OMP version, tag, commit
+- source checkout과 변경 파일 목록
+- patch 파일 SHA-256
+- 함께 설치된 다른 local patch 목록
+- 실제 bundle build 명령
+- official rollback bundle 및 `messaging.ts` 경로와 SHA-256
+- 설치한 custom bundle 및 `messaging.ts` 경로와 SHA-256
+- renderer test 명령과 결과
+- 전체 bundle smoke 결과
+- actual TUI IRC smoke 결과
+- patch 상태: `active | upstreamed | blocked | retired`
+
+같은 OMP 설치에 assistant Markdown spacing과 IRC full-body 패치가 함께 들어가므로 **기능별 source patch는 분리해도 bundle은 한 번만 생성·검증·설치한다.** OMP 17.3.4 배포는 일부 런타임 경로에서 package `src/tools/hub/messaging.ts`도 직접 읽으므로 custom `dist/cli.js`와 custom `messaging.ts`를 함께 설치·검증한다. bundle만 교체하면 live incoming 카드와 `hub wait` 결과가 서로 다른 정책으로 렌더링될 수 있다.
+
+### OMP 업데이트 후 재적용 절차
+
+#### 1. 업데이트 전 기록
+
+기존 `OMP 업데이트 때마다 수행할 절차`에 더해 다음을 확인한다.
+
+- 활성 IRC patch의 기준 version/tag/commit
+- IRC source patch SHA-256
+- 현재 custom bundle에 assistant spacing과 IRC full-body 두 기능이 모두 포함됐는지
+- installed `dist/cli.js`와 `src/tools/hub/messaging.ts`가 manifest의 custom SHA-256과 각각 일치하는지
+- 실제 Main 화면에서 incoming 및 relay 전문이 보이는 기준 캡처
+
+#### 2. 공식 업데이트 후 upstream 포함 여부 판정
+
+새 source에서 다음을 확인한다.
+
+1. `IrcBus.#relayToMainUi()` 또는 동등 경로가 A→B 메시지를 Main UI에 전달하는가.
+2. `irc:incoming`, `irc:relay`, message-carrying `hub wait`, successful `hub send` renderer가 expansion 상태와 무관하게 전문을 표시하는가.
+3. line-count cap, fixed preview width, final truncate가 full body와 endpoint에 적용되지 않는가.
+4. 내부 blank line과 긴 한 줄 tail이 보존되는가.
+5. autoreply와 일반 inbox preview 정책이 유지되는가.
+6. narrow/wide resize 후에도 전문이 유지되는가.
+
+이 조건이 모두 충족되고 actual TUI smoke가 통과하면 upstreamed로 판정하고 IRC local patch를 적용하지 않는다. 이름만 유사하거나 12줄 제한만 늘린 구현은 동등 구현이 아니다.
+
+#### 3. upstream에 포함되지 않은 경우
+
+1. 새 official version에 대응하는 exact source tag/commit을 `~/project/oh-my-pi-custom` 또는 새 clean checkout에 준비한다.
+2. assistant spacing patch와 IRC full-body patch 각각을 새 source에 대해 먼저 check한다.
+3. IRC patch check가 실패하면 강제 적용, `--reject`, fuzzy replacement, minified bundle 직접 편집을 하지 않는다.
+4. 새 version의 `createIrcMessageCard`, `renderWaitResult`, `buildIrcMessageCard`, `irc:incoming`·`irc:relay` event wiring과 renderer test를 다시 읽고 책임 경계를 재판정한다.
+5. 두 source patch가 모두 필요한 경우 clean source에 차례로 적용한 뒤 combined diff를 검토한다.
+6. assistant spacing 회귀 테스트와 IRC renderer 회귀 테스트를 모두 실행한다.
+7. 하나의 custom `dist/cli.js` bundle을 생성하고 bundle smoke를 실행한다.
+8. 새 official bundle과 runtime `messaging.ts`를 rollback용으로 보존한 뒤 custom bundle과 custom `messaging.ts`를 함께 설치한다.
+9. assistant compact actual TUI smoke, subagent→Main incoming 전문 smoke, Main→subagent outgoing 전문 smoke, subagent A→B relay 전문 smoke를 수행한다.
+10. 두 feature manifest의 version, commit, patch SHA-256, official/custom bundle 및 runtime source SHA-256과 검증 결과를 갱신한다.
+
+> [!WARNING]
+> IRC patch 파일만 보존하고 과거 custom `dist/cli.js`를 새 OMP 설치 위에 그대로 덮어쓰지 않는다. 과거 bundle에는 이전 version의 전체 코드가 들어 있다. 반드시 새 exact source revision에 필요한 source patch들을 이식하고, 테스트한 combined bundle을 새로 생성한다.
+
+### IRC 패치 중단 및 롤백 조건
+
+다음 중 하나라도 발생하면 IRC patch 재적용을 중단한다.
+
+- 새 package version과 exact source commit 대응 관계를 확정하지 못함
+- upstream이 incoming/relay renderer 또는 event 구조를 부분 변경해 책임 범위가 겹침
+- source patch check 실패
+- incoming 또는 relay 마지막 sentinel, sender tail 또는 recipient tail 손실
+- rendered row가 viewport display width를 초과함
+- autoreply 또는 일반 inbox preview 회귀
+- width 변경 후 stale cache 또는 본문 손실
+- renderer test, combined bundle build, bundle smoke 실패
+- assistant spacing patch와 결합했을 때 기존 compact 회귀 테스트 실패
+- official rollback bundle 또는 manifest checksum 불일치
+
+롤백은 combined custom bundle 전체를 대상으로 한다. OMP 프로세스를 종료하고 manifest가 가리키는 official bundle과 SHA-256을 확인한 뒤 official bundle을 복구한다. IRC 기능만 빠진 별도 bundle을 임의로 조합하지 않는다. 복구 후 `omp --version`, 실행 파일 SHA-256, 일반 Main/subagent transcript를 확인한다.
+
+### IRC 패치 장기 종료 조건
+
+다음 조건이 모두 충족되면 IRC local patch 재적용을 종료한다.
+
+- upstream release가 subagent→Main `irc:incoming`, message-carrying `hub wait`, Main→subagent `hub send`, subagent↔subagent `irc:relay` 본문 전문을 Main 화면에 기본 표시함
+- `Ctrl+O`와 무관하게 동일 전문이 보임
+- 내부 blank line, 긴 한 줄, 한글/emoji, narrow/wide resize가 무손실임
+- autoreply와 일반 inbox preview가 기존 정책을 유지함
+- actual TUI 회귀 검증 통과
+
+그 이후에는 IRC source patch와 custom bundle 재적용을 중단하고 feature manifest를 `upstreamed`로 갱신한다.
+
+### IRC 설계 검토 근거
+
+| 항목 | 근거 |
+| --- | --- |
+| 초기 CodexPro 검토 | Oracle browser 슬롯 3, session `slots-context-ompircpl-4e19ff1f3d` |
+| 반박 및 최종 합의 | 같은 conversation의 followup `slots-followup-ompircpl-108f953bf8`, authoritative verification `ok: true` |
+| conversation context | `omp-irc-parent-transcript-20260815T143734189177421` |
+| local source 근거 | `irc/bus.ts`, `session/irc-bridge.ts`, `session/agent-session.ts`, `tools/hub/messaging.ts`, 공용 transcript renderer 경로 및 IRC tests |
+| 중앙 wrapping 동작 | `packages/tui/src/utils.ts`의 `wrapTextWithAnsi`/`visibleWidth`와 로컬 hard-wrap 실행 확인 |
+
+### 2026-08-16 IRC 패치 범위 확장 결과
+
+| 항목 | 값 |
+| --- | --- |
+| OMP version | `17.3.4` |
+| upstream tag / commit | `v17.3.4` / `ffd53ff92a6f575d499730475a73460dd7cc2eea` |
+| source patch | `~/.omp/agent/local-patches/irc-full-body/v17.3.4/irc-full-body-v17.3.4.patch` |
+| source patch SHA-256 | `dab443cc35cb5e31d8896373bb7a2129a80e079c5d582299c751985aedbb2a1c` |
+| official rollback bundle SHA-256 | `a547f8fa4457e1f96886a7ece04a27dc110f80c29b395daeb223f4a98e802a24` |
+| combined custom bundle SHA-256 | `e5a3d2fbd0322394e041436636255073d5d7a23b01e7645981e69c65544ea255` |
+| installed runtime source | `~/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/src/tools/hub/messaging.ts` |
+| official/custom runtime source SHA-256 | `9a0e599e8e3d20a3ed74270f378148f82c5a84ab5a514b9014cc4ae7124bbc5d` / `0b24ff84206c005cc0480c96fb50e4091cb05feeac5d77b15b1a9d124da913ad` |
+| 결합 기능 | `assistant-markdown-spacing`, `irc-full-body` |
+| focused tests | 2 files, 64 pass, 0 fail, 247 expect |
+| type check | `packages/coding-agent` 통과 |
+| Biome | 변경 TypeScript 2개 파일 통과 |
+| bundle | `bun --cwd=packages/coding-agent run gen:bundle` 성공 |
+| installed smoke | `omp/17.3.4`, `smoke-test: ok` |
+| actual TUI | 새 OMP 세션에서 `VerifyIncomingSmoke`의 14행 incoming 및 wait 카드와 Main→`OutgoingSmokeReceiver`의 14행 outgoing send 카드를 검증했다. 수신 카드는 `INCOMING-SMOKE-HEAD`부터 `INCOMING-SMOKE-FINAL-TAIL`, 송신 카드는 `OUTGOING-SMOKE-HEAD`, `LINE-02`–`LINE-13`, `OUTGOING-SMOKE-FINAL-TAIL`까지 `Ctrl+O` 없이 표시했고 elision counter가 없었다. 기존 subagent A→B relay 전문 smoke도 유지한다. |
+
+현재 active manifest:
+
+```text
+~/.omp/agent/local-patches/irc-full-body/v17.3.4/manifest.json
+```
+
+assistant Markdown spacing artifact의 `custom-dist-cli.js`와 runtime hash도 같은 combined bundle SHA-256으로 갱신했다. OMP 17.3.4에서는 IRC runtime source도 별도 custom SHA-256으로 설치·추적한다. 이후 업데이트에서는 두 source patch를 새 exact source revision에 적용하고 combined bundle과 필요한 runtime source를 함께 생성·검증·설치해야 한다.
+
+## 2026-08-16 OMP 17.3.5 공식 업데이트 및 combined patch 재적용
+
+### 정정된 작업 경계
+
+이날 실제 새 버전이 나온 제품은 **ompweb이 아니라 OMP**였다. 공식 OMP를 `17.3.4 -> 17.3.5`로 업데이트했다. ompweb package는 별도 release update를 하지 않았으며 계속 `0.3.1`이다.
+
+### 공식 업데이트 직후 확인된 patch 소실
+
+`omp update`는 global package와 bundled `dist/cli.js`를 교체하므로 OMP 본체에 직접 들어간 로컬 patch도 함께 사라졌다. 실제 업데이트 직후 다음을 확인했다.
+
+| 항목 | 업데이트 직후 official 17.3.5 상태 |
+| --- | --- |
+| `omp --version` | `omp/17.3.5` |
+| installed `dist/cli.js` SHA-256 | `b6984f1f5047d3096544c2946a82475424853d5102cd703b02a237d697b1c70d` |
+| installed `src/tools/hub/messaging.ts` SHA-256 | `9a0e599e8e3d20a3ed74270f378148f82c5a84ab5a514b9014cc4ae7124bbc5d` |
+| `omp config get tui.assistantMarkdownSpacing` | `Unknown setting` |
+
+따라서 `assistant-markdown-spacing`과 `irc-full-body`는 업데이트 직후 실제로 비활성화된 상태였다. 반면 user extension은 global package 교체 대상이 아니므로 그대로 유지됐다.
+
+- `omp-ballast`: `0.1.0`, `~/.omp/agent/extensions/omp-ballast/`, effective rule `0`
+- `ompweb-live-bridge.js`: SHA-256 `d5291b78c41b83418699de2ffaf0638390ac25d721c86cd7183f953692f12d95`, mode `0600`
+- `ompweb-live-bridge.token`: mode `0600`
+
+### 17.3.5 source 재이식
+
+정확한 source 기준:
+
+| 항목 | 값 |
+| --- | --- |
+| tag | `v17.3.5` |
+| commit | `37eee71978951fccf66b21f7e3e2b74596ac9d74` |
+| clean 재패치 checkout | `~/project/oh-my-pi-custom-v17.3.5` |
+| 결합 기능 | `assistant-markdown-spacing`, `irc-full-body` |
+
+기존 17.3.4 code patch를 17.3.5 clean source에 `git apply --check`했다. 기능 소스와 테스트는 그대로 적용 가능했고, 기존 patch 파일의 CHANGELOG 문맥만 새 release changelog와 충돌했다. CHANGELOG를 재패치 대상으로 삼지 않고 실제 기능 source/test delta만 17.3.5에 이식했다.
+
+새 17.3.5 artifact:
+
+| 항목 | 값 |
+| --- | --- |
+| spacing source patch | `~/.omp/agent/local-patches/assistant-markdown-spacing/v17.3.5/assistant-markdown-spacing-v17.3.5.patch` |
+| spacing patch SHA-256 | `2c76dc920705bc2bda4c6a2766dcf5f3e2d809a011765b6736623da98127997e` |
+| IRC source patch | `~/.omp/agent/local-patches/irc-full-body/v17.3.5/irc-full-body-v17.3.5.patch` |
+| IRC patch SHA-256 | `6e518c99495335e1f7e0a5d1ebb5d65ad9d54969e5059f654c0209112f11c244` |
+| official rollback bundle SHA-256 | `b6984f1f5047d3096544c2946a82475424853d5102cd703b02a237d697b1c70d` |
+| combined custom bundle SHA-256 | `0e851d84ffa6a31abdf6f3d9246e7fc62378b0a9ce929d5477d3485c9bb56f52` |
+| official IRC runtime source SHA-256 | `9a0e599e8e3d20a3ed74270f378148f82c5a84ab5a514b9014cc4ae7124bbc5d` |
+| custom IRC runtime source SHA-256 | `0b24ff84206c005cc0480c96fb50e4091cb05feeac5d77b15b1a9d124da913ad` |
+
+### 17.3.5 검증과 설치
+
+- TUI Markdown tests: `157 pass`, `0 fail`, `965 expect`
+- coding-agent assistant/IRC tests: `74 pass`, `0 fail`, `276 expect`
+- 합계: `5 files`, `231 pass`, `0 fail`, `1,241 expect`
+- `packages/tui` type check 통과
+- `packages/coding-agent` type check 통과
+- Biome: 변경 TypeScript 10개 파일, 수정 필요 없음
+- `bun --cwd=packages/coding-agent run gen:bundle` 성공
+
+clean worktree의 native addon 자체를 새로 빌드하는 단계는 로컬에 `cmake`가 없어 실패했다. `v17.3.4..v17.3.5`의 native Rust source에는 변경이 없고 wrapper/package metadata만 바뀐 것을 확인했으므로, focused test 실행에는 기존 linux-x64 native addon을 **테스트용으로만** 재사용했다. 이 binary는 배포 artifact로 설치하지 않았다.
+
+설치 후 readback:
+
+```text
+omp --version
+=> omp/17.3.5
+
+omp config get tui.assistantMarkdownSpacing
+=> compact
+
+installed dist/cli.js SHA-256
+=> 0e851d84ffa6a31abdf6f3d9246e7fc62378b0a9ce929d5477d3485c9bb56f52
+
+installed src/tools/hub/messaging.ts SHA-256
+=> 0b24ff84206c005cc0480c96fb50e4091cb05feeac5d77b15b1a9d124da913ad
+```
+
+현재 manifest:
+
+```text
+~/.omp/agent/local-patches/assistant-markdown-spacing/v17.3.5/manifest.json
+~/.omp/agent/local-patches/irc-full-body/v17.3.5/manifest.json
+```
+
+17.3.5 interactive TUI에서의 최종 육안 smoke는 이 재적용 작업에서 별도로 다시 실행하지 못했다. 대신 renderer/streaming/IRC focused tests, 두 package typecheck, bundle 생성, 설치 hash와 설정 readback까지 완료했다. 다음 실제 TUI 세션을 새로 시작할 때 compact spacing과 IRC 전문 표시를 한 번 확인하면 이 버전의 interactive smoke까지 닫힌다.
+
+## 2026-08-19 OMP 17.3.8 공식 업데이트 및 combined patch 재적용
+
+### 공식 업데이트와 rollback 기준
+
+OMP를 `17.3.5 -> 17.3.8`로 `omp update`하여 공식판을 먼저 설치했다. 업데이트 직후 `tui.assistantMarkdownSpacing`은 다시 `Unknown setting`이었으므로 두 로컬 기능은 17.3.8 upstream에도 포함되지 않은 상태로 확인했다.
+
+업데이트 전 전체 운영 상태는 다음에 별도 보존했다.
+
+```text
+~/.omp/agent/manual-backups/omp-before-17.3.8-20260819T121758Z/
+```
+
+공식 17.3.8 rollback 기준:
+
+| 항목 | 값 |
+| --- | --- |
+| official `dist/cli.js` SHA-256 | `5fef4bf7186d34a42e0ab694e830f178b7c54a089201da075f8a96db660d9c29` |
+| official `messaging.ts` SHA-256 | `9a0e599e8e3d20a3ed74270f378148f82c5a84ab5a514b9014cc4ae7124bbc5d` |
+| official linux-x64 modern native SHA-256 | `91e2c4fc0cd8b7e39518cc57d86adbf22403994409056fbaa0d0adf1980fdb71` |
+| official linux-x64 baseline native SHA-256 | `be55ca59aa97e59441e547d18141dc6b001ad7f018b99a87fa5cc1050acce188` |
+
+### 17.3.8 source 재이식
+
+정확한 source 기준은 tag `v17.3.8`, commit `858f7dd91fff9b84cf8a2c6a6bb85aa0e6d03a55`, checkout `~/project/oh-my-pi-custom-v17.3.8`이다.
+
+17.3.8 source에는 `tui.assistantMarkdownSpacing`/`Markdown.blockSpacing` 및 IRC full-body 동등 구현이 없었다. 기존 v17.3.5 spacing patch와 IRC patch는 각각 `git apply --check`를 그대로 통과했고 실제 적용도 성공했다. 따라서 강제 적용이나 fuzzy replacement 없이 동일 source patch 내용을 v17.3.8 artifact 이름으로 보존했다.
+
+17.3.8에서는 `pi-natives` Rust 쪽 변경이 있으므로 17.3.5 때와 달리 과거 native addon을 재사용하지 않았다. 공식 updater가 설치한 `@oh-my-pi/pi-natives-linux-x64@17.3.8`의 modern/baseline addon을 source checkout의 검증용 native 위치에 복사했고 SHA-256 일치를 확인했다.
+
+### 검증과 bundle 생성
+
+- focused tests: `5 files`, `231 pass`, `0 fail`, `1,241 expect`
+- `packages/tui` type check 통과
+- `packages/coding-agent` type check 통과
+- Biome: 변경 TypeScript 10개 파일, 수정 필요 없음
+- `bun --cwd=packages/coding-agent run gen:bundle` 성공
+- 생성 source bundle `--version`: `omp/17.3.8`
+- 생성 source bundle `config get tui.assistantMarkdownSpacing`: `compact`
+
+### 설치 결과
+
+| 항목 | 값 |
+| --- | --- |
+| combined custom bundle SHA-256 | `bf13c3a9a03075cf2cef544b4fd3b9e814413bf6d6ef96c873c494634e3983c6` |
+| custom IRC runtime source SHA-256 | `0b24ff84206c005cc0480c96fb50e4091cb05feeac5d77b15b1a9d124da913ad` |
+| spacing patch SHA-256 | `2c76dc920705bc2bda4c6a2766dcf5f3e2d809a011765b6736623da98127997e` |
+| IRC patch SHA-256 | `6e518c99495335e1f7e0a5d1ebb5d65ad9d54969e5059f654c0209112f11c244` |
+
+설치 후 readback:
+
+```text
+omp --version
+=> omp/17.3.8
+
+omp config get tui.assistantMarkdownSpacing
+=> compact
+
+installed dist/cli.js SHA-256
+=> bf13c3a9a03075cf2cef544b4fd3b9e814413bf6d6ef96c873c494634e3983c6
+
+installed src/tools/hub/messaging.ts SHA-256
+=> 0b24ff84206c005cc0480c96fb50e4091cb05feeac5d77b15b1a9d124da913ad
+```
+
+`omp gallery -t hub --plain --width 72`도 설치된 17.3.8 custom runtime에서 성공했다. compact/streaming/IRC의 기능 계약은 위 231개 focused test에서 검증했고 설치 파일 SHA-256이 검증 산출물과 동일함을 확인했다. 원격 모델을 호출하는 별도 interactive assistant turn이나 실제 다중 subagent 송수신은 이번 재적용에서 추가로 발생시키지 않았다.
+
+현재 manifest:
+
+```text
+~/.omp/agent/local-patches/assistant-markdown-spacing/v17.3.8/manifest.json
+~/.omp/agent/local-patches/irc-full-body/v17.3.8/manifest.json
+```
+
+1차 롤백은 과거 17.3.5 custom bundle이 아니라 위에 보존한 **순정 17.3.8** `dist/cli.js`와 `messaging.ts`를 복원하는 방식이다.

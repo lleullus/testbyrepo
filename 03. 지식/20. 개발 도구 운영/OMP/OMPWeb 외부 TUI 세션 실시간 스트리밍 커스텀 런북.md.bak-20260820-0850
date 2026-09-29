@@ -1,0 +1,1083 @@
+---
+tags:
+  - OMP
+  - ompweb
+  - TUI
+  - SSE
+  - 로컬-패치
+  - 운영-런북
+status: 적용
+created: 2026-08-15
+updated: 2026-08-19
+---
+
+# OMPWeb 외부 TUI 세션 실시간 스트리밍 커스텀 런북
+
+## 목적과 제품 경계
+
+이 문서는 독립 실행 중인 Oh My Pi(OMP) TUI 세션의 assistant 진행 상황을 이미 열린 ompweb 세션 화면에 새로고침 없이 표시하는 로컬 커스텀 기능의 설계, 보안 경계, 배포, 검증, 업데이트 절차를 고정한다.
+
+제품 경계:
+
+- OMP: `omp` 클라이언트와 `~/.omp/agent/` 설정·세션·사용자 extension
+- ompweb: `@kahme247/ompweb`의 로컬 웹 UI, `http://127.0.0.1:30177/`
+- OpenCodex: `ocx`, `127.0.0.1:10100`; 이 기능의 transport나 설정 소유자가 아님
+- OpenCode: 별도 CLI/TUI; 범위가 아님
+
+기준 상태:
+
+| 항목 | 값 |
+| --- | --- |
+| ompweb 기준 | `@kahme247/ompweb@0.3.3` |
+| upstream 기준점 | tag `v0.3.3`, commit `fc49cef` |
+| local custom branch | `custom/tui-session-stream`, head `55492a1` |
+| post-0.3.2 hotfix | 업데이트 직전 `9bc39f7`로 커밋 후 v0.3.3 rebase에서 `55492a1`로 재작성; multi-tab SSE/H2 + host-tool/xdev + MCP toast suppression 유지 |
+| pre-update rollback branch | `backup/pre-ompweb-0.3.3-20260819` -> `9bc39f7` |
+| OMP 검증 버전 | `omp/17.3.5` |
+| 소스 | `/home/user01/project/ompweb` |
+| OMP 사용자 extension | `~/.omp/agent/extensions/ompweb-live-bridge.js` |
+| OMPWeb service | `~/.config/systemd/user/ompweb.service` |
+| service drop-in | `~/.config/systemd/user/ompweb.service.d/live-bridge.conf` |
+| bearer token | `~/.omp/agent/ompweb-live-bridge.token`, mode `0600` |
+| 배포 명령 | `cd ~/project/ompweb && npm run deploy:local-custom` |
+| provenance | `~/.omp/agent/local-patches/ompweb-tui-live-bridge/v0.3.3/manifest.json` |
+| provenance inventory | production `30` + regression tests `9` + intentional removals `2` |
+| 전역 npm 설치본 | `@kahme247/ompweb@0.3.3` |
+| Tailnet 접속 | `https://desktop-balmtav-1.tail42cd28.ts.net:8444/` -> `http://127.0.0.1:30177/` (`tailnet only`, browser HTTP/2) |
+
+전역 npm 설치본은 버전 확인용일 뿐 현재 서비스 실행 소스가 아니다. `ompweb.service`는 `/home/user01/project/ompweb`의 custom build를 실행한다.
+
+## 사용자 계약
+
+독립 TUI가 현재 보고 있는 세션과 같은 세션을 ompweb에서 열면 다음 동작을 제공한다.
+
+1. TUI assistant의 `message_update`가 최대 약 50 ms 단위로 coalesce되어 브라우저에 반영된다.
+2. tool 실행 중에는 tool 이름이 진행 상태로 표시된다.
+3. 외부 TUI source가 하나인 세션에서는 ompweb composer가 같은 TUI에 `prompt`, 실행 중 `steer`/`follow-up`, `abort`를 보낼 수 있다. model 변경이나 임의 RPC 명령은 이 control bridge의 범위가 아니다.
+4. browser는 bearer token을 직접 가지지 않는다. ompweb server가 현재 단일 source에 control command를 queue하고, TUI extension이 인증된 loopback long-poll로 가져가 실행한 뒤 acknowledgement를 되돌린다. 둘 이상의 source가 같은 세션을 주장하면 control도 fail closed한다.
+5. 외부 snapshot 종료 뒤 JSONL에 같은 최종 assistant 메시지가 확인되면 overlay를 제거하고 영속 transcript로 전환한다.
+6. bridge가 끊겨도 기존 JSONL watcher가 최종 영속 상태를 복구한다.
+7. 두 개 이상의 외부 source가 같은 세션을 주장하면 임의 병합하지 않고 conflict로 fail closed한다.
+8. 열려 있는 ompweb은 외부 TUI가 만든 새 세션을 page reload 없이 sidebar에 추가한다.
+
+평상시 page reload나 수동 Refresh는 필요 없다. 새 OMP TUI 프로세스가 사용자 extension을 자동 로드하고, ompweb이 catalog와 선택 세션 SSE를 자동 구독한다. 기존 Refresh 버튼은 서버 cache를 강제로 무효화하는 fallback으로 유지한다.
+
+## 왜 JSONL watcher만으로는 부족했는가
+
+기존 `/api/sessions/[id]/events` 경로는 session JSONL의 append/rewrite만 감시했다. 이는 다음 영속 상태를 자동 반영하는 데는 충분했다.
+
+- 완료된 assistant 메시지와 toolResult
+- Todo snapshot
+- subagent history 요약
+- tree/title/session metadata
+
+하지만 OMP의 token delta는 assistant 응답 완료 전 JSONL에 존재하지 않는다. 파일 watcher가 없는 데이터를 추정할 수는 없다. 따라서 진짜 live partial은 OMP extension event bus에서 받아야 한다.
+
+## 최종 아키텍처
+
+```text
+독립 OMP TUI
+  └─ 사용자 extension: ompweb-live-bridge.js
+       ├─ message_update / tool / lifecycle event 수집
+       ├─ assistant text·thinking만 sanitize
+       ├─ 50 ms latest snapshot coalescing
+       └─ loopback POST + bearer token
+            └─ POST /api/bridge/live
+                 └─ process-global session/source broker
+                      ├─ monotonic rev
+                      ├─ source TTL 45 s
+                      ├─ tombstone 5 min
+                      └─ multi-source conflict
+
+OMP session JSONL
+  └─ lib/session-watch.ts
+       ├─ fs.watch wake-up hint
+       └─ periodic stat correctness backstop
+
+브라우저
+  └─ GET /api/sessions/[id]/observe (SSE)
+       ├─ ready + current external state
+       ├─ external snapshot state
+       └─ changed/reset persistence invalidation
+            └─ useAgentSession.ts
+                 ├─ live overlay
+                 ├─ external control routing
+                 └─ JSONL authoritative reconciliation
+
+브라우저 control
+  └─ POST /api/sessions/[id]/control
+       └─ process-global source control queue
+            └─ GET /api/bridge/control (TUI extension long-poll)
+                 ├─ prompt / steer / follow-up / abort 실행
+                 └─ POST /api/bridge/control acknowledgement
+```
+
+의존 방향은 `OMP extension -> stable loopback HTTP -> ompweb broker -> 통합 SSE -> browser`다. ompweb이 TUI 프로세스 내부에 attach하거나 별도 `omp --mode rpc-ui`를 만들지 않는다.
+
+## Wire protocol v1
+
+Snapshot:
+
+```ts
+{
+  v: 1;
+  sourceId: string;
+  sessionId: string;
+  rev: number;
+  kind: "snapshot";
+  run: "idle" | "running" | "terminal";
+  message: null | {
+    status: "streaming" | "ended";
+    anchorLeafId: string | null;
+    value: AssistantMessage;
+  };
+  activeTools: Array<{
+    id: string;
+    name: string;
+    anchorLeafId: string | null;
+  }>;
+}
+```
+
+Withdrawal:
+
+```ts
+{
+  v: 1;
+  sourceId: string;
+  sessionId: string;
+  rev: number;
+  kind: "withdrawn";
+}
+```
+
+전달 가능한 assistant content는 `text`와 `thinking`뿐이다. 다음 데이터는 wire에서 제거한다.
+
+- user message
+- image/base64
+- tool arguments와 result body
+- `providerPayload`
+- 인증 정보와 환경 변수
+- 임의 extension metadata
+
+POST body 상한은 1 MiB, assistant text+thinking 합계 상한은 512 KiB다. content block은 128개, active tool은 64개로 제한한다.
+
+## OMP event 매핑
+
+| OMP event | bridge 상태 전이 |
+| --- | --- |
+| `session_start` | 현재 session ID attach, idle/running snapshot |
+| `session_switch` | 이전 session withdrawal 후 새 session attach |
+| `session_branch` | session ID 변경 시 reattach, 동일하면 overlay invalidate |
+| `session_tree` | message/tool overlay invalidate |
+| `agent_start` | run=`running`, 이전 message clear |
+| `message_start` | streaming assistant snapshot 시작, anchor 고정 |
+| `message_update` | 전체 누적 assistant snapshot 교체 |
+| `message_end` | status=`ended` final snapshot |
+| `tool_execution_start` | activeTools에 id/name 추가 |
+| `tool_execution_end` | 같은 tool ID 제거 |
+| `agent_end` | run=`terminal`, activeTools clear |
+| `session_shutdown` | withdrawal, local controller dispose |
+
+Heartbeat는 15초마다 새 revision으로 같은 semantic snapshot을 보낸다. broker는 presence를 갱신하되 semantic 내용이 같으면 browser SSE fanout을 생략한다.
+
+## 서버 상태 규칙
+
+1. broker key는 `sessionId -> sourceId`다.
+2. 같은 source의 `rev <= lastRev` update는 폐기한다.
+3. source가 하나면 `single`, 둘 이상이면 `conflict`, 없으면 `none`이다.
+4. 마지막 update 후 45초가 지나면 source를 비활성화한다.
+5. 비활성 source revision tombstone은 5분간 유지해 늦은 stale frame의 부활을 막는다.
+6. 더 높은 revision의 heartbeat/snapshot은 만료 source를 다시 활성화할 수 있다.
+7. `withdrawn`은 즉시 presence와 overlay를 제거한다.
+8. broker는 Next.js process global에 존재한다. 다중 인스턴스나 serverless 배포가 필요해지면 Redis/NATS 같은 외부 broker로 명시적으로 교체해야 한다.
+
+## 통합 SSE와 JSONL 복구
+
+브라우저는 `/api/sessions/<session-id>/observe` 하나만 구독한다.
+
+SSE event:
+
+- `ready`: file observer와 external subscriber를 먼저 등록한 뒤 현재 external state와 함께 전송
+- `external`: 최신 `none | single | conflict` 상태
+- `changed`: 동일 JSONL의 append로 판단한 level-triggered invalidation
+- `reset`: replacement, truncation, rewrite, disappearance/reappearance 또는 boundary mismatch
+
+불변조건:
+
+1. subscribe가 `ready`보다 먼저다.
+2. JSONL event는 메시지 transport가 아니라 authoritative reload trigger다.
+3. refresh 시작 직전에 dirty bit를 지워 in-flight 중 도착한 변경을 잃지 않는다.
+4. persisted refresh는 세션당 하나만 실행한다.
+5. web RPC/bash/compaction이 transcript를 소유하는 동안 disk refresh를 보류한다.
+6. SID와 generation fence로 이전 세션의 늦은 SSE/GET을 폐기한다.
+7. 과거 branch를 보고 있으면 append만으로 live leaf로 강제 이동하지 않는다.
+8. reset 뒤 과거 leaf가 실제로 사라진 경우에만 persisted leaf로 이동한다.
+9. `ended` external assistant와 마지막 persisted assistant의 provider/model/content가 같으면 overlay를 제거한다.
+10. source 만료 또는 withdrawal 시 partial overlay를 버리고 JSONL 상태만 남긴다.
+
+
+## 외부 TUI 새 세션 catalog 자동 인식
+
+### 확인된 원인
+
+열려 있는 ompweb의 session sidebar는 최초 load, 사용자 Refresh, ompweb RPC lifecycle에서만 `/api/sessions`를 다시 읽는다. `/api/agent/running/events`의 `refreshSessionList`도 `rpc-manager`가 소유한 web RPC 세션에서만 발생하므로, 터미널에서 독립적으로 시작한 새 OMP TUI 세션은 sidebar 갱신 신호를 만들지 못한다.
+
+서버의 session list는 30초 TTL cache를 사용한다. 브라우저 HTTP response는 `no-store`여도 서버 내부 cache는 별개이므로, 기존 수동 Refresh도 TTL 안에서는 같은 stale 목록을 받을 수 있다.
+
+### 반영 설계와 불변조건
+
+1. 인증·검증을 통과한 external `snapshot`마다 비동기 session discovery를 예약한다. POST 응답과 token streaming은 discovery 완료를 기다리지 않는다.
+2. session별 pending/announced 상태로 중복 scan을 coalesce한다. token update마다 filesystem을 다시 걷지 않는다.
+3. discovery는 session list와 session-file walk cache를 함께 무효화한 뒤 `resolveSessionPath(sessionId)`로 실제 JSONL 존재를 확인한다.
+4. `session_start` 시점에 JSONL이 아직 없을 수 있으므로 즉시, 250 ms, 1 s의 bounded retry를 사용한다. 그 뒤에도 파일이 없으면 상태를 cooldown으로 돌리고 다음 accepted snapshot에서 다시 시도한다. 따라서 prompt 시작 뒤의 lifecycle snapshot이나 heartbeat가 discovery를 재기동할 수 있다.
+5. JSONL이 확인된 뒤에만 기존 running SSE의 `refreshSessionList: true`를 발행한다. sidebar는 기존 `/api/sessions` 재조회 경로를 그대로 사용하며 external session을 web RPC running session으로 위장하지 않는다.
+6. 수동 Refresh는 `/api/sessions?refresh=1`을 사용해 서버 cache를 명시적으로 무효화한다. 자동 경로가 실패해도 수동 동작은 stale cache를 반환하지 않아야 한다.
+7. 이 catalog 자동 인식 변경 자체는 wire protocol `v: 1`, OMP extension event 계약, external live authority, 당시 composer view-only 계약을 변경하지 않았다. OMP core 수정이나 session directory polling/재귀 watcher도 추가하지 않는다.
+
+### 검증 계약
+
+- 단위 검증: 파일 생성이 첫 시도보다 늦어도 bounded retry가 session을 발견하고 refresh를 정확히 한 번 발행한다.
+- 회귀 검증: 중복 snapshot은 discovery와 refresh fanout을 중복 실행하지 않는다.
+- 수동 fallback: 강제 Refresh 직전에 생성한 session이 30초 cache TTL과 무관하게 목록에 나타난다.
+- 실제 smoke: ompweb을 연 상태에서 새 OMP TUI 대화를 시작하면 page reload나 수동 Refresh 없이 sidebar에 새 session이 나타난다.
+
+### 2026-08-15 검증 결과
+
+- ompweb을 먼저 연 뒤 새 TUI session `01a004a7-e4d4-7000-9bbe-1353cdd5eae9`를 시작했다. browser는 reload나 Refresh 클릭 없이 약 7초 안에 `Reply CATALOG-SMOKE-AUG15-NEW-SESSION` row를 sidebar에 표시했다.
+- delayed JSONL 단위 검증은 첫 scan 뒤 100 ms에 파일을 생성했고 250 ms retry에서 발견했다. 중복 snapshot 10회를 추가해도 refresh fanout은 1회였다.
+- 수동 fallback smoke는 session list cache를 먼저 채운 뒤 새 JSONL을 만들었다. 일반 `/api/sessions`는 의도대로 0건인 stale 상태였고 `/api/sessions?refresh=1`은 같은 session을 즉시 1건 반환했다. smoke 파일은 삭제하고 강제 refresh로 cache까지 정리했다.
+- 전체 suite는 349 tests 중 348 pass, 1 skip, 0 fail이었다.
+
+## 보안과 authority
+
+- POST endpoint는 `OMP_WEB_TUI_LIVE_BRIDGE=1`일 때만 활성화된다.
+- ompweb service는 loopback `127.0.0.1:30177`에만 bind한다.
+- POST는 `Authorization: Bearer <token>`을 요구한다.
+- token은 `~/.omp/agent/ompweb-live-bridge.token`에 mode `0600`으로 둔다.
+- route는 timing-safe token 비교를 사용한다.
+- 브라우저 SSE에는 token을 노출하지 않는다.
+- live snapshot 권위는 외부 TUI extension에 있고 완료 transcript 권위는 JSONL에 있다.
+- control channel은 `prompt`(idle), `steer`/`follow-up`(running delivery), `abort`로 제한한다. model 변경, 임의 RPC, shell 명령을 generic forwarding하지 않는다.
+- control command는 `sessionId + sourceId`에 묶이고, 단일 source일 때만 전달한다. source conflict/withdrawal 시 pending command는 실패 처리한다.
+- TUI extension만 bearer token을 사용해 `/api/bridge/live`와 `/api/bridge/control`을 호출하며 browser에는 token을 노출하지 않는다.
+
+## 구현 파일
+
+### OMP extension
+
+```text
+extensions/ompweb-live-bridge/controller.ts
+extensions/ompweb-live-bridge/control.ts
+extensions/ompweb-live-bridge/index.ts
+extensions/ompweb-live-bridge/omp-extension-types.ts
+```
+
+### ompweb server/browser
+
+```text
+app/api/bridge/live/route.ts
+app/api/bridge/control/route.ts
+app/api/sessions/route.ts
+app/api/sessions/[id]/control/route.ts
+app/api/sessions/[id]/observe/route.ts
+lib/external-control.ts
+lib/external-live-types.ts
+lib/external-live.ts
+lib/external-live-message.ts
+lib/agent-event-session.ts
+hooks/useAgentSession.ts
+components/ChatWindow.tsx
+components/ChatInput.tsx
+components/SessionSidebar.tsx
+lib/external-session-discovery.ts
+```
+
+### 영속 fallback
+
+```text
+lib/session-watch.ts
+lib/session-reader.ts
+```
+
+### 테스트와 배포
+
+```text
+lib/agent-event-session.test.mjs
+lib/external-control.test.mjs
+lib/external-live.test.mjs
+lib/external-live-message.test.mjs
+lib/external-session-discovery.test.mjs
+lib/external-live-controller.test.mjs
+scripts/deploy-local-custom.mjs
+```
+
+구형 `/api/sessions/[id]/events` route는 통합 `/observe`로 clean cutover했으며 compatibility alias를 두지 않는다.
+
+## 배포
+
+```bash
+cd /home/user01/project/ompweb
+npm run deploy:local-custom
+```
+
+이 명령은 다음을 한 번에 수행한다.
+
+1. `npm run build`
+2. OMP extension을 Bun standalone bundle로 생성
+3. `~/.omp/agent/extensions/ompweb-live-bridge.js`에 원자적 배포용 산출물 복사
+4. token이 없을 때만 32-byte random token 생성, mode `0600` 유지
+5. systemd drop-in에 feature flag와 token path 기록
+6. provenance manifest 갱신
+7. `systemctl --user daemon-reload`
+8. `ompweb.service` restart
+
+`deploy-local-custom.mjs`는 non-login/CodexPro shell에서 `systemctl --user`용 환경이 비어 있어도 `/run/user/<uid>/bus`가 존재하면 `XDG_RUNTIME_DIR`과 `DBUS_SESSION_BUS_ADDRESS`를 보완한다. 이 보완은 service user bus를 새로 만드는 것이 아니라 이미 실행 중인 user manager의 표준 bus 경로를 사용한다.
+
+이미 실행 중인 OMP TUI는 시작 시점에 extension set이 고정될 수 있다. 배포 뒤 live bridge 검증은 반드시 새 TUI 프로세스에서 수행한다.
+
+## 검증 절차
+
+정적·계약 검증:
+
+```bash
+cd /home/user01/project/ompweb
+npm run typecheck
+node --experimental-strip-types --test \
+  lib/agent-event-session.test.mjs \
+  lib/external-control.test.mjs \
+  lib/external-live.test.mjs \
+  lib/external-live-message.test.mjs \
+  lib/external-session-discovery.test.mjs \
+  lib/external-live-controller.test.mjs
+npm test
+npm run build
+```
+
+런타임 smoke:
+
+1. 새 OMP TUI에서 새 세션을 시작한다.
+2. 같은 session ID를 ompweb에서 연다.
+3. 응답이 끝나기 전에 assistant partial이 새로고침 없이 증가하는지 본다.
+4. tool 실행 중 tool 이름이 표시되는지 본다.
+5. 외부 source가 하나일 때 browser에서 `prompt`를 보내고, 실행 중에는 `steer`/`follow-up` 및 `abort`가 같은 TUI로 전달되는지 본다.
+6. message end 뒤 같은 메시지가 JSONL transcript에 하나만 남는지 본다.
+7. TUI 종료 또는 45초 만료 뒤 external ownership이 제거되고 일반 web RPC session 동작으로 돌아가는지 본다.
+8. 잘못된 token POST가 `401`, feature flag off가 `404`, 과대 body가 `413`인지 확인한다.
+9. `systemctl --user is-active ompweb.service`와 `curl` HTTP `200`을 확인한다.
+
+## 2026-08-15 적용 결과
+
+| 검증 | 결과 |
+| --- | --- |
+| 전체 테스트 | 349 tests, 348 pass, 1 skip, 0 fail |
+| targeted custom tests | 8/8 pass |
+| TypeScript | `tsc --noEmit` 성공 |
+| production build | Next.js 16.3.0 optimized build 성공 |
+| OMP extension bundle | Bun bundle 성공, 8.74 KiB |
+| 실제 TUI session | `01a00479-d68d-7000-9510-353d712e9e1c` |
+| 새 session catalog smoke | `01a004a7-e4d4-7000-9bbe-1353cdd5eae9`, page reload/Refresh 없이 sidebar 표시 |
+| 수동 강제 Refresh | stale 일반 조회 0건 -> `?refresh=1` 조회 1건 |
+| service | `active`, `/` HTTP `200` |
+| 잘못된 bearer token | HTTP `401` |
+| 1 MiB 초과 payload | HTTP `413` |
+| token/extension mode | 둘 다 `0600` |
+
+실제 browser/TUI 검증:
+
+> 이 목록은 2026-08-15 당시 view-only 계약 기준의 역사적 검증 기록이다. 현재 외부 TUI control 계약은 위 `사용자 계약`과 2026-08-16 갱신 내용을 따른다.
+
+- 새로고침 없이 TUI attach snapshot을 받아 composer가 즉시 `Controlled by the attached TUI session` read-only로 전환됐다.
+- assistant가 200줄을 생성하는 동안 `LBT-AUG15-050`은 보였지만 `LBT-AUG15-200`과 `LBT-AUG15-FINAL`은 아직 없었다. 완료 JSONL 이전의 실제 `message_update` partial임을 확인했다.
+- 완료 뒤 `LBT-AUG15-200`과 `LBT-AUG15-FINAL`은 각각 정확히 1회만 렌더링됐다.
+- tool sleep 중 `LIVE-STREAM-BEGIN`과 실행 중 bash tool header가 보였고 final continuation은 이후 별도로 반영됐다.
+- TUI 종료 withdrawal 뒤 page reload 없이 composer read-only가 즉시 해제됐다.
+- SSE 격리 smoke에서 `ready:none -> external:single -> external:none` frame 순서를 확인했다.
+- ompweb을 먼저 연 상태에서 별도 새 TUI session을 시작했고 약 7초 안에 새 session row가 sidebar에 자동 추가됐다.
+- session list cache를 의도적으로 stale하게 만든 뒤 기존 Refresh의 `?refresh=1` 경로가 새 JSONL을 즉시 노출함을 확인했다.
+
+화면 증거:
+
+```text
+/tmp/ompweb-live-token-partial.png
+/tmp/ompweb-live-bridge-final.png
+```
+
+## 2026-08-16 ompweb 버그 수정 및 source 정합성 점검
+
+> [!NOTE]
+> 이 절은 **ompweb 자체 작업만** 기록한다. 같은 날 수행한 실제 버전 업데이트는 OMP `17.3.4 -> 17.3.5`이며, 그 업데이트와 OMP 본체 로컬 패치 재적용 기록은 `OMP assistant Markdown compact spacing 패치 및 업데이트 런북.md`에서 관리한다. ompweb package version은 작업 전후 모두 `0.3.1`이다.
+
+### ompweb source 정합성 점검 — release 업데이트 아님
+
+- ompweb package version은 계속 `@kahme247/ompweb@0.3.1`이다.
+- local custom branch의 기존 커밋을 당시 `origin/main` 기준점 `463e914` 위로 정리했다. 이것은 새 ompweb release 설치가 아니라 source maintenance다.
+- upstream의 2026-08-15 후속 수정 9개를 받아오면서 기존 custom live/control/observe 변경을 유지했다.
+- 특히 upstream의 terminal fast-mode resync와 초기 message list mount 뒤 scroll 완료 처리 수정이 custom 병합 뒤에도 유지되는지 확인했다.
+- provenance manifest에는 현재 custom source file 27개가 기록되어 있고, 2026-08-16 점검 시 missing file은 `0`개였다.
+
+### ompweb 버그 1 — 새 web 세션 첫 prompt의 장시간 대기
+
+확인된 race:
+
+1. web의 새 세션은 먼저 `/api/agent/new`의 `ensure_session`으로 OMP RPC runtime과 real session ID를 만든다.
+2. 첫 prompt 전에는 session JSONL이 아직 없을 수 있다. 실제 smoke에서 이 시점 `/api/sessions/<id>/observe`는 `404`였다.
+3. `handleSend()`는 prompt event 유실을 막기 위해 `/api/agent/<id>/events` SSE가 연결될 때까지 기다린다. connection timeout은 최대 60초다.
+4. 첫 prompt 전에 `promoteNewSession()`이 같은 real session ID를 AppShell의 selected session으로 승격한다.
+5. custom `/observe` effect가 `session?.id` 변경으로 재실행될 때 cleanup이 agent event SSE까지 함께 닫을 수 있었다.
+6. 이 race에 걸리면 새 web session이 이미 생성되었는데도 `handleSend()`가 닫힌/재연결 중 SSE를 길게 기다리는 증상이 발생할 수 있었다.
+
+수정:
+
+- persisted `/observe` SSE lifecycle과 web agent `/api/agent/<id>/events` SSE lifecycle을 분리했다.
+- `eventSourceSessionIdRef`로 agent SSE 소유 session을 명시한다.
+- `new -> promoted`가 **같은 real session ID**이면 observe effect 재실행 시 agent SSE를 보존한다.
+- 실제 다른 session ID로 이동하거나 blank session으로 이동할 때만 이전 agent SSE를 닫는다.
+- hook 최종 unmount에서는 agent SSE/reconnect timer/coalescer를 확실히 정리한다.
+- `lib/agent-event-session.ts`와 `lib/agent-event-session.test.mjs`로 same-ID promotion 보존/다른-ID 교체 규칙을 회귀 테스트한다.
+
+2026-08-16 재배포 후 `/home/user01/tmp` 실제 smoke:
+
+| 단계 | 측정 |
+| --- | --- |
+| `ensure_session` | 약 `769 ms` |
+| 첫 prompt 전 `/observe` | `404` 확인 |
+| agent SSE headers/connected | 약 `5-6 ms` |
+| prompt RPC ack | 약 `10 ms` |
+| `agent_start` | 약 `29 ms` |
+| 첫 `message_update` | 약 `1.47 s` |
+| `agent_end` | 약 `1.84 s` |
+
+따라서 측정된 OMP RPC cold start 자체는 약 0.7~0.9초 수준이었고, 긴 대기의 핵심은 cold start가 아니라 React session promotion과 두 SSE lifecycle이 겹치는 race였다.
+
+### ompweb 버그 2 — 새 web 세션에서 `task`/`hub`/`todo`가 사라짐
+
+2026-08-16 실제 문제 세션 `01a009ef-0a5c-7000-9ba1-7ba8d260e676`에서 다음 모순이 재현됐다.
+
+- ompweb에서 새로 만든 상태에서는 assistant가 자신에게 `read`, `bash`, `edit`, `write`만 있다고 판단해 Ready Ticket의 Count 1 auditor를 시작할 수 없다고 보고했다.
+- 같은 JSONL을 OMP TUI에서 재개한 뒤에는 같은 대화에서 `todo`와 `task`를 실제 호출했고 `opencodex-deepseek-v4-flash-max`의 `DeepSeekPrimaryAuditor` spawn이 성공했다.
+- 따라서 DeepSeek model binding이나 Ready Ticket skill이 원인이 아니었다. 같은 session file을 사용해도 **프로세스를 어떤 toolset으로 시작했는지**가 달랐다.
+
+확인된 원인:
+
+1. 과거 Tool Preset UI는 `off/default/full` 선택을 제공했다.
+2. composer redesign 커밋 `8a24697`에서 실제 Tool Preset UI와 `ChatInput` props가 제거됐다.
+3. 그러나 `useAgentSession`의 숨은 `toolPreset` state와 localStorage preference 및 새 세션 spawn 제한은 남았다.
+4. preference가 없거나 오래된 browser state가 있으면 기본값 `default`가 선택되고 `PRESET_DEFAULT = ["read", "bash", "edit", "write"]`가 사용됐다.
+5. `ensureNewSession()`이 이 배열을 `/api/agent/new`의 `toolNames`로 보내면 server는 새 OMP RPC process를 `--tools read,bash,edit,write`로 시작한다. 이 때문에 `task`, `hub`, `todo`, `grep`, `glob`, `eval`, `web_search` 등이 실제 runtime에서 제거됐다.
+6. 반면 일반 OMP TUI resume은 `--tools` 제한 없이 시작하므로 OMP 기본 전체 tool inventory가 다시 나타났다. 같은 JSONL을 TUI로 열자 갑자기 `task`가 동작한 이유다.
+
+수정:
+
+- 현재 composer에는 Tool Preset UI가 없으므로 web-created session도 TUI와 동일하게 OMP 기본 toolset을 상속하도록 했다.
+- `ensureNewSession()`은 더 이상 `toolNames`를 `/api/agent/new`에 보내지 않는다. 따라서 stale localStorage의 `omp-web:tool-preset=default`도 새 세션 capability를 줄일 수 없다.
+- server의 명시적 `toolNames` 처리 자체는 유지하지만 현재 web 새 세션 기본 경로에서는 사용하지 않는다.
+- `lib/api-contract.test.mjs`에 `new web sessions inherit OMP's default tool inventory` 회귀 계약을 추가했다.
+
+재배포 후 실제 web-created smoke session `01a00a00-2358-7000-9203-c7da04515372`의 `GET /api/agent/<id>` state에서 system prompt의 `# Tool Inventory`를 직접 확인했다. 포함된 도구는 다음과 같았다.
+
+```text
+read / bash / edit / ask / eval / glob / grep / task / hub / todo / web_search / write
+```
+
+즉 모델에게 capability를 질문한 것이 아니라 실제 RPC runtime state에서 `task`, `hub`, `todo` 존재를 확인했다.
+
+### ompweb 버그 3 — persisted session 화면이 `/observe ready`를 기다리며 늦게 뜸
+
+서비스 재시작 뒤 persisted session을 선택할 때 `Loading session...`이 오래 유지되는 증상을 다시 조사했다. 서버 자체의 session read 성능은 병목이 아니었다.
+
+2026-08-16 측정:
+
+| 경로 | 측정 |
+| --- | --- |
+| `/api/sessions` | 약 `4 ms`, 약 `65 KB` |
+| 큰 persisted session 본문 | 약 `44 ms`, defer 적용 후 약 `1.0 MB` |
+| `/api/sessions/<id>/state` | 약 `4 ms` |
+| `/api/sessions/<id>/observe` 첫 byte/`ready` | loopback/Tailnet server-side 약 `3-5 ms` |
+
+확인된 UI 구조:
+
+1. session 선택 시 `useAgentSession`은 `/observe` EventSource를 먼저 연다.
+2. 기존 구현은 `ready` frame이 와야 `loadSession(sid, true, true)`를 시작했다.
+3. SSE가 establish되지 않으면 `setTimeout(initializeSelectedSession, 2000)` fallback 뒤에야 본문 GET을 시작했다.
+4. 따라서 JSONL 자체는 수십 ms에 읽혀도 mobile/Tailnet 브라우저에서 EventSource establishment/reconnect가 늦으면 화면 전체가 `Loading session...`으로 막힐 수 있었다.
+
+수정:
+
+- persisted history GET은 EventSource 생성 직후 **즉시** 시작한다.
+- `/observe ready`는 더 이상 visible history의 loading gate가 아니다.
+- initial GET 중 `ready`/`changed`/`reset`이 도착하면 dirty bit를 남긴다.
+- `persistedTerminalReloadRef`가 initial load 중 refresh를 막고, initial load가 끝난 뒤 dirty bit가 있으면 authoritative resync를 수행한다.
+- 따라서 초기 표시 속도와 no-loss observer barrier를 분리했다.
+- 기존 `2000 ms` fallback timer는 제거했다.
+- `lib/api-contract.test.mjs`에 `persisted session history starts loading without waiting for observe readiness` 회귀 계약을 추가했다.
+
+재배포 후 service `active`, `/api/omp-version`은 `omp/17.3.5`, Tailnet 경유 큰 session 본문은 약 `44 ms`로 확인했다.
+
+### ompweb 버그 4 — half-open fetch가 `Loading session...`을 무한 유지
+
+2026-08-17 신규 세션에서 다시 `Loading session...`이 풀리지 않는 증상을 조사했다. 증상 시점의 실제 session `01a00b7a-57a4-7000-9d59-5bcdbb8046e1`은 서버/OMP 측에서는 정상 상태였다.
+
+- persisted session GET: 약 `10.9 ms`, HTTP `200`
+- `/state`: 약 `7.4 ms`, HTTP `200`
+- OMP RPC state: session alive, 당시 `isStreaming=true`, `isPromptRunning=true`
+- 같은 session을 현재 build의 clean Chromium에서 다시 열면 약 `300 ms`에 잠깐 loading, 약 `600 ms`에 transcript 표시
+- clean Chromium에서 새 web session을 직접 생성한 smoke도 real session promotion 약 `0.94 s`, `Loading session...` 고착 없이 정상 완료
+
+코드상 남아 있던 무한 대기 경로는 `loadSession()`의 fetch에 timeout이 없고, visible persisted history를 이미 읽은 뒤에도 secondary `/state` fetch가 끝날 때까지 `loading=true`를 유지하던 구조였다. 기존 탭의 네트워크 요청이 half-open으로 남으면 서버가 정상이어도 그 React state는 무기한 loading에 머물 수 있었다.
+
+수정:
+
+- persisted session/context/state fetch에 `SESSION_LOAD_FETCH_TIMEOUT_MS = 8_000` 상한을 둔다.
+- persisted history JSON을 적용하는 즉시 `loading=false`로 전환한다.
+- `/state`는 model/context usage/runtime flags를 위한 secondary sync일 뿐 visible transcript의 loading gate가 아니다.
+- primary history GET 자체가 half-open이면 최대 8초 뒤 `TimeoutError`로 빠져 무한 loading을 끝낸다.
+- `lib/api-contract.test.mjs`에 `session loading cannot stay blocked on an unbounded fetch or the secondary state probe` 회귀 계약을 추가했다.
+
+실제 Chromium 장애 주입 검증:
+
+1. `/state` 요청을 DevTools Fetch interception으로 영구 pause했다. 약 `600 ms`부터 transcript가 표시됐고 `Loading session...`은 사라진 채 4초 이상 유지됐다.
+2. primary persisted-session GET을 영구 pause했다. 0.5/2/5초에는 loading이었지만 약 `8.5 s`에 `TimeoutError: signal timed out`으로 전환돼 loading이 종료됐다.
+
+### 2026-08-17 검증 결과
+
+| 검증 | 결과 |
+| --- | --- |
+| 전체 테스트 | `363 tests, 362 pass, 1 skip, 0 fail` |
+| TypeScript | `tsc --noEmit` 성공 |
+| production build | Next.js 16.3.0 optimized build 성공 |
+| custom manifest | production `27` + regression tests `7` + intentional removals `2`; inventory verified |
+| service | `active`, `/` HTTP `200` |
+| loopback | `127.0.0.1:30177` HTTP `200` |
+
+service restart는 이 점검에서 약 15초가 걸렸고 systemd 로그상 `TimeoutStopSec=15` 뒤 기존 Next.js process가 강제 종료되는 별도 shutdown 지연이 관측됐다. 이는 새 web session의 첫 prompt 지연 race와는 별개 문제다.
+
+## 2026-08-18 ompweb 0.3.2 업데이트 및 custom 재이식
+
+### release identity
+
+`@kahme247/ompweb@0.3.2`가 npm `latest`와 Git tag `v0.3.2`로 실제 배포된 것을 확인했다.
+
+| 항목 | 값 |
+| --- | --- |
+| npm version/latest | `0.3.2` |
+| npm integrity | `sha512-MN0wKvv03r4fp4RX+0vKLZM42Qj7Ga/MUmTHYKwRoZQf4in0CCnCKHLw5xfqH1K+ipIDPIy3z5F5K4JdSn4CZg==` |
+| npm shasum | `89804be13a94f150be591ef6b0bd4c0dfce014c6` |
+| npm `gitHead` | `b7ad11224a1edb66805302a9a20b9e658351d02e` |
+| Git `v0.3.2` | `b7ad11224a1edb66805302a9a20b9e658351d02e` |
+
+npm과 Git release identity가 일치했다.
+
+### dirty tree 보존과 rollback 기준
+
+업데이트 직전 custom working tree에는 live/control/observe bridge와 2026-08-16~17 버그 수정이 아직 working tree 형태로 남아 있었다. 문서의 업데이트 절차에 따라 먼저 전체를 커밋했다.
+
+```text
+commit: 1f58f2c
+message: chore: preserve local ompweb customizations before 0.3.2
+files changed: 36
+```
+
+추가 rollback pointer:
+
+```text
+backup/pre-ompweb-0.3.2-20260818 -> 1f58f2c
+```
+
+기존 provenance inventory도 업데이트 전에 다시 대조했다.
+
+```text
+sourceFiles: 27
+testFiles: 7
+removedFiles: 2
+missing: 0
+removedFiles가 다시 생긴 항목: 0
+```
+
+### upstream 0.3.2 재기준화
+
+기존 custom 기준점 `463e914` 이후 0.3.2에는 password login/session cookie, running-session sidebar 안정화, chat scroll/image helper 수정, CLI password/version 옵션 등이 추가됐다.
+
+`custom/tui-session-stream`을 `v0.3.2` 위로 rebase했다. 충돌은 `components/SessionSidebar.tsx` 한 곳뿐이었다.
+
+충돌 해결은 어느 한쪽을 버리지 않고 다음 두 의미를 함께 유지했다.
+
+1. 0.3.2 upstream의 session list ETag + 이전 request AbortController
+2. local custom의 수동 `?refresh=1` server-cache 강제 무효화
+
+최종 branch:
+
+```text
+b7ad112  v0.3.2
+edf9b3c  feat: stream persisted TUI session progress
+e3794df  ops: run ompweb from custom source build
+5bcc41d  chore: preserve local ompweb customizations before 0.3.2
+```
+
+즉 0.3.2 위에 기존 custom 3개 commit이 재기준화된 상태다.
+
+### upstream 흡수 여부 재판정
+
+0.3.2는 session/sidebar/auth 영역을 개선했지만 다음 local 계약을 동등하게 제공하지 않는다. 따라서 custom을 유지했다.
+
+- 외부 독립 OMP TUI의 live partial snapshot bridge
+- 단일 external source에 대한 prompt/steer/follow-up/abort control bridge
+- JSONL + external 상태를 합친 `/observe` SSE와 source conflict/TTL/withdrawal 계약
+- external TUI 새 session catalog 자동 discovery와 `?refresh=1` fallback
+- same-ID web session promotion에서 agent SSE 보존
+- web-created session의 OMP 기본 tool inventory 상속
+- persisted history가 `/observe ready`를 기다리지 않는 즉시 load
+- primary/secondary session fetch bounded timeout과 secondary `/state` 비차단 처리
+
+wire protocol은 계속 `v: 1`이며 schema 재정의가 필요하지 않았다.
+
+### source 검증
+
+0.3.2 dependency tree를 `npm ci`로 재설치했다. peer warning은 있었지만 install은 성공했고 `npm audit` 결과 취약점은 `0`이었다.
+
+검증 결과:
+
+| 검증 | 결과 |
+| --- | --- |
+| targeted custom regression | `29 pass / 0 fail` |
+| 전체 suite | `366 tests / 365 pass / 1 skip / 0 fail` |
+| TypeScript | `tsc --noEmit` 성공 |
+| production build | Next.js `16.3.0`, 성공 |
+| Git working tree | rebase 후 clean |
+
+전체 suite에는 0.3.2의 새 password login/session cookie와 CLI `--password` 관련 테스트도 포함된다.
+
+### production 배포
+
+```bash
+cd ~/project/ompweb
+npm run deploy:local-custom
+```
+
+배포 결과:
+
+- 0.3.2 production build 성공
+- `ompweb-live-bridge.js` Bun bundle 성공, 약 `13.16 KiB`
+- `ompweb.service` restart 성공
+- service `active/running`
+- `ExecStart`는 계속 `/home/user01/project/ompweb/node_modules/next/dist/bin/next start -H 127.0.0.1 -p 30177`
+- 전역 npm package도 exact `@kahme247/ompweb@0.3.2`로 맞췄지만 service 실행 소스는 계속 custom project build다.
+
+새 provenance:
+
+```text
+~/.omp/agent/local-patches/ompweb-tui-live-bridge/v0.3.2/manifest.json
+upstreamPackage: @kahme247/ompweb@0.3.2
+sourceFiles: 27
+testFiles: 7
+removedFiles: 2
+extension SHA-256: d5291b78c41b83418699de2ffaf0638390ac25d721c86cd7183f953692f12d95
+```
+
+inventory 수는 0.3.1과 동일하며 extension artifact SHA도 변경되지 않았다.
+
+### production acceptance
+
+| 항목 | 결과 |
+| --- | --- |
+| `/api/app-update` | `currentVersion=0.3.2`, `availableVersion=0.3.2`, `updateAvailable=false` |
+| loopback `/` | HTTP `200`, HTML |
+| Tailnet `:8444/` | HTTP `200`, HTML |
+| invalid bridge bearer | HTTP `401` |
+| 1 MiB 초과 bridge payload | HTTP `413` |
+| OMP | `omp/17.3.5` |
+
+실제 interactive OMP TUI를 새 PTY에서 실행한 live bridge smoke:
+
+```text
+sessionId: 01a01220-3a68-7000-b1a1-6a0715b03c7f
+GET /api/sessions/<id>/observe: HTTP 200
+ready: true
+externalSingle: true
+assistant final marker: 확인
+TUI /exit: exit code 0
+```
+
+따라서 **OMP 17.3.5 user extension -> ompweb 0.3.2 broker -> `/observe` -> browser 계약이 실제 TUI 런타임에서도 유지됨**을 확인했다.
+
+참고로 `omp -p` 비대화형 smoke에서는 persisted session 생성과 최종 응답은 성공했지만 external `single`을 포착하지 못했다. 이 모드는 이 런북의 사용자 계약인 interactive TUI와 동일하지 않으므로 실패 판정에 사용하지 않았다. 실제 PTY TUI에서는 `externalSingle=true`를 확인했다.
+
+### 최종 판정
+
+`ompweb 0.3.2 + local custom live/control/observe patch set` 전환을 완료로 판정한다.
+
+- release identity 일치
+- pre-update custom commit/rollback branch 보존
+- 0.3.2 rebase 완료
+- upstream 신규 auth/sidebar/chat 변경 유지
+- local bridge + 버그 수정 4종 유지
+- targeted/full/typecheck/build 통과
+- provenance v0.3.2 갱신
+- service/Tailnet 정상
+- 실제 interactive TUI live bridge smoke 통과
+
+## 2026-08-18 다중 탭 `Loading session... TimeoutError` 영구 수정
+
+### 재현과 원인 확정
+
+새 web session을 시작할 때 `Loading session...` 뒤 약 8초 후 `TimeoutError: signal timed out`이 표시되는 문제를 재조사했다. 이 오류는 `SESSION_LOAD_FETCH_TIMEOUT_MS = 8_000`이 원인을 만든 것이 아니라, primary persisted history fetch가 브라우저에서 연결을 배정받지 못한 상태를 8초 뒤 끊어 주면서 드러난 결과였다.
+
+서버 자체 지연은 배제됐다.
+
+- `ompweb.service`는 `active`였고 loopback `/api/sessions`와 persisted history는 수십 ms에 응답했다.
+- 직접 API 순서로 새 runtime을 만들었을 때 `ensure_session`은 약 `951 ms`, 아직 JSONL이 없는 real session ID의 history GET은 약 `7 ms`에 `404`를 반환했다.
+- clean Chromium 단일 탭에서는 loopback과 기존 Tailnet HTTP 경로 모두 새 session 첫 prompt가 정상 완료됐다.
+- 반면 기존 `http://...:8444` Tailnet origin에서 persisted ompweb 탭을 3개 연 상태로 새 session을 시작하면 동일한 `TimeoutError: signal timed out`이 재현됐다.
+- 실패한 history/state fetch는 `8000~8012 ms` 뒤 abort됐고 Resource Timing의 `nextHopProtocol`이 비어 있었다. 같은 시점 정상 요청은 `http/1.1`이었다. 즉 서버가 8초 처리한 것이 아니라 브라우저가 HTTP/1.1 connection slot을 받기 전에 timeout된 것이다.
+
+기존 탭 하나는 장기 연결을 다음처럼 점유할 수 있었다.
+
+```text
+/api/agent/running/events           # sidebar running SSE
+/api/sessions/<id>/observe         # persisted/external observer SSE
+/api/agent/<id>/events             # web RPC agent SSE, 실행한 세션에서 추가
+```
+
+다중 탭에서 이 장기 SSE가 누적되면 같은 origin의 HTTP/1.1 connection pool을 소진해 일반 fetch가 대기열에 갇힐 수 있었다.
+
+초기 1~3차 수정 뒤에도 2026-08-18 16:40 전후 같은 오류가 다시 보고되어 loopback HTTP/1.1을 별도로 재현했다. 이때 `components/SessionSidebar.tsx`가 **background 탭에서도 `/api/agent/running/events` SSE를 탭마다 하나씩 계속 유지**하고 있음을 확인했다. persisted `/observe`는 hidden 탭에서 이미 닫히고 terminal agent SSE도 종료되지만, 탭 5개만 열어도 `running/events × 5`가 장기 connection을 점유한다. active tab에서 새 session을 만들면 `/api/agent/new`는 빈 slot으로 성공하고 이어 `/api/agent/<id>/events`가 마지막 slot을 차지한 뒤 primary history GET이 queue에 갇혀 정확히 `TimeoutError: signal timed out`이 재현됐다. 재현 session은 `01a013d5-c70b-7000-a7ab-64409a9398db`였고 history GET에 HTTP status가 붙기 전에 8초 timeout이 발생했다.
+
+따라서 H2 전환만으로는 **Tailnet 접속**은 보호해도 loopback `http://127.0.0.1:30177` 같은 HTTP/1.1 origin까지 보호하지 못한다. 최종 수정은 장기 SSE lifecycle 자체가 background tab 수에 비례하지 않도록 해야 한다.
+
+### 적용한 영구 수정
+
+1. **Tailnet transport를 HTTPS/H2로 전환**했다.
+   - 이전: `http://desktop-balmtav-1.tail42cd28.ts.net:8444/`
+   - 현재: `https://desktop-balmtav-1.tail42cd28.ts.net:8444/`
+   - backend bind는 그대로 `http://127.0.0.1:30177/`이다.
+   - 실제 Chromium navigation의 `nextHopProtocol`이 `h2`임을 확인했다. 여러 SSE는 HTTP/2 stream으로 multiplex되어 HTTP/1.1 connection-slot 고갈에 의존하지 않는다.
+2. **terminal agent SSE를 즉시 해제**했다.
+   - `hooks/useAgentSession.ts`의 `closeAgentEventStream()`이 현재 per-session EventSource, reconnect timer, pending coalescer를 정리한다.
+   - terminal `agent_end`에서 즉시 닫는다.
+   - SSE terminal frame을 놓치고 reconcile/prompt settlement로 완료를 판정한 `finishPromptWithoutStream()` 경로도 같은 정리를 수행한다.
+   - `isTerminal === false`인 비종료 delivery는 기존대로 stream을 유지한다.
+3. **background tab의 persisted `/observe` SSE를 해제**했다.
+   - `document.visibilityState === "hidden"`이면 해당 탭의 `/observe` EventSource를 닫는다.
+   - foreground 복귀 시 `persistedDirtyRef=true`, `persistedResetRef=true`로 reset boundary를 세우고 observer를 다시 연다.
+   - 그동안 놓친 JSONL/external ownership 변화는 `drainPersistedRefresh()`의 authoritative reload와 reconnect `ready` frame으로 회복한다.
+   - visible history GET 자체는 계속 `/observe ready`에 막히지 않고 즉시 시작한다.
+4. **background tab의 sidebar `/api/agent/running/events` SSE도 해제**했다.
+   - `components/SessionSidebar.tsx`는 visible tab에서만 running-status EventSource를 유지한다.
+   - hidden 전환 시 즉시 `closeSource()`하고, foreground 복귀 시 persisted unread marker를 localStorage에서 다시 읽고 `loadSessions(false)`로 authoritative session list를 갱신한 뒤 running SSE를 다시 연다.
+   - 이 변경으로 같은 browser window에서 background tab 수가 늘어도 `running/events` 장기 connection 수가 탭 수에 비례하지 않는다.
+   - 실제 loopback HTTP/1.1 5-tab 재현에서 수정 전 exact timeout을 확인한 뒤, 수정 배포 후 같은 조건에서 새 session 첫 prompt가 10초 내 정상 완료됐다.
+
+`SESSION_LOAD_FETCH_TIMEOUT_MS = 8_000`은 fail-fast 안전장치로 유지했다. timeout을 늘리는 방식은 connection starvation을 가릴 뿐이므로 수정으로 사용하지 않았다.
+
+### 검증 결과
+
+| 검증 | 결과 |
+| --- | --- |
+| targeted contract | latest `lib/api-contract.test.mjs`: `13 pass / 0 fail` |
+| 전체 suite | `369 tests / 368 pass / 1 skip / 0 fail` |
+| TypeScript | `tsc --noEmit` 성공 |
+| production build | Next.js `16.3.0`, 성공 |
+| deploy | `npm run deploy:local-custom` 성공 |
+| provenance | production `27` + regression tests `7` + intentional removals `2`; extension SHA-256 `d5291b78c41b83418699de2ffaf0638390ac25d721c86cd7183f953692f12d95` 유지 |
+| service | 재배포 후 `active/running` |
+| Tailnet protocol | `https://...:8444`, Chromium `h2` |
+| hidden-tab observer | background 전환으로 끝난 `/observe` resource 확인, foreground에서 재구독 |
+| hidden-tab running SSE | foreground로 돌아온 tab의 이전 `/api/agent/running/events`가 `8.052 s`, `http/1.1` finite resource로 종료된 것을 확인 |
+| terminal agent SSE | 완료 session의 `/api/agent/<id>/events`가 약 `2.805 s`에 종료, `h2` |
+| 3-tab Tailnet regression | persisted session 탭 3개 상태에서 새 session을 시작하고 10초 이상 관찰해 timeout 없음 |
+| 5-tab loopback regression | 수정 전 exact `TimeoutError: signal timed out` 재현, 수정 후 동일 5-tab HTTP/1.1 조건에서 assistant marker까지 정상 완료 |
+
+3-tab 실제 smoke session은 `01a01385-6fba-7000-8603-2bc86abfba24`였고 assistant marker `OMPWEB-PERMFIX-3TAB-20260818`까지 정상 렌더링됐다. 테스트 뒤 해당 진단 session은 삭제했다. foreground로 돌아온 기존 탭에서는 background 동안 닫힌 `/observe`가 `16.419 s`, `h2` resource로 완료된 것도 확인했다.
+
+이 수정 뒤의 운영 판정은 **transport(H2)와 application lifecycle(SSE 조기 해제)을 둘 다 유지**하는 것이다. 둘 중 하나만으로도 위험은 줄지만, 업데이트 후에는 두 계약을 함께 회귀 검증한다.
+
+## 2026-08-18 host-tool/xdev 및 MCP 토스트 스팸 억제
+
+### 원인
+
+OMPWeb은 browser host tool `open_url`, `notify`, `open_file`과 `pi-web://` URI scheme을 OMP RPC child에 등록한다. 기존 구현은 기존 session의 `handleSend`, running session 복구, fatal SSE reconnect 등에서 `set_host_tools`/`set_host_uri_schemes`를 반복 전송할 수 있었다. OMP는 동일 payload라도 `xd://` device inventory 재계산과 `xdev-mount-notice`를 발생시킬 수 있고, OMPWeb은 과거 이 notice를 `MCP tools updated` 정보 토스트로 노출했다.
+
+`Settings -> Extensions & Tools -> MCP Resource Updates`는 OMP native `mcp.notifications` 설정으로 **MCP resource update를 agent conversation에 주입할지** 제어한다. 이 값이 `false`여도 OMPWeb UI 토스트에는 영향을 주지 않는다. `tools.xdev=false`는 토스트만 끄는 옵션이 아니라 xd:// mounting 자체를 비활성화하므로 이 문제의 운영 해법으로 사용하지 않는다.
+
+### 적용한 수정
+
+1. **동일 host registration을 OMP child 단위로 idempotent 처리**했다.
+   - `lib/rpc-manager.ts`는 마지막 `set_host_tools`/`set_host_uri_schemes` payload key를 wrapper에 보관한다.
+   - 같은 child에 byte-equivalent registration이 다시 오면 OMP에 명령을 재전송하지 않는다.
+   - 실제 OMP child `restart()` 때는 registration key와 host inventory cache를 비워 reconnect sync가 새 child에는 반드시 다시 전달되게 한다.
+2. **`xdev-mount-notice`는 내부 동기화 이벤트로 처리**한다.
+   - `hooks/useAgentSession.ts`는 이 custom message를 transcript와 toast layer 모두에 노출하지 않는다.
+3. **OMPWeb 전역 MCP 정보성 토스트 suppress 옵션을 추가**했다.
+   - `components/ui/toast.tsx`의 중앙 `add()` 경로에서 non-error toast의 title/description에 `MCP`, `xd://`, `xdev`가 포함되면 기본적으로 drop한다.
+   - MCP `error` toast는 항상 그대로 보인다. 따라서 실제 MCP load/save/connection 오류를 숨기지 않는다.
+   - UI 설정은 `Settings -> Interface & Behavior -> MCP informational toasts`이며 **기본값은 Off**다.
+   - preference는 browser localStorage key `omp-web:mcp-info-toasts`에 저장한다. key가 없으면 Off로 해석한다.
+   - 사용자가 이 스위치를 On으로 바꾸면 MCP 정보/성공 토스트를 다시 볼 수 있다.
+4. **provenance inventory를 확장**했다.
+   - production source에 `components/SettingsConfig.tsx`, `components/ui/toast.tsx`, `lib/rpc-manager.ts`를 추가했다.
+   - regression tests에 `components/ui/toast.test.mjs`, `lib/rpc-manager.test.mjs`를 추가했다.
+   - 현재 manifest inventory는 production `30`, regression tests `9`, intentional removals `2`다.
+
+### 검증 결과
+
+- targeted: `components/ui/toast.test.mjs + lib/api-contract.test.mjs + lib/rpc-manager.test.mjs` -> `35 pass / 0 fail`
+- 전체 suite: `372 tests / 371 pass / 1 skip / 0 fail`
+- `npm run typecheck` 성공
+- `node --check scripts/deploy-local-custom.mjs` 성공
+- production build + `npm run deploy:local-custom` 성공
+- `ompweb.service` 재배포 후 `active`
+- clean browser session에서 Settings의 `MCP informational toasts` control이 존재하며, localStorage key가 없는 상태에서 세 번째 UI switch가 `aria-checked=false`인 것을 확인했다.
+- 최신 manifest `deployedAt=2026-08-18T13:56:02.915Z`, extension SHA-256 `d5291b78c41b83418699de2ffaf0638390ac25d721c86cd7183f953692f12d95`.
+
+## 2026-08-19 ompweb 0.3.3 업데이트 및 custom 재이식
+
+### 보존과 재기준화
+
+업데이트 직전 working tree의 8개 hotfix 파일은 먼저 다음 커밋으로 보존했다.
+
+```text
+9bc39f7 chore: preserve post-0.3.2 ompweb hotfixes
+8 files changed, 124 insertions(+), 13 deletions(-)
+```
+
+rollback pointer:
+
+```text
+backup/pre-ompweb-0.3.3-20260819 -> 9bc39f7
+```
+
+`v0.3.3`은 commit `fc49cef92d674a74545fafc7a22e8c202f62ca3f`이며 `v0.3.2` 이후 upstream 15개 commit을 포함한다. `custom/tui-session-stream`을 이 tag 위로 rebase했다.
+
+rebase 중 실제 content conflict는 `lib/api-contract.test.mjs` 한 곳이었다. upstream의 `interactive login negotiates RPC v2 before sending the login command` 계약과 local의 다음 세 회귀 계약을 모두 유지하는 방식으로 해결했다.
+
+- web-created session의 OMP 기본 tool inventory 상속
+- persisted history의 `/observe ready` 비의존 즉시 load
+- session/context/state fetch의 bounded timeout 및 secondary `/state` 비차단
+
+최종 계보:
+
+```text
+55492a1 (HEAD -> custom/tui-session-stream) chore: preserve post-0.3.2 ompweb hotfixes
+caebb57 fix(agent-events): release per-session SSE stream on terminal completion
+17a1f6a chore: preserve local ompweb customizations before 0.3.2
+2253280 ops: run ompweb from custom source build
+89771fe feat: stream persisted TUI session progress
+fc49cef (tag: v0.3.3) 0.3.3
+```
+
+0.3.3의 model search, Frontmatter, RPC v2, Windows path/worktree, settings/i18n 변경은 유지했고 external TUI live/control/observe bridge와 9개 local regression 계약은 동등한 upstream 구현이 없어 계속 유지했다.
+
+### source 검증
+
+`npm ci`는 성공했고 `npm audit` 취약점은 `0`이었다. React 19와 `@emoji-mart/react`의 기존 peer warning은 있었지만 install 실패는 아니었다.
+
+| 검증 | 결과 |
+| --- | --- |
+| targeted custom regression | `55 pass / 0 fail` |
+| 전체 suite | `392 tests / 391 pass / 1 skip / 0 fail` |
+| TypeScript | `npm run typecheck` 성공 |
+| production build | Next.js `16.3.0`, 성공 |
+| deploy | `npm run deploy:local-custom` 성공 |
+| Git working tree | clean |
+
+전체 suite에서 0.3.3의 model search, Frontmatter 파싱, RPC v2 large-frame/utility negotiation, Windows/UNC path normalization 관련 신규 회귀 테스트도 함께 통과했다.
+
+### production acceptance
+
+- `ompweb.service`: `active`
+- loopback `/`: HTTP `200`
+- `/api/app-update`: `currentVersion=0.3.3`, `availableVersion=0.3.3`, `updateAvailable=false`
+- 전역 npm 설치본: `@kahme247/ompweb@0.3.3`
+- `/api/omp-version`: `omp/17.3.5`
+- invalid bridge bearer: HTTP `401`
+- 새 provenance: `~/.omp/agent/local-patches/ompweb-tui-live-bridge/v0.3.3/manifest.json`
+- provenance inventory: production `30` + regression tests `9` + intentional removals `2`
+- extension SHA-256: `d5291b78c41b83418699de2ffaf0638390ac25d721c86cd7183f953692f12d95` 유지
+- browser Settings의 `MCP informational toasts`: localStorage key가 없는 기본 상태에서 세 번째 switch `aria-checked=false`
+- Tailnet `https://desktop-balmtav-1.tail42cd28.ts.net:8444/`: `tailnet only`; 실제 Chromium navigation `nextHopProtocol="h2"`
+
+실제 interactive OMP TUI PTY smoke session `01a0178f-0e65-7000-a76c-fb700f4a14b7`에서는 다음을 확인했다.
+
+- external source `single` attach
+- run=`running` snapshot
+- assistant `streaming` snapshot
+- 실행 중 `followUp` control: HTTP `200`, `accepted=true`
+- initial assistant final과 control follow-up final이 모두 JSONL에 영속화
+- TUI `/exit`: exit code `0`
+- 종료 뒤 같은 session control: HTTP `409`, `external_session_not_attached`
+- 검증 종료 후 해당 진단 session은 `/api/sessions/<id>` DELETE로 삭제했고 `{"ok":true}`를 확인했다.
+
+추가 계측에서는 모델 응답이 매우 빨라 첫 관측 시점에 final JSONL도 이미 존재해 이번 smoke만으로 `streaming snapshot -> final JSONL`의 시간 순서를 별도로 재증명하지는 못했다. 그러나 실제 streaming snapshot, control, 영속화, withdrawal 계약은 모두 관측했고 자동 회귀도 통과했으므로 0.3.3 업데이트 실패로 판정할 근거는 없다.
+
+### 최종 판정
+
+`ompweb 0.3.3 + local custom live/control/observe patch set` 전환을 완료로 판정한다. 현재 운영 rollback 기준은 `backup/pre-ompweb-0.3.3-20260819 -> 9bc39f7`이다.
+
+## Tailnet 접속 계약과 점검
+
+현재 ompweb 자체는 보안 경계상 `127.0.0.1:30177`에만 bind한다. tailnet 접속은 Tailscale Serve가 TLS를 종료하고 HTTP/2를 제공한다.
+
+```text
+https://desktop-balmtav-1.tail42cd28.ts.net:8444/
+  -> Tailscale Serve (tailnet only, TLS/H2)
+  -> proxy http://127.0.0.1:30177/
+```
+
+- `8444`의 현재 사용자 계약은 **HTTPS + tailnet only**다. 과거 `http://...:8444` URL은 더 이상 운영 접속 주소가 아니다.
+- Chromium에서 navigation과 API request가 `h2`로 협상되는지 확인한다. SSE 다중 탭 회귀를 막는 transport 계약이므로 단순 HTTP `200`만으로 검증을 끝내지 않는다.
+- `8444`는 Funnel/public endpoint가 아니다. 다른 기기에서만 접속되지 않으면 먼저 해당 client가 같은 tailnet에 online인지 확인한다.
+- loopback backend는 계속 HTTP `127.0.0.1:30177`이며 외부 인터페이스에 직접 bind하지 않는다.
+
+현재 Serve 설정을 만드는 명령:
+
+```bash
+tailscale serve --http=8444 off
+tailscale serve --https=8444 --bg http://127.0.0.1:30177
+```
+
+점검 명령:
+
+```bash
+tailscale status
+tailscale serve status
+curl -I https://desktop-balmtav-1.tail42cd28.ts.net:8444/
+curl -I http://127.0.0.1:30177/
+```
+
+브라우저 protocol 확인 예:
+
+```js
+performance.getEntriesByType("navigation")[0]?.nextHopProtocol // "h2"
+```
+
+## Oracle 적대 검토 기록
+
+Oracle Browser slot 3, stock Oracle `0.16.1`, GPT-5.5 Pro, high reasoning으로 같은 대화에서 초기 검토와 적대 follow-up을 수행했다.
+
+| 항목 | 값 |
+| --- | --- |
+| conversation | `6a801629-3544-83ee-ae54-b5074f974d8a` |
+| context key | `ompweb-tui-stream-20260815-01a0041f` |
+| 초기 session | `slots-context-ompwebli-ec5909e6ca` |
+| follow-up session | `slots-followup-ompwebli-bd2716120f` |
+
+합의 결론:
+
+- OMP user extension + authenticated loopback bridge가 현재 요구에서 가장 작은 정합 해법이다.
+- raw provider frame이나 generic event forwarder를 만들지 않는다.
+- replay ring보다 latest complete snapshot을 사용한다.
+- JSONL은 최종 authoritative recovery path로 유지한다.
+- branch anchor, monotonic revision, TTL, withdrawal, multi-source conflict를 명시한다.
+- `ompweb-live-bridge/v1` endpoint와 schema를 안정 dependency boundary로 취급한다.
+
+## 업데이트 절차
+
+### OMP 업데이트
+
+이 **ompweb live bridge 자체는 OMP 본체 patch가 아니라** 다음 사용자 extension이다. 따라서 일반적인 OMP 업데이트에서 bridge 때문에 OMP core를 재패치하지 않는다. OMP 설치에 존재하는 다른 core patch의 재적용 여부는 `OMP assistant Markdown compact spacing 패치 및 업데이트 런북.md`에서 별도로 관리한다.
+
+```text
+~/.omp/agent/extensions/ompweb-live-bridge.js
+```
+
+다만 extension은 OMP의 event 이름·payload·발화 순서와 `ReadonlySessionManager` API에 의존한다. OMP 업데이트 뒤에는 새 TUI 프로세스에서 약 1분의 호환성 smoke만 수행한다.
+
+1. 새 OMP TUI를 실행한다. 업데이트 전에 실행 중이던 TUI를 그대로 사용하지 않는다.
+2. 짧은 assistant 응답을 시작하고 같은 session을 ompweb에서 연다.
+3. 응답 완료 전에 partial text가 새로고침 없이 증가하는지 확인한다.
+4. tool 하나를 실행해 active tool 이름이 표시되는지 확인한다.
+5. TUI가 붙어 있는 동안 browser `prompt`와 실행 중 `steer`/`follow-up`/`abort` control이 같은 TUI로 전달되는지 확인한다.
+6. TUI를 종료한 뒤 page reload 없이 external ownership이 제거되고 일반 web RPC session 동작으로 돌아가는지 확인한다.
+
+위 항목이 모두 정상이면 **이 bridge의 OMP 업데이트 대응**은 끝이다. bridge 자체를 이유로 OMP core를 재패치하지 않고 기존 extension artifact를 계속 사용한다.
+
+실패하면 다음 계약의 변경 여부만 조사한다.
+
+```text
+session_start / session_switch / session_branch / session_tree / session_shutdown
+agent_start / agent_end
+message_start / message_update / message_end
+tool_execution_start / tool_execution_end
+ctx.sessionManager.getSessionId()
+ctx.sessionManager.getLeafId()
+ctx.setTimeout() / ctx.setInterval() / ctx.clearTimer()
+```
+
+계약이 바뀐 경우 OMP 본체를 patch하지 않는다. `extensions/ompweb-live-bridge/`를 새 extension API에 맞게 수정하고 `npm run deploy:local-custom`으로 extension bundle만 다시 배포한다.
+
+### ompweb 업데이트
+
+ompweb 새 버전이 나와도 전역 npm package만 업데이트하면 custom service에는 반영되지 않는다. **custom branch에 working tree 변경이 남아 있을 수 있으므로, dirty 여부와 최신 상태를 확인·보존하지 않은 채 바로 rebase/update하지 않는다.**
+
+업데이트 전 보존 절차:
+
+1. `git status --porcelain=v1 -uall`로 modified/untracked/deleted 파일을 모두 기록한다.
+2. working tree가 dirty면 **최신 상태 전체를 먼저 보존**한다. backup branch의 임시 commit 또는 `git stash push -u`처럼 untracked와 deletion까지 포함하는 방법을 사용하고 식별자를 기록한다. 과거 backup branch만 최신 상태라고 가정하지 않는다.
+3. provenance manifest의 세 목록을 현재 tree와 대조한다.
+   - `sourceFiles`: production `30`개
+   - `testFiles`: regression test `9`개
+   - `removedFiles`: 의도적 삭제 `2`개
+4. manifest의 `sourceFiles`/`testFiles`가 실제로 존재하고 `removedFiles`가 실제로 삭제 상태인지 확인한 뒤 upstream 작업을 시작한다.
+
+재이식 절차:
+
+1. 새 upstream tag/commit을 `/home/user01/project/ompweb`에 준비한다.
+2. 새 upstream에 동등한 external TUI bridge와 아래 9개 bug fix가 들어왔는지 **각각** 먼저 확인한다. upstream에 동등 구현이 있으면 중복 local patch를 제거한다.
+3. 동등 구현이 없으면 manifest의 `sourceFiles`와 `testFiles`를 최신 server/session hook 구조에 의미 단위로 이식하고, `removedFiles`는 새 upstream에서도 obsolete 여부를 재확인한 뒤 삭제 상태를 유지한다.
+4. wire `v: 1` 계약을 바꾸어야 하면 endpoint/schema version을 함께 올린다. 기존 v1 의미를 조용히 재정의하지 않는다.
+5. 다음 아홉 회귀 계약은 bridge 기능과 별개로 반드시 다시 검증한다.
+   - **버그 1:** brand-new web session의 same-ID promotion이 agent SSE를 닫지 않으며 첫 prompt가 60초 connect timeout 경로에 빠지지 않는다.
+   - **버그 2:** web-created session이 stale Tool Preset의 `--tools read,bash,edit,write`를 상속하지 않고 OMP 기본 tool inventory(`task`/`hub`/`todo` 포함)를 사용한다.
+   - **버그 3:** persisted session history GET은 `/observe ready`를 기다리지 않고 즉시 시작하며, ready/change/reset은 initial load 뒤 authoritative resync로 무손실 처리한다. `2000 ms` loading fallback gate를 재도입하지 않는다.
+   - **버그 4:** persisted history가 적용되면 secondary `/state` 완료를 기다리지 않고 loading을 해제하며, session/context/state fetch는 bounded timeout을 가진다. half-open fetch가 `Loading session...`을 무한 유지하게 두지 않는다.
+   - **버그 5:** terminal `agent_end` 또는 settlement/reconcile 완료 뒤 `/api/agent/<id>/events` EventSource를 즉시 닫아 완료된 web RPC session이 장기 connection slot을 계속 점유하지 않는다. `isTerminal === false` delivery는 닫지 않는다.
+   - **버그 6:** hidden tab은 `/api/sessions/<id>/observe` EventSource를 닫고, foreground 복귀 시 dirty+reset fence를 세운 뒤 observer 재구독과 authoritative persisted refresh를 수행한다.
+   - **버그 7:** hidden tab은 sidebar `/api/agent/running/events` EventSource도 닫고, foreground 복귀 시 unread marker와 session list를 authoritative resync한 뒤 running SSE를 다시 연다. loopback HTTP/1.1에서 background 탭 수만큼 running SSE가 누적되지 않아야 한다.
+   - **버그 8:** 같은 OMP RPC child에 동일 `set_host_tools`/`set_host_uri_schemes` payload를 반복 전달하지 않는다. child restart 때만 registration cache를 초기화하고, `xdev-mount-notice`는 OMPWeb 내부 동기화로 처리해 transcript/toast에 노출하지 않는다.
+   - **버그 9:** OMPWeb `MCP informational toasts` UI preference는 기본 Off이며 non-error `MCP`/`xd://`/`xdev` 토스트를 중앙 toast layer에서 suppress한다. MCP error toast는 항상 표시되고, 사용자가 On으로 바꾸면 정보/성공 토스트를 다시 볼 수 있어야 한다.
+6. targeted regression tests, 전체 `npm test`, `npm run typecheck`, production build를 통과시킨다.
+7. 실제 browser/Tailnet smoke에서 session 전환 로딩, 새 session 첫 prompt, `task`/`hub`/`todo`, external TUI live/control을 확인한다. 추가로 Tailnet persisted session 3-tab에서 background `/observe` 해제와 timeout 비재현을 확인하고, loopback HTTP/1.1 persisted session 5-tab에서 background `/api/agent/running/events` 해제와 새 session 8초 timeout 비재현을 반드시 확인한다. Settings의 `MCP informational toasts`가 기본 Off인지 확인하고, Off 상태에서 MCP/xd:// 정보성 토스트는 보이지 않되 실제 MCP error toast는 유지되는지도 확인한다.
+8. `npm run deploy:local-custom`을 실행한다.
+9. 새 manifest의 `upstreamPackage`, `sourceFiles`, `testFiles`, `removedFiles`, extension SHA-256을 확인한다. 현재 기준 inventory가 변했다면 이유와 새 count를 이 문서에 같이 갱신한다.
+10. `tailscale serve status`와 브라우저 Resource Timing을 확인해 `:8444` 운영 URL이 HTTPS이고 `nextHopProtocol`이 `h2`인지 검증한다. source 재배포가 기존 Serve 설정을 HTTP/1.1로 되돌리게 두지 않는다.
+
+### 전역 npm ompweb 업데이트
+
+현재 `ompweb.service`는 `/home/user01/project/ompweb`의 custom build를 실행한다. 따라서 `npm install -g @kahme247/ompweb@latest`만 실행해도 현재 서비스에는 반영되지 않으며, 로컬 custom source의 재이식·검증·배포 절차를 대신하지 않는다.
+
+업데이트 시 특히 다시 확인할 지점:
+
+- Next.js route runtime과 process-global broker 수명
+- session resolver/authorization 변화
+- `useAgentSession`의 web RPC ownership과 terminal reconciliation
+- terminal agent EventSource 조기 해제와 hidden-tab `/observe` suspend/foreground authoritative resync
+- OMP child 단위 host-tool/URI registration idempotency와 restart 시 cache reset
+- `xdev-mount-notice` internal-only 처리, `MCP informational toasts` 기본 Off 및 MCP error toast 유지
+- Tailnet `:8444`의 HTTPS/H2 Serve 계약과 browser `nextHopProtocol=h2`
+- OMP extension event 이름·순서·`ReadonlySessionManager` API
+- assistant message content shape
+- systemd `ExecStart`, Node/Bun 경로
+
+## Rollback
+
+Tailnet HTTPS/H2 전환만 긴급 롤백할 경우:
+
+```bash
+tailscale serve --https=8444 off
+tailscale serve --http=8444 --bg http://127.0.0.1:30177
+```
+
+이 롤백은 과거 HTTP/1.1 다중 탭 connection starvation 조건을 다시 만들 수 있으므로 임시 진단 외에는 권장하지 않는다. 정상 운영 복귀는 다시 `tailscale serve --http=8444 off` 후 `tailscale serve --https=8444 --bg http://127.0.0.1:30177`로 한다.
+
+외부 bridge만 끄기:
+
+```bash
+rm -f ~/.config/systemd/user/ompweb.service.d/live-bridge.conf
+rm -f ~/.omp/agent/extensions/ompweb-live-bridge.js
+systemctl --user daemon-reload
+systemctl --user restart ompweb.service
+```
+
+token은 재활성화를 고려해 남겨도 되며, 완전 폐기할 때만 별도로 삭제한다. 이미 실행 중인 TUI extension은 POST를 계속 시도할 수 있지만 feature flag가 꺼진 server는 `404`로 거부한다. 새 TUI부터는 extension artifact가 없어 로드되지 않는다.
+
+핵심 원칙: **live partial의 권위는 외부 TUI extension snapshot, 완료 이력의 권위는 OMP session JSONL이다. ompweb은 이 권위 경계를 바꾸지 않으며, 외부 TUI 제어는 단일 source에 대한 prompt/steer/follow-up/abort의 제한된 control bridge로만 수행한다.**

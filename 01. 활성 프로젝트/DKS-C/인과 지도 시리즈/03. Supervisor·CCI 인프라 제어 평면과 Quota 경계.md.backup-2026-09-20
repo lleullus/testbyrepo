@@ -1,0 +1,352 @@
+# 03. Supervisor·CCI 인프라 제어 평면과 Quota 경계 — 선언 가능한 생성과 변경 경로는 어디에서 갈라지는가?
+
+## 문서의 목적
+
+이 문서는 Kubernetes 용어를 알고 있지만, DKS-C가 가상 인프라를 어느 제어 평면에 요청하고 그 자원 한도를 어디에서 판단하는지는 따로 연결해 보아야 하는 독자를 위한 설명이다. 중심 질문은 두 가지다. 첫째, CCI와 Supervisor가 `Project`, `VPC`, `SupervisorNamespace`, VM, 스토리지 같은 입력을 어느 계층의 객체로 받아 vCenter·NSX 자원 상태로 바꾸는가? 둘째, 이미 만들어진 `SupervisorNamespace`의 Quota를 바꿀 때 왜 일반 CCI 경로와 vCenter Automation API 경로를 하나의 실행 사슬로 놓을 수 없는가?
+
+현재 참조 자료가 직접 뒷받침하는 구조·동작·제약을 우선 설명한다. DKS-C 가이드에 적힌 CCI의 `SupervisorNamespace` 일반 `update/patch` 미지원은 현재 운영의 전제로 다루되, 실제 대상 VCF/VCFA 버전에서 API가 지원되는지는 다시 확인해야 한다. 특정 요청이 실제로 성공했는지, vCenter 변경이 CCI 읽기 모델에 언제 반영되는지, Quota를 해소한 뒤 CAPI가 자동으로 재시도했는지는 이 문서의 명세만으로 확정하지 않는다.
+
+## 전체 이해 지도
+
+이 지도는 객체 이름을 먼저 나열하는 대신, 어떤 입력이 어느 계층에서 작용하고 무엇을 확인해야 다음 판단으로 넘어갈 수 있는지를 짧은 문장으로 이어간다.
+
+- **CCI와 Supervisor는 같은 객체가 아니라 한 요청을 나누어 맡는 두 제어 계층이다.** CCI(Cloud Consumption Interface)는 여러 Supervisor Cluster에 접근하기 위한 통합 인터페이스로서 Project·VPC·IPBlock·Limit·Supervisor Namespace 등의 원하는 상태를 받는다. Supervisor는 Compute·VPC·Storage를 Kubernetes 리소스로 노출하고 그 원하는 상태를 vSphere·NSX 및 Kubernetes 상태로 조정하는 제어 클러스터이므로, CCI에 매니페스트를 제출했다는 사실은 최종 VM이나 네트워크가 이미 만들어졌다는 뜻이 아니다.
+- **Project와 Supervisor Namespace는 인프라 Tenant의 범위를 잡고, NamespaceClassConfig와 VPC는 그 요청이 사용할 조건을 정한다.** Project는 Supervisor Namespace들을 묶는 권한·테넌시 범위이고, NamespaceClassConfig는 CPU·Memory·Storage의 기본 Quota와 VM Class를 제공한다. VM Class는 VM에 적용할 CPU Core·Memory 사양을 미리 정한 등급이다. VPC는 그 Namespace와 사용자 Cluster에 대응하는 네트워크 자원 범위이며, 사용자 Cluster 안의 Kubernetes `Namespace`와 Supervisor의 `SupervisorNamespace`는 계층과 수명주기가 다르다.
+- **요청을 허용하는 전제는 권한 하나로 끝나지 않는다.** Organization·Project 권한과 올바른 `cci` 또는 Supervisor `k8s` Context, 대상 Supervisor·Region·Zone, NamespaceClassConfig·VM Class, VPC·VPCConnectivityProfile(네트워크 토폴로지 프로필)·IPBlock(주소 범위)·Limit(IP 할당 한도), Storage Policy(저장소 사용 정책)·이미지가 함께 준비되어야 한다. 이 목록은 작업에 필요한 조건이지 이번 요청에서 각각 실제로 사용되었다는 실행 증거가 아니다.
+- **일반 생성·삭제 경로에서는 운영자·포털·자동화가 CRD(Custom Resource Definition)로 원하는 상태를 제출하고, CCI와 Supervisor 계층이 이를 하부 자원 상태로 조정한다.** CCI는 참조와 권한을 확인한 뒤 Supervisor 및 인프라 제공 계층에 요청하고, Supervisor·vCenter·NSX는 Namespace·VM·Storage·VPC 상태와 status·이벤트를 남긴다. 사용자 Cluster를 만드는 경우 CAPI(Cluster API)가 Cluster·Machine 계층을 조정하지만, 컨트롤러가 상태를 반복 관찰하므로 이 흐름은 하나의 동기식 함수 호출이나 항상 고정된 선후가 아니다.
+- **Quota는 하나의 숫자가 아니라 서로 다른 범위에서 허용되는 자원 상한과 그 사용량 집계다.** Namespace의 CPU·Memory 사양, Storage Policy별 `StorageQuota`(정책별 저장소 한도), CCI Zone(Region 안에서 CPU·Memory를 집계하는 단위)의 CPU·Memory 집계, Region StorageClass 총량, VPC의 External-IP `Limit`가 각각 다른 객체에 나타난다. NamespaceClassConfig에서 입력 사양을 준비하는 것과 Zone·Region에서 사용량을 집계하는 것은 다른 작용이며, CAPI가 Worker 수를 늘리려는 선언도 Quota를 자동으로 늘리는 작용이 아니다.
+- **새 객체를 만드는 요청과 이미 존재하는 Namespace의 Quota 변경 요청은 공통 전제에서 서로 다른 분기로 갈라진다.** 가이드는 `SupervisorNamespace`를 생성·삭제 중심의 객체로 설명하고 일반 `update/patch`를 지원하지 않는다고 기록한다. 따라서 기존 Namespace의 CPU·Memory·Storage 한도 변경은 일반 생성 경로의 다음 단계로 이어 붙이지 말고, 대상 릴리스에서 CCI 변경 operation이 실제로 지원되는지 먼저 판별해야 한다.
+- **지원되지 않거나 확인되지 않은 경우에는 곧바로 PATCH하는 것이 아니라 승인된 예외 경로의 조건을 먼저 갖춘다.** 승인된 인프라 운영자 또는 권한을 위임받은 자동화가 CCI와 vCenter에서 랜덤 suffix를 포함한 Namespace를 교차 식별하고, vCenter Automation API가 요구하는 `namespace_id`와 `UpdateSpec`(변경 필드 구조)의 schema·권한을 확인한 뒤에만 최소 변경을 검토한다. Cluster 이름이나 문자열 규칙만으로 대상을 조합하지 않는다.
+- **예외 PATCH는 지정한 Quota 필드만 단위에 맞추어 바꾸고, 응답보다 read-back(변경 뒤 다시 읽는 확인)을 더 넓게 확인해야 한다.** `PATCH /api/vcenter/namespaces/instances/{namespace_id}`의 `resource_spec`(CPU·Memory·전체 Storage 사양)과 필요한 `storage_specs`(Storage Policy별 사양)에는 CPU MHz, Memory·Storage MiB, API가 요구하는 Storage Policy ID를 사용한다. vCenter 상세 GET에서 목표 값이 읽힌 뒤에도 Supervisor/CCI status·Quota 집계·이벤트가 같은 대상과 상태를 보이는지 대조하고, 값이 어긋나면 추가 PATCH나 CAPI 재시도를 진행하지 않는다.
+- **CAPI 증설의 재개는 Quota 값이 바뀌었다는 사실이 아니라 후속 관측으로 판정한다.** VM admission(새 VM 생성 허용 판단)이 더 이상 Quota 때문에 거부되지 않고 Machine·MachineDeployment·KubeadmControlPlane 또는 VM의 새 condition/event가 보일 때에만 자동 재조정이나 기존 retry가 실제로 진행 중이라고 말할 수 있다. 원자료에는 CCI와 vCenter의 자동 동기화나 모든 실패 상태에서의 CAPI 자동 재개 계약이 없으므로, 그런 관측이 없으면 승인된 runbook이나 추가 조사가 필요하다고 남긴다.
+- **04번의 플랫폼 관리 평면 배치는 이 Quota 분기의 후속 장애가 아니라 같은 기반 위의 독립적인 책임 질문이다.** 03번은 인프라 객체를 선언·조정하고 Quota 변경을 검증하는 공통 제어 메커니즘을 닫으며, 04번은 Console·Gateway·Monitoring·Logging·DevOps 기능을 어느 전용 Cluster에 둘지 설명한다. 01·02번은 이 기반을 소비하는 테넌시·프로비저닝·네트워크 질문이지만 문서를 읽는 순서가 시스템 실행 순서를 뜻하지는 않는다.
+
+## 1. Supervisor와 CCI는 무엇을 제어하는가: 계층·권한·구조
+
+이 장의 질문은 “인프라를 선언하는 입력은 어느 API에 제출되고, 각 주체는 어디까지 조정할 수 있는가?”이다. DKS-C 자료에서 Supervisor는 Compute·VPC·Storage 같은 인프라를 CRD로 관리하는 Kubernetes 제어 클러스터이고, CCI는 여러 Supervisor Cluster에 접근하는 통합 인터페이스다. 따라서 두 이름을 하나의 객체명처럼 읽지 말고, CCI가 제공하는 접근·추상화와 Supervisor가 실제 상태를 조정하는 계층을 함께 보아야 한다.
+
+### Supervisor, CCI, VCF 계층
+
+VCF 인프라 아키텍처는 Workload Domain(WLD)이 Region과 관계를 이루고, 하나의 Region 아래에 여러 Zone이 있을 수 있다고 설명한다. Supervisor는 이 가상화 범위에서 Compute·VPC·Storage를 Kubernetes 리소스로 노출하는 기반 제어 클러스터다. VCF CLI 가이드의 `cci` Context는 여러 Supervisor Cluster를 하나의 접근면으로 묶고, `k8s` Context는 Supervisor 또는 VKS Kubernetes API에 접근하는 경로로 구분된다. 따라서 `cci`에서 보는 CCI 객체와 Supervisor의 `k8s` 객체는 같은 API 범위로 간주할 수 없다.
+
+CCI의 역할은 vCenter·NSX 내부 API를 사용자가 직접 조합하지 않고 Project, VPC, IPBlock, Limit, Supervisor Namespace 같은 CRD 형태로 원하는 상태를 제출하게 하는 것이다. 여기서 원하는 상태는 “이 자원을 이 사양으로 두고 싶다”는 요청이며, 컨트롤러는 그 상태와 실제 상태의 차이를 관찰해 조정을 시도한다. 이 추상화가 실제 자원 생성·삭제와 상태 조정으로 이어지려면 대상 Organization과 Context 권한, Supervisor·Region·Zone, 참조 정책·클래스가 먼저 존재해야 한다.
+
+### 권한이 나뉘는 지점
+
+VCF CLI 운영 가이드의 권한 표는 같은 인프라를 보더라도 CCI·Supervisor·사용자 Cluster에서 책임 범위가 달라진다는 경계를 제시한다.
+
+| 주체·Context | 확인된 범위 | 이 문서에서의 의미 |
+|---|---|---|
+| Organization Admin · CCI | Organization(WLD) 범위의 Computing, VPC, Storage 라이프사이클과 VPC·Limit·IPBlock·Load Balancer, Supervisor NamespaceClass·Region·Zone 관리 | 인프라 소비 범위와 상위 CCI 객체를 다루는 주체 |
+| Organization User · Supervisor | VKS Cluster 라이프사이클과 Supervisor Namespace별 권한, CAPI CRD·VirtualMachine·VirtualMachineService·VSphereMachine 사용 | 이미 할당된 인프라 범위에서 클러스터 객체를 조정하는 주체 |
+| Cluster Admin · Supervisor Namespace CCI | 할당된 Supervisor Namespace 범위의 Cluster 라이프사이클 | DKS-C에서는 사용자에게 제공하지 않는 관리 범위 |
+| Cluster User · VKS Cluster | 프로비저닝된 사용자 Cluster의 운영 | 인프라 Quota를 바꾸는 주체와 분리된 소비자 범위 |
+
+이 표는 권한을 가진 주체가 특정 변경을 실제 수행했다는 증거가 아니다. Organization User가 CAPI 객체를 조정할 수 있다는 사실만으로 CCI의 `SupervisorNamespace` Quota를 수정할 수 있다고 결론 내릴 수 없다. 해당 Quota의 변경 권한, 대상 API의 operation 지원 여부, 현재 객체 상태는 별도로 확인해야 한다. 특히 CCI Context Token과 vCenter Namespace PATCH 권한은 같은 자격 범위라고 가정하지 않는다.
+
+### CCI 객체와 구조적 관계
+
+CCI 가이드의 주요 객체는 서로 다른 범위와 질문을 가진다. 아래에서 “구조”는 객체가 무엇을 포함·식별하는지, “조건”은 다음 요청을 허용하기 위해 참조되는지를 뜻한다.
+
+| 객체 | 범위와 역할 | 이 장에서 확인할 작용 |
+|---|---|---|
+| `Project` | Supervisor Namespace를 묶는 Tenant·권한 범위. DKS Platform에서는 재활용되는 것으로 기술됨 | Namespace와 권한을 어느 상위 범위에서 식별하는지 정함 |
+| `ProjectRole` / `ProjectRoleBinding` | 사전 정의 Role과 User/Group의 바인딩 | Project 범위에서 어떤 사용자가 요청을 제출·관리할 수 있는지 조건을 제공함 |
+| `SupervisorNamespaceClass` / `SupervisorNamespaceClassConfig` | Namespace의 추상화와 CPU·Memory·Storage Quota, 기본 VM Class 사양 | Namespace 생성 시 사용할 기본 자원 사양과 Class를 제공함 |
+| `SupervisorNamespace` | Quota를 지정할 수 있는 최소 Tenant 단위. CCI 가이드에서 생성·삭제 중심으로 기술됨 | Supervisor에서 인프라 Tenant·Quota·Cluster 대응을 식별함 |
+| `VPC` | VPC 자원 범위. CCI 가이드에서 `SupervisorNamespace:VPC:Cluster = 1:1:1`로 기술됨 | Namespace와 Cluster가 사용할 NSX/VCF 네트워크 범위를 정함 |
+| `IPBlock` / `Limit` | Private·Private TGW·External IP 범위와 IP 할당 정책 | VPC의 IP 범위·할당 조건을 제공함 |
+| `VPCAttachment` / `VPCConnectivityProfile` | VPC와 네트워크 토폴로지 프로필의 연결 | VPC 연결이 어떤 프로필을 참조하는지 정함 |
+| `VirtualMachine` 및 Storage 관련 객체 | Supervisor 범위의 VM·영구 저장소 요청과 상태 | Namespace·Class·Policy 조건을 실제 VM/PVC 상태로 변환함 |
+
+`SupervisorNamespace`는 사용자 Cluster 내부의 Kubernetes `Namespace`와 다르다. 전자는 Supervisor에서 인프라 Tenant와 Quota를 식별하는 객체이고, 후자는 이미 만들어진 사용자 Cluster 안에서 애플리케이션 API 범위를 나눈다. 두 이름이 비슷하다는 이유로 권한·수명주기·Quota를 합쳐 설명하지 않는다.
+
+### 1:1:1 관계가 의미하는 범위
+
+CCI 가이드의 `VPC : Supervisor Namespace : VKS = 1:1:1`은 하나의 사용자 Cluster와 하나의 Supervisor Namespace, 하나의 VPC를 대응시키는 구조적 규칙이다. `VPC : Limit = 1:1`은 VPC와 IP 할당 정책의 대응을, `Supervisor Namespace : NamespaceClass = 1:1`은 Namespace가 참조하는 기본 사양의 대응을 나타낸다. 이 관계는 어떤 객체가 같은 테넌시 경계를 식별하는지 알려 주지만, 패킷이 항상 특정 방화벽을 통과한다거나 공통 하이퍼바이저·스토리지·인증 계층까지 분리된다는 효과를 보장하지 않는다. 네트워크 경로와 정책은 02번의 병렬 질문이며, 실제 효과는 별도 설정·흐름 증거가 필요하다.
+
+따라서 이 장의 답은 CCI가 권한이 부여된 Organization·Project 범위에서 인프라 객체를 선언하는 통합 인터페이스이고, Supervisor가 그 객체와 Kubernetes·vSphere 자원 상태를 조정하는 제어 계층이라는 것이다. Project라는 상위 범위 아래 Namespace·VPC·Cluster의 1:1 관계는 경계 구조를 설명하지만, 어떤 객체의 모든 속성이 이후에 수정 가능하다는 뜻은 아니다. 실제 생성·변경을 판단하려면 다음 장의 입력·변환과 상태 증거를 이어서 확인해야 한다.
+
+## 2. 일반 생성·삭제·관리 경로는 어떻게 실행되는가: CRD 입력에서 인프라 상태까지
+
+이 장의 질문은 “새 Namespace·VPC·VM 또는 사용자 Cluster를 요청할 때, 누가 무엇을 어떤 상태로 바꾸는가?”이다. 출발점은 승인된 Project와 권한, 준비된 Supervisor·Region·Zone, NamespaceClassConfig·Storage Policy·VM Class 같은 참조 자원이다. `kubectl apply`는 최종 VM을 직접 만드는 명령이 아니라 CCI와 Supervisor 컨트롤러가 읽을 desired state를 제출하는 입력이다. desired state는 최종적으로 원하는 객체 사양이며, 실제 자원이 그 상태에 도달했는지는 별도 status·이벤트로 확인한다.
+
+### 실행을 허용하는 조건
+
+일반 경로에 들어가기 전에 다음 조건을 각각 확인한다. 한 조건의 존재는 다른 조건이 충족되었다는 뜻이 아니며, 아래 표는 사전 의존성과 실패 시 해석을 분리한다.
+
+| 조건 | 확인할 내용 | 빠졌을 때의 판단 |
+|---|---|---|
+| Context·권한 | `cci` Context와 Organization Admin 또는 해당 Project Role, 대상 Supervisor Context의 권한 | API 호출이 거부되거나 일부 객체만 조회될 수 있음 |
+| 대상 Supervisor·Region·Zone | 대상 WLD와 Supervisor, Region, Zone이 사용 가능하고 상태가 정상인지 | Namespace·VM 배치 요청이 실행될 기반이 없음 |
+| Namespace 사양 | `SupervisorNamespaceClass`와 `SupervisorNamespaceClassConfig`, 기본 VM Class, CPU·Memory·Storage 규칙 | Namespace 생성 입력을 완성할 수 없음 |
+| 네트워크 사양 | VPC, VPCConnectivityProfile, IPBlock, Limit, VPCAttachment의 참조와 여유 | VPC·External IP 요청을 실체화할 조건이 부족함 |
+| 저장소·이미지 | Storage Policy, Content Library 또는 VM 이미지가 대상 Supervisor에서 사용 가능함 | VM·PVC 생성이 정책 또는 이미지 단계에서 멈출 수 있음 |
+| 후속 클러스터 계층 | CAPI·ArgoCD·BootstrapData·대상 Cluster API와 Addon 배포 권한 | 인프라 생성과 사용자 Cluster 완료를 같은 결과로 판단할 수 없음 |
+
+이 조건들은 “실제로 모두 사용되었다”는 실행 기록이 아니라 각 작업을 허용하는 사전 의존성이다. 예를 들어 `RegionStorageClassQuota`가 남아 있어도 특정 Supervisor Namespace의 `storage_specs`가 충분하다는 뜻은 아니다. 반대로 Namespace 사양이 존재해도 실제 VM 생성은 Zone·Region·Storage 여유와 admission 결과를 더 확인해야 한다.
+
+### CCI 입력이 하부 상태로 변환되는 방식
+
+다음 표는 요청이 어떤 계층에서 읽히고 어느 관측 지점으로 이어지는지를 보여준다. 각 행은 하나의 동기식 함수 호출이 아니라, 각 컨트롤러가 상태를 관찰하고 조정하는 경계다.
+
+| 행위자·계층 | 입력 | 변환·조작 | 산출물·관측 지점 |
+|---|---|---|---|
+| 운영자·포털·자동화 | Project, NamespaceClass, VPC, Quota, Storage Policy, VM/Cluster 사양 | 권한이 있는 Context에 CRD 매니페스트 또는 API 요청을 제출 | 생성·변경을 요구하는 desired state |
+| CCI | Project·Role·VPC·IPBlock·Limit·Supervisor Namespace 객체 | 참조·권한·필드를 검증하고 대상 Supervisor 및 인프라 제공 계층에 조정 요청 | CCI 객체의 `status`, 이벤트, 하부 요청 상태 |
+| Supervisor·VM/Storage 계층 | Namespace 사양, VM Class, Storage Policy, 네트워크 입력 | Namespace·VM·Storage 요청을 vSphere 자원과 Kubernetes 상태로 변환 | Supervisor 자원, VM/PVC 관련 상태, Quota 집계 |
+| NSX 계층 | VPC, IPBlock, Limit, Connectivity Profile, Attachment | VPC 토폴로지와 IP 할당 범위를 생성·연결하고 상태를 노출 | VPC·Limit·IP 사용량 및 네트워크 상태 |
+| CAPI 계층(사용자 Cluster 작업 시) | `Cluster`, `ClusterClass`, Machine·Bootstrap 관련 객체와 사용 가능한 Namespace/VPC | Control Plane·Worker VM과 부트스트랩 객체를 조정 | Machine·MachineDeployment·Cluster condition, VM 상태 |
+| 후속 Addon·Portal 계층 | kubeconfig·etcd Secret, `networkInfos`, Addon 정의 | 대상 Cluster에 Addon을 적용하고 접속·SNAT 정보를 Portal 데이터로 변환 | Addon health, Console 응답, 엔드포인트 정보 |
+
+CCI가 확인한 요청은 Supervisor·vCenter·NSX의 자원 상태로 이어질 수 있지만, 표의 다음 행이 설명 순서대로 즉시 실행된다는 뜻은 아니다. 컨트롤러는 상태를 반복 관찰하며, 일부 VM·Control Plane·Worker 및 Addon 작업은 병렬로 진행될 수 있다. 어느 행이 실제로 실행되었는지는 해당 객체의 상태·이벤트와 접속·권한·Quota 조건을 기준으로 판단한다.
+
+### 생성·삭제와 변경을 구분하기
+
+CCI 가이드가 설명하는 `SupervisorNamespace` 수명주기는 생성·삭제 중심이다. NamespaceClassConfig는 CPU·Memory·Storage의 기본 사양과 VM Class를 제공하고, 생성 시 Namespace가 그 범위에서 Quota를 갖는다. 이미 생성된 Namespace의 일반 `update/patch`는 같은 가이드에서 지원되지 않는 것으로 기록되어 있다. 그러므로 다음 네 요청을 한 경로의 연속 단계로 합치지 않는다.
+
+- 새 `SupervisorNamespace`와 VPC를 선언하고 자원을 만드는 작업
+- 기존 Namespace의 CPU·Memory·Storage 한도를 바꾸는 작업
+- VPC의 `Limit` 또는 External IP 할당량을 바꾸는 작업
+- 사용자 Cluster의 Machine을 증설하거나 교체하는 작업
+
+각 작업은 서로 다른 객체·권한·상태를 갖는다. 특히 CAPI가 Worker 수를 늘리는 선언을 제출했다는 사실은 Namespace Quota가 자동으로 늘어났다는 뜻이 아니다. 일반 경로에서 확인할 수 있는 것은 제출된 desired state와 조정 결과이며, 기존 Quota의 변경은 다음 장에서 지원 여부를 판별하는 별도 분기다.
+
+## 3. Quota는 어디에서 고정되고 어디에서 분기되는가: Namespace·Region·Zone의 경계
+
+이 장의 질문은 “Quota를 어느 객체가 소유하고, 어떤 값이 기존 Namespace 변경을 막는가?”이다. CCI 가이드는 NamespaceClass에서 Quota 사양을 상속·참조하고 `SupervisorNamespace`를 Quota 지정의 최소 Tenant 객체로 설명한다. 동시에 CPU·Memory 집계, Storage Policy별 한도, Region·Zone 집계, External IP Limit이 서로 다른 객체에 나타나므로 이 값을 하나의 숫자나 하나의 API로 취급하면 안 된다.
+
+### Quota 계층과 관측 단위
+
+| 자원 | 설정·대상 객체 | 집계·상태 객체 | 해석 시 주의 |
+|---|---|---|---|
+| CPU·Memory | `SupervisorNamespaceClassConfig`와 `SupervisorNamespace`의 `resource_spec` 범위 | CCI `Zone`(`topology.cci.vmware.com`) 및 Namespace status의 zone 정보 | 가이드는 CPU·Memory 사양을 Zone과 무관하게 지정한다고 적는 한편 Zone 단위 사용량·한도 집계도 설명한다. **할당 입력**과 **관측 집계 축**을 분리해야 한다. |
+| Storage | Namespace의 Storage Policy별 설정, `SupervisorNamespaceClassConfig`의 기본값 | `StorageQuota`, `StoragePolicyQuota`, `StoragePolicyUsage`, Region `RegionStorageClassQuota` | Storage는 Policy별 한도와 Region 총량을 별도로 본다. Namespace에서 ClassConfig의 Storage 값을 일반 override할 수 없다. |
+| External IP | `IPBlock`, `Limit`, VPC의 `spec.limitNames` | `LimitState`, `VPCLimitState`, `VPCIPAddressUsage`, `IPBlockUsage` | Namespace의 CPU·Memory·Storage PATCH로 External IP Quota가 바뀌지 않는다. |
+| VM Class·노드 디스크 | VM Class와 Cluster/Machine 사양 | VM·Machine·Storage 상태 | VM 수를 늘리는 선언은 Namespace·Region·Storage 여유 조건을 소비한다. 실제 생성 여부는 이벤트·condition으로 판정한다. |
+
+CCI `Zone`의 API group은 `topology.cci.vmware.com`이고, Supervisor Context에서 보이는 `topology.tanzu.vmware.com` Zone과 다르다. 같은 “Zone”이라는 이름만 보고 두 객체를 섞으면 CPU·Memory 상태를 잘못된 범위에서 읽게 된다. 또한 Namespace 입력의 CPU·Memory Quota와 Zone의 사용량 집계는 같은 값의 다른 표기가 아니라, 지정 단위와 관측 범위가 다른 두 판단이다.
+
+Quota를 읽는 명령은 값을 바꾸지 않고 현재 범위의 상태를 조회한다. External IP는 `SupervisorNamespace → VPC → Limit → LimitState`로 이어지는 객체를 차례로 읽는다.
+
+```bash
+kubectl get svns ${SVNS} -n ${PROJECT} -o jsonpath="{.spec.vpcName}"
+kubectl get vpc ${VPC} -o jsonpath="{.spec.limitNames[0]}"
+kubectl get limitstate ${LIMIT} -o jsonpath="{.quota.usage}"
+```
+
+CPU·Memory는 CCI API group의 Region 소속 Zone 목록과 해당 Zone의 limit·사용량을 각각 확인한다.
+
+```bash
+kubectl get zone --field-selector="spec.regionName=${REGION}"
+kubectl get zone ${ZONE} -o jsonpath="{.spec.cpuLimit}"
+kubectl get zone ${ZONE} -o jsonpath="{.status.cpuUsed}"
+kubectl get zone ${ZONE} -o jsonpath="{.spec.memoryLimit}"
+kubectl get zone ${ZONE} -o jsonpath="{.status.memoryUsed}"
+```
+
+Storage는 Region의 StorageClass별 총량과 Namespace의 Policy별 상태를 따로 읽는다.
+
+```bash
+kubectl get regionstorageclassquota --field-selector="spec.regionName=${REGION}"
+kubectl get ${NAME} -o jsonpath="{.spec.storageCapacity}"
+kubectl get ${NAME} -o jsonpath="{.status.storageConsumed}"
+```
+
+Supervisor Namespace 안에서 보이는 Storage Policy와 Zone별 CPU·Memory 사양도 별도로 확인한다.
+
+```bash
+kubectl get svns ${SVNS} -n ${PROJECT} -o jsonpath="{.status.storageClasses[0].name}"
+kubectl get svns ${SVNS} -n ${PROJECT} -o jsonpath="{.status.storageClasses[0].limit}"
+kubectl get svns ${SVNS} -n ${PROJECT} -o jsonpath="{.status.zones[0].cpuLimit}"
+kubectl get svns ${SVNS} -n ${PROJECT} -o jsonpath="{.status.zones[0].memoryLimit}"
+```
+
+### CCI에서 확인되는 변경 경계
+
+CCI 가이드의 제한사항은 다음 세 가지를 직접 구분한다.
+
+1. `SupervisorNamespace`는 생성·삭제 중심의 객체이며 일반 `update/patch`가 지원되지 않는다.
+2. CPU·Memory·Storage 사양은 NamespaceClassConfig에서 준비되지만, Storage Quota는 Supervisor Namespace에서 override할 수 없다.
+3. VCFA의 Supervisor Namespace Quota 변경 기능은 가이드에 “VCF 9.1에서 적용 예정”으로 기록되어 있고, vSphere Automation API(vCenter API)와 필요한 vCenter 권한을 통한 변경 가능성이 별도로 적혀 있다.
+
+이 기록을 제품 전체의 영구적 불변성으로 확대하지 않는다. DKS-C가 사용하는 VCFA/VCF 버전과 CCI 서비스가 실제로 `update/patch` operation을 노출하는지는 대상 환경에서 확인할 조건이다. 지원 여부가 확인되기 전에는 CCI 매니페스트에 수정된 `SupervisorNamespace`를 넣어 성공할 것이라고 가정하지 않는다.
+
+### 두 작업 경로가 갈라지는 판별표
+
+| 요청 | 먼저 확인할 것 | 사용 가능한 기본 경로 | 변경 후 확인 |
+|---|---|---|---|
+| 새 VPC·Namespace·VM 생성 | 권한·ClassConfig·Policy·IPBlock·Limit·Region/Zone | CCI CRD → Supervisor/vCenter/NSX 조정 | CRD status·이벤트·하부 자원 상태 |
+| 기존 VPC·Limit의 IP 사용량 정책 변경 | Limit/권한/API 버전과 현재 소비량 | CCI의 VPC·Limit 경로(환경별 지원 확인) | Limit·LimitState·VPCIPAddressUsage 대조 |
+| 기존 Namespace CPU·Memory Quota 변경 | 대상 릴리스에서 CCI update/patch 지원 여부 | 지원 확인 시 CCI 경로, 아니면 승인된 vCenter 예외 경로 | vCenter Namespace GET와 Supervisor Namespace status |
+| 기존 Namespace Policy별 Storage Quota 변경 | PVC·VKS 사용 여부, Storage Policy ID, API schema | 지원 확인 시 CCI 경로, 아니면 승인된 vCenter 예외 경로 | `storage_specs`, StorageQuota/Usage, VM/PVC 상태 |
+| Quota 초과 상태에서 CAPI Worker 증설 | VM admission 오류와 CAPI condition | Quota 해소 후 CAPI controller의 재조정 관찰 | VM 생성 이벤트·Machine condition·노드 Ready |
+
+여기서 “지원되지 않거나 확인되지 않음”은 즉시 PATCH하라는 명령이 아니다. 승인된 변경 권한과 실행 계획, 영향 범위, read-back 방법이 준비된 경우에만 4장의 예외 경로를 적용한다. VPC의 External-IP `Limit`와 Namespace CPU·Memory·Storage Quota는 각각 다른 객체에서 판정되므로, 한 값을 늘려 다른 부족이 해결되었다고 추정하지 않는다.
+
+### Quota 부족이 증설 경로에 미치는 영향
+
+CAPI가 Worker 또는 Control Plane 수를 desired 값으로 계산해도, 새 VM의 OS 디스크와 Memory·CPU 요청이 Namespace·Storage Policy·Region/Zone 여유를 넘어가면 하부 VM 생성이 허용되지 않을 수 있다. 이때 문서에서 확정할 수 있는 것은 “Quota 조건이 충족되지 않으면 증설 작업이 자원 생성 단계에서 진행되지 않을 수 있다”는 메커니즘까지다. 실제로 `QuotaExceeded`, admission 거부, `Provisioning` 고착, 재시도 횟수 중 무엇이 발생했는지는 VM·CAPI 이벤트와 condition으로 확인한다.
+
+따라서 이 장의 답은 Quota가 Namespace 하나에만 있는 단일 값이 아니라 NamespaceClass/Namespace, Storage Policy, Region·Zone, VPC·Limit로 나뉜 구조라는 것이다. CCI 경로에서 생성·삭제와 Quota 변경의 지원 범위가 다르므로 기존 Namespace Quota 요청은 별도의 지원 여부 판별을 거쳐야 한다. CCI `update/patch`가 확인되지 않은 환경에서는 vCenter PATCH를 정상 선언 경로의 다음 단계가 아니라 조건부 예외 경로로 다룬다.
+
+## 4. vCenter PATCH 예외 경로는 어떻게 작동하는가: 행위자·입력·조작·출력
+
+이 장의 질문은 “CCI에서 기존 Namespace Quota를 바꿀 수 없을 때, 운영자는 어떤 Namespace를 어떤 필드로 변경하고, 변경이 실제 제어 평면에 반영되었는지 어떻게 판단하는가?”이다. 로컬 CCI 가이드는 vSphere Automation API 사용 가능성과 vCenter 권한 필요성을 확인하지만, 실행 대상 ID·필드 값·동기화 완료 시각은 제공하지 않는다. 아래 절차는 그 빈칸을 추측으로 채우지 않고, 공식 vSphere Automation API의 endpoint·UpdateSpec 구조와 DKS-C의 CCI 조회 정보를 결합해 검증 가능한 운영 경로로 정리한 것이다.
+
+### 행위자와 권한
+
+실제 PATCH 수행자는 일반 사용자나 CAPI controller가 아니라 **승인된 인프라 운영자 또는 그 권한을 위임받은 자동화**다. vSphere 공식 문서는 기존 Namespace 설정 변경에 Supervisor의 `Namespaces.Configure` 권한이 필요하다고 설명한다. DKS-C의 CLI 권한 표와 vCenter 접속 정보는 Organization Admin·Supervisor 관리 권한을 별도 범위로 두므로, CCI Context Token을 가진 것만으로 vCenter Namespace PATCH 권한이 생긴다고 가정하지 않는다.
+
+운영자는 실행 전에 다음을 같은 변경 기록에 남긴다.
+
+- 변경 사유, 승인 번호, 대상 WLD·vCenter·Supervisor
+- 현재 Quota와 목표 Quota, 단위 변환 근거
+- 대상 Namespace의 CCI 이름·Project·VPC·Cluster 매핑
+- API 버전과 `UpdateSpec` schema 확인 결과
+- 변경 전 vCenter·CCI·Supervisor·CAPI 상태와 read-back 계획
+
+자격증명·세션 토큰·비밀번호는 이 문서나 명령 예시에 복사하지 않는다. vSphere Automation 인증은 대상 환경의 SSO·토큰 정책에 따르고, PATCH 요청에는 승인된 세션과 TLS 검증 설정을 사용한다.
+
+### 대상 Namespace를 식별하는 방법
+
+Namespace 이름은 Cluster 이름과 같다고 가정할 수 없다. CCI 가이드는 Namespace가 Cluster 이름 뒤에 **지정할 수 없는 랜덤 문자 5자리**를 포함한다고 설명한다. 따라서 이름을 추측해 PATCH하지 않고 다음 순서로 세 계층의 대상을 교차 식별한다.
+
+| 순서 | 확인 입력·방법 | 판정할 내용 |
+|---:|---|---|
+| 1 | CCI Context에서 `v get svns`와 Project 범위 조회 | `PROJECT`, `NAME`, `CLUSTER`, `REGION`, `CLASS`, `VPC`를 확인한다. 대상 Cluster와 Namespace의 CCI 이름을 기록한다. |
+| 2 | Supervisor Namespace 객체의 metadata·status 조회 | `metadata.name`, Project, VPC, Class, quota status가 1단계 기록과 일치하는지 확인한다. 이름을 추측해 새 객체를 만들지 않는다. |
+| 3 | vCenter Namespace inventory 조회 | `GET https://<vcenter_ip_or_fqdn>/api/vcenter/namespaces/instances`로 목록을 확인하고, Supervisor cluster·namespace 이름을 CCI 기록과 대조한다. |
+| 4 | vCenter 상세 조회 | `GET https://<vcenter_ip_or_fqdn>/api/vcenter/namespaces/instances/<namespace_id>`의 `cluster`, `resource_spec`, `storage_specs`와 대상 기록을 대조한다. |
+| 5 | 불일치 시 중지 | Cluster 이름만 일치하거나 WLD 명칭이 혼재하면 PATCH하지 않는다. 운영 현황에 기록된 `kh-prd-ia-wld01`·`kh-prd-ai-wld01` 표기도 실제 VCFA/vCenter 조회로 확정해야 한다. |
+
+여기서 `<namespace_id>`는 vCenter API가 요구하는 식별자다. 목록의 이름과 CCI `metadata.name`이 일치하는지, `cluster`가 대상 Supervisor인지 확인한 뒤 사용한다. Namespace suffix가 랜덤이라는 사실은 이 대조 절차가 필요한 이유이지, 문자열을 임의로 조합할 근거가 아니다.
+
+### PATCH endpoint와 UpdateSpec 필드
+
+Broadcom의 vSphere Automation REST 문서는 기존 Namespace 일부 설정만 바꿀 때 다음 endpoint에 `UpdateSpec` JSON을 제출한다고 설명한다.
+
+```http
+PATCH https://<vcenter_ip_or_fqdn>/api/vcenter/namespaces/instances/<namespace_id>
+Content-Type: application/json
+vmware-api-session-id: <approved-session>
+```
+
+Quota 목적의 request body는 대상 API schema와 변경 범위에 맞춰 최소 필드만 포함한다. 아래 값은 예시 자리표시자이며 실제 숫자·Policy ID를 자료 없이 채우지 않는다.
+
+```json
+{
+  "resource_spec": {
+    "cpu_limit": <CPU_LIMIT_MHZ>,
+    "memory_limit": <MEMORY_LIMIT_MIB>,
+    "storage_request_limit": <AGGREGATE_STORAGE_LIMIT_MIB>
+  },
+  "storage_specs": [
+    {
+      "policy": "<VSPHERE_STORAGE_POLICY_ID>",
+      "limit": <POLICY_LIMIT_MIB>
+    }
+  ]
+}
+```
+
+필드의 의미와 단위는 다음과 같다.
+
+| JSON 위치 | 조작 대상 | 단위·조건 |
+|---|---|---|
+| `resource_spec.cpu_limit` | Namespace의 CPU limit | 공식 Namespace API 문서의 CPU 단위는 MHz이다. CCI `v get quota`가 GHz로 표시하면 API payload 전에 단위를 변환한다. |
+| `resource_spec.memory_limit` | Namespace의 Memory limit | MiB. GiB 표기를 그대로 보내지 않고 대상 API schema 단위로 변환한다. |
+| `resource_spec.storage_request_limit` | Namespace 전체 Storage request limit | MiB. 대상 VCF/VCFA API 버전이 이 필드를 노출하는지 schema와 GET 결과로 확인한 뒤 사용한다. |
+| `storage_specs[].policy` | Namespace에 연결된 vSphere Storage Policy | 사람이 읽는 Policy 이름이 아니라 API가 요구하는 Policy ID를 사용한다. |
+| `storage_specs[].limit` | 해당 Policy의 Namespace Storage limit | MiB. 여러 정책을 쓰면 각 정책 항목과 실제 PVC/VKS 사용 관계를 함께 확인한다. |
+
+`UpdateSpec`은 지정한 설정만 적용하고 생략한 설정은 유지하는 부분 변경 모델이다. 따라서 변경하지 않을 `access_list`, `vm_service_spec` 등을 불필요하게 재작성하지 않는다. `storage_specs`를 조작할 때에는 현재 GET 결과와 대상 API의 배열 처리 규칙을 확인하고, 유지해야 할 Storage Policy를 누락하지 않는다. Policy를 삭제하거나 할당을 낮추기 전에는 해당 Namespace에서 그 StorageClass를 사용하는 PVC와 VKS Cluster가 없는지 확인하라는 공식 문서의 조건도 지킨다. 이 조건을 확인하지 않은 낮춤은 Quota 숫자만 바꾸는 작업이 아니라 기존 소비자의 후속 상태를 바꿀 수 있는 요청이 된다.
+
+Namespace 전체 설정을 `SetSpec`으로 다시 쓰는 `PUT`은 부분 Quota 변경과 다른 작업이다. 이 문서의 예외 경로는 영향 범위를 좁히기 위해 `PATCH`와 `UpdateSpec`을 기본으로 하며, PUT으로 넓히지 않는다.
+
+### PATCH 후 상태 일관성을 확인하는 변환 경로
+
+PATCH의 입력·작용·출력을 한 번에 “성공”이라고 묶지 않고 다음 순서로 기록한다.
+
+1. **입력 기록:** 운영자 또는 승인 자동화가 교차 식별한 `namespace_id`와 목표 `resource_spec`·`storage_specs`를 제출한다. 이 단계는 변경 요청의 입력을 남기는 단계다.
+2. **vCenter 작용:** vCenter Namespace service가 `UpdateSpec`에 지정된 필드만 기존 Namespace 설정에 반영한다. HTTP 성공 응답은 이 요청이 API 계층에서 처리되었다는 관측이지, 다른 계층까지 반영되었다는 증거가 아니다.
+3. **vCenter 출력 read-back:** Namespace 상세 GET의 `resource_spec`·`storage_specs`를 다시 읽어 목표 값·Policy ID·단위를 대조한다.
+4. **Supervisor·CCI 관측:** Supervisor Namespace status, `StorageQuota`·`StoragePolicyUsage`, Zone·Region 집계와 관련 이벤트를 다시 읽어 동일한 대상과 적용 가능한 상태가 노출되는지 확인한다.
+5. **후속 admission·CAPI 확인:** 앞의 값·대상·상태가 일치할 때만 VM admission과 CAPI condition/event를 확인한다. 값이 다르거나 상태가 갱신되지 않았으면 CAPI 재시도와 추가 PATCH를 멈추고 원인을 조사한다.
+
+vCenter가 값을 바꿨다는 HTTP 응답만으로 CCI와 Supervisor의 상태 일관성을 확정하지 않는다. CCI 가이드는 `SupervisorNamespace`의 일반 update/patch를 지원하지 않는다고 기록하므로, CCI desired spec에 새 Quota를 다시 써서 동기화를 보장하는 방법도 현재 자료에는 없다. vCenter GET과 Supervisor/CCI 조회가 서로 다르면 “CCI가 곧 덮어쓸 것” 또는 “Supervisor가 자동으로 동기화했을 것”이라고 추정하지 않는다. 대상 버전의 controller 동작·API 지원·상태 갱신 지연을 확인하고, 불일치가 해소될 때까지 CAPI 재시도나 추가 Quota 변경을 진행하지 않는다.
+
+### CAPI 증설 재개는 자동인가?
+
+제공된 DKS-C 원자료는 CAPI가 Cluster·Machine 객체를 사용하고, VM 생성·health 상태를 프로비저닝 과정에서 확인한다는 점을 설명한다. 그러나 Quota가 vCenter에서 변경된 뒤 CAPI가 자동으로 어떤 이벤트를 받아 즉시 재개하는지, 운영자가 어떤 재시도 명령을 수행해야 하는지는 정의하지 않는다. 그러므로 다음처럼 판단한다.
+
+- `Machine`, `MachineDeployment`, `KubeadmControlPlane` 또는 관련 VM의 condition/event가 새 시도를 보이고, VM admission이 더 이상 Quota 조건으로 거부되지 않으면 **자동 재조정 또는 기존 controller retry가 실제로 진행 중이라는 증거**로 볼 수 있다.
+- Quota 값은 반영됐지만 CAPI condition이 계속 `Failed`·`Provisioning`에 머물면 **자동 재개를 보장하지 않는다**. 승인된 runbook의 reconcile/retry 절차가 필요할 수 있으나, 이 문서의 자료만으로 특정 명령이나 재시도 횟수를 확정하지 않는다.
+- vCenter GET만 성공하고 Supervisor/CCI status가 이전 값이면 CAPI retry를 먼저 하지 않는다. 하부 admission이 새 값을 읽는다는 전제가 아직 확인되지 않았기 때문이다.
+
+따라서 이 장의 답은 다음과 같다. 예외 경로의 구체적 조작은 운영자 또는 승인된 자동화가 CCI·vCenter에서 랜덤 suffix를 포함한 대상 Namespace를 교차 식별한 뒤, `PATCH /api/vcenter/namespaces/instances/{namespace_id}`에 `resource_spec`와 필요한 `storage_specs`를 단위에 맞춰 제출하는 것이다. PATCH 성공 응답은 출발점일 뿐이며, vCenter GET·Supervisor/CCI status·Quota admission·CAPI condition을 순서대로 대조해야 한다. 원자료에는 양쪽 상태의 자동 동기화와 CAPI 자동 재개 계약이 없으므로, 둘 다 관측 증거가 있을 때만 완료로 판단한다.
+
+## 5. 04번 문서와의 관계: 플랫폼 배치는 독립적인 책임 질문이다
+
+이 장의 질문은 “인프라 제어 평면과 Quota 예외 경로를 이해한 뒤, 플랫폼 관리 기능의 배치가 이 문서에서 인과적으로 결정되는가?”이다. 답은 아니다. 03은 인프라 객체를 만들고 변경하는 **공통 제어 메커니즘**을 설명하고, 04는 Console·Gateway·Monitoring·Logging·DevOps 같은 플랫폼 기능을 사용자 Cluster와 어떤 책임·장애 경계로 배치하는지 묻는다.
+
+현재 운영 현황에는 플랫폼 기능이 여러 전용 Cluster에 배치되어 있고, 사용자 Cluster와 관리 Cluster가 별도 범위로 기록되어 있다. 이 사실은 04번의 배치 구조를 설명하는 자료이지, Quota PATCH 때문에 04번 구조가 생겼다는 증거가 아니다. 마찬가지로 01번의 CAPI 프로비저닝과 02번의 VPC·네트워크 경계는 03번의 CCI/Supervisor가 제공하는 공통 기반을 사용하지만, 문서를 읽는 순서가 시스템 실행 순서가 되지는 않는다.
+
+따라서 03번의 결론은 Quota 경계와 상태 검증에서 닫힌다. 04번은 “Quota 문제가 낳은 다음 위기”가 아니라, 공통 인프라 제어 평면 위에서 플랫폼 기능의 역할·책임·배치 단위를 정하는 병렬 질문이다. 04번을 읽을 때에는 이 문서의 vCenter PATCH 결과를 전제하지 않고, 현재 플랫폼 Cluster 구조와 공유 기반의 범위를 별도로 확인한다.
+
+## 조사·증거 경로
+
+이 절의 질문은 “명세상 가능한 변환과 특정 변경이 실제로 실행·반영되었다는 증거를 어떻게 구별하는가?”이다. 아래 표에서 왼쪽은 가능한 동작과 조건이고, 가운데는 실제 실행을 주장하기 위해 필요한 관측이다. 표의 확인 순서는 운영자가 증거를 수집하는 순서이며, 시스템의 내부 실행 순서를 뜻하지 않는다.
+
+| 가능한 동작·조건 | 실제로 확인할 증거 | 그 증거만으로 말할 수 없는 것 |
+|---|---|---|
+| CCI Context가 Project·VPC·Namespace 객체를 조회·생성할 수 있음 | `vcf context` 설정, 권한 응답, `kubectl get` 결과, CCI 이벤트 | 특정 요청이 vCenter·NSX 자원으로 성공적으로 완성되었다는 판단 |
+| `SupervisorNamespace`가 Project·Class·VPC·Cluster와 대응함 | `v get svns`, `kubectl get svns -o yaml`, vCenter Namespace 목록·상세 GET | 이름만 일치한다는 이유로 같은 WLD·Supervisor에 속한다는 판단 |
+| NamespaceClassConfig가 기본 CPU·Memory·Storage·VM Class를 제공함 | Class/Config spec, Namespace 생성 입력, Namespace status | 이미 생성된 Namespace의 Quota가 CCI에서 수정 가능한지 여부 |
+| vCenter API가 기존 Namespace 설정을 PATCH할 수 있음 | 대상 버전 API reference, `Namespaces.Configure` 권한, PATCH 요청·응답 기록 | PATCH 후 Supervisor·CCI가 같은 값을 노출하거나 CAPI가 재개했다는 판단 |
+| `resource_spec`과 `storage_specs`가 목표 Quota를 표현함 | API schema, PATCH body의 단위·Policy ID, vCenter 상세 GET의 read-back | Region/Zone 전체 Quota 또는 VPC External-IP Limit까지 바뀌었다는 판단 |
+| vCenter Namespace 값이 Supervisor/CCI에 반영됨 | Supervisor Namespace status, StorageQuota/PolicyUsage, Zone·Region 집계, 관련 이벤트의 시간순 대조 | 상태가 일시적으로 일치한 뒤 CCI controller가 덮어쓰지 않는다는 장기 보장 |
+| Quota 조건이 충족되어 VM 생성이 허용됨 | VM admission 이벤트, VirtualMachine status, CAPI Machine condition, 실제 VM/노드 상태 | 모든 Worker가 Ready이거나 Addon·워크로드가 정상이라는 판단 |
+| CAPI가 증설을 자동 재조정함 | Quota 변경 이후의 새 CAPI reconcile/event, VM 생성 시각, Machine replicas와 Ready 상태의 변화 | 자동 재시도가 모든 버전·모든 실패 상태에서 보장된다는 판단 |
+| Storage Policy 변경이 안전함 | Namespace의 PVC·VKS 사용 목록, `storage_specs` 전후, StoragePolicyUsage·스토리지 상태 | 정책 제거 후 장기 데이터 무결성 또는 애플리케이션 정상성 |
+
+권장 조사 순서는 다음과 같다. (1) 변경 전 CCI·vCenter·Supervisor·CAPI 상태를 같은 시각 기준으로 기록한다. (2) `v get svns`와 vCenter inventory로 Namespace와 WLD/Supervisor를 교차 식별한다. (3) 대상 버전의 CCI update/patch 지원 여부와 `Namespaces.Configure` 권한을 확인한다. (4) 예외 경로가 승인되었을 때만 최소 `UpdateSpec`을 PATCH한다. (5) vCenter 상세 GET과 Supervisor/CCI Quota 상태를 다시 읽는다. (6) VM admission·CAPI condition·event의 변화가 확인될 때만 증설 재개 여부를 판정한다. 어느 단계에서 불일치가 발견되면 다음 단계를 성공으로 간주하지 않는다.
+
+이 경로가 지지하는 최종 판단은 “설정상 가능한 동작”, “이번 요청의 API 반영”, “CAPI와 VM의 후속 실행”을 세 단계로 분리하는 것이다. API 문서와 CRD 명세만으로 실제 운영 변경의 완료를 선언할 수 없으며, 각 단계의 read-back과 이벤트가 있어야 다음 판단으로 넘어간다.
+
+## 남아 있는 제약과 질문
+
+이 문서는 CCI/Supervisor의 역할과 Quota 변경 분기를 답했지만, 다음 항목은 현재 원자료만으로 닫히지 않는다.
+
+- **대상 버전의 CCI Quota update 지원:** CCI 가이드는 VCFA 기능이 VCF 9.1에서 적용 예정이라고 기록한다. DKS-C의 실제 VCFA/VCF 버전과 CCI 서비스가 현재 노출하는 operation을 API discovery 또는 공식 compatibility 자료로 확인해야 한다.
+- **API schema의 세부 호환성:** `resource_spec.cpu_limit`, `memory_limit`, `storage_request_limit`, `storage_specs[].policy/limit`의 지원 여부와 단위·배열 처리 방식은 대상 vCenter API reference와 GET 결과를 기준으로 확인해야 한다.
+- **CCI와 vCenter의 권위·동기화:** vCenter PATCH 뒤 CCI `SupervisorNamespace`의 spec/status가 어떤 주기로 갱신되는지, CCI 조정기가 외부 변경을 덮어쓰는지, 충돌 시 어느 값을 권위로 삼는지 운영 자료가 없다.
+- **CAPI 재개 정책:** Quota가 해소된 뒤 기존 `Machine`이 자동 재조정되는지, 운영자 재시도나 별도 승인 절차가 필요한지는 CAPI controller event·condition과 실제 runbook으로 판정해야 한다.
+- **Quota 단위와 집계:** CCI·vCenter의 Namespace 값, CCI Zone CPU/Memory 집계, Region Storage Policy Quota, VPC IP Limit은 서로 다른 측정 범위다. GHz/GiB/TiB와 MHz/MiB를 변환할 때 기준 시각과 대상 객체를 함께 기록해야 한다.
+- **Storage Policy 영향:** Policy별 PVC·VKS 사용량, Retain PVC, StorageClass 연결이 남아 있으면 Storage Quota를 낮추거나 Policy를 제거할 수 없다. 실제 사용 목록과 복구 가능성을 별도로 확인한다.
+- **Namespace 식별자:** 랜덤 5자리 suffix와 WLD 명칭 혼재로 인해 Cluster 이름만으로 `namespace_id`를 만들 수 없다. CCI·Supervisor·vCenter inventory의 교차 확인이 필요하다.
+- **공통 기반의 장애 범위:** 이 문서의 Quota 변경 성공은 하이퍼바이저·스토리지·NSX·DNS·인증 같은 공통 기반의 가용성이나 격리를 보장하지 않는다.
+- **과거 도입 이유:** 수동 GUI의 한계가 Supervisor·CCI 도입의 실제 역사적 결정 이유였는지, 당시 대안과 비교해 선택되었는지는 ADR·결정 기록 없이는 확정하지 않는다.
+
+결국 현재 자료로 확정되는 범위는 CCI/Supervisor가 인프라 객체를 선언·조정하는 기본 경로를 제공하고, 기존 `SupervisorNamespace` Quota 변경은 CCI 지원 여부와 vCenter 권한·API를 따로 판단해야 하며, PATCH 후 양쪽 상태와 CAPI 후속 실행을 증거로 확인해야 한다는 것이다. 자동 동기화·자동 재개·전체 장애 해소는 이 문서의 명세에서 보장하지 않는다.
+
+## 상세 자료 색인
+
+다음 색인은 제품명 목록이 아니라 이 문서를 읽은 뒤 생기는 질문을 기준으로 구성했다. 계정·비밀번호·API Token은 복제하지 않고, 필요한 경우 원자료의 인증·접근 절차에서 승인된 방식으로 확인한다.
+
+| 지금 풀어야 할 질문 | 확인할 자료 | 확인할 내용 |
+|---|---|---|
+| CCI와 Supervisor Context는 어떻게 구분하고 어떤 인증·권한을 쓰는가? | [`VCF CLI 및 접근 운영 정보`](../VCF%20CLI%20및%20접근%20운영%20정보.md#context-종류-및-인증-방식), [`Context 권한 체계`](../VCF%20CLI%20및%20접근%20운영%20정보.md#context-권한-체계) | `cci`·`k8s` Context, Organization Admin/User, Cluster Admin/User의 책임과 범위 |
+| Project·NamespaceClass·SupervisorNamespace·VPC는 어떤 구조로 대응하는가? | [`VCFA CCI CRDs 및 Quota 가이드`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#cci-crds-구조-및-관계), [`Supervisor Namespace 관련`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#supervisor-namespace-관련) | CRD API group, 1:1 관계, NamespaceClassConfig의 기본 Quota·VM Class, SupervisorNamespace의 역할 |
+| CPU·Memory·Storage·External IP Quota는 어느 객체에서 집계되는가? | [`Quota CRDs`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#quota-crds) | Namespace·Zone·RegionStorageClassQuota·StoragePolicyUsage·IPBlock·Limit·LimitState의 범위 차이 |
+| 기존 SupervisorNamespace의 CCI update/patch 제한은 무엇인가? | [`Quota 변경 이슈 (제한사항)`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#quota-변경-이슈-제한사항), [`주의사항 / 예외 / 확인 필요`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#주의사항--예외--확인-필요) | create/destroy 중심 수명주기, Storage override 제한, VCFA 기능 버전 메모, vCenter 권한 필요 |
+| 대상 Namespace와 VPC·Cluster·Project를 어떻게 교차 식별하는가? | [`Supervisor Namespace 조회`](../VCF%20CLI%20및%20접근%20운영%20정보.md#supervisor-namespace-v-get-svns), [`Naming Convention`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#naming-convention) | `v get svns` 컬럼, Region·Class·VPC, 랜덤 5자리 Namespace suffix와 이름 규칙 |
+| vCenter에서 기존 Namespace Quota를 부분 변경할 endpoint와 권한은 무엇인가? | [Broadcom — Updating the Namespace Configuration](https://techdocs.broadcom.com/us/en/vmware-cis/vcf/vcf-9-0-and-later/9-1/administration-sdks-cli-and-tools/introduction-to-the-vcf-programming-guide/introduction-to-the-vsphere-automation-rest-apis/vsphere-with-kubernetes-overview/managing-namespaces-on-a-supervisor-cluster/changing-the-namespace-configuration.html) | `PATCH /api/vcenter/namespaces/instances/{namespace_id}`, `UpdateSpec`, `Namespaces.Configure`, 부분 적용 규칙 |
+| PATCH body의 Resource·Storage 필드와 단위는 무엇인가? | [Broadcom — Self-Service Namespace Management](https://techdocs.broadcom.com/us/en/vmware-cis/vsphere/vsphere-sdks-tools/8-0/vmware-vsphere-automation-rest-programming-guide-8-0/vsphere-with-kubernetes-overview-1/managing-namespaces-on-a-supervisor-cluster-1/self-service-namespace-templates-1.html), [Broadcom — Create a vSphere Namespace](https://techdocs.broadcom.com/us/en/vmware-cis/vcf/vcf-9-0-and-later/9-1/administration-sdks-cli-and-tools/introduction-to-the-vcf-programming-guide/introduction-to-the-vsphere-automation-rest-apis/vsphere-with-kubernetes-overview/managing-namespaces-on-a-supervisor-cluster/create-a-supervisor-namespace.html) | `resource_spec`, CPU MHz, Memory/Storage MiB, `storage_specs`의 Policy ID와 limit, 대상 API schema 확인 |
+| Storage Policy를 바꾸기 전에 어떤 소비자를 확인해야 하는가? | [Broadcom — Updating the Namespace Configuration](https://techdocs.broadcom.com/us/en/vmware-cis/vcf/vcf-9-0-and-later/9-1/administration-sdks-cli-and-tools/introduction-to-the-vcf-programming-guide/introduction-to-the-vsphere-automation-rest-apis/vsphere-with-kubernetes-overview/managing-namespaces-on-a-supervisor-cluster/changing-the-namespace-configuration.html), [`Storage Quota 조회`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#quota-조회-방법) | 해당 StorageClass의 PVC·VKS 사용 여부, Namespace·Region Storage 상태, 변경 전후 read-back |
+| Region·Zone Quota와 Namespace Quota를 어떤 명령으로 구별해 읽는가? | [`Region Quota (v get quota)`](../VCF%20CLI%20및%20접근%20운영%20정보.md#region-quota-v-get-quota), [`Quota 조회 방법`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#quota-조회-방법) | Zone CPU/Memory, Region Storage, Namespace status, External-IP의 `LimitState` 조회 경로 |
+| CAPI가 Quota 해소 뒤 실제 증설을 재개했는지 무엇으로 판단하는가? | [`CAPI CRDs (Cluster API)`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#capi-crds-cluster-api), [`클러스터 프로비저닝 프로세스`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#클러스터-프로비저닝-프로세스-11단계) | Machine·MachineDeployment·BootstrapData·ClusterClass 역할, VM·health·Secret 조회 순서와 실제 condition/event 확인 범위 |
+| 현재 DKS-C에서 WLD·Storage Policy·Supervisor를 어디서 확인하는가? | [`DKS-C 운영 현황 요약`](../DKS-C%20운영%20현황%20요약.md#시스템-아키텍처), [`Storage`](../DKS-C%20운영%20현황%20요약.md#storage), [02번 네트워크 문서](02.%20네트워크%20격리와%201:1:1%20테넌시%20경계.md), [04번 플랫폼 배치 문서](04.%20플랫폼%20관리%20평면%20분리와%20전용%20클러스터.md) | 운영 WLD·VPC·Storage Policy의 현재 기록, 02의 네트워크 병렬 질문, 04의 독립적인 플랫폼 배치 질문 |
+| 01·02·04에서 03번의 범위를 어떻게 연결해 읽는가? | [01번 테넌시·프로비저닝](01.%20멀티클러스터%20테넌시와%20자동%20프로비저닝.md), [02번 네트워크 경계](02.%20네트워크%20격리와%201:1:1%20테넌시%20경계.md), [04번 플랫폼 관리 평면](04.%20플랫폼%20관리%20평면%20분리와%20전용%20클러스터.md) | 03은 공통 인프라 제어·Quota 경계, 01·02는 이를 소비하는 테넌시·네트워크 질문, 04는 독립적인 책임·배치 질문임을 확인 |
+
+색인은 이 문서의 결론을 반복하는 목록이 아니다. CCI 구조·일반 변환·Quota 계층·vCenter PATCH 계약·실행 증거·문서 간 병렬 관계를 각각 원자료에서 재검증할 위치를 가리킨다.

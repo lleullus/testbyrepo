@@ -1,0 +1,34 @@
+{
+	"nodes":[
+		{"id":"b100000000000003","type":"group","x":750,"y":0,"width":450,"height":560,"color":"1","label":"🔗 문서 관계"},
+		{"id":"b100000000000001","type":"group","x":-40,"y":40,"width":350,"height":560,"color":"4","label":"📂 StorageClass 분리 — 문서 구조"},
+		{"id":"b100000000000002","type":"group","x":400,"y":0,"width":300,"height":280,"color":"3","label":"📋 리스크 및 운영 하위 문서"},
+		{"id":"a100000000000007","type":"file","file":"짬/아카이브/StorageClass 분리/리스크 및 운영/01. Risk Register.md","x":415,"y":35,"width":270,"height":65,"color":"1"},
+		{"id":"a100000000000008","type":"file","file":"짬/아카이브/StorageClass 분리/리스크 및 운영/02. 운영 프로세스.md","x":415,"y":115,"width":270,"height":65,"color":"5"},
+		{"id":"a100000000000009","type":"file","file":"짬/아카이브/StorageClass 분리/리스크 및 운영/03. Next Milestone.md","x":415,"y":195,"width":270,"height":65,"color":"6"},
+		{"id":"a200000000000001","type":"text","text":"## 🔷 주 흐름\n\n**01. 배경 및 결정** → **02. 설계 및 구성** → **03. 테스트 및 검증**\n\n문제 정의 → 대안 비교 → 설계 결정 → 검증 절차로 이어지는 문서 체인.\n각 단계는 이전 단계의 결정을 전제로 한다.","x":765,"y":35,"width":420,"height":130,"color":"2"},
+		{"id":"a200000000000002","type":"text","text":"## 📋 리스크 및 운영 (Cross-cutting)\n\n**04. 리스크 및 운영**은 Risk Register / 운영 프로세스 / Next Milestone으로 구성된 허브.\n모든 문서(01~05)에서 참조되는 공통 운영 기준.","x":765,"y":180,"width":420,"height":110,"color":"6"},
+		{"id":"a200000000000003","type":"text","text":"## 🔧 NFS mount option 최적화 (기술 검토)\n\n**05. NFS mount option 최적화**는 02(설계)의 mountOptions 결정과 03(테스트)의 검증 항목에 영향을 주는 기술 검토 문서.\n적용 권고안을 포함하며 Next Milestone #2와 연결됨.","x":765,"y":305,"width":420,"height":110,"color":"3"},
+		{"id":"a200000000000004","type":"text","text":"#### 파일명 규칙\n- `NN. 제목.md` — 프로젝트 루트 문서\n- `NN. 디렉터리/` — 하위 문서 그룹\n- `*.canvas` — 시각화\n- `*.base` — 문서 인벤토리\n\n> [!tip]\n> 캔버스에서 파일 노드를 클릭하면 해당 문서로 바로 이동합니다.","x":765,"y":430,"width":420,"height":110,"color":"4"},
+		{"id":"a100000000000001","type":"file","file":"짬/아카이브/StorageClass 분리/개요.md","x":-25,"y":75,"width":320,"height":65,"color":"1"},
+		{"id":"a100000000000002","type":"file","file":"짬/아카이브/StorageClass 분리/01. 배경 및 결정.md","x":-25,"y":155,"width":320,"height":65,"color":"2"},
+		{"id":"a100000000000003","type":"file","file":"짬/아카이브/StorageClass 분리/02. 설계 및 구성.md","x":-25,"y":235,"width":320,"height":65,"color":"3"},
+		{"id":"a100000000000004","type":"file","file":"짬/아카이브/StorageClass 분리/03. 테스트 및 검증.md","x":-25,"y":315,"width":320,"height":65,"color":"5"},
+ 		{"id":"a100000000000005","type":"file","file":"짬/아카이브/StorageClass 분리/04. 리스크 및 운영.md","x":-25,"y":395,"width":320,"height":65,"color":"6"},
+		{"id":"a100000000000006","type":"file","file":"짬/아카이브/StorageClass 분리/05. NFS mount option 최적화.md","x":-25,"y":475,"width":320,"height":65,"color":"2"}
+	],
+	"edges":[
+		{"id":"e000000000000001","fromNode":"a100000000000001","fromSide":"bottom","toNode":"a100000000000002","toSide":"top","label":"→ hub"},
+		{"id":"e000000000000002","fromNode":"a100000000000001","fromSide":"bottom","toNode":"a100000000000003","toSide":"top","label":"→ hub"},
+		{"id":"e000000000000003","fromNode":"a100000000000001","fromSide":"bottom","toNode":"a100000000000004","toSide":"top","label":"→ hub"},
+		{"id":"e000000000000004","fromNode":"a100000000000001","fromSide":"bottom","toNode":"a100000000000005","toSide":"top","label":"→ hub"},
+		{"id":"e000000000000005","fromNode":"a100000000000001","fromSide":"bottom","toNode":"a100000000000006","toSide":"top","label":"→ hub"},
+		{"id":"e000000000000006","fromNode":"a100000000000002","fromSide":"bottom","toNode":"a100000000000003","toSide":"top","label":"→ 결정→설계"},
+		{"id":"e000000000000007","fromNode":"a100000000000003","fromSide":"bottom","toNode":"a100000000000004","toSide":"top","label":"→ 설계→검증"},
+		{"id":"e000000000000008","fromNode":"a100000000000005","fromSide":"bottom","toNode":"a100000000000007","toSide":"top","label":"→ 허브"},
+		{"id":"e000000000000009","fromNode":"a100000000000005","fromSide":"bottom","toNode":"a100000000000008","toSide":"top","label":"→ 허브"},
+		{"id":"e00000000000000a","fromNode":"a100000000000005","fromSide":"bottom","toNode":"a100000000000009","toSide":"top","label":"→ 허브"},
+		{"id":"e00000000000000b","fromNode":"a100000000000003","fromSide":"right","toNode":"a100000000000006","toSide":"top","label":"설계 연계"},
+		{"id":"e00000000000000c","fromNode":"a100000000000004","fromSide":"right","toNode":"a100000000000006","toSide":"top","label":"검증 연계"}
+	]
+}

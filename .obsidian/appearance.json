@@ -1,0 +1,10 @@
+{
+  "theme": "obsidian",
+  "accentColor": "#ff0000",
+  "enabledCssSnippets": [
+    "mermaid-fit"
+  ],
+  "baseFontSize": 10,
+  "baseFontSizeAction": true,
+  "cssTheme": "Things"
+}

@@ -1,0 +1,324 @@
+{
+  "nodes": [
+    {
+      "id": "9e625d4c071dcb83",
+      "type": "group",
+      "x": 0,
+      "y": 0,
+      "width": 310,
+      "height": 480,
+      "label": "📂 프로젝트 문서 구조",
+      "color": "4"
+    },
+    {
+      "id": "b166d8b8ed50280f",
+      "type": "file",
+      "x": 15,
+      "y": 35,
+      "width": 280,
+      "height": 65,
+      "file": "짬/아카이브/LLM 바이브 코딩 코드베이스 관리/00. LLM 바이브 코딩 코드베이스 관리 홈.md",
+      "color": "1"
+    },
+    {
+      "id": "f48b61a5b8c43834",
+      "type": "file",
+      "x": 15,
+      "y": 115,
+      "width": 280,
+      "height": 65,
+      "file": "짬/아카이브/LLM 바이브 코딩 코드베이스 관리/컨텍스트 맵과 도메인 안전 경계/00. 개요.md",
+      "color": "2"
+    },
+    {
+      "id": "5429dafaed6b9291",
+      "type": "file",
+      "x": 15,
+      "y": 195,
+      "width": 280,
+      "height": 65,
+      "file": "짬/아카이브/LLM 바이브 코딩 코드베이스 관리/작업 프로토콜/개요.md",
+      "color": "3"
+    },
+    {
+      "id": "96e57bf1236f22d8",
+      "type": "file",
+      "x": 15,
+      "y": 275,
+      "width": 280,
+      "height": 65,
+      "file": "짬/아카이브/LLM 바이브 코딩 코드베이스 관리/LLM 친화적 코드베이스 기준/00. 개요.md",
+      "color": "5"
+    },
+    {
+      "id": "2516ec41aaed822d",
+      "type": "file",
+      "x": 15,
+      "y": 355,
+      "width": 280,
+      "height": 65,
+      "file": "짬/아카이브/LLM 바이브 코딩 코드베이스 관리/외부 레퍼런스/00. 외부 레퍼런스 홈.md",
+      "color": "6"
+    },
+    {
+      "id": "e1a504f771926817",
+      "type": "text",
+      "x": 380,
+      "y": 5,
+      "width": 120,
+      "height": 55,
+      "text": "## 🔍 Research",
+      "color": "1"
+    },
+    {
+      "id": "e4d4bbca429be971",
+      "type": "text",
+      "x": 520,
+      "y": 5,
+      "width": 110,
+      "height": 55,
+      "text": "## 📋 Plan",
+      "color": "2"
+    },
+    {
+      "id": "cf19b245f53e6143",
+      "type": "text",
+      "x": 650,
+      "y": 5,
+      "width": 130,
+      "height": 55,
+      "text": "## ✏️ Small diff",
+      "color": "3"
+    },
+    {
+      "id": "c136cab286178223",
+      "type": "text",
+      "x": 800,
+      "y": 5,
+      "width": 140,
+      "height": 55,
+      "text": "## ✅ Run checks",
+      "color": "4"
+    },
+    {
+      "id": "9332e27b0b68c2a6",
+      "type": "text",
+      "x": 960,
+      "y": 5,
+      "width": 120,
+      "height": 55,
+      "text": "## 👁️ Review",
+      "color": "5"
+    },
+    {
+      "id": "6475b6fca715cb1c",
+      "type": "text",
+      "x": 1100,
+      "y": 5,
+      "width": 120,
+      "height": 55,
+      "text": "## 🔄 Merge",
+      "color": "6"
+    },
+    {
+      "id": "fec22c90747ec0f1",
+      "type": "group",
+      "x": 370,
+      "y": 95,
+      "width": 860,
+      "height": 190,
+      "label": "🛡️ Harness Core",
+      "color": "1"
+    },
+    {
+      "id": "622c9143a7edfcd7",
+      "type": "text",
+      "x": 385,
+      "y": 120,
+      "width": 190,
+      "height": 70,
+      "text": "#### Context Builder\nmanifest, topology, symbols\n→ Context Pack",
+      "color": "1"
+    },
+    {
+      "id": "afc63629ade286b9",
+      "type": "text",
+      "x": 600,
+      "y": 120,
+      "width": 190,
+      "height": 70,
+      "text": "#### Pre-Write Guard\nAdvisory: block / warning\n→ 구조적 위험 감지",
+      "color": "2"
+    },
+    {
+      "id": "df2f1306b08e402d",
+      "type": "text",
+      "x": 815,
+      "y": 120,
+      "width": 190,
+      "height": 70,
+      "text": "#### Patch Executor\nApproved plan → Small diff\n→ 승인 범위 내 변경",
+      "color": "3"
+    },
+    {
+      "id": "fd529e8b3d3ef0b2",
+      "type": "text",
+      "x": 1030,
+      "y": 120,
+      "width": 190,
+      "height": 70,
+      "text": "#### Verification Router\nTests + Typecheck + Lint\n+ Structural audit",
+      "color": "4"
+    },
+    {
+      "id": "a5d8e6ab081f43fa",
+      "type": "text",
+      "x": 385,
+      "y": 210,
+      "width": 250,
+      "height": 55,
+      "text": "lumin-repo-lens\nCore Evidence Provider",
+      "color": "5"
+    },
+    {
+      "id": "1481de7c37dbb926",
+      "type": "text",
+      "x": 370,
+      "y": 310,
+      "width": 150,
+      "height": 60,
+      "text": "도입 순서\nAGENTS.md → 검증 명령\n→ 테스트 → evidence",
+      "color": "3"
+    },
+    {
+      "id": "40cf84f107429537",
+      "type": "text",
+      "x": 540,
+      "y": 310,
+      "width": 150,
+      "height": 60,
+      "text": "중복 판단 모델\n구조/경계/계약/의미\n→ 7가지 결론",
+      "color": "2"
+    },
+    {
+      "id": "7978e70be06f17da",
+      "type": "text",
+      "x": 710,
+      "y": 310,
+      "width": 150,
+      "height": 60,
+      "text": "CI Rollout\nadvisory → blocking\n→ full gate",
+      "color": "1"
+    },
+    {
+      "id": "3fb9270e9c1e98a9",
+      "type": "text",
+      "x": 880,
+      "y": 310,
+      "width": 150,
+      "height": 60,
+      "text": "반복 실수 흡수\nAGENTS.md → 테스트\n→ lint → evidence",
+      "color": "6"
+    },
+    {
+      "id": "cce630a735fd2814",
+      "type": "group",
+      "x": 1340,
+      "y": 0,
+      "width": 310,
+      "height": 480,
+      "label": "🔄 경량 라이프사이클 엔진",
+      "color": "6"
+    },
+    {
+      "id": "eb4e33292dac6d21",
+      "type": "text",
+      "x": 1360,
+      "y": 30,
+      "width": 270,
+      "height": 50,
+      "text": "1. Context 선택\nproject note / context index",
+      "color": "2"
+    },
+    {
+      "id": "e4e1f3c656e817e4",
+      "type": "text",
+      "x": 1360,
+      "y": 95,
+      "width": 270,
+      "height": 50,
+      "text": "2. 요구사항 구조화\n성공 신호 / 다루지 않을 것",
+      "color": "3"
+    },
+    {
+      "id": "19b48a3ed11a8da9",
+      "type": "text",
+      "x": 1360,
+      "y": 160,
+      "width": 270,
+      "height": 50,
+      "text": "3. 최소 slice 선택\nin scope / out of scope",
+      "color": "4"
+    },
+    {
+      "id": "445a87d26a3fb275",
+      "type": "text",
+      "x": 1360,
+      "y": 225,
+      "width": 270,
+      "height": 50,
+      "text": "4. 중단 조건 검사\n모호하면 handoff 금지",
+      "color": "1"
+    },
+    {
+      "id": "874e73252684c1e0",
+      "type": "text",
+      "x": 1360,
+      "y": 290,
+      "width": 270,
+      "height": 50,
+      "text": "5. handoff prompt\n작은 계약 / 검증 기대치",
+      "color": "5"
+    },
+    {
+      "id": "9a3c588e701169b9",
+      "type": "text",
+      "x": 1360,
+      "y": 355,
+      "width": 270,
+      "height": 50,
+      "text": "6. 구현 에이전트 실행",
+      "color": "3"
+    },
+    {
+      "id": "04485438cd2928ad",
+      "type": "text",
+      "x": 1360,
+      "y": 420,
+      "width": 270,
+      "height": 50,
+      "text": "7. 결과 → Obsidian 환류\nevidence / context gap 기록",
+      "color": "6"
+    }
+  ],
+  "edges": [
+    { "id": "79243e3f47d09718", "fromNode": "e1a504f771926817", "toNode": "e4d4bbca429be971", "fromSide": "right", "toSide": "left", "label": "→" },
+    { "id": "ac58bd36ccdedb46", "fromNode": "e4d4bbca429be971", "toNode": "cf19b245f53e6143", "fromSide": "right", "toSide": "left", "label": "→" },
+    { "id": "b395ad3151f6b6a7", "fromNode": "cf19b245f53e6143", "toNode": "c136cab286178223", "fromSide": "right", "toSide": "left", "label": "→" },
+    { "id": "e19696b6ab0884c0", "fromNode": "c136cab286178223", "toNode": "9332e27b0b68c2a6", "fromSide": "right", "toSide": "left", "label": "→" },
+    { "id": "4bd8049f059f8999", "fromNode": "9332e27b0b68c2a6", "toNode": "6475b6fca715cb1c", "fromSide": "right", "toSide": "left", "label": "→" },
+    { "id": "025879d635644e0a", "fromNode": "622c9143a7edfcd7", "toNode": "afc63629ade286b9", "fromSide": "right", "toSide": "left", "label": "→" },
+    { "id": "158ae55f972f00de", "fromNode": "afc63629ade286b9", "toNode": "df2f1306b08e402d", "fromSide": "right", "toSide": "left", "label": "→" },
+    { "id": "358b463e58e86ecb", "fromNode": "df2f1306b08e402d", "toNode": "fd529e8b3d3ef0b2", "fromSide": "right", "toSide": "left", "label": "→" },
+    { "id": "a5ef33aaa1c4e96d", "fromNode": "a5d8e6ab081f43fa", "toNode": "622c9143a7edfcd7", "fromSide": "right", "toSide": "bottom", "label": "manifest / topology / symbols", "color": "5" },
+    { "id": "75c8b54524e6242c", "fromNode": "a5d8e6ab081f43fa", "toNode": "afc63629ade286b9", "fromSide": "right", "toSide": "bottom", "label": "pre-write advisory", "color": "5" },
+    { "id": "2c49e7840db506ed", "fromNode": "a5d8e6ab081f43fa", "toNode": "fd529e8b3d3ef0b2", "fromSide": "right", "toSide": "bottom", "label": "post-write audit", "color": "5" },
+    { "id": "721c120db73494df", "fromNode": "622c9143a7edfcd7", "toNode": "a5d8e6ab081f43fa", "fromSide": "bottom", "toSide": "top", "label": "evidence 요청", "color": "5" },
+    { "id": "8a9ab074dbc828cf", "fromNode": "eb4e33292dac6d21", "toNode": "e4e1f3c656e817e4", "fromSide": "bottom", "toSide": "top", "label": "↓" },
+    { "id": "ad62b62f2689877e", "fromNode": "e4e1f3c656e817e4", "toNode": "19b48a3ed11a8da9", "fromSide": "bottom", "toSide": "top", "label": "↓" },
+    { "id": "b71c3006dda4f7b1", "fromNode": "19b48a3ed11a8da9", "toNode": "445a87d26a3fb275", "fromSide": "bottom", "toSide": "top", "label": "↓" },
+    { "id": "19efc7e3f0d0769f", "fromNode": "445a87d26a3fb275", "toNode": "874e73252684c1e0", "fromSide": "bottom", "toSide": "top", "label": "↓" },
+    { "id": "886aaeec1228e73c", "fromNode": "874e73252684c1e0", "toNode": "9a3c588e701169b9", "fromSide": "bottom", "toSide": "top", "label": "↓" },
+    { "id": "5adc7a903a0b3f50", "fromNode": "9a3c588e701169b9", "toNode": "04485438cd2928ad", "fromSide": "bottom", "toSide": "top", "label": "↓" }
+  ]
+}

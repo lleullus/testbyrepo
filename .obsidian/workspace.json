@@ -1,0 +1,261 @@
+{
+  "main": {
+    "id": "1c9e9187a4facdcb",
+    "type": "split",
+    "children": [
+      {
+        "id": "ce8dc9dedf059e39",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "9148b5f51901fa9a",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "01. 활성 프로젝트/DKS-C/VOC/월별/2026-01 DKS VOC 인사이트.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "2026-01 DKS VOC 인사이트"
+            }
+          },
+          {
+            "id": "8ae46d0c20385bb6",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "01. 활성 프로젝트/DKS-C/00. DKS-C 아키텍처 전체 이해 가이드.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "00. DKS-C 아키텍처 전체 이해 가이드"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "325c39236bce72d9",
+    "type": "split",
+    "children": [
+      {
+        "id": "826145ad1faac8d5",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "36d7ad8d90255732",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "파일 탐색기"
+            }
+          },
+          {
+            "id": "ff16292f9a93ea8e",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "a-1",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "검색"
+            }
+          },
+          {
+            "id": "203b84ff92b0f849",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "북마크"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 351.50312423706055
+  },
+  "right": {
+    "id": "e05d7bbe6697bc79",
+    "type": "split",
+    "children": [
+      {
+        "id": "9028cc2bd018c33e",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "dcd6b4b4118a8836",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "01. 활성 프로젝트/01. Xi'an 전환 운영 가이드/출장/20. 교육/2026-08-26 KubeSphere Operation 운영자 실습 가이드/00. KubeSphere Operation 운영자 실습 가이드 안내.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "백링크"
+            }
+          },
+          {
+            "id": "ec80e52ce158cab1",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "위키 활용.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "위키 활용 의 나가는 링크"
+            }
+          },
+          {
+            "id": "6a6d128f2765c298",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "태그"
+            }
+          },
+          {
+            "id": "8395cd09d706492e",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "모든 속성"
+            }
+          },
+          {
+            "id": "6cc944003f56e0c2",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "짬/아카이브/20. 소프트웨어 엔지니어링/AI 생성 코드 설계·리뷰 체크리스트.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "AI 생성 코드 설계·리뷰 체크리스트 의 개요"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:빠른 전환기 열기": false,
+      "graph:그래프 뷰 열기": false,
+      "canvas:새 캔버스 만들기": false,
+      "daily-notes:오늘의 일일 노트 열기": false,
+      "templates:템플릿 삽입": false,
+      "command-palette:명령어 팔레트 열기": false,
+      "bases:새 베이스 생성하기": false
+    }
+  },
+  "active": "9148b5f51901fa9a",
+  "lastOpenFiles": [
+    "01. 활성 프로젝트/DKS-C/VOC/2026-08-23 ~ 2026-08-29 DKS VOC 목록 (10건).md",
+    "01. 활성 프로젝트/DKS-C/VOC/2026-08-16 ~ 2026-08-22 DKS VOC 목록 (6건).md",
+    "01. 활성 프로젝트/DKS-C/VOC/2026-08-09 ~ 2026-08-15 DKS VOC 목록 (19건).md",
+    "01. 활성 프로젝트/DKS-C/VOC/2026-08-02 ~ 2026-08-08 DKS VOC 목록 (20건).md",
+    "01. 활성 프로젝트/DKS-N/[DKS-N] thanos-compact-2 PVC 증설 용량 산정.md",
+    "01. 활성 프로젝트/DKS-N/Thanos Compactor 샤드 구성과 PVC 증설 산정.md",
+    "01. 활성 프로젝트/DKS-N/thanos-compact-2 ENOSPC와 PVC Working Space 분석.md",
+    "01. 활성 프로젝트/DKS-N/thanos-compact-2 ENOSPC와 PVC Working Space 분석.md.backup-2026-09-28-pre-rewrite",
+    "01. 활성 프로젝트/DKS-C/VOC/월별/2026-01 DKS VOC 인사이트.md",
+    "01. 활성 프로젝트/DKS-N",
+    "DKS-N/thanos-compact-2 ENOSPC와 PVC Working Space 분석.md",
+    "DKS-N",
+    "01. 활성 프로젝트/DKS-C/VOC/2026-07-26 ~ 2026-08-01 DKS VOC 목록 (13건).md",
+    "01. 활성 프로젝트/DKS-C/VOC/2026-07-19 ~ 2026-07-25 DKS VOC 목록 (16건).md",
+    "01. 활성 프로젝트/DKS-C/VOC/월별/2026-06 DKS VOC 인사이트.md",
+    "01. 활성 프로젝트/DKS-C/VOC/월별/2026-05 DKS VOC 인사이트.md",
+    "01. 활성 프로젝트/DKS-C/VOC/월별/2026-04 DKS VOC 인사이트.md",
+    "01. 활성 프로젝트/DKS-C/VOC/월별/2026-03 DKS VOC 인사이트.md",
+    "01. 활성 프로젝트/DKS-C/VOC/월별/2026-02 DKS VOC 인사이트.md",
+    "01. 활성 프로젝트/DKS-C/인과 지도 시리즈/01. 멀티클러스터 테넌시와 자동 프로비저닝.md",
+    "01. 활성 프로젝트/DKS-C/VOC/월별",
+    "01. 활성 프로젝트/DKS-C/Claims/90. 전체 적용 결과 및 잔여 검증 백로그.md",
+    "01. 활성 프로젝트/DKS-C/Claims/네트워크/CCL-NET-007 - DKS-C는 Controller를 제공하지만 Gateway와 HTTPRoute는 사용자가 작성한다.md",
+    "01. 활성 프로젝트/DKS-C/Claims/네트워크/CCL-NET-006 - DKS-N Ingress Manifest는 DKS-C Gateway API로 재구성해야 한다.md",
+    "01. 활성 프로젝트/DKS-C/Claims/플랫폼 정책/CCL-PLT-003 - DKS-N 공용 Node의 사용자 Label 관리는 지원되지 않는다.md",
+    "01. 활성 프로젝트/DKS-C/Claims/이미지·Harbor/CCL-IMG-002 - Registry Credential 변경 시 Pull Secret을 갱신해야 한다.md",
+    "01. 활성 프로젝트/DKS-C/Claims/이미지·Harbor/CCL-IMG-001 - Private Registry Workload에는 유효한 Pull Credential 참조가 필요하다.md",
+    "01. 활성 프로젝트/DKS-C/Claims/이미지·Harbor",
+    "01. 활성 프로젝트/DKS-C/Claims/배포/CCL-DEP-002 - P-DEP 지속 설정은 Git 또는 CD 정의에 반영한다.md",
+    "01. 활성 프로젝트/DKS-C/Claims/배포/CCL-DEP-001 - P-DEP 관리 필드의 콘솔 직접 수정은 재배포 시 덮어써질 수 있다.md",
+    "01. 활성 프로젝트/DKS-C/Claims/배포",
+    "01. 활성 프로젝트/DKS-C/Claims/스토리지/CCL-STO-002 - 외부 VM과의 파일 공유는 별도 NFS 또는 동기화 경로를 사용한다.md",
+    "01. 활성 프로젝트/DKS-C/Claims/스토리지",
+    "01. 활성 프로젝트/DKS-C/Claims/자원",
+    "01. 활성 프로젝트/DKS-C/Claims/플랫폼 정책",
+    "01. 활성 프로젝트/DKS-C/Claims/인증·권한",
+    "무제.canvas",
+    "01. 활성 프로젝트/01. Xi'an 전환 운영 가이드/출장/assets/harbor-image-container-concept.tmp.png",
+    "01. 활성 프로젝트/01. Xi'an 전환 운영 가이드/출장/assets/harbor-image-container-concept.png",
+    "01. 활성 프로젝트/01. Xi'an 전환 운영 가이드/출장/20. 교육/2026-08-25 Kubernetes 및 DKS 아키텍처/assets/2026-08-25/part1-flow-minimal.png",
+    "01. 활성 프로젝트/01. Xi'an 전환 운영 가이드/출장/assets/part1-flow-minimal-v2.png",
+    "01. 활성 프로젝트/01. Xi'an 전환 운영 가이드/출장/assets/part1-flow-minimal.png",
+    "01. 활성 프로젝트/01. Xi'an 전환 운영 가이드/출장/20. 교육/2026-08-25 Kubernetes 및 DKS 아키텍처/assets/2026-08-25/part9-dks-architecture-comic.png",
+    "01. 활성 프로젝트/01. Xi'an 전환 운영 가이드/출장/20. 교육/2026-08-25 Kubernetes 및 DKS 아키텍처/assets/2026-08-25/part8-monitoring-comic.png",
+    "01. 활성 프로젝트/01. Xi'an 전환 운영 가이드/출장/20. 교육/2026-08-25 Kubernetes 및 DKS 아키텍처/assets/2026-08-25/part7-harbor-registry-comic.png",
+    "01. 활성 프로젝트/01. Xi'an 전환 운영 가이드/출장/20. 교육/2026-08-25 Kubernetes 및 DKS 아키텍처/assets/2026-08-25/part6-persistent-storage-comic.png",
+    "01. 활성 프로젝트/01. Xi'an 전환 운영 가이드/출장/20. 교육/2026-08-25 Kubernetes 및 DKS 아키텍처/assets/2026-08-25/part5-kubernetes-network-comic.png",
+    "짬/아카이브/StorageClass 분리/StorageClass 분리.canvas",
+    "짬/아카이브/LLM 바이브 코딩 코드베이스 관리/시스템 아키텍처 개요.canvas",
+    "짬/아카이브/LLM 바이브 코딩 코드베이스 관리/오케스트라 워크플로우/오케스트라 워크플로우.canvas",
+    "활성 운영/DKS/DKS 업무 흐름도.canvas",
+    "아카이브/LLM 바이브 코딩 코드베이스 관리/오케스트라 워크플로우/오케스트라 워크플로우.canvas",
+    "아카이브/LLM 바이브 코딩 코드베이스 관리/05. 오케스트라 워크플로우/오케스트라 워크플로우.canvas",
+    "아카이브/LLM 바이브 코딩 코드베이스 관리/시스템 아키텍처 개요.canvas",
+    "아카이브/StorageClass 분리/StorageClass 분리.canvas",
+    "아카이브/99. LLM 바이브 코딩 코드베이스 관리/05. 오케스트라 워크플로우/오케스트라 워크플로우.canvas"
+  ]
+}

@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlyMeta - 초고속 항공권 메타 검색</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen font-sans antialiased" x-data="flightApp()">
+
+  <!-- Minimal Anti-Bloat Header (Brand Only) -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-xs">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm text-lg font-bold">
+          ✈
+        </div>
+        <div>
+          <span class="text-xl font-black tracking-tight text-gray-900">FlyMeta</span>
+          <span class="hidden sm:inline-block ml-2 text-xs font-medium text-gray-500 border-l border-gray-300 pl-2">초고속 항공권 메타 검색</span>
+        </div>
+      </div>
+      <div class="text-xs text-gray-400 font-mono">Zero-Build Dashboard</div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+
+    <!-- Search Hero Form -->
+    <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+      <form @submit.prevent="searchFlights()" class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <!-- Origin -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">출발지 (공항코드)</label>
+            <div class="relative">
+              <input type="text"
+                     x-model="origin"
+                     maxlength="3"
+                     :disabled="state === 'loading'"
+                     class="w-full uppercase font-bold text-gray-800 bg-gray-50 border border-gray-300 rounded-xl px-3.5 py-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors"
+                     placeholder="ICN">
+              <span class="absolute right-3 top-2.5 text-xs text-gray-400">인천</span>
+            </div>
+          </div>
+
+          <!-- Destination -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">도착지 (공항코드)</label>
+            <div class="relative">
+              <input type="text"
+                     x-model="dest"
+                     maxlength="3"
+                     :disabled="state === 'loading'"
+                     class="w-full uppercase font-bold text-gray-800 bg-gray-50 border border-gray-300 rounded-xl px-3.5 py-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors"
+                     placeholder="CXR">
+              <span class="absolute right-3 top-2.5 text-xs text-gray-400">나트랑</span>
+            </div>
+          </div>
+
+          <!-- Depart Date -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">출발일</label>
+            <input type="date"
+                   x-model="depart"
+                   :disabled="state === 'loading'"
+                   class="w-full font-medium text-gray-800 bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
+          </div>
+
+          <!-- Return Date -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">복귀일</label>
+            <input type="date"
+                   x-model="return_date"
+                   :disabled="state === 'loading'"
+                   class="w-full font-medium text-gray-800 bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
+          </div>
+
+          <!-- Adults & Submit Button -->
+          <div class="grid grid-cols-2 gap-2 sm:col-span-2 lg:col-span-1">
+            <div>
+              <label class="block text-xs font-semibold text-gray-600 mb-1">인원(성인)</label>
+              <select x-model.number="adults"
+                      :disabled="state === 'loading'"
+                      class="w-full font-semibold text-gray-800 bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
+                <option value="1">1명</option>
+                <option value="2">2명</option>
+                <option value="3">3명</option>
+                <option value="4">4명</option>
+                <option value="5">5명</option>
+              </select>
+            </div>
+            <div class="flex items-end">
+              <button type="submit"
+                      :disabled="state === 'loading'"
+                      class="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2.5 px-4 rounded-xl shadow-sm transition-all duration-150 flex items-center justify-center gap-1">
+                <span x-show="state !== 'loading'">항공권 검색</span>
+                <span x-show="state === 'loading'" class="flex items-center gap-1.5">
+                  <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                  <span>검색중</span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- Validation Feedback Banner -->
+    <div x-show="validationError" x-cloak class="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="font-bold">입력 오류:</span>
+        <span x-text="validationError"></span>
+      </div>
+      <button @click="validationError = ''" class="text-red-500 hover:text-red-700 font-bold">&times;</button>
+    </div>
+
+    <!-- Partial Success / Warning Banner -->
+    <div x-show="warnings.length > 0" x-cloak class="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm space-y-1">
+      <div class="flex items-center gap-2 font-semibold">
+        <span>⚠️ 일부 소스 수집 주의:</span>
+      </div>
+      <template x-for="(w, idx) in warnings" :key="idx">
+        <div class="text-xs text-amber-700 pl-4 list-disc" x-text="w"></div>
+      </template>
+    </div>
+
+    <!-- Real-time SSE Progress Stepper -->
+    <section x-show="state === 'loading' || (progress.step > 0 && offers.length > 0)"
+             x-cloak
+             class="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                :class="state === 'loading' ? 'bg-blue-100 text-blue-800 animate-pulse' : 'bg-green-100 text-green-800'">
+            <span x-text="state === 'loading' ? '실시간 수집 진행중' : '수집 완료'"></span>
+          </span>
+          <span class="text-xs text-gray-500" x-text="progress.statusText"></span>
+        </div>
+
+        <!-- Provider Badges -->
+        <div class="flex items-center gap-2">
+          <!-- Naver Badge -->
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border"
+                :class="{
+                  'bg-emerald-50 text-emerald-800 border-emerald-200': progress.naverDone && !progress.naverFailed,
+                  'bg-red-50 text-red-700 border-red-200': progress.naverFailed,
+                  'bg-gray-50 text-gray-500 border-gray-200 animate-pulse': state === 'loading' && !progress.naverDone
+                }">
+            <span class="w-2 h-2 rounded-full"
+                  :class="{
+                    'bg-emerald-500': progress.naverDone && !progress.naverFailed,
+                    'bg-red-500': progress.naverFailed,
+                    'bg-gray-300': state === 'loading' && !progress.naverDone
+                  }"></span>
+            <span>네이버 항공권</span>
+            <span x-show="progress.naverDone && !progress.naverFailed" class="font-bold" x-text="'(' + progress.naverCount + '건)'"></span>
+          </span>
+
+          <!-- Trip.com Badge -->
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border"
+                :class="{
+                  'bg-blue-50 text-blue-800 border-blue-200': progress.tripDone && !progress.tripFailed,
+                  'bg-red-50 text-red-700 border-red-200': progress.tripFailed,
+                  'bg-gray-50 text-gray-500 border-gray-200 animate-pulse': state === 'loading' && !progress.tripDone
+                }">
+            <span class="w-2 h-2 rounded-full"
+                  :class="{
+                    'bg-blue-500': progress.tripDone && !progress.tripFailed,
+                    'bg-red-500': progress.tripFailed,
+                    'bg-gray-300': state === 'loading' && !progress.tripDone
+                  }"></span>
+            <span>트립닷컴</span>
+            <span x-show="progress.tripDone && !progress.tripFailed" class="font-bold" x-text="'(' + progress.tripCount + '건)'"></span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Stepper Visual -->
+      <div class="grid grid-cols-3 gap-2 pt-4 text-center text-xs font-medium">
+        <div class="flex items-center gap-2" :class="progress.step >= 1 ? 'text-blue-600' : 'text-gray-400'">
+          <div class="w-6 h-6 rounded-full flex items-center justify-center font-bold"
+               :class="progress.step >= 1 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'">1</div>
+          <span class="truncate">수집 요청</span>
+        </div>
+        <div class="flex items-center gap-2" :class="progress.step >= 2 ? 'text-blue-600' : 'text-gray-400'">
+          <div class="w-6 h-6 rounded-full flex items-center justify-center font-bold"
+               :class="progress.step >= 2 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'">2</div>
+          <span class="truncate">멀티소스 병렬 수집</span>
+        </div>
+        <div class="flex items-center gap-2" :class="progress.step >= 3 ? 'text-blue-600' : 'text-gray-400'">
+          <div class="w-6 h-6 rounded-full flex items-center justify-center font-bold"
+               :class="progress.step >= 3 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'">3</div>
+          <span class="truncate">최적 비교 및 정렬</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Instant Filter Toolbar (In-Memory < 5ms) -->
+    <section x-show="offers.length > 0"
+             x-cloak
+             class="bg-white rounded-2xl border border-gray-200 p-4 shadow-xs space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <!-- Toggles -->
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Direct Flight Toggle -->
+          <button type="button"
+                  @click="filterDirectOnly = !filterDirectOnly"
+                  :class="filterDirectOnly ? 'bg-blue-600 text-white border-blue-600 shadow-xs' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'"
+                  class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all">
+            <span>✈️ 직항만 보기</span>
+          </button>
+
+          <!-- No Card Discount Toggle -->
+          <button type="button"
+                  @click="filterNoCard = !filterNoCard"
+                  :class="filterNoCard ? 'bg-blue-600 text-white border-blue-600 shadow-xs' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'"
+                  class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all">
+            <span>💳 카드할인 제외 (일반가만)</span>
+          </button>
+        </div>
+
+        <!-- Sort and Count -->
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-gray-500">
+            결과: <strong class="text-gray-900 font-bold" x-text="filteredOffers.length"></strong>건
+            <span class="text-gray-400" x-text="'/ 전체 ' + offers.length + '건'"></span>
+          </span>
+
+          <select x-model="sortBy"
+                  class="text-xs font-semibold text-gray-700 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <option value="recommend">추천순 (직항 우선 · 최저가순)</option>
+            <option value="price_asc">최저가순</option>
+            <option value="duration_asc">최단 비행시간순</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Airline Filter Chips -->
+      <div x-show="availableAirlines.length > 0" class="flex flex-wrap items-center gap-1.5 pt-2 border-t border-gray-100">
+        <span class="text-xs text-gray-400 font-medium mr-1">항공사:</span>
+        <template x-for="airline in availableAirlines" :key="airline">
+          <button type="button"
+                  @click="toggleAirline(airline)"
+                  :class="selectedAirlines.includes(airline) ? 'bg-gray-800 text-white border-gray-800' : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-transparent'"
+                  class="px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors"
+                  x-text="airline">
+          </button>
+        </template>
+        <button type="button"
+                x-show="selectedAirlines.length > 0"
+                @click="selectedAirlines = []"
+                class="text-xs text-blue-600 hover:underline ml-2">전체 선택 해제</button>
+      </div>
+    </section>
+
+    <!-- State 1: Idle Welcome View -->
+    <div x-show="state === 'idle'" class="bg-white rounded-2xl border border-gray-200 p-12 text-center shadow-xs">
+      <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl">
+        🛫
+      </div>
+      <h2 class="text-lg font-bold text-gray-900 mb-1">최저가 항공권 비교 검색</h2>
+      <p class="text-sm text-gray-500 max-w-md mx-auto">
+        출발지와 목적지, 일정을 확인하고 <strong class="text-blue-600 font-semibold">[항공권 검색]</strong> 버튼을 클릭하면 네이버 항공권과 트립닷컴의 실시간 최저가를 즉시 비교합니다.
+      </p>
+    </div>
+
+    <!-- State 2: Loading Skeletons View -->
+    <div x-show="state === 'loading'" x-cloak class="space-y-4">
+      <template x-for="i in [1, 2, 3]" :key="i">
+        <div class="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs animate-pulse">
+          <div class="flex flex-col md:flex-row gap-4 items-center">
+            <div class="w-full md:w-32 h-16 bg-gray-100 rounded-xl"></div>
+            <div class="flex-1 w-full space-y-3">
+              <div class="h-4 bg-gray-100 rounded-md w-3/4"></div>
+              <div class="h-4 bg-gray-100 rounded-md w-1/2"></div>
+            </div>
+            <div class="w-full md:w-48 h-16 bg-gray-100 rounded-xl"></div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- State 3: Empty Results View -->
+    <div x-show="state === 'empty' || (state === 'success' && filteredOffers.length === 0)"
+         x-cloak
+         class="bg-white rounded-2xl border border-gray-200 p-12 text-center shadow-xs">
+      <div class="w-12 h-12 bg-gray-100 text-gray-500 rounded-2xl flex items-center justify-center mx-auto mb-3 text-xl">
+        🔍
+      </div>
+      <h3 class="text-base font-bold text-gray-800 mb-1">조건에 맞는 항공권을 찾을 수 없습니다</h3>
+      <p class="text-xs text-gray-500">필터 조건을 완화하거나 다른 일정으로 다시 검색해보세요.</p>
+    </div>
+
+    <!-- State 4: Error View with Retry -->
+    <div x-show="state === 'error'"
+         x-cloak
+         class="bg-white rounded-2xl border border-red-200 p-8 text-center shadow-xs space-y-4">
+      <div class="w-12 h-12 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto text-xl">
+        ⚠️
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-gray-900 mb-1">항공권 검색 중 오류가 발생했습니다</h3>
+        <p class="text-xs text-gray-600" x-text="errorMessage || '네트워크 연결 또는 소스 응답에 문제가 있습니다.'"></p>
+      </div>
+      <button type="button"
+              @click="searchFlights()"
+              class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors">
+        다시 시도
+      </button>
+    </div>
+
+    <!-- State 5: 3-Zone Responsive Card Feed -->
+    <div x-show="filteredOffers.length > 0" x-cloak class="space-y-4">
+      <template x-for="(offer, index) in filteredOffers" :key="index">
+        <article class="bg-white rounded-2xl border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all duration-200 overflow-hidden">
+          <div class="flex flex-col md:flex-row items-stretch">
+
+            <!-- Left Zone: Rank Badge & Provider Badge -->
+            <div class="w-full md:w-36 p-4 flex md:flex-col items-center md:items-start justify-between md:justify-center gap-2 border-b md:border-b-0 md:border-r border-gray-100 bg-gray-50/50">
+              <div class="flex items-center gap-1.5">
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-800 text-white font-black text-xs"
+                      x-text="'#' + (index + 1)"></span>
+                <span class="text-xs font-bold text-gray-600" x-show="index === 0">최적가</span>
+              </div>
+
+              <!-- Provider Badge -->
+              <div>
+                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border"
+                      :class="offer.provider === '트립닷컴' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'"
+                      x-text="offer.provider">
+                </span>
+                <div x-show="offer.seller_name" class="text-[11px] text-gray-400 mt-0.5 truncate max-w-[120px]" x-text="offer.seller_name"></div>
+              </div>
+            </div>
+
+            <!-- Center Zone: Outbound & Inbound Flight Timelines -->
+            <div class="flex-1 p-5 space-y-4">
+              <!-- Outbound Flight -->
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
+                <div class="flex items-center gap-2 sm:w-44">
+                  <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold">가는편</span>
+                  <div class="truncate">
+                    <span class="text-xs font-bold text-gray-900" x-text="offer.outbound_leg.airline_name"></span>
+                    <span class="text-[11px] text-gray-400 font-mono" x-text="offer.outbound_leg.flight_number"></span>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-4 flex-1 justify-center">
+                  <div class="text-right">
+                    <div class="text-base font-black text-gray-900" x-text="formatTime(offer.outbound_leg.depart_time)"></div>
+                    <div class="text-[11px] text-gray-500 font-semibold" x-text="offer.outbound_leg.depart_airport"></div>
+                  </div>
+                  <div class="flex flex-col items-center px-2">
+                    <span class="text-[10px] text-gray-400 font-medium" x-text="formatDuration(offer.outbound_leg.duration_minutes)"></span>
+                    <div class="w-16 sm:w-24 h-0.5 bg-gray-300 relative my-1">
+                      <div class="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-blue-600"></div>
+                    </div>
+                    <span class="text-[10px] font-bold"
+                          :class="offer.outbound_leg.is_direct ? 'text-blue-600' : 'text-amber-600'"
+                          x-text="offer.outbound_leg.is_direct ? '직항' : '경유'"></span>
+                  </div>
+                  <div class="text-left">
+                    <div class="text-base font-black text-gray-900" x-text="formatTime(offer.outbound_leg.arrive_time)"></div>
+                    <div class="text-[11px] text-gray-500 font-semibold" x-text="offer.outbound_leg.arrive_airport"></div>
+                  </div>
+                </div>
+
+                <div class="sm:w-28 text-right">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium"
+                        :class="offer.outbound_leg.has_checked_baggage ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'"
+                        x-text="offer.outbound_leg.has_checked_baggage ? '수하물 포함' : '수하물 미포함'">
+                  </span>
+                </div>
+              </div>
+
+              <!-- Inbound Flight -->
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="flex items-center gap-2 sm:w-44">
+                  <span class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold">오는편</span>
+                  <div class="truncate">
+                    <span class="text-xs font-bold text-gray-900" x-text="offer.inbound_leg.airline_name"></span>
+                    <span class="text-[11px] text-gray-400 font-mono" x-text="offer.inbound_leg.flight_number"></span>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-4 flex-1 justify-center">
+                  <div class="text-right">
+                    <div class="text-base font-black text-gray-900" x-text="formatTime(offer.inbound_leg.depart_time)"></div>
+                    <div class="text-[11px] text-gray-500 font-semibold" x-text="offer.inbound_leg.depart_airport"></div>
+                  </div>
+                  <div class="flex flex-col items-center px-2">
+                    <span class="text-[10px] text-gray-400 font-medium" x-text="formatDuration(offer.inbound_leg.duration_minutes)"></span>
+                    <div class="w-16 sm:w-24 h-0.5 bg-gray-300 relative my-1">
+                      <div class="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-emerald-600"></div>
+                    </div>
+                    <span class="text-[10px] font-bold"
+                          :class="offer.inbound_leg.is_direct ? 'text-blue-600' : 'text-amber-600'"
+                          x-text="offer.inbound_leg.is_direct ? '직항' : '경유'"></span>
+                  </div>
+                  <div class="text-left">
+                    <div class="text-base font-black text-gray-900" x-text="formatTime(offer.inbound_leg.arrive_time)"></div>
+                    <div class="text-[11px] text-gray-500 font-semibold" x-text="offer.inbound_leg.arrive_airport"></div>
+                  </div>
+                </div>
+
+                <div class="sm:w-28 text-right">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium"
+                        :class="offer.inbound_leg.has_checked_baggage ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'"
+                        x-text="offer.inbound_leg.has_checked_baggage ? '수하물 포함' : '수하물 미포함'">
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Zone: Total Price, Condition, Booking CTA -->
+            <div class="w-full md:w-56 p-5 flex flex-col items-end justify-center border-t md:border-t-0 md:border-l border-gray-100 bg-gray-50/70">
+              <span class="text-[11px] text-gray-500" x-text="'성인 ' + adults + '인 총액'"></span>
+              <div class="text-2xl font-black text-gray-900 tracking-tight" x-text="formatPrice(offer.total_price)"></div>
+
+              <!-- Payment Condition Tag -->
+              <div class="mt-1">
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold"
+                      :class="offer.has_card_discount ? 'bg-amber-100 text-amber-800' : 'bg-gray-200 text-gray-700'"
+                      x-text="offer.payment_condition">
+                </span>
+              </div>
+
+              <!-- Secure Deeplink Booking Button -->
+              <a :href="offer.deeplink_url || '#'"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 class="mt-4 w-full inline-flex items-center justify-center px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors duration-150 gap-1">
+                <span>예약하기</span>
+                <span>➔</span>
+              </a>
+            </div>
+
+          </div>
+        </article>
+      </template>
+    </div>
+
+  </main>
+
+  <!-- Alpine.js Application Logic -->
+  <script>
+    function flightApp() {
+      return {
+        origin: 'ICN',
+        dest: 'CXR',
+        depart: '2027-01-13',
+        return_date: '2027-01-16',
+        adults: 2,
+        state: 'idle', // 'idle' | 'loading' | 'success' | 'partial' | 'error' | 'empty'
+        errorMessage: '',
+        validationError: '',
+        progress: {
+          step: 0,
+          statusText: '',
+          naverDone: false,
+          naverCount: 0,
+          naverFailed: false,
+          tripDone: false,
+          tripCount: 0,
+          tripFailed: false,
+        },
+        offers: [],
+        warnings: [],
+        filterDirectOnly: false,
+        filterNoCard: false,
+        selectedAirlines: [],
+        sortBy: 'recommend',
+        eventSource: null,
+
+        get availableAirlines() {
+          const set = new Set();
+          this.offers.forEach(o => {
+            if (o.outbound_leg && o.outbound_leg.airline_name) set.add(o.outbound_leg.airline_name);
+            if (o.inbound_leg && o.inbound_leg.airline_name) set.add(o.inbound_leg.airline_name);
+          });
+          return Array.from(set).sort();
+        },
+
+        toggleAirline(name) {
+          if (this.selectedAirlines.includes(name)) {
+            this.selectedAirlines = this.selectedAirlines.filter(a => a !== name);
+          } else {
+            this.selectedAirlines.push(name);
+          }
+        },
+
+        get filteredOffers() {
+          let list = [...this.offers];
+
+          // 1. Direct Only filter
+          if (this.filterDirectOnly) {
+            list = list.filter(o => o.is_direct);
+          }
+
+          // 2. No Card Discount (General price only) filter
+          if (this.filterNoCard) {
+            list = list.filter(o => !o.has_card_discount);
+          }
+
+          // 3. Airline multi-select filter
+          if (this.selectedAirlines.length > 0) {
+            list = list.filter(o =>
+              this.selectedAirlines.includes(o.outbound_leg?.airline_name) ||
+              this.selectedAirlines.includes(o.inbound_leg?.airline_name)
+            );
+          }
+
+          // 4. Client-side sort
+          list.sort((a, b) => {
+            if (this.sortBy === 'recommend') {
+              // 1순위: 직항(0) vs 경유(1)
+              const aDirect = a.is_direct ? 0 : 1;
+              const bDirect = b.is_direct ? 0 : 1;
+              if (aDirect !== bDirect) return aDirect - bDirect;
+              // 2순위: 총액 오름차순
+              if (a.total_price !== b.total_price) return a.total_price - b.total_price;
+              // 3순위: 총 소요시간 오름차순
+              const aDuration = a.total_duration_minutes || (a.outbound_leg?.duration_minutes + a.inbound_leg?.duration_minutes) || 0;
+              const bDuration = b.total_duration_minutes || (b.outbound_leg?.duration_minutes + b.inbound_leg?.duration_minutes) || 0;
+              return aDuration - bDuration;
+            } else if (this.sortBy === 'price_asc') {
+              if (a.total_price !== b.total_price) return a.total_price - b.total_price;
+              const aDuration = a.total_duration_minutes || 0;
+              const bDuration = b.total_duration_minutes || 0;
+              return aDuration - bDuration;
+            } else if (this.sortBy === 'duration_asc') {
+              const aDuration = a.total_duration_minutes || 0;
+              const bDuration = b.total_duration_minutes || 0;
+              if (aDuration !== bDuration) return aDuration - bDuration;
+              return a.total_price - b.total_price;
+            }
+            return 0;
+          });
+
+          return list;
+        },
+
+        searchFlights() {
+          this.validationError = '';
+          this.errorMessage = '';
+
+          // Validate inputs
+          const orig = (this.origin || '').trim().toUpperCase();
+          const dst = (this.dest || '').trim().toUpperCase();
+          if (!orig || !dst || !this.depart || !this.return_date) {
+            this.validationError = '출발지, 도착지, 출발일, 복귀일을 모두 입력해주세요.';
+            return;
+          }
+          if (orig.length !== 3 || dst.length !== 3) {
+            this.validationError = '공항 코드는 3자리 영문 IATA 코드여야 합니다 (예: ICN, CXR).';
+            return;
+          }
+          if (this.depart > this.return_date) {
+            this.validationError = '출발일은 복귀일보다 이전이어야 합니다.';
+            return;
+          }
+
+          if (this.eventSource) {
+            this.eventSource.close();
+            this.eventSource = null;
+          }
+
+          this.state = 'loading';
+          this.offers = [];
+          this.warnings = [];
+          this.progress = {
+            step: 1,
+            statusText: '항공권 검색 요청 중...',
+            naverDone: false,
+            naverCount: 0,
+            naverFailed: false,
+            tripDone: false,
+            tripCount: 0,
+            tripFailed: false,
+          };
+
+          const params = new URLSearchParams({
+            from: orig,
+            to: dst,
+            depart: this.depart,
+            return: this.return_date,
+            adults: String(this.adults || 2),
+          });
+
+          const url = `/api/search/stream?${params.toString()}`;
+          const es = new EventSource(url);
+          this.eventSource = es;
+
+          es.addEventListener('started', (e) => {
+            this.progress.step = 1;
+            this.progress.statusText = '항공권 소스 수집 시작...';
+          });
+
+          es.addEventListener('progress', (e) => {
+            try {
+              const data = JSON.parse(e.data);
+              if (data.provider === 'naver') {
+                this.progress.naverDone = true;
+                this.progress.naverCount = data.count || 0;
+                if (data.status === 'failed') this.progress.naverFailed = true;
+              } else if (data.provider === 'trip') {
+                this.progress.tripDone = true;
+                this.progress.tripCount = data.count || 0;
+                if (data.status === 'failed') this.progress.tripFailed = true;
+              }
+              this.progress.step = 2;
+              this.progress.statusText = '실시간 항공권 데이터 집계 중...';
+            } catch (err) {
+              console.error('SSE progress parse error', err);
+            }
+          });
+
+          es.addEventListener('complete', (e) => {
+            try {
+              const data = JSON.parse(e.data);
+              this.offers = data.offers || [];
+              this.warnings = data.warnings || [];
+              this.progress.step = 3;
+              this.progress.statusText = '수집 완료';
+
+              if (this.offers.length > 0) {
+                this.state = this.warnings.length > 0 ? 'partial' : 'success';
+              } else {
+                if (this.warnings.length > 0 && this.warnings.some(w => w.includes('실패'))) {
+                  this.state = 'error';
+                  this.errorMessage = this.warnings.join('; ');
+                } else {
+                  this.state = 'empty';
+                }
+              }
+            } catch (err) {
+              this.state = 'error';
+              this.errorMessage = '결과 데이터 파싱에 실패했습니다.';
+            } finally {
+              es.close();
+              this.eventSource = null;
+            }
+          });
+
+          es.onerror = (err) => {
+            if (this.state === 'loading') {
+              this.state = 'error';
+              this.errorMessage = '실시간 스트림 연결 중 오류가 발생했습니다.';
+            }
+            es.close();
+            this.eventSource = null;
+          };
+        },
+
+        formatPrice(val) {
+          if (val === null || val === undefined) return '0원';
+          return Number(val).toLocaleString('ko-KR') + '원';
+        },
+
+        formatDuration(mins) {
+          if (!mins) return '0분';
+          const h = Math.floor(mins / 60);
+          const m = mins % 60;
+          if (h > 0 && m > 0) return `${h}시간 ${m}분`;
+          if (h > 0) return `${h}시간`;
+          return `${m}분`;
+        },
+
+        formatTime(dateStr) {
+          if (!dateStr) return '';
+          const m = String(dateStr).match(/(\d{2}:\d{2})/);
+          return m ? m[1] : dateStr;
+        }
+      };
+    }
+  </script>
+</body>
+</html>

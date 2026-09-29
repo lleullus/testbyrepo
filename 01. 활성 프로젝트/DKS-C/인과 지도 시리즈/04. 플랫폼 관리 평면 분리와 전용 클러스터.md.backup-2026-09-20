@@ -1,0 +1,180 @@
+# 플랫폼 관리 평면 분리와 전용 클러스터 — 사용자 평면과 5개 역할 클러스터의 경계
+
+## 문서의 목적
+
+이 문서는 Kubernetes의 Cluster라는 운영 경계를 알고 DKS-C의 사용자 클러스터를 접해 본 독자가, **사용자 워크로드와 플랫폼 관리 기능이 어디에서 갈리고 현재 관리 기능이 Console(Platform Core), Gateway, Monitoring, Logging, DevOps의 다섯 역할 클러스터에 어떻게 배치되어 있는지**를 한 흐름으로 이해하도록 돕는다. 중심 질문은 두 가지다. 사용자 클러스터와 플랫폼 클러스터를 나누면 Kubernetes 수준에서 어떤 직접 공유가 줄어드는가? 현재 자료가 확인하는 다섯 클러스터의 역할·자원·공유 기반은 어디까지인가?
+
+참조 자료는 현재의 배치와 구성요소를 설명하지만, 당시 “정확히 다섯 개”를 선택한 ADR, 대안 비교표, 전용 물리 호스트 배치 증적은 제공하지 않는다. 따라서 과거 도입 이유를 추측하지 않고, 문서로 확인되는 구조와 그 구조에서 설명할 수 있는 효과·조건·한계를 나누어 서술한다. 다섯 개라는 수는 설계상 필연값이 아니라 현재 운영 현황에 기록된 역할 배치로 다룬다.
+
+## 전체 이해 지도
+
+- **사용자 워크로드와 플랫폼 기능은 먼저 Kubernetes Cluster 단위에서 갈린다.** 사용자 VKS/Kubernetes Cluster는 애플리케이션·서비스·Pod를 수용하고, 플랫폼 Cluster 집합은 그 사용자 Cluster를 만들고 관리하고 관측하고 배포하게 하는 DKS-C 기능을 수용한다. 여기서 평면을 나눈다는 말은 Namespace보다 바깥의 Cluster 경계를 나눈다는 뜻이다.
+
+- **사용자 Cluster는 포털과 Gateway 경로를 통해 관리되고 외부 접근이 통제된다.** 운영 현황에는 사용자 Cluster를 DKS-C 포털(콘솔)로 관리하고 외부 직접 접근은 허용하지 않으며 `dksg-ic01-khm` APISIX를 통한다고 기록되어 있다. 사용자 Cluster와 VPC(가상 네트워크 범위)는 1:1로 대응하고 VPC별 SNAT(Source Network Address Translation, 외부로 나가는 출발지 주소를 바꾸는 주소 변환) External IP를 부여하므로, 이 구조는 Cluster와 네트워크 자원을 매핑하지만 SNAT 주소 자체가 방화벽이나 물리 격리를 보장한다는 뜻은 아니다.
+
+- **플랫폼 평면은 책임이 다른 다섯 Cluster로 현재 배치되어 있다.** Console(Platform Core)은 포털 요청·권한·자원 관리와 외부 시스템 연계를 맡고, Gateway는 APISIX(외부 요청을 받아 백엔드 API로 전달하는 Gateway)로 Backend Gateway API 및 Kubernetes Native API/REST API 요청을 전달하며 Keycloak(중앙 인증 구성요소)으로 인증을 처리한다. Monitoring은 메트릭을 저장·조회하고 알람을 전파하며, Logging은 로그를 수집·저장·검색·시각화하고, DevOps는 CI/CD(지속적 통합·배포) 작업을 빌드·이미지 Push·Kubernetes 배포로 실행한다.
+
+- **각 역할의 입력을 다른 형태의 운영 산출물로 바꾸는 경로는 서로 다르다.** 예를 들어 인증된 요청은 백엔드 API 호출로 전달되고, 메트릭은 시계열 저장·조회 결과와 알람이 되며, 로그는 색인·검색 데이터가 되고, 소스와 빌드 입력은 이미지와 배포 결과가 된다. 그러므로 역할 Cluster를 나눠도 호출·인증·저장소·대상 사용자 Cluster API 같은 서비스 의존은 남는다.
+
+- **서로 다른 Cluster를 사용하면 한 Cluster의 Kubernetes 제어 평면과 Worker 자원을 다른 Cluster의 Pod가 직접 점유하는 경로가 줄어든다.** API 서버·etcd(클러스터 상태를 저장하는 구성요소)·Scheduler(어느 Worker에 Pod를 배치할지 결정하는 구성요소)와 Worker 노드(Pod를 실행하는 노드)는 각 Cluster의 운영 단위에 속하므로, 사용자 Pod가 사용자 Cluster 자원을 많이 쓰는 사실만으로 플랫폼 Console Cluster에 같은 Pod가 스케줄되지는 않는다. 이것이 현재 구조만으로 설명할 수 있는 1차 분리 효과다.
+
+- **이 분리는 서비스 경로와 공통 기반을 없애지는 않는다.** 관리 Cluster 전체가 `prod-dks-vpc`와 `dkssol-project`의 단일 Transit G/W(네트워크 사이의 공통 게이트웨이)를 공유하고, 플랫폼·Supervisor PV(PersistentVolume, 클러스터가 사용하는 영속 저장 볼륨)에는 `vks-pf-storage-policy-admin`이 사용된다고 기록되어 있다. 따라서 공통 네트워크·스토리지 정책·상위 계층의 상태와 정책은 여러 역할에 동시에 영향을 줄 수 있다.
+
+- **“전용 Cluster”라는 이름만으로 하부 인프라의 독립 장애 도메인이 증명되지는 않는다.** 같은 WLD(Workload Domain, VCFA가 관리하는 논리적 가상화 자원 단위)/Region의 하이퍼바이저와 Zone, 물리 네트워크 패브릭, 스토리지 백엔드, 전원, 상위 VCF 관리 영역이 별도인지에 대한 증거는 현재 자료에 없다. Cluster 수준의 직접 간섭 감소와 물리 인프라까지 장애가 차단된다는 보장은 서로 다른 주장이다.
+
+- **현재 인벤토리는 배치 구조를 지지하지만 실제 실행·성공·장애 국소화까지 대신하지 않는다.** 운영 현황 표와 SW 아키텍처 표는 WLD별 Cluster 이름·노드 사양·역할별 구성요소를 보여준다. Pod·Node·PVC·Event·자원 상태, 네트워크 flow, LB·인증 로그와 시간대별 장애 기록이 있어야 실제 경로와 영향 범위를 판단할 수 있다.
+
+- **따라서 다섯 Cluster는 현재 책임 기준의 구조 사실로 읽어야 한다.** 역할별 입력과 자원 성격이 다르다는 사실은 분리 가능한 이유의 배경이 될 수 있지만, 정확히 다섯 개를 선택한 역사적 원인이나 2·3개 Cluster·Node Pool 대안보다 우월하다는 결론은 제공 자료의 범위 밖에 남는다.
+
+## 1. 사용자 워크로드와 플랫폼 관리 평면은 어디서 갈리는가?
+
+이 장의 질문은 “사용자 애플리케이션이 사용하는 자원과 DKS-C 자체를 운영하는 자원은 어떤 경계로 구분되는가?”이다. 운영 현황은 사용자 Cluster를 DKS-C 포털로 관리하고 외부 접근을 `dksg-ic01-khm` APISIX를 통해 통제한다고 기록한다. 같은 자료는 관리 Cluster가 `prod-dks-vpc`를 사용하고, 사용자 Cluster는 VPC와 1:1 관계를 가지며 VPC별 SNAT External IP를 부여받는다고 설명한다. 이 사실들은 현재 경계의 모양을 보여주지만, 분리 결정을 내린 당시의 이유나 모든 경로에서 실제로 적용된 방화벽 동작까지 말해주지는 않는다.
+
+### 사용자 평면: 애플리케이션을 수용하는 Cluster
+
+사용자 평면은 사용자 VKS/Kubernetes Cluster와 그 안의 애플리케이션·서비스·Pod로 구성된다. Kubernetes Namespace는 하나의 Cluster 안에서 애플리케이션을 논리적으로 다시 나누는 범위이고, 여기서 말하는 사용자 평면과 플랫폼 평면의 구분은 그보다 바깥인 **Cluster 단위**의 구분이다. 따라서 Namespace를 나누는 것과 별도 Cluster를 두는 것은 같은 수준의 경계가 아니다.
+
+운영 현황에는 사용자 Cluster가 DKS-C 포털(콘솔)로 관리되고 외부에서 직접 접근할 수 없으며, 외부 접근은 `dksg-ic01-khm` APISIX를 통해 통제된다고 기록되어 있다. 이때 APISIX는 외부 요청을 받아 백엔드 API 경로로 전달하는 Gateway 구성요소다. 사용자 Cluster의 기본 External-IP는 kube-apiserver, Application Ingress, SNAT에 각각 쓰이는 3개로 문서화되어 있다. 이 목록은 주소의 용도를 설명하는 현재 구성 정보이지, 세 주소 모두가 동일한 방향의 외부 통신을 허용한다는 뜻은 아니다.
+
+네트워크 측면에서 사용자 Cluster와 VPC의 1:1 대응은 각 Cluster가 어느 VPC 자원을 사용하는지 식별하게 하고, SNAT(Source Network Address Translation)는 외부로 나가는 통신의 출발지 주소를 VPC의 외부 IP로 바꾸는 구조를 설명한다. VCFA VPC 모델은 `Project : Transit G/W : VPC (VPC G/W) = 1 : 1 : N`, `VPC : SNAT (external ip) = 1 : 1` 관계를 제시하며, 동일 VPC 안의 VM 간에는 Security Group 개념 없이 통신 제한이 없다고 기록한다. 이 모델 관계와 주소 변환은 실제 ACL의 허용·차단이나 하부 물리망 격리를 증명하지 않으므로, 실제 패킷 경로와 정책은 02번 및 네트워크 런타임 증거에서 별도로 확인해야 한다.
+
+### 플랫폼 평면: 사용자 서비스를 만들고 운영하게 하는 기능
+
+플랫폼 평면은 사용자의 업무 애플리케이션이 아니라 그 애플리케이션을 만들고 관리하는 DKS-C 기능이다. SW 아키텍처 자료는 Console Cluster를 자원관리·권한관리·서비스 요청·CI/CD 기능의 중심으로 설명하고, Gateway Cluster에는 APISIX와 Keycloak, Monitoring Cluster에는 VictoriaMetrics·Grafana·알람 계층, Logging Cluster에는 OpenSearch·OpenTelemetry 계층, DevOps Cluster에는 빌드·배포 실행 계층을 배치한다.
+
+Console(Platform Core)은 DKS Console, Portal API, DKS Batch, DevOps API, VCFA MGMT, Backup Agent, DKS DB, Nats로 구성된다. 포털 요청을 인증·로깅하고 Kubernetes·모니터링·외부 시스템과 연동하는 요청이 Portal API와 자원 관리 기능으로 이어지며, DB는 Portal·DevOps·CUP·Knox 데이터를 저장하고 Nats는 CI/CD 로그 스트리밍과 이벤트를 전달한다. 이 설명은 역할과 대표 구성요소의 문서화이며 모든 구성요소의 실제 Pod·VM 위치나 현재 health를 확인했다는 뜻은 아니다.
+
+Gateway Cluster에서 APISIX는 DKS-C Backend Gateway와 Kubernetes Native API/REST API 서비스를 제공하고 Control Plane과 Data Plane을 분리하며 AutoScaling 대상으로 기록되어 있다. Keycloak은 DS ADFS SSO와 연동하는 OIDC 중앙 인증 구성요소이며, OIDC·JWT는 인증 요청과 토큰을 처리하는 기술 표기다. 그러므로 Gateway는 외부 요청을 인증·라우팅하는 역할로 이해할 수 있지만, 특정 요청이 어느 LB·경로·헤더를 거쳐 백엔드에 도착했는지는 런타임 로그와 설정을 확인해야 한다.
+
+Monitoring Cluster는 메트릭, 즉 시간에 따라 변하는 수치형 관측 데이터를 중앙 저장·조회하고 알람을 전파한다. VictoriaMetrics의 main/archive 저장소와 read/write/record 계층은 각각 중앙·장기 저장, 조회, 수집 게이트웨이, 집계·Archive 이전을 맡고, Grafana는 시각화를 담당한다. `vm-alert`, `alert-dispatcher`, 운영 Runbook은 알람 Rule·전파·동보와 대응 안내를 연결한다. Logging Cluster는 OpenTelemetry Collector로 로그를 수집·가공·전송하고 OpenSearch에 저장·색인하며, Dashboard로 검색·분석·시각화한다. `spoditor`는 StatefulSet Pod 제어와 OpenSearch 노드별 인증서 적용을 맡는 구성요소로 기록된다.
+
+DevOps Cluster는 CI/CD(지속적 통합·배포) Task를 실행하는 계층이다. `workflow-runner`가 DevOps API와 통신해 빌드 목록을 가져오고 빌드 서버를 만든 뒤 `workflow-engine`을 실행하면, DinD(Docker in Docker) `tenant`가 Task 실행 환경이 된다. `ci-git-clone`은 소스를 내려받고 `builder`는 Dockerfile을 빌드해 이미지를 Push하며 `deploy-k8s`는 Kubernetes 리소스를 배포한다. `container-logger`는 DinD 작업 로그를 실시간으로 Nats에 보낸다. 이 흐름은 입력이 빌드·이미지·배포 산출물로 변환되는 역할을 설명하지만, 이 사실만으로 모든 외부 구성요소가 `dkso` Cluster 안에서 실행되거나 작업이 항상 성공한다고 확정하지 않는다.
+
+### Cluster 경계가 줄이는 직접 간섭
+
+서로 다른 Kubernetes Cluster로 운영하면 한 Cluster의 Scheduler, API 서버·etcd 같은 제어 평면, Worker 노드 자원을 다른 Cluster의 Pod가 직접 점유하는 구조가 줄어든다. Scheduler는 자기 Cluster의 Worker에만 Pod를 배치하므로, 사용자 Cluster의 Pod가 그 Cluster의 Worker 자원을 많이 사용하더라도 그 사실만으로 플랫폼 Console Cluster의 Worker에 같은 Pod가 스케줄되지는 않는다. 이는 Namespace 격리보다 바깥에 있는 Cluster 경계에서 설명되는 현재 구조의 1차 효과다.
+
+다만 “직접 점유가 줄어든다”와 “장애가 절대로 전파되지 않는다”는 다르다. 사용자 Cluster가 정상이어도 공통 Gateway·인증·네트워크·스토리지·VCF 계층이 영향을 받으면 플랫폼 요청이나 외부 접근이 실패할 수 있고, 반대로 Gateway 장애는 사용자 애플리케이션의 외부 진입 경로에 영향을 줄 수 있다. 현재 자료에는 사용자 부하가 플랫폼 Cluster로 실제 전파되지 않았다는 장애 실험이나 장기 관측 결과가 없다.
+
+따라서 이 장의 답은 다음과 같다. **사용자 평면과 플랫폼 평면은 서로 다른 Kubernetes Cluster 집합과 관련 네트워크·자원 정책으로 구분되고, 그 결과 같은 Cluster의 제어 평면·노드 자원을 직접 공유하는 간섭이 줄어든다.** 그러나 이 경계는 서비스 호출과 공통 기반을 제거하지 않으며, 전용 물리 호스트나 무제한 장애 차단을 뜻하지 않는다. 플랫폼 평면 내부의 다섯 역할이 현재 어떻게 나뉘어 있는지는 다음 장에서 운영 인벤토리와 SW 아키텍처를 대조한다.
+
+## 2. 관리 평면의 5개 역할 클러스터는 무엇을 맡는가?
+
+이 장의 질문은 “현재 자료에서 다섯 클러스터가 어떤 책임과 구성요소를 맡고, 이 배치가 무엇을 말해주는가?”이다. 운영 현황의 Platform 클러스터 표는 운영 WLD01과 운영 WLD02 각각에 `dksc`, `dksg`, `dksm`, `dksl`, `dkso` 역할의 Cluster를 기록한다. SW 아키텍처 자료는 이 다섯 역할에 해당하는 구성요소를 설명한다. 따라서 다섯 개는 현재 배치의 구조적 개수로 확인할 수 있지만, 이 자료만으로 “부하 충돌 때문에 정확히 다섯 개를 선택했다”고 거슬러 올라갈 수는 없다.
+
+### 역할과 구성요소의 대응
+
+| 현재 역할 | 운영 WLD01 Cluster | 운영 WLD02 Cluster | 자료에서 확인되는 책임·대표 구성요소 |
+|---|---|---|---|
+| **Console / Platform Core** | `prd-dksc-ic01-khm` | `dev-dksc-ic01-khm` | DKS Console, Portal API, DKS Batch, DevOps API, VCFA MGMT, Backup Agent, DKS DB, Nats. 포털 요청·권한·자원 관리와 외부 시스템 연계를 담당한다. |
+| **Gateway** | `prd-dksg-ic01-khm` | `dev-dksg-ic01-khm` | APISIX와 Keycloak. Backend Gateway API, Kubernetes Native API/REST API, 인증 처리, APISIX의 Control/Data Plane 분리와 AutoScaling이 SW 자료에 기록되어 있다. |
+| **Monitoring** | `prd-dksm-ic01-khm` | `dev-dksm-ic01-khm` | `vm-alert`, VictoriaMetrics main/archive/read/write/record, Grafana, `alert-dispatcher`, 운영 Runbook. 중앙 메트릭 저장·조회·집계·알람 전파를 담당한다. |
+| **Logging** | `prd-dksl-ic01-khm` | `dev-dksl-ic01-khm` | OpenSearch, OpenSearch Dashboards, OpenTelemetry Collector, `spoditor`. 로그를 수집·가공·저장하고 검색·분석·시각화한다. |
+| **DevOps** | `prd-dkso-ic01-khm` | `dev-dkso-ic01-khm` | `workflow-runner`, `workflow-engine`, DinD `tenant`, `ci-git-clone`, `builder`, `deploy-k8s`, `container-logger`. CI/CD Task 실행, 빌드·이미지 Push·Kubernetes 배포와 로그 전송을 담당한다. |
+
+ArgoCD와 Harbor는 SW 아키텍처의 vSphere Supervisor Service 및 DevOps 이미지 저장소 항목에도 나타난다. ArgoCD에는 플랫폼 관리용과 사용자 Cluster 프로비저닝용 인스턴스가 구분되어 있고, Harbor는 관리자·애드온·DevOps 이미지와 차트를 저장하는 기능으로 설명된다. 그러므로 이들은 DevOps 역할과 연동되는 배포·이미지 의존으로 읽을 수 있지만, 위 역할 표만으로 모든 ArgoCD·Harbor 프로세스가 `dkso` Cluster 안에서 실행된다고 확정하지 않는다. 실제 Pod·VM 배치와 Supervisor Service 실행 위치는 런타임 인벤토리로 확인해야 한다.
+
+### 현재 노드 배치가 보여주는 것
+
+운영 현황 표의 노드 사양은 역할별 자원 배치가 동일하지 않다는 구조를 보여준다. 이는 현재 용량 계획의 관측값이지 모든 환경에 적용되는 기본값이나 성능 보장은 아니다.
+
+- **운영 WLD01:** 다섯 Cluster 모두 Control Plane 3개를 `4C/8G`로 기록한다. Console·Gateway·Monitoring은 Worker 5개(`16C/32G`), Logging은 Worker 5개(`16C/64G`), DevOps는 Worker 10개(`8C/16G`)로 기록되어 총 45개 노드가 된다.
+- **운영 WLD02:** 다섯 Cluster 모두 Control Plane 3개(`4C/8G`)와 Worker 3개(`8C/16G`)로 기록되어 각 Cluster 6개, 합계 30개 노드다.
+
+이 수치 차이는 Logging이나 DevOps가 현재 별도 자원 규모를 갖는다는 구조적 사실을 보여준다. 하지만 자원 규모가 다른 이유가 “정확히 다섯 개를 선택한 결정의 원인”이라고 문서화되어 있지는 않다. 실제 처리량·피크·장애 이력·운영 책임 단위 또는 단일 Cluster의 전용 Node Pool/taint·toleration 대안과 비교한 기록이 없기 때문이다. 따라서 여기서 말할 수 있는 것은 **현재 DKS-C가 역할별 책임과 현재 자원 규모를 다섯 Cluster로 분리해 배치한다**는 것까지다.
+
+다섯 역할은 입력과 출력의 종류도 서로 다르다. Gateway는 요청·인증을 받아 백엔드 경로로 전달하고, Monitoring은 시계열 데이터를 저장·조회하며, Logging은 로그를 색인하고, DevOps는 빌드 서버와 배포 작업을 실행한다. 이 차이는 별도 운영 단위가 어떤 효과를 낼 수 있는지 설명하는 배경이지만, 2개·3개 Cluster나 단일 Cluster 내 Node Pool보다 현재 구성이 필연적으로 우월하다는 증거는 아니다.
+
+따라서 이 장의 답은 다음과 같다. **다섯 Cluster는 Console/Platform Core, Gateway, Monitoring, Logging, DevOps라는 책임 기준으로 현재 배치된 구조이며, 각 역할의 구성요소와 Worker 규모도 동일하지 않다.** 이 문서는 그 구조와 현재 자원 스냅샷을 확인하지만, 다섯이라는 숫자의 역사적 선택 이유·대안 비교·성능 우열은 확정하지 않는다. 다섯으로 나눈 뒤의 공통 기반과 서비스 의존은 다음 장에서 격리 범위를 판단할 때 함께 고려한다.
+
+## 3. 전용 클러스터 뒤에도 어떤 공유 기반이 남는가?
+
+이 장의 질문은 “전용 Cluster라는 표현이 실제로 어디까지의 장애 경계를 의미하는가?”이다. 현재 자료는 다섯 플랫폼 Cluster를 별도 Cluster로 기록하지만, 모든 Cluster가 별도 ESXi 호스트·물리 네트워크 패브릭·스토리지 장비·전원·상위 VCF 관리 영역까지 나뉘었다고 증명하지 않는다. 따라서 Cluster 수준에서 줄어드는 직접 간섭과 그 아래에서 공동 영향이 남을 수 있는 조건을 함께 본다.
+
+### 자료에서 확인되는 공통 경계
+
+| 계층 | 확인된 현재 구조 | 이 구조가 의미하는 조건·한계 |
+|---|---|---|
+| **WLD·Region** | 운영 현황은 WLD01과 WLD02 각각에 다섯 Platform Cluster를 나열한다. 다섯 Cluster가 같은 WLD에 함께 배치되어 있고, VCFA 구조 자료의 `Workload Domain : Region = 1 : 1` 관계에 따라 같은 Region 범위로 읽힌다. | 같은 WLD·Region의 하이퍼바이저, Zone, 상위 관리 경로가 별도인지 자료만으로 확인할 수 없다. WLD 또는 Region 장애가 다수 Cluster에 영향을 줄 가능성은 남는다. |
+| **관리 네트워크** | 관리 클러스터 전체가 `prod-dks-vpc`를 사용하고 `dkssol-project`의 단일 Transit G/W를 공유한다고 운영 현황에 기록되어 있다. | 관리 Cluster별 Kubernetes 경계는 있어도 공통 VPC·Transit G/W의 경로·장애·정책 영향은 공유된다. 라우팅·ACL의 실제 허용·차단은 flow trace와 정책 조회가 필요하다. |
+| **사용자 네트워크** | 사용자 Cluster는 VPC와 1:1로 대응하고 VPC별 SNAT External IP를 가진다. | 사용자별 VPC 매핑은 구조 관계이고, SNAT은 주소 변환이다. 이 둘만으로 VPC 밖의 모든 통신이 차단되거나 물리적으로 격리된다고 판단할 수 없다. |
+| **관리용 스토리지 정책** | `vks-pf-storage-policy-admin`은 Supervisor VM OS와 Platform Cluster PV 용도로 기록되어 있으며, 운영 WLD01 표에는 DS001·50 TB가 기재되어 있다. 사용자 Cluster VM OS에는 별도의 `vks-pf-storage-policy`가 DS002·60 TB로 기재되어 있다. | 정책 수준에서 사용자와 플랫폼 용도를 구분하지만, 같은 정책을 사용하는 Supervisor·Platform 소비자의 quota·datastore·백엔드 상태는 공동 조건이 될 수 있다. 정책 분리가 물리 스토리지 장애 도메인 분리를 뜻하지는 않는다. |
+| **공통 서비스·계층** | 플랫폼 구성은 VCF Supervisor/CCI, ArgoCD, Harbor, APISIX, Keycloak, cert-manager 등 상위·외부 계층과 연계된다. SW 자료는 APISIX·Keycloak·ArgoCD·Harbor·기본 Addon의 역할을 기록한다. | 각 서비스가 어느 인스턴스·호스트·스토리지·인증서·DNS를 공유하는지는 현재 구성과 상태를 더 확인해야 한다. 공통 LB, DNS/PKI, 외부 ADFS 인증, 상위 VCF 관리 영역도 별도 장애 경계로 검증해야 한다. |
+
+특히 **하이퍼바이저(ESXi), 물리 네트워크 패브릭, 공유 스토리지, 물리 전원, 상위 VCF 관리 영역**은 전용 Kubernetes Cluster라는 사실만으로 분리되었다고 말할 수 없다. 자료에 전용 호스트·랙·패브릭·전원 회선의 배치 증거가 없는 한 이 계층의 공통 장애 가능성을 남겨 두는 것이 정확하다. 이는 다섯 Cluster의 가치가 없다는 뜻이 아니라, “Cluster 경계에서 직접 자원 공유를 줄이는 효과”와 “하부 인프라의 공통 장애를 제거하는 보장”이 서로 다른 주장이라는 뜻이다.
+
+### 조건에 따른 가능한 영향과 보장 범위
+
+다음은 실제 사고 기록이 아니라, 현재 구조와 의존에서 검토할 수 있는 조건부 경로다.
+
+- 사용자 Cluster의 Pod·노드 자원 고갈은 같은 Cluster의 제어 평면·Worker 자원에 직접 영향을 주지만, 별도 Platform Cluster의 Scheduler가 그 Pod를 함께 배치하지는 않는다. 다만 사용자가 접근해야 하는 APISIX·인증·공통 네트워크가 정상이라는 조건이 추가된다.
+- Logging Cluster의 수집·색인 부하는 우선 그 Cluster의 Worker·PV·OpenSearch 계층에서 처리된다. 그러나 `vks-pf-storage-policy-admin`을 공유하는 범위의 quota·datastore 여유나 공통 네트워크가 부족하면 다른 플랫폼 기능에 공동 영향이 생길 수 있다. 현재 자료는 이런 장애가 실제 발생했다고 말하지 않는다.
+- Gateway Cluster의 APISIX는 외부 요청과 백엔드 라우팅을 담당한다. 따라서 Gateway Cluster 자체의 장애와 사용자 Cluster 애플리케이션의 장애는 서로 다른 Cluster 수준 문제로 구분할 수 있지만, Gateway가 사용하는 LB·VPC·인증서·Keycloak·DNS가 공통으로 실패하면 여러 대상의 외부 접근이 함께 영향을 받을 수 있다.
+- Monitoring Cluster와 Console Cluster를 분리하면 관측 데이터 처리와 포털 API의 Kubernetes 자원 직접 점유는 분리된다. 그러나 Monitoring이 수집하는 데이터가 네트워크·스토리지·인증 경계를 통과한다는 의존까지 없어지는 것은 아니다.
+- DevOps Cluster의 빌드·배포 실행과 Console의 포털 요청은 Cluster 수준에서는 분리되지만, ArgoCD·Harbor·대상 사용자 Cluster API·이미지 저장소 접근이 정상이어야 전체 작업이 완료된다. 한 구성요소의 Pod가 Ready라는 사실만으로 전체 배포 경로를 보장할 수 없다.
+
+따라서 “장애 반경을 국소화한다”는 표현은 **각 Cluster의 Kubernetes 제어 평면·노드·역할별 자원에 대한 직접 영향 범위를 줄인다**는 의미로 한정해야 한다. “장애가 항상 한 Cluster 안에서 끝난다”, “나머지 기능이 계속 정상이다”, “하부 인프라도 독립이다”와 같은 무제한 보장은 현재 자료의 범위를 넘는다.
+
+이 장의 답은 다음과 같다. **전용 Cluster는 Kubernetes 수준의 직접 자원·제어 평면 경계를 제공하지만, 관리 VPC·Transit G/W·정책형 스토리지·WLD/Region·LB·인증·하부 물리 인프라가 공통이면 공동 장애 가능성이 남는다.** 실제 장애 반경은 이름이나 노드 수만으로 판정하지 않고 해당 계층의 상태·경로·이벤트·장애 기록을 대조해야 한다. 이로써 전용 Cluster가 무엇을 분리하고 무엇까지는 분리하지 않는지의 범위를 닫는다.
+
+## 조사·증거 경로
+
+이 구획은 구성상 가능한 동작과 DKS-C에서 실제로 관측된 사실을 나누기 위한 것이다. 운영 현황과 SW 아키텍처 자료는 현재 인벤토리·역할·정책을 지지하지만, 특정 부하가 다른 Cluster로 전파되지 않았다는 실험이나 특정 장애의 실제 경로를 제공하지 않는다. 따라서 아래의 가능한 동작은 조건부 메커니즘으로, 실제 관측 증거는 별도의 판단 근거로 읽는다.
+
+### 설정상 가능한 동작과 필요한 조건
+
+| 설정·조건 | 설명할 수 있는 가능한 동작·효과 | 실행·효과를 확인하기 위해 필요한 증거 |
+|---|---|---|
+| 사용자 Cluster와 Platform Cluster가 서로 다른 Kubernetes Cluster임 | 한 Cluster의 Scheduler·API 서버·etcd·Worker 자원을 다른 Cluster의 Pod가 직접 점유하는 경로가 줄어든다. | 두 Cluster의 API endpoint, Node 목록·소속, Pod 스케줄링과 자원 사용량. 이 증거는 직접 자원 경계를 지지하지만 하부 물리 호스트 분리를 대신하지 않는다. |
+| 다섯 Platform 역할을 별도 Cluster로 배치함 | Console·Gateway·Monitoring·Logging·DevOps의 Pod·제어 평면 자원과 역할별 운영 단위를 나누어 관리할 수 있다. | Cluster별 실제 Pod·Node·Namespace·ResourceQuota와 배포 매니페스트. 역할 이름만으로 현재 실행 위치나 성능을 확정하지 않는다. |
+| 관리 Cluster가 `prod-dks-vpc`와 단일 Transit G/W를 공유함 | 관리 서비스 사이의 통신과 외부 경로가 공통 VPC·Transit 경로의 상태·정책에 의존할 수 있다. | VPC/Transit 라우팅, NSX 정책·flow trace, Transit G/W·LB 상태, APISIX access log. 설정만으로 실제 요청이 그 경로를 통과했다고 말하지 않는다. |
+| `vks-pf-storage-policy-admin`을 Supervisor VM OS·Platform PV에 사용함 | 같은 정책·datastore·백엔드를 쓰는 소비자 사이에 quota·용량·스토리지 상태가 공통 조건이 될 수 있다. | `StoragePolicyQuota`·실사용량·datastore health·PVC/PV·VolumeAttachment·VM 이벤트와 시간대별 상관관계. 정책 용도 표만으로 실제 quota 고갈을 주장하지 않는다. |
+| Gateway Cluster의 APISIX와 인증 계층을 사용함 | 외부 요청을 APISIX가 수신·라우팅하고 인증 계층과 연계하는 구조를 설명할 수 있다. 원본 IP·Two-Arm·SNAT 변환의 구체 조건은 별도 문서의 질문이다. | LB 설정·양방향 route·APISIX route/plugin·access log·Keycloak/OIDC 로그·백엔드 수신 로그. 이것이 있어야 실제 패킷 경로와 헤더 전달을 판단할 수 있다. |
+
+### 실제 관측 증거와 판단 범위
+
+| 확인하려는 주장 | 현재 확인되는 자료·추가 관측 증거 | 지지하는 판단 | 그것만으로 말할 수 없는 것 |
+|---|---|---|---|
+| 현재 Platform Cluster가 다섯 역할로 배치되어 있는가? | [운영 현황 요약의 Platform 클러스터 표](../DKS-C%20운영%20현황%20요약.md#platform-클러스터)와 각 WLD의 Cluster·CP/WK 표 | WLD별 Cluster 이름, 역할, 노드 사양이라는 현재 인벤토리 구조 | 다섯이라는 숫자의 과거 선택 이유, 실제 장애 반경, 장기 가용성 |
+| 각 역할에 어떤 소프트웨어가 속하는가? | [SW 아키텍처의 Console·Gateway·DevOps·Monitoring·Logging 절](../DKS-C%20SW%20아키텍처%20및%20기술%20스택.md#console-클러스터-dks-c-console-전반-기능-제공-자원관리-권한관리-서비스-요청-cicd) | 역할별 책임과 대표 구성요소의 문서화 | 실제 Pod·VM이 어느 Cluster에서 실행 중인지, 모든 구성요소의 health와 자원 사용량 |
+| 관리 Cluster와 사용자 Cluster의 네트워크 구조는 무엇인가? | [운영 현황의 Network 항목](../DKS-C%20운영%20현황%20요약.md#network), [VCFA VPC 모델](../VCFA%20인프라%20아키텍처.md#4-vpc-model) | 관리 `prod-dks-vpc`·Transit G/W 공유와 사용자 VPC 1:1·SNAT 구조 | 실제 ACL 허용·차단, 패킷이 거친 장비, 횡적 통신이 실제로 차단되었다는 판단 |
+| 플랫폼과 사용자의 스토리지가 어떤 정책으로 나뉘는가? | [운영 현황의 Block Storage policy 표](../DKS-C%20운영%20현황%20요약.md#block-storage-policy-운영-wld01) | `admin` 정책의 Platform/Supervisor 용도와 사용자 VM OS 정책의 구분 | 정책·datastore·물리 장비가 서로 다른 장애 도메인인지, quota 고갈·복구 실패가 실제 발생했는지 |
+| 다섯 Cluster가 실제로 Ready이며 역할별 장애가 국소화되었는가? | 각 Cluster의 `kubectl get nodes`, API/etcd health, Pod·PVC·Event·Resource 상태, 모니터링 시계열과 장애 티켓 | 특정 시각의 노드·Pod·저장소 health와 장애 전파 여부를 시간축으로 판단 | 인벤토리 문서만으로 현재 가용성·무중단·모든 공통 장애의 부재 |
+| 사용자 부하가 플랫폼 자원과 직접 충돌하지 않았는가? | 부하 시간대의 사용자/Platform Cluster별 Node·Pod 자원, throttling/OOM, API latency, 네트워크·스토리지 이벤트, 장애 기록 | 해당 부하 사건의 직접 영향과 공통 의존 영향을 구분 | 한 번의 정상 관측으로 모든 부하·장애 조건에서 격리가 보장된다는 판단 |
+| 정확히 다섯 개를 선택한 이유가 확인되는가? | 제공된 원자료에는 역할·현재 배치는 있으나 ADR·대안 비교·당시 요구사항은 없음. 별도 결정 기록을 찾아야 한다. | 현재 수는 구조 사실로 유지하고, 역사적 설계 인과는 미확정으로 판단 | 부하 특성만으로 5개가 필연적이었다는 결론, 2·3개 또는 Node Pool 대안의 우열 |
+| 하부 물리 인프라까지 분리되었는가? | ESXi/호스트·WLD/Zone·물리 네트워크 패브릭·스토리지 백엔드·전원·상위 VCF 관리 영역의 배치·장애 도메인 자료 | 확인된 계층까지만 공통·분리 범위를 판단 | 전용 Kubernetes Cluster라는 표기만으로 물리 분리를 확정하는 것 |
+
+현재 문서에서 먼저 확인할 수 있는 것은 **가능한 구성과 현재 인벤토리**다. 실제 실행과 장애 판단은 Cluster 상태, 네트워크 flow, 스토리지 이벤트, 인증·LB 로그, 시간대별 자원·장애 기록을 결합해야 한다. 조사자가 인벤토리→구성→런타임 상태 순으로 자료를 읽는다고 해서 시스템도 그 순서로 실행된다는 뜻은 아니다. 이 구획의 결론은 “다섯 역할 구조는 문서화되어 있으나, 효과의 실제 크기와 하부 공통 장애 도메인은 추가 증거가 필요하다”는 범위까지다.
+
+## 남아 있는 제약과 질문
+
+이 문서는 현재 DKS-C의 사용자 평면·플랫폼 평면 경계와 다섯 역할 Cluster의 배치 구조를 답했다. 다음 제약은 답하지 못한 문제를 숨기는 것이 아니라, 확인된 구조를 넘어설 때 필요한 증거의 범위다.
+
+- **정확히 다섯 개를 선택한 이유:** Logging·Monitoring·Gateway·DevOps의 입력과 자원 사용 성격이 서로 다르다는 점은 분리 가능성의 배경이다. 그러나 2개·3개 Cluster, 단일 Cluster의 전용 Node Pool, taint/toleration·Namespace 격리와 비교한 ADR이나 결정 기록은 제공 자료에서 확인되지 않는다.
+- **물리적 격리의 범위:** 현재 확인되는 것은 Kubernetes Cluster·노드 집합과 네트워크·스토리지 정책 수준의 구분이다. ESXi 호스트, 물리 네트워크 패브릭, 공유 스토리지 백엔드, 물리 전원, 상위 VCF 관리 영역이 별도 장애 도메인인지는 확인되지 않았다.
+- **공유 네트워크:** 관리 Cluster 전체가 `prod-dks-vpc`와 `dkssol-project`의 단일 Transit G/W를 공유한다는 기록이 있다. 이 공통 경로의 장애·정책·용량이 여러 관리 기능에 미치는 실제 범위는 NSX/라우팅 상태와 flow evidence가 필요하다.
+- **공유 스토리지:** `vks-pf-storage-policy-admin`의 Platform/Supervisor 용도는 확인되지만, 정책·datastore·물리 백엔드·quota 소비자의 실제 공유 범위와 장애 전파는 런타임 상태로 판단해야 한다.
+- **역할과 실행 위치의 정합성:** SW 아키텍처 표에는 Keycloak이 Gateway Cluster 구성요소로, ArgoCD와 Harbor는 Supervisor Service·이미지 저장소로 기록된다. 실제 Pod·VM·서비스 인스턴스의 배치가 이 문서의 역할표와 일치하는지는 현재 클러스터 인벤토리로 확인해야 한다.
+- **환경 식별자와 시점:** 운영 현황의 VCF Overview에는 `kh-prd-ia-wld01`·`kh-prd-ia-wld02`, Platform 표에는 `kh-prd-ai-wld01`·`kh-prd-ai-wld02`가 사용된다. 공식 WLD 명칭을 확정하기 전에는 이름만으로 서로 다른 물리 환경이라고 해석하지 않는다. 노드 수·사양도 문서 작성 시점의 스냅샷이다.
+- **실제 장애 반경:** 노드가 Ready이거나 특정 Pod가 정상이라는 관측 하나로 무중단·무전파를 보장할 수 없다. 부하 사건, API·etcd, 네트워크, LB, 인증, PV·datastore 이벤트를 같은 시간축으로 확인해야 한다.
+- **Gateway의 상세 메커니즘:** Gateway Cluster가 다섯 역할 중 하나라는 구조는 이 문서에서 확인했다. 외부 클라이언트 요청이 LB와 APISIX를 거쳐 백엔드로 전달되는 패킷 처리, Two-Arm의 return path, SNAT·원본 IP·X-Forwarded-For 조건은 새로운 장애가 생겨서 이어지는 주제가 아니다. [05번 문서](05.%20외부%20트래픽%20진입%20경로와%20APISIX·Two-Arm%20LB.md#전체-이해-지도)가 이 Gateway 역할을 실제 외부 트래픽 처리 메커니즘으로 확장해 설명한다.
+
+따라서 이 문서의 결론은 “사용자와 플랫폼을 Cluster 수준에서 나누고, 플랫폼 기능을 현재 다섯 역할 Cluster에 배치한다”는 현재 구조와, 그 구조가 직접 자원 공유를 줄이는 범위까지다. 하부 공유 인프라의 공통 장애 가능성과 다섯이라는 수의 역사적 선택 이유는 남은 확인 질문으로 보존한다. 05번은 이 결론을 바탕으로 이미 식별된 Gateway Cluster의 외부 요청·패킷 변환 경로를 더 깊게 읽는 보완 문서다.
+
+## 상세 자료 색인
+
+다음 색인은 구성요소 목록이 아니라, 이 문서를 읽은 뒤 생기는 질문과 확인 위치를 연결한다. 운영 계정·비밀번호·민감한 접속 정보는 복제하지 않고 원자료의 필요한 구조 범위만 가리킨다.
+
+| 지금 풀어야 할 질문 | 확인할 자료 또는 본문 위치 | 확인할 내용 |
+|---|---|---|
+| 사용자 Cluster와 플랫폼 Cluster는 어떤 경계로 나뉘며, 그 경계가 보장하지 않는 것은 무엇인가? | [1. 사용자 워크로드와 플랫폼 관리 평면은 어디서 갈리는가?](#1-사용자-워크로드와-플랫폼-관리-평면은-어디서-갈리는가) 및 [운영 현황의 시스템 아키텍처](../DKS-C%20운영%20현황%20요약.md#시스템-아키텍처) | 포털·APISIX 관리 경로, 관리 `prod-dks-vpc`, 사용자 VPC 1:1·SNAT 구조와 Cluster 수준 격리 범위 |
+| 현재 두 WLD에서 다섯 Platform Cluster의 이름·노드 수·사양은 무엇인가? | [2. 관리 평면의 5개 역할 클러스터는 무엇을 맡는가?](#2-관리-평면의-5개-역할-클러스터는-무엇을-맡는가) 및 [운영 현황의 Platform 클러스터](../DKS-C%20운영%20현황%20요약.md#platform-클러스터) | `dksc`·`dksg`·`dksm`·`dksl`·`dkso`의 WLD별 대응과 CP/Worker 스냅샷 |
+| Console / Platform Core가 실제로 처리하는 입력·출력은 무엇인가? | [SW 아키텍처의 Console 클러스터](../DKS-C%20SW%20아키텍처%20및%20기술%20스택.md#console-클러스터-dks-c-console-전반-기능-제공-자원관리-권한관리-서비스-요청-cicd) | DKS Console, Portal API, VCFA MGMT, DB·Nats 등 포털·자원 관리 구성요소 |
+| Gateway Cluster 안에서 APISIX와 Keycloak의 역할·배치는 어디까지 확인되는가? | [SW 아키텍처의 Gateway Cluster](../DKS-C%20SW%20아키텍처%20및%20기술%20스택.md#gateway-cluster-backend-gateway-api-및-인증-처리) | Backend Gateway API, Native API/REST API, Control/Data Plane 분리, OIDC·JWT 인증 구성 |
+| Monitoring·Logging·DevOps 역할은 어떤 데이터와 작업을 변환하는가? | [SW 아키텍처의 Monitoring](../DKS-C%20SW%20아키텍처%20및%20기술%20스택.md#monitoring-클러스터-클러스터-메트릭-중앙-관리-알람동보-제어), [Logging](../DKS-C%20SW%20아키텍처%20및%20기술%20스택.md#logging-클러스터-로그-수집-및-시각화), [DevOps](../DKS-C%20SW%20아키텍처%20및%20기술%20스택.md#devops-클러스터-devops-task-api-및-빌드배포-처리) | 메트릭 저장·알람, 로그 수집·색인, 빌드·이미지·Kubernetes 배포의 입력·출력과 대표 구성요소 |
+| 관리 Cluster와 사용자 Cluster가 실제로 어떤 VPC·Transit·SNAT 경로를 쓰는가? | [운영 현황의 Network](../DKS-C%20운영%20현황%20요약.md#network) 및 [VCFA VPC Model](../VCFA%20인프라%20아키텍처.md#4-vpc-model) | 관리 VPC·Transit G/W 공유, 사용자 VPC 1:1, VPC별 SNAT의 구조적 의미와 실제 경로 확인 지점 |
+| Platform PV와 사용자 VM OS는 어떤 Storage Policy를 공유하거나 분리하는가? | [운영 현황의 Block Storage policy](../DKS-C%20운영%20현황%20요약.md#block-storage-policy-운영-wld01) 및 [3. 전용 클러스터 뒤에도 어떤 공유 기반이 남는가?](#3-전용-클러스터-뒤에도-어떤-공유-기반이-남는가) | `vks-pf-storage-policy-admin`의 Supervisor/Platform 용도, 사용자 정책과 quota·datastore 장애 범위 |
+| 전용 Cluster가 ESXi·물리망·스토리지·전원까지 분리되었는지 어떻게 판단하는가? | [조사·증거 경로](#조사증거-경로) 및 [VCFA Fleet·Domain 구조](../VCFA%20인프라%20아키텍처.md#1-vcf-fleet-domain-구조) | 호스트·WLD·Zone·물리 패브릭·스토리지 백엔드·상위 VCF 관리 영역의 별도 장애 도메인 증거 |
+| 현재 다섯 Cluster가 정상이고 장애 반경이 실제로 국소화되었는가? | [조사·증거 경로 — 실제 관측 증거와 판단 범위](#실제-관측-증거와-판단-범위) | Node/API/etcd·Pod/PVC·Event·자원·flow·LB·인증 로그와 장애 기록을 시간축으로 대조하는 방법 |
+| 왜 정확히 다섯 개를 선택했으며 대안보다 우월한가? | [남아 있는 제약과 질문](#남아-있는-제약과-질문) 및 별도 ADR·결정 기록 | 현재 배치 사실과 역사적 선택 이유의 구분, 2·3개 Cluster·Node Pool 대안 비교의 부재 |
+| Gateway Cluster의 외부 트래픽 처리와 Two-Arm 조건은 어디에서 확장해 읽는가? | [05번 외부 트래픽 진입 경로와 APISIX·Two-Arm LB](05.%20외부%20트래픽%20진입%20경로와%20APISIX·Two-Arm%20LB.md#전체-이해-지도) 및 [VCFA Load Balancer Networking](../VCFA%20인프라%20아키텍처.md#5-load-balancer-networking) | LB·APISIX의 요청 경로, return path, SNAT·원본 IP·X-Forwarded-For의 조건과 판단 범위 |

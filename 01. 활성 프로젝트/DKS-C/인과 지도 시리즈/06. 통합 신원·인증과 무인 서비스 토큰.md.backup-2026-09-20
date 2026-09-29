@@ -1,0 +1,260 @@
+# 06. 통합 신원·인증과 무인 서비스 토큰 — 공통 IdP에서 사람과 기계의 경로를 어떻게 나누는가?
+
+## 문서의 목적
+
+이 문서는 DKS-C의 인증을 하나의 로그인 이야기로 합치지 않고, **사람이 브라우저로 로그인하는 경로**와 **브라우저 없이 실행되는 시스템이 자격증명을 사용하는 경로**로 나누어 이해하기 위한 것이다. 중심 질문은 두 가지다. 첫째, 사내 ADFS와 Keycloak이 어떤 공통 신원 기반을 만들고, 그 기반에서 Console·Grafana·OpenSearch·Kubernetes 같은 서비스가 어떤 OIDC 경계를 갖는가? 둘째, 헬스체크·배치·API 소비자가 어떤 입력과 Token Exchange를 거쳐 장기 Access Token을 받고, 그 자격증명이 어디에 저장·주입되며 무엇으로 통제되는가?
+
+원자료가 직접 설명하는 범위는 Keycloak `DKS` Realm과 Client 설정, OIDC Authorization Code 발급 절차, Token Exchange의 발급 단계와 일부 JWT Claim 예시다. ADFS와 Keycloak 사이에서 실제로 사용한 federation 프로토콜, 서비스별 role/scope 매핑, Kubernetes Secret의 etcd 암호화 설정, 특정 무인 consumer의 실제 배포·호출 성공은 원자료만으로 확인되지 않는다. 따라서 아래에서는 **구성상 가능한 동작**, **자료에 적힌 설정·절차**, **실제 실행 여부를 판단하는 데 필요한 증거**를 가까이 붙여 구분한다. 사람의 SSO가 기계 인증을 발생시켰다는 과거 인과는 주장하지 않으며, 07번은 발급된 Credential과 TLS 인증서의 횡단 수명주기를 다루는 별도의 운영 질문으로 연결한다.
+
+## 전체 이해 지도
+
+- **공통 신원 기반의 중심은 Keycloak의 `DKS` Realm이다.** Realm은 사용자·그룹·Client를 서로 묶어 관리하는 경계이고, Client는 토큰을 사용할 서비스나 자동화를 등록하는 단위다. Keycloak은 이 Realm의 OIDC endpoint, 즉 인증 요청과 토큰 발급을 받는 지점에서 토큰을 내는 중앙 IAM으로 문서화되어 있다. 문서에 적힌 Issuer는 `https://keycloak.dks.samsungds.net/realms/DKS`이므로, 여러 서비스가 같은 발급자를 참조할 수 있는 출발점이 된다.
+- **ADFS는 Keycloak 앞단에서 사내 사용자의 신원을 확인하는 upstream IdP이고, Keycloak은 그 결과를 downstream 서비스에 전달하는 발급자다.** IdP는 사용자가 누구인지 확인하는 신원 제공자이며, 이 둘 사이의 연결은 federation 구간이다. 자료는 ADFS SSO 연계와 Keycloak의 OIDC 중앙 인증을 말하지만 실제 wire protocol이 SAML 2.0인지 OIDC인지는 IdP metadata와 설정을 보기 전까지 확정하지 않는다.
+- **브라우저를 쓸 수 있는 사람은 자신이 접근하는 서비스의 OIDC Client를 통해 Authorization Code를 받는다.** 서비스 측 OIDC 소비자인 RP가 브라우저를 Keycloak authorization endpoint로 보내면 사용자의 Keycloak 또는 필요한 ADFS 인증이 끝난 뒤 등록된 `redirect_uri`로 일회용 Code가 돌아오고, 서비스 backend가 그 Code를 token endpoint에 제출해 ID Token과 Access Token으로 바꾼다.
+- **Code가 생겼다고 서비스 접근이 끝난 것은 아니다.** RP는 발급자의 `iss`(누가 발급했는지), JWT 서명, 대상 `aud`(어느 API·앱을 위한 것인지), 만료 시각 `exp`, 필요한 사용자·그룹·role Claim을 검증한 뒤 자체 세션을 만들거나 API 요청을 보낸다. 그러므로 같은 Realm의 토큰을 받았다는 사실만으로 Console·Grafana·OpenSearch·Kubernetes가 같은 권한을 주는 것은 아니다.
+- **브라우저 없는 헬스체크·배치·API consumer는 사람 경로를 매번 반복하지 않는다.** 사전에 등록한 Long-Term Client와 그 Secret, 그리고 사람이 한 번 인증해 얻은 Subject Token(교환의 입력으로 쓰는 기존 Access Token)을 준비해 Keycloak의 Token Exchange에 제출한다.
+- **Token Exchange는 Subject Token과 교환 Client의 자격을 다른 용도의 Access Token으로 변환하는 발급 단계다.** 자료에 기재된 절차는 Code 발급 → 토큰 소유자 Client Access Token 발급 → `dkssol-console-longterm-client`로 교환이며, 주요 문서 설정값은 365일이다. 다만 실제 허용 `audience`(토큰을 받아들일 대상)·`scope`(허용 기능 범위)·role 정책과 발급된 JWT의 `exp`가 있어야 그 범위와 만료를 확정할 수 있다.
+- **발급 뒤 consumer는 장기 Access Token을 `Authorization: Bearer` 헤더로 대상 API에 보내고, 토큰을 받는 API(Resource Server)가 다시 issuer·서명·audience·expiry·권한을 검증한다.** Kubernetes에서 실행된다면 Kubernetes `Secret`(민감한 값을 Pod에 전달하는 API 객체)의 값이 volume 파일이나 환경 변수로 주입될 수 있지만, 원자료에는 특정 Secret manifest나 mount 설정이 없으므로 이 주입 경로가 현재 배포에 적용되었다고 단정하지 않는다.
+- **장기 토큰의 보관 위치와 발급 기간은 안전성 그 자체가 아니다.** Secret 객체는 전달·접근 단위일 뿐 etcd에 저장할 때의 암호화, 최소 권한, 로그 마스킹, 노드·백업 보호를 자동으로 보장하지 않는다. 문서상 365일이라는 Client 설정도 실제 토큰의 `exp`와 Client policy를 대조해야 하며, 만료·교체·폐기는 발급 이후의 별도 lifecycle 판단이다.
+- **따라서 사람과 기계는 같은 Realm을 참조하되 행위자·입력·토큰 수명·검증 경계가 병렬로 나뉜다.** 최초 장기 토큰 발급 ceremony에 사람의 인증이 포함되어도 이후 무인 호출이 브라우저 로그인으로 되돌아간다는 뜻은 아니며, 어떤 경로가 실제로 성공했는지는 설정·JWT Claim·Secret/RBAC·API 응답을 각각 확인해야 한다.
+
+## 1. 공통 신원 기반: ADFS·Keycloak과 서비스별 OIDC 경계를 어떻게 구분하는가?
+
+이 장은 “누가 신원을 확인하고, 어느 구간에서 어떤 프로토콜과 토큰이 쓰이는가?”에 답한다. 사내 계정을 확인하는 ADFS, `DKS` Realm을 운영하는 Keycloak, 각 서비스에 등록된 Client와 그 토큰을 검증하는 Resource Server를 한 계층으로 묶지 않는 것이 출발점이다. 특히 ADFS와 Keycloak 사이의 upstream federation과 Keycloak과 애플리케이션 사이의 OIDC를 분리해 읽어야 한다.
+
+### 공통 신원 기반의 역할
+
+Keycloak은 사용자·Client·그룹을 `DKS` Realm 단위로 관리하고, 다른 ID 시스템과 연결할 수 있는 **ID Provider** 역할을 갖는 중앙 IAM으로 설명된다. Realm은 운영 대상을 격리하는 묶음이고, Client는 특정 애플리케이션 또는 자동화 소비자를 등록하는 단위다. SW 아키텍처 자료는 Gateway Cluster의 Keycloak을 “DS ADFS SSO 연동 OIDC 중앙 집중 인증”으로 기재한다. 이는 Keycloak이 DKS 서비스의 공통 발급자라는 점은 뒷받침하지만, ADFS federation이 어떤 wire protocol로 설정되었는지나 모든 downstream 권한 매핑까지 증명하지는 않는다.
+
+| 구성요소 | 식별·책임 | 이 문서에서 확정할 수 있는 범위 |
+|---|---|---|
+| ADFS | 사내 사용자 신원을 확인하는 upstream 조직 IdP | Keycloak과 사내 SSO가 연계된다는 자료가 있다. 실제 SAML/OIDC metadata와 Claim 변환은 별도 확인이 필요하다. |
+| Keycloak `DKS` Realm | 사용자·Client·그룹을 묶고 OIDC endpoint에서 Token을 발급하는 중앙 Realm | Issuer는 `https://keycloak.dks.samsungds.net/realms/DKS`로 기재되어 있다. |
+| Keycloak `Client` | 특정 애플리케이션 또는 자동화 용도의 등록 단위 | Client ID, redirect URI, token/session 정책, Client Secret 및 허용된 역할을 서비스별로 구분하는 단위다. |
+| OIDC RP/서비스 | Keycloak의 authorization·token 결과를 받아 자체 로그인 세션 또는 API 인증으로 변환하는 소비자 | 서비스마다 자신의 Client와 토큰 검증·권한 매핑을 가져야 한다. 공통 Issuer를 쓴다는 사실만으로 권한이 동일해지지 않는다. |
+| Resource Server/API | Access Token을 제시받고 issuer·audience·expiry·권한을 확인하는 호출 대상 | 실제 각 API의 검증 규칙과 role/scope 매핑은 서비스 설정·로그로 확인해야 한다. |
+
+### ADFS 연계와 서비스 OIDC를 같은 프로토콜로 부르지 않기
+
+두 구간은 최종적으로 사용자 Claim이나 Access Token으로 이어질 수 있지만, 맡은 역할이 다르다. ADFS와 Keycloak 사이에서는 Keycloak이 외부 IdP를 broker하는 federation 설정을 확인해야 하고, Keycloak과 서비스 사이에서는 서비스가 OIDC RP가 되어 Authorization Code를 교환한다. 아래 표에서 “가능한 프로토콜”은 표준상 가능한 선택지이고 “확인되는 것”은 현재 자료가 직접 지지하는 범위다.
+
+| 구간 | 표준 역할과 가능한 프로토콜 | 현재 자료에서 확인되는 것 | 아직 확인할 것 |
+|---|---|---|---|
+| ADFS → Keycloak | Keycloak이 upstream IdP를 broker하는 federation 구간. ADFS 설정에 따라 **SAML 2.0 또는 OIDC**가 될 수 있다. | ADFS SSO 연계와 Keycloak의 OIDC 중앙 인증이 기재되어 있다. | 실제로 SAML metadata/assertion을 소비하는지, OIDC discovery/authorization을 사용하는지, NameID/subject·group Claim을 어떻게 매핑하는지. 둘 다 동시에 쓴다고 단정할 수 없다. |
+| Keycloak → Console/Grafana/OpenSearch 등 RP | **OIDC Authorization Code 흐름**. RP가 authorization endpoint로 이동하고 Code를 token endpoint에서 교환한다. | `dkssol-console`, `grafana-oauth`, `opensearch-dashboard-oauth` Client와 OIDC 로그인 목적이 기재되어 있다. | 각 RP의 redirect URI, confidential/public Client 유형, 서명키(JWKS) 검증, group/role 매핑과 실제 로그인 성공. |
+| Keycloak → Kubernetes API | API Server가 Keycloak issuer의 JWT를 검증하는 Resource Server 경계. CLI는 별도 OIDC Client일 수 있다. | `k8s-client`가 kube-apiserver OIDC 설정 용도이고 `kube-login`이 OIDC 인증 플러그인 용도다. | API Server의 `issuer-url`, audience, username/group Claim, RBAC binding과 실제 `kubectl` 호출. |
+| Keycloak → 자동화 API | 일반 브라우저 로그인 대신 Token Exchange 또는 별도 OAuth grant를 사용하는 비대화형 경계 | DKS-C 원자료는 Token Exchange 발급 절차를 설명한다. | Client 정책, requested audience/scope, 실제 Access Token의 Claims와 대상 API의 검증 규칙. Client Credentials 경로는 이 자료에서 확인되지 않는다. |
+
+따라서 “ADFS와 Keycloak을 SAML/OIDC로 연동하고 모든 서비스와 OIDC로 연결한다”는 표현은 두 구간의 확인 수준을 섞는다. 현재 자료가 지지하는 문장은 ADFS와 Keycloak이 사내 SSO로 연계되고 Keycloak이 OIDC 중앙 인증을 제공한다는 것까지이며, ADFS↔Keycloak의 실제 protocol과 Claim 변환은 metadata·설정으로 확인해야 한다. Keycloak↔각 RP는 OIDC 흐름으로 설명할 수 있지만, Access Token을 최종적으로 받아들일지는 각 Resource Server의 issuer·audience·권한 설정이 결정한다.
+
+### 서비스별 OIDC Client가 만드는 인증 경계
+
+서비스가 OIDC RP로 구성되었다면 공통 메커니즘은 다음과 같다. 이 순서는 Client가 어떤 입력을 받아 무엇으로 바꾸는지 설명하는 것이며, 현재 등록된 모든 서비스가 실제로 성공했다는 운영 증거를 대신하지 않는다.
+
+1. 사용자가 Console·Grafana·OpenSearch Dashboard 같은 서비스에 접근한다.
+2. 서비스에 로그인 세션이 없으면 자신의 `client_id`와 등록된 `redirect_uri`를 넣어 Keycloak authorization endpoint로 브라우저를 보낸다. `redirect_uri`는 Code를 돌려받을 허용 주소이므로 등록값과 요청값이 일치해야 한다.
+3. Keycloak은 자신의 사용자 세션을 확인하고, 필요한 경우 upstream ADFS 인증으로 사용자를 보낸다. 인증이 끝나면 등록된 redirect URI에 일회용 `code`를 붙여 브라우저를 되돌린다.
+4. 서비스 backend 또는 OIDC library는 token endpoint에 Code와 Client 자격을 제출한다. Confidential Client라면 Client Secret도 제출하며, 요청의 `redirect_uri`가 Code 발급 때의 값과 맞아야 한다.
+5. Keycloak은 ID Token과 Access Token을 반환한다. RP는 `iss`(발급자), JWT 서명, `aud`(토큰을 사용하도록 허가된 대상), `exp`(만료 시각)와 필요한 사용자·그룹 Claim을 검증한 뒤 자체 세션을 만들거나 Access Token으로 API를 호출한다.
+6. API는 자신의 audience·issuer·권한 규칙을 다시 적용한다. 그러므로 “Keycloak JWT 하나를 받았다”는 사실은 모든 서비스에서 동일한 권한으로 통과한다는 뜻이 아니다.
+
+현재 Client 목록에서 사람·서비스 경계를 직접 확인할 수 있는 등록은 다음과 같다.
+
+| Client | 행위자·서비스 | 자료에 기재된 역할 | 수명 관련 기재 |
+|---|---|---|---|
+| `dkssol-console` | 사람 → DKS-C Console | Console OIDC 인증 | Access Token 30분; 나머지 세션은 Realm 설정 사용 |
+| `grafana-oauth` | 사람 → Grafana | Grafana OIDC 로그인 | Realm 설정 사용 |
+| `opensearch-dashboard-oauth` | 사람 → OpenSearch Dashboard | OpenSearch Dashboard OIDC 로그인 | Realm 설정 사용 |
+| `kube-login` | 사람 → `kubectl` OIDC 플러그인 | 브라우저 인증 후 클러스터 접속 | Access Token·세션 8시간, Client Session Max 28,900초 |
+| `k8s-client` | Kubernetes API Server | kube-apiserver OIDC 설정 | Realm 설정 사용 |
+| `dks-cluster-mgmt` | 내부 시스템 계정 | `console-vcfa` → Console API 호출 | Realm 설정 사용 |
+| `k8s-cluster-admin` | 내부 시스템 계정 | Kyverno 제약 아래 관리자 기능 수행 | Realm 설정 사용 |
+| KubeSphere *(등록 여부 확인 필요)* | 적용되어 있다면 사람 → 서비스 Web RP | 별도 Client·redirect URI·audience·group/role 검증이 필요한 OIDC Authorization Code 경로 |
+| ArgoCD *(등록 여부 확인 필요)* | 적용되어 있다면 사람 또는 CLI → 서비스 RP | 별도 Client·redirect URI·audience·group/role 검증이 필요한 OIDC Authorization Code 경로 |
+| Harbor *(등록 여부 확인 필요)* | 이미지 저장소의 인증 방식은 별도 확인 | SW 아키텍처에 Harbor가 기재되지만 Keycloak OIDC Client 등록은 이 자료에서 확인되지 않음 |
+
+KubeSphere·ArgoCD·Harbor는 SW 아키텍처에 서비스로 등장하더라도, 이 문서의 세 원자료에서 Keycloak Client 행으로 확인되지 않는다. 실제로 OIDC를 적용했다면 각 서비스의 `client_id`, redirect URI, issuer·JWKS 검증, audience와 group/role 매핑을 별도로 확인해야 한다. Harbor가 이미지 저장소이고 Argo CD가 Supervisor Service라는 구조적 사실만으로 Keycloak OIDC Client 등록이나 로그인 성공을 증명할 수 없다.
+
+이 장에서 확정할 수 있는 결론은 **ADFS↔Keycloak federation과 Keycloak↔서비스 OIDC를 서로 다른 구간으로 보고, 하나의 Realm 아래에서도 Client와 Resource Server의 검증 경계를 서비스별로 유지해야 한다**는 것이다. Console·Grafana·OpenSearch·Kubernetes 관련 Client의 문서화된 목적은 확인되지만, upstream protocol의 실제 종류와 목록 밖 서비스의 적용 범위는 live 설정·metadata·로그가 있어야 닫힌다.
+
+## 2. 사람 경로: 대화형 OIDC 로그인은 어떤 단기 토큰과 서비스 검증으로 닫히는가?
+
+사람 경로의 질문은 “브라우저를 사용할 수 있는 사용자가 Code, ID Token, Access Token을 어떤 순서로 만들고, 어디에서 만료시키며, 서비스는 무엇을 검증하는가?”이다. 시작은 사용자의 브라우저와 서비스별 OIDC Client이고 끝은 RP가 검증한 세션 또는 API 요청이다. Realm 기본값과 Client별 override가 다르므로, 사람용 토큰의 수명을 전 서비스에 하나의 숫자로 일반화하지 않는다.
+
+### Authorization Code가 Token으로 변환되는 흐름
+
+DKS-C의 Long-Term 발급 절차에서 사람 인증은 Console Client의 OIDC Authorization Code 흐름으로 구체화되어 있다. 브라우저에서 다음 authorization endpoint를 요청한다.
+
+```text
+https://keycloak.dks.samsungds.net/realms/DKS/protocol/openid-connect/auth?client_id=dkssol-console&response_type=code&scope=openid&redirect_uri=https://console.dks.samsungds.net/
+```
+
+`client_id`는 어느 애플리케이션이 요청하는지, `response_type=code`는 바로 Access Token이 아니라 일회용 Code를 먼저 받겠다는 뜻이다. `scope=openid`는 OIDC 사용자 인증을 요청하고, `redirect_uri`는 Code를 돌려받을 등록 주소다. Keycloak은 요청된 Client와 redirect URI를 확인한 뒤 사용자 세션 또는 필요한 ADFS 인증을 처리한다.
+
+| 단계 | 입력·행위자 | Keycloak 또는 RP의 조작 | 출력·다음 조건 |
+|---:|---|---|---|
+| 1 | 브라우저, `client_id`, `redirect_uri`, `scope=openid` | Keycloak authorization endpoint가 Client 요청과 redirect URI를 확인하고 사용자 인증 세션을 요구한다. | 인증 성공 뒤 등록된 redirect URI로 Code 반환 |
+| 2 | ADFS 인증 결과 또는 이미 유효한 Keycloak 사용자 세션 | 실제 upstream federation과 사용자 Claim을 Keycloak 계정·그룹으로 연결한다. | Keycloak Realm에서 사용자를 식별한 뒤 Code를 발급 |
+| 3 | 일회용 Code, Console Client ID/Secret, 동일한 redirect URI | Client가 token endpoint에 `grant_type=authorization_code`를 제출한다. | ID Token·Access Token 반환. Code는 1회용이며 약 1분 후 만료 |
+| 4 | ID Token·Access Token, RP 검증 설정 | RP가 issuer·서명·audience·expiry와 필요한 권한 Claim을 확인한다. | 서비스 세션 생성 또는 대상 API 요청. 검증 실패 시 해당 서비스에서 거부 |
+
+원자료에 적힌 Code 교환 요청은 다음과 같다. Client Secret은 문서나 로그에 남기지 않으며, 아래 표기는 실제 비밀값을 대신한 것이다.
+
+```bash
+curl -X POST 'https://keycloak.dks.samsungds.net/realms/DKS/protocol/openid-connect/token' \
+-H 'Content-Type: application/x-www-form-urlencoded' \
+-d 'grant_type=authorization_code' \
+-d 'client_id=dkssol-console' \
+-d 'client_secret=[REDACTED_SECRET]' \
+-d 'code=[1번에서 복사한 code 값]' \
+-d 'redirect_uri=https://console.dks.samsungds.net/'
+```
+
+Code가 반환되었다는 것은 인증 흐름의 중간 산출물이 생겼다는 뜻이지 서비스 접근이 끝났다는 뜻이 아니다. Code를 호출하거나 약 1분이 지나면 사용할 수 없으므로 재사용할 수 없고, Client Secret 또는 redirect URI가 틀리면 token endpoint가 토큰을 발급하지 않는다. 토큰을 받은 뒤에도 RP가 `iss`, 서명, `aud`, `exp`와 필요한 권한 Claim을 확인해야 한다. ID Token은 RP가 사용자 인증 결과를 이해하는 자료이고, API 호출 권한은 Access Token과 대상 Resource Server의 정책으로 판단한다.
+
+### 단기 토큰·세션 수명은 정책별 설정값이다
+
+자료에서 직접 확인되는 값은 “모든 단기 토큰이 30분~1시간” 같은 전역 범위가 아니다. Realm 기본 Access Token Lifespan은 10분이고 Client별 예외가 있다. 아래 값은 설정·자료에 적힌 기준이며, 특정 발급 토큰의 실제 만료는 JWT의 `exp`와 Client 설정을 함께 대조해야 한다.
+
+| 설정·Client | 자료에서 확인되는 값 | 해석 시 주의할 점 |
+|---|---:|---|
+| DKS Realm Access Token Lifespan | 10분 | Realm 기본값이다. 모든 Client가 이 값을 그대로 쓴다고 단정하지 않는다. |
+| `dkssol-console` | Access Token 30분 | 잦은 재발급을 줄이기 위한 Client별 override로 기재되어 있다. SSO Session 수명까지 30분으로 바뀐 것은 아니다. |
+| `kube-login` | Access Token·세션 8시간; Client Session Max 28,900초 | CLI 사용 목적의 별도 설정이다. 브라우저 Console Client의 기본값으로 일반화하지 않는다. |
+| SSO Session Idle / Max | 8시간 / 24시간 | 사용자 SSO 세션의 유휴·절대 최대 시간이다. Access Token Lifespan과 같은 값이 아니며, Token 갱신·재인증 동작은 Client 구현에 따른다. |
+| Client Session Idle / Max | Realm 설정 사용이 다수 | 세션 설정과 Access Token의 `exp`를 같은 만료 시각으로 읽지 않는다. |
+
+그러므로 다른 문서에 나타난 “10~30분” 또는 “30분~1시간” 같은 요약을 전역 보장으로 채택할 수 없다. 현재 자료가 보여주는 대표값은 Realm 10분, `dkssol-console` 30분, `kube-login` 8시간이며, 실제 기준은 환경과 Client 정책이다. Access Token 수명과 SSO Session Idle/Max를 따로 읽어야 사용자 재인증과 토큰 재발급의 조건을 혼동하지 않는다.
+
+### 서비스는 동일 JWT가 아니라 자기 경계를 검증한다
+
+Console·Grafana·OpenSearch Dashboard가 모두 Keycloak OIDC를 사용하더라도 각 서비스는 자신의 Client ID와 redirect URI로 인증을 시작하고, 반환된 Token을 자신의 RP 또는 Resource Server 규칙으로 검증한다. `iss`는 공통 Keycloak Realm을 가리킬 수 있지만, `aud`는 허가된 대상 앱을 나타내고 `exp`는 그 Token의 만료 시각을 나타낸다. `sub`는 사용자의 고유 식별자이고 `preferred_username`은 사용자 이름이며, 실제 권한은 서비스가 group·role을 어떤 규칙으로 매핑하는지에 달려 있다.
+
+서명만 확인하고 `aud`나 필요한 권한 Claim을 확인하지 않는다면 공통 Issuer가 서비스 경계를 대신해 주지 않는다. 반대로 `aud`가 맞더라도 네트워크 경로, 애플리케이션 RBAC, API 정책까지 자동으로 허용되는 것은 아니다. 현재 자료는 Claim 이름과 Client 목적을 제공하지만 각 RP의 검증 코드와 role binding을 제공하지 않으므로, “추가 로그인 없이 모든 시스템에 동일 권한으로 접근한다”는 결론으로 확대하지 않는다.
+
+따라서 사람의 로그인은 **서비스별 Authorization Code → ID/Access Token → RP 검증**이라는 OIDC 순서로 닫힌다. Realm 10분·Console 30분·`kube-login` 8시간의 차이는 단일 전사 수명이 아니라 Client별 설정의 결과이며, 특정 서비스의 실제 권한과 로그인 성공은 Claims·검증 설정·RBAC·로그 증거로 따로 확인해야 한다.
+
+## 3. 기계 경로: Token Exchange가 장기 Credential을 어떻게 만들고 어디에 주입하는가?
+
+기계 경로의 질문은 “브라우저 없는 소비자가 한 번 발급된 자격증명으로 API를 계속 호출하도록, 어떤 입력이 어떤 토큰과 저장 산출물로 변환되는가?”이다. 시작점은 미리 생성된 Exchange Client와 관리자의 일회성 인증 ceremony이고, 끝은 장기 Access Token을 제시하는 헬스체크·배치·API 호출이다. 이 범위에서 DKS-C 원자료가 확인하는 비대화형 경로는 Token Exchange이며, 일반적인 Client Credentials grant나 클라우드 Workload Identity가 실제로 구성되었다는 증거는 없다.
+
+### 발급 전제와 일회성 사람 인증
+
+`dkssol-console-longterm-client`는 Long-Term Token 발급 전에 생성되어 있어야 하는 Exchange Client로 문서화되어 있고, 생성일은 2026-06-16으로 기록되어 있다. Keycloak Client 목록에는 Console용과 Kubernetes용 장기 Client가 용도별로 따로 있다. 이 등록은 무인 consumer가 사용할 대상 Client를 미리 식별하는 구조적 조건이지만, Client Secret이 실제로 안전하게 보관되거나 해당 Client의 권한이 최소로 제한되었다는 증거는 아니다.
+
+원자료의 발급 절차는 세 번의 변환으로 이어진다.
+
+1. **사용자 인증 Code 발급:** 브라우저에서 `dkssol-console` OIDC authorization 요청을 수행하고 로그인 뒤 일회용 Code를 받는다. Code는 호출되거나 약 1분이 지나면 만료된다.
+2. **토큰 소유자 Client Access Token 발급:** Code와 `dkssol-console`의 Client ID·Secret·redirect URI를 Keycloak token endpoint에 제출해 Subject Token으로 사용할 Client Access Token을 받는다.
+3. **Long-Term Client로 교환:** 사전 생성된 `dkssol-console-longterm-client`의 Client ID·Secret과 앞 단계 Token을 사용해 Token Exchange를 요청하고 Long-Term Access Token을 받는다.
+
+이 절차에 사람이 참여하는 것은 발급 ceremony의 조건이다. 이를 “사람 SSO가 먼저 생겨 기계 인증 문제가 발생했다”는 인과로 읽을 근거는 없다. 지속 호출 단계에는 브라우저·ADFS 로그인·일회용 Code가 매번 필요하지 않고, consumer가 보관한 장기 Access Token을 대상 API에 제시한다. 다만 장기 Token이 만료되면 원자료는 재인증 후 재발급해야 한다고 설명하므로, Long-Term Credential은 영구 자격증명이 아니다.
+
+### Token Exchange의 입력·조작·출력
+
+Token Exchange를 “장기 토큰을 안전하게 만든다”라고만 쓰면 누가 무엇을 제출하고 Keycloak이 무엇을 발급했는지가 사라진다. Subject Token은 앞 단계에서 발급된 Access Token이고, Exchange Client는 그 Token을 다른 대상 용도의 Token으로 바꾸도록 등록된 Client다. 이 입력·조작·출력의 구분은 발급 권한과 실제 호출 권한을 따로 확인하게 한다.
+
+| 변환 단계 | 행위자·입력 | Keycloak의 조작 | 출력·적용 위치 |
+|---:|---|---|---|
+| A. 사용자 인증 | 사람의 브라우저, `dkssol-console`, `scope=openid`, 등록 `redirect_uri` | ADFS 연계 또는 Keycloak 세션으로 사용자를 인증하고 authorization Code를 발급 | 1회용 Code. 발급 후 약 1분 또는 최초 사용까지 유효 |
+| B. Code 교환 | 관리 절차, Code, `dkssol-console` Client ID·Secret, redirect URI | token endpoint가 Code와 Client 자격을 검증하고 토큰을 발급 | 토큰 소유자 Client Access Token. 다음 단계의 Subject Token 입력 |
+| C. Client 교환 | 관리 절차 또는 발급 스크립트, Subject Token, `dkssol-console-longterm-client` ID·Secret | token endpoint에서 Token Exchange grant를 처리하고 대상 Client 정책을 적용 | Long-Term Access Token. 표준 요청은 Token Exchange `grant_type`을 사용하며 실제 wire parameter는 배포 설정으로 확인 |
+| D. 무인 호출 | Health Check/배치/API consumer, Long-Term Access Token | Consumer가 `Authorization: Bearer <token>` 헤더에 Token을 넣어 대상 API로 전송 | Monitoring `/-/healthy`, OpenSearch `/` 등 대상 API 응답. 응답 성공은 그 호출과 시점의 검증만 지지 |
+
+발급된 JWT 예시에는 `iss=https://keycloak.dks.samsungds.net/realms/DKS`, `aud=dkssol-console`, `azp=dkssol-console-longterm-client`, `sub`, `preferred_username`, `groups`가 기재되어 있다. `azp`는 이 토큰을 요청한 authorized party, 즉 교환 Client를 식별하는 Claim이지만, 그것만으로 모든 대상 서비스에 같은 audience·scope·role 제한이 적용되었다고 결론 낼 수 없다. 실제 교환 요청의 허용 Client policy, `scope`, requested audience, group/role mapping, Resource Server 검증을 함께 확인해야 한다.
+
+여기서 말하는 Token Exchange는 OAuth 2.0 Token Exchange로 표준화된 RFC 8693 계열의 변환 개념이다. 표준이 있다는 사실과 현재 Keycloak 인스턴스가 어떤 교환 권한·audience·scope를 허용하는지는 별개의 주장이다. 원자료는 발급 절차 세 단계는 설명하지만 실제 배포에서 사용하는 전체 Token Exchange 요청과 허용 정책을 싣지는 않는다. 따라서 `grant_type=token-exchange`라는 설명용 표기만으로 특정 Keycloak 버전의 모든 파라미터를 고정하지 않고, 운영 발급 명령과 Client 설정을 증거로 삼는다. 브라우저 없는 OAuth의 일반적 대안인 `Client Credentials`를 이 자료가 확인한 실제 DKS-C 경로로 바꾸어 쓰지 않는다.
+
+### Client별 장기 수명과 실제 JWT `exp`
+
+Keycloak 자료에는 Long-Term Client의 Access Token Lifespan과 Client Offline Session Idle이 함께 기재된다. 이 둘은 모두 설정값이고, 실제로 발급된 Access Token이 언제 거부될지는 서명 검증이 가능한 JWT의 `exp`로 판정해야 한다.
+
+| Client 또는 표기 | 설정·자료상 기간 | 해석 범위 |
+|---|---:|---|
+| `dkssol-console-longterm-client` | Access Token 365일, Offline Session Idle 365일 | Console API·P-DEP Health Check 및 OpenSearch/VictoriaMetrics 권한 확인 용도의 Long-Term Client로 기재됨 |
+| `k8s-longterm-client` | Access Token 365일, Offline Session Idle 365일 | Kubernetes 클러스터 접속용 장기 Client |
+| `k8s-longterm-client-30` | 표의 Client 기간 30일 | 주의사항에는 발급되는 Access Token 만료일이 항상 365일로 고정된다고 기재됨. 이름·Offline Session 설정만으로 실제 만료를 판정하지 않음 |
+| `k8s-longterm-client-90` | 표의 Client 기간 90일 | 위와 동일하게 실제 JWT `exp` 대조 필요 |
+| `k8s-longterm-client-120` | 표의 Client 기간 120일 | 위와 동일하게 실제 JWT `exp` 대조 필요 |
+| `k8s-longterm-client-180` | 표의 Client 기간 180일 | 위와 동일하게 실제 JWT `exp` 대조 필요 |
+
+따라서 “장기 토큰은 모두 정확히 1년”이나 Client 이름의 숫자가 곧 Access Token 만료일이라는 표현을 쓰지 않는다. 문서화된 주요 발급값은 365일이지만, 30/90/120/180일 표기는 Client 또는 Offline Session 설정과 발급 Access Token의 만료값이 어긋날 수 있다는 주의와 함께 읽어야 한다. 발급 시각의 `iat`와 `exp`, Client/Realm lifespan을 함께 대조하고, 세션 Idle 만료와 JWT `exp`를 하나의 수명으로 합치지 않는다.
+
+### 장기 Token의 저장·주입 경로와 Secret의 한계
+
+무인 consumer가 Kubernetes Pod에서 실행된다면 발급된 Token은 다음과 같은 가능한 경로로 전달된다. 이 경로는 저장·주입 메커니즘의 설명이지 현재 배포에 대한 관측 결과가 아니다. 참조한 발급 방법 자료에는 실제 Secret manifest나 volume mount 설정이 제시되어 있지 않다.
+
+1. Long-Term Access Token을 Kubernetes `Secret`의 `data`에 저장한다.
+2. Pod가 Secret volume의 파일 또는 환경 변수로 그 값을 읽는다.
+3. Health Check·배치 프로세스가 읽은 값을 `Authorization: Bearer <token>` 헤더에 넣어 대상 API로 전송한다.
+4. 대상 API는 issuer·서명·audience·`exp`·권한을 검증하고, 그 시점의 요청에 대해 HTTP 응답 또는 health 결과를 반환한다.
+
+Kubernetes `Secret`은 API 객체이자 Pod에 값을 전달하는 단위라는 구조적 의미를 가진다. Secret 값이 기본적으로 인코딩된 형태로 다뤄질 수 있다는 사실은 etcd 저장 시 암호화되었다는 뜻이 아니다. etcd의 encryption-at-rest가 실제로 활성화되었는지는 `EncryptionConfiguration`과 provider 설정, 키 관리·교체, 백업 운영 증거를 별도로 확인해야 한다. Secret을 volume이나 환경 변수로 주입하는 것도 전달 방식일 뿐, 실행 중 프로세스·노드·백업·로그·디버깅 경로에서 값이 노출되지 않는다는 보장은 아니다.
+
+장기 Credential에는 다음 통제를 연결해 적용 여부와 기대 효과를 구분한다.
+
+| 통제 | 적용 위치·작동 | 현재 자료만으로 확정할 수 없는 점 |
+|---|---|---|
+| **전용 Client** | `dkssol-console-longterm-client`, `k8s-longterm-client*`처럼 사용 목적별 Client를 분리한다. Client Secret은 발급 자료가 민감 정보로 별도 보관해야 한다고 명시한다. | 실제 Client policy가 다른 서비스 교환·impersonation을 막는지. |
+| **Audience 제한** | Token의 `aud`와 Resource Server가 허용하는 audience를 일치시켜 다른 API로의 재사용 범위를 줄인다. | 발급 예시의 `aud=dkssol-console`이 Monitoring·OpenSearch에서도 어떻게 검증되는지, requested audience가 제한되는지. Claim 하나만으로 효과를 확정할 수 없다. |
+| **최소 권한** | Health Check·메트릭 조회·클러스터 접속에 필요한 최소 scope/role/group만 Client 또는 대상 API에 매핑하고 관리자 권한을 부여하지 않는다. | 원자료에는 Long-Term Client의 실제 scope·role binding 표가 없다. 최소 권한은 확인해야 할 통제 목표이지 현재 증명된 보장이 아니다. |
+| **Secret RBAC 제한** | Secret `get/list/watch`와 해당 Pod·Namespace 접근 주체를 제한하고, Token을 로그·매니페스트·이미지에 넣지 않는다. | RBAC는 API 접근을 줄일 뿐, 권한 있는 관리자·노드·Pod 침해·etcd/백업 접근까지 차단하지 않는다. 실제 RBAC·백업·노드 경계를 확인해야 한다. |
+| **etcd 암호화-at-rest** | Kubernetes encryption provider를 구성하면 etcd 저장 시 평문 노출 위험을 줄일 수 있다. | Secret 객체가 존재한다는 사실만으로 이 설정을 증명할 수 없다. EncryptionConfiguration, key 관리·교체, 백업 암호화를 별도로 확인한다. |
+| **전송·사용 시 보호** | API 호출은 TLS 경로에서 수행하고, Consumer는 Bearer Token을 필요한 요청에만 주입하며 로그에 출력하지 않는다. | 실제 endpoint TLS, 프록시 로그, 환경 변수·파일 권한, 오류·디버그 로그의 마스킹은 운영 확인 대상이다. |
+| **만료·폐기·교체** | JWT `exp`를 기준으로 재발급·교체하고, 교체 후 Consumer가 새 값을 읽는지 확인한다. | 원자료는 만료 시 재인증이 필요하다고 설명하지만 자동 rotation·즉시 revoke·무중단 교체 절차를 확정하지 않는다. 이는 07번의 횡단 lifecycle 질문이다. |
+
+그러므로 “암호화된 Kubernetes Secret에 넣으면 안전한 무인 자동화가 완성된다”는 결론을 내리지 않는다. 자료가 확인하는 것은 Long-Term Token을 Bearer로 호출하는 발급·검증 절차이고, 실제 위험 감소의 크기는 audience·scope·RBAC·etcd 암호화·운영 로그·Consumer 배포 상태가 함께 결정한다. 장기 Token은 탈취되면 만료 전까지 소유자처럼 사용될 수 있는 bearer credential이므로, Secret 접근 제한은 노출 가능성을 줄이는 통제이지 탈취 후 사용을 무조건 막는 통제가 아니다.
+
+이 장의 결론은 **사전 등록된 Client 자격과 사람의 일회성 Subject Token을 Keycloak Token Exchange에 넣어 Long-Term Access Token으로 변환하고, 그 Token을 무인 Consumer에 전달하는 경로를 별도로 운영한다**는 것이다. 문서화된 주요 기간은 365일이지만 실제 `exp`와 Client policy가 판정 기준이다. Secret 저장·주입은 전달 메커니즘일 뿐 etcd 암호화·최소 권한·audience 제한·RBAC 적용을 자동 보장하지 않으며, 발급 이후의 만료·교체·폐기는 이 문서의 발급 질문과 구별되는 수명주기 범위다.
+
+## 조사·증거 경로
+
+이 절은 “설정상 가능한 인증 경로”와 “특정 시점에 DKS-C에서 실제로 성공한 인증·호출”을 분리한다. Client 표와 발급 절차는 메커니즘을 설명하지만 ADFS federation의 실제 protocol, 모든 서비스의 OIDC 적용, Token Exchange policy, Secret 보호 또는 장기 호출의 지속 성공을 증명하지 않는다. 조사자는 질문마다 해당 증거를 확인하고, 한 증거가 지지하지 않는 결론까지 넓히지 않는다.
+
+| 확인하려는 질문 | 가능한 동작·조건 | 실제로 필요한 관측 증거 | 그 증거가 지지하는 판단 | 그것만으로 말할 수 없는 것 |
+|---|---|---|---|---|
+| ADFS와 Keycloak은 어떤 protocol로 연계되는가? | Keycloak의 upstream IdP 설정이 ADFS metadata를 SAML 또는 OIDC 방식으로 참조한다. | Keycloak Identity Provider 설정, ADFS relying-party/trust metadata, discovery URL 또는 SAML metadata·assertion 샘플, Claim mapping | 실제 federation protocol과 사용자 Claim 전달 범위 | Keycloak이 모든 downstream 서비스에 같은 권한을 부여한다는 판단 |
+| Console·Grafana·OpenSearch가 OIDC RP로 등록되었는가? | 서비스별 Client가 authorization endpoint로 redirect하고 Code를 token endpoint에서 교환한다. | `.well-known/openid-configuration`, Client ID·redirect URI 목록, 서비스 로그인 로그, token exchange 기록, JWKS 서명 검증 | 해당 Client의 OIDC 로그인과 callback·Token 검증 경로 | KubeSphere·ArgoCD·Harbor도 자동으로 같은 설정이라는 판단 |
+| 사람이 받은 Access Token의 수명은 얼마인가? | Realm 10분 또는 Client override 30분/8시간 등 정책에 따라 발급된다. | Realm·Client 설정 export와 실제 발급 JWT의 `iat`·`exp`, Client session 설정 | 특정 Client·발급 시점의 실제 만료값 | 다른 Client나 다른 환경의 수명, SSO Session Max와의 동일성 |
+| Code 교환이 실제로 성공했는가? | Code가 1회용이고 약 1분 안에 `authorization_code` 교환되어 ID/Access Token을 만든다. | authorization redirect 기록, token endpoint HTTP 응답·audit log, Code 사용 시각과 오류 로그 | 해당 발급 ceremony에서 Token이 반환되었는지 | 장기 Token 교환이나 후속 API 호출의 성공 |
+| Token Exchange가 허용된 Client 정책으로 수행되는가? | Subject Token과 사전 생성된 Long-Term Client 자격을 `token-exchange` grant에 넣어 새 Access Token을 발급한다. | Keycloak Client 설정·permissions, exchange 요청 audit, 입력·출력 Token의 `iss/sub/aud/azp/scope/groups/exp`, 실패 이벤트 | 어떤 주체가 어떤 Client로 어떤 Claims의 Token을 받았는지 | Claim 예시만으로 최소 권한·audience 제한이 실제로 강제된다는 판단 |
+| Long-Term Token의 실제 만료일은 언제인가? | Client 설정에는 365일 또는 30/90/120/180일 표기가 있을 수 있고, 발급 Token은 문서 주의사항상 365일로 보일 수 있다. | 각 발급 JWT의 서명 검증 후 `iat`·`exp`, Keycloak Client/Realm lifespan, offline session 설정 | 해당 JWT가 실제로 만료되는 시각 | Client 이름 또는 Offline Session 값만으로 Access Token `exp`를 계산하는 것 |
+| 무인 Consumer가 실제 API를 호출하는가? | Consumer가 Bearer Token을 Monitoring `/-/healthy`, OpenSearch `/` 등 대상 API에 전송한다. | 실제 호출의 HTTP status·응답 본문, 대상 API auth log, Consumer 로그의 token 비노출 상태, issuer/audience/expiry 검증 결과 | 그 시점·대상·권한 범위에서 호출이 성공했는지 | 장기 무중단, 모든 API에 대한 재사용, Token이 유출되지 않았다는 판단 |
+| Token이 Kubernetes Secret으로 안전하게 주입되는가? | Secret data를 Pod volume/env로 전달하고 Consumer가 읽어 Bearer 헤더에 넣는다. | Secret metadata·data 접근 감사, Pod `volumes`/`envFrom`/mount 설정, Secret RBAC, 파일·환경 변수 권한, etcd EncryptionConfiguration·백업 정책 | 저장·주입 경로와 접근 주체, at-rest 암호화 적용 여부 | Secret 객체 존재만으로 탈취·노드 침해·백업 노출이 없다는 판단 |
+| 만료 후 교체·폐기가 동작하는가? | 새 Token 발급 → Secret/Consumer 반영 → 실제 호출 확인 → 구 Token 폐기·만료 순서가 운영될 수 있다. | rotation runbook·승인 기록, 새 JWT `exp`, Secret resourceVersion/Pod reload, 구 Token 호출 거부 또는 revoke 기록 | 교체가 실제 소비자와 대상 API에 반영되었는지 | 자동 rotation이 항상 무중단이고 즉시 폐기된다는 보장 |
+
+증거를 읽는 순서와 시스템 인과도 구별한다. 예를 들어 discovery 문서를 먼저 읽고 Client 설정을 나중에 읽는 것은 조사 편의를 위한 순서일 뿐 discovery가 Client를 생성했다는 뜻이 아니다. JWT Claim이 정상이어도 네트워크 경로·Secret 접근·실제 API 응답까지 자동으로 확인되는 것은 아니다. 반대로 API 응답 하나가 성공해도 확인하지 않은 다른 consumer나 다른 시점의 성공을 보장하지 않는다.
+
+현재 원자료로 직접 확인되는 범위는 `DKS` Realm과 여러 Client의 문서화된 목적·수명 설정, Authorization Code → Client Access Token → Long-Term Client 교환의 발급 절차, 일부 JWT Claim 예시와 Bearer 검증 대상이다. 실제 federation protocol, Token Exchange의 허용 정책, 각 Resource Server의 audience·role 검증, Secret 보호 및 장기 호출 지속성은 위 증거를 추가로 대조해야 한다.
+
+## 남아 있는 제약과 질문
+
+이 절은 확인된 인증·토큰 경로의 경계와 현재 자료만으로 닫히지 않는 운영 질문을 모은다. 아래 항목은 장애를 가정한 서사가 아니라, 구조·권한·수명·증거의 확정 범위를 보존하기 위한 제약이다.
+
+- **ADFS federation protocol:** Keycloak이 ADFS를 upstream IdP로 사용한다는 구조는 확인되지만, SAML 2.0인지 OIDC인지와 사용자·그룹 Claim 변환은 현재 자료만으로 확정할 수 없다.
+- **서비스별 적용 범위:** Keycloak Client 목록에는 Console·Grafana·OpenSearch Dashboard·Kubernetes 관련 항목이 확인된다. KubeSphere·ArgoCD·Harbor가 실제 OIDC RP인지, 각 서비스가 어떤 audience와 group/role을 요구하는지는 별도 Client inventory와 서비스 설정이 필요하다.
+- **권한의 실제 범위:** `iss`, `sub`, `aud`, `azp`, `groups` Claim 예시는 토큰 구조를 보여주지만, `scope`와 role binding, audience 제한이 최소 권한으로 적용되었다는 증거는 없다. `aud=dkssol-console`인 예시 Token이 Monitoring·OpenSearch에서 어떤 방식으로 허용되는지도 확인 대상이다.
+- **수명 수치의 기준:** Realm Access Token 기본값 10분, Console 30분, `kube-login` 8시간은 Client 정책의 예시다. Long-Term Client는 365일이 주요 문서값이지만, 30/90/120/180 Client 표기와 실제 Access Token `exp`가 다를 수 있으므로 발급 JWT를 우선한다.
+- **Secret 보호:** Kubernetes Secret 객체 저장은 etcd encryption-at-rest를 의미하지 않는다. Secret RBAC, etcd EncryptionConfiguration, key 관리·백업, Pod·노드·로그·환경 변수 노출 경계를 확인해야 한다.
+- **무인 경로의 상태:** 발급 절차가 문서화되어 있다는 사실은 특정 배치가 실제로 Token을 받아 계속 호출한다는 증거가 아니다. Consumer의 실제 HTTP 응답, 대상 API 로그, 만료 후 동작을 별도로 관측해야 한다.
+- **폐기·교체:** 원자료는 Long-Term Token 만료 시 재인증·재발급이 필요하다고 설명하지만, 자동 rotation·즉시 revoke·Secret 교체 후 Consumer reload의 실행 계약은 이 문서에 없다.
+- **07번과의 관계:** 07번은 이 인증 구조가 다음 단계로 진행되는 필연적 문서가 아니다. 06에서 발급된 Long-Term Credential과 TLS 인증서의 `exp`·`notAfter`를 시간에 따라 관측하고 갱신·교체하는 **횡단 lifecycle 질문**이며, 06의 발급 원인이나 기계 인증의 발생 원인을 설명하지 않는다.
+
+이 문서가 닫는 결론은 **공통 Keycloak 신원 기반에서 사람과 기계의 인증 경로가 행위자별로 병렬 분기되고, Token Exchange는 그중 비대화형 소비자의 장기 Credential 변환을 담당한다**는 데까지다. 실제 protocol·권한·암호화·호출 성공과 만료 후 교체의 범위는 위 제약에 적은 운영 증거가 있어야 확정되며, 확인되지 않은 보장을 안전한 자동화라는 표현으로 확대하지 않는다.
+
+## 상세 자료 색인
+
+다음 색인은 파일 목록이 아니라 이 문서를 읽은 뒤 생기는 질문에 맞춰 구성했다. 설정값·발급 명령·민감한 Client Secret은 이 문서에 복제하지 않고 원자료의 해당 절에서 확인한다.
+
+| 지금 풀어야 할 질문 | 확인할 자료 | 확인할 내용 |
+|---|---|---|
+| Keycloak Realm·Issuer·JWT Claim은 무엇이며, 기본 세션·Access Token 수명은 어떻게 다른가? | [`DKS Keycloak 연계 정보.md`](../DKS%20Keycloak%20연계%20정보.md#핵심-내용) · [`Client 목록`](../DKS%20Keycloak%20연계%20정보.md#client-목록) | `DKS` Realm, `iss/sub/aud/exp` Claim, SSO Session Idle/Max, Realm 10분 기본값과 Client별 override |
+| Console·Grafana·OpenSearch·Kubernetes용 Client가 어떤 역할과 수명으로 등록되어 있는가? | [`DKS Keycloak 연계 정보.md — Client 목록`](../DKS%20Keycloak%20연계%20정보.md#client-목록) · [`kube-login 전용 설정`](../DKS%20Keycloak%20연계%20정보.md#client-no10-kube-login-전용-설정) | `dkssol-console`, `grafana-oauth`, `opensearch-dashboard-oauth`, `k8s-client`, `kube-login`의 목적·수명·세션 설정 |
+| ADFS와 Keycloak이 어느 계층에서 연계되고 Keycloak이 어느 클러스터에 배치되는가? | [`DKS-C SW 아키텍처 및 기술 스택.md — Gateway Cluster`](../DKS-C%20SW%20아키텍처%20및%20기술%20스택.md#gateway-cluster--backend-gateway-api-및-인증-처리) | Gateway Cluster의 Keycloak, DS ADFS SSO 연계, OIDC·JWT 중앙 인증이라는 문서화된 범위 |
+| 사람의 브라우저 인증 Code를 어떻게 발급하고 교환하는가? | [`DKS-C Long-Term Access Token 발급 방법.md — Code 발급`](../DKS-C%20Long-Term%20Access%20Token%20발급%20방법.md#1-code-발급) · [`Client Access Token 발급`](../DKS-C%20Long-Term%20Access%20Token%20발급%20방법.md#2-client-access-token-발급-code--token) | Authorization URL, 1회용·약 1분 Code, `authorization_code` 교환 입력과 redirect URI 일치 조건 |
+| 사전 등록된 Long-Term Client로 Token Exchange를 어떻게 수행하는가? | [`DKS-C Long-Term Access Token 발급 방법.md — Long-Term Access Token 교환`](../DKS-C%20Long-Term%20Access%20Token%20발급%20방법.md#3-long-term-access-token-교환) | `dkssol-console-longterm-client` ID·Secret, Subject Token 교환, 1년 문서값과 재인증 조건 |
+| 발급된 장기 Token이 실제 어느 API에 어떤 Header로 사용되는가? | [`DKS-C Long-Term Access Token 발급 방법.md — 검증`](../DKS-C%20Long-Term%20Access%20Token%20발급%20방법.md#검증) | Monitoring `/-/healthy`, OpenSearch `/`, `Authorization: Bearer` 호출과 발급 JWT `iss/aud/azp/sub/groups` 예시 |
+| 30/90/120/180 이름의 Kubernetes Long-Term Client가 실제 며칠 뒤 만료되는가? | [`DKS Keycloak 연계 정보.md — 장기 Client 표`](../DKS%20Keycloak%20연계%20정보.md#client-목록) · [`주의사항·예외·확인 필요`](../DKS%20Keycloak%20연계%20정보.md#주의사항--예외--확인-필요) | Offline Session 표기와 실제 Access Token 만료일의 차이, 발급 JWT `exp` 우선 판정 |
+| 장기 Credential의 만료·교체와 TLS 인증서 lifecycle은 어디에서 다루는가? | [`07. 운영 수명주기와 인증서·변경 위험 관리.md`](07.%20운영%20수명주기와%20인증서·변경%20위험%20관리.md) | 06의 발급 결과를 전제로 하는 것이 아니라, Long-Term Token·TLS 인증서의 만료 관측·갱신·교체라는 횡단 운영 질문 |
+
+색인은 인증 경로를 다시 하나의 사슬로 요약하지 않는다. OIDC 로그인·Token Exchange·Secret 보호·실제 호출·lifecycle은 각각 다른 질문과 증거를 가지며, 원자료의 해당 앵커에서 설정·절차·판정 범위를 확인해야 한다.

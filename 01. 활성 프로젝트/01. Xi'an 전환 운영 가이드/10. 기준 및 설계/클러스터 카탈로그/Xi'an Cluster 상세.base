@@ -1,0 +1,31 @@
+filters:
+  and:
+    - 'file.inFolder("01. 활성 프로젝트/01. Xi'an 전환 운영 가이드/10. 기준 및 설계/클러스터 카탈로그")'
+    - 'file.ext == "md"'
+    - or:
+        - 'type == "cluster-note"'
+        - 'type == "harbor-note"'
+properties:
+  cluster:
+    displayName: "Cluster"
+  type:
+    displayName: "Type"
+  created:
+    displayName: "Created"
+  file.mtime:
+    displayName: "Updated"
+views:
+  - type: table
+    name: "Xi'an Cluster 상세"
+    order:
+      - file.name
+      - cluster
+      - type
+      - created
+      - file.mtime
+  - type: cards
+    name: "Cluster Cards"
+    order:
+      - file.name
+      - cluster
+      - type
