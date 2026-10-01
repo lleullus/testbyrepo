@@ -86,7 +86,7 @@ challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("utf-8")).di
 with open("/tmp/oauth_pkce.json", "w") as f:
     json.dump({"verifier": verifier, "challenge": challenge}, f)
 
-CLIENT_ID = "REDACTED_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+CLIENT_ID = "1071006060591-REDACTED.apps.googleusercontent.com"
 SCOPES = [
     "https://www.googleapis.com/auth/cloud-platform",
     "https://www.googleapis.com/auth/userinfo.email",
@@ -126,7 +126,7 @@ with open("/tmp/oauth_pkce.json") as f:
 data = {
     "grant_type": "authorization_code",
     "client_id": CLIENT_ID,
-    "client_secret": "REDACTED_GOOGLE_CLIENT_SECRET",
+    "client_secret": "GOCSPX-REDACTED",
     "code": "수신한_CODE",
     "redirect_uri": "http://localhost:51121/callback",
     "code_verifier": pkce["verifier"],

@@ -4,35 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "ce8dc9dedf059e39",
+        "id": "e461fcff21ea9408",
         "type": "tabs",
         "children": [
           {
-            "id": "9148b5f51901fa9a",
+            "id": "a979727249abb1c7",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01. 활성 프로젝트/DKS-C/VOC/월별/2026-01 DKS VOC 인사이트.md",
+                "file": "01. 활성 프로젝트/DKS-C/인과 지도 시리즈/01. 멀티클러스터 테넌시와 자동 프로비저닝.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "2026-01 DKS VOC 인사이트"
-            }
-          },
-          {
-            "id": "8ae46d0c20385bb6",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "01. 활성 프로젝트/DKS-C/00. DKS-C 아키텍처 전체 이해 가이드.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "00. DKS-C 아키텍처 전체 이해 가이드"
+              "title": "01. 멀티클러스터 테넌시와 자동 프로비저닝"
             }
           }
         ]
@@ -199,17 +185,18 @@
       "bases:새 베이스 생성하기": false
     }
   },
-  "active": "9148b5f51901fa9a",
+  "active": "a979727249abb1c7",
   "lastOpenFiles": [
+    "01. 활성 프로젝트/DKS-N/thanos-compact-2 ENOSPC와 PVC Working Space 분석.md",
+    "01. 활성 프로젝트/DKS-N/[DKS-N] thanos-compact-2 PVC 증설 용량 산정.md",
+    "01. 활성 프로젝트/DKS-N/Thanos Compactor 샤드 구성과 PVC 증설 산정.md",
+    "01. 활성 프로젝트/DKS-C/00. DKS-C 아키텍처 전체 이해 가이드.md",
+    "01. 활성 프로젝트/DKS-C/VOC/월별/2026-01 DKS VOC 인사이트.md",
     "01. 활성 프로젝트/DKS-C/VOC/2026-08-23 ~ 2026-08-29 DKS VOC 목록 (10건).md",
     "01. 활성 프로젝트/DKS-C/VOC/2026-08-16 ~ 2026-08-22 DKS VOC 목록 (6건).md",
     "01. 활성 프로젝트/DKS-C/VOC/2026-08-09 ~ 2026-08-15 DKS VOC 목록 (19건).md",
     "01. 활성 프로젝트/DKS-C/VOC/2026-08-02 ~ 2026-08-08 DKS VOC 목록 (20건).md",
-    "01. 활성 프로젝트/DKS-N/[DKS-N] thanos-compact-2 PVC 증설 용량 산정.md",
-    "01. 활성 프로젝트/DKS-N/Thanos Compactor 샤드 구성과 PVC 증설 산정.md",
-    "01. 활성 프로젝트/DKS-N/thanos-compact-2 ENOSPC와 PVC Working Space 분석.md",
     "01. 활성 프로젝트/DKS-N/thanos-compact-2 ENOSPC와 PVC Working Space 분석.md.backup-2026-09-28-pre-rewrite",
-    "01. 활성 프로젝트/DKS-C/VOC/월별/2026-01 DKS VOC 인사이트.md",
     "01. 활성 프로젝트/DKS-N",
     "DKS-N/thanos-compact-2 ENOSPC와 PVC Working Space 분석.md",
     "DKS-N",
@@ -232,7 +219,6 @@
     "01. 활성 프로젝트/DKS-C/Claims/배포/CCL-DEP-002 - P-DEP 지속 설정은 Git 또는 CD 정의에 반영한다.md",
     "01. 활성 프로젝트/DKS-C/Claims/배포/CCL-DEP-001 - P-DEP 관리 필드의 콘솔 직접 수정은 재배포 시 덮어써질 수 있다.md",
     "01. 활성 프로젝트/DKS-C/Claims/배포",
-    "01. 활성 프로젝트/DKS-C/Claims/스토리지/CCL-STO-002 - 외부 VM과의 파일 공유는 별도 NFS 또는 동기화 경로를 사용한다.md",
     "01. 활성 프로젝트/DKS-C/Claims/스토리지",
     "01. 활성 프로젝트/DKS-C/Claims/자원",
     "01. 활성 프로젝트/DKS-C/Claims/플랫폼 정책",
