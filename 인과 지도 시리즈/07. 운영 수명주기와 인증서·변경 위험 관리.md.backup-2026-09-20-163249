@@ -1,0 +1,492 @@
+# 07. 운영 수명주기와 인증서·변경 위험 관리 — 제어 평면·플랫폼 자격증명 수명과 클러스터 롤링 교체 인과
+
+## 문서의 목적
+
+이 문서는 DKS-C 환경을 구성하는 **인증서 계층별 수명주기**, **Keycloak 무인 서비스 토큰 갱신 경로**, 그리고 **CAPI 기반 클러스터 업그레이드 및 노드 롤링 교체 시 발생하는 위험 관리 체계**를 설명합니다.
+
+1. **시간 기반 자격증명의 계층별 격리와 만료 영향**: Kubernetes 제어 평면 및 etcd, kubelet, 플랫폼 공통 서비스(Harbor, KubeSphere, Ingress/APISIX, Keycloak), 워크로드 Addon 인증서가 각각 어떤 주체에 의해 발급·갱신되며 만료 시 어떤 시스템 기능이 정지하는지 밝힙니다.
+2. **갱신 메커니즘과 프로세스 반영 조건**: `cert-manager`와 `kubeadm`의 갱신 동작이 Kubernetes `Secret`이나 호스트 디렉터리에 새 파일을 생성한 뒤, 실행 중인 컨테이너 프로세스가 이를 메모리에 다시 적재하기까지 필요한 조건과 검증 경로를 분리합니다.
+3. **클러스터 롤링 교체와 서비스 지속성 제약**: CAPI(`ClusterClass`, `KubeadmControlPlane`, `MachineDeployment`)를 통한 제어 평면 및 워커 노드 교체 과정에서 etcd 쿼럼(Quorum), `PodDisruptionBudget`(PDB), Drain 절차가 어떻게 맞물리며, 어떤 조건에서 교착(Deadlock)이나 서비스 순단이 일어나는지 인과 사슬로 규명합니다.
+4. **4단계 운영 방어선과 실무 점검 기준**: (1) 인증서 프로세스 메모리 로드 여부, (2) etcd 쿼럼 유지 상태, (3) PDB/Drain 교착 해소, (4) 장기 토큰 잔여 시간 점검이라는 단계별 방어선을 통해 비정상 운영 중단을 사전 차단하는 절차와 증거 수집 경로를 정의합니다.
+
+모호한 비유나 추상적 표현을 배제하고, 실제 리소스 이름, 파일 시스템 경로, API 객체 상태, 시스템 명령어와 에러 조건을 바탕으로 서술합니다.
+
+---
+
+## 전체 이해 지도
+
+이 지도는 클러스터 내부의 시간 기반 자격증명이 만료되는 지점과, 노드·버전 교체 작업이 진행되는 실행 경로를 따라 단계별 인과 관계를 설명합니다.
+
+- **Kubernetes 클러스터는 용도와 영향 범위가 서로 다른 4개 계층(제어 평면 1년, kubelet 1년, 플랫폼 공통 서비스 90일, 내부 워크로드 mTLS)의 TLS 인증서로 통신을 보호합니다.** 제어 평면(`/etc/kubernetes/pki`)과 각 노드의 `kubelet`(`/var/lib/kubelet/pki`)은 `kubeadm`이 발급한 1년 만료 인증서를 사용하고, 플랫폼 공통 서비스(Harbor, Ingress, APISIX, Keycloak)와 클러스터 내부 관측성 Addon(Metric Server, OpenSearch, VictoriaMetrics)은 전용 Issuer나 `cert-manager`가 발급한 90일 만료 인증서를 사용합니다. 각 계층은 갱신 주체와 인증 경로가 분리되어 있으므로 한 계층의 유효성이 다른 계층의 안전을 보장하지 않으며, 이로 인해 각 계층의 만료는 클러스터의 서로 다른 기능을 순차적으로 정지시킵니다.
+
+- **제어 평면 인증서가 만료되면 API 서버가 정지하여 모든 제어 기능이 즉시 마비되고, kubelet 인증서가 만료되면 노드 등록이 끊겨 파드 상태 동기화가 중단됩니다.** `kube-apiserver`와 `etcd` 간의 mTLS 인증서가 만료되면 API 서버가 etcd 데이터에 접근하지 못해 CrashLoopBackOff에 빠지며, 운영자의 `kubectl` 명령과 컨트롤러 매니저의 상태 조정이 전면 거절됩니다. 또한 노드 데몬인 `kubelet`의 클라이언트 인증서가 만료되면 API 서버로의 하트비트 전송이 실패하여 노드가 `NotReady` 상태로 전이되고, 스케줄러가 해당 노드의 파드를 비정상으로 판단해 불필요한 축출(Eviction)을 시도합니다. 이 제어 평면과 노드 인프라가 정상 동작하더라도, 외부 트래픽과 내부 플랫폼 서비스를 연결하는 인증서가 별도로 만료될 위험이 이어집니다.
+
+- **플랫폼 서비스와 인그레스 인증서가 만료되면 외부 트래픽 인입이 차단되고, 내부 애드온 mTLS가 만료되면 모니터링/로깅 수집이 단절됩니다.** Ingress Controller 및 APISIX의 게이트웨이 인증서가 만료되면 외부 사용자의 HTTPS TLS 핸드셰이크가 실패하여 대고객 웹 트래픽이 차단되고, Harbor 레지스트리 인증서가 만료되면 워커 노드의 컨테이너 이미지 풀(`ImagePullBackOff`)이 거부되어 신규 파드 생성이 마비됩니다. 동시에 Metric Server(`vmauth`)와 OpenSearch 노드 간 mTLS 인증서가 만료되면 메트릭 파이프라인과 로그 수집 에이전트의 데이터 전송이 즉시 중단됩니다. 이러한 내부 서비스 및 워크로드 mTLS의 90일 인증서는 자동 갱신 컨트롤러가 동작하지만, 그 갱신 완료가 실제 서비스 정상화를 즉시 보장하지는 못합니다.
+
+- **내부 90일 인증서는 `cert-manager`가 만료 30일 전에 자동 갱신하여 Kubernetes Secret에 저장하지만, Secret이 갱신되었다고 해서 실행 중인 파드가 새 인증서를 즉시 읽는 것은 아니며 파드 재기동이나 프로세스 reload가 수반되어야 실제 메모리에 반영됩니다.** `cert-manager`는 `Certificate`의 갱신 시점(`renewalTime`)에 도달하면 새 인증서를 발급해 대상 네임스페이스의 Secret을 갱신합니다. 그러나 Secret 볼륨을 마운트한 파드 프로세스(Nginx, OpenSearch 등)가 디스크의 파일 변경을 실시간 감시(`inotify`)하여 메모리의 SSL 컨텍스트를 동적으로 재구성하지 못하거나 환경 변수로 주입받은 경우, 프로세스 메모리에는 기존 만료 인증서가 그대로 유지되어 통신 실패가 지속됩니다. 따라서 `kubectl rollout restart`를 통한 프로세스 재적재가 실행되어야 비로소 유효한 인증서가 서빙됩니다.
+
+- **여기까지가 정적 인증서의 계층별 만료와 프로세스 메모리 반영 조건이며, 이제 노드 OS 패치나 Kubernetes 버전 업그레이드를 실행하는 동적 노드 변경 과정으로 관점을 바꿉니다.** DKS-C의 User Cluster는 기존 VM을 제자리에서 수정하지 않고 CAPI(`ClusterClass`) 컨트롤러가 새 버전의 VM을 생성하여 클러스터에 조인시킨 뒤 구 VM을 삭제하는 불변 인프라(Immutable Infrastructure) 롤링 방식으로 갱신됩니다. 따라서 인증서가 유효하더라도 이 롤링 교체 과정에서 심각한 서비스 중단 위험이 발생합니다. 그중 가장 먼저 실행되는 제어 평면 노드 교체는 분산 합의 알고리즘의 제약을 받습니다.
+
+- **제어 평면 롤링 교체(`KubeadmControlPlane`)에서는 3대의 etcd가 하나씩 교체되는 과정(`3 -> 4 -> 3`)에서 정족수(Quorum) 손실 위험이 발생하므로 etcd 헬스가 검증된 후에만 다음 노드 삭제가 진행됩니다.** Raft 분산 합의를 사용하는 etcd는 3대 구성 시 최소 2대, 신규 VM이 추가된 일시적 4대 구성 시 최소 3대의 정상 노드가 과반수 쿼럼을 유지해야 합니다. 4대 상태에서는 허용 장애 대수가 여전히 1대이므로, 네트워크 순단이나 리소스 경합으로 노드 1대가 추가 이탈하면 즉시 쿼럼이 깨져 클러스터 전체 API가 정지됩니다. 따라서 CAPI는 신규 노드의 etcd 동기화와 API 서버 헬스체크(`/readyz`)가 확인된 후에만 구 노드를 etcd 멤버에서 제거하고 삭제합니다. 제어 평면 교체가 안전하게 완료되더라도, 사용자 워크로드가 실행되는 워커 노드 집합을 교체할 때 또 다른 실행 중단 장벽이 발생합니다.
+
+- **워커 노드 롤링 교체(`MachineDeployment`)에서는 `kubectl drain`이 파드를 축출할 때, 잘못 설정된 PodDisruptionBudget(PDB)이나 리더 락을 잡은 싱글톤 파드(KubeSphere Tower 등)가 종료 조건을 거부하면 롤링 업데이트 전체가 무한 교착(Deadlock)에 빠집니다.** CAPI는 신규 워커 VM이 준비되면 구 워커 VM에 Cordon을 걸고 Drain을 실행하여 파드를 이전시킵니다. 그러나 PDB의 `minAvailable` 설정이 전체 파드 수와 같아 축출 허용치(`maxUnavailable`)가 0이거나, 컨트롤 플레인 터널 락을 점유하는 KubeSphere Tower 같은 싱글톤 파드가 리더 선점 락을 놓지 않고 종료 신호(`SIGTERM`) 처리를 지연시키면 Drain 명령이 반환되지 않아 전체 노드 교체 작업이 멈춥니다. 이러한 클러스터 내부 노드 변경의 교착 위험 외에도, 클러스터 외부에서 제어 명령을 주입하는 무인 자동화 계층의 신원 위험이 추가로 결합됩니다.
+
+- **여기에 Keycloak 무인 서비스용 Long-Term Token이 만료되면 CI/CD 배포 파이프라인 전체가 마비되는 신원 위험이 결합됩니다.** 플랫폼 관측성 파이프라인(Prometheus Federate, OpenSearch Log Forwarder)과 CI/CD 배포 러너는 사람의 대화형 로그인이 불가능하므로 1년 유효기간의 Keycloak 장기 토큰을 Secret에 마운트하여 API를 호출합니다. 이 토큰은 cert-manager의 자동 갱신 루프에 포함되지 않는 수동 Token Exchange 대상이므로, 갱신 시점을 놓쳐 토큰이 만료되면 신규 애플리케이션 배포와 중앙 로그·메트릭 수집이 `401 Unauthorized`로 전면 거절됩니다.
+
+- **따라서 운영 수명주기 위험 관리는 단순한 컴포넌트 동작 확인이 아니라, (1) 인증서 프로세스 메모리 로드 여부 -> (2) etcd 쿼럼 유지 상태 -> (3) PDB/Drain 교착 해소 -> (4) 장기 토큰 잔여 시간 점검이라는 단계별 방어선을 사전에 확인해야만 비로소 완료됩니다.** Secret이나 디스크의 인증서 파일 갱신 여부만 확인해서는 프로세스 메모리 장애를 막을 수 없고, VM 생성 상태만 확인해서는 etcd 쿼럼 붕괴와 PDB 교착을 피할 수 없으며, 클러스터 내부가 정상이더라도 장기 토큰이 만료되면 외부 배포 파이프라인이 차단됩니다. 그러므로 (1) `openssl s_client`를 통한 실제 프로세스 서빙 인증서 검증, (2) `etcdctl endpoint health`를 통한 과반수 쿼럼 검증, (3) `kubectl get pdb`의 `ALLOWED DISRUPTIONS`와 싱글톤 파드 락 점검, (4) Keycloak JWT `exp` 값 및 `/-/healthy` 엔드포인트 `200 OK` 조회를 모두 통과해야만 운영 안전이 물리적으로 보장됩니다.
+
+---
+
+## 1. 인증서 계층 구조와 만료 영향도
+
+DKS-C 클러스터는 통신 주체와 보안 경계에 따라 서로 다른 CA(Certificate Authority)와 관리 주체를 갖는 4대 인증서 계층으로 분리되어 동작합니다.
+
+```text
++-----------------------------------------------------------------------------------+
+| 1. 제어 평면 & etcd 계층 (/etc/kubernetes/pki)                                    |
+|    - 관리 주체: kubeadm                                                           |
+|    - 유효기간: 1년 (기본)                                                         |
+|    - 대상: apiserver, etcd(peer/server), front-proxy, controller-manager, scheduler|
++-----------------------------------------------------------------------------------+
+                                         ||
+                                         \/
++-----------------------------------------------------------------------------------+
+| 2. 노드 에이전트 계층 (/var/lib/kubelet/pki)                                      |
+|    - 관리 주체: kubelet (CSR API 기반 자동 갱신)                                  |
+|    - 유효기간: 1년 (Client/Server 인증서)                                         |
+|    - 대상: kubelet client cert, kubelet server cert                                |
++-----------------------------------------------------------------------------------+
+                                         ||
+                                         \/
++-----------------------------------------------------------------------------------+
+| 3. 플랫폼 공통 서비스 & 게이트웨이 계층                                           |
+|    - 관리 주체: 플랫폼 전용 Issuer / 외부 CA / cert-manager                       |
+|    - 유효기간: 90일 ~ 1년                                                         |
+|    - 대상: Harbor(Registry), Ingress/APISIX, Keycloak(SSO), KubeSphere            |
++-----------------------------------------------------------------------------------+
+                                         ||
+                                         \/
++-----------------------------------------------------------------------------------+
+| 4. 클러스터 내부 Addon mTLS 계층                                                  |
+|    - 관리 주체: cert-manager (1.18.2 Addon)                                       |
+|    - 유효기간: Root CA(365일), 서비스(90일, Renew 10~15일), Operator(5~7년)       |
+|    - 대상: OpenSearch(8개 노드), Metric Server(vmauth), VictoriaMetrics Operator  |
++-----------------------------------------------------------------------------------+
+```
+
+### 1) 제어 평면 및 etcd 인증서 계층 (`/etc/kubernetes/pki`)
+
+Kubernetes 마스터 노드의 제어 컴포넌트 간 통신에 사용되는 x509 인증서입니다. Control Plane VM 내부의 로컬 디스크(`/etc/kubernetes/pki`)에 저장되어 정적 파드(Static Pod)로 마운트됩니다.
+
+| 파일명 | 발급 CA | 인증 주체(CN) 및 대상 | 만료 시 발생하는 시스템 현상 |
+|---|---|---|---|
+| `apiserver.crt` | `ca.crt` | `kube-apiserver` 서비스 엔드포인트 | 외부 클라이언트 및 노드의 `kube-apiserver` TLS 핸드셰이크 거절. 모든 `kubectl` 명령 실패 |
+| `apiserver-kubelet-client.crt` | `ca.crt` | `system:masters` 그룹, kubelet 연결용 | API 서버가 kubelet으로 보내는 요청 거절. `kubectl exec`, `kubectl logs`, `kubectl top` 실행 불가 |
+| `front-proxy-client.crt` | `front-proxy-ca.crt` | API Aggregator 프록시 클라이언트 | 메트릭 서버(`metrics-server`) 등 확장 API 서버(Aggregated API) 통신 단절 |
+| `etcd/server.crt` | `etcd/ca.crt` | etcd 서버 데몬 | API 서버가 etcd로 질의하는 데이터베이스 연결 차단. `kube-apiserver` CrashLoopBackOff |
+| `etcd/peer.crt` | `etcd/ca.crt` | etcd 노드 상호 간 통신 | etcd 멤버 간 데이터 복제 및 쿼럼 하트비트 단절. etcd 클러스터 분할(Split-Brain) 및 정지 |
+| `etcd/healthcheck-client.crt` | `etcd/ca.crt` | kubeadm 및 liveness probe | etcd 헬스체크 실패로 인해 마스터 노드의 컨테이너 런타임이 etcd 컨테이너를 반복 재시작 |
+| `apiserver-etcd-client.crt` | `etcd/ca.crt` | `kube-apiserver`의 etcd 클라이언트 | API 서버가 etcd에 데이터를 읽고 쓸 수 없음. API 서버 기동 실패 |
+
+이 계층의 인증서는 `kubeadm`으로 프로비저닝될 때 기본 1년(365일) 유효기간으로 생성됩니다. `cert-manager`가 관리하지 않는 영역이므로, 만료 전에 `kubeadm certs renew` 명령을 실행하거나 CAPI를 통한 정기적인 제어 평면 롤링 업그레이드를 수행해야 합니다.
+
+### 2) kubelet 인증서 계층 (`/var/lib/kubelet/pki`)
+
+워커 노드 및 제어 평면 노드의 `kubelet` 데몬이 사용하는 인증서입니다.
+
+1. **kubelet 클라이언트 인증서 (`kubelet-client-current.pem`)**:
+   - `kubelet`이 `kube-apiserver`에 노드 상태(Heartbeat)를 보고하고 새 파드 할당을 수신할 때 제시하는 신원 증명입니다.
+   - 쿠버네티스의 `RotateKubeletClientCertificate` 기능에 의해 만료 기간이 도래하기 전 kubelet이 자동으로 `CertificateSigningRequest`(CSR)를 생성하고 API 서버가 이를 승인하여 회전시킵니다.
+   - **만료 시 현상**: kubelet이 API 서버 인증을 통과하지 못합니다. 노드가 `NotReady` 상태로 전환되며, `node-controller`가 해당 노드의 파드를 다른 정상 노드로 재스케줄링(축출)하기 시작합니다.
+2. **kubelet 서버 인증서 (`kubelet.crt`)**:
+   - `kube-apiserver`가 노드로 직접 접속하여 컨테이너 로그(`logs`)를 스트리밍하거나 명령어(`exec`)를 실행할 때 kubelet이 서버로서 제시하는 인증서입니다.
+   - **만료 시 현상**: 노드는 `Ready` 상태를 유지하지만, 운영자의 `kubectl logs`, `kubectl exec`, `kubectl attach` 호출이 `x509: certificate has expired or is not yet valid` 에러와 함께 즉시 거절됩니다.
+
+### 3) 플랫폼 공통 서비스 및 게이트웨이 인증서 계층
+
+클러스터 외부 사용자와 관리 시스템이 접촉하는 엔드포인트 인증서입니다.
+
+- **Harbor Registry TLS**: 노드가 이미지를 다운로드할 때 신뢰할 수 있는 레지스트리임을 증명합니다. 만료 시 워커 노드가 이미지 레이어를 다운로드하지 못해 `ImagePullBackOff` 에러가 발생하며, 클러스터 내부의 신규 파드 생성이 중단됩니다.
+- **Ingress Controller / APISIX TLS**: 외부 업무망에서 클러스터 내부 서비스로 인입되는 HTTPS 트래픽의 종단점(Termination) 인증서입니다. 만료 시 사용자의 웹 브라우저나 API 호출 클라이언트에서 SSL 핸드셰이크 에러(`ERR_CERT_DATE_INVALID`)가 발생하여 대고객 서비스가 중단됩니다.
+- **Keycloak SSO TLS**: 사용자 인증 및 OIDC 토큰 발급 엔드포인트입니다. 만료 시 포털 콘솔 로그인과 Kubernetes API OIDC 인증이 차단됩니다.
+
+### 4) 클러스터 내부 Addon mTLS 계층 (DKS-C 현황 인벤토리)
+
+DKS-C 클러스터에 기본 배포되는 13개 Addon 중 상호 mTLS 통신을 사용하는 주요 컴포넌트의 인증서 현황입니다.
+
+| 영역 | 인증서 리소스명 | 관리 주체 (Issuer) | 유효기간 (Duration) | 갱신 창 (renewBefore) | 비고 |
+|---|---|---|---|---|---|
+| **Metric Server** | `root-ca` | `selfsigned-root` | 365일 (8760h) | 3일 (72h) | 메트릭 수집 루트 인증서 |
+| **Metric Server** | `vmauth-server-cert` | `monitoring-hub-issuer` | 90일 (2160h) | 10일 (240h) | VictoriaMetrics 인증 서버 |
+| **Log Server** | `root-ca` | `logs-selfsigned-issuer` | 365일 (8760h) | 3일 (72h) | 로그 허브 루트 인증서 |
+| **OpenSearch 노드** | `cluster-*-cert-*` (8개) | `logs-issuer` | 90일 (2160h) | 15일 (360h) | coordinator(2), master(3), hot(2), warm(1) |
+| **OpenSearch API** | `opensearch-cert` | `logs-issuer` | 90일 (2160h) | 15일 (360h) | REST API 엔드포인트 |
+| **Addon 에이전트** | `dks-*-agent-cert` (3개) | 영역별 전용 Issuer | 90일 (2160h) | 10일 (240h) | log, metric, events 에이전트 |
+| **Operator** | `vm-operator-root-ca` | `vm-operator-root` | 2658일 (63800h) | - (수동) | VictoriaMetrics Operator |
+
+- **OpenSearch 8개 노드 집중 갱신 위험 구조**: OpenSearch 클러스터의 마스터·데이터 노드 간 통신 인증서 8개는 모두 동일한 Issuer(`logs-issuer`)와 90일 유효기간, 15일 갱신 창을 갖습니다. 생성 시점이 같은 경우 갱신 도래 시점 역시 동일한 주간에 집중됩니다. cert-manager가 새 인증서를 정상 발급하더라도, 8개 노드가 새 인증서를 동시에 적용하는 과정에서 노드 재시작이 겹치면 OpenSearch 클러스터의 쿼럼이 흔들릴 수 있습니다.
+
+---
+
+## 2. 인증서 갱신 메커니즘과 프로세스 반영 조건
+
+인증서 갱신은 단순히 파일 시스템이나 Secret에 새 바이트를 기록하는 것으로 완결되지 않습니다. 갱신된 파일이 실행 중인 프로세스의 메모리에 적재되어 TLS 핸드셰이크에 제시될 때 비로소 갱신이 완료됩니다.
+
+### 1) cert-manager 자동 갱신 루프와 단계별 상태 전이
+
+`cert-manager 1.18.2` Addon이 관리하는 인증서는 Kubernetes 컨트롤러 루프를 통해 비동기로 갱신됩니다.
+
+```mermaid
+flowchart TD
+    A[Certificate 리소스 관측] -->|현재 시각 >= renewalTime| B[CertificateRequest 생성]
+    B --> C{Issuer / CA 서명}
+    C -->|성공| D[Kubernetes Secret 갱신]
+    C -->|실패| E[경고 이벤트 발행 및 재시도 백오프]
+    D --> F[kubelet Secret 볼륨 동기화]
+    F --> G{애플리케이션 인증서 리로드 방식}
+    G -->|File-watch 지원| H[메모리 핫 리로드 완료]
+    G -->|File-watch 미지원| I[구 인증서 메모리 유지 - 장애 위험]
+    G -->|환경 변수로 주입| I
+    I --> J[파드 롤링 재기동 Rolling Restart 필요]
+```
+
+1. **갱신 조건 도달**: `Certificate` 리소스의 `status.renewalTime`(통상 만료 10~30일 전)이 도달하면 cert-manager 컨트롤러가 이를 감지합니다.
+2. **발급 요청**: 컨트롤러가 개인키를 생성하고 `CertificateRequest` CRD를 생성하여 지정된 `Issuer` 또는 `ClusterIssuer`에 전달합니다.
+3. **Secret 동기화**: 서명된 x509 인증서가 반환되면 대상 네임스페이스의 `Secret`(`tls.crt`, `tls.key`, `ca.crt`)을 새로운 데이터로 덮어씁니다(`resourceVersion` 증가).
+4. **저장과 반영의 괴리**:
+   - Kubernetes의 kubelet은 볼륨으로 마운트된 Secret을 주기적으로(기본 `syncFrequency` 약 1분) 로컬 파일 시스템에 동기화합니다.
+   - **문제점**: Nginx, OpenSearch, 일부 Go 기반 데몬 등 디스크 상의 인증서 파일 변경을 실시간으로 감시(`inotify`)하여 메모리의 SSL 컨텍스트를 재구성하는 기능이 없는 소프트웨어는 Secret이 갱신되어도 프로세스를 재시작하지 않으면 메모리에 로드된 기존 만료 인증서를 계속 서빙합니다.
+   - **운영 기준**: `kubectl rollout restart deployment/<name>` 또는 `rollout restart statefulset/<name>`을 명시적으로 실행하여 새 인증서가 프로세스 기동 시점에 로드되도록 강제해야 합니다.
+
+### 2) cert-manager Webhook 만료 교착(Deadlock) 메커니즘
+
+cert-manager 운영에서 가장 치명적인 고장 모드는 `cert-manager-webhook` 자체의 인증서 만료로 인해 전체 인증서 갱신이 영구 중단되는 현상입니다.
+
+1. **의존성 구조**: cert-manager는 `Certificate`, `Issuer` 등 커스텀 리소스가 생성되거나 수정될 때 유효성을 검증하기 위해 Kubernetes API 서버의 `ValidatingWebhookConfiguration` 및 `MutatingWebhookConfiguration`과 통신합니다.
+2. **교착 인과 사슬**:
+   - `cert-manager-webhook` 파드가 사용하는 서빙 인증서가 만료됩니다.
+   - API 서버가 webhook으로 HTTPS 요청을 보낼 때 TLS 핸드셰이크가 실패합니다.
+   - API 서버는 실패 정책(`failurePolicy: Fail`)에 따라 cert-manager 관련 CRD의 모든 `CREATE`, `UPDATE` 요청을 거부합니다.
+   - cert-manager 컨트롤러가 만료된 인증서를 갱신하기 위해 `CertificateRequest`를 생성하려고 해도, API 서버가 Webhook 검증 실패를 이유로 요청을 거부합니다.
+   - **결과**: 클러스터 내의 모든 cert-manager 기반 인증서 갱신이 일제히 정지하는 교착 상태가 발생합니다.
+
+### 3) 제어 평면 인증서 수동 갱신 절차 (kubeadm)
+
+제어 평면 인증서는 `kubeadm` 명령어를 통해 마스터 노드에서 직접 갱신해야 합니다.
+
+```bash
+# 1. 제어 평면 인증서 만료 잔여 기간 점검
+kubeadm certs check-expiration
+
+# 2. 모든 제어 평면 및 etcd 인증서 일괄 갱신 (1년 연장)
+kubeadm certs renew all
+
+# 3. 갱신된 인증서를 정적 파드에 반영하기 위해 kubelet 매니페스트 터치
+# (kubelet이 파일 변경을 감지하고 Static Pod를 자동으로 재생성함)
+mv /etc/kubernetes/manifests/*.yaml /tmp/
+sleep 2
+mv /tmp/*.yaml /etc/kubernetes/manifests/
+
+# 4. 관리자 접속 설정 파일(admin.conf) 갱신 및 로컬 배포
+cp /etc/kubernetes/admin.conf ~/.kube/config
+chown $(id -u):$(id -g) ~/.kube/config
+```
+
+---
+
+## 3. 클러스터 변경·업그레이드 위험 관리 (CAPI 롤링 교체와 교착 인과)
+
+DKS-C는 Cluster-API(CAPI)를 통해 선언적으로 클러스터를 관리합니다. 노드 OS 패치나 Kubernetes 버전 업그레이드 시 기존 가상머신을 제자리에서 변경하지 않고, 새 VM을 생성하여 트래픽을 넘긴 뒤 구 VM을 제거하는 롤링 교체(Rolling Upgrade)를 수행합니다.
+
+### 1) CAPI 제어 평면 롤링 업그레이드와 etcd 쿼럼 보존
+
+제어 평면의 수명주기는 `KubeadmControlPlane`(KCP) 컨트롤러가 담당합니다.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CAPI as KCP Controller
+    participant vSphere as vSphere (ESXi)
+    participant CP_New as 신규 Control Plane VM
+    participant etcd_Cluster as etcd 클러스터 (기존 3노드)
+    participant CP_Old as 구 Control Plane VM
+
+    Note over etcd_Cluster: etcd Quorum: 3노드 중 2노드 이상 정상 필요
+    CAPI->>vSphere: 1. 신규 CP VM 사양 요청 및 전원 인가
+    vSphere-->>CP_New: VM 부팅 및 cloud-init 실행
+    CP_New->>etcd_Cluster: 2. etcd member add (일시적 4노드 구성)
+    CP_New->>CP_New: 3. kube-apiserver 등 제어 컴포넌트 기동
+    CAPI->>CP_New: 4. API 서버 Healthcheck (/readyz) 성공 확인
+    CAPI->>CP_Old: 5. 구 CP 노드 Cordon 및 Drain
+    CAPI->>etcd_Cluster: 6. etcd member remove (구 노드 etcd 멤버 퇴출)
+    CAPI->>vSphere: 7. 구 CP VM 전원 종료 및 자원 회수
+    Note over etcd_Cluster: etcd Quorum: 3노드로 안정화 복귀
+```
+
+#### etcd 쿼럼 상실(Quorum Loss) 위험 인과
+
+- etcd는 분산 합의(Raft) 알고리즘을 사용하므로 클러스터 노드 수가 N개일 때 과반수인 floor(N/2) + 1개의 노드가 생존해야 정상 동작합니다.
+  - 3노드 구성: 최소 2노드 필요 (최대 1대 장애 허용)
+  - 4노드 구성: 최소 3노드 필요 (최대 1대 장애 허용)
+- **위험 상황**: KCP가 새 노드를 추가하여 일시적으로 4노드가 된 상태에서는 쿼럼 유지 기준이 3대로 상향됩니다. 이 순간 하이퍼바이저 장애, 네트워크 순단, 또는 리소스 부족으로 다른 기존 노드 1대에 통신 두절이 발생하면, 즉시 쿼럼이 깨지며 클러스터 전체의 모든 읽기·쓰기가 차단됩니다.
+- **운영 통제**: 제어 평면 롤링 업데이트는 반드시 **1대씩 순차적으로(Surge=1)** 진행해야 하며, 다음 노드 교체로 넘어가기 전에 `etcdctl endpoint health` 및 `member list`를 확인하여 쿼럼이 완벽히 복원되었는지 검증해야 합니다.
+
+### 2) 워커 노드 롤링 교체(`MachineDeployment`)와 Drain 교착(Deadlock)
+
+워커 노드의 업그레이드는 `MachineDeployment` 컨트롤러가 제어합니다. 새 워커 VM이 배포되어 `Ready` 상태가 되면, CAPI는 구 워커 VM에 대해 `kubectl drain`을 호출하여 파드를 축출합니다.
+
+이때 다음과 같은 5대 원인에 의해 Drain 작업이 타임아웃을 유발하며 영구 교착 상태에 빠질 수 있습니다.
+
+| 교착 유발 요인 | 발생 메커니즘 | 방지 및 해결 조치 |
+|---|---|---|
+| **PodDisruptionBudget (PDB) 제약** | PDB의 `minAvailable: 2` 조건에서 전체 레플리카가 2개뿐인 경우, 축출 허용 개수(`maxUnavailable`)가 0이 되어 Drain 요청이 영구 거부됨 | 배포 전 PDB 설정 검토. 임시로 레플리카를 증설(`scale`)하거나 업그레이드 동안 PDB 완화 |
+| **리더 락 점유 싱글톤 파드 (KubeSphere Tower 등)** | 멀티클러스터 터널링 에이전트(KubeSphere Tower 등)나 싱글톤 컨트롤러가 제어 평면과의 터널 락(Leader Election Lease)을 점유한 상태에서 Drain 종료 신호(`SIGTERM`) 처리를 지연하거나 정상 반납하지 못하면 Drain 요청이 무한 대기함 | 롤링 전 Tower 등 싱글톤 파드의 Lease 갱신 상태 점검, Drain 차단 시 파드 수동 축출(`--force`) 또는 Lease 리소스 강제 반납/삭제 후 재기동 |
+| **로컬 스토리지 파드 (`emptyDir`, `hostPath`)** | 파드가 로컬 디스크 볼륨을 점유하고 있으면, 데이터 유실을 방지하기 위해 kubelet이 기본 Drain 요청을 거부함 | `--delete-emptydir-data=true` 플래그를 Drain 정책에 명시하고, 스테이트풀 데이터는 CSI 원격 볼륨으로 이전 |
+| **단독 파드 (Unmanaged Pod)** | ReplicaSet, DaemonSet, Job 등의 컨트롤러 없이 단독(`kind: Pod`)으로 배포된 파드는 축출 시 재생성되지 않으므로 Drain 거절 | `--force=true` 플래그를 사용하거나, 모든 애플리케이션을 Deployment/StatefulSet 하위로 전환 |
+| **Graceful Shutdown 지연** | 컨테이너 프로세스가 `SIGTERM`을 수신하고도 종료되지 않고 `terminationGracePeriodSeconds`(기본 30초, DB 등은 수백 초)를 모두 소모함 | 애플리케이션의 시그널 처리 핸들러 점검 및 최대 유예 시간을 합리적 수준(60초 이내)으로 제한 |
+
+### 3) CNI/CSI 데몬셋(DaemonSet) 초기화 지연 인과
+
+새 워커 VM이 기동되었을 때, 해당 노드에 네트워크를 할당하는 CNI(Antrea/Calico) 파드와 스토리지를 마운트하는 CSI(vSphere CSI) 파드가 먼저 정상 동작해야 일반 워크로드 파드가 배포될 수 있습니다.
+
+- **인과 사슬**: CAPI가 새 워커 노드를 생성 -> 노드가 `NotReady` 상태로 등록됨 -> 노드 테인트(`node.kubernetes.io/not-ready:NoSchedule`) 발생 -> CNI 데몬셋이 해당 테인트를 톨러레이션(Toleration)하여 기동 -> 노드에 CNI 바이너리 및 설정 주입 -> 노드가 `Ready`로 전이 -> 비로소 이전 노드에서 Drain된 워크로드 파드가 새 노드로 스케줄링됨.
+- **위험**: 이미지 레지스트리 부하나 IPAM 대역 고갈로 인해 CNI 데몬셋 파드 기동이 지연되면, 구 노드에서 축출된 수십 개의 파드가 `Pending` 상태로 장시간 대기하며 서비스 가용성이 급격히 저하됩니다.
+
+---
+
+## 4. Keycloak Long-Term Access Token 수명주기와 무인 서비스 검증
+
+인증서와 별개로, 클러스터의 무인 자동화 파이프라인(Prometheus Federate, OpenSearch Log Forwarder, CI/CD Runner)은 Keycloak이 발급하는 1년 유효기간의 Long-Term Access Token을 사용합니다. 이 토큰이 만료되면 CI/CD 배포 파이프라인 전체와 관측성 수집이 마비되는 신원 위험이 발생합니다.
+
+### 1) 3단계 발급 및 Token Exchange 인과 경로
+
+이 토큰은 cert-manager와 같은 자동화 에이전트가 처리하지 않으며, 운영자의 인증을 거치는 Keycloak Token Exchange 절차로 발급됩니다.
+
+```text
++-------------------------------------------------------------------------------+
+| 1단계: 브라우저 OIDC 인가 코드 (Code) 획득                                    |
+|   - 엔드포인트: https://keycloak.dks.samsungds.net/realms/DKS/protocol/openid-connect/auth
+|   - 클라이언트: dkssol-console                                                |
+|   - 특징: 운영자 SSO 로그인 필요, 1회용이며 1분(60초) 이내에 사용하지 않으면 만료|
++-------------------------------------------------------------------------------+
+                                         ||
+                                         \/
++-------------------------------------------------------------------------------+
+| 2단계: Client Access Token 발급                                               |
+|   - 엔드포인트: https://keycloak.dks.samsungds.net/realms/DKS/protocol/openid-connect/token
+|   - 인자: grant_type=authorization_code, code, client_id=dkssol-console       |
+|   - 산출물: 표준 OAuth2 Access Token (유효기간: 수십 분)                       |
++-------------------------------------------------------------------------------+
+                                         ||
+                                         \/
++-------------------------------------------------------------------------------+
+| 3단계: Token Exchange를 통한 Long-Term Token 교환                             |
+|   - 인자: grant_type=urn:ietf:params:oauth:grant-type:token-exchange          |
+|   - 클라이언트: dkssol-console-longterm-client                                |
+|   - 산출물: 1년(365일) 유효기간을 갖는 JWT Bearer Token                        |
++-------------------------------------------------------------------------------+
+```
+
+### 2) JWT Claims 분석과 오해 방지
+
+발급된 토큰의 유효성은 Base64로 디코딩하여 JSON 클레임(Claims)을 직접 확인해야 합니다.
+
+```json
+{
+  "exp": 1781827200,
+  "iat": 1750291200,
+  "iss": "https://keycloak.dks.samsungds.net/realms/DKS",
+  "aud": "k8s-platform-services",
+  "azp": "dkssol-console-longterm-client",
+  "preferred_username": "service-account-dks-monitor"
+}
+```
+
+- `exp` (Expiration Time): 토큰이 만료되는 Unix 에포크 시각입니다. 운영 판단 시 반드시 이 값을 날짜로 변환하여 만료일을 확정해야 합니다.
+- **Client 이름의 숫자 혼동 주의**: Keycloak 클라이언트 목록에 존재하는 `k8s-longterm-client-30`, `k8s-longterm-client-90`, `k8s-longterm-client-180` 등은 클라이언트의 **Offline Session Idle(미사용 유지 기간)** 정책을 의미할 뿐입니다. 발급된 Access Token 자체의 만료 기간은 정책에 따라 항상 365일(1년)로 고정되어 있습니다. 클라이언트 명칭에 적힌 숫자를 토큰 수명으로 오판해서는 안 됩니다.
+
+### 3) Secret 교체 후 실제 서비스 검증
+
+새 토큰을 Kubernetes Secret에 적용한 후에는 반드시 실제 엔드포인트를 호출하여 인증 통과 여부를 검증해야 합니다.
+
+```bash
+# 1. 모니터링 헬스 엔드포인트 검증
+curl -k -s -o /dev/null -w "%{http_code}\n" \
+  -H "Authorization: Bearer ${NEW_LONGTERM_TOKEN}" \
+  https://monitoring.dks.samsungds.net/-/healthy
+# 기대 출력: 200
+
+# 2. OpenSearch REST API 쿼리 검증
+curl -k -s -o /dev/null -w "%{http_code}\n" \
+  -H "Authorization: Bearer ${NEW_LONGTERM_TOKEN}" \
+  https://opensearch-api.dks.samsungds.net/
+# 기대 출력: 200
+```
+
+`401 Unauthorized`가 반환되면 토큰의 `aud`(Audience) 불일치 또는 Token Exchange 시 권한 스코프 누락이 원인입니다.
+
+---
+
+## 5. 장애 시나리오별 긴급 복구 절차
+
+인증서 만료 및 롤링 교체 실패로 인한 장애 발생 시, 다음 절차에 따라 긴급 복구를 수행합니다.
+
+### 1) 제어 평면 인증서 만료로 `kubectl` 통신이 두절된 경우
+
+- **현상**: `Unable to connect to the server: x509: certificate has expired or is not yet valid` 에러 발생.
+- **복구 절차**:
+  1. vSphere Remote Console 또는 호스트 SSH를 통해 마스터 노드 1번에 직접 로그인합니다(root 권한).
+  2. `kubeadm certs renew all` 명령을 실행하여 모든 만료 인증서를 즉시 갱신합니다.
+  3. 도커/containerd 런타임 명령(`crictl`)으로 실행 중인 API 서버 컨테이너를 강제 종료하여 새 인증서로 재시작시킵니다.
+     ```bash
+     crictl pods --name kube-apiserver -q | xargs -r crictl stopp
+     ```
+  4. 갱신된 `/etc/kubernetes/admin.conf` 파일을 각 마스터 노드 및 관리자 홈 디렉터리에 복사합니다.
+  5. 나머지 마스터 노드(2번, 3번)에서도 동일하게 2~4번 과정을 반복합니다.
+
+### 2) cert-manager Webhook 장애로 모든 CRD 생성이 실패하는 경우
+
+- **현상**: `Internal error occurred: failed calling webhook "webhook.cert-manager.io"` 에러와 함께 `Certificate` 리소스 수정 불가.
+- **복구 절차**:
+  1. API 서버의 웹훅 차단을 해제하기 위해 임시로 Webhook Configuration을 비활성화하거나 삭제합니다.
+     ```bash
+     kubectl delete validatingwebhookconfiguration cert-manager-webhook
+     kubectl delete mutatingwebhookconfiguration cert-manager-webhook
+     ```
+  2. cert-manager 컨트롤러 및 웹훅 파드를 재기동하여 내부 자체 서명 서빙 인증서를 새로 발급받도록 유도합니다.
+     ```bash
+     kubectl rollout restart deployment -n cert-manager cert-manager-webhook
+     ```
+  3. 웹훅 파드가 정상 기동되어 새 서빙 인증서를 생성하면, Helm 또는 Carvel 배포를 통해 Webhook Configuration을 원상 복구합니다.
+
+### 3) 워커 노드 Drain 무한 대기로 클러스터 롤링 업그레이드가 멈춘 경우
+
+- **현상**: CAPI Machine 객체가 `Deleting` 단계에서 멈추어 있고, Kubelet 로그에 Drain 타임아웃 기록.
+- **복구 절차**:
+  1. 제어 클러스터에서 해당 노드의 Drain을 가로막는 파드를 조회합니다.
+     ```bash
+     kubectl get pods -A --field-selector spec.nodeName=<대상노드명>
+     ```
+  2. PDB 설정을 조회하여 `ALLOWED DISRUPTIONS`가 0인 리소스를 식별합니다.
+     ```bash
+     kubectl get pdb -A
+     ```
+  3. 싱글톤 파드(KubeSphere Tower 등)가 리더 락을 점유하고 종료되지 않는지 확인하고 Lease 리소스를 점검합니다.
+     ```bash
+     kubectl get lease -A
+     ```
+  4. 문제가 되는 파드의 레플리카를 일시 증설하거나, 긴급한 경우 수동으로 파드를 강제 종료합니다.
+     ```bash
+     kubectl delete pod <파드명> -n <네임스페이스> --grace-period=0 --force
+     ```
+
+---
+
+## 6. 실무 점검 체크리스트: 4단계 방어선
+
+운영팀이 정기 점검 및 변경 작업 전후에 수행해야 하는 4단계 필수 점검 항목입니다.
+
+### 1) [1단계] 인증서 프로세스 메모리 로드 여부 점검
+
+- [ ] **cert-manager 인증서 상태 점검**:
+  ```bash
+  kubectl get certificate -A -o custom-columns=\
+  "NAMESPACE:.metadata.namespace,NAME:.metadata.name,READY:.status.conditions[0].status,EXPIRATION:.status.notAfter,RENEWAL:.status.renewalTime"
+  ```
+  - 모든 리소스의 `READY` 컬럼이 `True`인지 확인.
+  - `RENEWAL` 시각이 지난 리소스가 존재하는지 확인.
+- [ ] **외부 서빙 프로세스 메모리 TLS 핸드셰이크 실측**:
+  ```bash
+  openssl s_client -connect <도메인>:443 -servername <도메인> </dev/null 2>/dev/null | openssl x509 -noout -dates
+  ```
+  - Secret 파일 갱신 후 실제 서빙 프로세스가 새 인증서를 로드했는지 확인.
+  - 미적재 시 대상 워크로드 `kubectl rollout restart` 실행.
+- [ ] **제어 평면 인증서 만료 잔여일 확인**:
+  ```bash
+  kubeadm certs check-expiration
+  ```
+  - 잔여일이 30일 이하인 항목이 있는지 확인.
+- [ ] **kubelet CSR 승인 대기열 확인**:
+  ```bash
+  kubectl get csr | grep Pending
+  ```
+  - 자동 승인되지 못하고 대기 중인 노드 인증서 요청이 없는지 점검.
+
+### 2) [2단계] etcd 쿼럼 유지 상태 점검 (제어 평면 롤링 전)
+
+- [ ] **etcd 쿼럼 및 헬스체크**:
+  ```bash
+  ETCDCTL_API=3 etcdctl --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+    --cert=/etc/kubernetes/pki/etcd/peer.crt \
+    --key=/etc/kubernetes/pki/etcd/peer.key \
+    --endpoints=https://127.0.0.1:2379 endpoint health
+  ```
+  - 3개 엔드포인트 모두 `healthy` 상태인지 확인.
+- [ ] **etcd 멤버 목록 및 리더 상태 점검**:
+  ```bash
+  ETCDCTL_API=3 etcdctl --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+    --cert=/etc/kubernetes/pki/etcd/peer.crt \
+    --key=/etc/kubernetes/pki/etcd/peer.key \
+    --endpoints=https://127.0.0.1:2379 member list -w table
+  ```
+  - 롤링 중 일시적 4노드 상태에서 다음 노드 삭제 전 쿼럼 회복 여부 확인.
+
+### 3) [3단계] PDB 및 싱글톤 Drain 교착 해소 점검 (워커 롤링 전)
+
+- [ ] **위반 가능 PDB 리소스 색출**:
+  ```bash
+  kubectl get pdb -A | awk '$5 == 0 {print $0}'
+  ```
+  - `ALLOWED DISRUPTIONS`가 0인 PDB 소유 애플리케이션 담당자에게 사전 공지 및 레플리카 일시 증설.
+- [ ] **리더 락 점유 싱글톤 파드(Tower 등) 및 Lease 상태 확인**:
+  ```bash
+  kubectl get pods -A -l app=tower
+  kubectl get lease -n kubesphere-system
+  ```
+  - 싱글톤 에이전트의 락 상태 확인 및 Drain 차단 위험 선제 파악.
+- [ ] **vSphere 인프라 가용 용량 확인**:
+  - 새 롤링 노드를 기동할 수 있는 ESXi CPU/Memory 용량 및 IPAM 여유 IP 확보 여부 확인.
+
+### 4) [4단계] Keycloak 장기 토큰 잔여 시간 점검
+
+- [ ] **토큰 만료일(`exp`) 클레임 확인**:
+  ```bash
+  echo "${LONGTERM_TOKEN}" | cut -d. -f2 | base64 -d 2>/dev/null | jq -r '.exp | todate'
+  ```
+  - 만료 잔여 기간이 30일 이하인 경우 수동 Token Exchange 갱신 수행.
+- [ ] **무인 파이프라인 실제 통신 검증**:
+  ```bash
+  curl -k -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer ${LONGTERM_TOKEN}" https://monitoring.dks.samsungds.net/-/healthy
+  ```
+  - `200 OK` 응답 확인.
+
+---
+
+## 7. 조사·증거 경로
+
+이 장은 운영자가 수집한 관측 증거와 이를 통해 확정할 수 있는 사실, 그리고 그 증거만으로는 주장할 수 없는 한계 경계를 표로 정의합니다.
+
+| 확인하려는 질문 | 설정상 가능한 동작·조건 | 실제 관측 증거 | 그 증거만으로 말할 수 없는 것 |
+|---|---|---|---|
+| 제어 평면 인증서가 정상인가? | `kubeadm`이 1년 유효기간으로 생성하며, 갱신 전까지 파일이 유지된다. | `kubeadm certs check-expiration` 출력, 각 `.crt` 파일의 `openssl x509 -enddate` 값 | API 서버가 갱신된 파일을 메모리에 다시 로드했는지 여부 (재기동 확인 필요) |
+| cert-manager가 새 인증서를 발급했는가? | `renewalTime` 도달 시 `CertificateRequest`를 생성하고 Secret을 갱신한다. | `Certificate`의 `Ready: True`, 새 `Secret`의 `resourceVersion` 및 생성 시각 | 파드 컨테이너 내부 프로세스가 새 인증서를 메모리에 로드했다는 사실 |
+| 실제 서비스가 새 인증서를 서빙하는가? | 파드가 Secret 볼륨을 감시하거나 재시작되면 새 인증서를 로드한다. | `openssl s_client -connect <도메인>:443 -servername <도메인>` 결과의 `notAfter` | 클러스터 내부의 다른 마이크로서비스 mTLS 경로까지 모두 갱신되었다는 판단 |
+| etcd 클러스터가 롤링 교체 가능한 상태인가? | 홀수 대의 etcd 멤버가 구성되어 있고 과반수가 정상 통신해야 한다. | `etcdctl endpoint health` 전원 `healthy`, `etcdctl member list`의 활성 상태 | 네트워크 순단 시 신규 노드 추가 과정에서의 일시적 쿼럼 저하 무영향 보장 |
+| 노드 Drain이 교착 없이 가능한 상태인가? | PDB의 `maxUnavailable`이 1 이상이고 리더 락 싱글톤 파드나 로컬 볼륨 점유가 없어야 한다. | `kubectl get pdb`의 `ALLOWED DISRUPTIONS > 0`, Lease 상태, 파드의 PVC 마운트 여부 | 컨테이너 프로세스가 graceful shutdown 유예 시간 내에 정상 종료될지 여부 |
+| Long-Term Token이 정상 갱신되었는가? | Keycloak Token Exchange로 1년짜리 JWT를 발급받아 Secret을 교체한다. | 디코딩된 JWT의 `exp` 값, monitoring `/-/healthy` 및 OpenSearch `200 OK` 응답 | 클러스터 내부의 모든 비인가 배치 파이프라인이 정상 동작한다는 보장 |
+
+---
+
+## 8. 상세 자료 색인
+
+이 문서를 읽은 뒤 세부 실행 정보와 연계 문서를 찾기 위한 질문 기반 색인입니다.
+
+| 지금 풀어야 할 질문 | 확인할 자료·앵커 | 확인할 내용 |
+|---|---|---|
+| 제어 평면 및 etcd 인증서 수동 갱신 절차가 필요할 때 | 이 문서의 [3) 제어 평면 인증서 수동 갱신 절차](#3-제어-평면-인증서-수동-갱신-절차-kubeadm) | `kubeadm certs renew all` 명령어 및 정적 파드 재시작 순서 |
+| DKS-C 기본 Addon 인증서의 정확한 수명과 갱신 창을 확인할 때 | [`DKS-C 인증서 갱신 기간 및 현황.md`](../DKS-C%20인증서%20갱신%20기간%20및%20현황.md#인증서-갱신-주기-패턴) | Metric Server, Log Server(OpenSearch 8노드), Addon 에이전트의 유효기간 현황 |
+| Keycloak 장기 토큰을 curl 커맨드로 직접 발급해야 할 때 | [`DKS-C Long-Term Access Token 발급 방법.md`](../DKS-C%20Long-Term%20Access%20Token%20발급%20방법.md#세부-정보) | 3단계 OIDC Authorization Code 및 Token Exchange curl 요청 본문 |
+| Keycloak 클라이언트 설정 및 세션 타임아웃 규칙을 확인할 때 | [`DKS Keycloak 연계 정보.md`](../DKS%20Keycloak%20연계%20정보.md#핵심-내용) | 13개 OIDC Client 목록, Offline Session 설정 및 토큰 클레임 구조 |
+| CAPI 롤링 업데이트 시 Supervisor Quota 증설 예외를 확인할 때 | [`03. Supervisor·CCI 인프라 제어 평면과 Quota 경계.md`](03.%20Supervisor%C2%B7CCI%20인프라%20제어%20평면과%20Quota%20경계.md#3-quota는-어디에서-고정되고-어디에서-분기되는가-namespace-region-zone의-경계) | CAPI 노드 증설(Surge)에 필요한 VM Quota 상한 및 vCenter API 우회로 |
+| 플랫폼 관리 클러스터와 테넌트 클러스터 분리 구조를 확인할 때 | [`04. 플랫폼 관리 평면 분리와 전용 클러스터.md`](04.%20플랫폼%20관리%20평면%20분리와%20전용%20클러스터.md) | Management Cluster와 User Cluster 간 관리 경계 및 CAPI 컨트롤러 위치 |
+| Ingress 및 APISIX 게이트웨이 인증서 교체 지점을 확인할 때 | [`05. 외부 트래픽 진입 경로와 APISIX·Two-Arm LB.md`](05.%20외부%20트래픽%20진입%20경로와%20APISIX%C2%B7Two-Arm%20LB.md) | External VIP, APISIX SSL 라우팅 규칙 및 Ingress Controller 인증서 바인딩 |

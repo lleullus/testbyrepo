@@ -1,0 +1,189 @@
+# 02. 네트워크 격리와 1:1:1 테넌시 경계 — 구조·주소 변환·경로 통제를 어떻게 구분하는가?
+
+## 문서의 목적
+
+이 문서는 Kubernetes와 VCF/NSX의 기본 용어를 알고 있지만, DKS-C에서 **무엇이 사용자 클러스터의 테넌시 경계를 식별하는지**, **전용 SNAT External IP가 패킷의 어떤 값을 바꾸는지**, **다른 VPC로 향하는 트래픽이 어떤 조건에서 정책 판단에 도달하는지**를 한 흐름으로 이해하려는 독자를 위한 것이다.
+
+원자료가 직접 뒷받침하는 기본 배치는 `User Cluster : Supervisor Namespace : VPC = 1:1:1`이다. 여기서 `Supervisor Namespace`는 사용자 클러스터 안의 애플리케이션 `Namespace`가 아니라 Supervisor 클러스터에서 vSphere/CCI 인프라를 묶는 객체다. 이 문서는 먼저 그 대응이 어떤 범위를 식별하는지 설명한 뒤, VPC 내부 주소가 전용 SNAT 주소로 다시 쓰이는 변환과 VPC 간 라우팅·방화벽 통제 조건을 분리해 설명한다.
+
+여러 클러스터가 하나의 VPC 또는 같은 L2 세그먼트를 공유하는 상황은 현재 배치의 사실로 제시하지 않는다. VCF가 설명하는 동일 VPC 내 통신 제약을 이해하기 위한 **가정된 위험 모델**로만 다룬다. 원자료에는 `1:1:1`을 처음 채택한 의사결정 기록이나 모든 패킷의 실제 경로 캡처가 없으므로, 현재 구조와 문서화된 효과는 설명하되 과거의 선택 이유를 발명하지 않고 `1:1:1`·SNAT만으로 실제 방화벽 통과나 비인가 통신 차단을 확정하지 않는다.
+
+## 전체 이해 지도
+
+이 문서의 중심 질문은 **한 사용자 클러스터의 네트워크 경계와 외부 출발지 주소를 어떻게 식별하고, 다른 VPC로 향하는 통신을 어디에서 어떤 조건으로 판단하는가**이다. 다음 불릿은 그 질문에 답하기 위해 구조, 변환, 경로 조건, 증거의 순서를 연결한다.
+
+- **먼저 `Supervisor Namespace`, `User Cluster`, `VPC`를 하나의 1:1:1 대응으로 읽는다.** `Supervisor Namespace`는 quota를 지정할 수 있는 최소 인프라 Tenant 객체이고, `User Cluster`는 그 Namespace에 대응하는 Kubernetes control plane과 node 집합이며, `VPC`는 그 클러스터가 사용하는 NSX/VCF 네트워크 자원 범위다. 따라서 이 대응은 한 사용자 클러스터의 배치·소유 범위를 식별하는 출발점이 된다.
+- **이 대응은 자원 범위를 구분하지만 모든 기반이 같은 비율로 분리된다는 뜻은 아니다.** 사용자 클러스터·Namespace·VPC가 따로 식별된다고 해서 Workload Domain, 하이퍼바이저, 물리 네트워크, 공통 Transit Gateway, 스토리지, DNS·인증까지 각각 전용이라는 사실이나, VPC 사이의 ACL이 자동으로 생긴다는 사실이 따라오지는 않는다.
+- **VPC 내부 VM의 외부행 통신에서는 출발지 주소가 전용 SNAT External IP로 다시 쓰일 수 있다.** SNAT(Source Network Address Translation)은 패킷의 source address를 다른 주소로 바꾸는 동작이다. `VPC : SNAT (external ip) = 1 : 1`은 VPC와 전용 주소의 대응을 나타내므로, A VPC의 내부 주소 `P_A`가 외부행 흐름에서 `S_A`로 관측될 수 있다.
+- **`S_A`는 출발지 VPC를 식별하는 정책 입력이 될 수 있지만 허용 결과는 아니다.** SNAT이 실행되었다는 사실은 목적지까지 도달했다는 뜻이 아니며, `S_A`를 ACL에 등록했다는 사실도 route가 존재하거나 해당 흐름이 실제로 허용되었다는 뜻이 아니다. 목적지·프로토콜·포트·방향, 라우팅과 정책의 실제 상태를 따로 확인해야 한다.
+- **Pod의 주소까지 같은 변환으로 단정하지 않는다.** 원자료가 직접 설명하는 것은 VPC 내부 VM의 outbound NAT이다. Pod source address가 CNI, 노드 egress, VPC egress 중 어디에서 바뀌는지는 클러스터의 NAT 규칙과 변환 전·후 패킷 또는 flow 기록으로 확인해야 한다.
+- **A VPC에서 B VPC로 가는 경로는 연결 객체와 route가 먼저 성립해야 한다.** `VPCConnectivityProfile`은 적용할 VPC topology 프로필이고, `VPCAttachment`는 VPC를 그 프로필에 연결하며, `TransitGateway`와 `Private TGW IPBlock`은 Multiple-VPC private 경로가 가능할 조건을 제공한다. 이 객체가 존재한다는 사실만으로 특정 route가 설치되었거나 패킷이 실행되었다고 말할 수는 없다.
+- **중앙 외부 경로가 실제 토폴로지에 구성된 경우에만 VPC Gateway에서 Tier-0 Gateway와 물리 방화벽으로 이어지는 순서를 검토한다.** 방화벽은 실제 관측된 source 또는 `S_A`, destination, protocol, port, direction을 기준으로 ACL의 allow/deny를 판단할 수 있다. Private TGW 경로가 Tier-0·물리 방화벽을 지나는지는 attachment, route table·route advertisement와 flow evidence로 별도 확인해야 한다.
+- **공유 VPC는 현재 사실과 분리된 위험 모델이다.** 여러 테넌트 VM이 같은 VPC에 있고 같은 L2/subnet까지 공유하며 VM 단위 Security Group 통제가 없다면 로컬 VM 직접 연결, broadcast/ARP 노출, 주소 중복을 검토할 수 있다. 그러나 같은 VPC라는 사실만으로 같은 L2, IP 충돌, ARP 위조가 이미 발생했다고 단정하지 않는다.
+- **마지막으로 설정상 가능한 경로와 실제 사건의 증거를 나누어 판단한다.** 객체 상태·IPBlock·quota 조회는 구조와 자원 범위를 지지하고, route/flow trace·패킷 캡처·방화벽 로그의 동일 5-tuple과 시간이 특정 흐름의 변환·경유·정책 판단을 지지한다. 현재 자료에는 모든 inter-VPC 흐름의 실행 로그가 없으므로, 그 증거가 없는 범위의 통과·차단·침해를 닫힌 사실로 말하지 않는다.
+
+## 1. 경계 구조
+
+이 장의 질문은 “어떤 객체를 기준으로 한 사용자 클러스터의 네트워크·테넌시 범위를 식별하는가?”이다. CCI 자료는 `VPC` CRD를 `SupervisorNamespace:VPC:Cluster = 1:1:1`로 기술하고, 운영 현황은 사용자 클러스터와 VPC가 1:1이며 VPC별 SNAT External IP가 부여된다고 정리한다. 이 관계는 우선 정적 구조로 읽어야 한다. 구조를 확인했다고 해서 실제 CIDR 사용, 패킷 경로, 방화벽 통과, 공통 인프라의 전용 여부까지 함께 확인되는 것은 아니다.
+
+### 어떤 객체가 1:1:1을 정의하는가
+
+| 객체 | 원자료에서 확인되는 관계 | 이 문서에서의 역할 |
+|---|---|---|
+| `Project` | Supervisor Namespace를 묶는 CCI Tenant 단위. DKS 플랫폼에서는 재활용되는 것으로 기술됨 | 어떤 권한·자원 범위에서 Namespace를 식별하는지 나타내는 상위 범위 |
+| `SupervisorNamespaceClass`·`SupervisorNamespaceClassConfig` | Namespace의 추상화와 기본 CPU·Memory·Storage quota 및 VM class를 정의 | Namespace가 사용할 기본 자원 정책을 구분한다. 네트워크 패킷 경계 그 자체는 아니다. |
+| `Supervisor Namespace` | `Supervisor Namespace : VKS = 1 : 1`; quota를 지정할 수 있는 최소 Tenant 객체 | 사용자 클러스터와 VPC를 묶는 인프라 테넌시 식별자. 일반 `update/patch`가 아니라 create/destroy 중심의 제약이 있다. |
+| `User VKS/Kubernetes Cluster` | Supervisor Namespace에 1:1로 대응 | 사용자의 Kubernetes control plane과 node 집합을 식별한다. |
+| `VPC` | `VPC : Supervisor Namespace = 1 : 1`; CCI `VPC` 설명에 `SupervisorNamespace:VPC:Cluster = 1:1:1` 표기 | 해당 사용자 클러스터가 사용하는 NSX/VCF 네트워크 자원 범위를 식별한다. VPC 이름이 클러스터 이름과 같다는 명명 규칙은 식별을 돕지만 이름 자체가 경로·정책을 집행하지는 않는다. |
+
+여기서 `Supervisor Namespace`는 Supervisor 클러스터의 vSphere/CCI 인프라 객체다. 이미 만들어진 사용자 클러스터 안에서 애플리케이션 API 객체를 나누는 Kubernetes `Namespace`와는 다른 계층이다. Kubernetes `Namespace`는 API 스코프·권한·쿼터를 나눌 수 있지만, 이 문서의 `1:1:1`은 그 내부 Namespace를 가리키지 않는다.
+
+CCI 명명 규칙은 Cluster·VPC·NamespaceClass의 이름을 클러스터명과 같게 두고, Supervisor Namespace에는 지정할 수 없는 랜덤 5자리 문자를 붙인다고 설명한다. 그러므로 이름만 보는 대신 이름, `svns.spec.vpcName`, VPC 객체의 상태를 함께 조회해야 대응 관계를 식별할 수 있다. 같은 이름이나 suffix만으로 실제 CIDR, 라우팅, 방화벽 정책을 추정할 수는 없다.
+
+이 구조에서 `Project`는 여러 Supervisor Namespace를 묶는 상위 CCI Tenant 범위이고, `SupervisorNamespaceClass`·`SupervisorNamespaceClassConfig`는 CPU·Memory·Storage quota와 VM class의 기본 정책을 정의한다. 이 정책 객체들은 자원 사용 조건을 구분하는 데 필요하지만, 어떤 패킷을 어느 경로로 전달할지 결정하는 네트워크 정책 객체와 동일하지 않다. 또한 Supervisor Namespace가 create/destroy 중심이고 일반 `update/patch`가 불가능하다는 제약은 인프라 객체의 수명주기 제약이지, 패킷 격리의 실행 증거가 아니다.
+
+### 현재 기본 배치와 공유-VPC 가정의 분리
+
+현재 배치와 위험 시나리오를 섞지 않으려면 다음 표처럼 자료가 말하는 범위와 추가 조건을 분리해야 한다.
+
+| 구분 | 자료가 말하는 범위 | 판단할 때 남겨야 할 조건 |
+|---|---|---|
+| **현재 DKS-C 기본 구조** | 사용자 클러스터는 VPC와 1:1이고, VPC별 SNAT External IP가 부여된다. CCI의 VPC 관계는 Supervisor Namespace·VPC·Cluster 1:1:1로 기술된다. | 사용자 클러스터들이 하나의 VPC를 공유한다고 일반화하지 않는다. 관리 클러스터가 `prod-dks-vpc`를 사용하고 `dkssol-project` Transit Gateway를 공유한다는 운영 현황은 사용자 클러스터 VPC 관계와 별도의 관리 평면 사실이다. |
+| **가정된 공유-VPC 위험 모델** | VCF 원자료는 동일 VPC 내 VM 간 통신 제한이 없고 Security Group 개념이 없다고 기술한다. 이 조건에서 여러 테넌트 VM을 함께 배치한다고 가정하면 VM 수준의 직접 통신을 검토해야 한다. | 같은 VPC가 같은 L2 broadcast domain이라는 뜻은 아니다. broadcast 노출·ARP 위조는 같은 L2/subnet과 ARP 도달성이, IP 충돌은 중복 주소·겹치는 주소 범위와 실제 할당이 추가로 성립해야 한다. |
+| **실제 사건 주장** | 제공된 세 원자료에는 특정 클러스터 간 공격, 패킷 캡처, flow log가 제시되지 않는다. | 위 시나리오를 DKS-C에서 실제 발생한 침해나 현재 경로로 서술하지 않는다. |
+
+VCF의 “동일 VPC 내 Security Group 부재”는 동일 VPC에 배치된 VM 사이에 VM 단위 통제가 없다는 기술적 제약을 설명한다. 그러나 이것이 `1:1:1`을 과거에 선택한 유일한 이유였다는 설계 인과를 증명하지 않고, 현재 모든 클러스터 간 직접 통신이 차단되었다는 실행 사실도 증명하지 않는다.
+
+`1:1:1`이 직접 제공하는 범위는 사용자 클러스터, Supervisor Namespace, VPC를 같은 테넌시 단위로 식별하고 서로 다른 사용자 클러스터가 동일 VPC에 함께 배치되는 구조를 줄이는 데 있다. 이 구조는 공유 Workload Domain, 하이퍼바이저, 물리 네트워크, 공통 Transit Gateway, 스토리지 또는 DNS·인증까지 같은 비율로 분리한다는 뜻이 아니다. VPC 간 경로의 ACL 허용 역시 이 대응만으로 자동 결정되지 않는다.
+
+따라서 이 장의 답은 다음과 같다. **DKS-C의 네트워크 테넌시 경계는 클러스터 내부 Kubernetes Namespace가 아니라 Supervisor Namespace·User Cluster·VPC의 1:1:1 대응으로 식별된다.** 이 구조는 배치·소유 범위를 구분하지만, 실제 주소 대역과 패킷이 어느 게이트웨이·방화벽을 지나는지는 다음의 변환·조건과 실행 증거를 통해 별도로 확인해야 한다.
+
+## 2. Egress 변환
+
+이 장의 질문은 “한 VPC 내부의 출발지 주소가 외부로 나갈 때 어떤 값으로 바뀌며, 그 변환이 무엇을 보장하지 않는가?”이다. VCFA 아키텍처는 `VPC : SNAT (external ip) = 1 : 1`과 VPC 내부 VM의 outbound NAT을 설명하고, 운영 현황은 사용자 클러스터 VPC별 SNAT External IP를 기록한다. 여기서는 주소 변환의 입력·작용·출력을 설명하되, 그 결과를 방화벽 허용이나 모든 동서 트래픽의 변환으로 확대하지 않는다.
+
+### 입력·조작·출력
+
+원자료가 직접 설명하는 기본 입력은 **VPC 내부 VM의 source address**다. VPC egress NAT은 외부로 나가는 흐름의 source address를 다시 쓰고, `VPC : SNAT (external ip) = 1 : 1`은 그 VPC에 대응하는 dedicated SNAT External IP를 나타낸다. A VPC의 내부 주소를 `P_A`, 전용 External IP를 `S_A`, 목적지를 `D`라고 쓰면 자료가 설명하는 구조는 다음처럼 읽을 수 있다.
+
+`A VPC 내부 주소 P_A → [VPC egress NAT으로 source address 재작성] → A VPC 전용 External IP S_A → 목적지 D`
+
+즉 VPC 내부 VM들이 외부행 통신에서 동일한 outbound/external IP로 NAT될 수 있고, 외부의 방화벽이나 서비스는 `S_A`를 출발지 VPC를 식별하는 값으로 사용할 수 있다. 이것은 “source address가 관측상 어떤 값으로 바뀌는가”에 대한 설명이지, 그 흐름이 다음 장비까지 도달했거나 정책에서 허용되었다는 설명이 아니다.
+
+`S_A`를 알고 있다는 사실만으로 ACL이 허용되었다고 말할 수 없다. NAT이 수행되었다는 사실만으로 목적지까지 도달했다고 말할 수도 없다. 실제 허용 여부는 목적지·프로토콜·포트·방향, 방화벽 정책, 실제 route와 flow에 따로 달려 있다. 같은 이유로 `VPC : SNAT = 1:1`이라는 매핑을 모든 VPC 간 동서 경로에 SNAT이 적용된다는 실행 명세로 읽지 않는다.
+
+Pod 주소에 대해서는 주장을 더 좁혀야 한다. 제공된 인프라 원자료가 직접 기술하는 것은 `VPC 내부 VM → SNAT External IP`이며, 모든 Pod의 주소가 항상 같은 지점에서 바로 VPC External IP로 바뀐다고 설명하지 않는다. Pod의 source address가 CNI, 노드 egress, VPC egress 중 어느 단계에서 바뀌는지는 해당 클러스터의 CNI 및 NAT 규칙과 변환 전·후 패킷으로 확인해야 한다. 따라서 `Pod IP → VPC External IP`는 가능한 변환 경로의 확인 대상이지, 이 문서가 모든 Pod에 대해 확정하는 기본 동작이 아니다.
+
+CCI 가이드는 클러스터 프로비저닝 과정의 9단계에서 `crd.nsx.vmware.com/v1alpha1`의 `kind: networkInfos`를 조회하여 SNAT IP를 추출한다고 설명한다. 이 조회는 포털이나 오케스트레이터에 대응 주소를 전달하는 정보 변환·후처리다. `networkInfos`에 `S_A`가 기록되어 있다는 것만으로 특정 패킷이 실제로 `S_A`로 변환되었거나 방화벽을 통과했다고 판단할 수 없다. 실행 여부와 적용 위치는 NAT rule, 변환 전·후 packet/flow evidence로 별도 확인한다.
+
+### External-IP의 역할을 섞지 않기
+
+운영 현황은 사용자 클러스터의 기본 External-IP를 다음 세 역할로 구분한다. 같은 External-IP라는 표현을 사용하더라도 주소가 패킷에서 맡는 방향과 기능은 다르다.
+
+| 역할 | 문서상 의미 | SNAT과의 구분 |
+|---|---|---|
+| kube-apiserver | Kubernetes API endpoint에 사용하는 External-IP | API 접점 주소이며, egress source 변환 주소와 같은 개념으로 합치지 않는다. |
+| Application Ingress | 애플리케이션 인입에 사용하는 External-IP | 외부에서 들어오는 목적지 주소다. VPC 내부 source의 egress 변환과 방향이 다르다. |
+| SNAT | VPC에서 외부로 나갈 때 대응하는 External-IP | source address를 다시 쓰는 변환의 출력이다. |
+
+CCI의 `IPBlock`은 `Private`, `Private TGW`, `External`로 구분된다. `Private`는 VPC 생성 시 자동 생성되는 내부 범위이며 `spec.visibility=Private`, `spec.systemOwned=true`로 설명된다. `Private TGW`는 Multiple-VPC 통신을 위한 subnet이고 `spec.visibility=Private`, `spec.systemOwned=false`다. `External`은 VPC 외부 subnet으로 사전 정의되며 이름이 콜론(`:`)으로 시작하고 read-only라고 설명된다. 즉 Public-TGW·External IPBlock은 사전 정의되고 Private IPBlock은 자동 생성된다.
+
+`Limit`은 External IPBlock에 대한 CIDR 또는 IP 개수 할당 정책이고 VPC의 `spec.limitNames`에 연결된다. 이 구조는 어떤 주소 풀이 어떤 VPC와 quota에 귀속되는지 설명하지만, 그 주소가 사용된 모든 패킷의 source 또는 SNAT 결과를 관측한 증거는 아니다. `IPBlockUsage`는 IPBlock의 allocated·available IP 목록, `LimitState`는 Limit의 consumed IP 사용량, `VPCIPAddressUsage`는 VPC의 allocated·available IP 목록을 나타내며, 각각은 주소 자원과 사용량을 확인하는 자료이지 패킷 실행 로그를 대신하지 않는다.
+
+VPC 간 private-TGW 경로와 외부 egress 경로가 같은 변환을 거친다고 가정해서도 안 된다. `Private TGW` subnet을 사용하는 Multiple-VPC 흐름에서 source가 유지되는지, 중간 NAT이 있는지, 전용 SNAT IP가 관측되는지는 목적지·route와 실제 패킷으로 판정해야 한다.
+
+따라서 이 장의 답은 다음과 같다. **SNAT은 VPC 내부 source address를 해당 VPC의 External IP로 다시 쓰는 변환이며, 전용 주소는 출발지 식별을 돕는다.** 그 변환 자체는 네트워크 경계를 만들거나 ACL을 허용하지 않는다. Pod까지 포함한 실제 적용 위치와 VPC 간 경로는 클러스터·NSX 구성과 변환 전·후 패킷 또는 flow 증거가 있어야 말할 수 있다.
+
+## 3. Inter-VPC 통제 조건
+
+이 장의 질문은 “A VPC에서 B VPC 또는 외부 목적지로 향하는 흐름이 어떤 조건에서 중앙 정책 판단에 도달하는가?”이다. CCI 자료는 VPC의 연결 프로필·attachment·Transit Gateway·Private TGW IPBlock을 설명하지만, 제공된 원자료에는 특정 환경의 Tier-0 hop, 물리 방화벽 인터페이스, route table, ACL 규칙이 모두 제시되어 있지 않다. 따라서 여기서 설명하는 경로는 **토폴로지가 그렇게 구성되고 실제 패킷이 그 경로를 사용할 때 가능한 실행 경로**이며, 특정 환경에서의 통과 사실은 별도 증거로 판단한다.
+
+### 경로를 허용하는 구성 요소
+
+| 구성 요소 | 원자료에서 확인되는 의미 | 이 문서에서의 관계 판정 |
+|---|---|---|
+| `VPCConnectivityProfile` | VPC topology 프로필 | 어떤 연결 토폴로지를 적용할 수 있는지 정하는 조건·의존 |
+| `VPCAttachment` | `VPCConnectivityProfile`과 VPC의 연결 | VPC가 해당 topology에 참여하도록 하는 기술적 의존 |
+| `TransitGateway` | 사전 정의된 VPC 연결 구성 요소 | 여러 VPC 또는 상위 연결로 향하는 경로의 조건 |
+| `Private TGW IPBlock` | Multiple-VPC 간 통신을 위한 private subnet | VPC 간 private 주소 경로가 존재할 수 있음을 나타내는 구조·조건 |
+| `External IPBlock` | VPC 외부 subnet, 사전 정의·read-only | VPC 밖 External 주소와의 경계를 식별하는 구조 |
+| VPC Gateway·Tier-0·물리 방화벽 | 제공된 요약 자료에는 VPC Gateway/Transit 관계는 있으나 구체적인 Tier-0 hop·물리 방화벽 배치·ACL이 없음 | 운영 토폴로지에서 실제 포함 여부를 확인해야 하는 조건·의존. 현재 문서만으로 존재·통과를 확정하지 않음 |
+
+경로 조건은 다음처럼 읽는다. 먼저 A VPC의 source가 A VPC Gateway와 route table에서 목적지에 맞는 경로를 선택해야 한다. `VPCConnectivityProfile`과 `VPCAttachment`가 해당 topology 참여를 제공하고, Private TGW 경로라면 `TransitGateway`를 통해 B VPC 쪽 private 경로로 이어질 수 있다. 중앙 외부 경로가 구성된 경우에는 VPC Gateway에서 Tier-0 Gateway를 거쳐 물리 방화벽의 ACL 판단과 목적지 라우팅으로 이어질 수 있다. 이 설명은 객체가 그렇게 구성되어 있고 실제 패킷이 그 경로를 탔을 때만 실행 순서가 된다.
+
+그 조건에서 방화벽 정책은 `source(S_A 또는 실제 관측 source)`, `destination`, `protocol`, `port`, `direction` 같은 흐름 속성을 입력으로 삼아 `allow` 또는 `deny`를 판단할 수 있다. 그러나 원자료에 장비의 실제 hop과 route advertisement가 없으므로 “모든 VPC 간 트래픽이 반드시 Tier-0와 물리 방화벽을 지난다”고 쓸 수 없다. 방화벽 flow log, ACL hit, NSX traceflow 또는 패킷 캡처가 특정 5-tuple과 시간에 대해 해당 hop을 보여줄 때에만 그 관측 범위의 경유와 정책 판단을 지지할 수 있다.
+
+### 확인해야 할 반대 경로
+
+`1:1:1`과 dedicated SNAT을 보고 하나의 중앙 경로만 가정하면 다음의 반대 경로를 놓치게 된다.
+
+- **동일 VPC의 로컬 경로:** 두 VM이 같은 VPC에 있다면 동일 VPC VM 간 통신 제한이 없다는 VCF 설명에 따라, 중앙 방화벽을 거치지 않는 로컬 전달 가능성을 먼저 확인해야 한다. 이 경로는 현재 사용자 클러스터 기본 배치가 여러 클러스터의 공유 VPC라는 뜻이 아니라, 공유가 발생했을 때의 위험 모델이다.
+- **Private TGW 경로:** `Private TGW`가 Multiple-VPC용 subnet이라는 CCI 설명에 따라 A VPC와 B VPC 사이에 private transit 경로가 있을 수 있다. 이 경로가 Tier-0·물리 방화벽을 통과하는지는 attachment, route table, route advertisement와 flow evidence로 확인해야 한다.
+- **External egress 경로:** 외부 목적지로 나가는 흐름은 VPC egress NAT 뒤에 `S_A`가 보일 수 있지만, 그 값만으로 B VPC로의 private reachability나 ACL 허용을 추정할 수 없다.
+
+따라서 전용 SNAT IP는 정책의 입력으로 사용할 수 있는 출발지 식별값이지 정책 그 자체가 아니다. 방화벽이 `S_A`를 허용하도록 설정되어 있어도 route가 없으면 통신은 성립하지 않고, route가 있어도 ACL이 거부하면 성립하지 않는다. 어느 장비가 실제 판단 주체인지와 허용 규칙은 운영 설정과 로그로 확인해야 한다.
+
+제공된 자료는 VCF의 동일 VPC 내 Security Group 부재와 CCI의 VPC 연결 객체를 설명하지만, `1:1:1`을 과거에 선택한 이유를 기록한 ADR이나 모든 inter-VPC 흐름의 실행 로그를 제공하지 않는다. 그러므로 “미세 Security Group 대신 1:1:1을 선택했다”는 역사적 문장을 확정하지 않고, 현재 구조가 공유 범위를 줄이는 효과와 통제 경로가 성립하기 위한 조건을 각각 설명한다.
+
+따라서 이 장의 답은 다음과 같다. **Inter-VPC 통제는 1:1:1 또는 SNAT만으로 완료되지 않으며, 연결 프로필·attachment·Transit Gateway·route가 허용한 경로가 실제로 Tier-0와 물리 방화벽을 거치는지, 그리고 그 방화벽이 source·destination·protocol·port를 어떤 ACL로 판단하는지가 결정한다.** 제공된 자료만으로는 이 경유와 차단 결과를 실제 사건의 사실로 닫을 수 없으므로, 다음 조사 경로에서 설정과 실행 증거를 대조해야 한다.
+
+## 조사·증거 경로
+
+이 문서의 원자료는 CRD 관계와 가능한 네트워크 동작을 설명하지만, 특정 흐름의 route trace·방화벽 로그·패킷 캡처를 함께 제공하지 않는다. 따라서 “설정상 가능한 동작”과 “실제로 관측된 증거”를 아래처럼 분리한다. 조사 순서는 시스템 실행 순서가 아니며, 한 증거의 존재만으로 다른 행의 실행을 추정하지 않는다. 특히 객체 조회 결과는 구조·설정의 근거이고, 같은 5-tuple과 시간을 가진 route/flow/firewall 관측이 있어야 특정 패킷의 경로·변환·정책 판단을 좁혀 말할 수 있다.
+
+| 지금 확인하려는 주장 | 문서상 가능한 동작·조건 | 필요한 실제 관측 증거 | 증거가 지지하는 판단과 말할 수 없는 것 |
+|---|---|---|---|
+| 한 User Cluster가 어떤 Supervisor Namespace·VPC에 대응하는가? | CCI `VPC` 관계가 `SupervisorNamespace:VPC:Cluster = 1:1:1`이고, Namespace의 `spec.vpcName`이 VPC를 가리킨다. | 대상 Project의 `SupervisorNamespace`, `VPC`, User Cluster 객체 metadata/spec/status와 상호 참조를 같은 시점에 조회한다. | 구조적 대응과 현재 객체 상태를 지지한다. 이 결과만으로 CIDR의 실제 사용, 라우팅, 방화벽 통과는 말할 수 없다. |
+| VPC와 IPBlock의 주소 범위·할당량은 무엇인가? | `Private`는 VPC 생성 시 자동 생성되고, `Private TGW`는 Multiple-VPC용이며, `External`은 VPC 외부 subnet이다. `Limit`은 External IPBlock의 CIDR 또는 개수 정책이다. | `IPBlock` CIDR/visibility, VPC의 `spec.limitNames`, `IPBlockUsage`, `VPCIPAddressUsage`, `LimitState`를 조회하고 할당·가용 목록을 대조한다. | 주소 범위와 allocation/usage를 지지한다. 주소가 실제 패킷의 source 또는 SNAT 결과로 사용됐다는 사실은 지지하지 않는다. |
+| source address가 전용 SNAT IP로 실제 변환되었는가? | VPC와 SNAT External IP가 1:1이고, VPC 내부 VM의 outbound source가 동일 SNAT IP로 NAT될 수 있다. `networkInfos` 조회로 SNAT 값을 읽을 수 있다. | NSX NAT 규칙, 변환 전·후 지점의 packet capture 또는 flow record, 동일 5-tuple·시간의 양쪽 로그를 상관시킨다. Pod이라면 CNI·노드 egress 관측도 포함한다. | 특정 흐름의 source 변환과 적용 위치를 지지한다. `networkInfos` 값이나 NAT 규칙만으로 모든 Pod·모든 경로의 실행을 확정하지 않는다. |
+| A VPC와 B VPC 사이의 가능한 경로는 무엇인가? | `VPCConnectivityProfile`, `VPCAttachment`, `TransitGateway`, `Private TGW IPBlock`이 연결 토폴로지와 private transit 조건을 제공한다. | VPC/attachment 상태, route table·route advertisement, NSX traceflow/flow telemetry, gateway 및 Tier-0의 경로 상태를 함께 확인한다. | 특정 source·destination의 reachability와 경로 후보를 지지한다. 경로가 존재해도 ACL 허용이나 실제 애플리케이션 성공을 의미하지 않는다. |
+| 특정 inter-VPC 패킷이 Tier-0·물리 방화벽을 통과했는가? | 토폴로지가 해당 게이트웨이와 방화벽을 포함하도록 구성된 경우 그 순서의 경로가 가능하다. 제공된 요약 자료만으로는 실제 hop이 확정되지 않는다. | Tier-0/라우팅 로그, 물리 방화벽 flow log와 ACL hit, NSX traceflow 또는 패킷 캡처를 동일 5-tuple·시간으로 상관시킨다. | 해당 관측 범위의 방화벽 경유와 허용·차단 판단을 지지한다. 샘플 로그 하나로 모든 클러스터·모든 시간의 격리를 보장하지 않는다. |
+| 공유-VPC 위험 모델이 현재 사건인가? | 동일 VPC 내 VM 통신에 Security Group 제한이 없다는 구조 제약은 문서화되어 있다. 같은 L2/subnet까지 공유하면 broadcast·ARP·주소 중복 위험을 검토할 수 있다. | 현재 사용자 클러스터 VPC 매핑, subnet/L2 구성, controlled reachability test, flow log와 사고 시점의 보안 로그를 확인한다. | 현재 배치의 공유 여부와 특정 reachability를 판단한다. 가정된 위협 시나리오만으로 실제 공격·침해를 확정하지 않는다. |
+| 운영 현황의 External-IP 세 역할과 SNAT 매핑이 현재도 유효한가? | 운영 현황은 사용자 클러스터 기본 External-IP를 kube-apiserver·Application Ingress·SNAT으로 구분하고, 사용자 클러스터 VPC 1:1 및 VPC별 SNAT을 기술한다. | 해당 시점의 live VPC/IPBlock/networkInfos와 포털·NSX 자원 레코드를 대조한다. | 역할 분류와 특정 시점의 매핑을 지지한다. 운영 문서의 요약만으로 현재 패킷 변환·방화벽 정책을 확정하지 않는다. |
+| External-IP 여유와 quota usage를 신뢰할 수 있는가? | CCI 문서는 `VPCLimitState`와 `VPCIPAddressUsage` 간 mismatch를 기록하고 이를 집계 오류 추정으로 남긴다. | 두 usage 객체, `LimitState`, 실제 allocated/available 목록과 VPC 자원 상태를 대조하고 mismatch를 기록한다. | 현재 capacity 판단의 근거와 불일치를 보여준다. 불일치가 해소되기 전 숫자를 정확한 잔여량이나 격리 증거로 사용하지 않는다. |
+
+External-IP quota를 조회할 때 CCI 가이드가 제시한 구조적 경로는 `SupervisorNamespace → VPC → Limit → LimitState`다. 실제 객체를 조회하는 명령과 필드는 다음처럼 연결된다. 이 명령은 quota·매핑을 읽기 위한 것이며 패킷의 NAT 실행이나 방화벽 통과를 검증하는 명령은 아니다.
+
+```bash
+kubectl get svns ${SVNS} -n ${PROJECT} -o jsonpath="{.spec.vpcName}"
+kubectl get vpc ${VPC} -o jsonpath="{.spec.limitNames[0]}"
+kubectl get limitstate ${LIMIT} -o jsonpath="{.quota.usage}"
+```
+
+CPU·메모리나 Storage quota를 별도로 확인하는 CCI 경로는 이 문서의 네트워크 경계를 직접 판정하지 않지만, Supervisor Namespace의 자원 정책과 네트워크 객체를 혼동하지 않기 위해 구분해야 한다. `SupervisorNamespaceClassConfig`의 기본 quota, `Limit`의 External-IP 정책, 실제 IPBlock 사용량은 서로 다른 자원 범위다.
+
+현재 자료에서 실제로 확인된 것은 `1:1:1` 구조 표기, VPC·SNAT 관계, IPBlock 종류와 CCI의 `networkInfos` 조회 단계까지다. 실제 inter-VPC 패킷이 어느 방화벽을 통과했는지, 특정 Pod source가 어떤 단계에서 SNAT됐는지, ACL이 해당 흐름을 허용했는지는 위 증거를 추가로 수집해야 한다.
+
+## 남아 있는 제약과 질문
+
+이 장은 앞서 확인한 구조·변환·경로 통제가 어디까지 확정되고 어디서부터 추가 증거를 요구하는지 정리한다. 아래 제약은 1:1:1의 의미를 뒤집는 결함 목록이 아니라, 현재 자료로 답할 수 있는 범위와 운영에서 계속 확인해야 할 질문이다.
+
+- **VPC 경계의 주소 범위:** 세 원자료의 요약만으로 각 사용자 VPC의 실제 CIDR·subnet·L2 segment·중복 방지 상태를 확정할 수 없다. VPC와 IPBlock 객체, 실제 allocation을 함께 확인해야 한다.
+- **공유-VPC 위협 모델의 적용 여부:** 동일 VPC 내 Security Group 부재는 문서화된 제약이지만, 현재 사용자 클러스터가 공유 VPC에 배치됐다는 증거는 제시되지 않았다. broadcast, ARP 위조, IP 충돌은 각각 L2/subnet·ARP 도달성·주소 할당 조건을 확인하기 전까지 시나리오로 남는다.
+- **Pod의 SNAT 적용 위치:** 원자료는 VPC 내부 VM의 outbound NAT을 직접 설명한다. Pod IP가 host/CNI/VPC 중 어느 지점에서 전용 External IP로 바뀌는지는 CNI 설정과 패킷 캡처가 필요하다.
+- **Private TGW와 중앙 방화벽의 관계:** `Private TGW`가 Multiple-VPC 통신용이라는 사실만으로 해당 경로가 Tier-0·물리 방화벽을 통과한다고 결론 내릴 수 없다. attachment, route table, route advertisement와 flow trace를 대조해야 한다.
+- **정책의 실제 효력:** dedicated SNAT IP는 출발지 식별을 돕지만 허용을 부여하지 않는다. ACL의 source·destination·protocol·port·direction과 hit log가 없으면 특정 통신이 차단됐다고 말할 수 없다.
+- **공통 기반 범위:** 1:1:1은 사용자 클러스터·Supervisor Namespace·VPC의 대응 구조다. 공통 Workload Domain, 하이퍼바이저, 물리 네트워크, Transit Gateway, 스토리지와 DNS·인증의 공유·장애 범위까지 자동으로 분리한다는 보장은 없다.
+- **IP 사용량의 불일치:** `VPCLimitState`와 `VPCIPAddressUsage` mismatch가 해소되지 않으면 External-IP 여유와 새 VPC/SNAT 할당 가능성을 단일 수치로 판단하기 어렵다.
+- **역사적 선택 이유:** VCF의 현재 제약과 1:1:1의 현재 효과는 설명할 수 있지만, 왜 당시 이 구조를 선택했는지는 ADR·결정 기록·당시 요구사항 없이는 확정하지 않는다.
+
+`03. Supervisor·CCI 인프라 제어 평면과 Quota 경계`는 이 문서가 설명한 Supervisor Namespace·VPC·User Cluster 대응을 생성·관리하는 **공통 인프라 제어 평면**을 다루는 보완·선행 기반 질문이다. 03번을 02번의 결론에서 새로 발생하는 위기나 필연적인 다음 실행 단계로 읽지 않는다.
+
+## 상세 자료 색인
+
+다음 색인은 제품 목록이 아니라 이 문서를 읽은 뒤 생기는 질문을 기준으로 구성했다. 운영 계정·비밀번호와 같은 민감정보는 복제하지 않고, 구조·주소·경로를 확인하는 데 필요한 자료 위치만 가리킨다.
+
+| 지금 풀어야 할 질문 | 확인할 자료 | 확인할 내용 |
+|---|---|---|
+| 어떤 CCI 객체가 Supervisor Namespace·VPC·User Cluster의 1:1:1 대응을 정의하는가? | [`VCFA CCI CRDs 및 Quota 가이드`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#cci-crds-구조-및-관계) | Project, Supervisor Namespace, VPC, VPCAttachment와 `SupervisorNamespace:VPC:Cluster = 1:1:1` 표기 |
+| VPC 내부·Private TGW·External 주소 범위는 어떻게 구분되는가? | [`VCFA CCI CRDs 및 Quota 가이드`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#ipblock-3종류) | IPBlock의 `Private`, `Private TGW`, `External` 의미와 자동 생성·사전 정의 조건 |
+| VPC와 SNAT External IP의 구조적 관계와 동일 VPC 통신 제약은 무엇인가? | [`VCFA 인프라 아키텍처`](../VCFA%20인프라%20아키텍처.md#4-vpc-model) | `VPC : SNAT (external ip) = 1 : 1`, VPC 내부 VM의 NAT, 동일 VPC 내 Security Group 부재 |
+| 클러스터명·VPC명·Supervisor Namespace가 실제 객체에서 어떻게 대응되는가? | [`VCFA CCI CRDs 및 Quota 가이드`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#naming-convention) | Cluster/VPC/NamespaceClass 명명, VPCAttachment suffix, Supervisor Namespace 랜덤 5자리 규칙 |
+| SNAT IP를 어떤 CCI 정보에서 읽으며, 그 값이 실행 증거인가? | [`VCFA CCI CRDs 및 Quota 가이드`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#클러스터-프로비저닝-프로세스-11단계) 및 [이 문서의 Egress 변환](#2-egress-변환) | `networkInfos` 조회의 위치와 SNAT 정보 전달 단계. 실제 변환은 NAT rule·packet/flow evidence로 별도 확인 |
+| External-IP quota와 allocated/available 사용량을 어떻게 대조하는가? | [`VCFA CCI CRDs 및 Quota 가이드`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#quota-조회-방법) | Supervisor Namespace → VPC → Limit → LimitState 조회 경로와 usage 확인 방법 |
+| 운영 환경에서 사용자 클러스터 VPC 1:1과 External-IP 세 역할은 어디에 기록되어 있는가? | [`DKS-C 운영 현황 요약`](../DKS-C%20운영%20현황%20요약.md#시스템-아키텍처) | 사용자 클러스터 VPC 1:1, VPC별 SNAT External IP, kube-apiserver·Application Ingress·SNAT 역할 |
+| VPC 간 경로가 어떤 연결 객체를 통해 가능한가? | [`VCFA CCI CRDs 및 Quota 가이드`](../VCFA%20CCI%20CRDs%20및%20Quota%20가이드.md#cci-crds-구조-및-관계) 및 [`VCFA 인프라 아키텍처`](../VCFA%20인프라%20아키텍처.md#4-vpc-model) | VPCConnectivityProfile, VPCAttachment, Transit Gateway와 Project·VPC Gateway 관계. 실제 route table·Tier-0 hop은 운영 설정에서 확인 |
+| 특정 패킷이 Tier-0·물리 방화벽을 통과하고 ACL에 의해 허용·차단됐는가? | [이 문서의 Inter-VPC 통제 조건](#3-inter-vpc-통제-조건) 및 [조사·증거 경로](#조사증거-경로) | route/flow trace, Tier-0 경로, 방화벽 ACL·hit log, 동일 5-tuple 상관관계. 원자료 요약만으로는 실제 통과를 확정하지 않음 |
+| 이 1:1:1 네트워크 구조를 어떤 제어 평면이 생성·관리하는가? | [`03. Supervisor·CCI 인프라 제어 평면과 Quota 경계`](03.%20Supervisor%C2%B7CCI%20인프라%20제어%20평면과%20Quota%20경계.md) | CCI/Supervisor가 VPC·Namespace·VM 등 인프라 객체를 생성·관리하는 조건과 Quota 변경 경계. 02번의 새 위기가 아닌 공통 기반 |
+
+색인은 `1:1:1`을 네트워크 통제의 단일 근거로 사용하지 않는다. 각 질문에 대해 구조·변환·조건·실행 증거 중 어느 자료를 확인해야 하는지 분리해 가리키며, 확인되지 않은 경로와 정책은 남아 있는 질문으로 남긴다.
