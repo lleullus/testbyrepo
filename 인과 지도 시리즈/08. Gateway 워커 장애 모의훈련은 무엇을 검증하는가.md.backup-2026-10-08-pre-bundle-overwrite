@@ -1,0 +1,413 @@
+# 08. Gateway Worker 장애 모의훈련 — VM 손실 뒤 어느 증거까지 있어야 자동 복구와 사용자 기능 복구를 말할 수 있는가?
+
+## 문서의 목적
+
+이 문서는 DKS-C 개발 Gateway Cluster의 Worker VM 한 대를 의도적으로 제거하는 장애 모의훈련에서 무엇을 실제로 검증해야 하는지 설명합니다. 훈련 대상 VM을 Machine·Node·Pod·Endpoint와 정확히 연결하는 Baseline부터 시작해, VM 손실을 각 Control Plane이 어떻게 감지하는지, CAPI와 인프라 Controller가 어떤 조건을 통과해 대체 Worker를 만드는지, Gateway Workload와 사용자 요청이 어디까지 복구돼야 하는지, 마지막으로 Timeline과 Evidence를 어떻게 남겨 자동 복구·Workload 복구·사용자 가용성을 서로 다른 결과로 판정하는지를 하나의 흐름으로 연결합니다.
+
+핵심은 장애 주입, 장애 감지, 대체 인프라 생성, Kubernetes Node 복구, Gateway Workload 복구, 사용자 요청 복구를 하나의 “자동 복구 성공”으로 뭉치지 않는 것입니다. 현재 원자료는 실행 전 검토 단계의 계획이며 이 문서는 특정 VM 삭제나 운영 변경을 승인하지 않습니다. 대상 Worker 수와 개발·운영 URL 표기에 자료 간 불일치가 있으므로 실제 실행 전 현행 Cluster·Machine·VM·Route를 다시 확정해야 합니다.
+
+## 전체 인과 지도
+
+장애 모의훈련은 VM을 하나 지우는 행위 자체를 검증하는 것이 아닙니다. 먼저 어떤 Worker VM이 어느 CAPI Machine과 Kubernetes Node, Gateway Pod·Endpoint에 대응하는지 닫혀 있어야 그 VM 손실이 무엇을 없앴는지 해석할 수 있습니다. 이 Baseline이 맞아도 VM이 사라진 순간 자동 복구가 시작됐다고 볼 수는 없습니다. Infrastructure Provider와 CAPI가 손실을 감지하고 원하는 Worker 수와 실제 상태의 차이를 인식한 뒤, Quota·Compute·Storage·Network 조건을 통과해 Replacement Machine과 VM을 만들어야 합니다. 새 VM이 생겨도 아직 Gateway 기능이 복구된 것은 아닙니다. Bootstrap과 kubelet Join을 거쳐 Node가 Ready가 되고, 필요한 APISIX·Keycloak Pod와 Endpoint가 살아남거나 대체 배치되어야 합니다. 그 상태에서도 사용자 요청이 실제로 정상이라는 보장은 없습니다. 개발계 DNS·VIP·LB·APISIX Route·Authentication·Backend까지 같은 요청 경로가 성공해야 최종 기능 복구를 말할 수 있습니다. 각 계층은 서로 다른 시각에 상태를 바꾸므로 T0부터 사용자 Request 정상화까지 증거를 따로 남겨야 어디서 복구가 느렸는지와 어떤 가설이 실제로 성립했는지 판단할 수 있습니다.
+
+이 문서는 물류센터 재난대응 훈련을 하나의 비유 세계로 사용합니다. 작업 구역은 Worker VM, 시설관리 기록은 Machine, 근무표는 Node, 실제 업무 인력은 Gateway Pod, 출고 창구는 Endpoint와 사용자 Request에 대응합니다. 비유는 복구 단계를 이해하기 위한 보조 수단이며 실제 훈련 판정은 VM·Machine·Node·Pod·Endpoint·Request·Alert의 동일 대상·동일 시각 Evidence를 기준으로 합니다.
+
+### 훈련 대상과 Baseline
+
+#### 왜 필요한가
+
+어느 VM을 제거했는지와 그 VM이 어떤 Machine·Node·Pod·Endpoint에 대응했는지가 불분명하면 이후의 상태 변화를 그 장애와 연결할 수 없습니다. 장애 전 Worker 수·사용자 경로·Replica·Capacity도 확인하지 않으면 원래 존재하던 문제를 훈련 영향으로 오해할 수 있습니다.
+
+#### 핵심 용어
+
+- Worker VM: vCenter에서 실제 Guest OS로 실행되는 Gateway Worker 인프라 VM
+- MachineDeployment: CAPI가 유지하려는 Worker 수와 Update 정책을 나타내는 Resource
+- MachineSet: 특정 Revision의 Machine 집합을 관리하는 Resource
+- Machine: Worker 한 대의 Lifecycle을 표현하는 CAPI Resource
+- NodeRef: Machine이 실제 Kubernetes Node와 연결됐음을 나타내는 참조
+- Provider ID: 인프라 VM과 Kubernetes/CAPI Resource를 연결할 때 사용하는 Provider 식별 정보
+- EndpointSlice: Service가 Traffic을 보낼 Ready Endpoint를 나타내는 Resource
+- Baseline: 장애 주입 전에 정상 상태와 대상 대응을 고정해 두는 기준 기록
+
+#### 비유
+
+작업 구역 하나를 폐쇄하기 전에 시설 번호, 작업반, 그 구역에서 일하는 인력, 출고 창구가 모두 같은 장소를 가리키는지 확인해야 합니다. 비슷한 이름의 다른 구역을 폐쇄하면 이후 변화가 훈련 때문인지 해석할 수 없습니다.
+
+#### 본문
+
+훈련에서 제거하는 대상은 vCenter의 실제 Worker VM 한 대입니다. CAPI Machine이나 Kubernetes Node Resource를 삭제하는 것과 같은 동작이 아니며 각각 다른 Controller 경로를 유발할 수 있습니다.
+
+| 계층 | 확인 대상 | 무엇을 나타내는가 | 잘못 식별했을 때 위험 |
+|---|---|---|---|
+| vCenter | Worker VM | 실제 Guest OS VM | 다른 VM·Control Plane 제거 |
+| CAPI | MachineDeployment | 원하는 Worker 수·Update 정책 | 복구 Owner 오판 |
+| CAPI | MachineSet | 특정 Revision의 Machine 집합 | 다른 Revision 선택 |
+| CAPI | Machine | Worker 한 대의 Lifecycle | VM·Node 대응 불일치 |
+| Kubernetes | Node | kubelet이 등록한 Worker | 실제 VM과 다른 Node 관측 |
+| Workload | Pod | APISIX·Keycloak 등 실행 Process | 서비스 영향 예측 실패 |
+| Service | EndpointSlice | 현재 Traffic 수신 가능 Pod | 사용자 경로 영향 오판 |
+
+삭제 후보를 정할 때 Node Name·UID, CAPI Machine과 NodeRef, MachineSet·MachineDeployment 소속, Infrastructure Provider ID와 vCenter VM ID/Name, Zone·ESXi Host 위치, 해당 Node의 Gateway 핵심 Pod, Service Endpoint에서 그 Pod가 차지하는 역할을 같은 대상으로 연결합니다.
+
+```text
+vCenter VM ID / Name
+        ↕ Provider / Instance 정보
+CAPI Machine UID
+        ↕ NodeRef
+Kubernetes Node UID / Name
+        ↕ spec.nodeName
+Gateway Pod
+        ↕ Service / EndpointSlice
+사용자 요청 경로
+```
+
+이 연결이 닫혀야 “이 VM 상실이 어느 Capacity와 Endpoint를 제거하는가”라는 인과 주장을 만들 수 있습니다.
+
+원자료에는 Worker 수 불일치가 있습니다. 훈련 요청서는 개발 Gateway Worker 5대 중 1대 삭제를 전제로 하지만 운영 현황 스냅샷은 dev-dksg-ic01-khm Worker를 3대로 기록합니다. 운영 현황이 과거 스냅샷일 수도 있고 요청서가 이후 증설을 반영했을 수도 있으며 요청서 수량이 잘못됐을 수도 있으므로 둘 중 하나를 추정으로 선택하지 않습니다.
+
+실행 시점에 Node·Machine·VM을 같은 시각으로 대조합니다.
+
+```bash
+kubectl --context="$GATEWAY_CONTEXT" get nodes -o wide
+kubectl --context="$MANAGEMENT_CONTEXT" -n "$GATEWAY_NAMESPACE" get machinedeployments,machinesets,machines -o wide
+```
+
+여기에 vCenter Inventory를 연결해 Control Plane VM이 후보에 섞이지 않았는지 확인합니다.
+
+URL에도 같은 문제가 있습니다. 요청서 일부에는 운영계와 개발계 표기가 섞여 있으므로 개발 Gateway 장애를 검증하면서 운영 URL만 성공하면 다른 환경의 정상 상태를 본 것일 수 있습니다. 훈련 전에 실제 개발계 사용자 경로를 닫습니다.
+
+```text
+개발계 사용자 FQDN
+  ↓ DNS
+개발계 VIP / LB Virtual Service
+  ↓ Backend Pool
+Gateway Kubernetes Service
+  ↓ Endpoint
+APISIX Listener / Route / Upstream
+  ↓
+검증 대상 Backend 또는 User Cluster API
+  ↓
+필요한 Authentication과 기대 Response
+```
+
+이 연결이 확인돼야 마지막 Request 결과가 실제 개발 Gateway 복구 증거가 됩니다.
+
+Baseline은 자동 복구 경로, Pod·Endpoint, 사용자 경로, Monitoring·Notification을 함께 기록합니다.
+
+| Baseline | 실제 질문 |
+|---|---|
+| MachineDeployment desired replicas | Controller가 유지하려는 Worker 수는 몇 대인가? |
+| MachineSet·Machine | 어느 Revision·Owner에 속하는가? |
+| Node Ready | 모든 Gateway Worker가 현재 Ready인가? |
+| vCenter VM | Node와 대응하는 VM이 존재·Power On인가? |
+| Supervisor Namespace Quota | 대체 VM·Disk를 허용할 여유가 있는가? |
+| Zone·Storage Capacity | 실제 배치 자원이 있는가? |
+| VPC·Network | 새 VM이 사용할 Network·IP가 준비돼 있는가? |
+
+“VM을 직접 삭제하면 CAPI가 자동 복구한다”는 것은 Machine Owner·Controller Policy·Provider Reconciliation을 확인한 뒤 훈련 가설로 확정합니다. 이 경로가 확인되지 않으면 단순 파괴 시험이 될 수 있습니다.
+
+Pod·Endpoint Baseline에는 Deployment·StatefulSet Desired/Ready Replica, Pod별 Node 배치, PDB와 disruptionsAllowed, Affinity·Anti-Affinity·Taint/Toleration, Resource Request와 다른 Worker의 가용량, Persistent Volume 사용 여부, Service·EndpointSlice의 Ready Endpoint, Leader Election·Readiness처럼 기능 인계에 필요한 Application 상태를 기록합니다.
+
+```bash
+kubectl --context="$GATEWAY_CONTEXT" get pods -A -o wide --field-selector="spec.nodeName=$NODE_NAME"
+kubectl --context="$GATEWAY_CONTEXT" get pdb -A
+```
+
+PDB는 계획된 Eviction을 제한하는 장치이며 갑작스러운 VM 상실 자체를 막지 않습니다. VM 손실 뒤 대체 Pod 배치 과정과 관리자가 수행할 Drain·Eviction에는 별도로 영향을 줄 수 있습니다.
+
+사용자 경로는 장애 전에도 실제 개발계 Request를 실행해 DNS 결과, TLS·Authentication 성공, HTTP Status뿐 아니라 기대 Response·상태 변화, APISIX Request ID·Access Log, Backend 처리 결과를 남깁니다. 인증 없는 Health Endpoint만으로 User 기능을 대표하지 않습니다.
+
+Monitoring·Notification에서는 VM·Machine 상태, Node NotReady, Pod·Replica 부족, APISIX·Service Health, CAPI Reconciliation 실패, 대체 VM 생성 실패 관련 Alert가 실제 존재하는지와 어디로 전달되는지 확인합니다. Alert 이름이 문서에 있다는 사실만으로 Notification이 운영자에게 전달된다고 보지 않습니다.
+
+### 훈련 가설과 단일 장애 주입
+
+#### 왜 필요한가
+
+장애 모의훈련은 실제 변경 하나를 일으킨 뒤 예상한 복구 메커니즘과 Evidence가 나타나는지 검증하는 실험입니다. 동시에 여러 설정을 바꾸면 무엇이 복구를 시작하거나 막았는지 구분할 수 없으므로 사전에 검증할 가설과 변경 변수를 고정해야 합니다.
+
+#### 핵심 용어
+
+- 장애 주입: 정상 시스템에 승인된 하나의 실패 조건을 의도적으로 만드는 행위
+- 인과 가설: 특정 조건에서 어떤 Controller·Workload·사용자 결과가 이어질 것이라는 사전 예상
+- 단일 변수: 원인 구분을 위해 훈련 중 의도적으로 바꾸는 조건을 하나로 제한하는 원칙
+- 중지 조건: 예상 밖 영향이 나타날 때 추가 장애 주입을 중단하는 기준
+- Evidence: 가설이 실제로 성립했는지 판단하는 상태·Event·Log·Request 결과
+
+#### 비유
+
+재난대응 훈련에서 하나의 작업 구역만 폐쇄하고 상황실·예비 작업구역·고객 창구가 어떻게 반응하는지 보는 것과 같습니다. 동시에 인력 수와 도로, 창구 규칙까지 바꾸면 어느 변화가 결과를 만들었는지 알 수 없습니다.
+
+#### 본문
+
+훈련은 사전에 다음 가설을 구분해 둡니다.
+
+가설 A는 CAPI가 원하는 Worker 수를 복구한다는 것입니다.
+
+```text
+Worker VM 한 대 상실
++ MachineDeployment desired replicas 유지
++ Controller와 Infrastructure Provider 정상
++ Quota·Capacity·Network 충족
+→ 대체 Machine·VM·Node 생성
+```
+
+이 가설은 VM 직접 삭제가 Provider 상태와 올바르게 조정되지 않거나, MachineDeployment Owner·Replica 정책이 기대와 다르거나, Supervisor Namespace Quota·Zone Compute·Storage가 부족하거나, VM Image·Bootstrap·API Join이 실패하면 깨질 수 있습니다.
+
+가설 B는 핵심 Gateway 기능이 남은 Replica 또는 대체 Pod로 유지·복구된다는 것입니다.
+
+```text
+Worker 한 대 상실
++ 핵심 Component Replica 분산
++ 살아남은 Ready Endpoint
+또는
++ 다른 Worker에 대체 Pod 배치 가능
+→ Gateway 기능 유지·복구
+```
+
+핵심 Component가 단일 Replica이거나 모든 Replica가 같은 Worker에 몰려 있거나, Anti-Affinity·Taint·Resource·Persistent Volume·Readiness·Leader Election 조건 때문에 대체 배치가 불가능하면 이 가설은 깨질 수 있습니다.
+
+가설 C는 Monitoring과 운영 전파가 장애와 복구를 구분해 관측한다는 것입니다.
+
+```text
+VM·Machine·Node 상태 변화
++ Alert Rule·Evaluation·Notification 경로 정상
+→ 운영자가 장애를 감지하고 복구 Timeline을 재구성
+```
+
+해당 Rule이 없거나 Evaluation Interval·for-duration 때문에 늦거나 Notification Route가 없거나 Monitoring 자체가 장애이거나 VM·Machine·Node 식별자가 연결되지 않으면 관측이 끊길 수 있습니다.
+
+가설 D는 사용자 기능 복구가 인프라 복구 뒤 실제 Request로 확인된다는 것입니다.
+
+```text
+새 Node Ready
++ Gateway Pod Ready
++ Service Endpoint 반영
++ LB / APISIX Route 정상
++ Authentication·Backend 정상
+→ 개발계 사용자 Request 성공
+```
+
+새 Node Ready는 이 결론의 충분조건이 아닙니다.
+
+승인된 담당자는 사전에 확정한 개발 Gateway Worker VM 한 대만 장애 대상으로 제거하고, 원인 분리를 위해 MachineDeployment replicas, CAPI Machine·MachineSet, PDB·Replica 수, APISIX Route·Upstream, LB Pool·Health Check, Supervisor Namespace Quota, 다른 Worker·Control Plane VM, 인증 Credential·Backend 설정을 동시에 변경하지 않습니다.
+
+장애 주입 시 승인된 작업·담당자, VM ID·Name, 연결된 Machine·Node UID, 삭제 시각 T0, 직전 Pod·Endpoint 상태, 예상 중단·중지 조건을 기록합니다. 예상 밖의 다중 Node·Control Plane·운영계 영향이 나타나면 추가 주입을 중단하고 실제 장애 대응으로 전환합니다.
+
+### 감지와 대체 Worker 생성
+
+#### 왜 필요한가
+
+VM이 사라졌다고 모든 Control Plane이 같은 순간 그 사실을 알고 Replacement를 만들지는 않습니다. Infrastructure Provider·CAPI·Kubernetes Node Controller가 각자 다른 상태를 관찰하고, 대체 VM을 만들 Capacity 조건까지 충족돼야 Worker Capacity가 복구됩니다.
+
+#### 핵심 용어
+
+- desired replicas: MachineDeployment가 유지하려는 Worker 수
+- available Worker: 실제로 사용 가능한 Worker 상태
+- Infrastructure Condition: Machine이 참조하는 인프라 Resource의 현재 상태
+- Reconcile: 현재 상태와 원하는 상태의 차이를 줄이도록 Controller가 반복 조정하는 작업
+- Replacement Machine: 손실된 Capacity를 채우기 위해 새로 만들어지는 Machine
+- Bootstrap: 새 VM이 Kubernetes Node로 Join할 수 있게 초기화하는 과정
+- Node Lease·Heartbeat: kubelet이 Control Plane에 자신의 생존 상태를 보고하는 신호
+
+#### 비유
+
+작업 구역 하나가 사라진 뒤 상황실이 정원 부족을 알아차리고 대체 구역을 배정하는 과정에 대응합니다. 구역이 없어졌다는 사실과 상황실이 이를 인식한 시각, 예비 공간을 확보한 시각, 새 인력이 실제 출근한 시각은 서로 다릅니다.
+
+#### 본문
+
+자동 복구의 출발점은 MachineDeployment가 유지하려는 desired replicas와 실제 가용 Worker 사이의 차이입니다. VM 손실을 Infrastructure Provider와 CAPI가 인식하고 MachineDeployment·MachineSet 조정이 정상이어야 Replacement Machine 요청이 생깁니다.
+
+그 다음 Supervisor Namespace Quota, Zone Compute, Storage, VPC·Network가 Replacement VirtualMachine 생성 조건을 충족해야 합니다.
+
+```text
+Worker VM 상실
+      ↓ Provider / CAPI가 손실 감지
+desired replicas > available
+      ↓
+Replacement Machine
+      ↓
+Quota + Compute + Storage + Network
+      ↓
+Replacement VirtualMachine
+      ↓
+Boot / Bootstrap / API 연결
+      ↓
+kubelet Node 등록
+      ↓
+Node Ready
+```
+
+각 연결은 실패할 수 있습니다.
+
+| 마지막 상태 | 다음 Breakpoint 후보 |
+|---|---|
+| VM 상실 확인 | Controller가 Provider 상태 차이를 인식하지 못함 |
+| Machine 상태 이상 | MachineDeployment Owner·Replica 조정 실패 |
+| Replacement Machine 생성 | Quota·Compute·Storage·Network 실패 |
+| VM Power On | Bootstrap·Cloud-init·API Endpoint 실패 |
+| kubelet 실행 | Token·Certificate·DNS·Network Join 실패 |
+| Node 등록 | CNI·CSI·Node Condition 문제로 NotReady |
+
+VM이 Power On돼도 Bootstrap·Cloud-init·API Endpoint·Credential·DNS·Network 조건을 통과해 kubelet이 Cluster에 Join하고 Node Ready가 되어야 Capacity 복구가 완료됩니다. VM 삭제 자체는 복구 성공 증거가 아니며 Replacement Machine 존재도 Node Ready의 충분조건이 아닙니다.
+
+감지에도 시차가 있습니다. vCenter에서 VM이 사라지거나 Power 상태가 바뀐 뒤 Machine Infrastructure Condition이 바뀔 수 있고, MachineDeployment·MachineSet Controller가 desired와 actual 차이를 인식합니다. kubelet Heartbeat·Lease가 끊긴 뒤 Control Plane은 Grace Period를 거쳐 Node를 NotReady·Unknown 계열로 판단할 수 있습니다. Pod·Endpoint 변화와 Alert Firing도 같은 순간이 아닙니다.
+
+Alert Firing은 Rule Evaluation Interval, for Duration, Notification Pipeline 때문에 실제 장애보다 늦을 수 있습니다.
+
+### Workload와 사용자 기능 복구
+
+#### 왜 필요한가
+
+Worker 수가 원래대로 돌아와도 APISIX·Keycloak Pod와 Endpoint가 실제 Traffic을 받을 준비가 되지 않았을 수 있습니다. 반대로 Worker 한 대가 사라져도 살아남은 Replica와 Capacity가 충분하면 사용자 기능은 계속 유지될 수 있습니다. 인프라 복구와 서비스 복구를 따로 판단해야 합니다.
+
+#### 핵심 용어
+
+- Ready Replica: Application Controller가 Ready 상태로 유지하고 있는 Pod Replica
+- PDB: 계획된 Pod Eviction 중 최소 가용성을 보호하는 정책
+- Affinity·Topology: Pod가 어느 Node·Zone에 배치될 수 있는지 제한하거나 선호하는 Scheduling 조건
+- EndpointSlice: Service가 Traffic을 보낼 Ready Pod Endpoint 목록
+- Leader Election: 여러 Replica 중 실제 Active 역할을 맡는 Instance를 선택하는 방식
+- User Path: DNS·VIP·LB·Gateway Service·APISIX·Authentication·Backend로 이어지는 실제 사용자 요청 경로
+
+#### 비유
+
+작업 구역 하나를 잃어도 다른 창구에 충분한 인력이 있으면 고객 업무는 계속될 수 있습니다. 반대로 새 작업 구역이 생겨 인원 수가 회복돼도 필요한 담당자가 배치되지 않거나 출고 창구가 열리지 않으면 고객 서비스는 복구되지 않습니다.
+
+#### 본문
+
+Worker 한 대 상실의 서비스 영향은 삭제 Node의 핵심 Pod 수, 살아남은 Replica·Endpoint, 다른 Worker의 가용 Resource, Scheduling·Affinity·Topology 조건, Volume·Leader Election·Readiness, LB·APISIX Health·Route의 결합으로 결정됩니다.
+
+영향이 제한될 수 있는 조건은 핵심 Component가 여러 Ready Replica로 분산돼 있고, 살아남은 Endpoint가 충분한 Capacity를 가지며, LB·Service가 NotReady Endpoint를 제외하고, Authentication·Backend가 장애 Node와 독립적인 경우입니다.
+
+영향이 커질 수 있는 조건은 단일 Replica이거나 Replica가 한 Node에 집중돼 있고, 다른 Worker의 Resource가 부족하거나 Hard Affinity·Topology 제약이 있으며, Volume Detach·Attach가 지연되거나 Leader Lease·Readiness가 교착하거나 살아남은 Replica Capacity가 부족하거나 LB Health Check와 Endpoint 상태가 불일치하는 경우입니다.
+
+PDB는 계획된 Eviction을 제한할 수 있지만 갑작스러운 VM 상실 자체를 막는 장치는 아닙니다.
+
+새 Node Ready 뒤에도 Gateway Pod가 반드시 그 Node로 이동하는 것은 아닙니다. Scheduler는 전체 Cluster 상태를 기준으로 배치합니다. 복구 목표는 같은 Pod가 같은 위치로 돌아오는 것이 아니라 필요한 Ready Replica와 Endpoint가 회복되는 것입니다.
+
+```text
+Worker 한 대 상실
+   ├─ 살아남은 Ready Endpoint 있음
+   │     + 처리 Capacity 충분
+   │     └─ 사용자 기능 유지 가능
+   │
+   └─ Ready Endpoint 부족 / 대체 배치 불가
+         ├─ Resource / Affinity
+         ├─ Volume
+         ├─ Leader Election / Readiness
+         └─ 사용자 기능 영향 가능
+```
+
+복구 상태는 세 층으로 나눕니다.
+
+인프라 복구는 MachineDeployment desired와 actual Worker 수가 다시 맞고, Replacement Machine·VirtualMachine이 생성되며, VM Boot·Bootstrap이 완료되고 새 Node가 등록·Ready된 상태입니다.
+
+Workload 복구는 APISIX·Keycloak 등 필요한 Controller의 Ready Replica가 회복되고, Pod가 정상 Worker에 배치되며, 필요한 Volume이 연결되고, EndpointSlice에 Ready Endpoint가 반영되고, Leader·Session 등 Application 상태가 정상인 상태입니다.
+
+사용자 경로 복구는 실제 개발계 Request가 끝까지 성공하는 상태입니다.
+
+```text
+Client
+  ↓
+개발계 DNS / VIP / LB
+  ↓
+Gateway Service / Endpoint
+  ↓
+APISIX Listener / Route / Upstream
+  ↓
+Authentication이 필요한 경우 Credential 검증
+  ↓
+Target Backend
+  ↓
+기대 Response·기능 결과
+```
+
+새 VM·Node가 생겼다는 사실은 Workload 복구 증거가 아니고, Pod Ready도 실제 사용자 경로 복구의 충분조건이 아닙니다. Node 수가 N-1이 됐다는 사실만으로 사용자 Request 실패율을 계산하지 않으며 실제 Pod·Endpoint·Request Evidence가 필요합니다.
+
+### Timeline과 훈련 판정
+
+#### 왜 필요한가
+
+장애 감지, 대체 인프라 생성, Node Join, Workload 재배치, 사용자 기능 정상화는 서로 다른 시각에 일어납니다. 각 시각을 따로 기록해야 어느 구간이 느렸는지와 자동 복구·Workload 복구·사용자 가용성 가운데 무엇이 실제로 성공했는지 구분할 수 있습니다.
+
+#### 핵심 용어
+
+- RTO: 장애 뒤 기능을 복구하는 데 허용할 목표 시간
+- Error Window: 실제 사용자 Request가 실패하거나 비정상 상태였던 시간 구간
+- Alert Firing: Monitoring Rule 조건이 충족돼 Alert 상태가 발생한 시점
+- Notification: Alert가 운영자나 외부 시스템에 전달된 상태
+- Timeline: 서로 다른 계층의 상태 변화 시각을 한 요청·대상 기준으로 정렬한 기록
+- 성공 기준: 훈련 전에 승인한 Evidence를 바탕으로 결과를 판정하는 기준
+
+#### 비유
+
+사고 시각, 상황실 인지 시각, 대체 인력 출동 시각, 작업 재개 시각, 고객 서비스 정상화 시각을 각각 기록하는 것과 같습니다. 경보가 울렸다고 고객 서비스가 복구된 것도 아니고, 대체 인력이 도착했다고 업무가 정상화된 것도 아닙니다.
+
+#### 본문
+
+VM 삭제, Machine·Infrastructure Condition 변화, Node NotReady, Alert Firing·Notification, Replacement Machine·VM 생성, 새 Node Ready, Pod·Endpoint 회복, 실제 개발계 Request 정상화는 서로 다른 시각을 가질 수 있습니다.
+
+| 시각 | 계층 | Evidence | 이 Evidence가 말하는 것 |
+|---|---|---|---|
+| T0 | vCenter | 삭제한 VM ID·Name | 실제 장애 주입 대상 |
+| T1 | CAPI | Machine·Infrastructure Condition | Controller가 인프라 손실을 인지 |
+| T2 | Kubernetes | Node Condition·Lease | kubelet 통신 중단 인지 |
+| T3 | Monitoring | Alert Firing·Notification | 관측·전파 경로 동작 |
+| T4 | CAPI/vCenter | Replacement Machine·VM | 인프라 대체 생성 시작 |
+| T5 | Kubernetes | 새 Node 등록·Ready | Worker Capacity 참여 |
+| T6 | Workload | Pod Ready·EndpointSlice | Gateway Traffic 수신 준비 |
+| T7 | 사용자 경로 | 개발계 실제 Request | 최종 기능 유지·복구 |
+
+이 Timeline에서 T0→T1이 길면 Provider·CAPI 감지 경로, T1→T4가 길면 Reconcile·Quota·Capacity, T4→T5가 길면 VM Boot·Bootstrap·Join, T5→T6이 길면 Scheduling·Volume·Readiness, T6→T7이 길면 LB·APISIX·Authentication·Backend가 우선 조사 후보가 됩니다. 시간이 길다는 사실만으로 특정 Component를 원인으로 확정하지 않고 Condition·Event·Log를 연결합니다.
+
+현재 원자료에는 승인된 수치형 RTO나 허용 Error Rate가 확정돼 있지 않습니다. 5분 이내나 완전 무중단 같은 값을 임의로 넣지 않습니다. 장애 중 Request 실패가 한 건이라도 있었다면 완전 무중단이라고 기록하지 않지만, 짧은 Request 실패가 있었다고 CAPI의 자동 Capacity 복구 자체까지 실패했다고 합치지도 않습니다.
+
+훈련 전 다음 판정 항목과 Evidence를 승인받고 실제 시간을 측정합니다.
+
+| 판정 영역 | 성공을 판단할 실제 Evidence |
+|---|---|
+| 대상 통제 | 승인된 개발 Gateway Worker VM 한 대만 제거 |
+| 장애 감지 | VM·Machine·Node 상태와 Alert가 예상 경로로 관측 |
+| Capacity 복구 | desired Worker 수를 Replacement Machine·VM·Node가 충족 |
+| Workload 복구 | 필요한 Gateway Pod·Endpoint가 Ready |
+| 사용자 경로 | 확정한 개발 URL/API가 필요한 인증 포함 정상 |
+| 영향 범위 | Control Plane·다른 Cluster·운영계에 예상 밖 영향 없음 |
+| 운영 전파 | 합의한 Notification·Communication 경로 동작 |
+| Evidence | 상태 변화와 시각을 Timeline으로 재구성 가능 |
+
+```text
+인프라 자동 복구 성공 여부
+        ≠
+Workload 기능 복구 결과
+        ≠
+사용자 가용성 결과
+```
+
+마지막으로 확인된 상태에서 다음 검증 질문을 이어갑니다.
+
+| 마지막으로 확인된 상태 | 다음 질문 | 구분력 있는 Evidence |
+|---|---|---|
+| VM 대상만 식별 | 같은 Machine·Node인가? | Provider ID, NodeRef, UID |
+| 현재 Worker 수 자료 불일치 | 실제 desired·actual 수는 얼마인가? | Node·Machine·VM 동시 조회 |
+| VM 삭제 완료 | CAPI가 손실을 감지했는가? | Machine·Infra Condition |
+| Node NotReady | 살아남은 Endpoint와 사용자 요청은 어떤가? | EndpointSlice·Request |
+| Alert Firing | Notification이 운영자에게 도달했는가? | Delivery 기록 |
+| Replacement Machine 없음 | Owner·Replica·Reconcile이 정상인가? | MachineDeployment·Controller Log |
+| Machine은 있으나 VM 없음 | Quota·Compute·Storage·Network 중 어디서 막혔는가? | Event·Condition·Capacity |
+| VM Power On | kubelet Join이 왜 안 되는가? | Bootstrap·Network·Credential |
+| 새 Node Ready | Gateway Replica·Endpoint가 회복됐는가? | Deployment·Pod·Endpoint |
+| Pod Ready | APISIX Route·인증·Backend Request가 성공하는가? | 실제 개발 Request·Log |
+| 사용자 Request 성공 | Error Window와 영향 범위를 기록했는가? | Client Probe·Timeline |
+
+이 설명 문서는 특정 VM 실제 삭제, Control Plane 또는 운영계 Resource 변경, CAPI Machine·MachineSet 직접 삭제, PDB 완화·Replica 변경, Supervisor Namespace Quota 변경, APISIX Route·LB Pool 변경, Alert Rule·Notification Route 임의 변경, 특정 RTO·SLO·무중단 기준 확정을 자동으로 승인하지 않습니다. 실제 훈련은 대상·권한·중지 조건·연락 체계·복구 책임자·사후 검토 방식이 확정된 실행 계획과 승인 절차를 따라야 합니다.
+
+## 질문별 자료 안내
+
+| 더 확인할 질문 | 자료 |
+|---|---|
+| 훈련의 원래 대상·불일치·사전조건·실행 단계는 무엇인가? | [DKS-C Gateway 워커 노드 장애 모의 훈련 계획 및 대응 절차](../장애모의훈련/DKS-C%20Gateway%20워커%20노드%20장애%20모의%20훈련%20계획%20및%20대응%20절차.md) |
+| 개발 Gateway Worker 수와 Platform Cluster 배치의 운영 기록은 무엇인가? | [DKS-C 운영 현황 요약](../상세%20참조/DKS-C%20운영%20현황%20요약.md) |
+| Machine → VM → Node 생성과 완료 상태는 어떻게 구별하는가? | [01. 멀티클러스터 테넌시와 자동 프로비저닝](01.%20멀티클러스터%20테넌시와%20자동%20프로비저닝.md) |
+| 대체 VM 생성에 필요한 Quota·Storage·Network 조건은 무엇인가? | [03. Supervisor·CCI 인프라 제어 평면과 Quota 경계](03.%20Supervisor%C2%B7CCI%20인프라%20제어%20평면과%20Quota%20경계.md) |
+| Gateway Cluster의 역할과 공유 인프라 범위는 무엇인가? | [04. 플랫폼 관리 평면 분리와 전용 클러스터](04.%20플랫폼%20관리%20평면%20분리와%20전용%20클러스터.md) |
+| LB→APISIX→Backend의 실제 요청 경로는 어떻게 확인하는가? | [05. 외부 트래픽 진입 경로와 APISIX·Two-Arm LB](05.%20외부%20트래픽%20진입%20경로와%20APISIX%C2%B7Two-Arm%20LB.md) |
